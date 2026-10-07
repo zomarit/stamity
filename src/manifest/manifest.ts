@@ -52,6 +52,7 @@ import {
   type SetupManifest,
 } from "../types/manifest.ts";
 import { STATE_DIR } from "../types/markers.ts";
+import { ownedPathDefect } from "./ownedPaths.ts";
 
 /**
  * The `.stamity/manifest.json` boundary: create, validate, read, write, and the
@@ -347,6 +348,25 @@ function collectLedgerEntryErrors(entry: unknown, index: number, errors: string[
   if (defect !== null) {
     errors.push(`\`ledger[${index}].path\` ${JSON.stringify(entry.path)} ${defect}`);
     return null;
+  }
+  // The owned-path bound (REQ-PLUGIN-045), judged only once the owner and the
+  // artifact type are known good: both select the part of the bound the path
+  // must fall in, and a row whose owner is already named as unknown is not
+  // named a second time for where it points. A ledger row is an authorisation
+  // to delete or overwrite its path, so a row naming a path no stamity release
+  // writes — a hand edit of the committed manifest — refuses the manifest.
+  if (ownerDefect === null && typeof entry.artifactType === "string" && VALID_ARTIFACT_TYPES.has(entry.artifactType)) {
+    const outside = ownedPathDefect({
+      path: entry.path,
+      adapter: entry.adapter as string,
+      artifactType: entry.artifactType,
+    });
+    if (outside !== null) {
+      errors.push(
+        `\`ledger[${index}].path\` ${JSON.stringify(entry.path)} ${outside} — a ledger row ` +
+          `authorises sync and clean to delete or overwrite its path, so the row is refused`,
+      );
+    }
   }
   return entry.path;
 }

@@ -1,0 +1,2241 @@
+{
+  "capturedAt": "2026-10-06",
+  "procedure": "Each release from 1.0.0 to 1.11.0 and the head ran init -y --tools claude,cursor,copilot,codex in a monorepo fixture (packages/app), config mcp add github and context7, add ops and sync -y; four more head fixtures cover MCP with a pack, a user override of each class, and a Codex rule anchored to src/api/. Rows are deduplicated by owner, artifact type and path.",
+  "totalRows": 5288,
+  "hashlessRows": 0,
+  "sources": [
+    {
+      "source": "@zomarit/stamity@1.0.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.0.1 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.1.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.2.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.3.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.4.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.5.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.6.0 monorepo fixture",
+      "rows": 253
+    },
+    {
+      "source": "@zomarit/stamity@1.7.0 monorepo fixture",
+      "rows": 293
+    },
+    {
+      "source": "@zomarit/stamity@1.8.0 monorepo fixture",
+      "rows": 318
+    },
+    {
+      "source": "@zomarit/stamity@1.9.0 monorepo fixture",
+      "rows": 318
+    },
+    {
+      "source": "@zomarit/stamity@1.9.1 monorepo fixture",
+      "rows": 318
+    },
+    {
+      "source": "@zomarit/stamity@1.10.0 monorepo fixture",
+      "rows": 318
+    },
+    {
+      "source": "@zomarit/stamity@1.11.0 monorepo fixture",
+      "rows": 308
+    },
+    {
+      "source": "head (d10db029) monorepo fixture",
+      "rows": 352
+    },
+    {
+      "source": "head, four clients",
+      "rows": 297
+    },
+    {
+      "source": "head, four clients, the github MCP server and the ops pack",
+      "rows": 351
+    },
+    {
+      "source": "head, four clients and a user override of each class",
+      "rows": 317
+    },
+    {
+      "source": "head, codex with a rule anchored to src/api/",
+      "rows": 74
+    }
+  ],
+  "rows": [
+    {
+      "path": ".agents/skills/my-skill/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/my-skill/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/my-skill/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-ask/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-ask/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-ask/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-ask/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-board/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-board/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-board/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-board/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-browser-evidence/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-browser-evidence/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-browser-evidence/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-browser-evidence/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-browser-evidence/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-browser-evidence/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-ci-pipeline/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-ci-pipeline/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-ci-pipeline/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-containerize/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-containerize/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-containerize/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-debug/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-debug/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-debug/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-debug/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-dep-audit/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-dep-audit/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-dep-audit/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-dep-audit/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-dep-audit/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-dep-audit/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-design-system-detect/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-design-system-detect/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-design-system-detect/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-design-system-detect/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-design-system-detect/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-design-system-detect/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-gh-agentic-workflows/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-gh-agentic-workflows/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-gh-agentic-workflows/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-handoff/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-handoff/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-handoff/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-handoff/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-handoff/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-handoff/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-incident-response/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-incident-runbook/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-incident-runbook/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-incident-runbook/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-learn/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-learn/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-learn/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-learn/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-learn/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-learn/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-my-cmd/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-my-cmd/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-my-cmd/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-my-cmd/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-onboard/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-onboard/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-onboard/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-onboard/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-onboard/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-onboard/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-plan/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-plan/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-plan/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-plan/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-pr-resolve/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-pr-resolve/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-pr-resolve/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-pr-resolve/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-qa/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-qa/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-qa/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-qa/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-qa/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-qa/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-quick/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-quick/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-quick/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-quick/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-release-runbook/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-release-runbook/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-release-runbook/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-release/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-release/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-release/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-release/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-release/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-release/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-release/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-rework/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-rework/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-rework/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-rework/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-spec/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-spec/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-spec/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-spec/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-verify/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/agents/openai.yaml",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/enhancability.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/enhancability.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/enhancability.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/maintainability.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/maintainability.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/maintainability.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/performance.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/performance.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/performance.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/product-spec.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/product-spec.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/product-spec.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/reliability.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/reliability.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/reliability.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/scalability.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/scalability.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/scalability.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/security.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/security.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/security.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/testability.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/testability.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/testability.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/ui.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/ui.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/ui.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/ux.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/ux.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/references/ux.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/st-work/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-work/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-work/agents/openai.yaml",
+      "adapter": "codex",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/st-work/agents/openai.yaml",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".agents/skills/stamity-ai-evals/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-ai-evals/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-ai-evals/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-api-versioning/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-api-versioning/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-api-versioning/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-ci-pipeline/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-ci-pipeline/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-ci-pipeline/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-containerize/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-containerize/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-containerize/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-contract-census/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-contract-census/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-contract-census/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-gh-agentic-workflows/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-gh-agentic-workflows/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-gh-agentic-workflows/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-incident-response/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-incident-response/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-incident-response/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-learnings-schema/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-learnings-schema/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-learnings-schema/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-migrations/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-migrations/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-migrations/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-my-rule/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-my-rule/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-my-rule/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-question-protocol/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-question-protocol/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-question-protocol/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-release/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-release/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-release/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".agents/skills/stamity-resilience/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-resilience/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-resilience/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-testing/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-testing/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-testing/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-ui-states/SKILL.md",
+      "adapter": "codex",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-ui-states/SKILL.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".agents/skills/stamity-ui-states/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/agents/stamity-creator.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-design-quality.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-devops.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-fixer.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-implementer.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-incident-responder.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-my-helper.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-performance.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-researcher.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-reviewer.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-security.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-spec-author.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/agents/stamity-test-runner.md",
+      "adapter": "claude",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".claude/commands/st-ask.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-board.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-debug.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-incident-response.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-my-cmd.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-plan.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-pr-resolve.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-quick.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-release.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-rework.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-spec.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/st-work.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/stamity-incident-response.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/commands/stamity-release.md",
+      "adapter": "claude",
+      "artifactType": "command"
+    },
+    {
+      "path": ".claude/rules/stamity-ai-evals.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-api-versioning.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-contract-census.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-injection-screening.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-learnings-schema.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-migrations.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-my-rule.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-question-protocol.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-resilience.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-secrets.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-security-patterns.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-testing.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/rules/stamity-ui-states.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/settings.json",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".claude/skills/my-skill/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-browser-evidence/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-browser-evidence/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-ci-pipeline/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-containerize/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-dep-audit/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-dep-audit/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-design-system-detect/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-design-system-detect/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-gh-agentic-workflows/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-handoff/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-handoff/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-incident-response/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-incident-runbook/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-learn/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-learn/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-onboard/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-onboard/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-qa/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-qa/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-release-runbook/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-release/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/agents/openai.yaml",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/enhancability.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/maintainability.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/performance.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/product-spec.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/reliability.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/scalability.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/security.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/testability.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/ui.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/ux.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/stamity-ai-evals/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/skills/stamity-ci-pipeline/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/stamity-containerize/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/stamity-gh-agentic-workflows/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/stamity-incident-response/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".claude/skills/stamity-question-protocol/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".claude/skills/stamity-release/SKILL.md",
+      "adapter": "claude",
+      "artifactType": "skill"
+    },
+    {
+      "path": ".codex/agents/stamity-creator.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-design-quality.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-devops.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-fixer.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-implementer.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-incident-responder.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-my-helper.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-performance.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-researcher.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-reviewer.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-security.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-spec-author.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/agents/stamity-test-runner.toml",
+      "adapter": "codex",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".codex/config.toml",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".codex/hooks.json",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".cursor/agents/stamity-creator.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-design-quality.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-devops.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-fixer.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-implementer.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-incident-responder.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-my-helper.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-performance.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-researcher.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-reviewer.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-security.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-spec-author.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/agents/stamity-test-runner.md",
+      "adapter": "cursor",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".cursor/hooks.json",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".cursor/hooks/mcp-guard.mjs",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".cursor/hooks/subagent-guard.mjs",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".cursor/mcp.json",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".cursor/rules/stamity-ai-evals.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-api-versioning.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-contract-census.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-injection-screening.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-learnings-schema.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-migrations.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-my-rule.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-question-protocol.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-resilience.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-secrets.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-security-patterns.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-testing.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/rules/stamity-ui-states.mdc",
+      "adapter": "cursor",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".cursor/skills/st-ask/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-board/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-debug/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-incident-response/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-plan/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-pr-resolve/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-quick/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-release/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-rework/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-spec/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/st-work/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/stamity-incident-response/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".cursor/skills/stamity-release/SKILL.md",
+      "adapter": "cursor",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/agents/stamity-creator.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-design-quality.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-devops.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-fixer.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-implementer.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-incident-responder.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-my-helper.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-performance.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-researcher.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-reviewer.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-security.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-spec-author.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/agents/stamity-test-runner.agent.md",
+      "adapter": "copilot",
+      "artifactType": "agent"
+    },
+    {
+      "path": ".github/hooks/stamity.json",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".github/instructions/stamity-ai-evals.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-api-versioning.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-contract-census.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-injection-screening.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-learnings-schema.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-migrations.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-my-rule.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-question-protocol.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-resilience.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-secrets.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-security-patterns.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-testing.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/instructions/stamity-ui-states.instructions.md",
+      "adapter": "copilot",
+      "artifactType": "rule"
+    },
+    {
+      "path": ".github/prompts/st-ask.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-board.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-debug.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-incident-response.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-my-cmd.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-plan.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-pr-resolve.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-quick.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-release.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-rework.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-spec.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/st-work.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/stamity-incident-response.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/prompts/stamity-release.prompt.md",
+      "adapter": "copilot",
+      "artifactType": "command"
+    },
+    {
+      "path": ".github/workflows/copilot-setup-steps.yml",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".mcp.json",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/agent-tool-policies.json",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/agent-tool-policies.json",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/agent-tool-policies.json",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/agent-tool-policies.json",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/claude/stamity-review-gate.mjs",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/codex/stamity-portable-hook.mjs",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/codex/stamity-session-start.mjs",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/copilot/stamity-session-start.mjs",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/generated/hooks/cursor/stamity-session-start.mjs",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/mcp/copilot-repo-settings.env",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/agents/stamity-devops.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/agents/stamity-incident-responder.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/commands/st-incident-response.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/commands/st-release.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/commands/stamity-incident-response.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/commands/stamity-release.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/receipt.json",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-ci-pipeline/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-containerize/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-gh-agentic-workflows/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-incident-response/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-incident-runbook/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-release-runbook/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/st-release/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/stamity-ci-pipeline/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/stamity-containerize/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/stamity-gh-agentic-workflows/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/stamity-incident-response/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".stamity/packs/ops/skills/stamity-release/SKILL.md",
+      "adapter": "pack:ops",
+      "artifactType": "infra"
+    },
+    {
+      "path": ".vscode/mcp.json",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": "AGENTS.md",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": "AGENTS.md",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": "AGENTS.md",
+      "adapter": "copilot",
+      "artifactType": "infra"
+    },
+    {
+      "path": "AGENTS.md",
+      "adapter": "cursor",
+      "artifactType": "infra"
+    },
+    {
+      "path": "AGENTS.override.md",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": "CLAUDE.md",
+      "adapter": "claude",
+      "artifactType": "infra"
+    },
+    {
+      "path": "packages/app/AGENTS.md",
+      "adapter": "codex",
+      "artifactType": "infra"
+    },
+    {
+      "path": "src/api/AGENTS.md",
+      "adapter": "codex",
+      "artifactType": "infra"
+    }
+  ]
+}

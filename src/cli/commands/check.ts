@@ -8,6 +8,7 @@ import { readCharterTemplate } from "../../content/charter.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
 import { readGates, readInstallMode } from "../../manifest/manifest.ts";
+import { OWNED_PATHS } from "../../manifest/ownedPaths.ts";
 import {
   extractManagedBlock,
   hasManagedBlock,
@@ -53,7 +54,8 @@ import {
   probePluginRuntime,
   requiredNodeRange,
 } from "./plugin/probe.ts";
-import { planSync, type SyncPlanEntry } from "./sync/engine.ts";
+import type { ReclaimActionEntry, ReclaimProof } from "../../merge/reclaim.ts";
+import { planSync, previewReclaim, type SyncPlanEntry } from "./sync/engine.ts";
 import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts";
 
 /**
@@ -124,6 +126,31 @@ export interface DriftReport {
   missing: string[];
   /** Ledger rows queued for the reclaim sweep on the next sync. */
   reclaimPending: number;
+  /**
+   * What the next sync's reclaim sweep would do to each queued path, one entry
+   * per path in the sweep's order (REQ-PLUGIN-045). `reclaimPending` stays the
+   * count of queued rows; several rows may name one path.
+   */
+  reclaim: ReclaimPreview[];
+}
+
+/**
+ * One path the next sync's reclaim sweep would act on, as `check` names it.
+ *
+ * `action` reads the sweep's disposition in the operator's words: `delete`,
+ * `strip` (the managed block goes, the rest stays) and `reduce` (a co-owned
+ * document loses the engine's entries) are what consent would do; `keep` is a
+ * file the sweep leaves because something in it is not the engine's; `refuse`
+ * is a path no gate could prove the engine's, or one it will not touch; `gone`
+ * is already absent. `proof` names what proved the claim on the three that act.
+ */
+interface ReclaimPreview {
+  path: string;
+  reason: ReclaimActionEntry["candidateReason"];
+  action: "delete" | "strip" | "reduce" | "keep" | "refuse" | "gone";
+  proof?: ReclaimProof;
+  /** The sweep's own sentence on why, for the three that do not act. */
+  why?: string;
 }
 
 /** State subdirectories `init` creates; their stores recreate them on write. */
@@ -1489,6 +1516,9 @@ export async function runDoctor(
  */
 export async function runDriftGate(rootDir: string, engineVersion: string): Promise<DriftReport> {
   const plan = await planSync(rootDir, engineVersion);
+  // The dry-run sweep `sync --dry-run` runs, so the path list here and the
+  // one a sync would act on are one computation, not two kept in agreement.
+  const preview = await previewReclaim(rootDir, plan);
   const changes = plan.entries.filter((entry) => entry.action !== "unchanged");
 
   const missing: string[] = [];
@@ -1506,6 +1536,35 @@ export async function runDriftGate(rootDir: string, engineVersion: string): Prom
     changes,
     missing,
     reclaimPending,
+    reclaim: (preview?.entries ?? []).map(reclaimPreviewOf),
+  };
+}
+
+/** The sweep's disposition, as {@link ReclaimPreview} names it. */
+const PREVIEW_ACTION: Record<
+  Exclude<ReclaimActionEntry["action"], "dry-run">,
+  ReclaimPreview["action"]
+> = {
+  deleted: "delete",
+  "managed-block-stripped": "strip",
+  "co-owned-reduced": "reduce",
+  "skipped-user-content": "keep",
+  "skipped-unsafe-path": "refuse",
+  "skipped-missing": "gone",
+};
+
+/**
+ * One dry-run sweep entry as a preview row. A `dry-run` entry carries the
+ * action consent would take in `wouldBe`, which every sweep entry of that
+ * action sets; a refusal carries its own action and the sweep's sentence.
+ */
+function reclaimPreviewOf(entry: ReclaimActionEntry): ReclaimPreview {
+  const acted = entry.action === "dry-run" ? (entry.wouldBe ?? "deleted") : entry.action;
+  return {
+    path: entry.path,
+    reason: entry.candidateReason,
+    action: PREVIEW_ACTION[acted],
+    ...(entry.proof === undefined ? { why: entry.detail } : { proof: entry.proof }),
   };
 }
 
@@ -1795,14 +1854,34 @@ function renderDrift(ctx: CliContext, outcome: DriftOutcome): void {
       `${drift.missing.length} ledgered file(s) missing, ${drift.reclaimPending} queued for ` +
       `reclaim\n`,
   );
-  const rows = [
-    ...drift.changes.map((entry) => `  ${entry.action.padEnd(9)} ${entry.path}`),
-    ...drift.missing.map((path) => `  ${"missing".padEnd(9)} ${path}`),
+  const rows: { line: string; bounded: boolean }[] = [
+    ...drift.changes.map((entry) => ({ line: `  ${entry.action.padEnd(9)} ${entry.path}`, bounded: true })),
+    ...drift.missing.map((path) => ({ line: `  ${"missing".padEnd(9)} ${path}`, bounded: true })),
+    // A delete is never folded into the `… and N more` row: it is the one line
+    // that names a file the next sync removes, and the operator reads this list
+    // to decide whether to run it (REQ-PLUGIN-045).
+    ...drift.reclaim.map((preview) => ({
+      line: reclaimLine(preview),
+      bounded: preview.action !== "delete",
+    })),
   ];
-  for (const row of rows.slice(0, MAX_DRIFT_LINES)) ctx.io.out(`${palette.dim(row)}\n`);
-  if (rows.length > MAX_DRIFT_LINES) {
-    ctx.io.out(palette.dim(`  … and ${rows.length - MAX_DRIFT_LINES} more\n`));
+  let shown = 0;
+  let folded = 0;
+  for (const row of rows) {
+    if (row.bounded && shown >= MAX_DRIFT_LINES) {
+      folded += 1;
+      continue;
+    }
+    if (row.bounded) shown += 1;
+    ctx.io.out(`${palette.dim(row.line)}\n`);
   }
+  if (folded > 0) ctx.io.out(palette.dim(`  … and ${folded} more\n`));
+}
+
+/** One reclaim preview as a drift line: the action, the path, and the proof or the reason. */
+function reclaimLine(preview: ReclaimPreview): string {
+  const head = `  ${preview.action.padEnd(9)} ${preview.path}`;
+  return preview.proof === undefined ? `${head} — ${preview.why ?? ""}` : `${head} (${preview.proof})`;
 }
 
 /**
@@ -2138,12 +2217,19 @@ export const checkCommand: CommandModule = {
                 changes: report.changes.map((entry) => ({ ...entry })),
                 missing: [...report.missing],
                 reclaimPending: report.reclaimPending,
+                // Each preview is a fresh object `runDriftGate` built for this
+                // report, so a shallow copy of the list shares nothing mutable.
+                reclaim: [...report.reclaim],
               },
         // Why there is no verdict, in the payload as well as on screen: a CI
         // job reading `drift: null` cannot otherwise tell "not initialised"
         // from "the plan is broken", and those need different responses.
         driftStatus: drift.kind,
         provenance,
+        // The bound every ledger row must lie in (REQ-PLUGIN-045), on every
+        // run: the refusal a manifest meets names a row, and this is the list
+        // the operator reads it against.
+        ownedPaths: OWNED_PATHS,
         // Data about the charter, so present whether or not the run is green;
         // absent only when there is no manifest to read it from. The exit code
         // never reads it: an unresolved gate is advisory.

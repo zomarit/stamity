@@ -28,6 +28,8 @@ import {
   readManifest,
   writeManifest,
 } from "../../../src/manifest/manifest.ts";
+import { OWNED_PATHS } from "../../../src/manifest/ownedPaths.ts";
+import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import {
@@ -194,6 +196,7 @@ interface DriftDoc {
   changes: { path: string; action: string }[];
   missing: string[];
   reclaimPending: number;
+  reclaim: { path: string; reason: string; action: string; proof?: string; why?: string }[];
 }
 
 interface ProvenanceDoc {
@@ -214,6 +217,8 @@ interface Envelope {
   provenance: ProvenanceDoc | null;
   /** Absent when there is no readable manifest to read the charter's gates from. */
   gates?: { notRun: string[]; unresolved: string[] };
+  /** The owned-path bound, on every run (REQ-PLUGIN-045). */
+  ownedPaths?: unknown;
   error?: unknown;
 }
 
@@ -420,7 +425,8 @@ describe("check — a healthy repository", () => {
     expect(row(doc, "manifest").status).toBe("pass");
     // A freshly synced repo is the honest clean state; it was an empty ledger
     // over an empty corpus while emission was a no-op.
-    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0 });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — check names each reclaim path
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
     expect(doc.provenance?.generatedBy).toBe(createApp().version);
     expect(doc.provenance?.manifestVersion).toBe("1.0.0");
     // Was `files: 0`. Counted off the ledger rather than pinned to a literal so
@@ -684,11 +690,15 @@ describe("check — an un-initialised repository", () => {
 });
 
 describe("check — the drift gate", () => {
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — a pack row lies only in its own
+  // pack folder and is `infra` there, as every release records one; the row
+  // sat at `docs/pack-guide.md` as a `skill`, which the manifest now refuses.
+  const PACK_GUIDE = ".stamity/packs/demo/guide.md";
   const packRow: LedgerEntry = {
-    path: "docs/pack-guide.md",
+    path: PACK_GUIDE,
     adapter: packOwner("demo"),
     artifactId: "guide",
-    artifactType: "skill",
+    artifactType: "infra",
   };
 
   it("names a ledgered file that is gone, and goes clean again once it is back", async () => {
@@ -698,24 +708,25 @@ describe("check — the drift gate", () => {
     const handle = getRepo();
     const root = await seedRepo(handle, {
       ledger: [packRow],
-      files: { "docs/pack-guide.md": "# Guide\n" },
+      files: { [PACK_GUIDE]: "# Guide\n" },
     });
 
     const before = await runJson(root);
     expect(before.code).toBe(0);
     expect(before.doc.drift?.clean).toBe(true);
 
-    await rm(join(root, "docs/pack-guide.md"));
+    await rm(join(root, PACK_GUIDE));
     const during = await runJson(root);
     expect(during.code).toBe(1);
     expect(during.doc.ok).toBe(false);
-    expect(during.doc.drift?.missing).toEqual(["docs/pack-guide.md"]);
+    expect(during.doc.drift?.missing).toEqual([PACK_GUIDE]);
     expect(during.doc.drift?.clean).toBe(false);
 
-    await writeFile(join(root, "docs/pack-guide.md"), "# Guide\n", "utf8");
+    await writeFile(join(root, PACK_GUIDE), "# Guide\n", "utf8");
     const after = await runJson(root);
     expect(after.code).toBe(0);
-    expect(after.doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0 });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — check names each reclaim path
+    expect(after.doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
   });
 
   it("prints the missing path and the sync next step in human output", async () => {
@@ -725,7 +736,7 @@ describe("check — the drift gate", () => {
 
     expect(result.code).toBe(1);
     expect(result.stdout).toContain("ledgered file(s) missing");
-    expect(result.stdout).toContain("docs/pack-guide.md");
+    expect(result.stdout).toContain(PACK_GUIDE);
     expect(result.stdout).toContain(npxCommand("sync"));
     // Pack rows still appear in the provenance rollup, missing file or not.
     expect(result.stdout).toContain("pack demo: 1 file(s)");
@@ -738,22 +749,34 @@ describe("check — the drift gate", () => {
     // while the planner was the no-op and emitted nothing; claude now emits
     // exactly that file, so the row would be re-emitted rather than reclaimed —
     // a path outside the emitted set is what the scenario actually needs.
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — an `infra` row at
+    // `docs/legacy-guide.md` names a path no release writes and the manifest is
+    // now refused; a deselected engine agent, recorded with its hash as every
+    // release records one, is the same reclaim-pending drift.
+    const legacy = ".claude/agents/stamity-legacy-guide.md";
     const root = await seedRepo(getRepo(), {
       ledger: [
         {
-          path: "docs/legacy-guide.md",
+          path: legacy,
           adapter: "claude",
           artifactId: "legacy-guide",
-          artifactType: "infra",
+          artifactType: "agent",
+          contentHash: createHash("sha256").update("# Legacy\n").digest("hex"),
         },
       ],
-      files: { "docs/legacy-guide.md": "# Legacy\n" },
+      files: { [legacy]: "# Legacy\n" },
     });
 
     const { code, doc } = await runJson(root);
 
     expect(code).toBe(1);
-    expect(doc.drift).toMatchObject({ clean: false, missing: [], reclaimPending: 1 });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — check names each reclaim path
+    expect(doc.drift).toMatchObject({
+      clean: false,
+      missing: [],
+      reclaimPending: 1,
+      reclaim: [{ path: legacy, reason: "deselected", action: "delete", proof: "hash" }],
+    });
     expect(doc.drift?.changes).toEqual([]);
 
     // A queued reclaim is drift with no changed and no missing path, so the
@@ -768,18 +791,20 @@ describe("check — the drift gate", () => {
     const root = await seedRepo(getRepo(), {
       tools: ["claude", "cursor"],
       ledger: [
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — the pack row moved into its
+        // own pack folder as `infra`; `docs/shared.md` as a `rule` is refused.
         {
-          path: "docs/shared.md",
+          path: ".stamity/packs/alpha/shared.md",
           adapter: packOwner("alpha"),
           artifactId: "shared",
-          artifactType: "rule",
+          artifactType: "infra",
         },
       ],
     });
 
     const report = await runDriftGate(root, "1.0.0");
 
-    expect(report.missing).toEqual(["docs/shared.md"]);
+    expect(report.missing).toEqual([".stamity/packs/alpha/shared.md"]);
   });
 
   it("propagates the engine's un-initialised failure to a direct caller", async () => {
@@ -789,6 +814,124 @@ describe("check — the drift gate", () => {
     __setContentRootForTests(handle.path("corpus"));
 
     await expect(runDriftGate(handle.dir, "1.0.0")).rejects.toBeInstanceOf(EngineError);
+  });
+});
+
+/**
+ * REQ-PLUGIN-045: `check` names every path a sync would reclaim, with the
+ * action and the proof, where it used to print only a count beside `sync` as
+ * the remedy — the one moment the operator can still decide not to run it.
+ */
+describe("check — the reclaim preview", () => {
+  const sha = (content: string): string => createHash("sha256").update(content).digest("hex");
+  const agentRow = (path: string, content: string): LedgerEntry => ({
+    path,
+    adapter: "claude",
+    artifactId: path,
+    artifactType: "agent",
+    contentHash: sha(content),
+  });
+
+  it("names a deselected engine file with its action and proof, in --json and in the text", async () => {
+    const gone = ".claude/agents/stamity-gone.md";
+    const root = await seedRepo(getRepo(), {
+      ledger: [agentRow(gone, "engine agent\n")],
+      files: { [gone]: "engine agent\n" },
+    });
+
+    const { code, doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(code).toBe(1);
+    expect(doc.drift?.reclaim).toEqual([{ path: gone, reason: "deselected", action: "delete", proof: "hash" }]);
+    expect(doc.drift?.reclaimPending).toBe(1);
+    expect(human.stdout).toContain(`  delete    ${gone} (hash)`);
+    // A preview: the file is still there.
+    expect(existsSync(join(root, gone))).toBe(true);
+  });
+
+  it("prints every delete line, never folding one into the overflow row", async () => {
+    const paths = Array.from({ length: 25 }, (_, index) => `.claude/agents/stamity-gone-${String(index).padStart(2, "0")}.md`);
+    const root = await seedRepo(getRepo(), {
+      ledger: paths.map((path) => agentRow(path, `${path}\n`)),
+      files: Object.fromEntries(paths.map((path) => [path, `${path}\n`])),
+    });
+
+    const human = await runHuman(root);
+
+    for (const path of paths) expect(human.stdout).toContain(`  delete    ${path} (hash)`);
+    expect(human.stdout).not.toContain("more\n");
+  });
+
+  it("names a kept file and a refused one with the sweep's reason, and folds them past the bound", async () => {
+    const edited = ".claude/agents/stamity-edited.md";
+    const hashless = ".claude/agents/stamity-hashless.md";
+    const missing = Array.from({ length: 20 }, (_, index) => `.stamity/packs/demo/m-${String(index).padStart(2, "0")}.md`);
+    const root = await seedRepo(getRepo(), {
+      ledger: [
+        agentRow(edited, "engine agent\n"),
+        { path: hashless, adapter: "claude", artifactId: "hashless", artifactType: "agent" },
+        ...missing.map((path) => ({ path, adapter: packOwner("demo"), artifactId: path, artifactType: "infra" as const })),
+      ],
+      files: { [edited]: "my own agent\n", [hashless]: "engine agent\n" },
+    });
+
+    const { doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(doc.drift?.reclaim).toEqual([
+      expect.objectContaining({ path: edited, action: "keep", why: expect.stringContaining("edited since") }),
+      expect.objectContaining({ path: hashless, action: "refuse", why: expect.stringContaining("records no content hash") }),
+    ]);
+    expect(doc.drift?.reclaim.map((preview) => preview.proof)).toEqual([undefined, undefined]);
+    // Twenty missing lines fill the bound, so both reclaim lines fold.
+    expect(human.stdout).toContain("… and 2 more");
+    expect(human.stdout).not.toContain(`keep      ${edited}`);
+  });
+
+  it("prints a keep line with the sweep's reason when there is room", async () => {
+    const edited = ".claude/agents/stamity-edited.md";
+    const root = await seedRepo(getRepo(), {
+      ledger: [agentRow(edited, "engine agent\n")],
+      files: { [edited]: "my own agent\n" },
+    });
+
+    const human = await runHuman(root);
+
+    expect(human.stdout).toContain(`  keep      ${edited} — The bytes no longer hash`);
+  });
+
+  it("names a strip with the block as its proof", async () => {
+    const stripped = ".claude/agents/stamity-noted.md";
+    const root = await seedRepo(getRepo(), {
+      ledger: [{ path: stripped, adapter: "claude", artifactId: "noted", artifactType: "agent" }],
+      files: { [stripped]: `${wrapInManagedBlock("engine body")}my notes\n` },
+    });
+
+    const { doc } = await runJson(root);
+
+    expect(doc.drift?.reclaim).toEqual([{ path: stripped, reason: "deselected", action: "strip", proof: "block" }]);
+  });
+
+  it("names a file already gone", async () => {
+    const gone = ".claude/agents/stamity-already-gone.md";
+    const root = await seedRepo(getRepo(), { ledger: [agentRow(gone, "x\n")] });
+
+    const { doc } = await runJson(root);
+
+    expect(doc.drift?.reclaim).toEqual([
+      expect.objectContaining({ path: gone, action: "gone" }),
+    ]);
+  });
+
+  it("publishes the owned-path bound on every run, with or without a manifest", async () => {
+    const root = await seedRepo(getRepo());
+    expect((await runJson(root)).doc.ownedPaths).toEqual(OWNED_PATHS);
+
+    const bare = getRepo();
+    __setContentRootForTests(bare.path("corpus"));
+    await mkdir(bare.path("empty"), { recursive: true });
+    expect((await runJson(bare.path("empty"))).doc.ownedPaths).toEqual(OWNED_PATHS);
   });
 });
 
@@ -812,7 +955,8 @@ describe("check — key-level ownership of .claude/settings.json", () => {
 
     const { code, doc } = await runJson(root);
 
-    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0 });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — check names each reclaim path
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
     expect(code).toBe(0);
     expect((await runHuman(root)).stdout).toContain("drift: clean");
   });
@@ -992,17 +1136,20 @@ describe("check — a managed block copied into the preserved region", () => {
    * sweep and carries no recorded hash for `pack-integrity` to check. The
    * fixture's only finding is then the one each test names.
    */
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — the pack row moved into its own
+  // pack folder as `infra`; `docs/managed-note.md` as a `rule` is refused.
+  const MANAGED_NOTE = ".stamity/packs/demo/managed-note.md";
   const managedRow: LedgerEntry = {
-    path: "docs/managed-note.md",
+    path: MANAGED_NOTE,
     adapter: packOwner("demo"),
     artifactId: "note",
-    artifactType: "rule",
+    artifactType: "infra",
   };
 
   function seedManagedNote(preserved: string): Promise<string> {
     return seedRepo(getRepo(), {
       ledger: [managedRow],
-      files: { "docs/managed-note.md": managedFile(preserved) },
+      files: { [MANAGED_NOTE]: managedFile(preserved) },
     });
   }
 
@@ -1014,7 +1161,7 @@ describe("check — a managed block copied into the preserved region", () => {
     // Line 9: the block occupies 1-7 (BEGIN, five body lines, END), line 8 is
     // the blank the preserved region opens with, and the copy starts under it.
     expect(row(doc, "preserved-duplicate").status).toBe("warn");
-    expect(row(doc, "preserved-duplicate").detail).toContain("docs/managed-note.md:9");
+    expect(row(doc, "preserved-duplicate").detail).toContain(`${MANAGED_NOTE}:9`);
     expect(row(doc, "preserved-duplicate").detail).toContain("delete the copy");
   });
 
@@ -1028,7 +1175,7 @@ describe("check — a managed block copied into the preserved region", () => {
     const { doc } = await runJson(root);
 
     expect(row(doc, "preserved-duplicate").status).toBe("warn");
-    expect(row(doc, "preserved-duplicate").detail).toContain("docs/managed-note.md:9");
+    expect(row(doc, "preserved-duplicate").detail).toContain(`${MANAGED_NOTE}:9`);
   });
 
   it("passes a managed file whose preserved region is the operator's own text", async () => {
@@ -1055,14 +1202,14 @@ describe("check — a managed block copied into the preserved region", () => {
   it("ignores a ledgered file that carries no managed block at all", async () => {
     const root = await seedRepo(getRepo(), {
       ledger: [managedRow],
-      files: { "docs/managed-note.md": `${BODY}\n` },
+      files: { [MANAGED_NOTE]: `${BODY}\n` },
     });
 
     const { code, doc } = await runJson(root);
 
     expect(code).toBe(0);
     expect(row(doc, "preserved-duplicate").status).toBe("pass");
-    expect(row(doc, "preserved-duplicate").detail).not.toContain("docs/managed-note.md");
+    expect(row(doc, "preserved-duplicate").detail).not.toContain(MANAGED_NOTE);
   });
 
   it("never fails the run — deleting the copy is the operator's call", async () => {
@@ -1138,9 +1285,11 @@ describe("check — the JSON envelope", () => {
     // between the two runs, so the flip is attributable to that mutation.
     const root = await seedRepo(getRepo(), {
       ledger: [
-        { path: "docs/gone.md", adapter: packOwner("demo"), artifactId: "gone", artifactType: "skill" },
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — the pack row moved into its own
+        // pack folder as `infra`; `docs/gone.md` as a `skill` is refused.
+        { path: ".stamity/packs/demo/gone.md", adapter: packOwner("demo"), artifactId: "gone", artifactType: "infra" },
       ],
-      files: { "docs/gone.md": "# Guide\n" },
+      files: { ".stamity/packs/demo/gone.md": "# Guide\n" },
     });
 
     const healthy = await runJson(root);
@@ -1156,7 +1305,7 @@ describe("check — the JSON envelope", () => {
     expect(healthy.doc.drift).not.toBeNull();
     expect(healthy.doc.provenance).not.toBeNull();
 
-    await rm(join(root, "docs/gone.md"));
+    await rm(join(root, ".stamity/packs/demo/gone.md"));
     const failing = await runJson(root);
 
     expect(failing.code).toBe(1);
@@ -1166,7 +1315,7 @@ describe("check — the JSON envelope", () => {
     // every question, and `ok:false` is one of its answers, not a substitute
     // for the rest (a thrown failure would have replaced this with `error`).
     expect(failing.doc.doctor.length).toBe(healthy.doc.doctor.length);
-    expect(failing.doc.drift?.missing).toEqual(["docs/gone.md"]);
+    expect(failing.doc.drift?.missing).toEqual([".stamity/packs/demo/gone.md"]);
     expect(failing.doc.provenance).not.toBeNull();
   });
 });
@@ -1201,7 +1350,9 @@ describe("check — installed pack integrity", () => {
           path: relPath,
           adapter: packOwner("demo"),
           artifactId: "demo",
-          artifactType: "agent",
+          // TEST CHANGE, justified: REQ-PLUGIN-045 — a pack row is `infra` in
+          // its own folder, as the installer records it; `agent` is refused.
+          artifactType: "infra",
           contentHash: createHash("sha256").update(body).digest("hex"),
         },
       ],
@@ -2500,7 +2651,9 @@ describe("check — the gates it did not run (REQ-FLOW-008)", () => {
     const handle = getRepo();
     const root = await seedRepo(handle, {
       ledger: [
-        { path: "docs/gone.md", adapter: packOwner("demo"), artifactId: "gone", artifactType: "skill" },
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — the pack row moved into its own
+        // pack folder as `infra`; `docs/gone.md` as a `skill` is refused.
+        { path: ".stamity/packs/demo/gone.md", adapter: packOwner("demo"), artifactId: "gone", artifactType: "infra" },
       ],
     });
 

@@ -2,6 +2,7 @@ import type { ContentClass } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { isPackOwner, type LedgerEntry } from "../types/manifest.ts";
+import { ownedPathDefect } from "./ownedPaths.ts";
 
 /**
  * Pure data logic over the ownership ledger — the manifest's record of every
@@ -151,6 +152,14 @@ export function ledgerUnionPaths(ledger: readonly LedgerEntry[]): ReadonlySet<st
  * content hash to match the bytes on disk, so a user-edited infra file is kept,
  * not deleted.
  *
+ * Trust by type is bounded, not total. The ledger this reads has passed
+ * manifest validation, which refuses an `infra` row outside the owned-path
+ * bound (`./ownedPaths.ts`: a platform file, a charter, a state folder, a
+ * pack's own folder), and the sweep re-checks each candidate's place in the
+ * bound before it reads this set at all. So an `infra` row a hand edit adds for
+ * `docs/owner.md` never reaches the sweep as trusted: the manifest that carries
+ * it is refused when it is read.
+ *
  * One definition, because two would drift: `clean` and `sync` must judge
  * ownership identically or the verb that ran last decides what survives.
  */
@@ -283,16 +292,23 @@ function containmentDefect(path: string): string | null {
 }
 
 /**
- * Assert every ledger path stays inside the repo rooted at `rootDir`. All
- * defective rows are named in ONE `VALIDATION_ERROR` throw — a hand-edited
- * ledger is repairable in a single sitting — and a clean ledger returns
- * without side effects. Nested relative paths are accepted; absolute paths
- * (POSIX or Windows-shaped) and `..` climbs are refused.
+ * Assert every ledger path stays inside the repo rooted at `rootDir`, and
+ * inside the owned-path bound (`./ownedPaths.ts`). All defective rows are
+ * named in ONE `VALIDATION_ERROR` throw — a hand-edited ledger is repairable in
+ * a single sitting — and a clean ledger returns without side effects. Nested
+ * relative paths are accepted; absolute paths (POSIX or Windows-shaped) and
+ * `..` climbs are refused.
+ *
+ * The callers hand it the rows a planned emission is about to record, before
+ * any write. A planned row outside the bound is an engine defect rather than
+ * an operator's — no release writes one, and `test/manifest/ownedPaths.test.ts`
+ * holds every planner output inside it — and refusing it here keeps it from
+ * ever reaching a manifest, where every later read would refuse it.
  */
 export function assertLedgerContainment(ledger: readonly LedgerEntry[], rootDir: string): void {
   const defects: string[] = [];
   for (const [index, entry] of ledger.entries()) {
-    const defect = containmentDefect(entry.path);
+    const defect = containmentDefect(entry.path) ?? ownedPathDefect(entry);
     if (defect !== null) {
       defects.push(`\`ledger[${index}].path\` ${JSON.stringify(entry.path)} ${defect}`);
     }
@@ -301,7 +317,8 @@ export function assertLedgerContainment(ledger: readonly LedgerEntry[], rootDir:
     throw new EngineError(
       `Ledger containment check failed for the repo at ${rootDir}: ${defects.join("; ")}. ` +
         `A ledger row authorises the reclaim sweep to act on its path, so every path must ` +
-        `be repo-relative POSIX with no \`..\` segment. Fix or drop the row(s) named above.`,
+        `be repo-relative POSIX with no \`..\` segment, inside the paths a stamity release ` +
+        `writes. Fix or drop the row(s) named above.`,
       { code: "VALIDATION_ERROR" },
     );
   }

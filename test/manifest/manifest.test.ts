@@ -241,7 +241,10 @@ describe("collectManifestErrors", () => {
   });
 
   it("accepts a pack owner and refuses one carrying no pack id", () => {
-    const row = { path: ".stamity/packs/ops/agents/reviewer.md", artifactType: "infra" as const };
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — a pack row must lie in its own
+    // pack's folder, and `@acme/ops` installs into `acme__ops/`; the row used
+    // the folder of a pack named `ops`, which the bound now refuses.
+    const row = { path: ".stamity/packs/acme__ops/agents/reviewer.md", artifactType: "infra" as const };
 
     expect(
       collectManifestErrors({
@@ -263,7 +266,11 @@ describe("collectManifestErrors", () => {
     // enforces uniqueness per (adapter, path) pair, not per path, and the wider
     // title would have stayed green if someone tightened the key back to the
     // path alone — silently breaking every co-owned row the composer writes.
-    const row = { adapter: "claude" as Tool, artifactId: "x", artifactType: "agent" as const };
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — an `agent` row at `AGENTS.md`
+    // lies outside the owned-path bound (agent rows only under a content
+    // folder), which would add a second error; the root charter is an `infra`
+    // row in every release, so the pair is spelled that way.
+    const row = { adapter: "claude" as Tool, artifactId: "x", artifactType: "infra" as const };
     const manifest = {
       ...fullManifest(),
       ledger: [
@@ -282,6 +289,10 @@ describe("collectManifestErrors", () => {
     // per selected tool, and the file is only reclaimable once every owner has
     // stopped emitting it. The collector had no positive case for it, so the
     // pair key was asserted from the failure side only.
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the third co-owner was a
+    // `pack:@acme/ops` row at `AGENTS.md`, and a pack row now lies only in its
+    // own pack folder (no release ever wrote one elsewhere); the pair key is
+    // still proved by two adapters sharing the path.
     const row = { artifactId: "charter", artifactType: "infra" as const };
 
     expect(
@@ -290,10 +301,94 @@ describe("collectManifestErrors", () => {
         ledger: [
           { path: "AGENTS.md", adapter: "claude", ...row },
           { path: "AGENTS.md", adapter: "codex", ...row },
-          { path: "AGENTS.md", adapter: "pack:@acme/ops", ...row },
         ],
       }),
     ).toEqual([]);
+  });
+
+  describe("the owned-path bound (REQ-PLUGIN-045)", () => {
+    const HASH = "a".repeat(64);
+    /** Every row shape a hand edit used to aim `sync` and `clean` with. */
+    const OUTSIDE: readonly { path: string; adapter: string; artifactType: string; contentHash?: string }[] = [
+      { path: "notes/st-owner.md", adapter: "claude", artifactType: "rule" },
+      { path: "src/stamity-x.ts", adapter: "cursor", artifactType: "skill" },
+      { path: "packages/app/skills/st-foo/index.ts", adapter: "cursor", artifactType: "skill" },
+      { path: "lib/30-stamity-y.js", adapter: "claude", artifactType: "rule" },
+      { path: ".stamity/learnings/keep-me.md", adapter: "claude", artifactType: "infra", contentHash: HASH },
+      { path: ".stamity/overrides/x.md", adapter: "claude", artifactType: "infra", contentHash: HASH },
+      { path: ".github/workflows/ci.yml", adapter: "claude", artifactType: "infra", contentHash: HASH },
+      { path: ".github/CODEOWNERS", adapter: "copilot", artifactType: "infra", contentHash: HASH },
+      { path: ".claude/agents/stamity-x.md", adapter: "claude", artifactType: "infra", contentHash: HASH },
+      { path: ".stamity/generated/x.md", adapter: "claude", artifactType: "skill", contentHash: HASH },
+      { path: ".stamity/packs/other/x.md", adapter: "pack:ops", artifactType: "infra", contentHash: HASH },
+    ];
+
+    it("refuses each row outside the bound, naming the row", () => {
+      for (const row of OUTSIDE) {
+        const errors = collectManifestErrors({
+          ...fullManifest(),
+          ledger: [{ ...row, artifactId: "forged" }],
+        });
+
+        expect(errors, `row ${JSON.stringify(row.path)} must be refused`).toEqual([
+          `\`ledger[0].path\` ${JSON.stringify(row.path)} lies outside the paths a stamity release writes ` +
+            `for ${row.artifactType} rows (owner ${row.adapter}) — a ledger row authorises sync and clean ` +
+            `to delete or overwrite its path, so the row is refused`,
+        ]);
+      }
+    });
+
+    it("names every row outside the bound when one manifest carries them all", async () => {
+      const root = getRoot().path("forged");
+      const manifest = {
+        ...fullManifest(),
+        ledger: OUTSIDE.map((row, index) => ({ ...row, artifactId: `forged-${index}` })),
+      };
+      await mkdir(join(root, STATE_DIR), { recursive: true });
+      await writeFile(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+
+      const failure = await readManifest(root).then(
+        () => null,
+        (cause: unknown) => cause,
+      );
+
+      expect(failure).toBeInstanceOf(EngineError);
+      expect((failure as EngineError).code).toBe("CONFIG_ERROR");
+      for (const [index, row] of OUTSIDE.entries()) {
+        expect((failure as EngineError).message).toContain(
+          `\`ledger[${index}].path\` ${JSON.stringify(row.path)} lies outside`,
+        );
+      }
+      // The writer refuses the same manifest, so the defect is never persisted.
+      await expect(writeManifest(root, manifest as SetupManifest)).rejects.toMatchObject({ code: "CONFIG_ERROR" });
+    });
+
+    it("accepts a row in each part of the bound, and names an unknown owner only once", () => {
+      expect(
+        collectManifestErrors({
+          ...fullManifest(),
+          ledger: [
+            { path: ".cursor/hooks.json", adapter: "cursor", artifactId: "a", artifactType: "infra" },
+            { path: "packages/app/AGENTS.md", adapter: "codex", artifactId: "b", artifactType: "infra" },
+            { path: ".stamity/generated/hooks/claude/stamity-x.mjs", adapter: "claude", artifactId: "c", artifactType: "infra" },
+            { path: ".agents/skills/my-skill/SKILL.md", adapter: "codex", artifactId: "d", artifactType: "skill" },
+            { path: ".stamity/packs/acme__ops/receipt.json", adapter: "pack:@acme/ops", artifactId: "e", artifactType: "infra" },
+          ],
+        }),
+      ).toEqual([]);
+
+      // The owner and the type select the part of the bound, so a row already
+      // refused for either is not refused a second time for its path.
+      const errors = collectManifestErrors({
+        ...fullManifest(),
+        ledger: [
+          { path: "docs/x.md", adapter: "emacs", artifactId: "a", artifactType: "infra" },
+          { path: "docs/y.md", adapter: "claude", artifactId: "b", artifactType: "theme" },
+        ],
+      });
+      expect(errors).toHaveLength(2);
+      expect(errors.join(" | ")).not.toContain("lies outside");
+    });
   });
 
   it("validates all six detected fields, including the two the gate resolver reads", () => {

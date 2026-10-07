@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 // `link` is the hard-link primitive, aliased for the same reason the write-escape
 // suite aliases it: `link` reads as a symlink at a glance, and the shared-name
@@ -10,6 +11,7 @@ import {
   applySync,
   planOutputEntries,
   planSync,
+  previewReclaim,
   type SyncPlan,
 } from "../../../src/cli/commands/sync/engine.ts";
 import {
@@ -140,6 +142,11 @@ async function seedRepo(
 
 function output(path: string, content: string, artifactId: string): AdapterOutput {
   return { path, content, owner: { adapter: "claude", artifactId, artifactType: "infra" } };
+}
+
+/** The ledger's spelling of a content hash, over the bytes a fixture wrote. */
+function sha256(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
 }
 
 /** The rejection an async call produced, or `null` when it resolved. */
@@ -351,17 +358,21 @@ describe("collisions", () => {
   it("classifies an unmanaged file at a non-engine name as a collision; apply refuses, then force overwrites behind a verified .bak", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
-    await handle.seedFiles({ "repo/docs/USER.md": "my notes\n" });
-    const outputs = [output("docs/USER.md", "generated whole-file\n", "user-doc")];
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the synthetic whole-file output
+    // sat at `docs/USER.md`, a path no release writes, which the planned-row
+    // check now refuses before any write. The engine's whole-file platform
+    // file at a name it did not mint is the same lane and the same collision.
+    await handle.seedFiles({ "repo/.github/workflows/copilot-setup-steps.yml": "my notes\n" });
+    const outputs = [output(".github/workflows/copilot-setup-steps.yml", "generated whole-file\n", "user-doc")];
 
     const entries = await planOutputEntries(root, outputs, ENGINE_VERSION);
     expect(entries).toEqual([
-      expect.objectContaining({ path: "docs/USER.md", action: "collision", adapter: "claude" }),
+      expect.objectContaining({ path: ".github/workflows/copilot-setup-steps.yml", action: "collision", adapter: "claude" }),
     ]);
     expect(entries[0]?.detail).toContain("--force");
 
     const base = await planSync(root, ENGINE_VERSION);
-    const plan: SyncPlan = { ...base, outputs, entries, collisions: ["docs/USER.md"] };
+    const plan: SyncPlan = { ...base, outputs, entries, collisions: [".github/workflows/copilot-setup-steps.yml"] };
 
     // TEST CHANGE, justified: the gate is per PATH now, not per plan —
     // one colliding file used to throw away every other write in the run, which
@@ -375,14 +386,14 @@ describe("collisions", () => {
       dryRun: false,
       now: T1,
     });
-    expect(gated.refused).toEqual(["docs/USER.md"]);
+    expect(gated.refused).toEqual([".github/workflows/copilot-setup-steps.yml"]);
     expect(gated.skipped).toBe(1);
     expect(gated.created + gated.updated).toBe(0);
-    expect(gated.wrote[0]?.warning).toContain("docs/USER.md");
+    expect(gated.wrote[0]?.warning).toContain(".github/workflows/copilot-setup-steps.yml");
     expect(gated.wrote[0]?.warning).toContain(
       "--force overwrites after a verified .bak, or move the file aside",
     );
-    expect(await readFile(join(root, "docs/USER.md"), "utf8")).toBe("my notes\n");
+    expect(await readFile(join(root, ".github/workflows/copilot-setup-steps.yml"), "utf8")).toBe("my notes\n");
 
     // dryRun previews the same plan without gating on the collision.
     const dry = await applySync(root, plan, {
@@ -393,7 +404,7 @@ describe("collisions", () => {
     });
     expect(dry.skipped).toBe(1);
     expect(renderSyncReport(plan, dry, plainPalette)).toContain("would refuse");
-    expect(await readFile(join(root, "docs/USER.md"), "utf8")).toBe("my notes\n");
+    expect(await readFile(join(root, ".github/workflows/copilot-setup-steps.yml"), "utf8")).toBe("my notes\n");
 
     const forced = await applySync(root, plan, {
       engineVersion: ENGINE_VERSION,
@@ -403,10 +414,10 @@ describe("collisions", () => {
     });
     expect(forced.updated).toBe(1);
     expect(forced.wrote[0]?.warning).toContain(".bak");
-    expect(await readFile(join(root, "docs/USER.md"), "utf8")).toBe("generated whole-file\n");
-    expect(await readFile(join(root, "docs/USER.md.bak"), "utf8")).toBe("my notes\n");
+    expect(await readFile(join(root, ".github/workflows/copilot-setup-steps.yml"), "utf8")).toBe("generated whole-file\n");
+    expect(await readFile(join(root, ".github/workflows/copilot-setup-steps.yml.bak"), "utf8")).toBe("my notes\n");
     expect((await readManifest(root))?.ledger).toEqual([
-      expect.objectContaining({ path: "docs/USER.md", adapter: "claude", artifactId: "user-doc" }),
+      expect.objectContaining({ path: ".github/workflows/copilot-setup-steps.yml", adapter: "claude", artifactId: "user-doc" }),
     ]);
   });
 
@@ -430,19 +441,23 @@ describe("collisions", () => {
       const root = await seedRepo(handle);
       await handle.seedFiles({
         "repo/notes.md": "USER NOTES\n",
-        "repo/machine.json": '{"v":0}\n',
+        "repo/.github/hooks/machine.json": '{"v":0}\n',
       });
       // One inode, two names, twice over — the plant the guard reads as
       // `nlink > 1`. In-tree twins: where the second name lives is what the
       // guard cannot see, and refusing the benign in-tree layout too is the
       // conservative half of the posture, pinned in `writeEscape.test.ts`.
       await hardLink(join(root, "notes.md"), join(root, "CLAUDE.md"));
-      await hardLink(join(root, "machine.json"), join(root, "settings.json"));
+      // TEST CHANGE, justified: REQ-PLUGIN-045 — the whole-file output sat at
+      // `settings.json`, a path no release writes, which the planned-row check
+      // now refuses before any write; `.github/hooks/stamity.json` is a
+      // whole-file platform output on the same lane.
+      await hardLink(join(root, ".github/hooks/machine.json"), join(root, ".github/hooks/stamity.json"));
       const outputs = [
         // Managed block → the merge lane, refused by `refusePreservedContent`.
         output("CLAUDE.md", wrapInManagedBlock("new body", "CLAUDE.md", ENGINE_VERSION), "context"),
         // No block → the whole-file lane, refused inside `backupBeforeOverwrite`.
-        output("settings.json", '{"v":1}\n', "settings"),
+        output(".github/hooks/stamity.json", '{"v":1}\n', "settings"),
       ];
 
       const entries = await planOutputEntries(root, outputs, ENGINE_VERSION);
@@ -453,18 +468,18 @@ describe("collisions", () => {
         ...base,
         outputs,
         entries,
-        collisions: ["CLAUDE.md", "settings.json"],
+        collisions: ["CLAUDE.md", ".github/hooks/stamity.json"],
       };
       const applyOpts = { engineVersion: ENGINE_VERSION, dryRun: false, now: T1 };
 
       // Refused per path rather than by throwing the plan away; the
       // aggregate remedy sentence rides each refused row's warning.
       const gated = await applySync(root, plan, { ...applyOpts, force: false });
-      expect(gated.refused).toEqual(["CLAUDE.md", "settings.json"]);
+      expect(gated.refused).toEqual(["CLAUDE.md", ".github/hooks/stamity.json"]);
       const gatedMessage = gated.wrote.map((row) => row.warning ?? "").join("\n");
       // One sentence, both paths, both gates named — and no backup promised on
       // a plan whose first path never reaches one.
-      expect(gatedMessage).toContain("Hard link(s) at CLAUDE.md, settings.json:");
+      expect(gatedMessage).toContain("Hard link(s) at CLAUDE.md, .github/hooks/stamity.json:");
       expect(gatedMessage).toContain(
         "by the merge gate on a file the engine merges a managed block into",
       );
@@ -556,7 +571,10 @@ describe("only-when-stale", () => {
   it("a same-version re-run reports all unchanged, bumps no mtimes, and still bumps the manifest", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
-    const guardPath = ".claude/stamity-guide.md";
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — a `rule` row directly under
+    // `.claude/` lies outside the owned-path bound (rule rows only under a
+    // content folder); the guide moved into `.claude/rules/`.
+    const guardPath = ".claude/rules/stamity-guide.md";
     const outputs = [
       { ...output(guardPath, wrapInManagedBlock("guide body", guardPath, ENGINE_VERSION), "guide"), owner: { adapter: "claude" as const, artifactId: "guide", artifactType: "rule" as const } },
     ];
@@ -599,22 +617,30 @@ describe("only-when-stale", () => {
 describe("reclaim", () => {
   it("reports an orphaned row on dryRun (all dry-run, zero tallies) and sweeps it on apply; pack rows never enter", async () => {
     const handle = tempDir();
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — both rows named paths no
+    // release writes (a root-level rule, a pack row outside `.stamity/packs/`),
+    // which the manifest now refuses; they moved into the bound, the swept row
+    // records the hash its delete now needs, and the pack row is `infra` in its
+    // own folder as every release records one.
+    const oldPath = ".claude/rules/stamity-old.md";
+    const packPath = ".stamity/packs/demo/thing.md";
     const oldRow: LedgerEntry = {
-      path: "stamity-old.md",
+      path: oldPath,
       adapter: "claude",
       artifactId: "old",
       artifactType: "rule",
+      contentHash: sha256("engine output\n"),
     };
     const packRow: LedgerEntry = {
-      path: "packs/demo/thing.md",
+      path: packPath,
       adapter: "pack:demo",
       artifactId: "thing",
-      artifactType: "rule",
+      artifactType: "infra",
     };
     const root = await seedRepo(handle, { ledger: [oldRow, packRow] });
     await handle.seedFiles({
-      "repo/stamity-old.md": "engine output\n",
-      "repo/packs/demo/thing.md": "pack content\n",
+      [`repo/${oldPath}`]: "engine output\n",
+      [`repo/${packPath}`]: "pack content\n",
     });
 
     const plan = await planSync(root, ENGINE_VERSION);
@@ -631,7 +657,7 @@ describe("reclaim", () => {
     expect(dry.reclaimed?.deletedCount).toBe(0);
     expect(dry.reclaimed?.strippedCount).toBe(0);
     expect(dry.reclaimed?.skippedCount).toBe(0);
-    expect(existsSync(join(root, "stamity-old.md"))).toBe(true);
+    expect(existsSync(join(root, oldPath))).toBe(true);
     // dryRun executes zero writes — the manifest bytes are untouched.
     expect(await readFile(manifestPath(root), "utf8")).toBe(manifestBytesBefore);
 
@@ -642,8 +668,8 @@ describe("reclaim", () => {
       now: T1,
     });
     expect(report.reclaimed?.deletedCount).toBe(1);
-    expect(existsSync(join(root, "stamity-old.md"))).toBe(false);
-    expect(existsSync(join(root, "packs/demo/thing.md"))).toBe(true);
+    expect(existsSync(join(root, oldPath))).toBe(false);
+    expect(existsSync(join(root, packPath))).toBe(true);
     // Was whole-array equality, which only held while emission contributed no
     // rows of its own. The claim is unchanged and asserted on the two rows this
     // test owns: the swept row is gone, the pack row survives byte-identical.
@@ -654,11 +680,15 @@ describe("reclaim", () => {
 
   it("classifies rows of a hand-removed tool as adapter-removed, sweeps them, and drops them from the ledger", async () => {
     const handle = tempDir();
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the row records the hash of
+    // the block-less file's bytes, as every release does; a hashless row no
+    // longer proves the delete this case is about.
     const cursorRow: LedgerEntry = {
       path: ".cursor/rules/30-stamity-style.mdc",
       adapter: "cursor",
       artifactId: "style",
       artifactType: "rule",
+      contentHash: sha256("rule body\n"),
     };
     const root = await seedRepo(handle, { tools: ["claude"], ledger: [cursorRow] });
     await handle.seedFiles({ "repo/.cursor/rules/30-stamity-style.mdc": "rule body\n" });
@@ -687,11 +717,15 @@ describe("reclaim", () => {
   // instead, and the sweep removes the old copies — and only them.
   it("moves a 1.10.0 cursor touchpoint from .cursor/skills to the shared tree and leaves the rest of .cursor/ alone", async () => {
     const handle = tempDir();
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the row records the hash of
+    // the block-less file's bytes, as 1.10.0 did; a hashless row no longer
+    // proves the delete this case is about.
     const oldTouchpoint: LedgerEntry = {
       path: ".cursor/skills/st-work/SKILL.md",
       adapter: "cursor",
       artifactId: "cmd-work",
       artifactType: "command",
+      contentHash: sha256("---\nname: st-work\n---\n# /st-work\n"),
     };
     const root = await seedRepo(handle, { tools: ["claude", "cursor"], ledger: [oldTouchpoint] });
     await handle.seedFiles({
@@ -955,7 +989,10 @@ describe("report payload", () => {
   it("syncJsonPayload is JSON-serializable and mirrors the human report's counts", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
-    const outputs = [output("stamity-a.md", wrapInManagedBlock("a", "stamity-a.md", ENGINE_VERSION), "a")];
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — an `infra` output at a root
+    // `stamity-a.md` lies outside the owned-path bound and is refused before any
+    // write; `CLAUDE.md` is an `infra` platform file on the same managed lane.
+    const outputs = [output("CLAUDE.md", wrapInManagedBlock("a", "CLAUDE.md", ENGINE_VERSION), "a")];
     const entries = await planOutputEntries(root, outputs, ENGINE_VERSION);
     const base = await planSync(root, ENGINE_VERSION);
     const plan: SyncPlan = { ...base, outputs, entries, collisions: [] };
@@ -1105,5 +1142,68 @@ describe("the plugin-owned report lines", () => {
 
     expect(renderSyncReport(plan, report, plainPalette)).not.toContain("plugin-owned");
     expect(syncJsonPayload(plan, report)["pluginOwned"]).toEqual([]);
+  });
+});
+
+/**
+ * REQ-PLUGIN-045: a row with no recorded hash proves nothing in the write lane
+ * either. A hand-added hashless `copilot` row for an owner's workflow that
+ * `init` had skipped used to license a backup-free overwrite of it (measured on
+ * 1.11.0); the owner's bytes now go to a verified `.bak` first.
+ */
+describe("a hashless ledger row in the write lane", () => {
+  const WORKFLOW = ".github/workflows/copilot-setup-steps.yml";
+  const OWNER_WORKFLOW =
+    'name: "Copilot Setup Steps"\non: workflow_dispatch\njobs:\n  copilot-setup-steps:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo owner\n';
+
+  it("backs up the owner's file before the overwrite and names the backup", async () => {
+    const handle = tempDir();
+    const forged: LedgerEntry = {
+      path: WORKFLOW,
+      adapter: "copilot",
+      artifactId: "copilot-setup-steps",
+      artifactType: "infra",
+    };
+    const root = await seedRepo(handle, { tools: ["copilot"], ledger: [forged] });
+    await handle.seedFiles({ [`repo/${WORKFLOW}`]: OWNER_WORKFLOW });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    expect(plan.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("update");
+    const report = await applySync(root, plan, {
+      engineVersion: ENGINE_VERSION,
+      force: false,
+      dryRun: false,
+      now: T1,
+    });
+
+    const row = report.wrote.find((result) => result.path === WORKFLOW);
+    expect(row?.action).toBe("updated");
+    expect(row?.warning).toContain(`${WORKFLOW}.bak`);
+    expect(await readFile(join(root, `${WORKFLOW}.bak`), "utf8")).toBe(OWNER_WORKFLOW);
+    expect(await readFile(join(root, WORKFLOW), "utf8")).not.toBe(OWNER_WORKFLOW);
+  });
+
+  it("previews the reclaim a dry run would take with the same actions and proofs check names", async () => {
+    const handle = tempDir();
+    const gone = ".claude/agents/stamity-gone.md";
+    const row: LedgerEntry = {
+      path: gone,
+      adapter: "claude",
+      artifactId: "gone",
+      artifactType: "agent",
+      contentHash: sha256("engine agent\n"),
+    };
+    const root = await seedRepo(handle, { ledger: [row] });
+    await handle.seedFiles({ [`repo/${gone}`]: "engine agent\n" });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    const dry = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: true, now: T1 });
+
+    expect(dry.reclaimed?.entries).toEqual([
+      expect.objectContaining({ path: gone, action: "dry-run", wouldBe: "deleted", proof: "hash" }),
+    ]);
+    expect(await previewReclaim(root, plan, T1)).toEqual(dry.reclaimed);
+    expect(existsSync(join(root, gone))).toBe(true);
+    expect(await previewReclaim(root, { ...plan, reclaim: [] })).toBeNull();
   });
 });

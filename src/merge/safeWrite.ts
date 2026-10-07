@@ -853,12 +853,13 @@ export interface LedgerHashRow {
  * with either is agreement. Same reading the reclaim sweep takes of the same
  * field (`./reclaim.ts::CandidateGroup.recordedHashes`).
  *
- * A row with no `contentHash` contributes no key at all, which is the honest
- * answer and not a gap this builder can close: nothing was recorded, so nothing
- * can be compared. Such a path keeps the pre-drift behaviour (see
- * {@link hasLedgerDrift}). Both shipped producers — `sync/engine.ts` and
- * `init/apply.ts` — record a hash on every row they write, so this is a
- * manifest written by an engine that predates the field, not a live state.
+ * Every owned path gets a key, and a path whose rows recorded no
+ * `contentHash` gets an EMPTY set: nothing was recorded, so nothing the bytes
+ * hold can be proved the engine's, and {@link hasLedgerDrift} reads that as
+ * drift. Every release records a hash on every row it writes (measured from
+ * 1.0.0 to 1.11.0, REQ-PLUGIN-045), so a hashless row is a hand edit of the
+ * committed manifest — and reading it as "not drifted" let one forged row turn
+ * an owner's file into a backup-free overwrite.
  */
 export function ledgerHashIndex(
   rootDir: string,
@@ -866,10 +867,9 @@ export function ledgerHashIndex(
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const index = new Map<string, Set<string>>();
   for (const row of rows) {
-    if (row.contentHash === undefined) continue;
     const key = ledgerKeyUnder(rootDir, row.path);
     const hashes = index.get(key) ?? new Set<string>();
-    hashes.add(row.contentHash);
+    if (row.contentHash !== undefined) hashes.add(row.contentHash);
     index.set(key, hashes);
   }
   return index;
@@ -889,12 +889,11 @@ export function ledgerHashIndex(
  * written at each path, so "still what we wrote" is a lookup, not a guess.
  *
  * `false` when the caller supplies no index, and `false` for a path the index
- * has no entry for. Absence of a record is not evidence of an edit, and reading
- * it as one would mint a `.bak` beside every generated file on the first
- * content-changing sync after an engine upgrade — the hot path, where the file
- * genuinely is regenerable. The cost of that choice is stated on
- * {@link ledgerHashIndex}: a row that never recorded a hash is not
- * drift-checkable and keeps the fast path.
+ * has no entry for: the index says nothing about a path it does not cover.
+ * `true` for a path whose rows recorded no hash (an empty set,
+ * {@link ledgerHashIndex}): the ledger claims the path but cannot show the
+ * bytes are the engine's, so the overwrite takes the verified `.bak`. No
+ * release writes such a row, so the engine's own outputs never pay for it.
  *
  * The hash is taken over the string exactly as {@link readIfExists} read it and
  * exactly as both producers wrote it (`createHash("sha256").update(content)`,
@@ -926,6 +925,7 @@ export function hasLedgerDrift(
 ): boolean {
   const recorded = ledgerHashes?.get(toLedgerKey(filePath));
   if (recorded === undefined) return false;
+  if (recorded.size === 0) return true;
   if (recorded.has(ledgerHash(existingContent))) return false;
   const folded = existingContent.replaceAll("\r\n", "\n");
   return folded === existingContent || !recorded.has(ledgerHash(folded));

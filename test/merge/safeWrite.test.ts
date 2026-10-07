@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { chmod, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  hasLedgerDrift,
   isManagedPath,
   ledgerHashIndex,
   ledgerPathSet,
@@ -226,14 +228,14 @@ describe("safeWriteFile — creation and whole-file writes", () => {
     await expect(bakFiles()).resolves.toEqual([]);
   });
 
-  it("keeps the fast path for a ledger row that recorded no hash", async () => {
-    // The stated residual, pinned so it stays deliberate. A row with no
-    // `contentHash` is a manifest written before the field existed: nothing was
-    // recorded, so nothing can be compared, and absence of a record is not
-    // evidence of an edit. Reading it as drift would mint a `.bak` beside every
-    // generated file on the first content-changing sync after an upgrade. Both
-    // shipped producers record a hash on every row, so this is a legacy
-    // manifest, not a live state.
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — this pinned the residual "a row
+  // with no hash keeps the fast path", which is the defect the unit closes: a
+  // hand-added hashless row for an owner's file turned `sync` into a
+  // backup-free overwrite of it. Every release from 1.0.0 to 1.11.0 records a
+  // hash on every row (measured, 0 of 5,288 rows without one), so the upgrade
+  // cost the residual guarded against does not exist. The fixture is the same;
+  // the assertions now pin the verified `.bak`.
+  it("backs up a file whose ledger row recorded no hash, before replacing it", async () => {
     const target = tempDir().path("stamity-agent.md");
     await writeFile(target, "old\n", "utf-8");
 
@@ -242,8 +244,25 @@ describe("safeWriteFile — creation and whole-file writes", () => {
       ledgerHashes: ledgerHashIndex(tempDir().dir, [{ path: "stamity-agent.md" }]),
     });
 
-    expect(result).toEqual({ path: target, action: "updated" });
-    await expect(bakFiles()).resolves.toEqual([]);
+    expect(result.action).toBe("updated");
+    expect(result.warning).toContain(`${target}.bak`);
+    await expect(bakFiles()).resolves.toEqual(["stamity-agent.md.bak"]);
+    await expect(readFile(`${target}.bak`, "utf-8")).resolves.toBe("old\n");
+    await expect(readFile(target, "utf-8")).resolves.toBe("new\n");
+  });
+
+  it("indexes a hashless row as an empty set beside a hashed path's hashes", () => {
+    const index = ledgerHashIndex(tempDir().dir, [
+      { path: "a.md" },
+      { path: "b.md", contentHash: "h1" },
+      { path: "b.md" },
+    ]);
+
+    expect(Array.from(index.values(), (hashes) => Array.from(hashes))).toEqual([[], ["h1"]]);
+    // A hashed co-owner still answers for the path: one recorded hash is a record.
+    expect(hasLedgerDrift(join(tempDir().dir, "b.md"), "x", index)).toBe(true);
+    expect(hasLedgerDrift(join(tempDir().dir, "a.md"), "x", index)).toBe(true);
+    expect(hasLedgerDrift(join(tempDir().dir, "c.md"), "x", index)).toBe(false);
   });
 
   it("lets backup:false opt out of the drift backup as well", async () => {

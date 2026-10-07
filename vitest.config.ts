@@ -174,6 +174,11 @@ export default defineConfig({
           lines: 100,
         },
 
+        // The owned-path bound (REQ-PLUGIN-045): manifest validation and the
+        // reclaim sweep refuse what it refuses, so every leg it has is a line of
+        // the ledger's security boundary and none is exempt.
+        "src/manifest/ownedPaths.ts": { statements: 100, branches: 100, functions: 100, lines: 100 },
+
         // `releaseInProcessLock`'s `if (entry)` else: every caller reserves
         // before releasing and the release closure is idempotent-guarded, so a
         // release for a path holding no reservation has no path to it.

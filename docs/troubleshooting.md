@@ -114,8 +114,12 @@ the same read-only plan `sync` itself runs, so "check says clean" and "sync writ
 one statement rather than two implementations that must agree.
 
 A drift line names how many files would change, how many ledgered files are missing, and how
-many are queued for reclaim. It then lists them. A run that exits `1` on drift alone reports
-`INTEGRITY_ERROR` in its `--json` output.
+many are queued for reclaim. It then lists them. Each reclaim line names the path, what the next
+`sync` would do to it and why: `delete`, `strip` (the managed block goes, your text stays) or
+`reduce` (a shared document loses the engine's entries) with the proof in brackets — `hash`,
+`block` or `co-owned` — or `keep`, `refuse` or `gone` with the reason. Every `delete` line is
+printed, however long the list. `check --json` carries the same list as `drift.reclaim`. A run
+that exits `1` on drift alone reports `INTEGRITY_ERROR` in its `--json` output.
 
 If the line reads `drift: not evaluated`, it names the real reason, and there are two. Either the
 manifest could not be read, or the plan itself threw. For the first, the `manifest` row above
@@ -124,6 +128,31 @@ override all throw. While the plan does not build, nothing is compared, so that 
 detect tampering with a generated file.
 
 ## Common failures
+
+### `check` refuses a manifest whose ledger names a path the engine does not write
+
+The `manifest` row fails, and `sync` and `clean` stop with `CONFIG_ERROR` before they touch a
+file:
+
+```text
+`ledger[57].path` "docs/owner.md" lies outside the paths a stamity release writes for infra rows
+(owner claude) — a ledger row authorises sync and clean to delete or overwrite its path, so the
+row is refused
+```
+
+The ledger in `.stamity/manifest.json` tells `sync` and `clean` which files they may delete or
+overwrite, and it is committed, so a row can be added by hand or by a pull request. No stamity
+release writes a row outside its own paths — the platform files it writes, a charter
+`AGENTS.md`, its state folders `.stamity/generated/` and `.stamity/mcp/`, an installed pack's
+own folder and the folders it writes agents, skills, rules and commands into. So such a row
+refuses the whole manifest rather than being acted on. Remove each row the message names, then
+re-run the command. `check --json` lists the paths a release writes under `ownedPaths`.
+
+A row inside those paths still proves nothing on its own. `sync` and `clean` delete or overwrite
+a file without a backup only when its bytes still hash to what the row recorded, together with
+an engine-minted `st-` or `stamity-` name in an agent, skill, rule or command folder, or when a
+managed block spans the file. A row with no content hash keeps its file, and an overwrite of one
+takes a verified `.bak` first.
 
 ### `check` reports drift after you edited a managed file
 

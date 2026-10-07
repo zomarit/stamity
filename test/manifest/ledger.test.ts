@@ -399,10 +399,20 @@ describe("assertLedgerContainment", () => {
   const ROOT = "/repo/root";
 
   it("accepts nested relative paths and an empty ledger", () => {
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the check now also holds each
+    // row to the owned-path bound, so the nested paths are ones a release
+    // writes: an `agent` row at `AGENTS.md` or `deep/a/b/c.md` is outside it
+    // (agent rows only under a content folder). Still three depths, still
+    // nested, still accepted.
+    const infraRow = (path: string): LedgerEntry => ({ ...rowFor(path), artifactType: "infra" });
     expect(() => assertLedgerContainment([], ROOT)).not.toThrow();
     expect(() =>
       assertLedgerContainment(
-        [rowFor("AGENTS.md"), rowFor(".claude/agents/reviewer.md"), rowFor("deep/a/b/c.md")],
+        [
+          infraRow("AGENTS.md"),
+          rowFor(".claude/agents/reviewer.md"),
+          infraRow(".stamity/generated/hooks/claude/stamity-x.mjs"),
+        ],
         ROOT,
       ),
     ).not.toThrow();
@@ -427,7 +437,12 @@ describe("assertLedgerContainment", () => {
   it("names every defective row in one throw", () => {
     let message = "";
     try {
-      assertLedgerContainment([rowFor("fine.md"), rowFor("../up.md"), rowFor("/abs.md")], ROOT);
+      // TEST CHANGE, justified: REQ-PLUGIN-045 — the clean row moved under a
+      // content folder, since an `agent` row at `fine.md` is now refused too.
+      assertLedgerContainment(
+        [rowFor(".claude/agents/fine.md"), rowFor("../up.md"), rowFor("/abs.md")],
+        ROOT,
+      );
     } catch (error) {
       message = (error as EngineError).message;
     }
@@ -435,6 +450,27 @@ describe("assertLedgerContainment", () => {
     expect(message).toContain("`ledger[1].path`");
     expect(message).toContain("`ledger[2].path`");
     expect(message).not.toContain("`ledger[0].path`");
+  });
+
+  it("refuses a planned row outside the owned-path bound, beside a shape defect, in one throw", () => {
+    let caught: unknown = null;
+    try {
+      assertLedgerContainment(
+        [rowFor(".claude/agents/fine.md"), rowFor("docs/stamity-guide.md"), rowFor("../up.md")],
+        ROOT,
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(EngineError);
+    const error = caught as EngineError;
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain(
+      '`ledger[1].path` "docs/stamity-guide.md" lies outside the paths a stamity release writes for agent rows (owner claude)',
+    );
+    expect(error.message).toContain("`ledger[2].path`");
+    expect(error.message).not.toContain("`ledger[0].path`");
   });
 });
 

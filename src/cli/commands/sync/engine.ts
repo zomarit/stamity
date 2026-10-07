@@ -567,6 +567,34 @@ function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"
 }
 
 /**
+ * The reclaim sweep a sync of `plan` would run, run without consent: every
+ * candidate passes gates 1-4 and comes back with the action consent would take
+ * (`wouldBe`) and its proof, or with the refusal. Writes nothing; `null` when
+ * the plan queues no candidate.
+ *
+ * One body for the two readers that preview a sync — `applySync({ dryRun })`
+ * and `check`'s drift gate (REQ-PLUGIN-045) — so `sync --dry-run --json` and
+ * `check --json` name the same paths with the same actions. Both allowlists
+ * come off `plan.manifest`, the run's pre-rebuild ledger, exactly as the live
+ * sweep builds them in {@link applySync}.
+ */
+export async function previewReclaim(
+  rootDir: string,
+  plan: SyncPlan,
+  now?: Date,
+): Promise<ReclaimReport | null> {
+  if (plan.reclaim.length === 0) return null;
+  const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
+  return sweepReclaimCandidates(plan.reclaim, {
+    rootDir,
+    consent: false,
+    trustedExactPaths: trustedInfraPaths(plan.manifest.ledger),
+    coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply),
+    ...(now === undefined ? {} : { now }),
+  });
+}
+
+/**
  * The pre-run ledger rows for `path` whose recorded hash still matches the
  * regular file on disk — the proof the engine wrote those bytes, carried into
  * the rebuilt ledger for a row this run refused to rewrite. A link, a missing
@@ -700,40 +728,7 @@ export async function applySync(
   const prospective = toLedgerEntries(plannedRows(plan.outputs));
   assertLedgerContainment(prospective, rootDir);
 
-  // The allowlist the sweep needs to act on block-less platform-named infra —
-  // `.codex/config.toml`, `.cursor/hooks.json`, the copilot setup workflow.
-  // Built from the PRE-rebuild ledger, which is the run's own record of what it
-  // wrote under those names; without it the advertised tool-removal flow
-  // (`config set tools <subset>` then `sync`) refuses every one of them as
-  // `skipped-unsafe-path` in the same run that drops their rows, stranding live
-  // config on disk that no later sync or clean can reach. `clean` passes the
-  // identical set (`../clean.ts`) — one judgement of ownership, not two.
-  const trustedPaths = trustedInfraPaths(plan.manifest.ledger);
-  // Off `plan.manifest`, whose ledger is this run's pre-rebuild record — the
-  // same rows `planSync` read the packs from, so the ownership set the write
-  // uses is the one the preview was judged against. Resolved before both the
-  // preview and the write loop: one read for the whole run, and it feeds the
-  // sweep as well as the merge, since the sweep's co-owned lane asks the same
-  // ownership question of the same three documents.
-  const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
-  // The sweep's second allowlist. `.mcp.json`, `.cursor/mcp.json` and
-  // `.vscode/mcp.json` are written by MERGING, so their recorded hash covers
-  // emission ∪ the operator's own entries; handing the sweep a reducer is what
-  // stops it reading a match as sole authorship and unlinking a document
-  // carrying a hand-added server (`../../../merge/reclaim.ts` gate 4).
-  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply);
-
   if (dryRun) {
-    const reclaimed =
-      plan.reclaim.length > 0
-        ? await sweepReclaimCandidates(plan.reclaim, {
-            rootDir,
-            consent: false,
-            trustedExactPaths: trustedPaths,
-            coOwnedPaths,
-            now,
-          })
-        : null;
     return {
       wrote: [],
       created: tally(plan.entries, "create"),
@@ -745,12 +740,36 @@ export async function applySync(
       // "would refuse" marker the report reads.
       refused: [],
       gitignoreAdded: [],
-      reclaimed,
+      reclaimed: await previewReclaim(rootDir, plan, now),
       manifestPath: statePath,
       dryRun: true,
       manifest: null,
     };
   }
+
+  // The allowlist the sweep needs to act on block-less platform-named infra —
+  // `.codex/config.toml`, `.cursor/hooks.json`, the copilot setup workflow.
+  // Built from the PRE-rebuild ledger, which is the run's own record of what it
+  // wrote under those names; without it the advertised tool-removal flow
+  // (`config set tools <subset>` then `sync`) refuses every one of them as
+  // `skipped-unsafe-path` in the same run that drops their rows, stranding live
+  // config on disk that no later sync or clean can reach. `clean` passes the
+  // identical set (`../clean.ts`) — one judgement of ownership, not two.
+  const trustedPaths = trustedInfraPaths(plan.manifest.ledger);
+  // Off `plan.manifest`, whose ledger is this run's pre-rebuild record — the
+  // same rows `planSync` read the packs from, so the ownership set the write
+  // uses is the one the preview was judged against. Resolved before the write
+  // loop: one read for the whole run, and it feeds the sweep as well as the
+  // merge, since the sweep's co-owned lane asks the same ownership question of
+  // the same three documents. A dry run reads the same set through
+  // {@link previewReclaim}.
+  const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
+  // The sweep's second allowlist. `.mcp.json`, `.cursor/mcp.json` and
+  // `.vscode/mcp.json` are written by MERGING, so their recorded hash covers
+  // emission ∪ the operator's own entries; handing the sweep a reducer is what
+  // stops it reading a match as sole authorship and unlinking a document
+  // carrying a hand-added server (`../../../merge/reclaim.ts` gate 4).
+  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply);
 
   // The collision gate, applied PER PATH rather than to the whole plan.
   //

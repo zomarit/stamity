@@ -2,13 +2,15 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, realpath, rmdir, unlink } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ReclaimCandidate } from "../manifest/ledger.ts";
+import {
+  carriesEngineMintedPrefix,
+  hasEngineMintedName,
+  ownedPathKind,
+  type OwnedPathKind,
+} from "../manifest/ownedPaths.ts";
 import type { CoOwnedReducer } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import {
-  ENGINE_CONTENT_PREFIXES,
-  STATE_DIR,
-  carriesEngineContentPrefix,
-} from "../types/markers.ts";
+import { ENGINE_CONTENT_PREFIXES, STATE_DIR } from "../types/markers.ts";
 import {
   atomicWriteFile,
   isSharedRegularFile,
@@ -31,31 +33,36 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  * bytes outside the block keeps them and loses only the block, and a co-owned file
  * with no block to strip is left untouched.
  *
- * Five gates, in order. The two cheap shape checks run before the sweep touches
- * disk, so a tampered ledger row is refused without a syscall:
+ * Five gates, in order. The two cheap checks run before the sweep touches disk,
+ * so a tampered ledger row is refused without a syscall:
  *
- * 1. **Containment (shape).** The recorded path is repo-relative POSIX with no
- *    `..` segment, no NUL byte, no drive letter. This is the same grammar the
- *    ledger asserts at persistence time, re-checked here because a ledger row is
- *    an authorisation to delete — hand-editing the manifest must not become a
- *    delete primitive aimed anywhere on the machine.
- * 2. **Ownership marker.** Any ONE of three proofs clears this gate. (a) The
- *    basename carries one of {@link ENGINE_CONTENT_PREFIXES} (optionally behind a two-digit
- *    ordering prefix), or the file sits inside an engine-minted SKILL directory
- *    (`…/skills/<prefix><name>/…`) — the one layout whose contents are not
- *    individually prefixed, so its marker lives on the container. No other
- *    ancestor counts on its own: a directory a user named after the engine says
- *    nothing about the files under it, so a prefixed ancestor is PROVISIONAL —
- *    it keeps the sweep reading, and gate 4 then requires the bytes to close the
- *    claim (a block spanning the file, or a matching hash). (b) The row recorded a
- *    `contentHash` and the path is somewhere that hash is admissible — inside
- *    {@link STATE_DIR}, or on the trusted allowlist; the hash is checked against
- *    the bytes at gate 4, so this proof is only provisional here. (c) The caller
+ * 1. **Containment (shape and bound).** The recorded path is repo-relative
+ *    POSIX with no `..` segment, no NUL byte, no drive letter — the grammar the
+ *    ledger asserts at persistence time — and every row naming it lies inside
+ *    the owned-path bound (`../manifest/ownedPaths.ts`, REQ-PLUGIN-045): a
+ *    platform file, a charter, a state folder or a pack's own folder for an
+ *    `infra` row, a content folder for an agent, skill, rule or command row.
+ *    Both are re-checked here although manifest validation refuses such a row
+ *    first, because a ledger row is an authorisation to delete and some callers
+ *    build candidates themselves (`clean --pack`): hand-editing the manifest
+ *    must not become a delete primitive aimed anywhere in the repository.
+ * 2. **Ownership marker.** Any ONE of three proofs clears this gate, and each
+ *    is PROVISIONAL here — gate 4 decides with the bytes. (a) The path's own
+ *    name is engine-minted (`../manifest/ownedPaths.ts::hasEngineMintedName`:
+ *    the basename carries one of {@link ENGINE_CONTENT_PREFIXES}, optionally
+ *    behind a two-digit ordering prefix, or the file sits inside an
+ *    engine-minted SKILL directory `…/skills/<prefix><name>/…`). A prefixed
+ *    ancestor of any other kind keeps the sweep reading too, and nothing more:
+ *    a directory a user named after the engine says nothing about the files
+ *    under it. (b) The row recorded a `contentHash` and the path is somewhere a
+ *    hash alone is admissible ({@link isHashProvable}): a state or pack folder,
+ *    or a platform file or charter on the trusted allowlist. (c) The caller
  *    listed the exact path in `trustedExactPaths`, the allowlist for infra files
  *    the engine writes under names it did not mint (MCP config, hook config).
- *    Proof (a) and a verified (b) earn whole-file deletion; (c) never does on its
- *    own, and must still prove sole ownership at gate 4 — via (b) or via a block
- *    that spans the file.
+ *    A whole-file delete then needs the bytes: a matching recorded hash where
+ *    (b) holds, the engine's name AND a matching recorded hash in a content
+ *    folder, or a managed block that spans the file. A row with no recorded
+ *    hash proves nothing: no release ever wrote one, so it is a hand edit.
  * 3. **Containment (physical).** The parent directory's realpath still resolves
  *    under the root's realpath, and the candidate itself is a regular file. A
  *    symlinked directory anywhere on the path, a symlink in place of the recorded
@@ -148,7 +155,21 @@ export interface ReclaimActionEntry {
     | "dry-run";
   /** Why, in one or two sentences — for `dry-run`, the action consent unlocks. */
   detail: string;
+  /**
+   * On a `dry-run` entry: the action consent would take. Absent on every other
+   * entry, whose `action` already says what happened.
+   */
+  wouldBe?: "deleted" | "managed-block-stripped" | "co-owned-reduced";
+  /**
+   * On every entry that deleted or rewrote its file, or would: what proved the
+   * engine's claim — a recorded hash that matches the bytes, a managed block,
+   * or the co-owned document's reducer. Absent on a refusal.
+   */
+  proof?: ReclaimProof;
 }
+
+/** What proved the engine's claim to a file the sweep removes or rewrites. */
+export type ReclaimProof = "hash" | "block" | "co-owned";
 
 /*
  * The sweep cannot decide a co-owned file itself: "which bytes here are mine" is
@@ -234,9 +255,6 @@ export interface ReclaimReport {
 /** Windows absolute forms a POSIX check misses: `C:/x`, `C:x`, `\\server\share`. */
 const WINDOWS_ABSOLUTE_PATTERN = /^(?:[A-Za-z]:|\\\\)/;
 
-/** A two-digit ordering prefix ahead of the content prefix, e.g. `30-stamity-…`. */
-const ORDERING_PREFIX_PATTERN = /^\d{2}-/;
-
 /** Reason precedence — lower rank wins when several rows name one path. */
 const REASON_RANK: Record<ReclaimCandidate["reason"], number> = {
   "adapter-removed": 0,
@@ -261,106 +279,34 @@ function ledgerKey(path: string): string {
   return path.startsWith("./") ? path.slice(2) : path;
 }
 
-/**
- * True when a basename is one the engine mints, with or without an ordering
- * prefix.
- *
- * Reads the whole {@link ENGINE_CONTENT_PREFIXES} set, not one constant. The
- * engine mints commands and skills under `st-` and everything else under
- * `stamity-`, and an ownership gate that knows only one of them is wrong in
- * both directions: it refuses to reclaim a `st-work.md` it wrote itself, and —
- * on a repo upgraded across the split — it cannot retire the `stamity-work.md`
- * that emission replaced. Both spellings are engine names; the class they
- * belong to is not this gate's question.
- */
-function carriesEnginePrefix(name: string): boolean {
-  const bare = ORDERING_PREFIX_PATTERN.test(name) ? name.slice(3) : name;
-  return carriesEngineContentPrefix(bare);
-}
-
 /** The engine's minted prefixes as an operator-readable list, for a refusal that
  *  names what it looked for rather than one arbitrary half of it. */
 const ENGINE_PREFIX_LIST = ENGINE_CONTENT_PREFIXES.map((prefix) => `\`${prefix}\``).join(" or ");
 
-/** The one directory segment under which the emitters mint prefixed CONTAINERS
- *  rather than prefixed files — `.agents/skills/`, `.claude/skills/`,
- *  `.cursor/skills/` (`src/adapters/*.ts`, `src/pack/projection.ts`). */
-const SKILL_CONTAINER_SEGMENT = "skills";
-
 /**
- * True when the path's OWN name proves engine authorship: its basename carries
- * the content prefix, with or without an ordering prefix.
+ * True when a recorded content hash may stand as proof of authorship for the
+ * group's path: every row naming it lies in a state folder or a pack's own
+ * folder, or names a platform file or a charter that the caller's trusted
+ * allowlist carries.
  *
- * Anchored to the basename, and the anchor is the whole point. The predicate
- * used to accept the prefix on ANY segment, so `stamity-tools/user.md` — a
- * directory a user named after the engine, holding a file the engine never
- * wrote — cleared the ownership gate and reached the whole-file delete branch
- * on the strength of a name that says nothing about the file underneath it. A
- * directory name is a statement about the directory; only the basename is a
- * statement about this file.
- *
- * The one layout where the marker legitimately sits on a directory is answered
- * by {@link isEngineMintedSkillPath}, narrowly, rather than by widening this
- * predicate back out to every ancestor.
- */
-function isEngineNamedPath(path: string): boolean {
-  return carriesEnginePrefix(basename(path));
-}
-
-/**
- * True when the path sits inside a skill directory the engine minted —
- * `…/skills/<prefix><name>/…` — the one shape whose ownership marker is on a
- * container rather than on the file.
- *
- * A projected skill is a single artifact spread over a DIRECTORY the engine
- * mints (`.agents/skills/st-verify/`): `SKILL.md` beside it, `references/*.md`
- * one level deeper, none of them individually prefixed. Reading the marker off
- * the file alone makes depth decide reclaimability, which is why an uninstall
- * once deleted a skill's `SKILL.md` and left its own reference files orphaned.
- *
- * The prefixed segment must be the immediate child of a
- * {@link SKILL_CONTAINER_SEGMENT}, which is what separates this from the
- * any-ancestor rule it replaces: `stamity-tools/user.md` carries a prefixed
- * ancestor with no `skills` segment above it, so it stays unproven and is
- * refused at gate 2.
- */
-function isEngineMintedSkillPath(path: string): boolean {
-  const segments = path.split("/");
-  // `slice(0, -1)` drops the file itself: a container has to sit ABOVE it, and
-  // the slice preserves original indices, so `segments[index - 1]` is still the
-  // segment before this one (`undefined`, hence `false`, at index 0).
-  return segments
-    .slice(0, -1)
-    .some(
-      (segment, index) =>
-        segments[index - 1] === SKILL_CONTAINER_SEGMENT && carriesEnginePrefix(segment),
-    );
-}
-
-/**
- * True when the path sits inside the engine's own state directory — one of the
- * two places a recorded content hash is admitted as proof of authorship (see
- * {@link isHashProvable}).
- */
-function isStateDirPath(path: string): boolean {
-  return path.startsWith(`${STATE_DIR}/`);
-}
-
-/**
- * True when a recorded content hash may stand as proof of authorship for `path`:
- * inside the engine's own state directory, or on the caller's trusted allowlist.
- *
- * What the hash actually proves is the reason both are admissible — and the
- * reason it is not the whole answer. Every producer records `sha256` of the bytes
- * it WROTE (`sync/engine.ts`, `init/apply.ts`, `pack/install.ts`). For a
- * whole-file writer those bytes are the generated document, so a file that still
- * equals the hash is engine output end to end wherever it sits. For the three
- * client MCP documents they are not: that lane MERGES, so the recorded hash
- * covers emission ∪ the operator's own entries, and equality proves only that
- * nobody has edited the file since. Those paths are declared `coOwnedPaths` by
- * their callers and divert to a class-specific reducer before this proof is
+ * What the hash actually proves is the reason these are admissible — and the
+ * reason it is not the whole answer. Every producer records `sha256` of the
+ * bytes it WROTE (`sync/engine.ts`, `init/apply.ts`, `pack/install.ts`). For a
+ * whole-file writer those bytes are the generated document, so a file that
+ * still equals the hash is engine output end to end. For the three client MCP
+ * documents they are not: that lane MERGES, so the recorded hash covers
+ * emission ∪ the operator's own entries, and equality proves only that nobody
+ * has edited the file since. Those paths are declared `coOwnedPaths` by their
+ * callers and divert to a class-specific reducer before this proof is
  * consulted — the diversion IS the safety property, because hash equality read
  * as sole authorship unlinked a `.mcp.json` carrying a hand-added server.
+ *
+ * The bound is what keeps a hash from proving more than the place it sits. It
+ * used to be admitted anywhere under `.stamity/`, so a hand-added row hashing
+ * an operator's learning or override deleted it; it is now admitted only in
+ * the two state folders the engine writes and in a pack's own folder. A content
+ * folder is not here at all: there the engine's name has to stand beside the
+ * hash (gate 4), because owners keep their own files in those folders too.
  *
  * The allowlist was previously exempt from the NAME gate yet had no way to prove
  * sole ownership at gate 4 unless a managed block spanned the file. That left the
@@ -369,9 +315,14 @@ function isStateDirPath(path: string): boolean {
  * while leaving them behind. Admitting the hash closes that gap without widening
  * anything else, because gate 4 still requires an exact match.
  */
-function isHashProvable(path: string, hashes: ReadonlySet<string>, trusted: ReadonlySet<string>): boolean {
-  if (hashes.size === 0) return false;
-  return isStateDirPath(path) || trusted.has(path);
+function isHashProvable(group: CandidateGroup, trusted: ReadonlySet<string>): boolean {
+  if (group.recordedHashes.size === 0) return false;
+  return [...group.kinds].every(
+    (kind) =>
+      kind === "state" ||
+      kind === "pack" ||
+      ((kind === "exact" || kind === "charter") && trusted.has(group.path)),
+  );
 }
 
 function sha256(content: Buffer | string): string {
@@ -449,6 +400,11 @@ interface CandidateGroup {
    * what each of them last wrote, so agreement with any owner is agreement.
    */
   recordedHashes: Set<string>;
+  /**
+   * Where each row naming this path falls in the owned-path bound — `null` for
+   * a row outside it, which refuses the whole path at gate 1.
+   */
+  kinds: Set<OwnedPathKind | null>;
 }
 
 /**
@@ -461,6 +417,7 @@ function groupByPath(candidates: readonly ReclaimCandidate[]): CandidateGroup[] 
     const path = ledgerKey(candidate.entry.path);
     const label = `${candidate.reason} (${candidate.entry.adapter})`;
     const hash = candidate.entry.contentHash;
+    const kind = ownedPathKind({ ...candidate.entry, path });
     const existing = groups.get(path);
     if (existing === undefined) {
       groups.set(path, {
@@ -468,11 +425,13 @@ function groupByPath(candidates: readonly ReclaimCandidate[]): CandidateGroup[] 
         reason: candidate.reason,
         owners: [label],
         recordedHashes: new Set(hash === undefined ? [] : [hash]),
+        kinds: new Set([kind]),
       });
       continue;
     }
     if (!existing.owners.includes(label)) existing.owners.push(label);
     if (hash !== undefined) existing.recordedHashes.add(hash);
+    existing.kinds.add(kind);
     if (REASON_RANK[candidate.reason] < REASON_RANK[existing.reason]) {
       existing.reason = candidate.reason;
     }
@@ -503,7 +462,7 @@ interface TargetPin {
 
 /** The action gates 1-4 selected, with everything the mutation step needs. */
 type ReclaimPlan =
-  | { kind: "delete"; target: string; pin: TargetPin; detail: string; backup?: string }
+  | { kind: "delete"; target: string; pin: TargetPin; detail: string; proof: ReclaimProof; backup?: string }
   | {
       /** Rewrite in place, preserving `keep`. Both rewrite dispositions land
        *  here; `action` is which of the two the report names. */
@@ -513,6 +472,7 @@ type ReclaimPlan =
       pin: TargetPin;
       keep: string;
       detail: string;
+      proof: ReclaimProof;
       /**
        * The file's current bytes, when the mutation owes a verified `.bak` of
        * them first: a co-owned document whose bytes no longer hash to what the
@@ -577,17 +537,26 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       `The recorded path ${defect}, so the sweep will not resolve it against the repo root.`,
     );
   }
+  // The second fence of the owned-path bound (gate 1): a row outside it never
+  // reaches the disk, whoever built the candidate.
+  if (group.kinds.has(null)) {
+    return skip(
+      "skipped-unsafe-path",
+      "The recorded path lies outside the paths the engine writes for the row's owner and artifact type, so no ledger row can authorise acting on it.",
+    );
+  }
 
-  // Earns a whole-file delete on the strength of the name alone.
-  const engineNamed = isEngineNamedPath(path) || isEngineMintedSkillPath(path);
+  // Provisional: the engine's own name, which gate 4 still needs a matching
+  // recorded hash beside before it unlinks anything.
+  const engineNamed = hasEngineMintedName(path);
   // Provisional, exactly like `hashProvable` below: enough to keep the sweep
   // reading, never enough to unlink. A prefixed directory that is not a skill
   // container is a name the USER may have chosen, and it says nothing about the
   // file inside it, so the bytes have to close the claim at gate 4 — a managed
   // block spanning the file, or a matching recorded hash.
-  const prefixedAncestor = path.split("/").slice(0, -1).some(carriesEnginePrefix);
+  const prefixedAncestor = path.split("/").slice(0, -1).some(carriesEngineMintedPrefix);
   // Provisional: the recorded hash still has to match the bytes below.
-  const hashProvable = isHashProvable(path, group.recordedHashes, ctx.trusted);
+  const hashProvable = isHashProvable(group, ctx.trusted);
   if (!engineNamed && !prefixedAncestor && !hashProvable && !ctx.trusted.has(path)) {
     return skip(
       "skipped-unsafe-path",
@@ -693,6 +662,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
         target,
         pin,
         detail: reduction.detail + driftDetail,
+        proof: "co-owned",
         ...(drifted ? { backup: content } : {}),
       };
     }
@@ -706,6 +676,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       pin,
       keep: reduction.content,
       detail: reduction.detail + driftDetail,
+      proof: "co-owned",
       ...(drifted ? { backup: content } : {}),
     };
   }
@@ -746,6 +717,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       pin,
       detail:
         "Whole-file engine output: the bytes still hash to what the ledger recorded writing here, so nothing in the file is user-authored.",
+      proof: "hash",
     };
   }
 
@@ -753,12 +725,24 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   if (split === null) {
     if (hashVetoed) return skip("skipped-user-content", hashMismatchDetail);
     if (engineNamed) {
+      // The name alone used to earn the delete, which made a hashless row a
+      // delete primitive for any owner file a hand edit gave an engine-looking
+      // name. Every release records a hash on every row, so a row without one
+      // is not the engine's record of writing here, and the bytes cannot be
+      // proved the engine's: the name and a matching hash, together.
+      if (!hashMatched) {
+        return skip(
+          "skipped-unsafe-path",
+          "The row records no content hash, so the bytes cannot be proved the engine's; every stamity release records one — remove the row, or delete the file by hand if it is yours to remove.",
+        );
+      }
       return {
         kind: "delete",
         target,
         pin,
         detail:
-          "Whole-file engine output: the name is engine-minted and there is no managed block whose surroundings could be user-authored.",
+          "Whole-file engine output: the name is engine-minted, the bytes still hash to what the ledger recorded writing here, and there is no managed block whose surroundings could be user-authored.",
+        proof: "hash",
       };
     }
     return skip(
@@ -782,6 +766,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       target,
       pin,
       detail: "The managed block spans the whole file — there are no user bytes outside it.",
+      proof: "block",
     };
   }
   // The strip PRESERVES the file's own user bytes and republishes them, which
@@ -804,6 +789,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     pin,
     keep,
     detail: `User content outside the managed block vetoes deletion, so only the block is removed and the remaining ${keep.length} byte(s) are preserved verbatim.`,
+    proof: "block",
   };
 }
 
@@ -960,6 +946,8 @@ export async function sweepReclaimCandidates(
         ...base,
         action: "dry-run",
         detail: `Consent would ${verb}. ${plan.detail}${provenance}`,
+        wouldBe: plan.kind === "delete" ? "deleted" : plan.action,
+        proof: plan.proof,
       });
       continue;
     }
@@ -1024,6 +1012,7 @@ export async function sweepReclaimCandidates(
         ...base,
         action: "deleted",
         detail: `${plan.detail}${backedUp} Deleted at ${stamp}.${provenance}`,
+        proof: plan.proof,
       });
       continue;
     }
@@ -1048,6 +1037,7 @@ export async function sweepReclaimCandidates(
       ...base,
       action: plan.action,
       detail: `${plan.detail}${backedUp} ${plan.action === "co-owned-reduced" ? "Reduced" : "Stripped"} at ${stamp}.${provenance}`,
+      proof: plan.proof,
     });
   }
 

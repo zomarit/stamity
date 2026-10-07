@@ -343,6 +343,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/mcp/env.ts": { unit: "p1-26", wave: 3 },
   "src/workspace/detect.ts": { unit: "p1-27", wave: 3 },
   "src/workspace/resolve.ts": { unit: "p1-27", wave: 3 },
+  // The owned-path bound: data the wave-4 manifest validator and write lane,
+  // the wave-5 ledger and the wave-6 reclaim sweep all read, so it sits below
+  // them and imports only the type and marker leaves.
+  "src/manifest/ownedPaths.ts": { unit: "p20-u0-ledger-bound", wave: 3 },
   // wave 4
   "src/merge/safeWrite.ts": { unit: "p1-28", wave: 4 },
   "src/manifest/manifest.ts": { unit: "p1-29", wave: 4 },

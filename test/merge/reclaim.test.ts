@@ -6,6 +6,7 @@ import * as realFsPromises from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { ReclaimCandidate } from "../../src/manifest/ledger.ts";
+import { OWNED_PATHS } from "../../src/manifest/ownedPaths.ts";
 import type * as ReclaimApi from "../../src/merge/reclaim.ts";
 import { wrapInManagedBlock } from "../../src/merge/managedBlocks.ts";
 import {
@@ -40,6 +41,22 @@ const tempDir = useTempDir("stamity-reclaim");
 /** chmod-based failure fixtures are meaningless as root, which bypasses the bits. */
 const CAN_TEST_PERMISSIONS = typeof process.getuid === "function" && process.getuid() !== 0;
 
+/**
+ * The artifact type a release records at `path`: a content class under a
+ * content folder, `infra` everywhere else.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the sweep now refuses at gate 1 a
+ * row outside the owned-path bound, which reads the row's type: a content row
+ * only under a content folder, an `infra` row only at a platform file, a
+ * charter or a state folder. The helpers typed every row `rule`, so a `.mcp.json`
+ * or `.stamity/mcp/…` fixture became a row no release writes; they now type
+ * each row the way a release records it at that path, and no case's subject
+ * changes with it.
+ */
+function recordedTypeAt(path: string): "rule" | "infra" {
+  return OWNED_PATHS.contentRoots.some((root) => path.startsWith(root)) ? "rule" : "infra";
+}
+
 /** A ledger row the sweep may act on. Defaults describe the common case: one
  *  cursor-owned rule the current emission no longer produces. */
 function candidate(
@@ -48,9 +65,26 @@ function candidate(
   adapter: Tool = "cursor",
 ): ReclaimCandidate {
   return {
-    entry: { path, adapter, artifactId: `artifact:${path}`, artifactType: "rule" },
+    entry: { path, adapter, artifactId: `artifact:${path}`, artifactType: recordedTypeAt(path) },
     reason,
   };
+}
+
+function sha256Of(content: string): string {
+  return createHash("sha256").update(Buffer.from(content, "utf8")).digest("hex");
+}
+
+/**
+ * The same row recording the hash of `content`, as every release records one.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — a row with no content hash proves
+ * nothing, so an engine-named block-less file is deleted only beside a matching
+ * hash. The cases whose subject is that delete (pruning, the renamed spelling,
+ * the nested skill reference) record the hash a release would have recorded;
+ * their assertions are unchanged.
+ */
+function recorded(row: ReclaimCandidate, content: string): ReclaimCandidate {
+  return { ...row, entry: { ...row.entry, contentHash: sha256Of(content) } };
 }
 
 const PACK_FILE = ".stamity/packs/acme__ops/agents/reviewer.md";
@@ -60,15 +94,22 @@ const PACK_BODY = "---\nid: reviewer\n---\nReview the change.\n";
  * A row for content the engine installed verbatim: a name it did not mint, no
  * managed block, and the hash of the bytes it wrote. The recorded hash is the
  * only ownership proof such a file has.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the owner follows the path, since a
+ * `pack:<id>` row lies only in its own pack folder: a pack row under
+ * `.stamity/packs/acme__ops/`, a `claude` row of the recorded type anywhere
+ * else (`AGENTS.md`, a cursor rule). The hash, the subject of these cases, is
+ * unchanged.
  */
 function hashedCandidate(path: string, content: string): ReclaimCandidate {
+  const inPack = path.startsWith(`${OWNED_PATHS.packRoot}acme__ops/`);
   return {
     entry: {
       path,
-      adapter: "pack:@acme/ops",
-      artifactId: "@acme/ops/agents/reviewer.md",
-      artifactType: "infra",
-      contentHash: createHash("sha256").update(Buffer.from(content, "utf8")).digest("hex"),
+      adapter: inPack ? "pack:@acme/ops" : "claude",
+      artifactId: inPack ? "@acme/ops/agents/reviewer.md" : `artifact:${path}`,
+      artifactType: inPack ? "infra" : recordedTypeAt(path),
+      contentHash: sha256Of(content),
     },
     reason: "deselected",
   };
@@ -125,8 +166,13 @@ describe("sweepReclaimCandidates — consent gate", () => {
     const report = await sweepReclaimCandidates(
       [
         candidate(".cursor/rules/50-stamity-testing.mdc"),
-        candidate(".claude/agents/stamity-implementer.md", "adapter-removed", "claude"),
-        candidate(".stamity/mcp/stamity-servers.json"),
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — the two block-less files
+        // record the hash of their bytes, which their delete now needs.
+        recorded(
+          candidate(".claude/agents/stamity-implementer.md", "adapter-removed", "claude"),
+          "whole-file engine output\n",
+        ),
+        recorded(candidate(".stamity/mcp/stamity-servers.json"), "{}\n"),
       ],
       { rootDir: root, consent: false },
     );
@@ -155,6 +201,10 @@ describe("sweepReclaimCandidates — consent gate", () => {
 
     expect(report.entries[0]?.detail).toContain("would delete this path");
     expect(report.entries[1]?.detail).toContain("would strip the managed block");
+    // What consent would take, and what proves it, on the preview itself.
+    expect(report.entries[0]).toMatchObject({ wouldBe: "deleted", proof: "block" });
+    expect(report.entries[1]).toMatchObject({ wouldBe: "managed-block-stripped", proof: "block" });
+    expect(report.entries[2]).not.toHaveProperty("proof");
     // A candidate that fails a gate reports the refusal itself, never a preview:
     // consent cannot unlock a path the sweep already refused.
     expect(report.entries[2]?.action).toBe("skipped-missing");
@@ -331,18 +381,80 @@ describe("sweepReclaimCandidates — containment", () => {
     expect(await readFile(temp.path("outside/secret.md"), "utf-8")).toBe("not ours\n");
   });
 
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — `docs/README.md` now stops at
+  // gate 1 (outside the owned-path bound, its own case below), so the
+  // marker-less file of this case moved into a content folder, where gate 2 is
+  // still the gate that refuses it.
   it("refuses a path whose basename carries no ownership marker", async () => {
     const temp = tempDir();
     const root = temp.path("repo");
-    await temp.seedFiles({ "repo/docs/README.md": "user doc\n" });
+    await temp.seedFiles({ "repo/.cursor/rules/README.md": "user doc\n" });
 
-    const report = await sweepReclaimCandidates([candidate("docs/README.md")], {
+    const report = await sweepReclaimCandidates([candidate(".cursor/rules/README.md")], {
       rootDir: root,
       consent: true,
     });
 
     expect(onlyEntry(report).detail).toContain("ownership marker");
-    expect(await readFile(join(root, "docs/README.md"), "utf-8")).toBe("user doc\n");
+    expect(await readFile(join(root, ".cursor/rules/README.md"), "utf-8")).toBe("user doc\n");
+  });
+
+  it.each([
+    ["an infra row outside every platform file and state folder", "docs/README.md", "claude", "infra"],
+    ["a content row outside every content folder", "notes/st-owner.md", "claude", "rule"],
+    ["an infra row in a state folder the engine does not write", ".stamity/learnings/keep-me.md", "claude", "infra"],
+    ["a content row in a state folder", ".stamity/generated/stamity-x.md", "claude", "skill"],
+    ["an infra row in a content folder", ".claude/agents/stamity-x.md", "claude", "infra"],
+    ["a pack row in another pack's folder", ".stamity/packs/other/x.md", "pack:ops", "infra"],
+    ["a tool row in a pack's folder", ".stamity/packs/ops/x.md", "claude", "infra"],
+  ] as const)("refuses %s at gate 1, even with a matching hash", async (_label, path, adapter, artifactType) => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${path}`]: "owner bytes\n" });
+    const before = await snapshot(root);
+
+    const report = await sweepReclaimCandidates(
+      [
+        {
+          entry: { path, adapter, artifactId: "forged", artifactType, contentHash: sha256Of("owner bytes\n") },
+          reason: "adapter-removed",
+        },
+      ],
+      { rootDir: root, consent: true, trustedExactPaths: new Set([path]) },
+    );
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-unsafe-path");
+    expect(entry.detail).toContain("lies outside the paths the engine writes");
+    expect(entry).not.toHaveProperty("proof");
+    expect(await snapshot(root)).toEqual(before);
+  });
+
+  it("refuses the whole path when one of the rows naming it lies outside the bound", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "repo/.cursor/rules/50-stamity-testing.mdc": managedWhole("engine rule") });
+
+    const report = await sweepReclaimCandidates(
+      [
+        candidate(".cursor/rules/50-stamity-testing.mdc"),
+        {
+          entry: {
+            path: ".cursor/rules/50-stamity-testing.mdc",
+            adapter: "claude",
+            artifactId: "forged",
+            artifactType: "infra",
+          },
+          reason: "deselected",
+        },
+      ],
+      { rootDir: root, consent: true },
+    );
+
+    expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(await readFile(join(root, ".cursor/rules/50-stamity-testing.mdc"), "utf-8")).toBe(
+      managedWhole("engine rule"),
+    );
   });
 
   it("does not read the marker off an ancestor directory that merely carries the prefix", async () => {
@@ -352,9 +464,12 @@ describe("sweepReclaimCandidates — containment", () => {
     // never wrote. The marker used to be read off any segment, so this cleared
     // gate 2 and reached the whole-file delete branch on the strength of a name
     // that says nothing about the file underneath it.
-    await temp.seedFiles({ "repo/stamity-tools/user.md": "mine\n" });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — a root-level `stamity-tools/`
+    // now stops at gate 1, so the user's folder sits inside a content folder,
+    // where the provisional-ancestor rule is still what keeps the file.
+    await temp.seedFiles({ "repo/.claude/rules/stamity-tools/user.md": "mine\n" });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-tools/user.md")], {
+    const report = await sweepReclaimCandidates([candidate(".claude/rules/stamity-tools/user.md")], {
       rootDir: root,
       consent: true,
     });
@@ -365,7 +480,7 @@ describe("sweepReclaimCandidates — containment", () => {
     // The prefixed directory keeps the sweep reading, and the bytes then have to
     // close the claim; they do not, so the file stays.
     expect(entry.detail).toContain("the directory, not this file");
-    expect(await readFile(join(root, "stamity-tools/user.md"), "utf-8")).toBe("mine\n");
+    expect(await readFile(join(root, ".claude/rules/stamity-tools/user.md"), "utf-8")).toBe("mine\n");
   });
 
   it("still reclaims the same shape once the bytes prove the engine wrote it", async () => {
@@ -373,9 +488,11 @@ describe("sweepReclaimCandidates — containment", () => {
     const root = temp.path("repo");
     // The other half of the provisional rule: a prefixed container is a hint,
     // and a managed block spanning the file is the proof that closes it.
-    await temp.seedFiles({ "repo/stamity-tools/emitted.md": managedWhole("engine body") });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the same move into a content
+    // folder as the case above.
+    await temp.seedFiles({ "repo/.claude/rules/stamity-tools/emitted.md": managedWhole("engine body") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-tools/emitted.md")], {
+    const report = await sweepReclaimCandidates([candidate(".claude/rules/stamity-tools/emitted.md")], {
       rootDir: root,
       consent: true,
     });
@@ -397,7 +514,9 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
     const report = await sweepReclaimCandidates(
       [
         candidate(".cursor/rules/50-stamity-testing.mdc"),
-        candidate(".stamity/mcp/stamity-servers.json", "adapter-removed", "claude"),
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — the block-less state file
+        // records the hash of its bytes, which its delete now needs.
+        recorded(candidate(".stamity/mcp/stamity-servers.json", "adapter-removed", "claude"), "{}\n"),
       ],
       { rootDir: root, consent: true },
     );
@@ -475,8 +594,10 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
       "repo/.agents/skills/stamity-verify/references/ui.md": "# UI\n\nengine reference body\n",
     });
 
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the block-less reference
+    // records the hash of its bytes; the name proof needs one beside it.
     const report = await sweepReclaimCandidates(
-      [candidate(".agents/skills/stamity-verify/references/ui.md")],
+      [recorded(candidate(".agents/skills/stamity-verify/references/ui.md"), "# UI\n\nengine reference body\n")],
       { rootDir: root, consent: true },
     );
 
@@ -526,7 +647,12 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
       [
         candidate(".claude/commands/stamity-work.md", "path-renamed", "claude"),
         candidate(".agents/skills/stamity-verify/SKILL.md", "path-renamed", "claude"),
-        candidate(".agents/skills/stamity-verify/references/ui.md", "path-renamed", "claude"),
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — the block-less reference
+        // records the hash of its bytes; the name proof needs one beside it.
+        recorded(
+          candidate(".agents/skills/stamity-verify/references/ui.md", "path-renamed", "claude"),
+          "# UI\n\nengine reference body\n",
+        ),
       ],
       { rootDir: root, consent: true },
     );
@@ -545,8 +671,10 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
       "repo/.agents/skills/st-verify/references/ui.md": "# UI\n\nengine reference body\n",
     });
 
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the block-less reference
+    // records the hash of its bytes; the name proof needs one beside it.
     const report = await sweepReclaimCandidates(
-      [candidate(".agents/skills/st-verify/references/ui.md")],
+      [recorded(candidate(".agents/skills/st-verify/references/ui.md"), "# UI\n\nengine reference body\n")],
       { rootDir: root, consent: true },
     );
 
@@ -582,7 +710,10 @@ describe("sweepReclaimCandidates — edge cases", () => {
         // Parent still present, file gone.
         candidate(".cursor/rules/50-stamity-gone.mdc"),
         // Whole parent tree gone.
-        candidate(".windsurf/rules/stamity-gone.md"),
+        // TEST CHANGE, justified: REQ-PLUGIN-045 — `.windsurf/rules/` is no
+        // folder a release writes, so it now stops at gate 1; the absent tree
+        // is a content folder the engine does write.
+        candidate(".github/instructions/stamity-gone.instructions.md"),
       ],
       { rootDir: root, consent: true },
     );
@@ -976,14 +1107,130 @@ describe("sweepReclaimCandidates — recorded-hash ownership", () => {
     const temp = tempDir();
     const root = temp.path("repo");
     await temp.seedFiles({ [`repo/${PACK_FILE}`]: PACK_BODY });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the row is the pack's own (a
+    // tool row in a pack folder now stops at gate 1 for another reason), with
+    // its hash removed, so the refusal is still the missing hash at gate 2.
+    const { contentHash: _dropped, ...hashless } = hashedCandidate(PACK_FILE, PACK_BODY).entry;
 
-    const report = await sweepReclaimCandidates([candidate(PACK_FILE)], {
+    const report = await sweepReclaimCandidates([{ entry: hashless, reason: "deselected" }], {
       rootDir: root,
       consent: true,
     });
 
     expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(onlyEntry(report).detail).toContain("ownership marker");
     expect(await readFile(join(root, PACK_FILE), "utf-8")).toBe(PACK_BODY);
+  });
+});
+
+/**
+ * REQ-PLUGIN-045: inside the bound, a row proves a delete only with the bytes.
+ * A hashless row whose path carried an engine name used to be deleted on the
+ * name alone, and a hash proved a delete anywhere under `.stamity/`; every
+ * release records a hash on every row, so a row without one is a hand edit.
+ */
+describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", () => {
+  const GONE = ".claude/agents/stamity-gone.md";
+  const GONE_BYTES = "a block-less engine agent\n";
+
+  it("keeps an engine-named block-less file whose row records no hash", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${GONE}`]: GONE_BYTES });
+
+    const report = await sweepReclaimCandidates([candidate(GONE, "deselected", "claude")], {
+      rootDir: root,
+      consent: true,
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-unsafe-path");
+    expect(entry.detail).toContain("records no content hash");
+    expect(entry).not.toHaveProperty("proof");
+    expect(await readFile(join(root, GONE), "utf-8")).toBe(GONE_BYTES);
+  });
+
+  it("deletes the same file once its row records the hash of its bytes, naming the proof", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${GONE}`]: GONE_BYTES });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(GONE, "deselected", "claude"), GONE_BYTES)], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "hash" });
+    expect(await snapshot(root)).toEqual({});
+  });
+
+  it("does not let a matching hash alone delete an unprefixed file in a content folder", async () => {
+    // An override-added skill is emitted unprefixed and owners keep their own
+    // files in these folders, so a hash is never enough there without the name.
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const mine = ".agents/skills/my-skill/SKILL.md";
+    await temp.seedFiles({ [`repo/${mine}`]: "my skill\n" });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(mine), "my skill\n")], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(await readFile(join(root, mine), "utf-8")).toBe("my skill\n");
+  });
+
+  it("previews the delete of a hashed file in a state folder the engine writes, naming the proof", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const policy = ".stamity/generated/agent-tool-policies.json";
+    await temp.seedFiles({ [`repo/${policy}`]: "{}\n" });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(policy, "adapter-removed", "claude"), "{}\n")], {
+      rootDir: root,
+      consent: false,
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "dry-run", wouldBe: "deleted", proof: "hash" });
+  });
+
+  it("deletes a trusted per-package charter whose bytes match, and keeps an untrusted one", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const charter = "packages/app/AGENTS.md";
+    const body = "# Charter\n\nengine charter\n";
+    await temp.seedFiles({ [`repo/${charter}`]: body });
+    const row = recorded(candidate(charter, "deselected", "codex"), body);
+
+    const untrusted = await sweepReclaimCandidates([row], { rootDir: root, consent: true });
+    expect(onlyEntry(untrusted).action).toBe("skipped-unsafe-path");
+
+    const trusted = await sweepReclaimCandidates([row], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([charter]),
+    });
+    expect(onlyEntry(trusted)).toMatchObject({ action: "deleted", proof: "hash" });
+  });
+
+  it("names the block as the proof of a delete and of a strip", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({
+      "repo/.cursor/rules/50-stamity-testing.mdc": managedWhole("engine rule"),
+      "repo/.claude/agents/stamity-reviewer.md": `mine\n${managedWhole("engine body")}`,
+    });
+
+    const report = await sweepReclaimCandidates(
+      [candidate(".cursor/rules/50-stamity-testing.mdc"), candidate(".claude/agents/stamity-reviewer.md")],
+      { rootDir: root, consent: true },
+    );
+
+    expect(report.entries.map((entry) => [entry.action, entry.proof])).toEqual([
+      ["deleted", "block"],
+      ["managed-block-stripped", "block"],
+    ]);
   });
 });
 
@@ -1299,6 +1546,24 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
     });
 
     expect(onlyEntry(report).action).toBe("deleted");
+  });
+
+  it("names the reducer as the proof, on the preview and on the applied run", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const merged = `${ENGINE_LINE}operator server\n`;
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: merged });
+    const opts = { rootDir: root, trustedExactPaths: new Set([CO_OWNED]), coOwnedPaths: reducerFor() };
+
+    const preview = await sweepReclaimCandidates([coOwnedCandidate(merged)], { ...opts, consent: false });
+    expect(onlyEntry(preview)).toMatchObject({ action: "dry-run", wouldBe: "co-owned-reduced", proof: "co-owned" });
+
+    const applied = await sweepReclaimCandidates([coOwnedCandidate(merged)], { ...opts, consent: true });
+    expect(onlyEntry(applied)).toMatchObject({ action: "co-owned-reduced", proof: "co-owned" });
+
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: ENGINE_LINE });
+    const deleted = await sweepReclaimCandidates([coOwnedCandidate(ENGINE_LINE)], { ...opts, consent: true });
+    expect(onlyEntry(deleted)).toMatchObject({ action: "deleted", proof: "co-owned" });
   });
 });
 
