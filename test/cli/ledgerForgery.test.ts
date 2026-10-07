@@ -407,6 +407,12 @@ describe("an import decision binds only as init records it", () => {
       expect(sync.code).toBe(1);
       expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(bytes);
       expect((await readdir(root)).filter((name) => name.startsWith("AGENTS.md.bak"))).toEqual([]);
+      // The text names the remedy that works, and never offers the one that does not.
+      expect(sync.stdout).toContain("Skipped AGENTS.md. AGENTS.md holds your text outside the engine's managed block");
+      expect(sync.stdout).toContain("init --force --import-config replace");
+      expect(sync.stdout).toContain("--force does not clear this");
+      expect(sync.stdout).not.toContain("re-run with --force");
+      expect(sync.stdout).not.toContain("--force overwrites after a verified .bak");
     },
     60_000,
   );

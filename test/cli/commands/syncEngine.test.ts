@@ -1304,9 +1304,12 @@ describe("the byte proof in the write lane", () => {
     const forced = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: true, dryRun: false, now: T1 });
 
     expect(forced.refused).toEqual(["AGENTS.md"]);
-    expect(forced.wrote.find((result) => result.path === "AGENTS.md")?.warning).toContain(
-      "An import-decision collision is never force-overridable",
-    );
+    // TEST CHANGE, justified: REQ-PLUGIN-046 — the skipped row carries its own
+    // detail and remedy, not the whole-plan message that sends the reader to a
+    // detail the live report never prints.
+    const warning = forced.wrote.find((result) => result.path === "AGENTS.md")?.warning;
+    expect(warning).toBe(`Skipped AGENTS.md. ${entry?.detail ?? ""}`);
+    expect(warning).toContain("init --force --import-config replace");
     expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(supplemented);
     expect(existsSync(join(root, "AGENTS.md.bak"))).toBe(false);
   });

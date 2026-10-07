@@ -853,6 +853,15 @@ export async function applySync(
       ])
     : new Set(plan.collisions);
   const refusalMessage = refused.size > 0 ? collisionRefusalMessage(plan) : null;
+  // An import-decision row's own detail names its remedy (restore `supplement`,
+  // or `init --force --import-config replace`); the whole-plan message names
+  // every class present and offers `--force` for the ones it clears, which is
+  // false for this row, forced or not.
+  const importDecisionDetails = new Map(
+    plan.entries
+      .filter((entry) => entry.collisionKind === "import-decision")
+      .map((entry) => [entry.path, entry.detail]),
+  );
 
   // The ignore rules first (REQ-FLOW-016): the review gate writes its counter,
   // lock and temp files on every round, and a sync is the verb an existing
@@ -882,7 +891,8 @@ export async function applySync(
       wrote.push({
         path: output.path,
         action: "skipped",
-        warning: `Skipped ${output.path}. ${output.sourceRefusal?.message ?? refusalMessage ?? ""}`.trim(),
+        warning:
+          `Skipped ${output.path}. ${output.sourceRefusal?.message ?? importDecisionDetails.get(output.path) ?? refusalMessage ?? ""}`.trim(),
       });
       // A source refusal leaves the engine's own last write on disk, unlike an
       // unmanaged-name skip, so the rows that prove it stay: the next sync after
