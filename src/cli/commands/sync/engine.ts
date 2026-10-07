@@ -53,6 +53,7 @@ import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
   coOwnedRowsCarriedThroughRefusal,
+  coOwnedHookDocuments,
   coOwnedReclaimReducers,
   installedPackServers,
   type CoOwnedDocumentLane,
@@ -655,6 +656,7 @@ export async function previewReclaim(
     consent: false,
     trustedExactPaths: trustedInfraPaths(plan.manifest.ledger),
     coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply),
+    hookDocuments: coOwnedHookDocuments(plan.manifest, packMcpSupply),
     ...(now === undefined ? {} : { now }),
   });
 }
@@ -1087,6 +1089,7 @@ export async function applySync(
           consent: true,
           trustedExactPaths: trustedPaths,
           coOwnedPaths,
+          hookDocuments: coOwnedHookDocuments(plan.manifest, packMcpSupply),
           now,
         })
       : null;

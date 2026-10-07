@@ -22,7 +22,7 @@ import {
 } from "../../types/manifest.ts";
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import { coOwnedReclaimReducers } from "../engine/emissionWrite.ts";
+import { coOwnedHookDocuments, coOwnedReclaimReducers } from "../engine/emissionWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import { packageCommand, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -530,6 +530,7 @@ async function runScopedClean(
     consent: !ctx.dryRun,
     trustedExactPaths: trustedInfraPaths(manifest.ledger),
     coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply),
+    hookDocuments: coOwnedHookDocuments(manifest, packSupply),
   });
   ctx.spinner.stop();
 
@@ -661,6 +662,7 @@ export const cleanCommand: CommandModule = {
         ? `Inspecting ${candidates.length} recorded path(s)...`
         : `Removing ${candidates.length} recorded path(s)...`,
     );
+    const packSupply = await installedPackMcpSupply(rootDir, manifest);
     const report = await sweepReclaimCandidates(candidates, {
       rootDir,
       consent: !ctx.dryRun,
@@ -669,22 +671,27 @@ export const cleanCommand: CommandModule = {
       // client documents themselves, and it resolves pack supply BEFORE the
       // sweep, so the reducer can still prove a pack-supplied entry. The
       // selection goes with the state directory a few lines below.
-      coOwnedPaths: coOwnedReclaimReducers(manifest, await installedPackMcpSupply(rootDir, manifest)),
+      coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply),
+      hookDocuments: coOwnedHookDocuments(manifest, packSupply),
     });
     ctx.spinner.stop();
 
     // A hooks document the sweep left in place that still runs an engine hook
     // script keeps the state directory whole, since the script lives in it
-    // (S17's settings case, `../../merge/reclaim.ts::documentsLeftInPlace`).
+    // (S17's settings case, `../../merge/reclaim.ts::hookDocumentsLeftInPlace`).
     const wiringKept = report.wiringKept ?? [];
     const stateDirRemoved = ctx.dryRun || wiringKept.length > 0 ? false : await removeStateDir(rootDir);
 
     const formatted = formatReclaimReport(report);
     if (formatted !== "") ctx.io.out(`${formatted}\n`);
-    if (wiringKept.length > 0) {
+    for (const doc of wiringKept) {
       ctx.io.out(
-        `Kept ${STATE_DIR}/: ${wiringKept.join(", ")} still runs a hook script under it, so deleting it would leave ` +
-          `that hook pointing at nothing. Remove that wiring, then re-run stamity clean.\n`,
+        doc.unreadable === true
+          ? `Kept ${STATE_DIR}/: ${doc.path} could not be read (a link, a hard link, or a file it cannot open), so ` +
+              `nothing proves it no longer runs a hook script under it. Replace it with a regular file (or delete it), ` +
+              `then re-run stamity clean.\n`
+          : `Kept ${STATE_DIR}/: ${doc.path} still runs a hook script under it, so deleting it would leave that hook ` +
+              `pointing at nothing. Remove that wiring, then re-run stamity clean.\n`,
       );
     }
 

@@ -357,6 +357,14 @@ export interface CoOwnedDocumentLane {
   readonly path: string;
   /** The document's noun in messages. */
   readonly noun: string;
+  /**
+   * True when the document wires hook commands, so a copy the reclaim sweep
+   * leaves in place may still run an engine hook script and holds it back
+   * (S17; `../../merge/reclaim.ts` `ReclaimOptions.hookDocuments`). The seam a
+   * hooks document registers through: the settings lane today, Cursor's and
+   * Codex's hook files with `u0-hook-files-ownership`.
+   */
+  readonly wiresHooks: boolean;
   predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedPrediction>;
   materialize(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedMergeResult>;
   reducer(ownership: CoOwnedOwnership, deleteWhenEngineOnly: boolean): CoOwnedReducer;
@@ -374,6 +382,7 @@ export function coOwnedDocumentLanes(
   const claude: CoOwnedDocumentLane = {
     path: CLAUDE_SETTINGS_PATH,
     noun: "settings document",
+    wiresHooks: true,
     predict: predictClaudeSettingsMerge,
     materialize: materializeClaudeSettings,
     reducer: (ownership, deleteWhenEngineOnly) =>
@@ -439,6 +448,18 @@ export function coOwnedRowsCarriedThroughRefusal(ledger: readonly LedgerEntry[],
   return ledger.flatMap((row) =>
     row.path === path && VALID_TOOLS.has(row.adapter) ? [{ ...row, adapter: row.adapter as Tool }] : [],
   );
+}
+
+/**
+ * The co-owned documents that wire hook commands, for the reclaim sweep's
+ * script keep (`ReclaimOptions.hookDocuments`): every lane declaring
+ * `wiresHooks`, and never an MCP document, which runs no hook.
+ */
+export function coOwnedHookDocuments(
+  manifest: SetupManifest,
+  packServers: readonly PackSuppliedServer[] = [],
+): ReadonlySet<string> {
+  return new Set([...coOwnedDocumentLanes(manifest, packServers).values()].filter((lane) => lane.wiresHooks).map((lane) => lane.path));
 }
 
 /**

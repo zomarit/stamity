@@ -12,6 +12,7 @@ import {
 import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
+  coOwnedHookDocuments,
   coOwnedReclaimReducers,
   installedPackServers,
   ledgerRowsForOutput,
@@ -472,6 +473,14 @@ describe("coOwnedOwnershipOf and the co-owned lanes (REQ-FLOW-036)", () => {
       record: { elements: { "/permissions/allow": [h(1)] } },
       deleteWhenEngineOnly: false,
     });
+  });
+
+  it("names only the co-owned documents that wire hooks, never an MCP document, for the sweep's script keep (review/49)", () => {
+    const manifest = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "1.0.0", now: new Date(0) });
+    expect([...coOwnedHookDocuments(manifest)]).toEqual([PATH]);
+    expect([...coOwnedReclaimReducers(manifest).keys()]).toContain(".mcp.json");
+    expect(coOwnedHookDocuments(manifest).has(".mcp.json")).toBe(false);
+    expect(coOwnedDocumentLanes(null).get(PATH)?.wiresHooks).toBe(true);
   });
 
   it("registers the settings lane, and hands the sweep a reducer over what the ledger records there", () => {

@@ -579,6 +579,7 @@ describe("collisions", () => {
     const lane: CoOwnedDocumentLane = {
       path: ".claude/settings.json",
       noun: "settings document",
+      wiresHooks: true,
       predict: (_absPath, _emitted, ownership) => {
         seen.push(ownership);
         return Promise.resolve({ result: { path: _absPath, action: "unchanged" }, collision: null });

@@ -222,6 +222,13 @@ export interface ReclaimOptions {
    * fails if either stops supplying it.
    */
   coOwnedPaths?: ReadonlyMap<string, CoOwnedReducer>;
+  /**
+   * The co-owned documents that wire hook commands — the only ones whose being
+   * left in place holds an engine hook script back (S17). Each co-owned lane
+   * declares it (`../cli/engine/emissionWrite.ts::CoOwnedDocumentLane.wiresHooks`,
+   * collected by `coOwnedHookDocuments`); none when absent.
+   */
+  hookDocuments?: ReadonlySet<string>;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -230,11 +237,12 @@ export interface ReclaimOptions {
 export interface ReclaimReport {
   entries: ReclaimActionEntry[];
   /**
-   * The co-owned documents this sweep left in place that still run an engine
-   * hook script, whose scripts it therefore kept (S17's settings case); absent
+   * The hook documents this sweep left in place that still run an engine hook
+   * script, whose scripts it therefore kept (S17's settings case), each marked
+   * `unreadable` when the sweep could not read it to prove it does not; absent
    * when there are none. `clean` keeps the state directory whole for them.
    */
-  wiringKept?: string[];
+  wiringKept?: { path: string; unreadable?: true }[];
   /**
    * The `consent` the sweep ran under — `false` means nothing was written,
    * whatever the entries look like.
@@ -969,36 +977,35 @@ async function pruneEmptyParents(target: string, ctx: SweepContext): Promise<voi
   }
 }
 
-// ── Sweep ──────────────────────────────────────────────────────────────────
-
-/**
- * Act on the ledger's reclaim candidates under the safety gates documented at
- * the top of this module. Returns one entry per candidate PATH — rows sharing a
- * path collapse into a single filesystem action — in first-appearance order.
- *
- * Throws `VALIDATION_ERROR` only when `rootDir` itself cannot be resolved, which
- * is a caller error and happens before any candidate is examined; per-candidate
- * failures are reported, never thrown.
- */
 /** True for a path under the engine's generated hooks folder: a script some client's hooks document may run. */
 function isEngineHookScript(path: string): boolean {
   return path.startsWith(`${HOOKS_GENERATED_DIR}/`);
 }
 
+/** A document that wires hooks, left in place by this sweep, with its text or `null` when it may not be read. */
+interface HookDocumentLeft {
+  path: string;
+  content: string | null;
+}
+
 /**
- * The co-owned documents this sweep left in place — refused or left untouched,
- * not gone — each with its text, or `null` when it is not a regular file this
- * sweep may read (a link, a hard link, an unreadable file): such a document is
- * taken to run every engine hook script, since nothing proves it does not.
+ * The hook documents (`ReclaimOptions.hookDocuments`) this sweep left in
+ * place — refused or left untouched, not gone — each with its text, or
+ * `null` when it is not a regular file this sweep may read (a link, a hard
+ * link, an unreadable file): such a document is taken to run every engine hook
+ * script, since nothing proves it does not. A co-owned document that wires no
+ * hooks (an MCP document) holds nothing back, whatever state it is in.
  */
-async function documentsLeftInPlace(
+async function hookDocumentsLeftInPlace(
   entries: readonly ReclaimActionEntry[],
-  ctx: SweepContext,
-): Promise<{ path: string; content: string | null }[]> {
-  const kept: { path: string; content: string | null }[] = [];
+  hookDocuments: ReadonlySet<string>,
+  root: string,
+): Promise<HookDocumentLeft[]> {
+  const kept: HookDocumentLeft[] = [];
   for (const entry of entries) {
+    if (!hookDocuments.has(entry.path)) continue;
     if (entry.action !== "skipped-user-content" && entry.action !== "skipped-unsafe-path") continue;
-    const target = join(ctx.root, ...entry.path.split("/"));
+    const target = join(root, ...entry.path.split("/"));
     let content: string | null = null;
     try {
       const stat = await lstat(target);
@@ -1011,6 +1018,29 @@ async function documentsLeftInPlace(
   return kept;
 }
 
+/** Why a hook script was kept, naming the document and what clears it. */
+function keptScriptDetail(holder: HookDocumentLeft): string {
+  const consequence =
+    "deleting it could leave that hook pointing at nothing, and a guard wired that way fails closed on every tool call.";
+  return holder.content === null
+    ? `Kept: ${holder.path}, which this sweep left in place, could not be read (a link, a hard link, or a file it ` +
+        `cannot open), so nothing proves it no longer runs this script — ${consequence} Replace ${holder.path} with a ` +
+        `regular file this sweep can read (or delete it), then re-run.`
+    : `Kept: ${holder.path}, which this sweep left in place, still runs this script — ${consequence.replace("could leave", "would leave")} ` +
+        `Remove that wiring from ${holder.path}, then re-run.`;
+}
+
+// ── Sweep ──────────────────────────────────────────────────────────────────
+
+/**
+ * Act on the ledger's reclaim candidates under the safety gates documented at
+ * the top of this module. Returns one entry per candidate PATH — rows sharing a
+ * path collapse into a single filesystem action — in first-appearance order.
+ *
+ * Throws `VALIDATION_ERROR` only when `rootDir` itself cannot be resolved, which
+ * is a caller error and happens before any candidate is examined; per-candidate
+ * failures are reported, never thrown.
+ */
 export async function sweepReclaimCandidates(
   candidates: readonly ReclaimCandidate[],
   opts: ReclaimOptions,
@@ -1162,8 +1192,8 @@ export async function sweepReclaimCandidates(
   // wired that way fails closed on every tool call.
   const coOwnedGroups = groups.filter((group) => ctx.coOwned.has(group.path));
   for (const group of coOwnedGroups) await sweepOne(group);
-  const keptDocuments = await documentsLeftInPlace(entries, ctx);
-  const wiringKept = new Set<string>();
+  const keptDocuments = await hookDocumentsLeftInPlace(entries, opts.hookDocuments ?? new Set<string>(), ctx.root);
+  const wiringKept = new Map<string, HookDocumentLeft>();
   for (const group of groups) {
     if (ctx.coOwned.has(group.path)) continue;
     const holder = isEngineHookScript(group.path) ? keptDocuments.find((doc) => doc.content === null || doc.content.includes(group.path)) : undefined;
@@ -1171,16 +1201,8 @@ export async function sweepReclaimCandidates(
       await sweepOne(group);
       continue;
     }
-    wiringKept.add(holder.path);
-    entries.push({
-      path: group.path,
-      candidateReason: group.reason,
-      action: "skipped-user-content",
-      detail:
-        `Kept: ${holder.path}, which this sweep left in place, ${holder.content === null ? "could not be read to prove it no longer runs" : "still runs"} ` +
-        `this script — deleting it would leave that hook pointing at nothing, and a guard wired that way fails closed on ` +
-        `every tool call. Remove that wiring from ${holder.path}, then re-run.`,
-    });
+    wiringKept.set(holder.path, holder);
+    entries.push({ path: group.path, candidateReason: group.reason, action: "skipped-user-content", detail: keptScriptDetail(holder) });
   }
   // The report reads in the candidates' own order, whatever order they settled in.
   const order = new Map(groups.map((group, index) => [group.path, index]));
@@ -1189,7 +1211,12 @@ export async function sweepReclaimCandidates(
   return {
     entries,
     consent: opts.consent,
-    ...(wiringKept.size > 0 ? { wiringKept: [...wiringKept].toSorted() } : {}),
+    ...(wiringKept.size > 0
+      ? {
+          // In the order the sweep met them, which follows the candidates.
+          wiringKept: [...wiringKept.values()].map((doc) => (doc.content === null ? { path: doc.path, unreadable: true as const } : { path: doc.path })),
+        }
+      : {}),
     deletedCount: entries.filter((entry) => entry.action === "deleted").length,
     strippedCount: entries.filter(
       (entry) => entry.action === "managed-block-stripped" || entry.action === "co-owned-reduced",

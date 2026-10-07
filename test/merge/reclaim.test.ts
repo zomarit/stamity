@@ -2087,12 +2087,16 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
     entry: { path, adapter: "claude", artifactId: "settings", artifactType: "infra", contentHash: sha256Of(content) },
     reason: "deselected",
   });
-  const sweep = (root: string, documentPath: string, documentBody: string, consent = true): Promise<ReclaimReport> =>
+  // TEST CHANGE, justified: review/49 — only a co-owned document its lane
+  // declares as wiring hooks can hold a script back, so the sweep is told which
+  // ones (`hookDocuments`); `wires: false` stands for an MCP document.
+  const sweep = (root: string, documentPath: string, documentBody: string, consent = true, wires = true): Promise<ReclaimReport> =>
     sweepReclaimCandidates([hashedCandidate(SCRIPT, SCRIPT_BODY), settingsCandidate(documentPath, documentBody)], {
       rootDir: root,
       consent,
       trustedExactPaths: new Set([documentPath]),
       coOwnedPaths: new Map([[documentPath, untouched]]),
+      hookDocuments: new Set(wires ? [documentPath] : []),
     });
   const wiring = `{"hooks":{"PreToolUse":[{"hooks":[{"command":"node ${SCRIPT}"}]}]}}\n`;
 
@@ -2112,7 +2116,7 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
         `pointing at nothing, and a guard wired that way fails closed on every tool call. Remove that wiring from ` +
         `${SETTINGS}, then re-run.`,
     );
-    expect(report.wiringKept).toEqual([SETTINGS]);
+    expect(report.wiringKept).toEqual([{ path: SETTINGS }]);
     expect(await readFile(join(root, SCRIPT), "utf-8")).toBe(SCRIPT_BODY);
   });
 
@@ -2146,7 +2150,26 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
     const report = await sweep(root, SETTINGS, "{}\n");
 
     expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
-    expect(report.entries[0]?.detail).toContain("could not be read to prove it no longer runs this script");
+    expect(report.entries[0]?.detail).toBe(
+      `Kept: ${SETTINGS}, which this sweep left in place, could not be read (a link, a hard link, or a file it cannot ` +
+        `open), so nothing proves it no longer runs this script — deleting it could leave that hook pointing at ` +
+        `nothing, and a guard wired that way fails closed on every tool call. Replace ${SETTINGS} with a regular file ` +
+        `this sweep can read (or delete it), then re-run.`,
+    );
+    expect(report.wiringKept).toEqual([{ path: SETTINGS, unreadable: true }]);
+  });
+
+  it("holds nothing back for a co-owned document that wires no hooks, linked or not (an MCP document; review/49)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const MCP = ".cursor/mcp.json";
+    await temp.seedFiles({ "outside.json": "{}\n", [`repo/${SCRIPT}`]: SCRIPT_BODY, "repo/.cursor/.keep": "" });
+    await symlink(temp.path("outside.json"), join(root, MCP));
+
+    const report = await sweep(root, MCP, "{}\n", true, false);
+
+    expect(report.entries.find((entry) => entry.path === SCRIPT)).toMatchObject({ action: "deleted" });
+    expect(report).not.toHaveProperty("wiringKept");
   });
 
   it("holds nothing back for a refused document that is not on disk", async () => {

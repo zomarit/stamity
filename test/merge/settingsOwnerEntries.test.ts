@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
@@ -406,6 +406,26 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     }
     expect(existsSync(join(root, ".stamity"))).toBe(true);
     expect(cleaned.stdout).toContain("Kept .stamity/: .claude/settings.json still runs a hook script under it");
+  });
+
+  it("clean names the real remedy when the settings file it keeps is a link it may not read (review/49)", async () => {
+    const root = await freshRepo();
+    await init(root);
+    const raw = await readSettings(root);
+    await writeFile(join(root, "elsewhere.json"), raw, "utf8");
+    await rm(SETTINGS_ABS(root));
+    await symlink(join(root, "elsewhere.json"), SETTINGS_ABS(root));
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(existsSync(join(root, ".stamity"))).toBe(true);
+    expect(cleaned.stdout).toContain(
+      "Kept .stamity/: .claude/settings.json could not be read (a link, a hard link, or a file it cannot open), so " +
+        "nothing proves it no longer runs a hook script under it. Replace it with a regular file (or delete it), then " +
+        "re-run stamity clean.",
+    );
+    expect(cleaned.stdout).not.toContain("Remove that wiring");
   });
 
   it("init --force carries the previous row through a co-owned-shape refusal too", async () => {
