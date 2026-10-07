@@ -137,7 +137,7 @@ Reads only. Nothing is written, so there is no preview mode to need.
 | Flag | What it does | Default |
 |---|---|---|
 | `--expect-version <semver>` | fail unless this exact release generated the repository and runs this check | — |
-| `--expect-tools <csv>` | fail unless the manifest's clients are exactly these: claude, cursor, copilot, codex | — |
+| `--expect-tools <csv>` | fail unless the manifest's clients are exactly the listed ids, each one of claude, cursor, copilot, codex | — |
 | `--expect-mode <mode>` | fail unless the manifest records this install mode — one of `generated`, `plugin-backed` | — |
 
 ## `stamity validate`

@@ -4443,8 +4443,10 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     expect(help).toContain(
       "--expect-version <semver> fail unless this exact release generated the repository and runs this check",
     );
+    // TEST CHANGE, justified: REQ-PLUGIN-047 (review/88) — the help read as if all four clients
+    // were required; it now says the listed ids, each one of the four.
     expect(help).toContain(
-      "--expect-tools <csv> fail unless the manifest's clients are exactly these: claude, cursor, copilot, codex",
+      "--expect-tools <csv> fail unless the manifest's clients are exactly the listed ids, each one of claude, cursor, copilot, codex",
     );
     expect(help).toContain(
       '--expect-mode <mode> fail unless the manifest records this install mode (choices: "generated", "plugin-backed")',

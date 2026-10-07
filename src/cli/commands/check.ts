@@ -2515,7 +2515,7 @@ export const checkCommand: CommandModule = {
       )
       .option(
         "--expect-tools <csv>",
-        `fail unless the manifest's clients are exactly these: ${TOOLS.join(", ")}`,
+        `fail unless the manifest's clients are exactly the listed ids, each one of ${TOOLS.join(", ")}`,
       )
       .addOption(
         new Option("--expect-mode <mode>", "fail unless the manifest records this install mode").choices([
