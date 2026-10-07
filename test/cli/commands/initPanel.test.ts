@@ -541,6 +541,11 @@ describe("renderInitPanel — migration summary", () => {
     expect(output).toContain("left in place: 2 predecessor path(s)");
     expect(output).toContain("one of those paths is live wiring: .claude/settings.json");
     expect(output).toContain("installed none of its own hook or permission settings");
+    // review/42: the stated cause is the one init still refuses for since
+    // REQ-FLOW-036 — a shape it cannot merge beside, or a link — not that the
+    // file was already here (a file already here is merged entry by entry).
+    expect(output).toContain("could not be merged: a member the engine writes into has another type, or the file is a link");
+    expect(output).not.toContain("was already here");
     // TEST CHANGE (sw26-engine-cli-call-form): the remedy names the pinned
     // npx call instead of a bare verb.
     expect(output).toContain(`remove it and run \`${npxCommand("sync")}\``);

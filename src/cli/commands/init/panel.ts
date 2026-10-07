@@ -113,10 +113,13 @@ export interface MigrationResidue {
    *
    * It rides its own field because it is the one residue path with a REMEDY
    * this engine can state: the others are the predecessor's to remove, while
-   * this one is a file the writer skipped (`../../../merge/safeWrite.ts`: no
-   * ownership ledger row, no `STAMITY:BEGIN`/`END` markers), so the hook and
-   * permission wiring that document holds is whatever was there before this run
-   * — and removing it and re-syncing is what installs this setup's.
+   * this one is a file the writer skipped. Since REQ-FLOW-036 an existing
+   * settings document is merged entry by entry, so the skip means only a
+   * `co-owned-shape` refusal (a member the engine writes into has another type)
+   * or a linked target (`shared-name`); the hook and permission wiring that
+   * document holds is then whatever was there before this run — and fixing the
+   * member, or removing a predecessor's file, then re-syncing is what installs
+   * this setup's.
    *
    * Named rather than inferred from the warning stream: a skipped write already
    * prints a generic collision warning, and a reader had no way to tell that
@@ -556,10 +559,12 @@ function residueLines(residue: MigrationResidue | undefined, carry: CarryReport)
   ];
   if (residue.unownedSettingsPath !== undefined) {
     lines.push(
-      `  one of those paths is live wiring: ${residue.unownedSettingsPath} was already here, so ` +
-        `this run refused to claim it and installed none of its own hook or permission settings ` +
-        `there — whatever that file wires is what still fires. If it is the previous setup's ` +
-        `rather than yours, remove it and run \`${packageCommand("sync")}\` to get this setup's.`,
+      `  one of those paths is live wiring: ${residue.unownedSettingsPath} could not be merged: a ` +
+        `member the engine writes into has another type, or the file is a link (the warning above ` +
+        `names which), so this run installed none of its own hook or permission settings there — ` +
+        `whatever that file wires is what still fires. Fix what the warning names and run ` +
+        `\`${packageCommand("sync")}\`. If it is the previous setup's rather than yours, remove it and ` +
+        `run \`${packageCommand("sync")}\` to get this setup's.`,
     );
   }
   if (carry.envMcpCarried) {

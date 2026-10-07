@@ -860,15 +860,15 @@ function migrationResidue(
  *
  * Detection never sees this file: it is not a marked instruction surface and it
  * is not under the predecessor's state directory, so every earlier residue
- * report omitted it — while `../../merge/safeWrite.ts` was skipping it on every
- * guided migration for exactly the reason that makes it worth naming. The
- * predecessor emits this same path as unwrapped JSON, so it carries no block of
- * anyone's; the writer therefore cannot prove ownership, leaves it untouched,
- * and this setup's hook and permission wiring never lands, so whatever that
- * document already wired is what still fires. The panel's remedy
+ * report omitted it. Since REQ-FLOW-036 the co-owned lane merges an existing
+ * settings document entry by entry, so a predecessor's file is skipped only when
+ * the merge cannot keep its entries beside the engine's: a `co-owned-shape`
+ * refusal (a member the engine writes into has another type) or a linked target
+ * (`shared-name`). Then this setup's hook and permission wiring never lands, so
+ * whatever that document already wired is what still fires. The panel's remedy
  * line is conditional on it actually being the predecessor's, because that is
- * the half this run cannot verify — what it CAN verify is that the file predates
- * the run and that the run did not write it.
+ * the half this run cannot verify — what it CAN verify is that the run did not
+ * write it.
  *
  * Read off `wrote` rather than re-probed off disk: the writer's own disposition
  * is the fact, and a second `stat` here would answer a different question (the
