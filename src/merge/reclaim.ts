@@ -70,7 +70,8 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  *    hash proves nothing: no release ever wrote one, so it is a hand edit.
  * 3. **Containment (physical).** The parent directory's realpath still resolves
  *    under the root's realpath — and under the realpath of the bound folder the
- *    row's path lies in, when it lies in one — the candidate itself is a regular
+ *    row's path lies in, when it lies in one, with no link on the chain of
+ *    `.stamity/` and its state and pack folders — the candidate itself is a regular
  *    file, and its folder lists it under exactly the recorded spelling (a
  *    case-insensitive volume answers other spellings too). A
  *    symlinked directory anywhere on the path, a symlink in place of the recorded
@@ -561,13 +562,25 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   // content root that is itself an in-repo alias (`.cursor/rules -> shared/rules`)
   // reclaim through the alias.
   const folder = ownedFolderOf(path);
+  // The engine's own folders — `.stamity/`, a state folder, a pack's folder —
+  // are never links, and a hash alone proves a delete there, so a link anywhere
+  // on that chain would aim the proof at whatever it points to. Each segment is
+  // read with `lstat`; a content root keeps its in-repo alias, which the check
+  // above already holds the parent inside.
+  const engineChain =
+    folder !== null && folder.startsWith(`${STATE_DIR}/`) ? folder.slice(0, -1).split("/") : [];
   let parentReal: string;
   let parentIdentity: DirectoryIdentity;
   let folderReal: string | null = null;
+  let linkedSegment: string | null = null;
   try {
     parentReal = await realpath(dirname(recordedTarget));
     parentIdentity = await readDirectoryIdentity(parentReal);
     if (folder !== null) folderReal = await realpath(resolve(ctx.root, folder));
+    for (let depth = 1; depth <= engineChain.length && linkedSegment === null; depth++) {
+      const segment = engineChain.slice(0, depth).join("/");
+      if ((await lstat(resolve(ctx.root, segment))).isSymbolicLink()) linkedSegment = segment;
+    }
   } catch (err) {
     if (errnoCode(err) === "ENOENT") {
       return skip("skipped-missing", "The parent directory is already gone.");
@@ -581,6 +594,12 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     return skip(
       "skipped-unsafe-path",
       `The parent directory resolves to ${parentReal}, outside the repo root — a symlinked directory on the path.`,
+    );
+  }
+  if (linkedSegment !== null) {
+    return skip(
+      "skipped-unsafe-path",
+      `\`${linkedSegment}\` is a symbolic link. The engine's own state and pack folders are never links, so a row under one cannot name a file the engine wrote.`,
     );
   }
   if (folderReal !== null && !isWithin(parentReal, folderReal)) {

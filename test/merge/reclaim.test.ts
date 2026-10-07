@@ -366,6 +366,29 @@ describe("sweepReclaimCandidates — containment", () => {
     expect(await readFile(join(root, ".stamity/learnings/keep-me.md"), "utf-8")).toBe(owner);
   });
 
+  // The engine's own folders are never links: a link at `.stamity/`, at a state
+  // folder or at a pack's folder would move the folder the row claims along
+  // with it, and the hash alone proves a delete there.
+  it.each([
+    // [the linked folder, its target, the row's path, the owner file the row reaches]
+    [".stamity/generated", ".stamity/learnings", ".stamity/generated/keep-me.md", ".stamity/learnings/keep-me.md"],
+    [".stamity", "owner-state", ".stamity/mcp/keep-me.md", "owner-state/mcp/keep-me.md"],
+    [".stamity/packs/acme__ops", "docs", `${OWNED_PATHS.packRoot}acme__ops/keep-me.md`, "docs/keep-me.md"],
+  ])("refuses a hashed row under %j when that folder is itself a link", async (linked, target, rowPath, ownerFile) => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const owner = "owner file\n";
+    await temp.seedFiles({ [`repo/${ownerFile}`]: owner });
+    await mkdir(join(root, linked, ".."), { recursive: true });
+    await symlink(join(root, target), join(root, linked), "dir");
+
+    const report = await sweepReclaimCandidates([hashedCandidate(rowPath, owner)], { rootDir: root, consent: true });
+
+    expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(onlyEntry(report).detail).toContain(`\`${linked}\` is a symbolic link`);
+    expect(await readFile(join(root, ownerFile), "utf-8")).toBe(owner);
+  });
+
   it("still reclaims through a content folder that is itself an in-repo alias", async () => {
     const temp = tempDir();
     const root = temp.path("repo");
