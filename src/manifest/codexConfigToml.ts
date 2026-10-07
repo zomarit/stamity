@@ -356,6 +356,39 @@ function arrayRedefinitionFailure(shown: string, found: { line: number; path: re
   );
 }
 
+/**
+ * The first standard table header that names a table an earlier one already
+ * did (the key path resolved, so `[features]` and `["features"]` are one),
+ * with both lines: TOML refuses a table defined twice, so Codex would load
+ * nothing of the file. `[[x]]` arrays of tables repeat by design and are not
+ * counted. Every table counts, the owner's included: the write keeps it, and a
+ * kept file Codex refuses is no file the engine can call set up.
+ */
+function doubleDefinition(segments: readonly TomlSegment[]): { name: string; line: number; first: number } | null {
+  const seen = new Map<string, number>();
+  let line = 1;
+  for (const segment of segments) {
+    if (segment.key !== null && !segment.arrayTable) {
+      const lines = linesOf(segment.text).map((text) => text.replace(BOM, "").replace(/\r?\n$/u, ""));
+      const at = line + lines.findIndex((text) => !BLANK.test(text) && !COMMENT.test(text));
+      const id = JSON.stringify(segment.key);
+      const first = seen.get(id);
+      if (first !== undefined) return { name: tomlTableName(segment.key), line: at, first };
+      seen.set(id, at);
+    }
+    line += segment.text.split("\n").length - 1;
+  }
+  return null;
+}
+
+function doubleDefinitionFailure(shown: string, found: { name: string; line: number; first: number }): string {
+  return (
+    `Skipped ${shown}: line ${found.line} defines [${found.name}] a second time (line ${found.first} defines it first), and ` +
+    `TOML refuses a table defined twice, so Codex would load none of this file. It was left untouched. Merge the two ` +
+    `[${found.name}] tables into one and re-run sync.`
+  );
+}
+
 function keptWarning(shown: string, name: string): string {
   return `Kept your ${shownTable(name)} in ${shown}; the engine's rendering of it is not written there — remove yours to get it back.`;
 }
@@ -462,6 +495,11 @@ function planUnbounded(
   // Only an owner's key can turn hooks off (no release wrote one), and the write keeps it.
   const hooksOff = hooksOffKey(existingRaw, cut.keys);
   const hooksOffNote = hooksOff === null ? "" : ` ${hooksOffSentence(shown, hooksOff)}`;
+  const doubled = doubleDefinition(cut.segments);
+  if (doubled !== null) {
+    const reason = doubleDefinitionFailure(shown, doubled) + hooksOffNote;
+    return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
+  }
   const state: OwnershipState = !ownership.owned ? "adoption" : ownership.legacy ? "legacy" : "recorded";
   const record = state === "recorded" ? ownership.record : null;
   const items = itemsOf(cut.segments, state !== "legacy");
@@ -612,6 +650,16 @@ export function reduceCodexConfigToml(
       detail:
         `This Codex configuration does not read as TOML at line ${cut.line} (${cut.reason}), so which of its tables the ` +
         `engine wrote cannot be read. Nothing was removed and nothing was deleted — fix or delete the file by hand.`,
+    };
+  }
+  const doubled = doubleDefinition(cut.segments);
+  if (doubled !== null) {
+    return {
+      kind: "untouched",
+      detail:
+        `This Codex configuration defines [${doubled.name}] twice (lines ${doubled.first} and ${doubled.line}), and TOML ` +
+        `refuses a table defined twice, so which of its tables the engine wrote cannot be read. Nothing was removed and ` +
+        `nothing was deleted — merge the two tables by hand.`,
     };
   }
   const state: OwnershipState = opts.legacy ? "legacy" : "recorded";

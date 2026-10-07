@@ -664,19 +664,24 @@ describe("planCodexConfigToml", () => {
     expect(planned.content).toBe(`${EMPTY}\n${owner}\n`);
   });
 
+  // TEST CHANGE, justified: review/93 (signed off) — the owner's [mcp_servers] beside the engine's
+  // recorded one defined that table twice, which TOML refuses and which is now a co-owned-shape
+  // refusal (the last describe below). Every name the engine renders is still the owner's here:
+  // the rendering is now [features] and [mcp_servers.github], both the owner's, and the engine's
+  // recorded bare [mcp_servers], no longer rendered, is the block that leaves.
   it("recorded: when every engine name is the owner's, the engine writes nothing and its block leaves with its separator and its line break", () => {
-    const owner = "[features]\nweb_search = true\n[mcp_servers]\nx = 1";
+    const owner = "[features]\nweb_search = true\n[mcp_servers.github]\nx = 1";
     const existing = `${owner}\n\n${table("mcp_servers")}`;
-    const planned = plan(existing, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }));
+    const planned = plan(existing, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }), GITHUB, ["github"]);
     expect(planned.content).toBe(owner);
     expect(planned.backup).toBeNull();
     expect(planned.record).toEqual({});
   });
 
   it("recorded: when every engine name is the owner's and an owner table follows the block, only the block leaves", () => {
-    const owner = "[features]\nweb_search = true\n[mcp_servers]\nx = 1\n";
+    const owner = "[features]\nweb_search = true\n[mcp_servers.github]\nx = 1\n";
     const after = '[profiles.x]\nmodel = "o3"\n';
-    const planned = plan(`${owner}\n${table("mcp_servers")}\n${after}`, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }));
+    const planned = plan(`${owner}\n${table("mcp_servers")}\n${after}`, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }), GITHUB, ["github"]);
     expect(planned.content).toBe(`${owner}\n${after}`);
     expect(planned.record).toEqual({});
   });
@@ -736,10 +741,14 @@ describe("planCodexConfigToml", () => {
     expect(planned.content).toBe(crlf(`model = "o3"\n\n${GITHUB}`));
   });
 
-  it("writes one copy of an engine table the owner pasted twice", () => {
+  // TEST CHANGE, justified: review/93 (signed off) — an engine table pasted twice is a table
+  // defined twice, which Codex refuses whole; the planner no longer drops the copy silently but
+  // refuses the file, naming the table, and leaves the owner to merge it.
+  it("refuses an engine table the owner pasted twice, naming it, and writes nothing", () => {
     const existing = `${EMPTY}\n${table("mcp_servers")}`;
     const planned = plan(existing, recorded(recordFor("features", "mcp_servers")));
-    expect(planned.content).toBe(EMPTY);
+    expect(planned.content).toBeNull();
+    expect(planned.collision).toContain("defines [mcp_servers] a second time");
   });
 });
 
@@ -1079,5 +1088,83 @@ describe("reduceCodexConfigToml", () => {
     const reduction = reduce(V1_11, { legacy: true, deleteWhenEngineOnly: true });
     expect(reduction).toMatchObject({ kind: "engine-only", proven: false });
     expect("mustBackUp" in reduction).toBe(false);
+  });
+});
+
+// ── A table defined twice (review/93) ──────────────────────────
+
+describe("a standard table defined twice in the kept file is a co-owned-shape collision (review/93)", () => {
+  const twice = (name: string, line: number, first: number): string =>
+    `Skipped .codex/config.toml: line ${line} defines [${name}] a second time (line ${first} defines it first), and ` +
+    `TOML refuses a table defined twice, so Codex would load none of this file. It was left untouched. Merge the two ` +
+    `[${name}] tables into one and re-run sync.`;
+  const shapes: [string, string, string, number, number][] = [
+    ["two owner [features] tables", "[features]\nweb_search = true\n\n[features]\nhooks = true\n", "features", 4, 1],
+    ["a bare and a quoted header", '[features]\nx = 1\n# a note\n["features"]\ny = 2\n', "features", 4, 1],
+    ["two spellings of one server table", '[mcp_servers.team]\ncommand = "a"\n\n[ mcp_servers . \'team\' ]\ncommand = "b"\n', "mcp_servers.team", 4, 1],
+    ["an owner table of no engine name", 'model = "o3"\n\n[profiles.x]\na = 1\n\n[profiles.x]\nb = 2\n', "profiles.x", 6, 3],
+    ["a quoted name that needs its quotes", '["a b"]\nx = 1\n["a b"]\n', '"a b"', 3, 1],
+  ];
+  for (const [name, raw, shown, line, first] of shapes) {
+    it(`${name}: skipped, naming [${shown}] and line ${line}, the file untouched and no --force`, () => {
+      for (const ownership of [ADOPTION, recorded(recordFor("features")), LEGACY]) {
+        for (const text of [raw, raw.replaceAll("\n", "\r\n")]) {
+          const planned = plan(text, ownership);
+          expect(planned.result).toEqual({ path: FILE, action: "skipped", warning: twice(shown, line, first) });
+          expect(planned.collision).toBe(twice(shown, line, first));
+          expect(planned.content).toBeNull();
+          expect(planned.backup).toBeNull();
+          expect(planned.record).toBeNull();
+          expect(planned.collision).not.toMatch(/force/iu);
+        }
+      }
+    });
+  }
+
+  it("carries a kept hooks-off key's sentence beside the refusal", () => {
+    const planned = plan("[features]\nhooks = false\n[features]\n", ADOPTION);
+    expect(planned.collision).toContain(twice("features", 3, 1));
+    expect(planned.collision).toContain("`hooks = false` in [features] (line 2)");
+  });
+
+  it("repeated [[x]] arrays of tables, and a sub-table beside its parent, are no collision", () => {
+    const raw = '[[profiles]]\nname = "a"\n\n[[profiles]]\nname = "b"\n\n[tools]\n[tools.x]\n';
+    const planned = plan(raw, ADOPTION);
+    expect(planned.collision).toBeNull();
+    expect(planned.content).toBe(`${raw}\n${EMPTY}`);
+  });
+
+  it("reduce: leaves the file untouched, naming the table", () => {
+    const raw = `${EMPTY}\n[profiles.x]\na = 1\n[profiles.x]\n`;
+    const reduction = reduce(raw, { record: recordFor("features", "mcp_servers") });
+    expect(reduction.kind).toBe("untouched");
+    expect(reduction.detail).toContain("[profiles.x]");
+    expect(reduction.detail).toContain("defined twice");
+  });
+
+  it("init skips the file byte for byte, check exits 1 on it, and sync after an owner's edit skips it too", async () => {
+    const root = await freshRepo();
+    const owner = 'model = "o3"\n\n[features]\nweb_search = true\n\n[features]\nhooks = true\n';
+    await seedConfig(root, owner);
+
+    const report = await init(root);
+    expect(configRow(report.wrote)).toMatchObject({ action: "skipped", warning: twice("features", 6, 3) });
+    expect(await readConfig(root)).toBe(owner);
+
+    const drift = await runDriftGate(root, ENGINE_VERSION);
+    const entry = drift.changes.find((change) => change.path === CODEX_CONFIG_FILE);
+    expect(entry?.collisionKind).toBe("co-owned-shape");
+    expect(entry?.detail).toContain("[features] a second time");
+    expect((await runInProcess([checkCommand], ["check"], { cwd: root })).code).toBe(1);
+
+    const later = await freshRepo();
+    await init(later);
+    const edited = `${await readConfig(later)}\n[profiles.x]\na = 1\n\n[profiles.x]\nb = 2\n`;
+    await writeFile(CONFIG_ABS(later), edited, "utf8");
+    const synced = await sync(later);
+    expect(configRow(synced.wrote).action).toBe("skipped");
+    expect(configRow(synced.wrote).warning).toContain("[profiles.x] a second time");
+    expect(await readConfig(later)).toBe(edited);
+    expect(await backups(later)).toEqual([]);
   });
 });
