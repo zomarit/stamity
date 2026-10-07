@@ -69,6 +69,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once. `clean` no longer deletes a hook script
   that a hooks file it keeps still runs. Cursor's two `failClosed` guards are included: deleting
   them made Cursor deny every sub-agent spawn and MCP call.
+- **Your own tables and top-level keys in `.codex/config.toml` survive `sync` and `clean`.** The
+  file was written whole, so a team's own `[mcp_servers.<id>]` or setting was dropped by the next
+  `sync` behind a `.bak`. It is now owned table by table: the engine owns each `[mcp_servers.<id>]`
+  it renders, the bare `[mcp_servers]` when no server is selected, and `[features]` only while it
+  is a table a release wrote. Every other table and top-level key is yours and is kept byte for
+  byte. A `[features]` table of your own is kept instead of the engine's; when it sets
+  `hooks = false`, Codex runs none of the hooks, the engine's guards included, so `sync` warns and
+  `check` exits 1 naming the line. A file that defines `features` or `mcp_servers` keys without a
+  table header, or holds an `[[mcp_servers]]` array beside a server table the engine writes, is
+  refused as `co-owned-shape` naming the line, and so is a selection of more than 63 MCP servers.
+  The comments above `[features]` are rewritten on the next `sync`.
 
 ### Changed
 
@@ -77,8 +88,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it.
 - **`check` fails on a `.cursor/hooks.json` entry Cursor rejects.** An event key outside the 21
   that Cursor accepts, a command entry with no `command`, a prompt entry with no `prompt`, or an
-  entry of another `type` makes Cursor load none of the file's hooks.
-  `check` now names the entry and exits 1. `sync` and `init` keep the entry and warn.
+  entry of another `type` makes Cursor load none of the file's hooks (shown for Cursor 3.13.10 by
+  microsoft/apm#3129; unverified on 3.23.23). `check` now names the entry and exits 1. `sync` and
+  `init` keep the entry and warn.
 - **The two Cursor guards are renamed** `.cursor/hooks/stamity-subagent-guard.mjs` and
   `.cursor/hooks/stamity-mcp-guard.mjs`, so every file the engine writes into `.cursor/hooks/`
   carries the `stamity-` prefix. The next `sync` writes them, points `.cursor/hooks.json` at them,

@@ -33,9 +33,10 @@ security fixes of the released 1.11.0 — merged at the Prove phase of run `2026
 REQ-PLUGIN-031 to 044 belong to files 1 to 3 of the same plan, which merge later, so the ids here leave a gap. The
 "Evidence" sentences cite the tree the defects were measured on, `d10db029`; the sentences headed "Amended 2026-10-07
 (build)" say what the build settled and name the code by path and symbol on the run's integration branch
-(`fix/plan-016-file-0` at `fa8163a3`; the registry unit and the hook-file unit's JSON half, not integrated at the merge,
-read on their lanes, `lane/016-00-b` at `96748e20` and `lane/016-00-a` at `d198b0f2`). They are not in a release yet:
-`status` still names 1.9.0, and the release that ships them, 1.12.0, sets it.
+(`fix/plan-016-file-0` at `fa8163a3`; the registry unit and the hook-file unit's JSON half, integrated after the merge,
+at their integration commits, `u0-registry-bound-calls` at `6d2fb2e7` and the JSON half at `8d4b932e`). All five units
+are integrated. They are not in a release yet: `status` still names 1.9.0, and the release that ships them, 1.12.0, sets
+it.
 
 ## Intent
 

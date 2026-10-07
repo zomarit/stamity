@@ -29,9 +29,9 @@ the five security fixes of the released 1.11.0), merged on 2026-10-07 at the Pro
 `.stamity/runs/2026-10-07_security-fixes/`. The ids REQ-FLOW-027 to 035 belong to files 1 to 3 of the same plan, which
 merge later. Each requirement's "Evidence (before)" cites `d10db029`, the tree the defects were measured on; its
 "Amended 2026-10-07 (build)" bullet says what the build settled and names the code by path and symbol on the run's
-integration branch (`fix/plan-016-file-0` at `fa8163a3`; the hook-file unit's JSON half, not integrated at the merge,
-read on `lane/016-00-a` at `d198b0f2`). They are not in a release yet: `status` still names 1.11.0, and the release that
-ships them, 1.12.0, sets it.
+integration branch (`fix/plan-016-file-0` at `fa8163a3`; the hook-file unit's JSON half, integrated after the merge,
+at its integration commit `8d4b932e`). All five units are integrated, the last, `u0-registry-bound-calls`, at
+`6d2fb2e7`. They are not in a release yet: `status` still names 1.11.0, and the release that ships them, 1.12.0, sets it.
 
 ## Intent
 
