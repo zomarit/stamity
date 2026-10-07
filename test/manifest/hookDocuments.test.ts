@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CURSOR_GUARD_EVENTS, EVENT_RENAME, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH, buildHooksJson } from "../../src/adapters/cursor.ts";
 import type { HookInterchange } from "../../src/hooks/model.ts";
 import { portableHookCommand } from "../../src/hooks/portableRunner.ts";
@@ -621,5 +621,23 @@ describe("hookScriptReader", () => {
     expect(reader.runs(text, `${HOOKS_GENERATED_DIR}/cursor/other.mjs`)).toBe(false);
     // A path no pattern reads, named in the text, still counts.
     expect(reader.runs('{"x":"bin/tool.rb"}', "bin/tool.rb")).toBe(true);
+  });
+
+  it("parses each of two kept documents once while the sweep alternates between them (review/80)", () => {
+    const fresh = hookScriptReader(GUARDS);
+    const script = `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`;
+    const cursor = buildHooksJson([row("session_start", script)]);
+    const other = '{"hooks":{"x":[{"command":"node .stamity/hooks/mine.mjs"}]}}';
+    const parse = vi.spyOn(JSON, "parse");
+    try {
+      for (const path of [script, MCP_GUARD_PATH, ".stamity/hooks/mine.mjs"]) {
+        fresh.runs(cursor, path);
+        fresh.runs(other, path);
+      }
+      const documents = parse.mock.calls.filter(([text]) => text === cursor || text === other).map(([text]) => text);
+      expect(documents).toEqual([cursor, other]);
+    } finally {
+      parse.mockRestore();
+    }
   });
 });

@@ -617,21 +617,25 @@ export function referencedHookScripts(text: string): Set<string> {
  * How the reclaim sweep reads a hooks document it keeps
  * (`../merge/reclaim.ts::HookScriptReader`): which candidate paths are engine
  * hook scripts — under the generated hooks folder, an installed pack's folder,
- * or one of `guardPaths` — and whether a kept document's text runs one. The
- * text's references are read once per document.
+ * or one of `guardPaths` — and whether a kept document's text runs one. Each
+ * document's references are read once, however the calls interleave.
  */
 export function hookScriptReader(guardPaths: readonly string[]): {
   isHookScript(path: string): boolean;
   runs(text: string, path: string): boolean;
 } {
   const guards = new Set(guardPaths);
-  let read: { text: string; scripts: Set<string> } | null = null;
+  // One entry per document text, so a sweep alternating between documents parses each once.
+  const read = new Map<string, Set<string>>();
   return {
     isHookScript: (path) => path.startsWith(`${HOOKS_GENERATED_DIR}/`) || path.startsWith(`${STATE_DIR}/packs/`) || guards.has(path),
     runs: (text, path) => {
-      const current = read !== null && read.text === text ? read : { text, scripts: referencedHookScripts(text) };
-      read = current;
-      return current.scripts.has(path) || text.includes(path);
+      let scripts = read.get(text);
+      if (scripts === undefined) {
+        scripts = referencedHookScripts(text);
+        read.set(text, scripts);
+      }
+      return scripts.has(path) || text.includes(path);
     },
   };
 }
