@@ -21,8 +21,10 @@ import {
   outputWriteOptions,
   predictMcpDocumentMerge,
   readIfExists,
+  rowsCarriedThroughSweep,
   sha256,
 } from "../../../src/cli/engine/emissionWrite.ts";
+import type { ReclaimActionEntry, ReclaimReport } from "../../../src/merge/reclaim.ts";
 import type { AdapterOutput } from "../../../src/types/content.ts";
 import type { LedgerEntry, SetupManifest } from "../../../src/types/manifest.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -850,5 +852,62 @@ describe("coOwnedReclaimRenderings — the proof by re-rendering for user hooks 
         SessionStart: [{ hooks: [{ type: "command", command: ["node", ".stamity/hooks/audit.mjs"] }] }],
       },
     });
+  });
+});
+
+describe("rowsCarriedThroughSweep (review/91)", () => {
+  const row = (path: string, adapter: LedgerEntry["adapter"] = "cursor"): LedgerEntry => ({
+    path,
+    adapter,
+    artifactId: path,
+    artifactType: "infra",
+    contentHash: sha256(path),
+  });
+  const entry = (path: string, action: ReclaimActionEntry["action"]): ReclaimActionEntry => ({
+    path,
+    candidateReason: "adapter-removed",
+    action,
+    detail: "",
+  });
+  const report = (entries: ReclaimActionEntry[], wiringKept?: ReclaimReport["wiringKept"]): ReclaimReport => ({
+    entries,
+    consent: true,
+    ...(wiringKept === undefined ? {} : { wiringKept }),
+    deletedCount: 0,
+    strippedCount: 0,
+    skippedCount: 0,
+  });
+  const coOwned = new Set([".cursor/hooks.json", ".cursor/mcp.json", ".codex/config.toml", ".codex/hooks.json"]);
+
+  it("carries no row when no sweep ran", () => {
+    expect(rowsCarriedThroughSweep([row(".cursor/hooks.json")], null, coOwned)).toEqual([]);
+  });
+
+  it("carries the rows of a co-owned document left unreduced and of each script a kept document runs, and nothing else", () => {
+    const ledger = [
+      row(".cursor/hooks.json"),
+      row(".cursor/mcp.json"),
+      row(".codex/config.toml", "codex"),
+      row(".codex/hooks.json", "codex"),
+      row(".stamity/generated/hooks/cursor/a.mjs"),
+      row(".stamity/generated/hooks/cursor/a.mjs", "pack:acme__ops"),
+      row(".stamity/generated/hooks/cursor/b.mjs"),
+      row(".cursor/rules/x.mdc"),
+    ];
+    const swept = report(
+      [
+        entry(".cursor/hooks.json", "skipped-user-content"),
+        entry(".cursor/mcp.json", "skipped-unsafe-path"),
+        entry(".codex/config.toml", "co-owned-reduced"),
+        entry(".codex/hooks.json", "skipped-missing"),
+        entry(".stamity/generated/hooks/cursor/a.mjs", "skipped-user-content"),
+        entry(".stamity/generated/hooks/cursor/b.mjs", "skipped-user-content"),
+        entry(".cursor/rules/x.mdc", "skipped-user-content"),
+      ],
+      [{ path: ".cursor/hooks.json", scripts: [".stamity/generated/hooks/cursor/a.mjs"] }],
+    );
+    expect(rowsCarriedThroughSweep(ledger, swept, coOwned)).toEqual([ledger[0], ledger[1], ledger[4]]);
+    // With nothing held by wiring, only the refused documents.
+    expect(rowsCarriedThroughSweep(ledger, report(swept.entries), coOwned)).toEqual([ledger[0], ledger[1]]);
   });
 });

@@ -1192,6 +1192,100 @@ describe("a first sync that refuses .cursor/hooks.json leaves the rename to the 
   );
 });
 
+describe("a removed client's hooks document the sweep cannot reduce keeps its rows, and its scripts', until the owner repairs it (review/91)", () => {
+  // Each refusal the sweep makes, how the owner clears it, and what the repaired document keeps.
+  const OWNER_ONLY = { version: 1, hooks: { afterFileEdit: [OWNER_CURSOR_ENTRY] } };
+  const refusals = [
+    [
+      "a document that does not parse",
+      async (root: string): Promise<() => Promise<void>> => {
+        const before = await readText(root, CURSOR_HOOKS);
+        await writeFile(abs(root, CURSOR_HOOKS), `${before},`, "utf8");
+        return () => writeFile(abs(root, CURSOR_HOOKS), before, "utf8");
+      },
+      null,
+    ],
+    [
+      "a document of another shape (an array)",
+      async (root: string): Promise<() => Promise<void>> => {
+        const before = await readText(root, CURSOR_HOOKS);
+        await writeDoc(root, CURSOR_HOOKS, [await readDoc(root, CURSOR_HOOKS)]);
+        return () => writeFile(abs(root, CURSOR_HOOKS), before, "utf8");
+      },
+      null,
+    ],
+    [
+      "a hard link the reduction would rewrite",
+      async (root: string): Promise<() => Promise<void>> => {
+        await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
+        const other = getTemp().path("outside-hooks.json");
+        await link(abs(root, CURSOR_HOOKS), other);
+        return () => rm(other);
+      },
+      OWNER_ONLY,
+    ],
+  ] as const;
+
+  // A hard link: Windows reports no link count this check can rely on (`./reclaim.test.ts`).
+  it.each(refusals.filter(([name]) => !name.startsWith("a hard link") || process.platform !== "win32"))(
+    "refused for %s: sync keeps the document and the scripts it runs with their pre-run rows, and once it is fixed the next sync reclaims them all by proof, with no .bak",
+    async (_name, refuse, repairedDoc) => {
+      const root = await freshRepo();
+      await init(root, ["claude", "cursor"]);
+      const cursorRows = (await readManifest(root))?.ledger.filter((row) => row.adapter === "cursor") ?? [];
+      const fix = await refuse(root);
+      await selectTools(root, ["claude"]);
+
+      const { report } = await sync(root);
+
+      expect(report.reclaimed?.entries.find((entry) => entry.path === CURSOR_HOOKS)?.action).toMatch(/^skipped-(user-content|unsafe-path)$/u);
+      const scripts = (report.reclaimed?.wiringKept ?? []).flatMap((kept) => kept.scripts);
+      for (const script of [CURSOR_RUNNER, SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]) expect(scripts, script).toContain(script);
+      const held = new Set([CURSOR_HOOKS, ...scripts]);
+      for (const path of held) expect(existsSync(abs(root, path)), path).toBe(true);
+      const carried = (await readManifest(root))?.ledger.filter((row) => row.adapter === "cursor") ?? [];
+      // Exactly the pre-run rows of the kept document and of each script it runs, unchanged.
+      expect(carried).toEqual(cursorRows.filter((row) => held.has(row.path)));
+      // Every other Cursor file left with its row.
+      expect(cursorRows.some((row) => !held.has(row.path))).toBe(true);
+
+      // A second sync before the fix carries them again.
+      await sync(root);
+      expect((await readManifest(root))?.ledger.filter((row) => row.adapter === "cursor")).toEqual(carried);
+
+      await fix();
+      const { report: repaired } = await sync(root);
+
+      const docEntry = repaired.reclaimed?.entries.find((entry) => entry.path === CURSOR_HOOKS);
+      if (repairedDoc === null) {
+        expect(docEntry?.action).toBe("deleted");
+        expect(existsSync(abs(root, CURSOR_HOOKS))).toBe(false);
+      } else {
+        expect(docEntry?.action).toBe("co-owned-reduced");
+        expect(await readDoc(root, CURSOR_HOOKS)).toEqual(repairedDoc);
+      }
+      for (const script of scripts) {
+        expect(existsSync(abs(root, script)), script).toBe(false);
+        expect(repaired.reclaimed?.entries.find((entry) => entry.path === script), script).toMatchObject({ action: "deleted", proof: "hash" });
+      }
+      expect((await readManifest(root))?.ledger.filter((row) => row.adapter === "cursor")).toEqual([]);
+      expect(await backups(root)).toEqual([]);
+    },
+  );
+
+  it("a document the sweep reduced carries nothing: its owner entry stays, and no Cursor row is left", async () => {
+    const root = await freshRepo();
+    await init(root, ["claude", "cursor"]);
+    await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
+    await selectTools(root, ["claude"]);
+
+    const { report } = await sync(root);
+
+    expect(report.reclaimed?.entries.find((entry) => entry.path === CURSOR_HOOKS)?.action).toBe("co-owned-reduced");
+    expect((await readManifest(root))?.ledger.filter((row) => row.adapter === "cursor")).toEqual([]);
+  });
+});
+
 describe("no verb deletes a renamed guard a kept .cursor/hooks.json still runs (REQ-FLOW-038 with S17, review/58)", () => {
   it("a .cursor/hooks.json sync refuses (an owner's version) keeps both old guards it still names", async () => {
     const root = await setUpByReleaseOneEleven();

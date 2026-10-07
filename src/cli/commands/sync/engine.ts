@@ -54,7 +54,6 @@ import {
   coOwnedOwnershipOf,
   coOwnedRowsCarriedThroughRefusal,
   hookScriptRetention,
-  legacyGuardRowsStillWired,
   coOwnedReclaimReducers,
   coOwnedReclaimRenderings,
   installedPackServers,
@@ -63,6 +62,7 @@ import {
   outputWriteOptions,
   predictMcpDocumentMerge,
   readIfExists,
+  rowsCarriedThroughSweep,
   sha256,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
@@ -1155,8 +1155,9 @@ export async function applySync(
           now,
         })
       : null;
-  // An old guard name a kept hooks document still runs keeps its row (review/75).
-  ledger = [...ledger, ...legacyGuardRowsStillWired(plan.manifest.ledger, reclaimed)];
+  // A document the sweep refused to reduce, and each script a kept hooks
+  // document still runs, keep their pre-run rows (review/75, review/91).
+  ledger = [...ledger, ...rowsCarriedThroughSweep(plan.manifest.ledger, reclaimed, coOwnedPaths)];
 
   // The state scaffold, restored on every live sync — the same helper init
   // runs. `check`'s state-dirs row names THIS verb as its remedy, and it named

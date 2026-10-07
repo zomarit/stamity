@@ -39,7 +39,7 @@ import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
-import type { HookScriptReader, ReclaimReport } from "../../merge/reclaim.ts";
+import type { HookScriptReader, ReclaimActionEntry, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
 import {
@@ -436,19 +436,37 @@ function cursorGuardPathsFor(ledger: readonly LedgerEntry[]): string[] {
 }
 
 /**
- * The pre-run ledger rows of each 1.11.0 guard name the live sweep kept because
- * a hooks document it left in place still runs it (`ReclaimReport.wiringKept`,
- * S17) — a `.cursor/hooks.json` this run refused, say. They go back into the
- * rebuilt ledger, so the setup stays one that ran a release before the rename
- * ({@link cursorGuardPathsFor}, review/75): once the owner clears the refusal,
- * the next sync recognises the old guard entries and rewires them, and the
- * sweep then deletes the old scripts by their recorded hash. A guard kept for
- * any other reason — edited by hand — is the owner's, and its row is not
- * carried.
+ * The sweep outcomes that leave a co-owned document as it was: the reducer
+ * refused it (it does not parse, or holds a shape it cannot read back), or the
+ * sweep would not rewrite it (a link, a hard link, a file it cannot read).
  */
-export function legacyGuardRowsStillWired(ledger: readonly LedgerEntry[], reclaimed: ReclaimReport | null): LedgerEntry[] {
-  const wired = new Set(reclaimed?.wiringKept?.flatMap((held) => held.scripts) ?? []);
-  return ledger.filter((row) => (LEGACY_CURSOR_GUARD_PATHS as readonly string[]).includes(row.path) && wired.has(row.path));
+const LEFT_UNREDUCED: ReadonlySet<ReclaimActionEntry["action"]> = new Set(["skipped-user-content", "skipped-unsafe-path"]);
+
+/**
+ * The pre-run ledger rows the live sweep's refusals hold in place (review/91):
+ * those of each co-owned document in `coOwned` the sweep left unreduced, and
+ * those of each script a hooks document it left in place still runs
+ * (`ReclaimReport.wiringKept`, S17). The ledger rebuild has already dropped
+ * them — a removed client's rows, or a renamed or deselected path's — so they
+ * go back whole, the recorded hash and the co-owned record included, and the
+ * files stay the engine's to reclaim: once the owner repairs the document, the
+ * next sync reduces it and deletes the scripts by their recorded hash. A
+ * document the sweep reduced or deleted carries nothing. 1.11.0's renamed
+ * guards are one case: a kept `.cursor/hooks.json` that still runs one keeps
+ * its row, so the setup stays one that ran a release before the rename
+ * ({@link cursorGuardPathsFor}, review/75). A file kept for any other reason —
+ * a script edited by hand, a whole-file document its owner edited — is the
+ * owner's, and its row is not carried.
+ */
+export function rowsCarriedThroughSweep(
+  ledger: readonly LedgerEntry[],
+  reclaimed: ReclaimReport | null,
+  coOwned: { has(path: string): boolean },
+): LedgerEntry[] {
+  if (reclaimed === null) return [];
+  const held = new Set(reclaimed.wiringKept?.flatMap((kept) => kept.scripts) ?? []);
+  for (const entry of reclaimed.entries) if (coOwned.has(entry.path) && LEFT_UNREDUCED.has(entry.action)) held.add(entry.path);
+  return ledger.filter((row) => held.has(row.path) && VALID_TOOLS.has(row.adapter));
 }
 
 /**
