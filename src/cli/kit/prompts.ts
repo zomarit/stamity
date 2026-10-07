@@ -1,5 +1,6 @@
 import { emitKeypressEvents, type Key } from "node:readline";
 import { createInterface, type Interface } from "node:readline/promises";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
 import { CliFailure } from "./output.ts";
 import { DUMB_TERM, makePalette, type Palette } from "./terminal.ts";
 
@@ -820,12 +821,18 @@ const clampToWidth = (line: string, columns: number): string => {
  * All three are DROPPED rather than spaced: unlike `\r`/`\n`/`\t` they carry
  * no width of their own, so replacing one with a space would invent a
  * difference where the source had none.
+ *
+ * The families are not listed here: the strip is every code point the drift
+ * renderer's two classes cover (`../../runs/layout.ts` `UNPRINTABLE_CHARS` and
+ * `UNICODE_TAG_CHARS`), as `printableName` strips them
+ * (`../../manifest/coOwnedJson.ts`). That adds the Arabic letter mark, the line
+ * and paragraph separators and the Unicode tag block, which carry no width and
+ * can spell a hidden instruction (review/96).
  */
+const LABEL_STRIP = new RegExp(`${UNPRINTABLE_CHARS.source}|${UNICODE_TAG_CHARS.source}`, "gu");
+
 export function sanitizeLabel(label: string): string {
-  return label
-    .replace(/[\r\n\t]/gu, " ")
-    // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
-    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
+  return label.replace(/[\r\n\t]/gu, " ").replace(LABEL_STRIP, "");
 }
 
 /**

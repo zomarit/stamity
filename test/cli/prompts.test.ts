@@ -20,6 +20,7 @@ import {
   type Palette,
 } from "../../src/cli/kit/terminal.ts";
 import type { CommandModule } from "../../src/cli/kit/program.ts";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../src/runs/layout.ts";
 import { runInProcess } from "../support/inProcess.ts";
 // The raw-TTY double, the terminal's own key bytes, and the shared
 // synchronization helpers (`tick`, `press`) — shared with the two command
@@ -1982,6 +1983,25 @@ describe("sanitizeLabel — what a label may not smuggle onto a terminal", () =>
     // width of its own, so replacing it with a space would invent a difference
     // the source did not carry.
     expect(sanitizeLabel("core\u200Bpack")).toBe(sanitizeLabel("corepack"));
+  });
+
+  // review/96: the label strip covers every code point the drift renderer's two
+  // classes cover (`../../src/runs/layout.ts`), as `printableName` does — the
+  // Arabic letter mark, the line and paragraph separators and the tag block
+  // included — and nothing else. Same output form: `\r`, `\n`, `\t` become a
+  // space, every other covered code point is dropped.
+  it("drops every code point UNPRINTABLE_CHARS and UNICODE_TAG_CHARS cover, and keeps every other", () => {
+    const unprintable = new RegExp(UNPRINTABLE_CHARS.source, "u");
+    const tag = new RegExp(UNICODE_TAG_CHARS.source, "u");
+    for (let code = 0; code <= 0xe007f; code += 1) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      const char = String.fromCodePoint(code);
+      const covered = unprintable.test(char) || tag.test(char);
+      const expected = !covered ? `A${char}B` : char === "\r" || char === "\n" || char === "\t" ? "A B" : "AB";
+      if (sanitizeLabel(`A${char}B`) !== expected) expect(sanitizeLabel(`A${char}B`), `U+${code.toString(16).toUpperCase()}`).toBe(expected);
+    }
+    const smuggled = [0x061c, 0x2028, 0x2029, 0xe0041, 0xe007f].map((code) => String.fromCodePoint(code)).join("");
+    expect(sanitizeLabel(`core${smuggled}pack`)).toBe("corepack");
   });
 
   // The class is a strip list, not an allow list: ordinary text — including
