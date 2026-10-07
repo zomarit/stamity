@@ -171,7 +171,9 @@ ${discovery}
 
    - a file this engine wrote: the operator runs \`${locate} -- clean -y\` and then
      \`${locate} -- plugin setup --client ${client} -y${rootFlag}\` again. Do not run either yourself:
-     \`clean -y\` takes no confirmation and removes ledger rows and the files they name;
+     \`clean -y\` takes no confirmation, removes ledger rows and the files they name, and deletes the
+     whole \`.stamity/\` directory — learnings, handoffs, overrides, run records and packs — unless a
+     hooks file it keeps still runs a script there. The operator copies out what to keep first;
    - a file an APM dependency installed: the operator removes that APM dependency;
    - a file nobody manages: the operator removes it, or the operator keeps it as an override
      under \`.stamity/overrides/\`.

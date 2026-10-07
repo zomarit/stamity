@@ -813,6 +813,22 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
     expect(body.indexOf("plugin setup --client")).toBeLessThan(body.lastIndexOf("plugin status"));
   });
 
+  it.each(CLIENTS)("says what `clean -y` deletes, the whole .stamity/ directory included, for %s", (client) => {
+    // `clean -y` runs `rm -r .stamity` unless a kept hooks document still runs a script there
+    // (S17, `src/cli/commands/clean.ts::removeStateDir`), so the remedy states that cost in full
+    // and tells the operator to copy out what to keep. The row wraps at the template's width;
+    // whitespace is folded so a re-wrap does not read as a change of wording.
+    const prose = (renderSetupCommand(client, rootVars[client]) as string).replace(/\s+/g, " ");
+    const sentence =
+      "`clean -y` takes no confirmation, removes ledger rows and the files they name, and deletes the whole " +
+      "`.stamity/` directory — learnings, handoffs, overrides, run records and packs — unless a hooks file it " +
+      "keeps still runs a script there.";
+    expect(prose).toContain(`Do not run either yourself: ${sentence} The operator copies out what to keep first;`);
+    // It belongs to the first remedy, the one that names `clean -y`, and not to a later row.
+    expect(prose.indexOf("a file this engine wrote")).toBeLessThan(prose.indexOf(sentence));
+    expect(prose.indexOf(sentence)).toBeLessThan(prose.indexOf("a file an APM dependency installed"));
+  });
+
   it.each(CLIENTS)("names no other client and carries no emission token for %s", (client) => {
     const body = (renderSetupCommand(client, rootVars[client]) as string).toLowerCase();
     expect(body).not.toContain("${stamity:");
