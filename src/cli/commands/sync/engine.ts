@@ -175,9 +175,11 @@ export interface SyncPlanEntry {
   refusedAtSource?: true;
   /**
    * Present when the client would reject the document as the write leaves it
-   * (S19: an entry of `.cursor/hooks.json` Cursor refuses, whoever wrote it):
-   * the entries and the remedy. Not a collision — `sync` writes and warns —
-   * but `check` fails on it, since the client then loads none of the file.
+   * (S19: an entry of `.cursor/hooks.json` Cursor refuses, whoever wrote it;
+   * S16: a kept `.codex/config.toml` key that turns Codex's hooks off): the
+   * entries or the key, and the remedy. Not a collision — `sync` writes and
+   * warns — but `check` fails on it, since the client then runs none of the
+   * file's hooks.
    */
   rejected?: string;
   /**

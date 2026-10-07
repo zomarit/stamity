@@ -730,6 +730,13 @@ when such a script lives there.
     reader's bound is refused (63 servers is the most), naming `config mcp remove <id>`. An owner's comment between two
     engine tables stays above the table it sat above; a comment appended after the engine's last table edits that
     table, which is then the owner's and is kept, with no `.bak`.
+  - **Codex's hooks turned off.** A kept key that sets Codex's hooks feature to `false` fails `check`, as a Cursor
+    entry Cursor rejects does: `hooks = false` or a quoted `"hooks"`/`'hooks'` in `[features]`, its deprecated alias
+    `codex_hooks`, or `features.hooks = false` at the root. `check` names the file, the line and the remedy (set it to
+    `true`, or remove the key); `sync` and `init` keep the table and warn with the same sentence, and a root dotted key,
+    already a `co-owned-shape` collision, carries the sentence in its refusal (`describeCodexHooksOff`,
+    `src/manifest/codexConfigToml.ts`; carried as the plan entry's `rejected`, judged on the text the write's own
+    prediction leaves; `review/81`).
   - **Scripts kept.** The sweep reads every hooks document still on disk, candidate or not (`hookDocumentsLeftInPlace`,
     `src/merge/reclaim.ts`, fed by `hookScriptRetention` in `src/cli/engine/emissionWrite.ts`), and a preview (`check`,
     `sync --dry-run`) reads a document the write rewrites as the write leaves it. `clean --json` names the scripts that
@@ -1114,8 +1121,9 @@ exists, it is the normative record for that requirement.
 - GIVEN a `.codex/config.toml` holding a top-level key and an owner table before setup WHEN `init -y --tools codex` and
   then `clean -y` run THEN it is byte-identical to before.
 - GIVEN an owner `[features]` table that sets `hooks = false` WHEN `init -y --tools codex` runs THEN the file holds one
-  `[features]` header, the owner's table is unchanged, and the run warns naming `hooks = false`; GIVEN one that does not
-  set `hooks` THEN no warning.
+  `[features]` header, the owner's table is unchanged, and the run warns naming `hooks = false`; WHEN `check` runs THEN it
+  exits 1 naming the file, the line and the remedy, for a quoted key as for a bare one; GIVEN one that does not set
+  `hooks` THEN no warning.
 - GIVEN a `.cursor/hooks.json` that does not parse WHEN `clean -y` runs THEN the file is kept, every script it names
   remains, and the report names the file for each kept script.
 - GIVEN a repository set up by 1.11.0 with an owner entry added to `.cursor/hooks.json` WHEN `clean -y` runs before any
@@ -1213,6 +1221,6 @@ exists, it is the normative record for that requirement.
 - REQ-FLOW-036 and REQ-FLOW-037: the residues the plan records as follow-up rows stay open — a user-hook entry edited in
   `.claude/settings.json` instead of its definition stays beside the engine's rendering; after a lost manifest the
   engine's three allow rows read as the owner's; a key an owner adds inside an engine Codex table makes the whole table
-  the owner's; `check` does not report an owner `[features]` that sets `hooks = false`; and inside the bound a forged
+  the owner's; and inside the bound a forged
   record still proves a selected `[mcp_servers.<id>]` (`docs/plans/016-fork-distribution-00.md`, Follow-ups and the
   2026-10-07 amendment of S16).

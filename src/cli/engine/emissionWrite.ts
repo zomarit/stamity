@@ -17,7 +17,7 @@ import {
   materializeClaudeSettings,
   predictClaudeSettingsMerge,
 } from "../../manifest/claudeSettings.ts";
-import { planCodexConfigToml, reduceCodexConfigToml } from "../../manifest/codexConfigToml.ts";
+import { describeCodexHooksOff, planCodexConfigToml, reduceCodexConfigToml } from "../../manifest/codexConfigToml.ts";
 import {
   materializeCoOwned,
   planCoOwnedJson,
@@ -406,8 +406,9 @@ export interface CoOwnedDocumentLane {
 
 /**
  * A lane's prediction, plus what the client would reject in the document as
- * the write leaves it (S19): `check` fails on it, while `sync` and `init`
- * keep the document and warn — it is not a collision, so it never stops a run.
+ * the write leaves it (S19), or a kept `.codex/config.toml` key that turns
+ * Codex's hooks off (S16): `check` fails on it, while `sync` and `init` keep
+ * the document and warn — it is not a collision, so it never stops a run.
  */
 interface CoOwnedLanePrediction extends CoOwnedPrediction {
   rejected?: string;
@@ -531,7 +532,15 @@ export function coOwnedDocumentLanes(
     // `[features]` turns Codex's hooks on and runs no command: the hook
     // commands live in `.codex/hooks.json`, so this document holds no script back.
     wiresHooks: false,
-    predict: (absPath, emitted, ownership) => predictCoOwnedMerge(absPath, codexPlan(absPath, emitted, ownership), codexNoun),
+    // A kept `hooks = false` turns every Codex hook off, the engine's guards
+    // included: the planner warns on the write, and the prediction carries it
+    // as `rejected`, so `check` fails as it does on a Cursor entry Cursor
+    // refuses (S19), judged on the text the write would leave.
+    predict: async (absPath, emitted, ownership) => {
+      const prediction = await predictCoOwnedMerge(absPath, codexPlan(absPath, emitted, ownership), codexNoun);
+      const rejected = prediction.collision === null ? describeCodexHooksOff(displayPath(absPath, ownership.boundaryDir), prediction.after ?? null) : null;
+      return rejected === null ? prediction : { ...prediction, rejected };
+    },
     materialize: (absPath, emitted, ownership) =>
       materializeCoOwned(absPath, codexPlan(absPath, emitted, ownership), ownership, codexNoun),
     // Its re-render proof is `render`, built above from the catalog and

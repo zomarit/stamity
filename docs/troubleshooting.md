@@ -294,7 +294,11 @@ Three steps stand between the emitted `.codex/hooks.json` and a hook the client 
 
 1. `features.hooks = true`. Every byte in `hooks.json` is inert while it is off. On codex-cli
    0.155.1 it measured on by default (2026-09-30), and the vendor's hooks page says the same.
-   stamity writes it into `.codex/config.toml` for you anyway, and `sync` restores it.
+   stamity writes it into `.codex/config.toml` for you anyway, and `sync` restores it, unless the
+   file holds a `[features]` table of your own, which the engine keeps instead of its own. While a
+   key you keep sets it to `false` (`hooks = false`, or `features.hooks = false` at the top), Codex
+   runs none of the hooks, the engine's guards included: `sync` warns, and `check` exits 1 naming
+   the line. Set it to `true`, or remove the key.
 2. `projects.<path>.trust_level = "trusted"`, in your own Codex home config.
 3. A per-hook review through the interactive `/hooks` command. Automation that cannot take that
    step uses `--dangerously-bypass-hook-trust` instead.

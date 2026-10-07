@@ -18,7 +18,9 @@
  * own table of that name, or an engine table the owner edited. It is kept, the
  * engine writes no second header, and the run warns — for `[features]` only
  * when the kept table sets `hooks = false`, since Codex runs hooks unless it
- * does. Every other table, and the root (every top-level key), is the owner's:
+ * does, and then `check` fails as well ({@link describeCodexHooksOff}): Codex
+ * would run none of the engine's hooks, its guards included. Every other
+ * table, and the root (every top-level key), is the owner's:
  * kept byte for byte and in order. No key-level ownership inside a table.
  *
  * Placement. The engine's tables form one block at the position of its first
@@ -69,8 +71,14 @@ import { normaliseSegment, segmentTomlTables, tomlTableName, type TomlKeyLine, t
 /** The engine's normalised rendering of a table name (`[mcp_servers.github]` → its text), or `null` when it renders none. */
 export type CodexTableRendering = (name: string) => string | null;
 
-/** A line of a kept `[features]` table that turns Codex's hooks off. */
-const HOOKS_OFF = /^\s*hooks\s*=\s*false\s*(#.*)?$/u;
+/**
+ * The `[features]` keys that switch Codex's hooks: `hooks`, and its deprecated
+ * alias `codex_hooks` (the vendor's config reference, `../adapters/codex.ts`
+ * `HOOK_TRUST_STEPS`).
+ */
+const HOOKS_KEYS: ReadonlySet<string> = new Set(["hooks", "codex_hooks"]);
+/** A key line's value, after its `=`, that is `false`. */
+const FALSE_VALUE = /^[ \t]*false[ \t]*(#.*)?$/u;
 const BLANK = /^[ \t]*$/u;
 const COMMENT = /^[ \t]*#/u;
 
@@ -352,8 +360,45 @@ function keptWarning(shown: string, name: string): string {
   return `Kept your ${shownTable(name)} in ${shown}; the engine's rendering of it is not written there — remove yours to get it back.`;
 }
 
-function hooksOffWarning(shown: string): string {
-  return `Codex reads no .codex/hooks.json while features.hooks is off: remove \`hooks = false\` from the [features] table in ${shown}.`;
+/**
+ * The first line of `raw` that sets Codex's hooks feature to `false`, under any
+ * key spelling the reader resolves — `hooks = false` or `"hooks" = false` in a
+ * `[features]` table, `features.hooks = false` at the root — with the key as it
+ * reads relative to its table.
+ */
+function hooksOffKey(raw: string, keys: readonly TomlKeyLine[]): { line: number; table: readonly string[]; key: readonly string[] } | null {
+  const lines = raw.split("\n");
+  for (const at of keys) {
+    const path = [...at.table, ...at.key];
+    if (path.length !== 2 || path[0] !== "features" || !HOOKS_KEYS.has(path[1] as string)) continue;
+    // A key that resolves to these names holds no `=`, so the first one on the line is the assignment's.
+    const text = (lines[at.line - 1] ?? "").replace(/\r$/u, "");
+    if (FALSE_VALUE.test(text.slice(text.indexOf("=") + 1))) return { line: at.line, table: at.table, key: at.key };
+  }
+  return null;
+}
+
+function hooksOffSentence(shown: string, found: { line: number; table: readonly string[]; key: readonly string[] }): string {
+  const key = tomlTableName(found.key);
+  const where = found.table.length === 0 ? "" : ` in [${tomlTableName(found.table)}]`;
+  return (
+    `Codex runs no hook from .codex/hooks.json, the engine's guards included, while ${shown} sets \`${key} = false\`${where} ` +
+    `(line ${found.line}): set \`${key} = true\`, or remove the key.`
+  );
+}
+
+/**
+ * The sentence `check` fails with, and `sync` and `init` warn with, when the
+ * Codex configuration `raw` turns Codex's hooks off (S16, as S19 for Cursor);
+ * `null` when it does not, or does not read (the planner's collision covers
+ * that). `shown` is the path as messages print it.
+ */
+export function describeCodexHooksOff(shown: string, raw: string | null): string | null {
+  if (raw === null) return null;
+  const cut = segmentTomlTables(raw);
+  if (!cut.ok) return null;
+  const found = hooksOffKey(raw, cut.keys);
+  return found === null ? null : hooksOffSentence(shown, found);
 }
 
 function recordOf(tables: readonly Item[], createdFile: boolean, terminatorAdded: boolean): CoOwnership {
@@ -414,6 +459,9 @@ function planUnbounded(
     const reason = readFailure(shown, cut.line, cut.reason);
     return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
   }
+  // Only an owner's key can turn hooks off (no release wrote one), and the write keeps it.
+  const hooksOff = hooksOffKey(existingRaw, cut.keys);
+  const hooksOffNote = hooksOff === null ? "" : ` ${hooksOffSentence(shown, hooksOff)}`;
   const state: OwnershipState = !ownership.owned ? "adoption" : ownership.legacy ? "legacy" : "recorded";
   const record = state === "recorded" ? ownership.record : null;
   const items = itemsOf(cut.segments, state !== "legacy");
@@ -422,13 +470,10 @@ function planUnbounded(
 
   const renderedNames = new Map(rendered.map((table) => [table.name as string, table]));
   const ownerNames = new Set(items.filter((item) => item.name !== null && !item.engine).map((item) => item.name as string));
-  const warnings: string[] = [];
+  const warnings: string[] = hooksOff === null ? [] : [hooksOffSentence(shown, hooksOff)];
   for (const item of items) {
     if (item.name === null || item.engine || item.pointer === null) continue;
-    if (item.name === "features") {
-      if (normaliseSegment(item.text).split("\n").some((line) => HOOKS_OFF.test(line))) warnings.push(hooksOffWarning(shown));
-      continue;
-    }
+    if (item.name === "features") continue;
     const engines = renderedNames.get(item.name);
     if (engines === undefined) continue;
     const changedHands =
@@ -441,12 +486,12 @@ function planUnbounded(
   const writes = rendered.filter((table) => !ownerNames.has(table.name as string));
   const redefined = redefinition(cut.keys, writes);
   if (redefined !== null) {
-    const reason = redefinitionFailure(shown, redefined);
+    const reason = redefinitionFailure(shown, redefined) + hooksOffNote;
     return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
   }
   const arrayRedefined = arrayRedefinition(cut.segments, writes);
   if (arrayRedefined !== null) {
-    const reason = arrayRedefinitionFailure(shown, arrayRedefined);
+    const reason = arrayRedefinitionFailure(shown, arrayRedefined) + hooksOffNote;
     return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
   }
   const held = items.filter((item) => item.engine);

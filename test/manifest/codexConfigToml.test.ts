@@ -15,7 +15,7 @@ import {
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
 import { createApp } from "../../src/index.ts";
-import { planCodexConfigToml, reduceCodexConfigToml } from "../../src/manifest/codexConfigToml.ts";
+import { describeCodexHooksOff, planCodexConfigToml, reduceCodexConfigToml } from "../../src/manifest/codexConfigToml.ts";
 import type { CoOwnedOwnership, CoOwnedPlan } from "../../src/manifest/coOwnedJson.ts";
 import { collectManifestErrors, createManifest, readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import { normaliseSegment, tomlTableName } from "../../src/manifest/tomlTables.ts";
@@ -286,6 +286,72 @@ describe("an owner [features] table before setup", () => {
       expect(configRow(report.wrote).warning).toBeUndefined();
     });
   }
+});
+
+describe("a kept key that turns Codex's hooks off fails check, as a Cursor entry Cursor rejects does (S16, review/81)", () => {
+  // Codex then runs no hook from .codex/hooks.json, the engine's guards
+  // included, while the drift gate read the file as in sync.
+  const spellings: [string, string, string][] = [
+    ["bare", "[features]\nhooks = false\nweb_search = true\n", "hooks = false"],
+    ["double-quoted", '[features]\n"hooks" = false\n', "hooks = false"],
+    ["single-quoted", "[features]\n'hooks' = false # off\n", "hooks = false"],
+    ["the deprecated alias", "[features]\ncodex_hooks=false\n", "codex_hooks = false"],
+  ];
+  for (const [name, owner, key] of spellings) {
+    it(`${name}: init keeps the table and warns; check exits 1 naming the file, the key and the remedy; sync keeps it, warns and exits 0`, async () => {
+      const root = await freshRepo();
+      await seedConfig(root, owner);
+
+      const report = await init(root);
+      expect(configRow(report.wrote).warning).toContain(key);
+      expect((await readConfig(root)).startsWith(owner)).toBe(true);
+
+      const drift = await runDriftGate(root, ENGINE_VERSION);
+      const entries = drift.changes.filter((entry) => entry.path === CODEX_CONFIG_FILE);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.action).toBe("unchanged");
+      expect(entries[0]?.rejected).toContain(".codex/config.toml");
+      expect(entries[0]?.rejected).toContain(`\`${key}\` in [features] (line 2)`);
+      expect(entries[0]?.rejected).toContain(`set \`${key.replace("false", "true")}\`, or remove the key`);
+      expect(drift.clean).toBe(false);
+      const check = await runInProcess([checkCommand], ["check"], { cwd: root });
+      expect(check.code).toBe(1);
+      expect(check.stdout + check.stderr).toContain(entries[0]?.rejected as string);
+
+      const before = await readConfig(root);
+      const synced = await sync(root);
+      expect(configRow(synced.wrote).warning).toBe(entries[0]?.rejected);
+      expect(await readConfig(root)).toBe(before);
+    });
+  }
+
+  it("hooks = true, a string \"false\" and hooks = false under another table leave check green", async () => {
+    for (const owner of ["[features]\nhooks = true\n", '[features]\nhooks = "false"\n', "[profiles.x]\nhooks = false\n"]) {
+      const root = await freshRepo();
+      await seedConfig(root, owner);
+      await init(root);
+      const drift = await runDriftGate(root, ENGINE_VERSION);
+      expect(drift.changes.filter((entry) => entry.path === CODEX_CONFIG_FILE)).toEqual([]);
+    }
+  });
+
+  it("dotted at the root: init refuses the file and the refusal names the hooks key and its remedy; check exits 1", async () => {
+    const root = await freshRepo();
+    const owner = 'model = "o3"\nfeatures.hooks = false\n';
+    await seedConfig(root, owner);
+
+    const report = await init(root);
+    const row = configRow(report.wrote);
+    expect(row.action).toBe("skipped");
+    expect(row.warning).toContain("`features.hooks = false` (line 2): set `features.hooks = true`, or remove the key");
+    expect(await readConfig(root)).toBe(owner);
+
+    const drift = await runDriftGate(root, ENGINE_VERSION);
+    const entry = drift.changes.find((change) => change.path === CODEX_CONFIG_FILE);
+    expect(entry?.collisionKind).toBe("co-owned-shape");
+    expect(entry?.detail).toContain("`features.hooks = false`");
+    expect((await runInProcess([checkCommand], ["check"], { cwd: root })).code).toBe(1);
+  });
 });
 
 // ── An engine table the owner made theirs ──────────────────────
@@ -626,9 +692,20 @@ describe("planCodexConfigToml", () => {
     const existing = `[features]\nhooks = false # off\n\n${table("mcp_servers")}`;
     const planned = plan(existing, recorded(recordFor("mcp_servers")));
     expect(planned.result.action).toBe("unchanged");
+    // TEST CHANGE, justified: REQ-FLOW-037, S16 (review/81) — the sentence is now the one `check`
+    // fails with too, naming the line, the key as Codex reads it and both remedies.
     expect(planned.result.warning).toBe(
-      "Codex reads no .codex/hooks.json while features.hooks is off: remove `hooks = false` from the [features] table in .codex/config.toml.",
+      "Codex runs no hook from .codex/hooks.json, the engine's guards included, while .codex/config.toml sets " +
+        "`hooks = false` in [features] (line 2): set `hooks = true`, or remove the key.",
     );
+    expect(describeCodexHooksOff(".codex/config.toml", existing)).toBe(planned.result.warning);
+  });
+
+  it("describeCodexHooksOff reads nothing into a missing or unreadable file, or a hooks key outside [features]", () => {
+    expect(describeCodexHooksOff(".codex/config.toml", null)).toBeNull();
+    expect(describeCodexHooksOff(".codex/config.toml", '[features]\nhooks = false\nx = "open\n')).toBeNull();
+    expect(describeCodexHooksOff(".codex/config.toml", "[features.sub]\nhooks = false\nfeatures = false\n")).toBeNull();
+    expect(describeCodexHooksOff(".codex/config.toml", "\uFEFF[features]\r\nhooks = false\r\n")).toContain("(line 2)");
   });
 
   it("adoption: an owner table with the rendering's data lines is the owner's and kept without a warning", () => {
