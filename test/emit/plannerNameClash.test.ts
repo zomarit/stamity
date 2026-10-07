@@ -182,12 +182,23 @@ describe("composeEmissionPlanner — an installed cross-class name clash", () =>
     expect(lines.filter((line) => line.includes(ACME_REMEDY))).toHaveLength(1);
   });
 
-  it.each<[string, boolean | undefined, string]>([
-    ["an npm channel", undefined, "npx @zomarit/stamity"],
-    ["no npm channel", false, "npx --no @zomarit/stamity"],
+  // TEST CHANGE, justified: REQ-PLUGIN-048 (review/78) — two rows added, and the
+  // tuple gains the context's `npmRegistry`; the first two rows are unchanged.
+  // The fallback names a scope registry the call can write, and fails closed to
+  // `--no` for one it cannot, so the refusal still names runnable steps.
+  it.each<[string, boolean | undefined, string | undefined, string]>([
+    ["an npm channel", undefined, undefined, "npx @zomarit/stamity"],
+    ["no npm channel", false, undefined, "npx --no @zomarit/stamity"],
+    [
+      "a scope registry",
+      undefined,
+      "https://npm.pkg.github.com",
+      "npx --@zomarit:registry=https://npm.pkg.github.com @zomarit/stamity",
+    ],
+    ["a registry the call cannot name", undefined, "http://npm.acme.example/", "npx --no @zomarit/stamity"],
   ])(
     "keeps the unpinned call when the version cannot be pinned (%s), rather than failing the refusal",
-    async (_, npmChannel, prefix) => {
+    async (_, npmChannel, npmRegistry, prefix) => {
       const packDir = await stagePack("acme-demo", {
         "commands/st-drill.md": artifact("drill", "command"),
         "skills/st-drill/SKILL.md": artifact("drill", "skill"),
@@ -199,10 +210,13 @@ describe("composeEmissionPlanner — an installed cross-class name clash", () =>
         ...ctxOf(manifest),
         engineVersion: "dev",
         ...(npmChannel === undefined ? {} : { npmChannel }),
+        ...(npmRegistry === undefined ? {} : { npmRegistry }),
       });
 
       expect(refusal.message).toContain(`run \`${prefix} clean --pack acme-demo\``);
       expect(refusal.next).toContain(`\`${prefix} sync\``);
+      // A refused registry is never echoed into a command.
+      expect(`${refusal.message}\n${refusal.next ?? ""}`).not.toContain("npm.acme.example");
     },
   );
 
