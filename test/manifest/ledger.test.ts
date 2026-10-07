@@ -13,7 +13,7 @@ import {
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
-import type { LedgerEntry } from "../../src/types/manifest.ts";
+import type { CoOwnership, LedgerEntry } from "../../src/types/manifest.ts";
 
 /**
  * Pure data logic — no filesystem, no clock: every case runs on values alone,
@@ -126,6 +126,48 @@ describe("toLedgerEntries", () => {
 
   it("returns empty for an empty emission run", () => {
     expect(toLedgerEntries([])).toEqual([]);
+  });
+});
+
+describe("the coOwned record on a rebuilt row (REQ-FLOW-036)", () => {
+  const record = (): CoOwnership => ({
+    elements: { "/permissions/allow": ["a".repeat(64), "b".repeat(64)] },
+    members: { "/version": "c".repeat(64) },
+    preexisting: ["/permissions"],
+    createdFile: true,
+  });
+  const settingsRow = (): LedgerEntry => ({
+    path: ".claude/settings.json",
+    adapter: "claude",
+    artifactId: "settings",
+    artifactType: "infra",
+    contentHash: "d".repeat(64),
+    coOwned: record(),
+  });
+
+  it("carries an equal record through toLedgerEntries, sharing no reference with the input", () => {
+    const input = settingsRow();
+    const [out] = toLedgerEntries([{ ...input, adapter: "claude" }]);
+    expect(out?.coOwned).toEqual(record());
+    expect(out?.coOwned).not.toBe(input.coOwned);
+    input.coOwned?.elements?.["/permissions/allow"]?.push("e".repeat(64));
+    (input.coOwned as { members: Record<string, string> }).members["/version"] = "f".repeat(64);
+    expect(out?.coOwned).toEqual(record());
+  });
+
+  it("carries an equal record through replaceAdapterEntries, for the kept rows and the new ones", () => {
+    const kept = { ...settingsRow(), adapter: "cursor" as const };
+    const fresh = settingsRow();
+    const out = replaceAdapterEntries([kept], "claude", [fresh]);
+    expect(out.map((row) => row.coOwned)).toEqual([record(), record()]);
+    kept.coOwned?.preexisting?.push("/hooks");
+    fresh.coOwned?.preexisting?.push("/hooks");
+    expect(out.map((row) => row.coOwned)).toEqual([record(), record()]);
+  });
+
+  it("leaves the key absent on a row without one", () => {
+    const [out] = toLedgerEntries([{ path: "a.md", adapter: "claude", artifactId: "a", artifactType: "agent" }]);
+    expect(out).not.toHaveProperty("coOwned");
   });
 });
 

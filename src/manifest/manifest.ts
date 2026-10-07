@@ -52,6 +52,7 @@ import {
   type SetupManifest,
 } from "../types/manifest.ts";
 import { STATE_DIR } from "../types/markers.ts";
+import { parseMemberPointer } from "./jsonMembers.ts";
 import { OWNED_PATHS, ownedPathDefect } from "./ownedPaths.ts";
 
 /**
@@ -315,6 +316,110 @@ function ledgerOwnerDefect(value: unknown): string | null {
   return `names neither a known tool (${TOOLS.join(", ")}) nor a \`${PACK_OWNER_PREFIX}<id>\` pack`;
 }
 
+/** The fields of a row's `coOwned` record (`CoOwnership`). */
+const CO_OWNED_FIELDS = ["members", "elements", "preexisting", "lines", "createdFile", "terminatorAdded"] as const;
+/** At most this many member pointers in `members`, `elements` and `preexisting` each. */
+const MAX_CO_OWNED_POINTERS = 64;
+/** At most this many element hashes under one array pointer. */
+const MAX_CO_OWNED_ELEMENTS = 256;
+/** The longest owned line (`u1-gitignore-lines`'s value bound). */
+const MAX_CO_OWNED_LINE = 1024;
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/** Why `pointer` is not a member pointer, or `null` when it is one. */
+function memberPointerDefect(pointer: string): string | null {
+  try {
+    parseMemberPointer(pointer);
+    return null;
+  } catch (error) {
+    // reason: not silent — the refusal's own message is the defect the caller names.
+    return (error as Error).message;
+  }
+}
+
+/**
+ * The defects of one row's `coOwned` record, one named error each. The record
+ * is what licenses the engine to remove an entry inside a document it shares,
+ * so its shape and size are bounded here, at the read, beside the row's path
+ * bound: a pointer that is not one, a hash that is not a sha256 digest, or a
+ * record past its bounds refuses the manifest. A pointer outside the spec of
+ * the row's document is NOT a defect — every reader ignores what it does not own.
+ */
+function collectCoOwnedErrors(value: unknown, field: string, errors: string[]): void {
+  if (!isPlainObject(value)) {
+    errors.push(`\`${field}\` must be an object`);
+    return;
+  }
+  for (const key of unknownFields(value, CO_OWNED_FIELDS)) errors.push(`unknown field \`${field}.${key}\``);
+  const pointerErrors = (pointer: string, at: string): boolean => {
+    const defect = memberPointerDefect(pointer);
+    if (defect !== null) errors.push(`\`${at}\`: ${defect}`);
+    return defect === null;
+  };
+  const digest = (hash: unknown, at: string): void => {
+    if (typeof hash !== "string" || !SHA256_HEX.test(hash)) errors.push(`\`${at}\` must be a lowercase sha256 hex digest`);
+  };
+  const { members, elements, preexisting, lines, createdFile, terminatorAdded } = value;
+  if (members !== undefined) {
+    if (!isPlainObject(members) || Object.keys(members).length > MAX_CO_OWNED_POINTERS) {
+      errors.push(`\`${field}.members\` must be an object of at most ${MAX_CO_OWNED_POINTERS} member pointers`);
+    } else {
+      for (const [pointer, hash] of Object.entries(members)) {
+        const at = `${field}.members[${JSON.stringify(pointer)}]`;
+        if (pointerErrors(pointer, at)) digest(hash, at);
+      }
+    }
+  }
+  if (elements !== undefined) {
+    if (!isPlainObject(elements) || Object.keys(elements).length > MAX_CO_OWNED_POINTERS) {
+      errors.push(`\`${field}.elements\` must be an object of at most ${MAX_CO_OWNED_POINTERS} array pointers`);
+    } else {
+      for (const [pointer, hashes] of Object.entries(elements)) {
+        const at = `${field}.elements[${JSON.stringify(pointer)}]`;
+        if (!pointerErrors(pointer, at)) continue;
+        if (!Array.isArray(hashes) || hashes.length > MAX_CO_OWNED_ELEMENTS) {
+          errors.push(`\`${at}\` must be an array of at most ${MAX_CO_OWNED_ELEMENTS} sha256 hex digests`);
+          continue;
+        }
+        for (const [position, hash] of hashes.entries()) digest(hash, `${at}[${position}]`);
+      }
+    }
+  }
+  if (preexisting !== undefined) {
+    if (!Array.isArray(preexisting) || preexisting.length > MAX_CO_OWNED_POINTERS) {
+      errors.push(`\`${field}.preexisting\` must be an array of at most ${MAX_CO_OWNED_POINTERS} member pointers`);
+    } else {
+      const seen = new Set<string>();
+      for (const [position, pointer] of preexisting.entries()) {
+        const at = `${field}.preexisting[${position}]`;
+        if (typeof pointer !== "string") {
+          errors.push(`\`${at}\` must be a member pointer string`);
+        } else if (seen.has(pointer)) {
+          errors.push(`\`${at}\` repeats \`${pointer}\``);
+        } else if (pointerErrors(pointer, at)) {
+          seen.add(pointer);
+        }
+      }
+    }
+  }
+  if (lines !== undefined) {
+    if (!Array.isArray(lines)) {
+      errors.push(`\`${field}.lines\` must be an array`);
+    } else {
+      for (const [position, line] of lines.entries()) {
+        if (typeof line !== "string" || line === "" || line.length > MAX_CO_OWNED_LINE || /[\r\n]/.test(line)) {
+          errors.push(
+            `\`${field}.lines[${position}]\` must be a non-empty string of at most ${MAX_CO_OWNED_LINE} characters with no line break`,
+          );
+        }
+      }
+    }
+  }
+  for (const [flag, flagValue] of [["createdFile", createdFile], ["terminatorAdded", terminatorAdded]] as const) {
+    if (flagValue !== undefined && flagValue !== true) errors.push(`\`${field}.${flag}\` must be exactly true when present`);
+  }
+}
+
 function collectLedgerEntryErrors(entry: unknown, index: number, errors: string[]): string | null {
   if (!isPlainObject(entry)) {
     errors.push(`\`ledger[${index}]\` must be an object`);
@@ -340,6 +445,7 @@ function collectLedgerEntryErrors(entry: unknown, index: number, errors: string[
   if (entry.stampedVersion !== undefined && typeof entry.stampedVersion !== "string") {
     errors.push(`\`ledger[${index}].stampedVersion\` must be a string`);
   }
+  if (entry.coOwned !== undefined) collectCoOwnedErrors(entry.coOwned, `ledger[${index}].coOwned`, errors);
   if (typeof entry.path !== "string") {
     errors.push(`\`ledger[${index}].path\` must be a string`);
     return null;

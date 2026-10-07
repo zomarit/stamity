@@ -362,6 +362,30 @@ describe("ledgerRowsForOutput — the row shape both writers persist", () => {
     expect("stampedVersion" in (unstamped ?? {})).toBe(false);
   });
 
+  /**
+   * A co-owned document's rows carry what the engine wrote inside it
+   * (REQ-FLOW-036): one record for the one write, on every owner's row, and
+   * no row sharing it with another or with the caller.
+   */
+  it("puts the co-owned record on every row it returns, each its own copy, and none when absent", () => {
+    const record = { elements: { "/permissions/allow": ["a".repeat(64)] }, createdFile: true as const };
+    const output = outputOf({
+      path: ".claude/settings.json",
+      content: "{}\n",
+      owner: { adapter: "claude", artifactId: "settings", artifactType: "infra" },
+      coOwners: [{ adapter: "cursor", artifactId: "settings", artifactType: "infra" }],
+    });
+
+    const rows = ledgerRowsForOutput(output, null, null, ENGINE_VERSION, record);
+
+    expect(rows.map((row) => row.coOwned)).toEqual([record, record]);
+    expect(rows[0]?.coOwned).not.toBe(record);
+    expect(rows[0]?.coOwned).not.toBe(rows[1]?.coOwned);
+    record.elements["/permissions/allow"].push("b".repeat(64));
+    expect(rows[0]?.coOwned?.elements?.["/permissions/allow"]).toHaveLength(1);
+    expect("coOwned" in (ledgerRowsForOutput(output, null, null, ENGINE_VERSION)[0] ?? {})).toBe(false);
+  });
+
   it("carries the owner triple through unchanged", () => {
     const rows = ledgerRowsForOutput(
       outputOf({

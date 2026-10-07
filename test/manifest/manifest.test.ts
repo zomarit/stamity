@@ -240,6 +240,89 @@ describe("collectManifestErrors", () => {
     }
   });
 
+  describe("a ledger row's coOwned record (REQ-FLOW-036)", () => {
+    const HASH = "a".repeat(64);
+    const settingsRow = (coOwned: unknown): Record<string, unknown> => ({
+      path: ".claude/settings.json",
+      adapter: "claude",
+      artifactId: "settings",
+      artifactType: "infra",
+      contentHash: HASH,
+      coOwned,
+    });
+    const errorsFor = (coOwned: unknown): string[] =>
+      collectManifestErrors({ ...fullManifest(), ledger: [settingsRow(coOwned)] });
+
+    it("accepts every field at its bound, and a row without the record", () => {
+      expect(
+        errorsFor({
+          members: Object.fromEntries(Array.from({ length: 64 }, (_, i) => [`/m${i}`, HASH])),
+          elements: { "/permissions/allow": Array.from({ length: 256 }, () => HASH), "/hooks/Pre~1Tool": [] },
+          preexisting: Array.from({ length: 64 }, (_, i) => `/c${i}`),
+          lines: ["node_modules/", "x".repeat(1024)],
+          createdFile: true,
+          terminatorAdded: true,
+        }),
+      ).toEqual([]);
+      expect(errorsFor({})).toEqual([]);
+      expect(collectManifestErrors({ ...fullManifest(), ledger: [{ ...settingsRow(undefined) }] })).toEqual([]);
+    });
+
+    it("names each defect once", () => {
+      const cases: readonly [unknown, string][] = [
+        ["record", "`ledger[0].coOwned` must be an object"],
+        [{ marker: true }, "unknown field `ledger[0].coOwned.marker`"],
+        [{ members: [] }, "`ledger[0].coOwned.members` must be an object of at most 64 member pointers"],
+        [{ members: { "/a~2": HASH } }, '`ledger[0].coOwned.members["/a~2"]`: `/a~2` is not a member pointer of depth 1 or 2 (RFC 6901)'],
+        [{ members: { "/a": "A".repeat(64) } }, '`ledger[0].coOwned.members["/a"]` must be a lowercase sha256 hex digest'],
+        [{ elements: { "permissions": [HASH] } }, '`ledger[0].coOwned.elements["permissions"]`: `permissions` is not a member pointer of depth 1 or 2 (RFC 6901)'],
+        [{ elements: { "/a": HASH } }, '`ledger[0].coOwned.elements["/a"]` must be an array of at most 256 sha256 hex digests'],
+        [{ elements: { "/a": [HASH, "nope"] } }, '`ledger[0].coOwned.elements["/a"][1]` must be a lowercase sha256 hex digest'],
+        [{ elements: "x" }, "`ledger[0].coOwned.elements` must be an object of at most 64 array pointers"],
+        [{ preexisting: ["/a/b/c"] }, "`ledger[0].coOwned.preexisting[0]`: `/a/b/c` is not a member pointer of depth 1 or 2 (RFC 6901)"],
+        [{ preexisting: ["/a", "/a"] }, "`ledger[0].coOwned.preexisting[1]` repeats `/a`"],
+        [{ preexisting: "/a" }, "`ledger[0].coOwned.preexisting` must be an array of at most 64 member pointers"],
+        [{ preexisting: [1] }, "`ledger[0].coOwned.preexisting[0]` must be a member pointer string"],
+        [{ lines: ["a\nb"] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
+        [{ lines: [""] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
+        [{ lines: ["x".repeat(1025)] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
+        [{ lines: "a" }, "`ledger[0].coOwned.lines` must be an array"],
+        [{ createdFile: false }, "`ledger[0].coOwned.createdFile` must be exactly true when present"],
+        [{ terminatorAdded: "yes" }, "`ledger[0].coOwned.terminatorAdded` must be exactly true when present"],
+      ];
+      for (const [coOwned, message] of cases) {
+        expect(errorsFor(coOwned), JSON.stringify(coOwned)).toEqual([message]);
+      }
+    });
+
+    it("refuses a record past its bounds, with one error per oversized field", () => {
+      expect(errorsFor({ members: Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`/m${i}`, HASH])) })).toEqual([
+        "`ledger[0].coOwned.members` must be an object of at most 64 member pointers",
+      ]);
+      expect(errorsFor({ elements: Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`/e${i}`, []])) })).toEqual([
+        "`ledger[0].coOwned.elements` must be an object of at most 64 array pointers",
+      ]);
+      expect(errorsFor({ elements: { "/a": Array.from({ length: 257 }, () => HASH) } })).toEqual([
+        '`ledger[0].coOwned.elements["/a"]` must be an array of at most 256 sha256 hex digests',
+      ]);
+      expect(errorsFor({ preexisting: Array.from({ length: 65 }, (_, i) => `/c${i}`) })).toEqual([
+        "`ledger[0].coOwned.preexisting` must be an array of at most 64 member pointers",
+      ]);
+    });
+
+    it("names the row it sits on, and accepts a record on any row's path (a reader ignores what it does not own)", () => {
+      const errors = collectManifestErrors({
+        ...fullManifest(),
+        ledger: [
+          { path: ".mcp.json", adapter: "claude", artifactId: "mcp-config", artifactType: "infra" },
+          { ...settingsRow({ createdFile: false }) },
+          { path: ".claude/agents/reviewer.md", adapter: "claude", artifactId: "reviewer", artifactType: "agent", coOwned: { members: { "/model": HASH } } },
+        ],
+      });
+      expect(errors).toEqual(["`ledger[1].coOwned.createdFile` must be exactly true when present"]);
+    });
+  });
+
   it("accepts a pack owner and refuses one carrying no pack id", () => {
     // TEST CHANGE, justified: REQ-PLUGIN-045 — a pack row must lie in its own
     // pack's folder, and `@acme/ops` installs into `acme__ops/`; the row used
@@ -697,6 +780,30 @@ describe("migrateManifest", () => {
 });
 
 describe("readManifest / writeManifest", () => {
+  it("round-trips a ledger row's coOwned record, element order kept", async () => {
+    const root = getRoot().dir;
+    const manifest: SetupManifest = {
+      ...fullManifest(),
+      ledger: [
+        {
+          path: ".claude/settings.json",
+          adapter: "claude",
+          artifactId: "settings",
+          artifactType: "infra",
+          contentHash: "c".repeat(64),
+          coOwned: {
+            elements: { "/permissions/allow": ["b".repeat(64), "a".repeat(64)] },
+            members: { "/z": "d".repeat(64), "/a": "e".repeat(64) },
+            preexisting: ["/permissions", "/hooks"],
+            createdFile: true,
+          },
+        },
+      ],
+    };
+    await writeManifest(root, manifest, { now: FIXED_NOW });
+    expect(await readManifest(root)).toEqual(manifest);
+  });
+
   it("round-trips create -> write -> read deep-equal, ledger and detection included", async () => {
     const root = getRoot().dir;
     const manifest = fullManifest();

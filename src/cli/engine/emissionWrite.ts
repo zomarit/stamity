@@ -14,7 +14,7 @@ import {
   type CoOwnedReducer,
   type MergeResult,
 } from "../../types/content.ts";
-import type { SetupManifest } from "../../types/manifest.ts";
+import type { CoOwnership, SetupManifest } from "../../types/manifest.ts";
 
 /**
  * The write-side rules the two regeneration verbs must apply IDENTICALLY.
@@ -196,12 +196,17 @@ export function outputWriteOptions(
  * `stampedVersion` rides on `managedBody`, not on the run: an output with no
  * managed block has nowhere to stamp a version into, and recording one anyway
  * claimed a stamp in the great majority of outputs that carry no block at all.
+ *
+ * `coOwned` is what the engine wrote INSIDE a document it shares with its owner
+ * (REQ-FLOW-036, `../../manifest/coOwnedJson.ts`): every owner's row of the one
+ * write carries it, each its own copy.
  */
 export function ledgerRowsForOutput(
   output: AdapterOutput,
   written: string | null,
   managedBody: string | null,
   engineVersion: string,
+  coOwned?: CoOwnership,
 ): EmittedArtifact[] {
   const contentHash = sha256(written ?? output.content);
   const rows: EmittedArtifact[] = [];
@@ -213,6 +218,7 @@ export function ledgerRowsForOutput(
       artifactType: owner.artifactType,
       contentHash,
       ...(managedBody === null ? {} : { stampedVersion: engineVersion }),
+      ...(coOwned === undefined ? {} : { coOwned: structuredClone(coOwned) }),
     });
   }
   return rows;

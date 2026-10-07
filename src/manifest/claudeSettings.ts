@@ -70,7 +70,7 @@
  *
  * Every writer here preserves what it parsed and republishes it, so every
  * writer first refuses a target whose bytes are not that file's alone
- * ({@link refuseLinkedSettingsTarget}) — a symbolic link would have its target's
+ * (`./coOwnedJson.ts::refuseLinkedCoOwnedTarget`) — a symbolic link would have its target's
  * keys copied into the tree as a fresh regular file, and a hard link would
  * become an independent copy of bytes another name still holds. The line
  * ending is the file's own: a CRLF document is compared and written in CRLF,
@@ -85,25 +85,12 @@
  * out and reports whether anything else is left.
  */
 
-import { lstat, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
 import { isPlainObject } from "../config/parse.ts";
-import {
-  acquireWriteLock,
-  assertWriteTargetContained,
-  atomicWriteFileUnlocked,
-  isSharedRegularFile,
-} from "../merge/atomicWrite.ts";
-import { mapFsErrno } from "../merge/fsErrors.ts";
-import {
-  backupBeforeOverwrite,
-  displayPath,
-  hasLedgerDrift,
-  toLedgerKey,
-} from "../merge/safeWrite.ts";
+import { displayPath, hasLedgerDrift, toLedgerKey } from "../merge/safeWrite.ts";
 import type { CoOwnedReducer, CoOwnedReduction, MergeResult } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import { HOOKS_GENERATED_DIR } from "../types/markers.ts";
+import { materializeCoOwned, refuseLinkedCoOwnedTarget } from "./coOwnedJson.ts";
 import { describeValue, jsonDocument, readTextOrNull } from "./mcpFilter.ts";
 
 /** The noun the shared read-failure sentences name for this lane. */
@@ -206,45 +193,6 @@ function isRepositoryHooksRendering(value: unknown): boolean {
         );
       }),
   );
-}
-
-// ── Link guard ───────────────────────────────────────────────────
-
-/**
- * Refuse before reading when `filePath`'s bytes are not that file's alone. A
- * missing file is not a linked one: ENOENT falls through so `created` works.
- */
-async function refuseLinkedSettingsTarget(filePath: string): Promise<void> {
-  let entry;
-  try {
-    entry = await lstat(filePath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
-  }
-  if (entry.isSymbolicLink()) {
-    throw new EngineError(
-      `Refusing to merge into ${filePath}: it is a symbolic link, so the top-level keys this ` +
-        `merge would keep beside the generated ones are not this file's — they are whatever the ` +
-        `link points at, which may sit outside this tree. The merge writes through temp+rename, ` +
-        `so the link would be replaced by a regular file inside the repository holding those ` +
-        `keys. Nothing was written. Replace the link with a regular file, or delete it and ` +
-        `re-run to regenerate it.`,
-      { code: "FS_ERROR" },
-    );
-  }
-  if (isSharedRegularFile(entry)) {
-    throw new EngineError(
-      `An existing file occupies ${filePath} and it is a hard link — its contents carry a second ` +
-        `name this tree cannot see, which may sit outside it. This document is merged rather than ` +
-        `overwritten, so every top-level key already in it is kept and republished through ` +
-        `temp+rename: on a shared name that lands a fresh inode holding bytes that were never this ` +
-        `file's alone. Nothing was written, and force does not help: this lane's backup refuses the ` +
-        `same file. Replace it with a regular file — copy the contents to a new file and move that ` +
-        `over this name — or delete it and re-run to regenerate it.`,
-      { code: "FS_ERROR" },
-    );
-  }
 }
 
 // ── Planning ─────────────────────────────────────────────────────
@@ -528,7 +476,7 @@ export async function predictClaudeSettingsMerge(
   ownership: SettingsOwnership,
 ): Promise<SettingsMergePrediction> {
   try {
-    await refuseLinkedSettingsTarget(filePath);
+    await refuseLinkedCoOwnedTarget(filePath);
   } catch (error) {
     if (!(error instanceof EngineError)) throw error;
     return {
@@ -555,57 +503,26 @@ export interface SettingsMergeResult extends MergeResult {
 }
 
 /**
- * Write `emitted` into `filePath` by key ownership, under the path's write
- * lock for the whole read-plan-backup-write cycle (`../merge/safeWrite.ts`
- * holds its lane the same way), so a concurrent run cannot slip a change in
- * between the read the plan was computed from and the write.
+ * Write `emitted` into `filePath` by key ownership, through the per-entry
+ * core's locked write (`./coOwnedJson.ts::materializeCoOwned`: containment,
+ * lock, link refusal, read, plan, backup, write), which holds the path's write
+ * lock for the whole read-plan-backup-write cycle so a concurrent run cannot
+ * slip a change in between the read the plan was computed from and the write.
+ * This lane records no per-entry ownership yet, so its record is `null` and
+ * stays off the result.
  */
 export async function materializeClaudeSettings(
   filePath: string,
   emitted: string,
   ownership: SettingsOwnership,
 ): Promise<SettingsMergeResult> {
-  // Containment first, as the safe-write lane orders it: the mkdir and the
-  // lockfile both build directories on this path, so an unchecked path would
-  // have the engine materialising a tree through a planted link before any
-  // decision is computed.
-  await assertWriteTargetContained(filePath, ownership.boundaryDir);
-  try {
-    await mkdir(dirname(filePath), { recursive: true });
-  } catch (error) {
-    throw mapFsErrno(error, filePath) ?? error;
-  }
-  const release = await acquireWriteLock(filePath, ownership.boundaryDir);
-  try {
-    await refuseLinkedSettingsTarget(filePath);
-    const existingRaw = await readTextOrNull(filePath, DOCUMENT);
-    const plan = planClaudeSettings(filePath, emitted, existingRaw, ownership);
-    let result = plan.result;
-    if (plan.backup !== null) {
-      const bakPath = await backupBeforeOverwrite(filePath, plan.backup, "verified backup", ownership.boundaryDir);
-      result = { ...result, warning: `${result.warning ?? ""} Your previous file is at ${bakPath}.`.trim() };
-    }
-    if (plan.content !== null) {
-      await atomicWriteFileUnlocked(
-        filePath,
-        plan.content,
-        ownership.boundaryDir === undefined ? undefined : { boundaryDir: ownership.boundaryDir },
-      );
-    }
-    return {
-      ...result,
-      writtenContent: plan.content ?? (result.action === "skipped" ? null : existingRaw),
-    };
-  } finally {
-    try {
-      await release();
-    } catch (releaseError) {
-      // Never mask the write's own result or error with a release failure.
-      console.error(
-        `Failed to release the write lock on ${filePath}: ${releaseError instanceof Error ? releaseError.message : String(releaseError)}`,
-      );
-    }
-  }
+  const { writtenRecord: _none, ...result } = await materializeCoOwned(
+    filePath,
+    (existingRaw) => ({ ...planClaudeSettings(filePath, emitted, existingRaw, ownership), record: null }),
+    ownership,
+    DOCUMENT,
+  );
+  return result;
 }
 
 // ── Reclaim ──────────────────────────────────────────────────────

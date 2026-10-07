@@ -294,6 +294,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/guard/tokenEstimate.ts": { unit: "p1-09", wave: 2 },
   "src/resilience/retry.ts": { unit: "p1-10", wave: 2 },
   "src/resilience/failureClass.ts": { unit: "p1-10", wave: 2 },
+  // Member pointers, canonical JSON, member hashes and the JSON style kept
+  // across a merge: pure, over the error type and the config parser's
+  // plain-object guard, so the wave-4 manifest validator can bound a row's
+  // co-owned record with it.
+  "src/manifest/jsonMembers.ts": { unit: "p20-u0-settings-ownership", wave: 2 },
   "src/resilience/failureLog.ts": { unit: "p1-11", wave: 2 },
   "src/resilience/adapterTimeout.ts": { unit: "p1-11", wave: 2 },
   "src/content/tags.ts": { unit: "p1-12", wave: 2 },
@@ -428,7 +433,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // whose read and serialise helpers it shares) and the safe-write lane (wave
   // 4, whose verified backup and drift compare it reuses); the generated-hooks
   // prefix it recognises the engine's own rendering by is a wave-0 marker.
-  "src/manifest/claudeSettings.ts": { unit: "p15-s4", wave: 5 },
+  // Wave 6 since plan 016 file 0: its link guard and locked write moved into
+  // the wave-5 per-entry core below, which it now imports.
+  "src/manifest/claudeSettings.ts": { unit: "p15-s4", wave: 6 },
+  // The per-entry core for a JSON document the engine shares with its owner:
+  // over the wave-2 member helpers, the wave-4 MCP merge lane's read helper
+  // and the wave-4 safe-write lane's backup and drift compare.
+  "src/manifest/coOwnedJson.ts": { unit: "p20-u0-settings-ownership", wave: 5 },
   "src/workspace/sync.ts": { unit: "p1-38", wave: 5 },
   // Authored as p1-39; re-cut into s2d-10 with the catalog above — see there.
   "src/content/userContent.ts": { unit: "s2d-10", wave: 5 },

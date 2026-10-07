@@ -94,6 +94,49 @@ export interface LedgerEntry {
   contentHash?: string;
   /** Engine version stamped into the managed block at write time. */
   stampedVersion?: string;
+  /**
+   * What the engine wrote INSIDE a document it shares with its owner, entry by
+   * entry (REQ-FLOW-036). Absent on every whole-file output, and on a
+   * co-owned row written by a release before this field existed — such a row
+   * reads as legacy (`../manifest/coOwnedJson.ts`).
+   */
+  coOwned?: CoOwnership;
+}
+
+/**
+ * The per-entry record of a co-owned document: which members and array
+ * elements the engine wrote there, each by the sha256 of its canonical JSON
+ * (`../manifest/jsonMembers.ts::memberHash`). No marker is written into the
+ * document itself, so this record and the engine's own paths are the whole
+ * proof of what is the engine's.
+ *
+ * {@link MANIFEST_VERSION} does not move for it, on the {@link ModelConfig}
+ * precedent: the field is additive and optional, a manifest without it parses
+ * unchanged, and there is nothing for a migration step to do.
+ */
+export interface CoOwnership {
+  /**
+   * A member pointer (RFC 6901, depth 1 or 2) of a whole value the engine owns
+   * → the lowercase sha256 hex of that value's canonical JSON (of a table's
+   * normalised text for `.codex/config.toml`).
+   */
+  members?: Record<string, string>;
+  /**
+   * An array pointer (depth 1 or 2) → the sha256 of each element's canonical
+   * JSON the engine wrote there, in array order.
+   */
+  elements?: Record<string, string[]>;
+  /**
+   * Pointers of containers that existed before the engine first wrote into the
+   * document and held nothing the engine recognised: they stay when emptied.
+   */
+  preexisting?: string[];
+  /** Whole lines the engine owns in a line-oriented document (`.gitignore`). */
+  lines?: string[];
+  /** Present only when the engine created the file. */
+  createdFile?: true;
+  /** Present only when the engine added the file's missing final line break. */
+  terminatorAdded?: true;
 }
 
 /** MCP server selection persisted for regeneration. */

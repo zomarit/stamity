@@ -1,7 +1,7 @@
 import type { ContentClass } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { isPackOwner, type LedgerEntry } from "../types/manifest.ts";
+import { isPackOwner, type CoOwnership, type LedgerEntry } from "../types/manifest.ts";
 import { ownedPathDefect } from "./ownedPaths.ts";
 
 /**
@@ -56,7 +56,8 @@ function artifactKey(entry: LedgerEntry): string {
  * Fresh row carrying exactly the ledger fields. Optionals the source lacks are
  * left absent rather than set to `undefined`, and any extra fields a richer
  * emission record carries are dropped — the persisted shape is the ledger's,
- * not the emitter's.
+ * not the emitter's. The nested `coOwned` record is cloned deep, so no returned
+ * row shares an array with its source.
  */
 function cloneEntry(entry: LedgerEntry): LedgerEntry {
   return {
@@ -66,6 +67,7 @@ function cloneEntry(entry: LedgerEntry): LedgerEntry {
     artifactType: entry.artifactType,
     ...(entry.contentHash !== undefined ? { contentHash: entry.contentHash } : {}),
     ...(entry.stampedVersion !== undefined ? { stampedVersion: entry.stampedVersion } : {}),
+    ...(entry.coOwned !== undefined ? { coOwned: structuredClone(entry.coOwned) } : {}),
   };
 }
 
@@ -99,6 +101,8 @@ export interface EmittedArtifact {
   contentHash?: string;
   /** Engine version stamped into the managed block at write time. */
   stampedVersion?: string;
+  /** What the engine wrote inside a co-owned document, entry by entry (`LedgerEntry.coOwned`). */
+  coOwned?: CoOwnership;
 }
 
 /** Ledger rows for an emission run, in emission order, sharing no reference

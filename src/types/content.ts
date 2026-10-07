@@ -257,15 +257,30 @@ export interface MergeResult {
  */
 export type CoOwnedReduction =
   /** Nothing in the file is the operator's, so the sweep may unlink it whole. */
-  | { kind: "engine-only"; detail: string }
+  | ({ kind: "engine-only"; detail: string } & CoOwnedReductionProof)
   /**
    * The engine's content removed; `content` is everything else. It always
    * differs from the input — a reduction that would change nothing answers
    * `untouched`, so the sweep never rewrites a file to its own bytes.
    */
-  | { kind: "reduced"; content: string; detail: string }
+  | ({ kind: "reduced"; content: string; detail: string } & CoOwnedReductionProof)
   /** Nothing the engine can prove it wrote, or nothing readable — leave it be. */
   | { kind: "untouched"; detail: string };
+
+/**
+ * What a reducer can say about the units it removed, for the sweep's backup
+ * rule. Both absent means the reducer proves nothing, and the sweep falls back
+ * to its whole-file hash compare.
+ */
+interface CoOwnedReductionProof {
+  /**
+   * Every unit the reducer removed was proved byte-equal to what the engine
+   * wrote, inside its bound.
+   */
+  proven?: boolean;
+  /** A removed unit lay outside the bound: the sweep backs the file up whatever its hash. */
+  mustBackUp?: true;
+}
 
 /**
  * Reduce one co-owned document, given the bytes on disk decoded as UTF-8.
