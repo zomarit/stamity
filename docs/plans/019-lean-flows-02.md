@@ -1,8 +1,8 @@
 ---
 id: lean-flows-02
 intent: feature
-stamp: 2104b177e6c4cc9592e289d72a4ffac9c9a87e92 2026-10-06
-reads: [content/commands/st-work.md, content/commands/st-quick.md, content/commands/st-plan.md, content/agents/stamity-test-runner.md, content/agents/stamity-fixer.md, content/agents/stamity-reviewer.md, content/agents/stamity-security.md, content/skills/st-dep-audit/SKILL.md, content/charter/stamity-charter.md, src/roster/triggers.ts, src/roster/reviewCaps.ts, src/roster/modelLadder.ts, src/mcp/secretScan.ts, src/cli.ts, src/cli/kit/program.ts, src/cli/commands/ledger.ts, src/content/charter.ts, scripts/ci/records-only.mjs, test/corpus/commands/work.test.ts, test/corpus/commands/lightTrio.test.ts, test/corpus/agents/spine.test.ts, test/corpus/agents/specialists.test.ts, test/corpus/agents/quality.test.ts, test/corpus/invariants.test.ts, test/roster/roster.test.ts, test/architecture/boundaries.test.ts, test/cli/surface.e2e.test.ts, test/content/invariantsVersion.test.ts, docs/specs/everyday-flows.md, docs/specs/orchestrator-context.md, docs/specs/model-ladder.md, docs/doctrine.md, evals/SET-v7.md, evals/cases-v6]
+stamp: f1035ef8db8e87cd360a4c2e3e3b4cf53bdf5215 2026-10-07
+reads: [content/commands/st-work.md, content/commands/st-quick.md, content/commands/st-plan.md, content/agents/stamity-test-runner.md, content/agents/stamity-fixer.md, content/agents/stamity-reviewer.md, content/agents/stamity-security.md, content/skills/st-dep-audit/SKILL.md, content/charter/stamity-charter.md, src/roster/triggers.ts, src/roster/reviewCaps.ts, src/roster/modelLadder.ts, src/mcp/secretScan.ts, src/cli.ts, src/cli/kit/program.ts, src/cli/commands/ledger.ts, src/content/charter.ts, scripts/ci/records-only.mjs, test/corpus/commands/work.test.ts, test/corpus/commands/lightTrio.test.ts, test/corpus/agents/spine.test.ts, test/corpus/agents/specialists.test.ts, test/corpus/agents/quality.test.ts, test/corpus/invariants.test.ts, test/roster/roster.test.ts, test/architecture/boundaries.test.ts, test/cli/surface.e2e.test.ts, test/content/invariantsVersion.test.ts, docs/specs/everyday-flows.md, docs/specs/orchestrator-context.md, docs/specs/model-ladder.md, docs/doctrine.md, evals/SET-v7.md, evals/cases-v6, content/agents/stamity-performance.md, content/agents/stamity-design-quality.md, content/agents/stamity-implementer.md, content/commands/st-rework.md, test/corpus/agents/shellDiscipline.test.ts, test/corpus/agents/verdictReturns.test.ts, test/corpus/agents/executionReturns.test.ts, test/evals/successorInputs.test.ts, src/runs/blocks.ts, scripts/generate-apm-package.mjs]
 depends_on: [docs/plans/019-lean-flows-01.md]
 ---
 
@@ -28,6 +28,10 @@ paths, naming the checks; tests chosen by declared reads with "unclear means eve
 the fix loop, so every applied fix is re-reviewed; at most three rounds; a security trigger that fits a file-writing CLI. Out of scope: the
 inbox, QA rows, plan size, effort and usage lines (file 3).
 
+Sub-agents also write every observation down as a finding: in a 150-row sample of Minor ledger rows, 74–85% were polish
+or noise, and no corpus text tells a Minor from a Warning. This file adds a capture rule by consequence and one severity
+scale shared by every finding role (the findings follow-up); the close that decides what is left is file 3's.
+
 ## Decisions
 
 ### The maintainer's walk (2026-10-07)
@@ -39,6 +43,13 @@ learnings changes get CI lanes, with the rule that every test that can fail on a
 the full matrix runs on every product change and weekly; builders **keep effort `high`** (the one answer that was
 not the recommended option); the declared defaults below stand.
 
+### The findings follow-up walk (2026-10-07)
+
+Taken later the same day, every answer the recommended option: sub-agents record only findings that name a consequence
+(this file, `p8`); every run ends with one question that decides each leftover, with real defects never pre-set to drop
+(file 3); "schedule" means a place, a date or a trigger, and the files (file 3); today's inbox is cleared once, with the
+maintainer (file 1); the change folds into this plan's three files; a count line at each close; the drop list stands.
+
 ### Settled by this plan (declared defaults)
 
 | # | Default |
@@ -48,15 +59,21 @@ not the recommended option); the declared defaults below stand.
 | S3 | A repository extends the classes and declares its tests' non-code inputs in one optional file, `.stamity/change-classes.json`. Extensions only add: a glob may join a class or move a path to a stronger class, never remove a built-in security rule or move a path to a weaker class (the built-in security rules are a floor). The classifier reads that file **from the base commit**, so a change cannot lower its own checks, and a change to the file is `config`. |
 | S4 | Without a declared map, a change to a non-code file is unclear for test selection and runs the full suite; only a declared map, held by its guard test, proves a narrower set. A test source that names the path only adds tests to a map's selection, never narrows it. |
 | S5 | Invariant 4 is amended (invariants 1.1.0 → 1.2.0): done means the gates the change's class requires exit 0 (every test that can fail on the change, by a declared map held by its guard), an unclear class runs the full gates, and the repository's CI runs the full matrix on every product change and on a schedule. Invariant 1 is not touched. |
-| S6 | The review cap moves from 4 to 3; the light tier stops at 2. Minor handling stays as today, and every applied fix keeps its closure re-review. A finding not fixed twice, or a gate red after a fix, gets a fresh fixer at a higher effort on the same model, then the person. Self-rated confidence no longer triggers a round. |
+| S6 | The review cap moves from 4 to 3; the light tier stops at 2. Minor findings stay out of the fix loop, and every applied fix keeps its closure re-review; what counts as a finding follows S10. A finding not fixed twice, or a gate red after a fix, gets a fresh fixer at a higher effort on the same model, then the person. Self-rated confidence no longer triggers a round. |
 | S7 | The security class's defaults add the risk classes the 53 real finds sat in: CI and release workflows and their scripts, hook and settings files of any client, shell-outs and process spawns, file deletion and overwrite, registry and network calls, state read back as authority, plus the existing auth, crypto and dependency rows. A lockfile-only bump with no install-script change goes to the dependency audit first. |
 | S8 | The secret scan of the added lines reuses the shipped patterns in `src/mcp/secretScan.ts`. |
 | S9 | The make-room unit frees at least 15 body lines and 900 characters above the re-attach cut, leaving room for Package 22's additions. |
+| S10 | A reviewer, a lens, the implementer or the fixer records a finding only when it names a consequence: who or what is affected, how, and in which use, with its evidence as today. A note with no consequence (wording, naming, style, comment drift, "a tidier shape", a "might" with no trigger) is not a finding: it is listed in the role's local report and counted in its digest as `notes left out: <n>`. "No findings" is a good answer for every role. |
+| S11 | One `## Severity` section, byte-identical in the reviewer, the three lenses, the implementer and the fixer, held by one test constant (the pattern of the `## Shell` paragraph in `test/corpus/agents/shellDiscipline.test.ts`): Critical, Warning and Minor, each by its consequence with one example, plus the no-findings sentence. The reviewer's own Warning rule (`stamity-reviewer.md:46-48`) stays word for word. `/st-rework`'s Minor line (`st-rework.md:20-22`) is aligned in the same number of lines. |
+| S12 | The implementer applies a one-line note inside its own unit's files while it builds; a larger one is a counted note, not a deferral. The fixer's "no opportunistic edits" rule stays: reviewer notes are not routed to it, and they reach the person as one line at the close (file 3). |
+| S13 | The reviewer, the implementer and the fixer record a pre-existing defect only when it passes S10's test, its `summary` leading with `pre-existing:` (no schema change). The security and design-quality lenses keep their out-of-change exclusions, so the security lens raises what it raises today. |
+| S14 | `p8` adds at most 2 lines and 200 characters to `st-work.md` above the re-attach cut (the digest rule names the notes count); the rest of its text sits in the agent files. |
 
 ## Spec delta
 
-New ids start at REQ-FLOW-061 (027–050 are reserved by plan 016; 051–060 are headroom). The charter amendment of S5
-(invariants 1.2.0, invariant 4) rides with REQ-FLOW-063.
+New ids start at REQ-FLOW-061 (027–050 are reserved by plan 016; 051–060 are headroom); the findings follow-up's
+REQ-FLOW-072 and REQ-FLOW-073 come after file 3's 068–071. The charter amendment of S5 (invariants 1.2.0, invariant 4)
+rides with REQ-FLOW-063.
 
 ### REQ-FLOW-061 — A change gets the checks its class needs (ADDED)
 
@@ -110,6 +127,26 @@ file, and a hit stops the batch.
 
 GIVEN `/st-plan` and a unit in the security class THEN the unit names its trust boundary, what it trusts, one abuse case
 and the check that stops it, in at most five lines.
+
+### REQ-FLOW-072 — A finding names its consequence (ADDED)
+
+GIVEN the reviewer, a lens, the implementer or the fixer THEN a finding names who or what it affects, how and in which
+use, with evidence; a note with no consequence (wording, naming, style, comment drift, a tidier shape, an untriggered
+"might") is listed in the role's report and counted as `notes left out: <n>`; the implementer applies a one-line note
+in its own unit's files; "no findings" is valid; the reviewer, implementer or fixer records a pre-existing defect only
+when it passes, leading `pre-existing:`; the security and design-quality lenses keep their out-of-change exclusions.
+
+### REQ-FLOW-073 — One severity scale in every role that raises findings (ADDED)
+
+GIVEN the reviewer, the security, performance and design-quality lenses, the implementer and the fixer THEN each
+carries the same `## Severity` section: Critical, Warning and Minor, each defined by its consequence with one example,
+and the sentence that "no findings" is a good result; one test holds the six sections byte-identical.
+
+### REQ-CTX-002 — The digest counts the notes left out (MODIFIED)
+
+`docs/specs/orchestrator-context.md:228-232`, `:1016-1030`: the `findings:` line of the reviewer, each lens, the
+implementer and the fixer gains `notes left out: <n>` (REQ-FLOW-072); the spec-author's digest and the test-runner's
+green digest do not change.
 
 ## Units
 
@@ -191,17 +228,30 @@ and the check that stops it, in at most five lines.
 | `depends_on` | p1-classify |
 | `verify` | `npx vitest run test/change test/cli/commands/gate.test.ts test/corpus test/roster` |
 
+### p8-capture-by-consequence — a finding names its consequence; one severity scale
+
+| Field | Content |
+|---|---|
+| `id` | p8-capture-by-consequence |
+| `requirements` | REQ-FLOW-072, REQ-FLOW-073, REQ-CTX-002 |
+| `files` | `content/agents/stamity-reviewer.md` (the Rubric intro `:22-24`, the nit policy `:134-135`, the digest `:184-186`, a new `## Severity` section), `content/agents/stamity-security.md` (`:115-143`), `content/agents/stamity-performance.md` (`:122-166`), `content/agents/stamity-design-quality.md` (`:115-144`), `content/agents/stamity-implementer.md` (`:36-38`, `:87-89`, `:96-114`), `content/agents/stamity-fixer.md` (`:101-102`, `:107-121`; `:20-22` and `:33-34` unchanged), `content/commands/st-work.md` (the digest rule `:207-212`; the Minor/nit bullet `:262-263` after its opening words), `content/commands/st-rework.md:20-22`, `test/corpus/agents/severityScale.test.ts` (new), the pins in `test/corpus/agents/spine.test.ts:709-716`, `verdictReturns.test.ts`, `executionReturns.test.ts`, `specialists.test.ts:341-349` and `:382-406`, and `test/corpus/commands/work.test.ts:376-382`, `:859-863`, `:1407-1428`; the eval cases `evals/cases-v6/golden/agent-reviewer-return-contract.md` (B7, A1, A2 and its Brief) and `evals/cases-v6/adversarial/digest-security-finding-carried-in-full.md` (B3 and its Brief), and the re-quoted ranges of `re-review-closures-fresh-reviewer`, `reviewer-brief-is-diff-and-criteria`, `agent-security-return-contract`, `agent-performance-return-contract`, `agent-design-quality-return-contract`, `agent-implementer-return-contract`, `agent-fixer-return-contract` and `security-agent-no-write-under-pressure`; `test/evals/successorInputs.test.ts` (the `agent-reviewer-return-contract` row of `EXPECTED_MOVES`), `evals/SET-v7.md` (the cells and one dated paragraph), `docs/specs/orchestrator-context.md` |
+| `interfaces` | The `## Severity` section (S11), three lines and one sentence: **Critical** — a defect that breaks a supported use, loses data or opens a security hole on the change's path; **Warning** — wrong or missing behaviour a user or maintainer meets in a supported use, or a change that makes an existing instance worse; **Minor** — a true defect with a small, named consequence; "A note with no consequence is not a finding; no findings is a good result." Each digest's `findings:` line ends with `notes left out: <n>`. A pre-existing defect's `summary` leads with `pre-existing:`. The findings block keys (`src/runs/blocks.ts:66-69`) do not change |
+| `testCriteria` | GIVEN the six agent bodies THEN each holds the `## Severity` section byte-identical to the test's constant. GIVEN each finding role's Return contract THEN its digest names `notes left out`. GIVEN `st-work.md` THEN the text from `- Minor/nit findings are ledgered` still ends before character 18,000 and the body stays within 500 lines. GIVEN the security and design-quality bodies THEN their out-of-change exclusion rows still read "out of scope" and each exclusion table keeps at least four rows. GIVEN `npx vitest run test/evals` THEN green, with the reviewed `EXPECTED_MOVES` row and the dated SET-v7 paragraph |
+| `edgeCases` | A note that names a consequence once looked at (a misleading message a user acts on) is a Minor finding, not a note. A client with no report write returns inline: the inline return carries the count only, never the notes list |
+| `depends_on` | p4-loop-rules, p5-security-trigger |
+| `verify` | `npx vitest run test/corpus test/evals` |
+
 ### p6-eval-cases-core — the risky case still gets its check
 
 | Field | Content |
 |---|---|
 | `id` | p6-eval-cases-core |
-| `requirements` | REQ-FLOW-062, REQ-FLOW-063, REQ-FLOW-064, REQ-FLOW-065, REQ-FLOW-067, REQ-PROVE-009 |
+| `requirements` | REQ-FLOW-062, REQ-FLOW-063, REQ-FLOW-064, REQ-FLOW-065, REQ-FLOW-067, REQ-FLOW-072, REQ-PROVE-009 |
 | `files` | New cases under `evals/cases-v6/golden/` and `adversarial/`, `evals/SET-v7.md` (roster counts and cells), `evals/README.md`, `test/evals/successorInputs.test.ts` |
-| `interfaces` | One case per reduced check, each with binding rows: (1) a docs edit to a file a test reads runs that test; (2) an unclear path gets the full gate; (3) an auth-path change and (4) a CLI file-deletion change get the security lens; (5) a lockfile-only bump gets the audit and no lens, with (6) its install-script twin getting the lens; (7) a light run with a finding still open at round 2 escalates instead of a round 3; (8) a gate red after a fix gets a fresh fixer at a higher effort; (9) a finding open at round 3 escalates instead of a round 4; (10) a light single pass catches a logic defect in a small diff; (11) a risk-class plan unit carries a threat note; (12) a docs change in a repository without a declared map runs the full suite. Only `evals/cases-v6/` moves |
-| `testCriteria` | GIVEN `npx vitest run test/evals` THEN green (locators, roster, coverage, successor inputs). GIVEN `find evals/cases-v6 -name '*.md' \| wc -l` THEN the count is the base count plus 12 |
+| `interfaces` | One case per reduced check, each with binding rows: (1) a docs edit to a file a test reads runs that test; (2) an unclear path gets the full gate; (3) an auth-path change and (4) a CLI file-deletion change get the security lens; (5) a lockfile-only bump gets the audit and no lens, with (6) its install-script twin getting the lens; (7) a light run with a finding still open at round 2 escalates instead of a round 3; (8) a gate red after a fix gets a fresh fixer at a higher effort; (9) a finding open at round 3 escalates instead of a round 4; (10) a light single pass catches a logic defect in a small diff; (11) a risk-class plan unit carries a threat note; (12) a docs change in a repository without a declared map runs the full suite; (13) a Minor with a user-visible consequence, worded like a note, is still recorded. Only `evals/cases-v6/` moves |
+| `testCriteria` | GIVEN `npx vitest run test/evals` THEN green (locators, roster, coverage, successor inputs). GIVEN `find evals/cases-v6 -name '*.md' \| wc -l` THEN the count is the base count plus 13 |
 | `edgeCases` | Plan 015's `b4` or plan 016's file 0 lands first and moves the counts → re-base on them (contract census); set source ranges from the landed text only |
-| `depends_on` | p3-gates-by-class, p4-loop-rules, p5-security-trigger |
+| `depends_on` | p3-gates-by-class, p4-loop-rules, p5-security-trigger, p8-capture-by-consequence |
 | `verify` | `npx vitest run test/evals` |
 
 ### p7-dogfood-sync — every emitted copy regenerated
@@ -211,17 +261,18 @@ and the check that stops it, in at most five lines.
 | `id` | p7-dogfood-sync |
 | `requirements` | spec carries no ids |
 | `files` | `.claude/**`, `.apm/**`, `.agents/**`, `AGENTS.md`, `.stamity/manifest.json`, the golden snapshots |
-| `interfaces` | `npm run build && node dist/cli.js sync`, then the goldens with the files named first and `--update` last |
+| `interfaces` | `npm run build && node dist/cli.js sync`, then `node scripts/generate-apm-package.mjs` (it writes `apm.yml` and `.apm/`, which CI diffs; `sync` does not), then the goldens with the files named first and `--update` last |
 | `testCriteria` | GIVEN `node dist/cli.js check` THEN clean. GIVEN the full suite alone with `STAMITY_CLAUDE_BIN` unset (reason recorded) THEN green |
 | `edgeCases` | A golden that moves without a content change → stop and find the cause |
 | `depends_on` | p6-eval-cases-core |
-| `verify` | `npm run build && node dist/cli.js sync && node dist/cli.js check && npm run lint && npm run typecheck && npm run test` |
+| `verify` | `npm run build && node dist/cli.js sync && node scripts/generate-apm-package.mjs && node dist/cli.js check && npm run lint && npm run typecheck && npm run test` |
 
 ## Execution order
 
 1. Measure `st-work.md` (p0's numbers), then `p0`.
 2. `p1` → `p2` → `p3` (one lane: the classifier, its inputs, its text). `p4` and `p5` after `p1`, each in its own lane;
-   shared files (`st-work.md`, the corpus pins) take one writer at a time in the order `p3`, `p4`, `p5`.
+   shared files (`st-work.md`, the agent files, the corpus pins) take one writer at a time in the order `p3`, `p4`,
+   `p5`, `p8`.
 3. `p6`, then `p7`; the full suite alone; coverage; knip; CI; the security lens on the change set (it is in the
    security class itself: it changes what fires the lens); the final whole-branch review at Fable 5.1 before the merge.
 
@@ -241,6 +292,13 @@ and the check that stops it, in at most five lines.
 - **Warning:** the charter amendment moves many pins (hash, doctrine row, byte constants, goldens, two eval sources).
 - **Warning:** invariants 15 and 16 encode the round-4 escalation; their rewrite needs inline reasons.
 - **Minor:** the Claude Code review-gate hook keeps counting per session until plan 016 file 2 rewrites it.
+- **Warning:** `p8`'s loss is unmeasured for its own test. The nearest measured rule (dropping Minor wording, docs and
+  style rows by keywords) hid 1 of the 5 real-defect Minors in a 150-row sample; judged by kind, 0–1. Mitigations: the
+  test is judged by consequence, not by keywords or the label; every left-out note stays in the role's local report;
+  file 3's QA walk reads the notes of the first three runs after this file merges (target: no real defect left out).
+- **Warning:** `p8` rewrites two measured eval contracts (`agent-reviewer-return-contract` B7, A1, A2;
+  `digest-security-finding-carried-in-full` B3). Each move carries its written reason (an `EXPECTED_MOVES` row where a
+  cases-v5 copy exists, a dated SET-v7 paragraph otherwise).
 
 ## Open questions
 
@@ -259,3 +317,6 @@ None.
 | A runtime file-read tracer behind the guard | the guard misses a read in practice |
 | A cheaper class or effort for closure re-reviews | file 3's usage lines show re-reviews above ~10% of a session's cost |
 | Hit-rate gating of the performance and design-quality lenses | 20 runs of stored rates exist |
+| A filter that learns from the person's drop decisions | file 3's count line shows the shown items' drop share above 20% for two releases |
+| A verification sub-agent per note before it is shown | the same trigger |
+| The fixer applying a reviewer's one-line notes inside a fix round it runs anyway | the close's notes line is answered "fix now" in more than a third of closes |

@@ -1,16 +1,16 @@
 ---
 id: lean-flows-01
 intent: feature
-stamp: 2104b177e6c4cc9592e289d72a4ffac9c9a87e92 2026-10-06
-reads: [.github/workflows/ci.yml, .github/workflows/pr-checks.yml, .github/workflows/pack-signing-rehearsal.yml, .github/workflows/docs-site.yml, .github/workflows/release.yml, .github/dependabot.yml, .github/release-controls-checklist.md, scripts/ci/records-only.mjs, scripts/ci/test-run.mjs, scripts/eval/usage.mjs, src/cli/docs/measurements.ts, vitest.config.ts, test/ci/workflow.test.ts, test/ci/recordsOnly.test.ts, test/ci/leakGate.test.ts, test/ci/testScheduling.test.ts, test/docsPages.test.ts, test/cli/docs/measurements.test.ts, test/evals/rubricCoreHash.test.ts, test/evals/usage.test.ts, evals/SET-v7.md, evals/README.md, evals/price-list.json, docs/specs/prove-behavior-and-value.md, docs/specs/apm-canonical-distribution.md, docs/specs/plugin-lifecycle.md, .stamity/inbox.md, .stamity/learnings]
+stamp: f1035ef8db8e87cd360a4c2e3e3b4cf53bdf5215 2026-10-07
+reads: [.github/workflows/ci.yml, .github/workflows/pr-checks.yml, .github/workflows/pack-signing-rehearsal.yml, .github/workflows/docs-site.yml, .github/workflows/release.yml, .github/dependabot.yml, .github/release-controls-checklist.md, scripts/ci/records-only.mjs, scripts/ci/test-run.mjs, scripts/eval/usage.mjs, src/cli/docs/measurements.ts, vitest.config.ts, test/ci/workflow.test.ts, test/ci/recordsOnly.test.ts, test/ci/leakGate.test.ts, test/ci/testScheduling.test.ts, test/docsPages.test.ts, test/cli/docs/measurements.test.ts, test/evals/rubricCoreHash.test.ts, test/evals/usage.test.ts, evals/SET-v7.md, evals/README.md, evals/price-list.json, docs/specs/prove-behavior-and-value.md, docs/specs/apm-canonical-distribution.md, docs/specs/plugin-lifecycle.md, .stamity/inbox.md, .stamity/learnings, content/commands/st-board.md, src/runs/ledgerStore.ts, src/cli/commands/ledger.ts, test/records/ledgers.test.ts, docs/plans/016-fork-distribution-01.md, docs/plans/016-fork-distribution-02.md, docs/plans/016-fork-distribution-03.md, .stamity/runs/2026-09-09_package-9/inbox-retirements.md]
 ---
 
 # Lean flows — file 1 of 3: the maintainers' tooling (CI, the release rules, the records)
 
 This file is self-contained. It is one of three `/st-plan` artifacts for **Package 23** ("make Stamity fast and lean, for
 users and for us"). This file changes no model-facing text: CI, the release rules, the eval's run-of-record source, the
-price list, this repository's own gate command and one inbox sweep. One session, one pull request, no release. Files 2
-and 3 (`docs/plans/019-lean-flows-02.md`, `-03.md`) change the product.
+price list, this repository's own gate command and one pass over the whole deferral inbox. One session, one pull
+request, no release. Files 2 and 3 (`docs/plans/019-lean-flows-02.md`, `-03.md`) change the product.
 
 intent chosen: feature because each unit adds a capability to the repository's tooling (a proven-push skip, three CI
 lanes, a change-aware release rule, one run-of-record source); no defect is being diagnosed.
@@ -26,6 +26,12 @@ only because two places hard-coded the previous release's runs 34 and 35. CI min
 path and the flaky reds. Out of scope: moving the Windows leg off pull requests (it catches real defects), a merge
 queue, records off `main` (plan 014).
 
+The deferral inbox holds 391 rows (351 Minor, 40 Warning). Since it was emptied on 2026-09-09, 474 rows went in and 83
+came out, and no row has yet left after more than eight days. Two readers sorted a 140-row sample without seeing each
+other's work and agreed on "worth a look or not" for 86% of it: about four in five rows are not worth a look (Minor rows
+83–91%), and nine are real defects, three of them filed Minor and four in no plan unit. Files 2 and 3 stop the inflow
+(a capture rule; a close that decides every leftover); this file clears what is there once, with the maintainer.
+
 ## Decisions
 
 ### The maintainer's walk (2026-10-07)
@@ -36,6 +42,14 @@ what the run shows; the release eval becomes change-aware with a periodic full r
 learnings changes get CI lanes, with the rule that every test that can fail on a change runs before `main` moves and
 the full matrix runs on every product change and weekly; builders **keep effort `high`** (the one answer that was
 not the recommended option); the declared defaults below stand.
+
+### The findings follow-up walk (2026-10-07)
+
+Taken later the same day, every answer the recommended option: sub-agents record only findings that name a consequence
+(file 2); every run ends with one question that decides each leftover — fix now, schedule or drop — with real defects
+never pre-set to drop and only safe defaults when nobody can answer (file 3); "schedule" means a place, a date or a
+trigger, and the files, for every inbox writer (file 3); today's inbox is cleared once, with the maintainer, in this
+file's session (`t10`); the change folds into this plan's three files; a count line at each close; the drop list stands.
 
 ### Settled by this plan (declared defaults; the maintainer may reverse any before the run starts)
 
@@ -51,7 +65,9 @@ not the recommended option); the declared defaults below stand.
 | S8 | `evals/run-of-record.json` (`{"path": "...", "release": "..."}`) is the one source; the run number stays derived from the path. |
 | S9 | The change-aware eval rule (unit `t7`) is in. Its periodic full run: every third release or 30 days after the last full run, whichever comes first. |
 | S10 | This repository pins `gates.test` to `node scripts/ci/test-run.mjs --coverage`, CI's own ubuntu command, so one local run gives the result and the coverage floors. |
-| S11 | The inbox sweep retires only rows whose settling change is on `main`, each with that evidence. |
+| S11 | The inbox pass gives every row one exit, decided by the maintainer in one walk: **fixed** (its settling change on `main`, with that evidence), **cut** (with its reason) or **scheduled** (to a plan unit, or the row stays with its place named in the pass's record). Real defects are decided one by one, worth-doing rows by group (by where they go), every other row in one decision, each keeping its own reason. |
+| S12 | The pass's mechanics: a pre-sort by about five read-only readers over disjoint dated blocks gives each row one verdict — `settled`, `real-defect`, `worth-doing`, `moot`, `below-floor` or `already-scheduled` — with a one-line reason; a second reader checks every Warning, every `real-defect` and every row on a security surface; inbox text is unscreened, so readers apply the injection-screening rule. A local driver retires each ledger-ref row with one `stamity ledger close --run <run> --id <id> --retired "<disposition>"` call (no new tooling), then removes its bullet; plan-ref, record-ref and no-ref rows leave by `/st-board`'s removal rule with one record line each. The pass's run folder keeps the verdicts and the driver input in its git-ignored `reports/`; its committed `record.md` and `inbox-retirements.md` (the shape of `.stamity/runs/2026-09-09_package-9/inbox-retirements.md`) name every exit. |
+| S13 | Before any row moves, plan 016 files 1–3's inbox citations by line number are re-pointed to stable keys (the ledger id, or a quoted lead phrase with `at f1035ef8`); a row a live plan unit names leaves as scheduled to that unit. |
 
 ## Spec delta
 
@@ -224,24 +240,25 @@ last release, and the line names that trigger.
 | `depends_on` | none |
 | `verify` | `npm run build && node dist/cli.js sync && node dist/cli.js check && npx vitest run test/records` |
 
-### t10-inbox-sweep — rows a change already settled leave the inbox
+### t10-inbox-pass — every inbox row decided once, with the maintainer
 
 | Field | Content |
 |---|---|
-| `id` | t10-inbox-sweep |
-| `requirements` | REQ-FLOW-024 |
-| `files` | `.stamity/inbox.md` and the ledgers whose rows it retires |
-| `interfaces` | For each of `.stamity/inbox.md` lines 108, 194, 195, 198, 199, 220, 221, 229, 234 and 255 (at `2104b177`; re-find by text), the settling change is named and the row leaves through the retire path `/st-work`'s close uses |
-| `testCriteria` | GIVEN `npx vitest run test/records` THEN green, and each retired row has its evidence in the commit message |
-| `edgeCases` | A row only partly settled → stays, with its remaining part rewritten |
+| `id` | t10-inbox-pass |
+| `requirements` | REQ-FLOW-024 (the retire path); the completeness-pass exit of `/st-board`'s removal rule (`content/commands/st-board.md:358-363`) carries no requirement id |
+| `files` | `.stamity/inbox.md`; the `retired` values of the ledgers its rows name (`.stamity/runs/*/ledger.jsonl`); a new run folder `.stamity/runs/<UTC date>_inbox-pass/` (`record.md`, `inbox-retirements.md`, a `ledger.jsonl` only for re-filed remainders; `reports/` stays local); `docs/plans/016-fork-distribution-01.md`, `-02.md`, `-03.md` (inbox citations re-pointed) |
+| `interfaces` | Per S11–S13. Pre-sort verdicts: `settled` (a sha or `path:line` on `main`) · `real-defect` · `worth-doing` (with a proposed place) · `moot` · `below-floor` · `already-scheduled` (the unit that names it), each with a one-line reason that becomes the `retired` text or the record line. The walk: real defects one by one (fix in a named session, or schedule to a plan unit); worth-doing rows grouped by place; every other row in one decision. Mechanics, in order: re-point plan 016's citations; retire ledger rows (`stamity ledger close --run <run> --id <id> --retired "<disposition>"`), then remove their bullets; remove plan-ref, record-ref and no-ref rows with one record line each; drop dated prose blocks left with no rows. A partly settled row is retired and its remainder re-filed through the pass's own ledger (`stamity ledger append --stdin`, closed `deferred`, appended with `Ref:` to the pass's ledger); no row is rewritten in place. `inbox-retirements.md` columns: Row · Ref · Exit · Reason |
+| `testCriteria` | GIVEN `npx vitest run test/records` THEN green: every deferred ledger row has a dated `retired` value or an inbox `Ref:`, every `Ref:` resolves, every bullet parses. GIVEN the pass's record THEN every remaining inbox row is named with its place, and every removed row has a line in `inbox-retirements.md`. GIVEN `grep -nE "inbox row [0-9]+\|inbox\.md:[0-9]+" docs/plans/016-fork-distribution-0[123].md` THEN no match |
+| `edgeCases` | One ledger id behind two inbox rows → the pre-sort flags it and both rows take the same disposition (a second, different disposition is refused by `src/runs/ledgerStore.ts`). A row whose ledger row is already retired → its bullet leaves with a record line. A row a live plan unit names → scheduled to that unit, never cut |
 | `depends_on` | none |
 | `verify` | `npx vitest run test/records test/learnings` |
 
 ## Execution order
 
 1. Measure first: confirm the CI numbers in Context on the last 30 runs (`gh api`), so the PR states the baseline.
+   Beside it, `t10`'s pre-sort; its walk is the session's opening question batch.
 2. Lane A (CI): `t1-proven-push` → `t2-ci-lanes` (both edit the aggregator). Lane B: `t3`, `t4`, `t5`. Lane C (evals):
-   `t6` → `t7` → `t8`. `t9` and `t10` last, in the integration branch.
+   `t6` → `t7` → `t8`. `t9`, then `t10`'s mechanics, last, in the integration branch.
 3. The full suite alone with `STAMITY_CLAUDE_BIN` unset (the reason recorded), coverage, knip, then CI on the PR. The
    PR's own CI shows the lane split working on itself.
 
@@ -252,6 +269,7 @@ last release, and the line names that trigger.
 | 1 | After the merge, the push run on `main` shows `prove-pr` proven and the matrix skipped | auto (the run's job list) |
 | 2 | A website-only Dependabot PR takes the website lane with the site build | auto at the next such PR |
 | 3 | The release checklist reads as a patch lane a person can follow | person |
+| 4 | Every inbox row left after `t10` is named with its place in the pass's record, and `test/records` is green | auto |
 
 ## Risks
 
@@ -263,6 +281,12 @@ last release, and the line names that trigger.
 - **Warning:** `t7` reverses a binding rule (the walk took it); the loss is that model drift with no repository
   change shows only at the periodic or model-change run.
 - **Minor:** plans 014 and 015 edit the same eval counts and specs; whichever lands second re-bases (contract census).
+- **Warning:** removing a bullet before its ledger row is retired turns the records gate red. Mitigation: the driver
+  retires first, and a diff check confirms every retired id's bullet is gone.
+- **Warning:** plan 016 files 1–3 cite inbox rows by line number, and Package 20 builds from them. Mitigation: S13
+  re-points them before any row moves; a row a live unit names leaves as scheduled to that unit.
+- **Minor:** the four-in-five reading comes from a 140-row sample. Mitigation: the second reader on every Warning,
+  every real defect and every security row bounds the risk of the one-decision group.
 
 ## Open questions
 
