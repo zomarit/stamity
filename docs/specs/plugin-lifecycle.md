@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, and excluded from the site build.
 status: shipped-with-1.9.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -26,6 +26,16 @@ The paragraphs headed "Amended 2026-10-06" under REQ-PLUGIN-016 and REQ-PLUGIN-0
 spec deltas the units `u4a-pack-skill-origin` and `u4b-pack-reach-row` declared in run
 `2026-10-03_pack-engine-defects`, merged at its close, measured against the code where a report and
 the code differ. They cite the tree at `eb4f0727` and are not in a release yet.
+
+REQ-PLUGIN-045 to REQ-PLUGIN-048, and the paragraphs headed "Amended 2026-10-07" under REQ-PLUGIN-015 and
+REQ-PLUGIN-016, come from the spec delta of `docs/plans/016-fork-distribution-00.md` — file 0 of plan 016, the five
+security fixes of the released 1.11.0 — merged at the Prove phase of run `2026-10-07_security-fixes`. The ids
+REQ-PLUGIN-031 to 044 belong to files 1 to 3 of the same plan, which merge later, so the ids here leave a gap. The
+"Evidence" sentences cite the tree the defects were measured on, `d10db029`; the sentences headed "Amended 2026-10-07
+(build)" say what the build settled and name the code by path and symbol on the run's integration branch
+(`fix/plan-016-file-0` at `fa8163a3`; the registry unit and the hook-file unit's JSON half, not integrated at the merge,
+read on their lanes, `lane/016-00-b` at `96748e20` and `lane/016-00-a` at `d198b0f2`). They are not in a release yet:
+`status` still names 1.9.0, and the release that ships them, 1.12.0, sets it.
 
 ## Intent
 
@@ -586,40 +596,28 @@ level removed (its duplicates remedy composes through the CLI's package-name kit
 capability-file reader stays in the engine, registered as the group `plugins: { capabilityFile }`.
 `plugin setup` is prompt-free — the init planner it calls asks nothing — so `-y` is inert.
 
-As built (2026-09-22): `.claude/settings.json` is owned per top-level key, not as a file. The engine
-owns exactly the keys the install mode makes its own (`src/adapters/claude.ts::claudeSettingsOwnedKeys`
-— `permissions`, and `hooks` while the repository owns hooks) and carries every other key — the
-client's `enabledPlugins`, an operator's `model`, `env` or, under a plugin-backed setup, `hooks` —
-through as its parsed value, re-serialised in the engine's style and in the file's own line ending
-(a document mixing the two endings is normalised to CRLF on its first write), in its position (`src/manifest/claudeSettings.ts`, `planClaudeSettings`;
-`test/manifest/claudeSettings.test.ts`, `test/merge/settingsKeyOwnership.test.ts`). So a setup run
-after `claude plugin install stamity@stamity --scope project` adopts the file the client wrote,
-keeps `enabledPlugins` beside the generated `permissions` and prints a notice naming the kept keys;
-in the other order the client's key lands beside a ledgered file and survives the same way. A
-repository-mode `hooks` rendering left behind by a lost setup — recognised by a command that runs a
-script under `.stamity/generated/hooks/` (`HOOKS_GENERATED_DIR`, defined in `src/types/markers.ts`
-and re-exported by `src/emit/hooksInfra.ts`), which only this engine writes — is the engine's to
-touch even with no ledger row: a plugin-backed setup removes it and reports the removal (the
-client stops running those hooks); a repository-owned one replaces it, with a warning naming `hooks`
-unless the file is proven unedited — then the difference is the rendering having moved with an
-engine upgrade and the replacement says nothing, as every proven-unedited key does; and recognition
-only widens what the engine may touch — it never skips the backup, so a recognised object the engine cannot prove
-unedited is touched only behind a verified `.bak`, because no predicate can tell the engine's rows
-from an operator's inside one object. The file collides only when it is not a JSON object (a leading
-byte-order mark is tolerated; the refusal quotes where the parser stopped, never the file's bytes),
-cannot be serialised back, or carries an engine-owned key with other content that no ledger row
-claims; the refusal names that key, because
-the key alone is the collision, and `--force` clears it behind a verified `.bak` of the file,
-replacing only the engine's keys — the whole file only where nothing in it could be parsed and kept.
-A symbolic or hard link at the path is refused before any read, as the MCP merge lane refuses it.
-The `hooks` half of REQ-PLUGIN-016's boundary is unchanged: under plugin-backed ownership the
-emission renders no `hooks` key, so user hooks (the manifest's `hooks.userHooksDir`) reach no file
-for this client — pre-existing, the planning warning recorded under that requirement — and a
-`hooks` key an operator hand-writes is what the `plugin-duplicates` row flags. This contract answers a defect the private-chain rehearsal found
-on 2026-09-22: the documented route — install, then setup — skipped the file the client had written
-and ended in `check`'s `collision .claude/settings.json`, with a remedy that would have destroyed
-the install record. Aligned to the header of `src/manifest/claudeSettings.ts` at the settings
-lane's round-3 commit, the wording of record.
+As built (2026-09-22), amended 2026-10-07 (plan 016 file 0, unit `u0-settings-ownership`): `.claude/settings.json`
+is owned per entry, not as a file and not per top-level key (REQ-FLOW-036). The engine owns each `permissions.allow` row
+and each hook entry it wrote. It carries every other member through as its parsed value, in the file's own indentation,
+key order, line ending and final newline: the client's `enabledPlugins`, an operator's `model`, `env`,
+`permissions.deny` and `ask`, and their own rows and entries. So a setup run after
+`claude plugin install stamity@stamity --scope project` merges into the file the client wrote and prints a notice naming
+what it kept. In the other order the client's key lands beside a ledgered file and survives the same way. A lost setup
+can leave a repository-mode hook entry behind, recognised by a command that runs a script under
+`.stamity/generated/hooks/`. That entry is the engine's to touch even with no ledger row: a plugin-backed setup removes
+it and a repository-owned one replaces it, behind a verified `.bak` unless the ledger proves it. The file collides only
+when it is not a JSON object, cannot be serialised back, or a member the engine writes into has another type. The
+refusal names the member, and `--force` does not clear it. A symbolic or hard link at the path is refused before any
+read. The `hooks` half of the boundary REQ-PLUGIN-016 draws is unchanged. (It read "owned per top-level key" and
+"`--force` clears it behind a verified `.bak` of the file, replacing only the engine's keys".)
+
+As built (2026-10-07): the per-entry core is `src/manifest/coOwnedJson.ts`, which `src/manifest/claudeSettings.ts`
+parameterises (`claudeSettingsSpec`: the `permissions.allow` rows bounded by `ENGINE_PERMISSION_ROWS`, the hook entries
+recognised by `isEngineHookGroup`); the link refusal is `refuseLinkedCoOwnedTarget(filePath)` in the core, its texts
+unchanged; the record is `LedgerEntry.coOwned`. A leading byte-order mark is kept on the write
+(`src/manifest/jsonMembers.ts`, `JsonStyle.bom`), and a document that cannot round-trip — a duplicate key, a number a
+double cannot hold exactly (`roundTripLoss`) — is backed up before any write, its warning naming why. The criteria are
+those of REQ-FLOW-036.
 
 ### REQ-PLUGIN-016 sync, check and clean honor the ownership boundary
 
@@ -633,6 +631,26 @@ path and version, or `warn` with `no plugin root in the environment` when no roo
 and `plugin-duplicates` (see REQ-PLUGIN-019); and When `stamity clean -y` runs, Then it removes only
 ledger rows, removes 0 files inside any plugin root, and prints one uninstall command line per
 client recorded in `plugin.clients`.
+
+Amended 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). "Only ledger rows" is bounded. Every row names a path
+inside the owned-path bound of REQ-PLUGIN-045, or the manifest is refused when it is read: `check` fails its `manifest`
+row naming the row, and `sync` and `clean` act on nothing. Inside the bound, a row licenses a whole-file delete or an
+overwrite without a backup only together with the bytes: a recorded `contentHash` that matches the file, an
+engine-minted name in a content folder, and at an instruction file or the Copilot setup workflow bytes that show the
+engine wrote them (REQ-PLUGIN-046); or a managed block spanning the file. A row with no `contentHash` proves nothing:
+the sweep keeps its file, and an overwrite takes a verified `.bak` first.
+
+- GIVEN a committed ledger row outside the bound WHEN `check` runs THEN it exits 1 and the `manifest` row names the row;
+  WHEN `sync -y` or `clean -y` runs THEN it exits 1 with `CONFIG_ERROR` naming the row and `git status --porcelain`
+  prints nothing.
+- GIVEN an in-bound engine-named row with no `contentHash` WHEN `sync -y` reclaims it THEN the file stays and the sweep
+  names it `skipped-unsafe-path`.
+
+As built (2026-10-07): the evidence, measured at `d10db029` — hand-added rows made `sync -y` (exit 0) delete five owner
+files and overwrite a sixth with no `.bak`, `clean -y` deleted the same, and `check` reported them only as "5 queued for
+reclaim" (`src/manifest/ledger.ts:157-163`, `src/merge/reclaim.ts:327-338`, `:345-347`, `:372-375`, `:743-763`,
+`src/merge/safeWrite.ts:863-877`, `:922-932`, `src/cli/commands/check.ts:1503` at that commit). The bound and its proofs
+are those of REQ-PLUGIN-045 and REQ-PLUGIN-046, with their tests.
 
 As built (2026-09-20): the boundary is one predicate, `withoutPluginOwnedRows`, applied over each
 adapter's finished row set with a per-adapter `HOOK_INFRA_ARTIFACT_IDS` set for the hook rows.
@@ -662,43 +680,42 @@ in `check.ts` into the shared probe, where `engineNodeFacts()` reads this build'
 both readers, so `check`'s row stays byte-identical arm by arm instead of two surfaces composing the
 same judgment twice.
 
-As built (2026-09-22), the settings document under the boundary. `sync` and `check` plan
-`.claude/settings.json` by the key-level ownership REQ-PLUGIN-015's paragraph of the same date
-records: `check`'s drift gate previews exactly the write `sync` would make, and its collision step
-says, for this file, that the collision is one key and not the file (`src/cli/commands/check.ts`,
-`collisionStep`). The rule is the same for every engine-owned key, `hooks` included: content equal
-to the rendering needs no proof, and content that differs is regenerated silently only while the
-file is unedited — a ledger row records the path and the file's bytes still hash to a hash that row
-recorded (`hasLedgerDrift`, CRLF fold included; a row recording no hash reads as contested);
-otherwise the key is contested — a collision with no ledger row, and with one a replacement behind
-a verified `.bak` whose warning names the key and `.claude/settings.local.json`, the client's
-per-user project settings, for personal rows. `clean`, and a client's removal through the reclaim sweep, strip only
-the keys the install mode makes the engine's and delete the file only when nothing else remains —
-the co-owned reducer settles the document by its keys ahead of the hash proof, so a client's
-`enabledPlugins` written after the setup does not block the reclaim
-(`reduceClaudeSettingsToForeignContent`; `src/merge/reclaim.ts`, gate 4); the reducer strips only
-the mode's own keys, so `clean` leaves a stale repository-mode rendering in place under plugin
-ownership — it is `sync`'s to remove, behind its backup, and the `plugin-duplicates` row's to name.
-The reclaim takes the care every write lane takes (the lane's round-4 commit): `clean` and a
-client's removal reclaim `.claude/settings.json` — and the three MCP documents — behind a verified
-`.bak` when the file's bytes no longer hash to what the ledger recorded, and name it; an untouched
-file is reclaimed with no backup; and a backup that cannot be taken (a hard-linked target, a `.bak`
-name already held) refuses the removal and leaves the file untouched — a backup or nothing.
-Under a plugin-backed
-setup a `hooks` key in the file is reported by `check`'s `plugin-duplicates` row and by
-`plugin status`, through the one probe both read, as an `unmanaged` hooks duplicate at
-`.claude/settings.json` (`src/cli/commands/plugin/probe.ts`, `settingsHooksDuplicate`), because the
-client loads it beside the plugin's hooks; the remedy names the key, `.claude/settings.local.json`
-for personal rows, and `sync`, which removes a stale repository-mode rendering by itself. The
-user-hook sentence above holds as it stands: under plugin-backed ownership the emission drops the
-whole `hooks` object for this client, so an accepted user hook row reaches no file (pre-existing),
-and the hooks key the duplicates row flags is one an operator hand-wrote. One residual is
-documented rather than closed (`test/manifest/claudeSettings.test.ts`, the repository-mode
-silent-regeneration case): an operator's `hooks` the engine carried under a plugin-backed setup,
-with the manifest's mode then hand-edited back to repository ownership and the file's bytes still
-matching a ledgered hash, reads as unedited and is regenerated silently — the route that reaches it,
-a hand-edited manifest mode, is outside the supported ones. Aligned to the header of
-`src/manifest/claudeSettings.ts` at the settings lane's round-3 commit, the wording of record.
+As built (2026-09-22), amended 2026-10-07 (plan 016 file 0, unit `u0-settings-ownership`): the settings document under
+the boundary. `sync` and `check` plan `.claude/settings.json` per entry (REQ-FLOW-036), and `check`'s drift gate previews
+exactly the write `sync` would make. The engine owns each `permissions.allow` row and each hook entry it wrote. The
+ledger records each by the hash of its canonical JSON, and the engine owns nothing else in the file: it never writes or
+removes `permissions.deny`, `permissions.ask` or an owner's entry. An entry equal to the rendering needs no proof. An
+engine entry that leaves or changes goes silently only when the ledger records it (or proves the file unedited) and it
+lies inside the engine's bound: an allow row the engine renders, or a hook entry whose every command runs a script under
+`.stamity/`. Otherwise it goes behind a verified `.bak`, whose warning names the entry and `.claude/settings.local.json`
+for personal rows. `clean`, and a client's removal through the reclaim sweep, remove the engine's entries, a stale
+repository-mode hook entry included (recognised by its script under `.stamity/generated/hooks/`). They keep every other
+member and delete the file only when the engine created it and nothing foreign remains
+(`reduceClaudeSettingsToForeignContent`; `src/merge/reclaim.ts`, gate 4). The reclaim takes a backup only when an entry
+it removes is not proven. A key another tool added needs none. A backup that cannot be taken refuses the removal and
+leaves the file untouched: a backup or nothing. The file collides only when it is not a JSON object or a member the
+engine writes into has another type. The collision names the member, `--force` does not clear it, and `check`'s step
+for it does not offer `--force`. Under a plugin-backed setup an operator's own `hooks` key is still reported by
+`check`'s `plugin-duplicates` row and by `plugin status` as an `unmanaged` hooks duplicate
+(`src/cli/commands/plugin/probe.ts`, `settingsHooksDuplicate`). (It read "strip only the keys the install mode makes the
+engine's" and "behind a verified `.bak` when the file's bytes no longer hash to what the ledger recorded".) Amended
+2026-10-07 (build): "runs a script under `.stamity/`" reads as the script the command executes, in the engine's own
+script folders — `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`, never the user's
+`.stamity/hooks/` (`commandRunsStateScript`, `src/manifest/coOwnedJson.ts`); a user-hook entry is proven only by
+re-rendering a definition still in `.stamity/hooks/`. `check`'s drift gate passes the write's own ledger hashes to the
+prediction, so "previews exactly the write" holds for every co-owned lane. A hashless co-owned row reads as drifted. A
+refused document keeps its ledger rows and record, and `clean` keeps every engine hook script a kept hooks document
+still runs.
+
+- GIVEN a plugin-backed setup and a `.claude/settings.json` to which another tool added a key WHEN `clean -y` runs THEN the
+  file holds exactly that foreign key, and no `.bak` exists anywhere in the repository.
+- GIVEN an engine hook entry the operator edited WHEN `clean -y` runs THEN a verified `.bak` exists and the output names
+  that entry.
+
+As built (2026-10-07): the lanes are registered in `coOwnedDocumentLanes` (`src/cli/engine/emissionWrite.ts`), and the
+ownership each verb passes is `coOwnedOwnershipOf`; the proof by re-rendering a user hook is `coOwnedReclaimRenderings`
+in the same module. Tests: `test/merge/settingsOwnerEntries.test.ts`, `test/merge/settingsKeyOwnership.test.ts`,
+`test/manifest/coOwnedJson.test.ts`, `test/merge/reclaim.test.ts` (100% coverage).
 
 Amended 2026-09-26 (plan 010 file 1, `prove/337`): the `plugin-runtime` row's warning names a step
 a person can take. The `warn` for a recorded client with no root in the environment now reads
@@ -1535,6 +1552,204 @@ Guides before `enterprise-forks` (`website/sidebars.ts:81-82`), in the llms inde
 case "the enterprise quickstart routes into the two guides and repeats none of their commands"
 (`test/docsPages.test.ts:2126`) holds the last two criteria.
 
+### REQ-PLUGIN-045 The ledger names only paths the engine writes, and a row proves a delete or an overwrite only with the bytes
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). The manifest is committed, and `sync` and `clean` act on
+what its ledger names, so the ledger is bounded by one exported value, `OWNED_PATHS` (`src/manifest/ownedPaths.ts`). It
+lists the sixteen platform files the engine writes at names it did not mint (`AGENTS.md`, `AGENTS.override.md`,
+`CLAUDE.md`, `.claude/settings.json`, `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codex/config.toml`,
+`.codex/hooks.json`, `.cursor/hooks.json`, `.cursor/hooks/stamity-mcp-guard.mjs`,
+`.cursor/hooks/stamity-subagent-guard.mjs`, the 1.11.0 guard names `.cursor/hooks/mcp-guard.mjs` and
+`.cursor/hooks/subagent-guard.mjs`, `.github/hooks/stamity.json`, `.github/workflows/copilot-setup-steps.yml`); a
+charter `AGENTS.md` in any folder; the twelve content folders (`.agents/skills/`, `.claude/agents/`,
+`.claude/commands/`, `.claude/rules/`, `.claude/skills/`, `.codex/agents/`, `.cursor/agents/`, `.cursor/rules/`,
+`.cursor/skills/` — written by 1.0.0 to 1.10.0 — `.github/agents/`, `.github/instructions/`, `.github/prompts/`); the
+state folders `.stamity/generated/` and `.stamity/mcp/`; and an installed pack's own folder `.stamity/packs/<id>/`. An
+`infra` row may name a platform file, a charter, a state folder or, for its `pack:<id>` owner, its pack folder; an
+agent, skill, rule or command row only a content folder. A row outside the bound refuses the manifest when it is read.
+Inside it, a whole-file delete or an overwrite without a backup needs a recorded `contentHash` that matches the file —
+plus, in a content folder, a name the engine minted (a `st-` or `stamity-` basename, or a skill folder so named directly
+under a `skills/` folder) — or a managed block spanning the file. A row with no `contentHash` proves nothing. `check`
+names every path a `sync` would reclaim, with the action and the proof, in its text and in `--json` (`drift.reclaim`),
+and publishes the bound as `ownedPaths`; a later unit that adds an emitted path extends the bound and raises its
+`version`.
+
+Amended 2026-10-07 (build): a `drift.reclaim` entry whose action is `keep`, `refuse` or `gone` also carries `why`, the
+sweep's reason; `check`'s text prints every reclaim line, with no "… and N more" fold, and shows a control character in
+a path as an escape. A whole-file delete also needs every segment below the bound folder, the folders and the file alike,
+to be listed under exactly the row's spelling, the file's real parent to lie inside the real path of the bound folder the
+row claims, and no symbolic link among `.stamity/`, a state folder or a pack folder on its own path. On the co-owned
+path, a row with no `contentHash` reads as drifted, so the reduction takes a verified `.bak` first. The exact list is
+sixteen paths, not the fourteen the delta drafted: the two guard names of REQ-FLOW-038 joined it beside the two 1.11.0
+names, which stay so their rows validate for the first sync after an upgrade, and `OWNED_PATHS.version` is 2.
+
+- GIVEN a committed repository and an added `infra` row for `docs/owner.md` recording that file's hash WHEN `check`,
+  `sync -y` or `clean -y` runs THEN `check` exits 1 naming the row, `sync` and `clean` exit 1 with `CONFIG_ERROR` naming
+  it, and no file changed.
+- GIVEN hashless rows for `notes/st-owner.md`, `src/stamity-x.ts`, `packages/app/skills/st-foo/index.ts` and
+  `lib/30-stamity-y.js`, and hashed `infra` rows for `.stamity/learnings/keep-me.md` and `.github/workflows/ci.yml`, THEN
+  each is refused the same way.
+- GIVEN the rows every release from 1.0.0 to 1.11.0 writes THEN each lies in the bound; GIVEN every planner output for
+  every client set, both install modes, every MCP dialect, an installed pack and a user override of each class THEN each
+  lies in the bound.
+- GIVEN an engine-named row with no `contentHash` WHEN `sync -y` reclaims it THEN the file stays; GIVEN a hashless row
+  for an owner's file that `init` skipped WHEN `sync -y` overwrites it THEN a verified `.bak` holds the owner's bytes.
+- GIVEN a deselected engine file WHEN `check --json` runs THEN `drift.reclaim` names its path with `action: "delete"` and
+  `proof: "hash"`, and the text names it; GIVEN any repository THEN `check --json` carries `ownedPaths`.
+- GIVEN an engine-named row with no `contentHash` WHEN `check --json` runs THEN its `drift.reclaim` entry has
+  `action: "refuse"` and a non-empty `why` (added from the build).
+- GIVEN 25 deselected rows with `strip` and `reduce` actions among them WHEN `check` runs THEN all 25 reclaim lines print
+  and none reads "… and N more"; GIVEN a row whose path holds a control character THEN its line shows the escape, never
+  the raw byte (added from the build).
+- GIVEN a hashed row spelled `.claude/agents/Stamity-x.md` for a file listed as `.claude/agents/stamity-x.md` on a
+  case-folding file system WHEN `sync -y` reclaims it THEN the file stays (added from the build).
+- GIVEN a bound content folder whose subfolder is a symbolic link to a folder outside it, and a hashed row through that
+  link WHEN `sync -y` reclaims it THEN the file stays (added from the build).
+- GIVEN `.stamity/generated/` committed as a symbolic link and a hashed row under it WHEN `sync -y` reclaims it THEN the
+  file stays (added from the build).
+- GIVEN a forged hashless `.claude/settings.json` row and an owner's `permissions` and `hooks` WHEN `sync -y` or
+  `clean -y` reduces the file THEN a verified `.bak` holds the owner's bytes first (added from the build).
+
+As built (2026-10-07): before the change no single list of the engine's paths existed (the constants sat in the four
+adapters and six other modules); `infra` rows were trusted by type alone (`src/manifest/ledger.ts:157-163` at
+`d10db029`), and a hash proved a delete anywhere under `.stamity/` (`src/merge/reclaim.ts:345-347`, `:372-375` there).
+Measured 2026-10-06: every release from 1.0.0 to 1.11.0 records a hash on every row, and 5,288 rows in 19 ledgers fall
+inside the bound with the artifact-type split above. The bound is `OWNED_PATHS`, `ownedPathKind` and `ownedFolderOf` in
+`src/manifest/ownedPaths.ts`, read by manifest validation (`src/manifest/manifest.ts`), the planner's containment check
+(`src/manifest/ledger.ts`), the reclaim sweep (`src/merge/reclaim.ts`) and `check --json`. Tests:
+`test/manifest/ownedPaths.test.ts` (the bound over every planner output and over the frozen rows of every release,
+`test/manifest/fixtures/released-ledger-rows.json`), `test/cli/ledgerForgery.test.ts`, `test/merge/reclaim.test.ts` and
+`test/merge/reclaim.property.test.ts` (`src/merge/reclaim.ts` and `src/manifest/ownedPaths.ts` held at 100%),
+`test/cli/commands/check.test.ts`. Plan 016 file 2's `u2-release-integrity` publishes the bound in `release.json` as
+`ownedPaths`.
+
+### REQ-PLUGIN-046 An import decision binds only as `init` records it, and an instruction file leaves only on its own bytes
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). `init` records one decision per pre-existing instruction
+file (`importChoice`). The engine cannot authenticate a committed record — the manifest carries no signature, and a key
+kept in the repository would be as forgeable as the record — so a decision binds only while it agrees with what only
+the engine's own actions leave behind. A decision names one of the four files `init` imports (`AGENTS.md`, `AGENT.md`,
+`CLAUDE.md`, `.github/copilot-instructions.md`), or the manifest is refused. A `skip` decision and a ledger row for the
+same path refuse the manifest: the engine never records a row for a skipped file. `sync` never writes a whole engine file
+over an instruction file that holds the owner's text outside the engine's managed block — the shape only `supplement`
+leaves: under any other decision the path is an `import-decision` collision, `--force` does not clear it, and the remedy
+names `init --force --import-config replace`. At `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md` and
+`.github/workflows/copilot-setup-steps.yml`, a recorded hash proves a whole-file delete or a backup-free overwrite only
+when the bytes show the engine wrote them: the charter (first non-blank line `# Charter`, then `## Repo facts`,
+`## Invariants`, `## Touchpoints` and `## Conditional layer` in order, no managed-block markers), the Codex rule appendix
+(first non-blank line opening `# Conditional rules (Codex down-conversion)`), the Copilot workflow's engine header line,
+or a managed block spanning the file. Otherwise the sweep keeps the file and an overwrite takes a verified `.bak` first.
+
+Amended 2026-10-07 (build): `AGENTS.override.md`, `CLAUDE.md` and the Copilot workflow need this byte proof only at the
+repository root; a charter `AGENTS.md` needs it in any folder. The root `AGENTS.override.md` proves itself when the Codex
+appendix heading `## Conditional rules (Codex down-conversion)` stands on a line of its own — under `skip` the engine
+writes it as the owner's `AGENTS.md` text plus that section — while a hand-edited override still fails its recorded
+hash, so it is kept on reclaim and backed up on write. In the write lane, a managed block spanning the file proves the
+bytes too.
+
+- GIVEN `importChoice` naming `.cursor/hooks.json` as `skip` THEN the manifest is refused and `check` exits 1 naming the
+  decision.
+- GIVEN a `skip` decision and a ledger row for the same path THEN the manifest is refused and `AGENTS.md` is
+  byte-identical after `sync -y`.
+- GIVEN a supplemented owner `AGENTS.md` whose decision reads `replace`, or none WHEN `sync -y` or `sync -y --force` runs
+  THEN it exits 1, `AGENTS.md` is byte-identical, no `.bak` exists, and `check --json` names the path with
+  `collisionKind: "import-decision"`.
+- GIVEN an owner's `docs/AGENTS.md` and a forged row hashing its bytes WHEN `sync -y` runs THEN the file stays; GIVEN the
+  engine's unedited per-package charter whose package left THEN it is deleted.
+- GIVEN the charter rendered at the head and one written by 1.0.0 THEN both pass the recogniser; GIVEN `# Charter`
+  followed by notes, or a file carrying STAMITY markers, THEN it fails.
+- GIVEN the engine's root `AGENTS.override.md` written under `skip` (the owner's `AGENTS.md` text plus the Codex
+  appendix section) WHEN `sync -y` rewrites it THEN no `.bak` is taken; GIVEN the same file with the heading
+  `## Conditional rules (Codex down-conversion)` removed THEN a verified `.bak` holds it first (added from the build).
+
+As built (2026-10-07): measured 2026-10-06 on 1.11.0, `skip` for Cursor's hook file and both guards (rows and files
+removed) left `check` at exit 0 while `cursor` stayed selected; `supplement` flipped to `replace` made `sync` overwrite
+the owner's `AGENTS.md`; flipped to `skip` with the rows' hash set to the file, `sync` deleted `AGENTS.md` whole. Every
+release's charter carries the four headings; 1.0.0 to 1.7.0 carry no `Invariants version` line. The recognisers are
+`needsByteProof`, `isEngineCharterDocument` and `bytesShowEngineOutput` in `src/manifest/ownedPaths.ts`; the collision
+kind is `import-decision` in `src/cli/commands/sync/engine.ts`. Tests: `test/cli/ledgerForgery.test.ts`,
+`test/manifest/manifest.test.ts`, `test/manifest/ownedPaths.test.ts` (with `test/manifest/fixtures/charter-1.0.0.md`).
+
+### REQ-PLUGIN-047 `check` takes the expected release, client set and install mode from its caller
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-check-expectations`). `check` proves the files match the manifest and the
+running CLI, and a pull request can change both. Three flags take the expectation from a caller the pull request cannot
+edit, such as a required workflow's input: `--expect-version <semver>` (the running CLI and the manifest's `generatedBy`
+both equal it), `--expect-tools <csv>` (the manifest's clients equal it as a set) and `--expect-mode <mode>` (the
+manifest records that install mode; the values are `INSTALL_MODES`). With any of them `check` prints one more row,
+`expectations`, and a `--json` object of the same name; a mismatch fails the run with `error.code: "EXPECTATION_ERROR"`,
+exit 1, naming the expected and the recorded value and the step that restores it. Without them the output is
+byte-identical to before.
+
+Amended 2026-10-07 (build): `error.next` joins its steps with `"; "`, as `error.why` joins the mismatches, one step per
+mismatch in the same order. With `--expect-version` given, every step runs the expected release — the client-set and
+install-mode steps too — so following the steps in order leaves `generatedBy` at the expected release; without it they
+run the running release. An `--expect-version` carrying build metadata (`1.12.0+acme.1`) is refused with
+`VALIDATION_ERROR`, because npm versions carry none. The expected-release calls read the identity record
+`packageCommand` reads, registry included (`packageCommandAt`, `src/cli/kit/packageName.ts`), so a registry fork's
+steps name its registry (REQ-PLUGIN-048).
+
+- GIVEN a repository whose manifest dropped `cursor` with its rows and files WHEN `check --expect-tools claude,cursor`
+  runs THEN it exits 1 with `EXPECTATION_ERROR` and `expectations.tools.missing` is `["cursor"]`; WHEN plain `check` runs
+  THEN its output is unchanged.
+- GIVEN `--expect-version` other than the running release or the manifest's `generatedBy` THEN `check` exits 1 naming
+  which; GIVEN `--expect-mode generated` on a plugin-backed manifest THEN it exits 1.
+- GIVEN an invalid value (`--expect-version 1.x`, `--expect-tools claude,emacs`) THEN it exits 1 with `VALIDATION_ERROR`
+  before any probe; GIVEN `--expect-mode bogus` THEN it exits 2.
+- GIVEN `docs/cli-reference.md` THEN it lists the three flags and the `EXPECTATION_ERROR` code, and
+  `docs/troubleshooting.md` documents the `expectations` row.
+- GIVEN `--expect-version 1.12.0+acme.1` THEN `check` exits 1 with `VALIDATION_ERROR` before any probe; GIVEN a failing
+  `--expect-version` and a failing `--expect-tools` THEN `error.next` holds one step per mismatch separated by `"; "`, and
+  every step names the expected release; GIVEN a registry fork THEN each step carries `--@<scope>:registry=<url>`
+  (added from the build).
+
+As built (2026-10-07): measured 2026-10-06 on 1.11.0, dropping `cursor` with its 78 rows and 76 files, guards included,
+left `check` at exit 0, and `check --help` offered `--json` and `-y` only. The flags, `evaluateExpectations` and the
+remedy steps are in `src/cli/commands/check.ts`; the code is in `src/types/errors.ts` and `CODE_MEANINGS`
+(`src/cli/docs/cliReference.ts`). Tests: `test/cli/checkExpectations.test.ts`, `test/cli/commands/check.test.ts`, and
+the surface suites (`test/types/errors.test.ts`, `test/cli/docs/cliReference.test.ts`,
+`test/resilience/failureClass.test.ts`, `test/docsPages.test.ts`). The reusable check action that would run these flags
+from a trusted workflow is not built.
+
+### REQ-PLUGIN-048 A registry fork's every pinned CLI call names its registry for its scope
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-registry-bound-calls`). A fork made with `fork-identity.mjs --registry
+<url>` publishes `@<scope>/stamity` to its own registry, and npx finds a scope's registry only in npm's configuration:
+on a machine without the scope mapping, a bare `npx -y @<scope>/stamity@<v>` asks the default registry, where anyone may
+hold that name. So every pinned call the CLI renders for such a fork — the emitted bodies, hook hints, guard messages,
+`.codex/hooks.json`, the CLI's remedies, the update banner, `sync --help` and the plugin roots' bodies — names the
+registry for the scope ahead of the package: `npx -y --@<scope>:registry=<url> @<scope>/stamity@<version> <verb>`. npm
+then takes the fork's package from the fork's registry and every other package from the default one. The canonical
+build and a fork with no `publishConfig.registry` render what they rendered before. A registry that is not a plain https
+URL is never written into a command; such a fork renders `npx --no`, which fetches nothing.
+
+Amended 2026-10-07 (build): such a fork is not made in the first place — `scripts/fork-identity.mjs --registry` refuses
+a URL outside the same `REGISTRY_URL` grammar at fork creation, naming the rule and never echoing the value, so one
+grammar holds from the fork to every rendered call.
+
+- GIVEN a fork whose `package.json` names `publishConfig.registry` WHEN `init` writes four clients THEN every pinned call
+  carries `--@<scope>:registry=<url>` before the package spec, and none is bare.
+- GIVEN the same fork THEN `sync --help` and the update banner name the registry the same way; GIVEN the canonical
+  package THEN every surface is byte-identical to before.
+- GIVEN a stub fork registry and a stub default registry that serves a look-alike under the fork's name WHEN the
+  rendered call runs on a machine with no scope mapping THEN the fork's build runs and the default registry is asked only
+  for unscoped dependencies.
+- GIVEN a registry with credentials, a query, a fragment or a shell metacharacter THEN no call names it and the CLI's
+  calls render `npx --no`.
+- GIVEN `scripts/fork-identity.mjs --registry` with a URL outside `REGISTRY_URL` (`https://r.example/a%20b`,
+  `https://u:p@r.example`, one holding `$` or a space) THEN it exits 1 with nothing written, the message names the plain
+  https rule, and no output line contains the value (added from the build).
+
+As built (2026-10-07): measured 2026-10-06, a `--registry` fork wrote 44 pinned calls in 23 files with no registry;
+against local registry stubs, npm 10.9.8, 11.21.0 and 12.2.0 alike ran a public look-alike for the bare call, the fork's
+build for the scoped-registry call, and failed with 404 for `--registry <url>`. The rendering is `scopeRegistryArg` and
+`REGISTRY_URL` in `src/shared/cliCall.ts`, restated in `scripts/plugins/tokens.mjs` and held equal by
+`test/ci/pluginModules.test.ts`; the identity read is `npmRegistry()` and `packageCommandAt` in
+`src/cli/kit/packageName.ts`. Tests: `test/shared/cliCall.test.ts`, `test/emit/noBareCliCall.test.ts`,
+`test/corpus/npxScopeRegistry.test.ts`, `test/cli/commands/sync.test.ts`, `test/cli/notice/updateNotice.test.ts`,
+`test/ci/forkIdentityScript.test.ts`. Plan 016 file 2's `u2-upgrade-verb` and `u2-apm-placeholders` use the same
+rendering.
+
 ## Non-goals
 
 - A self-contained executable per platform (Node at the engine floor is the declared prerequisite).
@@ -1548,6 +1763,10 @@ case "the enterprise quickstart routes into the two guides and repeats none of t
 - `docs/plans/008-plugin-lifecycle-01.md`, `-02.md`, `-03.md` — the units and their evidence.
 - `docs/plans/010-enterprise-release-01.md` — REQ-PLUGIN-027 to 030 and the 2026-09-26
   amendments, with their units and decisions.
+- `docs/plans/016-fork-distribution-00.md` — REQ-PLUGIN-045 to 048 and the 2026-10-07 amendments of REQ-PLUGIN-015 and
+  016, with their units, declared defaults S1–S19 and their dated build amendments.
+- `.stamity/runs/2026-10-07_security-fixes/record.md` and its `ledger.jsonl` — the build, the review rounds and the
+  sign-offs the "Amended 2026-10-07 (build)" sentences record.
 - `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` (its Codex section) and
   `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md` — the two walks of
   2026-09-24 and 2026-09-26 the amendments cite.

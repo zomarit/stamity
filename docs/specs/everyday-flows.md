@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, and excluded from the site build.
 status: shipped-with-1.11.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
@@ -23,6 +23,15 @@ REQ-FLOW-005 and REQ-FLOW-024 were re-read on the release branch after that edit
 2026-10-06" in REQ-FLOW-022 and REQ-FLOW-026, and the criteria marked "added 2026-10-06", come from the spec deltas the
 units `u6-init-fixes` and `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at its close.
 They cite `eb4f0727` and are not in a release yet.
+
+REQ-FLOW-036 to REQ-FLOW-038 come from the spec delta of `docs/plans/016-fork-distribution-00.md` (file 0 of plan 016,
+the five security fixes of the released 1.11.0), merged on 2026-10-07 at the Prove phase of the run
+`.stamity/runs/2026-10-07_security-fixes/`. The ids REQ-FLOW-027 to 035 belong to files 1 to 3 of the same plan, which
+merge later. Each requirement's "Evidence (before)" cites `d10db029`, the tree the defects were measured on; its
+"Amended 2026-10-07 (build)" bullet says what the build settled and names the code by path and symbol on the run's
+integration branch (`fix/plan-016-file-0` at `fa8163a3`; the hook-file unit's JSON half, not integrated at the merge,
+read on `lane/016-00-a` at `d198b0f2`). They are not in a release yet: `status` still names 1.11.0, and the release that
+ships them, 1.12.0, sets it.
 
 ## Intent
 
@@ -626,6 +635,152 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
   `test/ci/pluginPackages.codex.test.ts`, `test/ci/pluginPackages.cursor.test.ts`, `test/cli/commands/plugin.test.ts`,
   `test/docsPages.test.ts`; the live check; QA.
 
+### REQ-FLOW-036 — `.claude/settings.json` is merged entry by entry, and an owner's entries survive every verb
+
+From `docs/plans/016-fork-distribution-00.md` § Spec delta B, the unit `u0-settings-ownership`. The engine owns only what
+it writes into `.claude/settings.json`: each `permissions.allow` row and each hook entry (one element of a
+`hooks.<Event>` array) it wrote, and any whole member a later requirement declares (the two declaration pointers of plan
+016 file 2's `u2-declare`). The ledger records each by the sha256 of its canonical JSON. Everything else is the owner's:
+the engine never writes, replaces or removes `permissions.deny`, `permissions.ask`, any other member of `permissions`,
+or an entry it did not write.
+
+- **Merge, never a collision.** An owner's existing `permissions` or `hooks` key is merged: the owner's rows and entries
+  keep their place and the engine's form one block beside them. The file collides only when it is not a JSON object or a
+  member the engine writes into has another type (`permissions` not an object, `allow` not an array, `hooks` not an
+  object, an event not an array); the message names the member and the fix, `--force` does not clear it, and no command
+  offers `--force` for it.
+- **What leaves, and when it takes a `.bak`.** An engine entry the rendering no longer carries leaves without a backup
+  only when the ledger records it (or proves the file unedited) and it lies inside the engine's bound: an allow row the
+  engine renders (`Read`, `Grep`, `Glob`), or a hook entry whose every command runs a script under `.stamity/`. Any other
+  engine entry leaves only behind a verified `.bak`, with a warning naming it. A hook entry recognised by its script under
+  `.stamity/generated/hooks/` but not recorded (an earlier setup's, or one edited by hand) is the engine's to replace or
+  remove, behind that backup. A recorded hash outside the bound proves nothing, and an allow row outside it stays the
+  owner's.
+- **Style.** The merged file keeps its own indentation (two or four spaces, a tab, or one line), key order, line ending
+  and final newline.
+- **Round trip.** `clean` removes the engine's entries, keeps every foreign one, writes no `.bak` when only foreign
+  content changed, and deletes the file only when the engine created it and nothing foreign remains; containers that
+  existed before setup stay even when emptied.
+- **Amended 2026-10-07 (build).** The bound for a hook entry is the script it executes, in the engine's own script
+  folders: `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`; a `.stamity/` path elsewhere in
+  the command does not count, and the user's `.stamity/hooks/` lies outside (`commandRunsStateScript`,
+  `src/manifest/coOwnedJson.ts`). A user-hook entry is proven only by re-rendering a definition still in
+  `.stamity/hooks/` (`coOwnedReclaimRenderings`, `src/cli/engine/emissionWrite.ts`): adding a definition, and `clean` in
+  a repository with user hooks, take no `.bak`; editing or removing a definition leaves one verified `.bak` and a warning
+  naming the entry. A whole member the engine writes, `yield` or `collide`, changes or leaves without a backup only when
+  it equals the engine's current rendering or a value a release rendered there; a differing `collide` member is a
+  `co-owned-shape` collision naming it. A document that cannot round-trip — a value shadowed by a duplicate key, or a
+  number a double cannot hold exactly (`roundTripLoss`, `src/manifest/jsonMembers.ts`) — takes a verified `.bak` before
+  any write, its warning naming why; a byte-order mark survives the merge. A co-owned row with no hash reads as drifted.
+  A `co-owned-shape` refusal keeps the document's ledger rows and record. Only documents that wire hooks hold back the
+  scripts they run from `clean` and a client's removal. `check`'s prediction passes the write's own ledger hashes, so
+  its preview is the write.
+- **Units:** `u0-settings-ownership`. The per-entry core (`src/manifest/coOwnedJson.ts`) is a shared contract that
+  REQ-FLOW-037 and plan 016 file 2's `u2-declare` build on.
+- **Evidence (before):** ownership was per top-level key (`src/adapters/claude.ts:215-217`;
+  `src/manifest/claudeSettings.ts:385-399`, at `d10db029`); an owner's differing key with no ledger row skipped the file
+  (`:423-436`), and with a row or `--force` was replaced behind a `.bak` (`:472-484`). Measured 2026-10-06 on 1.11.0: an
+  owner `permissions` holding `deny: ["Bash(rm -rf:*)"]`, plus a `PreToolUse` hook, made `init -y` exit 0 and skip the
+  file. `sync -y --force` and `init -y --force` dropped the deny rule and the hook. A deny rule added after setup made
+  `check` print "next: … sync", and a plain `sync -y` removed it (exit 0). A foreign key added after setup left a
+  1,883-byte `.bak` at `clean`, and a four-space file without a final newline came back two-space with one.
+- **Expand/contract:** a ledger from 1.11.0 records no entry hashes and reads as legacy. Entries equal to the rendering,
+  allow rows inside the bound and recognised hook entries count as the engine's. A changed one leaves silently while the
+  file still hashes to the recorded hash, and behind a `.bak` otherwise. The first `sync` records the entries. A 1.11.0
+  CLI drops `coOwned` on its next write and falls back to its per-key rule. Rollback is a re-sync at the prior version.
+- **Proof:** `test/merge/settingsOwnerEntries.test.ts`, `test/merge/settingsKeyOwnership.test.ts`,
+  `test/manifest/coOwnedJson.test.ts`, `test/manifest/jsonMembers.test.ts`, `test/manifest/claudeSettings.test.ts`,
+  `test/merge/reclaim.test.ts`; QA.
+
+### REQ-FLOW-037 — Cursor's and Codex's hook files are merged entry by entry, Codex's configuration table by table, and no kept hook loses its script
+
+From `docs/plans/016-fork-distribution-00.md` § Spec delta B, the unit `u0-hook-files-ownership`. `.cursor/hooks.json`
+and `.codex/hooks.json` are owned per entry by the core of REQ-FLOW-036. The engine owns each element of a
+`hooks.<event>` array it wrote, recognising an entry by the script it runs (`.stamity/generated/hooks/<client>/`, or one
+of Cursor's two guards). It also owns Cursor's `version` while anything of the engine's remains, and Codex's
+`description` unless the owner wrote one. An owner's entry survives `sync` and `clean`, and no `.bak` is written when only
+foreign entries changed. `.codex/config.toml` is owned per table. The engine owns `[features]`, the bare `[mcp_servers]`
+when it selects no server, and each `[mcp_servers.<id>]` it renders. An owner's own table of one of those names, or an
+engine table the owner edited, is the owner's and is kept, and the engine writes no second header; for `[features]` the
+run warns when the kept table sets `hooks = false` (Codex runs hooks by default; vendor re-read 2026-10-07). Every other
+table and every top-level key is the owner's, kept byte for byte. `clean`, and a `sync` that removes a client, never
+delete a hook script that a hooks document they keep still runs: they report it kept, and `clean` then keeps `.stamity/`
+when such a script lives there.
+
+- **Amended 2026-10-07 (build).** The unit was built in two halves: the TOML half (`src/manifest/tomlTables.ts`,
+  `src/manifest/codexConfigToml.ts`, the `.codex/config.toml` lane), then the JSON half (`src/manifest/hookDocuments.ts`,
+  the Cursor and Codex hooks lanes) in two passes, the second the guard rename of REQ-FLOW-038.
+  - **Entries.** A Cursor entry leaves without a backup only when the script it executes lies under
+    `.stamity/generated/hooks/cursor/` or an installed pack's `.stamity/packs/<id>/`, or is one of the guards; a Codex
+    group only when every inner hook is the engine's `node -e` starter, or, as releases up to 1.6.0 wrote it, an argv
+    running a script under `.stamity/generated/hooks/codex/` or executing one in an installed pack's folder
+    (`src/manifest/hookDocuments.ts`). An entry a release up to 1.6.0 wired directly from a user hook or an installed
+    pack's hook is the engine's only when it equals that old direct form re-rendered from the definitions the engine
+    still wires — user rows first, then pack rows, the order 1.6.0 wrote them in (`directHookRendering`) — never by the
+    whole-file hash alone, so a forged legacy row removes no owner entry.
+  - **Members.** Cursor's `version` is a `collide` member and Codex's `description` a `yield` one, each bounded by every
+    value a release rendered there (`version` 1 in every release; five `description` texts from 1.7.0 to 1.11.0, the
+    pinned check call normalised away). The top-level `stamity` member 1.0.0 to 1.6.0 wrote into `.codex/hooks.json` is
+    declared with its one release value: it leaves silently, and any other `stamity` is the owner's.
+  - **Codex tables.** `[features]` is the engine's only when its text is one of the renderings a release wrote (1.8.0
+    to 1.9.1, 1.10.0 to 1.11.0, and the current one; `RELEASED_FEATURES`). An owner key that defines without a header a
+    table the engine writes a header for (`features.x`, an inline `features`, an inline server in an owner's
+    `[mcp_servers]` the engine writes), and an owner `[[mcp_servers]]` beside a server table the engine writes, are
+    `co-owned-shape` collisions naming the key or the header's line. A selection whose record would pass the manifest
+    reader's bound is refused (63 servers is the most), naming `config mcp remove <id>`. An owner's comment between two
+    engine tables stays above the table it sat above; a comment appended after the engine's last table edits that
+    table, which is then the owner's and is kept, with no `.bak`.
+  - **Scripts kept.** The sweep reads every hooks document still on disk, candidate or not (`hookDocumentsLeftInPlace`,
+    `src/merge/reclaim.ts`, fed by `hookScriptRetention` in `src/cli/engine/emissionWrite.ts`), and a preview (`check`,
+    `sync --dry-run`) reads a document the write rewrites as the write leaves it. `clean --json` names the scripts that
+    kept `.stamity/` as `stateDirKept`.
+  - **Cursor's rejected entries.** A `.cursor/hooks.json` holding an entry Cursor rejects fails `check`, whoever wrote
+    it; `sync` and `init` keep the entry and warn naming it. The check reads the event key against the 21 events
+    cursor.com/docs/hooks lists (read 2026-10-07, Cursor 3.23.23; `CURSOR_HOOK_EVENTS`) and each entry by type: `type`
+    absent or `"command"` needs a `command`, `"prompt"` needs a `prompt`, any other `type` fails (`cursorHookDefects`).
+- **Units:** `u0-hook-files-ownership`.
+- **Evidence (before):** all three were whole-file outputs (`src/adapters/cursor.ts:778-819`,
+  `src/adapters/codex.ts:930-973`, `:1097-1149`, at `d10db029`). Measured 2026-10-06 on 1.11.0: an owner entry in
+  `.cursor/hooks.json` and an owner group in `.codex/hooks.json` were each dropped by `sync -y` behind a `.bak`, and
+  `check` reported the file as drift. An owner `[mcp_servers.<id>]` table was removed by `sync -y`. With an owner entry
+  and no sync in between, `clean -y` kept the hooks file whole and deleted the scripts it runs, Cursor's two
+  `failClosed` guards included. Cursor drops the whole file on one unknown event key, and with it the guards
+  (microsoft/apm#3129, shown for Cursor 3.13.10).
+- **Expand/contract:** 1.11.0 rows carry no `coOwned` and read as legacy; the first `sync` records the entries and
+  tables. An edited 1.11.0 `.codex/config.toml` keeps every table outside the engine's names. Rollback is a re-sync at
+  the prior version, which drops owner entries and tables again.
+- **Proof:** `test/merge/hookFilesOwnership.test.ts`, `test/manifest/tomlTables.test.ts`,
+  `test/manifest/codexConfigToml.test.ts`, `test/manifest/hookDocuments.test.ts`, `test/cli/commands/clean.test.ts`,
+  `test/emit/syncDriftProof.e2e.test.ts`; QA.
+
+### REQ-FLOW-038 — The engine's files in a folder users share carry the `stamity-` prefix
+
+From `docs/plans/016-fork-distribution-00.md` § Spec delta B, the unit `u0-hook-files-ownership`. Every file the engine
+writes into a folder where users keep files of their own carries a `stamity-` or `st-` name segment. A hand-written file
+then never shares a name with an engine one, and a reviewer tells the two apart by name. The only unprefixed engine
+paths are the fixed client files a client reads by name and the state directory. The fixed files are the three
+charters, `.claude/settings.json`, `.cursor/hooks.json`, `.cursor/mcp.json`, `.codex/config.toml`, `.codex/hooks.json`,
+`.mcp.json`, `.vscode/mcp.json`, `.github/hooks/stamity.json` and `.github/workflows/copilot-setup-steps.yml`. Cursor's
+two guards become `.cursor/hooks/stamity-subagent-guard.mjs` and `.cursor/hooks/stamity-mcp-guard.mjs`. The first
+`sync` after an upgrade writes the new names and rewires `.cursor/hooks.json`. It removes each old name only when its
+bytes still hash to what the ledger recorded, inside the engine's bound; an edited one is kept and reported.
+
+- **Amended 2026-10-07 (build).** The bound lists both new names and keeps the two old ones, so a 1.11.0 row at an old
+  name still validates (`OWNED_PATHS` `version` 2, REQ-PLUGIN-045; `LEGACY_CURSOR_GUARD_PATHS`,
+  `src/adapters/cursor.ts`, which nothing writes). An entry running an old name counts as the engine's only where the
+  manifest's ledger records that name — a setup that ran a release before the rename; elsewhere the old names are free,
+  and an entry running one is the owner's (`cursorGuardPathsFor`, `src/cli/engine/emissionWrite.ts`). A hooks document
+  the sweep leaves in place — kept, refused or linked — keeps the old guards it still runs, and a preview (`check`,
+  `sync --dry-run`) reads the rewired document as the write leaves it, so it shows the old guards as the deletes the
+  write then makes. A `.cursor/hooks.json` refused as `co-owned-shape` carries the old guards' ledger rows through each
+  `sync` until the owner fixes it, so the old names stay the engine's to reclaim once it is.
+- **Units:** `u0-hook-files-ownership`.
+- **Evidence (before):** `src/adapters/cursor.ts:110-116` at `d10db029`. Of the 201 paths a four-client `init` records
+  on 1.11.0, 11 carry no prefixed segment: the six fixed client files, the three charters and the two guards.
+- **Expand/contract:** the old names are reclaimed by proof; the plugin roots ship the new names under `hooks/`, and a
+  client on an older root keeps the old names inside its own root, which `sync` never touches.
+- **Proof:** `test/emit/namePrefix.test.ts`, `test/adapters/cursor.test.ts`, `test/merge/hookFilesOwnership.test.ts`.
+
 ## Acceptance criteria
 
 One set per requirement. Each is machine-checkable unless tagged `judgment:`. Once a test named under a requirement
@@ -907,6 +1062,99 @@ exists, it is the normative record for that requirement.
   rows are shown, and the shown total equals `codexSkillsListChars` (added 2026-10-06;
   `test/adapters/codex.test.ts:2087`).
 
+**REQ-FLOW-036**
+
+- GIVEN a `.claude/settings.json` holding `permissions.allow: ["Bash(npm test:*)"]`, `permissions.deny:
+  ["Bash(rm -rf:*)"]`, a `PreToolUse` entry with matcher `Bash` running `./scripts/guard.sh`, and `model` WHEN `init -y
+  --tools claude` runs THEN it exits 0, the file is written rather than skipped, and each of those members is byte for
+  byte present beside the engine's rows and entries.
+- GIVEN that setup WHEN `sync -y`, `sync -y --force` and `init -y --force` run THEN the deny rule and the owner's hook
+  entry are unchanged after each, and no `.bak` exists.
+- GIVEN a setup to which the owner added `permissions.deny` WHEN `check` runs THEN it exits 0 with no drift for the file;
+  WHEN `sync -y` runs THEN the file is byte-identical.
+- GIVEN the first fixture WHEN `init -y` and then `clean -y` run THEN the file is byte-identical to before setup and no
+  `.bak` exists.
+- GIVEN a `.claude/settings.json` to which another tool added a key after setup WHEN `clean -y` runs THEN the file holds
+  that key alone and no `.bak` exists.
+- GIVEN a ledger record that claims the owner's deny rule, the whole `permissions` member or the owner's allow row WHEN
+  `sync -y` and `clean -y` run THEN those members survive both; GIVEN a record that claims the owner's hook entry, whose
+  script lies outside `.stamity/`, THEN that entry leaves only behind a verified `.bak` and a warning names it.
+- GIVEN a four-space file without a final newline, a tab-indented one, a one-line one and a CRLF one WHEN `init -y` and
+  then `clean -y` run THEN each is byte-identical to before, and after `init` each is still in its own style.
+- GIVEN a file whose `permissions` is a string WHEN `init -y` runs THEN the file is skipped with a message naming
+  `permissions`; WHEN `check` runs THEN it exits 1 and no line of its output contains `--force`.
+- GIVEN an engine hook entry the owner edited WHEN `sync -y` runs THEN the engine's entry is restored, a verified `.bak`
+  holds the edit, and the warning names the entry and `.claude/settings.local.json`.
+- `judgment: reviewer` · One residue is content-equal rather than byte-identical, and the unit records it: a JSON style
+  `JSON.stringify` cannot write (aligned colons, inline arrays, number or escape spellings) comes back with the same
+  keys and values.
+- GIVEN a user hook defined in `.stamity/hooks/` WHEN `init -y --tools claude` and then `clean -y` run THEN no `.bak`
+  exists; GIVEN that definition then edited, or removed, WHEN `sync -y` runs THEN one verified `.bak` exists and the
+  warning names the entry (added 2026-10-07 from the build).
+- GIVEN a record claiming an owner's hook entry whose command passes `.stamity/g.json` as an argument to a script
+  outside `.stamity/` WHEN `sync -y` runs THEN the entry leaves only behind a verified `.bak` (added 2026-10-07 from the
+  build).
+- GIVEN a settings file holding a duplicate key, or a number past what a double holds exactly, WHEN `init -y` writes it
+  THEN a verified `.bak` holds the previous bytes and the warning says why; GIVEN a file opening with a byte-order mark
+  THEN the merged file still opens with it (added 2026-10-07 from the build).
+- GIVEN a setup whose `.claude/settings.json` the owner then changes so `hooks.PreToolUse` is a string WHEN `sync -y`
+  runs THEN the file is refused as `co-owned-shape` and the ledger keeps its settings rows and their record; WHEN
+  `clean -y` runs THEN every engine hook script the kept file names remains (added 2026-10-07 from the build).
+
+**REQ-FLOW-037**
+
+- GIVEN `init -y --tools cursor` and an owner entry under `hooks.afterFileEdit` in `.cursor/hooks.json` WHEN `check`
+  runs THEN it exits 0 with no drift for the file; WHEN `sync -y` runs THEN the file is byte-identical and no `.bak`
+  exists; WHEN `clean -y` runs instead THEN the file holds `version` and the owner's entry alone, and no guard script
+  remains.
+- GIVEN `init -y --tools codex` and an owner group under `hooks.PostToolUse` in `.codex/hooks.json` WHEN `sync -y` runs
+  THEN the file is byte-identical and no `.bak` exists; WHEN `clean -y` runs THEN the file holds the owner's group alone.
+- GIVEN an owner `[mcp_servers.team]` table in `.codex/config.toml` WHEN `sync -y` runs THEN the file is byte-identical;
+  WHEN `clean -y` runs THEN the file holds the owner's table alone.
+- GIVEN a `.codex/config.toml` holding a top-level key and an owner table before setup WHEN `init -y --tools codex` and
+  then `clean -y` run THEN it is byte-identical to before.
+- GIVEN an owner `[features]` table that sets `hooks = false` WHEN `init -y --tools codex` runs THEN the file holds one
+  `[features]` header, the owner's table is unchanged, and the run warns naming `hooks = false`; GIVEN one that does not
+  set `hooks` THEN no warning.
+- GIVEN a `.cursor/hooks.json` that does not parse WHEN `clean -y` runs THEN the file is kept, every script it names
+  remains, and the report names the file for each kept script.
+- GIVEN a repository set up by 1.11.0 with an owner entry added to `.cursor/hooks.json` WHEN `clean -y` runs before any
+  `sync` THEN the owner's entry remains and no script the kept file names is missing.
+- GIVEN a `.cursor/hooks.json` holding a foreign entry under an event key Cursor's validator does not accept WHEN
+  `check` runs THEN it exits 1 naming the entry and the remedy; WHEN `sync -y` runs THEN it keeps the entry, warns
+  naming it, and exits 0.
+- GIVEN a foreign `{"type": "prompt", "prompt": "…"}` entry under a Cursor event WHEN `check` runs THEN that entry fails
+  nothing; GIVEN a `"prompt"` entry with no `prompt`, or an entry whose `type` is neither `"command"` nor `"prompt"`,
+  THEN `check` exits 1 naming it (added 2026-10-07 from the vendor re-read and the build).
+- GIVEN an owner `[features]` that is no release's rendering and a ledger record or a whole-file hash claiming it WHEN
+  `sync -y` runs THEN the table is byte-identical; GIVEN `features.x = 1` at the top level, or an owner
+  `[[mcp_servers]]` while a server is selected, WHEN `init -y --tools codex` runs THEN the file is refused as
+  `co-owned-shape` naming the key or the header's line; GIVEN 64 selected servers THEN the plan refuses naming
+  `config mcp remove <id>`, and 63 pass (added 2026-10-07 from the build).
+- GIVEN a repository set up by 1.6.0 with a user hook and an installed pack's hook wired directly in `.cursor/hooks.json`
+  or `.codex/hooks.json`, their definitions still in place, WHEN `sync -y` runs THEN each direct entry is replaced by the
+  runner's and each hook is wired once;
+  GIVEN a forged legacy row and an owner's entry THEN the owner's entry remains after `sync -y` and `clean -y` (added
+  2026-10-07 from the build).
+- GIVEN a hooks document the sweep leaves in place — reduced to the owner's entries, refused, linked, or no reclaim
+  candidate at all — WHEN `clean -y` or a client's removal sweeps THEN every engine hook script it names remains (added
+  2026-10-07 from the build).
+
+**REQ-FLOW-038**
+
+- GIVEN `init -y --tools cursor` THEN `.cursor/hooks/` holds exactly `stamity-mcp-guard.mjs` and
+  `stamity-subagent-guard.mjs`, and `.cursor/hooks.json` runs them on `beforeMCPExecution` and `subagentStart` with
+  `failClosed: true`.
+- GIVEN a repository set up by 1.11.0 WHEN `sync -y` runs THEN `.cursor/hooks/subagent-guard.mjs` and
+  `.cursor/hooks/mcp-guard.mjs` are gone, the two new files exist, `.cursor/hooks.json` names only the new paths, and
+  `check` then exits 0; GIVEN the old MCP guard edited by hand THEN it stays and the sync report names it.
+- GIVEN all four clients and two MCP servers selected THEN every planned path outside `.stamity/` and the fixed list
+  above has a `stamity-` or `st-` segment.
+- GIVEN a repository set up by 1.11.0 whose `.cursor/hooks.json` is refused or linked WHEN `sync -y` runs THEN both old
+  guards stay; GIVEN `check` before that `sync` THEN its reclaim lines name the old guards with the action the write
+  takes; GIVEN a repository whose ledger never recorded the old names and an owner entry running
+  `node .cursor/hooks/mcp-guard.mjs` THEN that entry stays the owner's (added 2026-10-07 from the build).
+
 ## References
 
 - `docs/plans/013-optimization-sweep-01.md` — the measures and the method that found these items.
@@ -914,6 +1162,10 @@ exists, it is the normative record for that requirement.
 - `docs/plans/013-optimization-sweep-03.md` — the next tier, spec delta A, and the drop list.
 - `.stamity/runs/2026-09-30_optimization-sweep/record.md` and its `ledger.jsonl` — the build, the sign-offs and the
   live checks this merge cites by ledger id.
+- `docs/plans/016-fork-distribution-00.md` — spec delta B (REQ-FLOW-036 to 038), the units `u0-settings-ownership` and
+  `u0-hook-files-ownership`, and the declared defaults S10–S19 with their dated build amendments.
+- `.stamity/runs/2026-10-07_security-fixes/record.md` and its `ledger.jsonl` — the build, the review rounds and the
+  sign-offs the "Amended 2026-10-07 (build)" bullets record.
 - `test`: each requirement names its suites above; once a test exists it is the normative record.
 - `source`: `src/shared/cliCall.ts`, `src/emit/substitution.ts`, `src/cli/kit/packageName.ts`,
   `scripts/plugins/tokens.mjs`, `src/types/markers.ts`, `src/detect/repoAnalyzer.ts`, `src/detect/verificationGates.ts`,
@@ -958,3 +1210,9 @@ exists, it is the normative record for that requirement.
   live and was not measured.
 - REQ-FLOW-026: a command restricted with `tools:` to one client would still reach every client that reads the shared
   tree. No shipped command uses `tools:` (the unit's deferral M-1).
+- REQ-FLOW-036 and REQ-FLOW-037: the residues the plan records as follow-up rows stay open — a user-hook entry edited in
+  `.claude/settings.json` instead of its definition stays beside the engine's rendering; after a lost manifest the
+  engine's three allow rows read as the owner's; a key an owner adds inside an engine Codex table makes the whole table
+  the owner's; `check` does not report an owner `[features]` that sets `hooks = false`; and inside the bound a forged
+  record still proves a selected `[mcp_servers.<id>]` (`docs/plans/016-fork-distribution-00.md`, Follow-ups and the
+  2026-10-07 amendment of S16).
