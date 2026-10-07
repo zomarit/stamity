@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { buildConfigTamperNoticeScript } from "../../src/hooks/scripts.ts";
@@ -223,7 +224,9 @@ describe("a registry fork's four-client emission", () => {
         ...TOOLS.map((tool) => `.stamity/generated/hooks/${tool}/stamity-config-tamper-notice.mjs`),
       ]),
     );
-    expect([...counts.keys()].some((path) => path.startsWith(".cursor/hooks/") && path.endsWith(".mjs"))).toBe(true);
+    // Both of Cursor's guards, by the names they carry since REQ-FLOW-038, so the
+    // registry-bound call is proven in the files Cursor runs, not in any `.mjs` there.
+    expect([...counts.keys()]).toEqual(expect.arrayContaining([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]));
     const bare: string[] = [];
     for (const [path] of counts) {
       const content = tree[path] ?? "";

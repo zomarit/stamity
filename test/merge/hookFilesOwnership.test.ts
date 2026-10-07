@@ -430,6 +430,95 @@ describe(".codex/hooks.json owned entry by entry", () => {
   });
 });
 
+// ── A --registry fork's hook documents (REQ-PLUGIN-048 with REQ-FLOW-037) ──
+
+describe("a --registry fork's hook documents are the engine's by the calls it renders", () => {
+  // The identity `scripts/fork-identity.mjs --registry` leaves behind, passed
+  // the way the goldens pass one, so the bytes do not depend on this checkout.
+  const FORK = { packageName: "@acme/stamity", npmChannel: true, npmRegistry: "https://npm.pkg.github.com" } as const;
+  const REGISTRY_ARG = "--@acme:registry=https://npm.pkg.github.com";
+  /**
+   * The fork's previous release. A setup made by it differs from the running
+   * rendering in every pinned call, so each engine entry is held to the bound
+   * (`codexHooksSpec`'s starter grammar) rather than matched byte for byte.
+   */
+  const PREVIOUS = "1.10.0-acme.1";
+  const boundCall = (version: string): string => `npx -y ${REGISTRY_ARG} @acme/stamity@${version}`;
+
+  async function forkInit(root: string, tools: readonly Tool[]): Promise<void> {
+    const decisions = await buildInitDecisions(root, { tools: [...tools] });
+    await applyInit({ rootDir: root, decisions, engineVersion: PREVIOUS, ...FORK, dryRun: false, force: false, now: T0 });
+  }
+
+  async function forkSync(root: string): Promise<MergeResult[]> {
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "", ...FORK });
+    return (await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 })).wrote;
+  }
+
+  /** Every inner Codex command string, both spellings, in document order. */
+  function codexCommands(doc: Record<string, unknown>): string[] {
+    const groups = Object.values(doc["hooks"] as Record<string, { hooks?: Record<string, unknown>[] }[]>).flat();
+    return groups
+      .flatMap((group) => group.hooks ?? [])
+      .flatMap((hook) => [hook["command"], hook["commandWindows"]])
+      .filter((command): command is string => typeof command === "string");
+  }
+
+  it("codex: the fork's upgrade with an owner group proves the recorded registry-bound starters the engine's — no .bak, no duplicate group, and a second sync is a no-op", async () => {
+    const root = await freshRepo();
+    await forkInit(root, ["codex"]);
+    const previous = codexCommands(await readDoc(root, CODEX_HOOKS)).filter((command) => command.startsWith('node -e "'));
+    // Non-degenerate: the starters carry the fork's registry-bound sync call, and no bare one.
+    expect(previous.length).toBeGreaterThan(0);
+    for (const command of previous) expect(command).toContain(`run ${boundCall(PREVIOUS)} sync'`);
+    // The owner's group makes the file differ from the ledger's whole-file hash,
+    // and no starter equals the running rendering: each recorded engine group
+    // leaves silently only inside the bound (`coOwnedJson.ts` rule 3), which for
+    // a starter is `codexHooksSpec`'s grammar, registry argument included.
+    await addHookEntry(root, CODEX_HOOKS, "PostToolUse", OWNER_CODEX_GROUP);
+
+    await forkSync(root);
+    const first = await readText(root, CODEX_HOOKS);
+    const second = rowOf(await forkSync(root), CODEX_HOOKS);
+
+    expect(await backups(root)).toEqual([]);
+    const commands = codexCommands(JSON.parse(first) as Record<string, unknown>);
+    const starters = commands.filter((command) => command.startsWith('node -e "'));
+    // Each engine group replaced in place, none duplicated, the owner's kept once.
+    expect(starters).toHaveLength(previous.length);
+    for (const command of starters) expect(command).toContain(`run ${boundCall(ENGINE_VERSION)} sync'`);
+    expect(first).not.toContain(PREVIOUS);
+    expect(first).not.toContain("npx -y @acme/stamity@");
+    expect(commands.filter((command) => command === "node scripts/team-audit.mjs")).toHaveLength(1);
+    expect(second.action).toBe("unchanged");
+    expect(await readText(root, CODEX_HOOKS)).toBe(first);
+  });
+
+  it("cursor: the renamed guards carry the registry-bound call across the fork's upgrade, and sync twice with an owner entry takes no .bak and adds no entry", async () => {
+    const root = await freshRepo();
+    await forkInit(root, ["cursor"]);
+    const guards = [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH];
+    for (const body of await Promise.all(guards.map((guard) => readText(root, guard)))) {
+      expect(body).toContain(`${boundCall(PREVIOUS)} sync`);
+    }
+    await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
+    const expected = await readDoc(root, CURSOR_HOOKS);
+
+    await forkSync(root);
+    const first = await readText(root, CURSOR_HOOKS);
+    const second = rowOf(await forkSync(root), CURSOR_HOOKS);
+
+    expect(await backups(root)).toEqual([]);
+    expect(JSON.parse(first)).toEqual(expected);
+    expect(second.action).toBe("unchanged");
+    expect(await readText(root, CURSOR_HOOKS)).toBe(first);
+    for (const body of await Promise.all(guards.map((guard) => readText(root, guard)))) {
+      expect(body).toContain(`${boundCall(ENGINE_VERSION)} sync`);
+      expect(body).not.toContain("npx -y @acme/stamity@");
+    }
+  });
+});
+
 // ── S17: a kept hooks document keeps the scripts it runs ───────
 
 describe("clean keeps every script a hooks document it keeps still runs (S17)", () => {
