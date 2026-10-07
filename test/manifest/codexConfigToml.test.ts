@@ -664,24 +664,19 @@ describe("planCodexConfigToml", () => {
     expect(planned.content).toBe(`${EMPTY}\n${owner}\n`);
   });
 
-  // TEST CHANGE, justified: review/93 (signed off) — the owner's [mcp_servers] beside the engine's
-  // recorded one defined that table twice, which TOML refuses and which is now a co-owned-shape
-  // refusal (the last describe below). Every name the engine renders is still the owner's here:
-  // the rendering is now [features] and [mcp_servers.github], both the owner's, and the engine's
-  // recorded bare [mcp_servers], no longer rendered, is the block that leaves.
   it("recorded: when every engine name is the owner's, the engine writes nothing and its block leaves with its separator and its line break", () => {
-    const owner = "[features]\nweb_search = true\n[mcp_servers.github]\nx = 1";
+    const owner = "[features]\nweb_search = true\n[mcp_servers]\nx = 1";
     const existing = `${owner}\n\n${table("mcp_servers")}`;
-    const planned = plan(existing, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }), GITHUB, ["github"]);
+    const planned = plan(existing, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }));
     expect(planned.content).toBe(owner);
     expect(planned.backup).toBeNull();
     expect(planned.record).toEqual({});
   });
 
   it("recorded: when every engine name is the owner's and an owner table follows the block, only the block leaves", () => {
-    const owner = "[features]\nweb_search = true\n[mcp_servers.github]\nx = 1\n";
+    const owner = "[features]\nweb_search = true\n[mcp_servers]\nx = 1\n";
     const after = '[profiles.x]\nmodel = "o3"\n';
-    const planned = plan(`${owner}\n${table("mcp_servers")}\n${after}`, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }), GITHUB, ["github"]);
+    const planned = plan(`${owner}\n${table("mcp_servers")}\n${after}`, recorded({ ...recordFor("mcp_servers"), terminatorAdded: true }));
     expect(planned.content).toBe(`${owner}\n${after}`);
     expect(planned.record).toEqual({});
   });
@@ -741,14 +736,10 @@ describe("planCodexConfigToml", () => {
     expect(planned.content).toBe(crlf(`model = "o3"\n\n${GITHUB}`));
   });
 
-  // TEST CHANGE, justified: review/93 (signed off) — an engine table pasted twice is a table
-  // defined twice, which Codex refuses whole; the planner no longer drops the copy silently but
-  // refuses the file, naming the table, and leaves the owner to merge it.
-  it("refuses an engine table the owner pasted twice, naming it, and writes nothing", () => {
+  it("writes one copy of an engine table the owner pasted twice", () => {
     const existing = `${EMPTY}\n${table("mcp_servers")}`;
     const planned = plan(existing, recorded(recordFor("features", "mcp_servers")));
-    expect(planned.content).toBeNull();
-    expect(planned.collision).toContain("defines [mcp_servers] a second time");
+    expect(planned.content).toBe(EMPTY);
   });
 });
 
@@ -1132,6 +1123,24 @@ describe("a standard table defined twice in the kept file is a co-owned-shape co
     const planned = plan(raw, ADOPTION);
     expect(planned.collision).toBeNull();
     expect(planned.content).toBe(`${raw}\n${EMPTY}`);
+  });
+
+  it("a second copy the engine proves its own is dropped, not refused: the kept file defines each table once", () => {
+    // The engine's [features] pasted twice under a legacy row: both copies are a released rendering.
+    const legacyTwice = plan(`${EMPTY}\n${table("features")}`, LEGACY);
+    expect(legacyTwice.collision).toBeNull();
+    expect(legacyTwice.content).toBe(EMPTY);
+    // Two owner tables of one name beside an engine copy of it stay a refusal: the write would keep both.
+    const ownerTwice = plan(`${EMPTY}\n[mcp_servers]\nx = 1\n\n[mcp_servers]\ny = 2\n`, recorded(recordFor("features", "mcp_servers")));
+    expect(ownerTwice.collision).toContain("defines [mcp_servers] a second time");
+    expect(ownerTwice.content).toBeNull();
+  });
+
+  it("reduce: drops every copy the engine proves its own and keeps the owner's one, as the planner does", () => {
+    const pasted = reduce(`${EMPTY}\n${table("mcp_servers")}`, { record: recordFor("features", "mcp_servers"), deleteWhenEngineOnly: true });
+    expect(pasted.kind).toBe("engine-only");
+    const beside = reduce(`[mcp_servers]\nx = 1\n\n${table("mcp_servers")}`, { record: recordFor("mcp_servers") });
+    expect(beside).toMatchObject({ kind: "reduced", content: "[mcp_servers]\nx = 1\n" });
   });
 
   it("reduce: leaves the file untouched, naming the table", () => {

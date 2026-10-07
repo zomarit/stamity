@@ -55,7 +55,10 @@
  * `[mcp_servers]`), naming the key: the header would be a second definition.
  * So is an owner's `[[mcp_servers]]` array of tables while the engine writes a
  * server table under it, naming the header's line: the engine's table would
- * land inside the array's last element. So is a selection whose record would name more tables than the manifest
+ * land inside the array's last element. So are two tables the write would keep
+ * that resolve to one name (two owner `[features]`), naming both lines; a
+ * second copy the engine proves its own is dropped instead, as any engine table
+ * is. So is a selection whose record would name more tables than the manifest
  * reader takes for one file ({@link planCodexConfigToml}).
  */
 
@@ -357,18 +360,26 @@ function arrayRedefinitionFailure(shown: string, found: { line: number; path: re
 }
 
 /**
- * The first standard table header that names a table an earlier one already
- * did (the key path resolved, so `[features]` and `["features"]` are one),
- * with both lines: TOML refuses a table defined twice, so Codex would load
- * nothing of the file. `[[x]]` arrays of tables repeat by design and are not
- * counted. Every table counts, the owner's included: the write keeps it, and a
- * kept file Codex refuses is no file the engine can call set up.
+ * The first standard table header the write would keep that names a table an
+ * earlier kept one already did (the key path resolved, so `[features]` and
+ * `["features"]` are one), with both lines: TOML refuses a table defined twice,
+ * so Codex would load nothing of the file. A table {@link classify} proved the
+ * engine's is not kept — the write drops it, and renders at most one of that
+ * name — so a second copy that is the engine's (its table pasted twice, or its
+ * recorded one beside an owner's of the same name) is repaired, not refused.
+ * Two owner tables of one name are the owner's to merge. `[[x]]` arrays of
+ * tables repeat by design and are not counted. `items` is {@link itemsOf}'s
+ * output for `segments`, classified: one item with a pointer per standard
+ * table of an engine name, in order.
  */
-function doubleDefinition(segments: readonly TomlSegment[]): { name: string; line: number; first: number } | null {
+function doubleDefinition(segments: readonly TomlSegment[], items: readonly Item[]): { name: string; line: number; first: number } | null {
+  const engine = items.filter((item) => item.pointer !== null).map((item) => item.engine);
+  let engineAt = 0;
   const seen = new Map<string, number>();
   let line = 1;
   for (const segment of segments) {
-    if (segment.key !== null && !segment.arrayTable) {
+    const dropped = segment.key !== null && !segment.arrayTable && isEngineKey(segment.key) && engine[engineAt++] === true;
+    if (segment.key !== null && !segment.arrayTable && !dropped) {
       const lines = linesOf(segment.text).map((text) => text.replace(BOM, "").replace(/\r?\n$/u, ""));
       const at = line + lines.findIndex((text) => !BLANK.test(text) && !COMMENT.test(text));
       const id = JSON.stringify(segment.key);
@@ -495,16 +506,16 @@ function planUnbounded(
   // Only an owner's key can turn hooks off (no release wrote one), and the write keeps it.
   const hooksOff = hooksOffKey(existingRaw, cut.keys);
   const hooksOffNote = hooksOff === null ? "" : ` ${hooksOffSentence(shown, hooksOff)}`;
-  const doubled = doubleDefinition(cut.segments);
-  if (doubled !== null) {
-    const reason = doubleDefinitionFailure(shown, doubled) + hooksOffNote;
-    return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
-  }
   const state: OwnershipState = !ownership.owned ? "adoption" : ownership.legacy ? "legacy" : "recorded";
   const record = state === "recorded" ? ownership.record : null;
   const items = itemsOf(cut.segments, state !== "legacy");
   const unedited = state === "legacy" && isUnedited(filePath, existingRaw, ownership);
   classify(items, { state, record, selected, render, unedited });
+  const doubled = doubleDefinition(cut.segments, items);
+  if (doubled !== null) {
+    const reason = doubleDefinitionFailure(shown, doubled) + hooksOffNote;
+    return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
+  }
 
   const renderedNames = new Map(rendered.map((table) => [table.name as string, table]));
   const ownerNames = new Set(items.filter((item) => item.name !== null && !item.engine).map((item) => item.name as string));
@@ -652,19 +663,19 @@ export function reduceCodexConfigToml(
         `engine wrote cannot be read. Nothing was removed and nothing was deleted — fix or delete the file by hand.`,
     };
   }
-  const doubled = doubleDefinition(cut.segments);
+  const state: OwnershipState = opts.legacy ? "legacy" : "recorded";
+  const items = itemsOf(cut.segments, !opts.legacy);
+  classify(items, { state, record: opts.legacy ? null : opts.record, selected: opts.selected, render: opts.render, unedited: false });
+  const doubled = doubleDefinition(cut.segments, items);
   if (doubled !== null) {
     return {
       kind: "untouched",
       detail:
-        `This Codex configuration defines [${doubled.name}] twice (lines ${doubled.first} and ${doubled.line}), and TOML ` +
-        `refuses a table defined twice, so which of its tables the engine wrote cannot be read. Nothing was removed and ` +
-        `nothing was deleted — merge the two tables by hand.`,
+        `This Codex configuration defines [${doubled.name}] twice outside the engine's tables (lines ${doubled.first} and ` +
+        `${doubled.line}), and TOML refuses a table defined twice, so what is left once the engine's tables are out ` +
+        `cannot be read. Nothing was removed and nothing was deleted — merge the two tables by hand.`,
     };
   }
-  const state: OwnershipState = opts.legacy ? "legacy" : "recorded";
-  const items = itemsOf(cut.segments, !opts.legacy);
-  classify(items, { state, record: opts.legacy ? null : opts.record, selected: opts.selected, render: opts.render, unedited: false });
   const held = items.filter((item) => item.engine);
   if (held.length === 0) {
     return {
