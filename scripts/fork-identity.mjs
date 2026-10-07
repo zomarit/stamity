@@ -43,6 +43,7 @@ import { fileURLToPath } from 'node:url'
 
 import { resolveDistributionIdentity } from './distribution-identity.mjs'
 import { isMain } from './native-typescript.mjs'
+import { REGISTRY_URL } from './plugins/tokens.mjs'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..')
 
@@ -118,29 +119,20 @@ function parseRepository(value) {
 }
 
 /**
- * The clean-URL rule of `scripts/distribution-identity.mjs` `requireCleanUrl` (https, no
- * userinfo), re-stated here rather than exported from there, and widened by the two things a
- * registry URL must also not carry: a query and a fragment, either of which could hold a token.
+ * The registry rule every pinned CLI call applies (`REGISTRY_URL` in `src/shared/cliCall.ts`, read
+ * here through its restatement in `scripts/plugins/tokens.mjs`): plain https, a host, an optional
+ * port and path, and no userinfo, query, fragment, `%` escape, space or shell character. The value
+ * becomes `publishConfig.registry`, which every call the fork prints names for its scope, and the
+ * CLI renders `npx --no` for a registry outside the rule (REQ-PLUGIN-048). Refusing it here tells
+ * the operator at fork time instead of leaving a fork whose every call silently stops fetching.
+ * Exported so `test/ci/forkIdentityScript.test.ts` holds it to the CLI's grammar.
  */
-function requireCleanRegistry(value) {
-  let parsed
-  try {
-    parsed = new URL(value)
-  } catch {
-    parsed = null
-  }
-  if (
-    parsed === null ||
-    parsed.protocol !== 'https:' ||
-    parsed.username !== '' ||
-    parsed.password !== '' ||
-    parsed.search !== '' ||
-    parsed.hash !== '' ||
-    value.includes('?') ||
-    value.includes('#')
-  ) {
+export function requireCleanRegistry(value) {
+  if (typeof value !== 'string' || !REGISTRY_URL.test(value)) {
     throw new Refusal(
-      '--registry must be an https URL with no credentials, query or fragment; the value is not echoed.',
+      '--registry must be a plain https URL, the rule every pinned CLI call applies to the registry it names: ' +
+        'https://<host>[:<port>][/<path>], the host of letters, digits, . and -, the path of letters, digits, ' +
+        '. _ ~ / and -, so no credentials, query, fragment, % escape, space or shell character; the value is not echoed.',
     )
   }
   return value

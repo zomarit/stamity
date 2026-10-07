@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 // @ts-expect-error — the script is a native ESM source-checkout tool with no declaration file.
-import { replaceFile } from "../../scripts/fork-identity.mjs";
+import { replaceFile, requireCleanRegistry } from "../../scripts/fork-identity.mjs";
+import { REGISTRY_URL } from "../../src/shared/cliCall.ts";
 import { repositoryRoute } from "../support/identity.ts";
 import { downstreamCheckout } from "./downstreamFixture.ts";
 
@@ -364,6 +365,9 @@ describe("scripts/fork-identity.mjs", () => {
         "https://registry.example.invalid/?token=fixture-pass",
         "https://registry.example.invalid/#fixture-pass",
         "registry.example.invalid",
+        // REQ-PLUGIN-048: outside the CLI's call grammar, so every call would render `npx --no`.
+        "https://registry.example.invalid/My%20Project/npm/",
+        "HTTPS://registry.example.invalid",
       ]) {
         const result = run(root(), ["--repository", FORK_URL, "--registry", registry]);
         expect(result.status, registry).toBe(1);
@@ -443,6 +447,60 @@ describe("scripts/fork-identity.mjs", () => {
         },
       );
     }, GENERATOR_BUDGET);
+  });
+
+  it("accepts exactly the registries the CLI's pinned call can name (REGISTRY_URL), and echoes none it refuses", () => {
+    // REQ-PLUGIN-048: a `publishConfig.registry` outside the call grammar makes every pinned
+    // call fail closed to `npx --no`. The script refuses it at fork time instead, so its rule
+    // and the CLI's must agree on every input; this case is the parity guard.
+    const accepted = [
+      "https://npm.pkg.github.com",
+      "https://npm.pkg.github.com/",
+      "https://registry.example.invalid:8443/npm/feed/",
+      "https://pkgs.example.invalid/org/_packaging/feed/npm/registry/",
+      "https://registry.example.invalid/a~b_c.d-e",
+    ];
+    const refused = [
+      "",
+      "registry.example.invalid",
+      "http://registry.example.invalid",
+      "HTTPS://registry.example.invalid",
+      " https://registry.example.invalid",
+      "https://registry.example.invalid ",
+      `https://registry.example.invalid${String.fromCharCode(10)}`,
+      "https://fixture-user:fixture-pass@registry.example.invalid",
+      "https://registry.example.invalid/?token=fixture-pass",
+      "https://registry.example.invalid/#fixture-pass",
+      "https://registry.example.invalid/My%20Project/",
+      "https://registry.example.invalid/$x",
+      "https://registry.example.invalid/a'b",
+      "https://registry.example.invalid/a`b`",
+      'https://registry.example.invalid/a"b',
+      "https://registry.example.invalid/a b",
+      "https://registry.example.invalid/a;b",
+      "https://registry.example.invalid/a&b",
+      "https://registry.example.invalid/a^b",
+      "https://registry_example.invalid",
+      `https://b${String.fromCodePoint(0xfc)}cher.example.invalid`,
+    ];
+    const scriptAccepts = (value: string): boolean => {
+      try {
+        requireCleanRegistry(value);
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        expect(message, JSON.stringify(value)).toContain("--registry");
+        expect(message, JSON.stringify(value)).not.toContain("registry.example.invalid");
+        expect(message, JSON.stringify(value)).not.toContain("fixture-pass");
+        return false;
+      }
+    };
+    // Non-degenerate: the samples straddle the grammar as the CLI reads it.
+    expect(accepted.every((value) => REGISTRY_URL.test(value))).toBe(true);
+    expect(refused.some((value) => REGISTRY_URL.test(value))).toBe(false);
+    for (const value of [...accepted, ...refused]) {
+      expect(scriptAccepts(value), JSON.stringify(value)).toBe(REGISTRY_URL.test(value));
+    }
   });
 
   it("removes the temporary file when the rename fails, and rethrows", () => {

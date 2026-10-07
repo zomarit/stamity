@@ -22,7 +22,7 @@ import type { AdapterOutput, ContentSelection } from "../../../src/types/content
 import { MANIFEST_VERSION } from "../../../src/types/manifest.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
-import { canonical, npxCommand } from "../../support/identity.ts";
+import { canonical, npxCommand, registryArgument } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
@@ -356,9 +356,11 @@ describe("sync — help text", () => {
     // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the channel line named
     // `@latest`; it now names the exact-version pinned form with a placeholder, the
     // spelling the update notice prints. The no-channel line is unchanged.
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — a `--registry` fork's checkout names its
+    // registry ahead of the spec; the canonical checkout asserts the same bytes as before.
     expect(result.stdout).toContain(
       canonical().npmChannel
-        ? `npx -y ${canonical().name}@<version> sync`
+        ? ["npx -y", registryArgument(canonical()), `${canonical().name}@<version> sync`].filter(Boolean).join(" ")
         : `then npx --no ${canonical().name} sync`,
     );
     expect(result.stdout).not.toContain("@latest");

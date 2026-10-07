@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the plugin roots render `npx -y --@<scope>:registry=<url> @<scope>/stamity@<version> <verb>`,
   so a machine without the scope mapping no longer asks the public registry for the fork's package.
   The canonical package's output is unchanged.
+- **`fork-identity.mjs --registry` refuses a registry URL the CLI calls cannot name.** The script
+  now applies the calls' own rule (plain https; no credentials, query, fragment, `%` escape, space or
+  shell character) and refuses anything else before writing, without echoing it. A fork whose
+  `publishConfig.registry` was set outside that rule by hand renders every call as `npx --no`
+  instead of `npx -y`, so it runs an installed copy and never fetches one.
 
 ### Fixed
 

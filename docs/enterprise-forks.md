@@ -154,8 +154,10 @@ Two flags change what it writes:
 
 It validates through the same `scripts/distribution-identity.mjs` both generators run, and it
 refuses before writing anything on an invalid identity: a repository off the public GitHub host, a
-scope npm would refuse, or a registry URL carrying credentials, a query or a fragment. It never
-echoes the URL it refused. It also refuses, naming the file, to rewrite a file with uncommitted
+scope npm would refuse, or a registry URL that is not plain https. That is the rule every pinned
+CLI call applies to the registry it names: `https://<host>[:<port>][/<path>]`, the host of letters,
+digits, `.` and `-`, the path of letters, digits, `.`, `_`, `~`, `/` and `-`, so no credentials,
+query, fragment, `%` escape, space or shell character. It never echoes the URL it refused. It also refuses, naming the file, to rewrite a file with uncommitted
 edits. A rerun with the same arguments moves no byte, and `--check` writes nothing and exits 1
 naming each file that differs from its target.
 
@@ -185,9 +187,11 @@ package from the default registry. The setup, the CLI's remedies, the update not
 `sync --help` and the plugin roots all print this form. The flag outranks an `.npmrc` mapping, so a
 machine that reaches your scope through a mirror is sent to the registry you published to for the
 fallback call, while a project that installs the pinned version runs that copy with no registry
-request. A registry URL that is not plain https (credentials, a query, a fragment, a `%` or a shell
-character, which `--registry` already refuses and only a hand edit can leave) is never written into
-a command: such a fork's calls render `npx --no`, as without `--registry` below. Hold your scope on
+request. A registry URL outside the plain-https rule above (no credentials, query, fragment, `%`
+escape, space or shell character) is never written into a command. The
+identity script's `--registry` refuses one before writing anything, so only a hand edit of
+`publishConfig.registry` can leave it, and such a fork's calls render `npx --no`, as without
+`--registry` below. Hold your scope on
 the public registry too, and publish nothing there, so a call someone types without the flag ends
 with a 404 instead of fetching a package someone else published under your name. The
 startup update notice asks your registry, never the public one, whether a newer version exists. It

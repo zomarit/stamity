@@ -12,8 +12,16 @@ import {
   repositorySlug,
   resolveOwnPackageFacts,
 } from "../../../src/cli/kit/packageName.ts";
+import { REGISTRY_URL } from "../../../src/shared/cliCall.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
-import { canonical, canonicalOnly } from "../../support/identity.ts";
+import {
+  canonical,
+  canonicalOnly,
+  manifestIdentity,
+  npxCommand,
+  npxCommandOf,
+  REGISTRY_URL as SUPPORT_REGISTRY_URL,
+} from "../../support/identity.ts";
 import { makeTempDir, useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -71,7 +79,10 @@ describe("packageCommand — the canonical checkout", () => {
     // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the remedy is the
     // pinned call — `-y` for a shell that cannot answer npx's prompt, and the
     // version that printed it, so the remedy runs the CLI whose flags it names.
-    expect(packageCommand("init")).toBe(`npx -y ${own.name}@${own.version} init`);
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — a `--registry` fork's checkout renders its
+    // registry here, so the expected call is the checkout's own (`npxCommand`, held to this
+    // renderer by the parity case below) rather than a bare `-y` literal.
+    expect(packageCommand("init")).toBe(npxCommand("init"));
     expect(resolveOwnPackageFacts()).toMatchObject({ name: own.name, version: own.version });
   });
 
@@ -79,12 +90,10 @@ describe("packageCommand — the canonical checkout", () => {
     const own = await ownPackageManifest();
 
     // TEST CHANGE (sw26-engine-cli-call-form): the pinned form, as above.
-    expect(packageCommand("config mcp add <id>")).toBe(
-      `npx -y ${own.name}@${own.version} config mcp add <id>`,
-    );
-    expect(packageCommand("clean --pack <id>")).toBe(
-      `npx -y ${own.name}@${own.version} clean --pack <id>`,
-    );
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — derived as in the case above.
+    expect(packageCommand("config mcp add <id>")).toBe(npxCommand("config mcp add <id>"));
+    expect(packageCommand("clean --pack <id>")).toBe(npxCommand("clean --pack <id>"));
+    expect(packageCommand("clean --pack <id>")).toContain(`${own.name}@${own.version} clean --pack <id>`);
   });
 
   it.skipIf(!canonical().canonical)(
@@ -205,6 +214,44 @@ describe("packageCommand — a renamed private downstream", () => {
     expect(kit.hasNpmChannel()).toBe(false);
     expect(kit.packageCommand("sync")).toBe(`npx --no ${manifest.name}@1.8.0 sync`);
     expect(kit.packageCommand("sync")).not.toContain("registry");
+  });
+
+  // build/1 (REQ-PLUGIN-048): `test/support/identity.ts` restates the call so a suite's expected
+  // remedy is not the renderer agreeing with itself. A `--registry` fork's own gate derives every
+  // remedy through it, so it must render what the CLI renders for the same manifest — the registry
+  // word, its fail-closed `npx --no`, and the unpinned fallback alike.
+  it.each([
+    { name: "@acme/stamity", version: "1.8.0" },
+    { name: "@acme/stamity", version: "1.8.0", private: true },
+    { name: "@acme/stamity", version: "next", private: true },
+    { name: "@acme/stamity", version: "1.8.0", private: "true" },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example:8443/npm/" } },
+    { name: "@acme/stamity", version: "1.8.0", private: true, publishConfig: { registry: "https://npm.acme.example" } },
+    { name: "@acme/stamity", version: "next", publishConfig: { registry: "https://npm.acme.example/" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://u:p@npm.acme.example" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "http://npm.acme.example" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example/a%20b" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "HTTPS://npm.acme.example" } },
+    { name: "stamity-internal", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example" } },
+  ])("the test support's npxCommand renders what packageCommand renders for the same manifest (%j)", async (manifest) => {
+    const fixture = getFixture();
+    await fixture.seedFiles({ "package.json": `${JSON.stringify(manifest)}\n` });
+    const kit = await loadKitRootedAt(fixture.dir);
+
+    const identity = manifestIdentity(manifest);
+    expect(npxCommandOf(identity, "sync")).toBe(kit.packageCommand("sync"));
+    expect(identity.npmChannel).toBe(kit.hasNpmChannel());
+    expect(identity.registry ?? null).toBe(kit.npmRegistry());
+  });
+
+  it("the test support's registry grammar is the call's own", () => {
+    expect(SUPPORT_REGISTRY_URL.source).toBe(REGISTRY_URL.source);
+    expect(SUPPORT_REGISTRY_URL.flags).toBe(REGISTRY_URL.flags);
+    // Non-degenerate: the parity cases above include a registry the call names.
+    expect(npxCommandOf(manifestIdentity({ name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } }), "sync")).toBe(
+      "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.8.0 sync",
+    );
   });
 
   it.each([{ registry: "" }, { registry: 42 }, "https://npm.acme.example"])(

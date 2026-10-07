@@ -49,9 +49,16 @@ export interface RepositoryIdentity {
   /**
    * Whether a registry serves the package: not `private`, or `publishConfig.registry`
    * set (a fork made with `--registry`). `false` on the registry-less fork, whose
-   * pinned calls render `npx --no`.
+   * pinned calls render `npx --no`, and on a fork whose registry the pinned call
+   * cannot name ({@link RepositoryIdentity.registry}), which fails closed the same way.
    */
   readonly npmChannel: boolean;
+  /**
+   * The registry every pinned call names for the package's scope: `publishConfig.registry`
+   * when the call can write it (a scoped name and a URL of {@link REGISTRY_URL}), else
+   * absent (REQ-PLUGIN-048). Absent, not `null`, so the canonical record keeps its keys.
+   */
+  readonly registry?: string;
 }
 
 interface Manifest {
@@ -70,25 +77,43 @@ function readManifest(): Manifest {
 
 let cached: RepositoryIdentity | null = null;
 
+/**
+ * The registry URLs a pinned call may name — `REGISTRY_URL` in `src/shared/cliCall.ts`,
+ * restated for the reason {@link npxCommand} gives and held equal by
+ * `test/cli/kit/packageName.test.ts`.
+ */
+export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._~/-]*)?$/;
+
+/**
+ * The identity a `package.json` declares, read the way the CLI reads its own
+ * (`ownCallIdentity` in `src/cli/kit/packageName.ts`): a declared registry the
+ * call cannot name — outside {@link REGISTRY_URL}, or on an unscoped name — is
+ * never rendered and costs the package its channel. Exported so a suite can
+ * hold {@link npxCommandOf} to the CLI over a manifest of its own.
+ */
+export function manifestIdentity(manifest: Manifest): RepositoryIdentity {
+  const name = typeof manifest.name === "string" ? manifest.name : "";
+  const version = typeof manifest.version === "string" ? manifest.version : "";
+  const publisher =
+    typeof manifest.stamity?.publisher === "string" ? manifest.stamity.publisher : DEFAULT_PUBLISHER;
+  const isPrivate = manifest.private === true || manifest.private === "true";
+  const declared = manifest.publishConfig?.registry;
+  const registry = typeof declared === "string" && declared !== "" ? declared : undefined;
+  const writable = registry !== undefined && name.startsWith("@") && REGISTRY_URL.test(registry);
+  return {
+    canonical: name === CANONICAL_NAME && publisher === CANONICAL_PUBLISHER && !isPrivate,
+    name,
+    version,
+    publisher,
+    private: isPrivate,
+    npmChannel: registry === undefined ? !isPrivate : writable,
+    ...(writable ? { registry } : {}),
+  };
+}
+
 /** The identity of the checkout the suite is running in. Memoized: the manifest cannot move mid-run. */
 export function canonical(): RepositoryIdentity {
-  if (cached === null) {
-    const manifest = readManifest();
-    const name = typeof manifest.name === "string" ? manifest.name : "";
-    const version = typeof manifest.version === "string" ? manifest.version : "";
-    const publisher =
-      typeof manifest.stamity?.publisher === "string" ? manifest.stamity.publisher : DEFAULT_PUBLISHER;
-    const isPrivate = manifest.private === true;
-    const registry = manifest.publishConfig?.registry;
-    cached = {
-      canonical: name === CANONICAL_NAME && publisher === CANONICAL_PUBLISHER && !isPrivate,
-      name,
-      version,
-      publisher,
-      private: isPrivate,
-      npmChannel: !isPrivate || (typeof registry === "string" && registry !== ""),
-    };
-  }
+  cached ??= manifestIdentity(readManifest());
   return cached;
 }
 
@@ -147,10 +172,30 @@ const SEMVER_SHAPE =
  * would agree with it by construction.
  */
 export function npxCommand(verb: string): string {
-  const { name, version, npmChannel } = canonical();
-  const flag = npmChannel ? "-y" : "--no";
-  if (SEMVER_SHAPE.test(version)) return `npx ${flag} ${name}@${version} ${verb}`;
-  return npmChannel ? `npx ${name} ${verb}` : `npx --no ${name} ${verb}`;
+  return npxCommandOf(canonical(), verb);
+}
+
+/**
+ * {@link npxCommand} for any identity: `npx -y <name>@<version> <verb>`, `--no`
+ * in place of `-y` without a channel, and `--@<scope>:registry=<url>` between
+ * the flag and the spec when the identity names a registry (REQ-PLUGIN-048).
+ * The unpinned fallback keeps the registry word too, as `packageCommand` does.
+ */
+export function npxCommandOf(identity: RepositoryIdentity, verb: string): string {
+  const { name, version, npmChannel } = identity;
+  const pinned = SEMVER_SHAPE.test(version);
+  const flag = npmChannel ? (pinned ? "-y" : "") : "--no";
+  const words = ["npx", flag, registryArgument(identity), pinned ? `${name}@${version}` : name, verb];
+  return words.filter((word) => word !== "").join(" ");
+}
+
+/**
+ * `--@<scope>:registry=<url>`, the word a pinned call carries between its npx flag and
+ * the spec when the identity names a registry, else `""` (REQ-PLUGIN-048).
+ */
+export function registryArgument(identity: RepositoryIdentity): string {
+  const { name, registry } = identity;
+  return registry === undefined ? "" : `--${name.slice(0, name.indexOf("/"))}:registry=${registry}`;
 }
 
 

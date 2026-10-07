@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { CANONICAL_PACKAGE_NAME } from "../../src/cli/kit/packageName.ts";
 import {
@@ -218,5 +219,22 @@ describe("the scope-registry option", () => {
       expect(REGISTRY_URL.test(registry), JSON.stringify(registry)).toBe(false);
     }
     expect(REGISTRY_URL.test(REGISTRY)).toBe(true);
+  });
+
+  // review/3 (the plan's "Windows parsing" risk): npx is `npx.cmd` on Windows, which only a shell
+  // runs, so the rendered words reach npm through cmd.exe there. `shell: true` is cmd.exe on
+  // win32 and /bin/sh elsewhere; the POSIX run proves the harness, the Windows leg proves cmd.
+  it("passes the rendered call's words through the platform shell intact", () => {
+    const words = pinnedCliCall("@acme/stamity", "1.12.0", "sync", { registry: `${REGISTRY}/npm/v1_x-y~z/` })
+      .split(" ")
+      .slice(1);
+    expect(words).toContain("--@acme:registry=https://npm.pkg.github.com/npm/v1_x-y~z/");
+    const script = "console.log(JSON.stringify(process.argv.slice(1)))";
+    const result = spawnSync(`"${process.execPath}" -e "${script}" -- ${words.join(" ")}`, {
+      shell: true,
+      encoding: "utf8",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout) as unknown).toEqual(words);
   });
 });
