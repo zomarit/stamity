@@ -1378,6 +1378,13 @@ describe("planCoOwnedJson / reduceCoOwnedJson — edges", () => {
       expect(edited.record?.members).toBeUndefined();
     });
 
+    it("collide: removes a recorded, unedited member the rendering no longer carries silently", () => {
+      const out = plan(doc({ meta: { a: 1 }, keep: 1 }), recorded({ members: { "/meta": memberHash({ a: 1 }) } }), doc({}), MSPEC);
+      expect(out.content).toBe(doc({ keep: 1 }));
+      expect(out.backup).toBeNull();
+      expect(out.result.warning).toBeUndefined();
+    });
+
     it("does nothing for a member neither the file nor the rendering carries", () => {
       expect(plan(doc({ version: 1 }), noRow(), doc({ version: 1 }), MSPEC).result.action).toBe("unchanged");
     });
