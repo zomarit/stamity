@@ -523,11 +523,7 @@ export async function coOwnedReclaimRenderings(
   } catch {
     return new Map();
   }
-  const rows = read.hooks.map((hook) => ({
-    event: hook.event,
-    command: hook.command,
-    ...(hook.matcher === undefined ? {} : { matcher: hook.matcher }),
-    ...(hook.timeoutMs === undefined ? {} : { timeoutMs: hook.timeoutMs }),
-  }));
-  return rows.length === 0 ? new Map() : new Map([[CLAUDE_SETTINGS_PATH, { hooks: claudeUserHookEntries(rows) }]]);
+  // The reader's rows carry provenance beside the interchange fields; the
+  // renderer reads the interchange fields alone, as the emission does.
+  return read.hooks.length === 0 ? new Map() : new Map([[CLAUDE_SETTINGS_PATH, { hooks: claudeUserHookEntries(read.hooks) }]]);
 }
