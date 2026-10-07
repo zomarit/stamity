@@ -751,6 +751,68 @@ describe("owner keys that define an engine table without a header are a co-owned
   });
 });
 
+describe("an owner [[mcp_servers]] array of tables beside a server the engine writes is a co-owned-shape collision (S12, build/48)", () => {
+  const arrayRefusal = (line: number): string =>
+    `Skipped .codex/config.toml: line ${line} declares [[mcp_servers]], an array of tables, where the engine writes a ` +
+    `[mcp_servers.github] table under that name, and TOML gives \`mcp_servers\` one definition: Codex would read the ` +
+    `engine's table inside your array, or refuse the file. It was left untouched. Rename your array, or define each of ` +
+    `your servers as an [mcp_servers.<id>] table, and re-run sync.`;
+  const shapes: [string, string, number][] = [
+    ["alone", "[[mcp_servers]]\n", 1],
+    ["with an unrelated key", 'model = "o3"\n\n[[mcp_servers]]\nname = "team"\n', 3],
+    ["with an unrelated key, after a comment above its header", '# the team servers\n[[mcp_servers]]\nname = "team"\n', 2],
+  ];
+  for (const [name, raw, line] of shapes) {
+    it(`${name}: skipped, naming [[mcp_servers]] and line ${line}, never offering --force`, () => {
+      for (const ownership of [ADOPTION, recorded(recordFor("features"))]) {
+        const planned = plan(raw, ownership, GITHUB, ["github"]);
+        expect(planned.result).toEqual({ path: FILE, action: "skipped", warning: arrayRefusal(line) });
+        expect(planned.collision).toBe(arrayRefusal(line));
+        expect(planned.content).toBeNull();
+        expect(planned.backup).toBeNull();
+        expect(planned.record).toBeNull();
+        expect(planned.collision).not.toMatch(/force/iu);
+      }
+    });
+  }
+
+  it("after the engine's recorded block, under CRLF: skipped, naming its line", () => {
+    const raw = `${GITHUB}\n[[mcp_servers]]\nname = "team"\n`.replaceAll("\n", "\r\n");
+    const line = GITHUB.split("\n").length + 1;
+    const planned = plan(raw, recorded(recordFor("features", "mcp_servers.github")), GITHUB, ["github"]);
+    expect(planned.collision).toBe(arrayRefusal(line));
+    expect(planned.content).toBeNull();
+  });
+
+  it("with a key for a selected server: skipped, naming that key and its line (review/51's rule, which reads first)", () => {
+    const planned = plan('[[mcp_servers]]\ngithub = { command = "x" }\n', ADOPTION, GITHUB, ["github"]);
+    expect(planned.result.action).toBe("skipped");
+    expect(planned.collision).toContain("`mcp_servers.github`");
+    expect(planned.collision).toContain("line 2");
+    expect(planned.collision).not.toMatch(/force/iu);
+  });
+
+  it("with no server selected it is no collision: the engine writes no table under that name and keeps yours", () => {
+    const planned = plan('[[mcp_servers]]\nname = "team"\n', ADOPTION);
+    expect(planned.collision).toBeNull();
+    expect(planned.content).toBe(`[[mcp_servers]]\nname = "team"\n\n${table("features")}`);
+  });
+
+  it("init over [[mcp_servers]] with github selected skips the file and leaves it byte for byte", async () => {
+    const root = await freshRepo();
+    const owner = 'model = "o3"\n\n[[mcp_servers]]\nname = "team"\n';
+    await seedConfig(root, owner);
+
+    const report = await init(root, ["github"]);
+
+    expect(await readConfig(root)).toBe(owner);
+    const row = configRow(report.wrote);
+    expect(row.action).toBe("skipped");
+    expect(row.warning).toContain("line 3 declares [[mcp_servers]]");
+    expect(row.warning).not.toMatch(/force/iu);
+  });
+});
+
 describe("an owner comment between two engine tables keeps its place (review/52)", () => {
   const NOTE = "# owner note\n\n";
   const between = `${table("features")}${NOTE}${table("mcp_servers.github")}`;

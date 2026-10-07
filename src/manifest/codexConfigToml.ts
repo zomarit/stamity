@@ -51,7 +51,9 @@
  * owner key that defines, without a header, a table the engine writes a header
  * for (`features.x = 1`, `features = { … }`, `github = { … }` in an owner's
  * `[mcp_servers]`), naming the key: the header would be a second definition.
- * So is a selection whose record would name more tables than the manifest
+ * So is an owner's `[[mcp_servers]]` array of tables while the engine writes a
+ * server table under it, naming the header's line: the engine's table would
+ * land inside the array's last element. So is a selection whose record would name more tables than the manifest
  * reader takes for one file ({@link planCodexConfigToml}).
  */
 
@@ -314,6 +316,38 @@ function redefinitionFailure(shown: string, found: { at: TomlKeyLine; path: read
   );
 }
 
+/**
+ * The first owner `[[array]]` header that a table the engine is about to write
+ * sits under (`[[mcp_servers]]` beside `[mcp_servers.github]`), with its line:
+ * TOML gives the name one definition, so the engine's header would either land
+ * inside the array's last element or be refused. An array of an engine table's
+ * own name is the owner's table of that name ({@link itemsOf}), which the
+ * engine then writes none of, so only a strict prefix can collide.
+ */
+function arrayRedefinition(segments: readonly TomlSegment[], writes: readonly Item[]): { line: number; path: readonly string[]; header: readonly string[] } | null {
+  let line = 1;
+  for (const segment of segments) {
+    const array = segment.arrayTable ? (segment.key as readonly string[]) : null;
+    const under = array === null ? undefined : writes.find((table) => (table.key as readonly string[]).length > array.length && startsWith(table.key as readonly string[], array));
+    if (array !== null && under !== undefined) {
+      const lines = linesOf(segment.text).map((text) => text.replace(BOM, "").replace(/\r?\n$/u, ""));
+      return { line: line + lines.findIndex((text) => !BLANK.test(text) && !COMMENT.test(text)), path: array, header: under.key as readonly string[] };
+    }
+    line += segment.text.split("\n").length - 1;
+  }
+  return null;
+}
+
+function arrayRedefinitionFailure(shown: string, found: { line: number; path: readonly string[]; header: readonly string[] }): string {
+  const name = tomlTableName(found.path);
+  return (
+    `Skipped ${shown}: line ${found.line} declares [[${name}]], an array of tables, where the engine writes a ` +
+    `[${tomlTableName(found.header)}] table under that name, and TOML gives \`${name}\` one definition: Codex would read ` +
+    `the engine's table inside your array, or refuse the file. It was left untouched. Rename your array, or define each ` +
+    `of your servers as an [mcp_servers.<id>] table, and re-run sync.`
+  );
+}
+
 function keptWarning(shown: string, name: string): string {
   return `Kept your ${shownTable(name)} in ${shown}; the engine's rendering of it is not written there — remove yours to get it back.`;
 }
@@ -408,6 +442,11 @@ function planUnbounded(
   const redefined = redefinition(cut.keys, writes);
   if (redefined !== null) {
     const reason = redefinitionFailure(shown, redefined);
+    return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
+  }
+  const arrayRedefined = arrayRedefinition(cut.segments, writes);
+  if (arrayRedefined !== null) {
+    const reason = arrayRedefinitionFailure(shown, arrayRedefined);
     return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
   }
   const held = items.filter((item) => item.engine);
