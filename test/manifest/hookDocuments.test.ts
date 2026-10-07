@@ -626,16 +626,16 @@ describe("hookScriptReader", () => {
   it("parses each of two kept documents once while the sweep alternates between them (review/80)", () => {
     const fresh = hookScriptReader(GUARDS);
     const script = `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`;
-    const cursor = buildHooksJson([row("session_start", script)]);
+    const cursorDoc = buildHooksJson([row("session_start", script)]);
     const other = '{"hooks":{"x":[{"command":"node .stamity/hooks/mine.mjs"}]}}';
     const parse = vi.spyOn(JSON, "parse");
     try {
       for (const path of [script, MCP_GUARD_PATH, ".stamity/hooks/mine.mjs"]) {
-        fresh.runs(cursor, path);
+        fresh.runs(cursorDoc, path);
         fresh.runs(other, path);
       }
-      const documents = parse.mock.calls.filter(([text]) => text === cursor || text === other).map(([text]) => text);
-      expect(documents).toEqual([cursor, other]);
+      const documents = parse.mock.calls.filter(([text]) => text === cursorDoc || text === other).map(([text]) => text);
+      expect(documents).toEqual([cursorDoc, other]);
     } finally {
       parse.mockRestore();
     }

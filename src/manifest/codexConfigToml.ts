@@ -372,7 +372,7 @@ function hooksOffKey(raw: string, keys: readonly TomlKeyLine[]): { line: number;
     const path = [...at.table, ...at.key];
     if (path.length !== 2 || path[0] !== "features" || !HOOKS_KEYS.has(path[1] as string)) continue;
     // A key that resolves to these names holds no `=`, so the first one on the line is the assignment's.
-    const text = (lines[at.line - 1] ?? "").replace(/\r$/u, "");
+    const text = (lines[at.line - 1] as string).replace(/\r$/u, "");
     if (FALSE_VALUE.test(text.slice(text.indexOf("=") + 1))) return { line: at.line, table: at.table, key: at.key };
   }
   return null;

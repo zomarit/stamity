@@ -325,15 +325,15 @@ describe("a kept key that turns Codex's hooks off fails check, as a Cursor entry
     });
   }
 
-  it("hooks = true, a string \"false\" and hooks = false under another table leave check green", async () => {
-    for (const owner of ["[features]\nhooks = true\n", '[features]\nhooks = "false"\n', "[profiles.x]\nhooks = false\n"]) {
+  for (const owner of ["[features]\nhooks = true\n", '[features]\nhooks = "false"\n', "[profiles.x]\nhooks = false\n"]) {
+    it(`${JSON.stringify(owner)}: hooks = true, a string "false" or hooks = false under another table leaves check green`, async () => {
       const root = await freshRepo();
       await seedConfig(root, owner);
       await init(root);
       const drift = await runDriftGate(root, ENGINE_VERSION);
       expect(drift.changes.filter((entry) => entry.path === CODEX_CONFIG_FILE)).toEqual([]);
-    }
-  });
+    });
+  }
 
   it("dotted at the root: init refuses the file and the refusal names the hooks key and its remedy; check exits 1", async () => {
     const root = await freshRepo();
