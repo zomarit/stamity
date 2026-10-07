@@ -260,22 +260,31 @@ async function syncedAt1110(name: string): Promise<string> {
 }
 
 /**
+ * The pinned prefix this checkout's remedies carry — `npx -y <package>@<version> `, with a
+ * `--registry` fork's `--@<scope>:registry=<url>` word in it (REQ-PLUGIN-048) — derived rather
+ * than matched as one word after `-y`, which a registry fork's two words would defeat.
+ */
+const PINNED_PREFIX = `${npxCommand("").trimEnd()} `;
+
+/** One quoted command with the pinned prefix, or the bare `stamity `, taken off. */
+function verbOf(command: string): string {
+  const unpinned = command.startsWith(PINNED_PREFIX) ? command.slice(PINNED_PREFIX.length) : command;
+  return unpinned.replace(/^stamity /, "");
+}
+
+/**
  * The commands the sync refusal's remedy line for pack `id` names, in order,
- * with the pinned `npx -y <package>@<version>` prefix taken off.
+ * with the pinned prefix taken off.
  */
 function remedyVerbs(output: string, id: string): string[] {
   const line = output.split("\n").find((text) => text.includes(`pack "${id}": run `));
   if (line === undefined) return [];
-  return [...line.matchAll(/`([^`]+)`/g)].map((match) =>
-    (match[1] ?? "").replace(/^npx -y \S+ /, "").replace(/^stamity /, ""),
-  );
+  return [...line.matchAll(/`([^`]+)`/g)].map((match) => verbOf(match[1] ?? ""));
 }
 
 /** The backtick-quoted commands in `span`, with the pinned prefix taken off. */
 function quotedVerbs(span: string): string[] {
-  return [...span.matchAll(/`([^`]+)`/g)].map((match) =>
-    (match[1] ?? "").replace(/^npx -y \S+ /, "").replace(/^stamity /, ""),
-  );
+  return [...span.matchAll(/`([^`]+)`/g)].map((match) => verbOf(match[1] ?? ""));
 }
 
 /**

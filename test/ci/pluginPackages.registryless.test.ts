@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { canonical } from "../support/identity.ts";
+import { canonical, npxCommandOf } from "../support/identity.ts";
 import { FORK_PUBLISHER, FORK_REPOSITORY } from "./downstreamFixture.ts";
 
 /**
@@ -47,9 +47,12 @@ const BUDGET_MS = 180_000;
 /**
  * A pinned call as the plugin token renders it: `npx`, one flag, then `<package>@<version>`.
  * The corpus's Running-the-CLI sentence (`npx --no stamity <verb>`, no `@`) is literal prose that
- * does not depend on the channel, so the `@` keeps it out of the count.
+ * does not depend on the channel, so the `@` keeps it out of the count. A `--registry` fork's
+ * own build carries `--@<scope>:registry=<url>` between the flag and the spec (REQ-PLUGIN-048),
+ * so the pattern admits that word too.
  */
-const PINNED_CALL = /npx (-y|--no) (@?[a-z0-9][\w.-]*(?:\/[\w.-]+)?)@([0-9][\w.-]*)/g;
+const PINNED_CALL =
+  /npx (-y|--no)(?: --@[a-z0-9][\w.~-]*:registry=[A-Za-z0-9.:/_~-]+)? (@?[a-z0-9][\w.-]*(?:\/[\w.-]+)?)@([0-9][\w.-]*)/g;
 
 const work = mkdtempSync(join(tmpdir(), "stamity-plugin-registryless-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -191,8 +194,9 @@ describe("a registry-less fork's plugin build (private, no publishConfig.registr
     // `test/ci/forkIdentity.test.ts`'s canonical-identity case), while a registry-less fork
     // running its inherited gate builds its own manifest without one and renders `--no`, as
     // `docs/enterprise-forks.md` promises it may with no test edit.
-    const ownFlag = canonical().npmChannel ? "-y" : "--no";
-    const ownCall = `npx ${ownFlag} ${CANONICAL_PACKAGE}@${VERSION}`;
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — derived through the support's renderer, so a
+    // `--registry` fork's own build expects its registry word; the canonical call is unchanged.
+    const ownCall = npxCommandOf({ ...canonical(), version: VERSION }, "");
 
     // The checkout's own build keeps its channel's flag: the channel, not the corpus, decides.
     expect(new Set([...own.values()].flat())).toEqual(new Set([ownCall]));
