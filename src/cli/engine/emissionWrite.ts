@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { CLAUDE_SETTINGS_PATH, claudeUserHookEntries } from "../../adapters/claude.ts";
+import { CODEX_CONFIG_FILE, codexConfigTableRendering } from "../../adapters/codex.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import {
@@ -9,10 +10,13 @@ import {
   materializeClaudeSettings,
   predictClaudeSettingsMerge,
 } from "../../manifest/claudeSettings.ts";
-import type {
-  CoOwnedMergeResult,
-  CoOwnedOwnership,
-  CoOwnedPrediction,
+import { planCodexConfigToml, reduceCodexConfigToml } from "../../manifest/codexConfigToml.ts";
+import {
+  materializeCoOwned,
+  predictCoOwnedMerge,
+  type CoOwnedMergeResult,
+  type CoOwnedOwnership,
+  type CoOwnedPrediction,
 } from "../../manifest/coOwnedJson.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
@@ -376,13 +380,15 @@ export interface CoOwnedDocumentLane {
 }
 
 /**
- * Every co-owned document lane, keyed by repo-relative path. This unit
- * registers `.claude/settings.json`; `manifest` and `packServers` are the
- * inputs a later lane's rendering facts are read from.
+ * Every co-owned document lane, keyed by repo-relative path:
+ * `.claude/settings.json` entry by entry, and `.codex/config.toml` table by
+ * table (REQ-FLOW-037, `../../manifest/codexConfigToml.ts`), whose renderings
+ * resolve against `packServers` and whose legacy proof reads `manifest`'s
+ * server selection.
  */
 export function coOwnedDocumentLanes(
-  _manifest: SetupManifest | null,
-  _packServers: readonly PackSuppliedServer[] = [],
+  manifest: SetupManifest | null,
+  packServers: readonly PackSuppliedServer[] = [],
 ): ReadonlyMap<string, CoOwnedDocumentLane> {
   const claude: CoOwnedDocumentLane = {
     path: CLAUDE_SETTINGS_PATH,
@@ -398,7 +404,25 @@ export function coOwnedDocumentLanes(
         ...(rendered === undefined ? {} : { rendered }),
       }),
   };
-  return new Map([[claude.path, claude]]);
+  const render = codexConfigTableRendering(packServers);
+  const selected = manifest?.mcp?.servers ?? [];
+  const codexNoun = "Codex configuration";
+  const codexPlan = (absPath: string, emitted: string, ownership: CoOwnedOwnership) => (existingRaw: string | null) =>
+    planCodexConfigToml(absPath, emitted, existingRaw, ownership, render, selected);
+  const codexConfig: CoOwnedDocumentLane = {
+    path: CODEX_CONFIG_FILE,
+    noun: codexNoun,
+    wiresHooks: false,
+    predict: (absPath, emitted, ownership) => predictCoOwnedMerge(absPath, codexPlan(absPath, emitted, ownership), codexNoun),
+    materialize: (absPath, emitted, ownership) =>
+      materializeCoOwned(absPath, codexPlan(absPath, emitted, ownership), ownership, codexNoun),
+    reducer: (ownership, deleteWhenEngineOnly) => (content) =>
+      reduceCodexConfigToml(content, { record: ownership.record, legacy: ownership.legacy, selected, render, deleteWhenEngineOnly }),
+  };
+  return new Map([
+    [claude.path, claude],
+    [codexConfig.path, codexConfig],
+  ]);
 }
 
 /** `a` and `b`'s record, unioned: every pointer either names, each hash list without repeats. */

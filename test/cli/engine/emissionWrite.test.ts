@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { chmod, link, lstat, readFile, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { CODEX_CONFIG_FILE, codexConfigTableRendering } from "../../../src/adapters/codex.ts";
 import { createManifest } from "../../../src/manifest/manifest.ts";
 import { materializeUserMcpJson } from "../../../src/manifest/mcpFilter.ts";
 import {
@@ -486,7 +487,9 @@ describe("coOwnedOwnershipOf and the co-owned lanes (REQ-FLOW-036)", () => {
 
   it("registers the settings lane, and hands the sweep a reducer over what the ledger records there", () => {
     const lanes = coOwnedDocumentLanes(null);
-    expect([...lanes.keys()]).toEqual([PATH]);
+    // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per
+    // table, so `.codex/config.toml` is a co-owned lane beside the settings one.
+    expect([...lanes.keys()]).toEqual([PATH, CODEX_CONFIG_FILE]);
     expect(lanes.get(PATH)?.noun).toBe("settings document");
 
     const raw = `${JSON.stringify({ permissions: { allow: ["Read", "Bash"] }, model: "opus" }, null, 2)}\n`;
@@ -500,6 +503,38 @@ describe("coOwnedOwnershipOf and the co-owned lanes (REQ-FLOW-036)", () => {
       proven: true,
       content: `${JSON.stringify({ permissions: { allow: ["Bash"] }, model: "opus" }, null, 2)}\n`,
     });
+  });
+});
+
+describe("the Codex config lane (REQ-FLOW-037)", () => {
+  const render = codexConfigTableRendering([]);
+  const tableHash = (name: string): string => createHash("sha256").update(render(name) ?? "").digest("hex");
+  const configRow = (coOwned?: LedgerEntry["coOwned"]): LedgerEntry => ({
+    path: CODEX_CONFIG_FILE,
+    adapter: "codex",
+    artifactId: "codex-config",
+    artifactType: "infra",
+    contentHash: "0".repeat(64),
+    ...(coOwned === undefined ? {} : { coOwned }),
+  });
+  const manifest = createManifest({ tools: ["codex"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "1.0.0", now: new Date(0) });
+
+  it("hands the sweep a table reducer: the recorded tables leave and the owner's table stays", () => {
+    const team = '[mcp_servers.team]\ncommand = "team-mcp"\n';
+    const raw = `${render("features")}\n${render("mcp_servers")}\n${team}`;
+    const reducer = coOwnedReclaimReducers({
+      ...manifest,
+      ledger: [configRow({ members: { "/features": tableHash("features"), "/mcp_servers": tableHash("mcp_servers") } })],
+    }).get(CODEX_CONFIG_FILE);
+    expect(reducer?.(raw)).toMatchObject({ kind: "reduced", content: team, proven: true });
+  });
+
+  it("reads the manifest's server selection for a legacy row's proof", () => {
+    const github = `${render("features")}\n${render("mcp_servers.github")}`;
+    const reduceWith = (servers: string[]) =>
+      coOwnedReclaimReducers({ ...manifest, mcp: { servers }, ledger: [configRow()] }).get(CODEX_CONFIG_FILE)?.(github);
+    expect(reduceWith(["github"])).toMatchObject({ kind: "engine-only", proven: false });
+    expect(reduceWith([])).toMatchObject({ kind: "reduced", content: render("mcp_servers.github") });
   });
 });
 

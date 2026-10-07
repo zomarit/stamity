@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_MD_PATH } from "../../src/adapters/claude.ts";
@@ -488,26 +488,72 @@ describe("deselection reclaim", () => {
     ]);
   });
 
+  // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per table,
+  // so the edited infra file this case keeps as salvage moves from
+  // `.codex/config.toml` (now reduced table by table, the two cases below) to
+  // `.codex/hooks.json`, still a whole-file output here.
   it("keeps an edited infra file and discloses it as salvage", async () => {
     // The allowlist exempts a path from the ownership-marker gate ONLY. Bytes
     // that no longer hash to what the engine recorded are the user's, so the
     // sweep keeps them — and because their rows are dropped anyway, the report
     // has to say so or the file is silently orphaned.
     await apply(await plan());
-    const edited = join(repo.rootDir, CODEX_CONFIG_FILE);
+    const edited = join(repo.rootDir, CODEX_HOOKS_FILE);
     const original = await readFile(edited, "utf8");
-    await writeFile(edited, `${original}\n# hand-edited by the operator\n`, "utf8");
+    await writeFile(edited, `${original}\n// hand-edited by the operator\n`, "utf8");
+
+    await selectTools(SURVIVING_TOOLS);
+    const report = await apply(await plan());
+
+    const kept = (report.reclaimed?.entries ?? []).filter((entry) => entry.action !== "deleted" && entry.path !== CODEX_CONFIG_FILE);
+    expect(kept.map((entry) => entry.path)).toEqual([CODEX_HOOKS_FILE]);
+    await expect(readFile(edited, "utf8")).resolves.toContain("hand-edited by the operator");
+
+    const rendered = renderSyncReport(await plan(), report, plainPalette);
+    expect(rendered).toContain("their ledger rows are dropped");
+    expect(rendered).toContain(CODEX_HOOKS_FILE);
+    expect(syncJsonPayload(await plan(), report).counts).toMatchObject({ reclaimSalvaged: 1 });
+  });
+
+  // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per table.
+  // This case appended a comment to the then whole-file `.codex/config.toml` and
+  // expected the sweep to keep the whole edited file as salvage. The file is now
+  // co-owned table by table, so the sweep reduces it instead: the engine's
+  // tables leave and the owner's content stays. The case now appends an owner
+  // TABLE and expects `co-owned-reduced` with that table kept; the comment edit
+  // moves to the next case.
+  it("reduces a Codex config holding an owner table to that table when the client is removed", async () => {
+    await apply(await plan());
+    const config = join(repo.rootDir, CODEX_CONFIG_FILE);
+    const team = '[profiles.team]\nmodel = "o3"\n';
+    await writeFile(config, `${await readFile(config, "utf8")}\n${team}`, "utf8");
 
     await selectTools(SURVIVING_TOOLS);
     const report = await apply(await plan());
 
     const kept = (report.reclaimed?.entries ?? []).filter((entry) => entry.action !== "deleted");
-    expect(kept.map((entry) => entry.path)).toEqual([CODEX_CONFIG_FILE]);
-    await expect(readFile(edited, "utf8")).resolves.toContain("hand-edited by the operator");
+    expect(kept.map((entry) => [entry.path, entry.action])).toEqual([[CODEX_CONFIG_FILE, "co-owned-reduced"]]);
+    await expect(readFile(config, "utf8")).resolves.toBe(team);
+    expect((await readdir(join(repo.rootDir, ".codex"))).filter((name) => name.includes(".bak"))).toEqual([]);
+  });
 
-    const rendered = renderSyncReport(await plan(), report, plainPalette);
-    expect(rendered).toContain("their ledger rows are dropped");
-    expect(rendered).toContain(CODEX_CONFIG_FILE);
-    expect(syncJsonPayload(await plan(), report).counts).toMatchObject({ reclaimSalvaged: 1 });
+  it("keeps the engine's last Codex table as the owner's once a comment appended at the end of the file edits it", async () => {
+    // A comment after the engine's last table lies inside that table, so the
+    // table no longer hashes to the record and is the owner's (S16): the sweep
+    // removes the engine's other tables and keeps that one, comment and all.
+    await apply(await plan());
+    const config = join(repo.rootDir, CODEX_CONFIG_FILE);
+    await writeFile(config, `${await readFile(config, "utf8")}# hand-edited by the operator\n`, "utf8");
+
+    await selectTools(SURVIVING_TOOLS);
+    const report = await apply(await plan());
+
+    const kept = (report.reclaimed?.entries ?? []).filter((entry) => entry.action !== "deleted");
+    expect(kept.map((entry) => [entry.path, entry.action])).toEqual([[CODEX_CONFIG_FILE, "co-owned-reduced"]]);
+    const after = await readFile(config, "utf8");
+    expect(after).toContain("hand-edited by the operator");
+    expect(after).not.toContain("[features]");
+    expect(after.startsWith("# github")).toBe(true);
+    expect((await readdir(join(repo.rootDir, ".codex"))).filter((name) => name.includes(".bak"))).toEqual([]);
   });
 });

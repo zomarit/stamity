@@ -43,6 +43,8 @@ import {
 import {
   CLAUDE_EVENT_NAMES,
 } from "../hooks/model.ts";
+import { normaliseSegment, segmentTomlTables, tomlTableName } from "../manifest/tomlTables.ts";
+import { CURATED_MCP_SERVERS, type PackSuppliedServer } from "../mcp/catalog.ts";
 import { emitCodexToml } from "../mcp/emit.ts";
 import { splitAtManagedBlock } from "../merge/managedBlocks.ts";
 import { readRepublishSource, republishDenyRefusal } from "../merge/safeWrite.ts";
@@ -297,9 +299,10 @@ const CONFIG_ARTIFACT_ID = "codex-config";
  * The infra rows that are HOOK wiring, and so a plugin's to carry when the
  * manifest records `hooks` against codex (`../emit/ownership.ts`).
  *
- * {@link CODEX_CONFIG_FILE} is NOT on the list. It is this client's whole
+ * {@link CODEX_CONFIG_FILE} is NOT on the list. It is this client's
  * configuration — MCP tables, the features flag, the subagent pointers — and
- * this adapter owns it whole under either install mode. The capability file
+ * this adapter owns its tables there under either install mode (table by
+ * table beside the owner's, REQ-FLOW-037). The capability file
  * file 1 emits for codex declares hooks `repository-owned` for exactly that
  * reason, so the plugin-backed branch here is defence rather than a live path.
  */
@@ -1067,7 +1070,10 @@ export function buildAgentToml(
 // ── 3. Composed CLI configuration ────────────────────────────────
 
 /**
- * Compose `.codex/config.toml` — one document, one writer.
+ * Compose `.codex/config.toml` — the engine's tables of a document it shares
+ * with its owner, table by table (REQ-FLOW-037: `../manifest/codexConfigToml.ts`
+ * merges these tables beside the owner's and keeps every other table and
+ * top-level key).
  *
  * The MCP tables are rendered by the catalog's own emitter and spliced in
  * verbatim, caveat comments included: Codex does not interpolate this file, and
@@ -1106,46 +1112,81 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
       { code: "VALIDATION_ERROR" },
     );
   }
+  return composeConfigTomlText(ctx.manifest.mcp?.servers ?? [], core.packMcpServers, "emit");
+}
 
-  const header = serializeTomlDocument({
+/**
+ * The document {@link composeConfigToml} writes, from the server ids and the
+ * supply they resolve against alone, so {@link codexConfigTableRendering} can
+ * re-render any one table of it.
+ *
+ * The file's preamble and the three-step notice are ONE comment block directly
+ * above `[features]`, with no blank line inside it or between it and the
+ * header: the table cut (`../manifest/tomlTables.ts`) gives a table the
+ * comments above it, and an owned table's comments are counted only from the
+ * last blank line among them, so a blank line here would hand the preamble to
+ * the owner and leave it behind on `clean`.
+ */
+function composeConfigTomlText(
+  serverIds: readonly string[],
+  packServers: readonly PackSuppliedServer[],
+  mode: "emit" | "probe",
+): string {
+  const comments = serializeTomlDocument({
     comments: [
-      "stamity — Codex CLI configuration. Generated file: regenerate rather than editing",
-      "it; local edits are overwritten.",
+      "stamity — Codex CLI configuration.",
+      "",
+      "stamity owns the [features] table and each [mcp_servers.<id>] table it renders; every",
+      "other table and top-level key here is yours, and sync and clean keep it. A [features]",
+      "table of your own is kept instead of this one; Codex runs hooks unless it sets",
+      "`hooks = false`.",
       "",
       "Composed by one writer: the MCP server tables below are rendered from the curated",
       "catalog, and any adapter-level table joins them here rather than in a second file.",
       "",
       `Hooks: ${CODEX_HOOKS_FILE} · subagents: ${CODEX_AGENTS_DIR}/ · standards: ${AGENTS_MD_FILE}.`,
-    ],
-    tables: [],
-  });
-
-  // `[features]` is its own serialized document, not a table appended to the
-  // header: this writer renders one comment preamble per document, and the
-  // three-step notice has to sit directly above the key it explains rather than
-  // at the top of the file behind the MCP prose.
-  const features = serializeTomlDocument({
-    comments: [
+      "",
       "Lifecycle hooks: an emitted hooks.json is read only while this key is on. It is written",
       "explicitly, so the client's default does not decide it. Enabling it here is step 1 of 3.",
       "",
       ...hookTrustLines(),
       "",
-      "One writer: this whole file is generated, so a `[features]` table of your own does not",
-      "belong in it — TOML reads a second [features] header as a redefinition, not a merge, and",
-      "a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine",
-      "refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),",
-      "so keep your file and add `hooks = true` INTO your existing [features] table.",
-      "Removing this key (or setting it false) makes every emitted hook inert with no other",
-      "signal — the client reads none of them — and `sync` restores `hooks = true` on this file",
-      "the next time it regenerates it.",
+      "Setting this key false makes every emitted hook inert with no other signal — the client",
+      "reads none of them. Edit this table and it becomes yours: sync keeps it as you left it",
+      "and stops refreshing it.",
     ],
-    tables: [{ header: "features", entries: [["hooks", true]] }],
+    tables: [],
   });
+  const features = serializeTomlDocument({ tables: [{ header: "features", entries: [["hooks", true]] }] });
+  return `${comments}${features}\n${emitCodexToml(serverIds, { packServers }, mode)}`;
+}
 
-  return `${header}\n${features}\n${emitCodexToml(ctx.manifest.mcp?.servers ?? [], {
-    packServers: core.packMcpServers,
-  })}`;
+/**
+ * The engine's current rendering of one table of {@link CODEX_CONFIG_FILE},
+ * normalised (`../manifest/tomlTables.ts::normaliseSegment`), comments
+ * included: `features` and the bare `mcp_servers` as an empty selection writes
+ * them, and `mcp_servers.<id>` for an id the curated catalog or `packServers`
+ * resolves, as {@link composeConfigToml} writes it for that id; `null` for any
+ * other name. The re-render proof a table of the engine's leaves by without a
+ * backup (S11), and a legacy row's proof that a table is the engine's.
+ *
+ * A PROBE render: this answers an ownership question before anything may be
+ * touched, so a catalog row that drifted since the file was written must not
+ * throw from inside it (`../mcp/emit.ts::engineOwnedServerIds` renders the
+ * same way for the same reason).
+ */
+export function codexConfigTableRendering(packServers: readonly PackSuppliedServer[]): (name: string) => string | null {
+  const tableOf = (text: string, name: string): string | null => {
+    const cut = segmentTomlTables(text);
+    const found = cut.ok ? cut.segments.find((segment) => segment.key !== null && tomlTableName(segment.key) === name) : undefined;
+    return found === undefined ? null : normaliseSegment(found.text);
+  };
+  const ids = [...new Set([...Object.keys(CURATED_MCP_SERVERS), ...packServers.map((server) => server.id)])];
+  return (name) => {
+    if (name === "features" || name === "mcp_servers") return tableOf(composeConfigTomlText([], packServers, "probe"), name);
+    const id = ids.find((candidate) => tomlTableName(["mcp_servers", candidate]) === name);
+    return id === undefined ? null : tableOf(composeConfigTomlText([id], packServers, "probe"), name);
+  };
 }
 
 // ── 4. Glob-rule down-conversion + budget shaping ────────────────

@@ -9,6 +9,7 @@ import {
   CODEX_HOOKS_FILE,
   buildAgentToml,
   buildHooksJson,
+  codexConfigTableRendering,
   codexResiduePlanner,
   composeConfigToml,
   downConvertRules,
@@ -29,6 +30,8 @@ import type { CoreHooksPlan, PlannedHookScript } from "../../src/emit/hooksInfra
 import { SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import { type HookInterchange } from "../../src/hooks/model.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
+import { segmentTomlTables } from "../../src/manifest/tomlTables.ts";
+import { CURATED_MCP_SERVERS, type PackSuppliedServer } from "../../src/mcp/catalog.ts";
 import { emitCodexToml } from "../../src/mcp/emit.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import { toCodexToolsFrontmatter } from "../../src/tools/translator.ts";
@@ -1081,12 +1084,49 @@ describe("config.toml — one composed document, one writer", () => {
     expect(content).toContain("learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)");
     expect(content).toContain("`features.codex_hooks`");
     expect(content).toContain("`codex exec --enable hooks`");
-    // A user's own [features] table is not clobbered, and the comment says how.
-    expect(content).toContain("add `hooks = true` INTO your existing [features] table");
-    // S-2: the preamble states the cost of removing the key and that sync
-    // restores it, not only how to add it back in by hand.
+    // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per table.
+    // A [features] table of the owner's is now KEPT instead of the engine's
+    // (S16, amended 2026-10-07: Codex runs hooks by default), so the comment
+    // no longer tells the owner to add `hooks = true` into their table, and an
+    // edited table stays the owner's rather than being restored by `sync`.
+    expect(content).toContain("A [features]\n# table of your own is kept instead of this one; Codex runs hooks unless it sets\n# `hooks = false`.");
+    expect(content).not.toContain("INTO your existing [features] table");
+    // S-2: the preamble states the cost of turning the key off.
     expect(content).toContain("makes every emitted hook inert with no other");
-    expect(content).toContain("`sync` restores `hooks = true` on this file");
+    expect(content).toContain("Edit this table and it becomes yours: sync keeps it as you left it");
+    expect(content).not.toContain("`sync` restores `hooks = true`");
+  });
+
+  it("says which tables are the engine's, and drops the whole-file claims", async () => {
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({ contentRoot, mcp: { servers: ["github"] } });
+
+    const content = composeConfigToml(await buildCoreEmissionPlan(ctx), ctx);
+
+    expect(content).toContain(
+      "# stamity owns the [features] table and each [mcp_servers.<id>] table it renders; every\n" +
+        "# other table and top-level key here is yours, and sync and clean keep it.",
+    );
+    expect(content).not.toContain("Generated file: regenerate rather than editing");
+    expect(content).not.toContain("local edits are overwritten");
+    expect(content).not.toContain("refuses to overwrite a file it does not own");
+  });
+
+  it("cuts into the engine's own tables alone, the preamble riding with [features] as one unbroken comment block", async () => {
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({ contentRoot, mcp: { servers: ["github", "context7"] } });
+
+    const content = composeConfigToml(await buildCoreEmissionPlan(ctx), ctx);
+
+    const cut = segmentTomlTables(content);
+    if (!cut.ok) throw new Error(cut.reason);
+    expect(cut.segments.map((segment) => segment.key)).toEqual([null, ["features"], ["mcp_servers", "github"], ["mcp_servers", "context7"]]);
+    expect(cut.segments[0]?.text).toBe("");
+    const features = cut.segments[1]?.text ?? "";
+    expect(features.startsWith("# stamity — Codex CLI configuration.")).toBe(true);
+    // No blank line before the header: an owned table's comments count from the
+    // last blank line among them, so one here would hand the preamble to the owner.
+    expect(features.slice(0, features.indexOf("[features]"))).not.toMatch(/\n\n/u);
   });
 
   it("names all three hook-loading steps above the flag, not the flag alone", async () => {
@@ -1116,6 +1156,37 @@ describe("config.toml — one composed document, one writer", () => {
 
     expect(() => composeConfigToml(doubled, ctx)).toThrow(EngineError);
     expect(() => composeConfigToml(doubled, ctx)).toThrow(/one path takes one writer/);
+  });
+});
+
+describe("codexConfigTableRendering — the engine's rendering of one table", () => {
+  it("renders [features] and the bare [mcp_servers] exactly as the empty selection writes them", async () => {
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({ contentRoot });
+    const content = composeConfigToml(await buildCoreEmissionPlan(ctx), ctx);
+    const render = codexConfigTableRendering([]);
+
+    expect(`${render("features")}\n${render("mcp_servers")}`).toBe(content);
+  });
+
+  it("renders a curated server's table as a selection of it writes it, and nothing for a name it cannot resolve", async () => {
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({ contentRoot, mcp: { servers: ["github"] } });
+    const content = composeConfigToml(await buildCoreEmissionPlan(ctx), ctx);
+    const render = codexConfigTableRendering([]);
+
+    expect(content.endsWith(render("mcp_servers.github") ?? "<none>")).toBe(true);
+    expect(render("mcp_servers.unknown")).toBeNull();
+    expect(render("profiles")).toBeNull();
+  });
+
+  it("renders a pack-supplied server under its quoted name, and only when the supply carries it", () => {
+    const supplied: PackSuppliedServer = { ...(CURATED_MCP_SERVERS["context7"] as PackSuppliedServer), id: "acme.tools", firstParty: false, sourcePackId: "opspack" };
+
+    const rendered = codexConfigTableRendering([supplied])('mcp_servers."acme.tools"');
+
+    expect(rendered).toContain('[mcp_servers."acme.tools"]\n');
+    expect(codexConfigTableRendering([])('mcp_servers."acme.tools"')).toBeNull();
   });
 });
 

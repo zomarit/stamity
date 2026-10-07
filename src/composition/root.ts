@@ -57,6 +57,8 @@ import * as claudeSettings from "../manifest/claudeSettings.ts";
 import * as ownedPaths from "../manifest/ownedPaths.ts";
 import * as jsonMembers from "../manifest/jsonMembers.ts";
 import * as coOwnedJson from "../manifest/coOwnedJson.ts";
+import * as tomlTables from "../manifest/tomlTables.ts";
+import * as codexConfigToml from "../manifest/codexConfigToml.ts";
 import * as mcpCatalog from "../mcp/catalog.ts";
 import * as descriptionScan from "../mcp/descriptionScan.ts";
 import * as mcpEnv from "../mcp/env.ts";
@@ -173,6 +175,8 @@ export interface EngineRegistry {
     readonly ownedPaths: typeof ownedPaths;
     readonly jsonMembers: typeof jsonMembers;
     readonly coOwnedJson: typeof coOwnedJson;
+    readonly tomlTables: typeof tomlTables;
+    readonly codexConfigToml: typeof codexConfigToml;
   };
   readonly mcp: {
     readonly catalog: typeof mcpCatalog;
@@ -360,7 +364,17 @@ export function createEngine(): EngineRegistry {
       validation: handoffValidation,
       store: handoffStore,
     },
-    manifest: { manifest: manifestCore, ledger, mcpFilter, claudeSettings, ownedPaths, jsonMembers, coOwnedJson },
+    manifest: {
+      manifest: manifestCore,
+      ledger,
+      mcpFilter,
+      claudeSettings,
+      ownedPaths,
+      jsonMembers,
+      coOwnedJson,
+      tomlTables,
+      codexConfigToml,
+    },
     mcp: {
       catalog: mcpCatalog,
       descriptionScan,

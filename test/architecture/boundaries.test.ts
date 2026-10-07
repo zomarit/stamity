@@ -299,6 +299,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // plain-object guard, so the wave-4 manifest validator can bound a row's
   // co-owned record with it.
   "src/manifest/jsonMembers.ts": { unit: "p20-u0-settings-ownership", wave: 2 },
+  // The TOML table cut `.codex/config.toml`'s per-table ownership stands on:
+  // over the wave-1 TOML writer's key quoting alone.
+  "src/manifest/tomlTables.ts": { unit: "p20-u0-hook-files-ownership", wave: 2 },
   "src/resilience/failureLog.ts": { unit: "p1-11", wave: 2 },
   "src/resilience/adapterTimeout.ts": { unit: "p1-11", wave: 2 },
   "src/content/tags.ts": { unit: "p1-12", wave: 2 },
@@ -440,6 +443,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // over the wave-2 member helpers, the wave-4 MCP merge lane's read helper
   // and the wave-4 safe-write lane's backup and drift compare.
   "src/manifest/coOwnedJson.ts": { unit: "p20-u0-settings-ownership", wave: 5 },
+  // `.codex/config.toml` per table, on the wave-5 core's plan types over the
+  // wave-2 table cut and member pointers and the wave-4 safe-write drift compare.
+  "src/manifest/codexConfigToml.ts": { unit: "p20-u0-hook-files-ownership", wave: 6 },
   "src/workspace/sync.ts": { unit: "p1-38", wave: 5 },
   // Authored as p1-39; re-cut into s2d-10 with the catalog above — see there.
   "src/content/userContent.ts": { unit: "s2d-10", wave: 5 },

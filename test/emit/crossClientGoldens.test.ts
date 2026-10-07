@@ -186,6 +186,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-07, plan 016 file 0, unit u0-hook-files-ownership, its TOML
+  //     half (run 2026-10-07_security-fixes). `.codex/config.toml` is owned
+  //     table by table (REQ-FLOW-037), and its comments say so. No emitted path
+  //     was added or removed; the sibling golden did not move.
+  //
+  //     CHANGED `.codex/config.toml` in the codex and all-four selections,
+  //       3328 -> 3072 bytes, comment lines only: the "Generated file … local
+  //       edits are overwritten" and "One writer: … add `hooks = true` INTO
+  //       your existing [features] table … `sync` restores" sentences give way
+  //       to which tables the engine owns and that an owner's [features] is
+  //       kept; the blank line inside the comment block above `[features]`
+  //       becomes a `#` line and the one above the header is dropped, so the
+  //       preamble rides with that table when the file is cut into tables.
+  //       Every data line is unmoved.
+  //     CHANGED `.stamity/manifest.json` in the codex (20384 -> 20663) and
+  //       all-four (79338 -> 79617) selections: the config row's `coOwned`
+  //       record (the two table hashes and `createdFile`), plus its new hash.
+  //
+  //     What did NOT move: every other path, `.codex/hooks.json` included.
+  //
   //   - 2026-09-30, plan 013 whole-branch review, fixer round 1 (run
   //     2026-09-30_optimization-sweep, pass `branch`; review/162 signed off,
   //     review/164). The charter and st-work moved, plus the manifest rows that
