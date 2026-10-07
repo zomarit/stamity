@@ -758,12 +758,33 @@ describe("planCoOwnedJson — members (collide, yield, structural)", () => {
     expect(out.result.warning).toContain(`Replaced description of ${SHOWN}: ${BOUND}`);
   });
 
-  it("collide: replaces a recorded, unedited member silently when the rendering moves", () => {
-    const out = mplan(doc({ version: 0, description: "engine", hooks: { stop: [E] } }), recorded({ members: { ...engineMembers, "/version": memberHash(0) } }));
-    expect(parsed(out.content)).toEqual({ version: 1, description: "engine", hooks: { stop: [E] } });
+  it("collide: a forged record equal to the owner's edited value is still a co-owned-shape collision, the file unchanged (review/45)", () => {
+    const existing = doc({ version: 2, description: "engine", hooks: { stop: [E] } });
+    const out = mplan(existing, recorded({ members: { ...engineMembers, "/version": memberHash(2) } }));
+    expect(out.result.action).toBe("skipped");
+    expect(out.content).toBeNull();
     expect(out.backup).toBeNull();
-    expect(out.result.warning).toBeUndefined();
-    expect(out.record?.members).toEqual(engineMembers);
+    expect(out.record).toBeNull();
+    expect(out.collision).toBe(
+      `Skipped ${SHOWN}: version differs from the engine's current rendering, which is the one proof the engine has ` +
+        `for it, where it writes 1, so the engine cannot add its entries beside yours without replacing it. It was ` +
+        `left untouched. Make it 1 (or remove it) and re-run sync.`,
+    );
+  });
+
+  // TEST CHANGE, justified: review/45 (signed off) — a `collide` member that
+  // differs from the engine's current rendering is a collision whatever the
+  // record says; a recorded, unedited value no longer licenses a silent replacement.
+  it("collide: a recorded, unedited member the rendering moved past is a collision too, never a silent replacement", () => {
+    const existing = doc({ version: 0, description: "engine", hooks: { stop: [E] } });
+    const out = mplan(existing, recorded({ members: { ...engineMembers, "/version": memberHash(0) } }));
+    expect(out.result.action).toBe("skipped");
+    expect(out.content).toBeNull();
+    expect(out.collision).toBe(
+      `Skipped ${SHOWN}: version differs from the engine's current rendering, which is the one proof the engine has ` +
+        `for it, where it writes 1, so the engine cannot add its entries beside yours without replacing it. It was ` +
+        `left untouched. Make it 1 (or remove it) and re-run sync.`,
+    );
   });
 
   it("yield: a recorded member the owner edited becomes theirs — kept, dropped from the record, with a notice", () => {
@@ -836,10 +857,12 @@ describe("planCoOwnedJson — members (collide, yield, structural)", () => {
     expect(parsed(regenerated.content)).toEqual(parsed(MEMITTED));
     expect(regenerated.backup).toBe(older);
     expect(regenerated.result.warning).toBe(`Replaced description of ${SHOWN}: ${BOUND}, so the previous file was backed up first.`);
+    // TEST CHANGE, justified: review/45 (signed off) — the whole-file hash is a
+    // recorded claim too, so a legacy file's differing `collide` member collides.
     const olderVersion = doc({ version: 0, description: "engine", hooks: { stop: [E] } });
-    const silent = mplan(olderVersion, legacyRow({ ledgerHashes: unedited(olderVersion) }));
-    expect(parsed(silent.content)).toEqual(parsed(MEMITTED));
-    expect(silent.backup).toBeNull();
+    const collided = mplan(olderVersion, legacyRow({ ledgerHashes: unedited(olderVersion) }));
+    expect(collided.result.action).toBe("skipped");
+    expect(collided.collision).toContain("version differs from the engine's current rendering");
   });
 
   // TEST CHANGE, justified: review/31 (signed off) — a recorded `yield` member
@@ -1004,14 +1027,22 @@ describe("reduceCoOwnedJson", () => {
       });
     });
 
+    // TEST CHANGE, justified: review/45 (signed off) — a `collide` member, the
+    // structural `version` included, leaves without a backup only when it
+    // equals the rendering handed in; with none, its removal is mustBackUp.
     it("removes a structural member with everything else when nothing foreign remains", () => {
-      expect(mreduce({ version: 1, description: "engine", hooks: { stop: [E] } }, record, { rendered: { description: "engine" } })).toEqual({
+      expect(mreduce({ version: 1, description: "engine", hooks: { stop: [E] } }, record, { rendered: { description: "engine", version: 1 } })).toEqual({
         kind: "engine-only",
         proven: true,
         detail: expect.any(String) as unknown,
       });
+      expect(mreduce({ version: 1, description: "engine", hooks: { stop: [E] } }, record, { rendered: { description: "engine" } })).toMatchObject({
+        kind: "engine-only",
+        proven: false,
+        mustBackUp: true,
+      });
       expect(mreduce({ version: 1, description: "engine", hooks: { stop: [E] } }, record)).toMatchObject({ kind: "engine-only", proven: false, mustBackUp: true });
-      expect(mreduce({ version: 1, hooks: { stop: [E] } }, record, { deleteWhenEngineOnly: false })).toEqual({
+      expect(mreduce({ version: 1, hooks: { stop: [E] } }, record, { deleteWhenEngineOnly: false, rendered: { version: 1 } })).toEqual({
         kind: "reduced",
         content: "{}\n",
         proven: true,
@@ -1026,6 +1057,18 @@ describe("reduceCoOwnedJson", () => {
         proven: false,
         mustBackUp: true,
       });
+    });
+
+    it("collide: a forged record over the owner's own value removes it only behind a backup (review/45)", () => {
+      const spec: CoOwnedJsonSpec = { ...MSPEC, members: [{ pointer: "/meta", foreign: "collide" }] };
+      const forged: CoOwnership = { members: { "/meta": memberHash("mine") }, elements: { "/hooks/stop": [memberHash(E)] } };
+      const out = reduceCoOwnedJson(doc({ meta: "mine", hooks: { stop: [E] }, keep: 1 }), spec, {
+        record: forged,
+        legacy: false,
+        deleteWhenEngineOnly: false,
+        rendered: { meta: "engine" },
+      });
+      expect(out).toMatchObject({ kind: "reduced", content: doc({ keep: 1 }), proven: false, mustBackUp: true });
     });
 
     it("yield, structural: a removed one outside the bound is mustBackUp; one kept beside foreign content owes nothing", () => {
@@ -1378,11 +1421,17 @@ describe("planCoOwnedJson / reduceCoOwnedJson — edges", () => {
       expect(edited.record?.members).toBeUndefined();
     });
 
-    it("collide: removes a recorded, unedited member the rendering no longer carries silently", () => {
-      const out = plan(doc({ meta: { a: 1 }, keep: 1 }), recorded({ members: { "/meta": memberHash({ a: 1 }) } }), doc({}), MSPEC);
+    // TEST CHANGE, justified: review/45 (signed off) — a value the rendering no
+    // longer carries cannot equal it, so its removal takes the backup.
+    it("collide: removes a recorded, unedited member the rendering no longer carries behind a backup", () => {
+      const existing = doc({ meta: { a: 1 }, keep: 1 });
+      const out = plan(existing, recorded({ members: { "/meta": memberHash({ a: 1 }) } }), doc({}), MSPEC);
       expect(out.content).toBe(doc({ keep: 1 }));
-      expect(out.backup).toBeNull();
-      expect(out.result.warning).toBeUndefined();
+      expect(out.backup).toBe(existing);
+      expect(out.result.warning).toBe(
+        `Removed meta from ${SHOWN}: the engine can prove it wrote a value there only when it equals its current ` +
+          `rendering, and this one does not, so the previous file was backed up first.`,
+      );
     });
 
     it("does nothing for a member neither the file nor the rendering carries", () => {

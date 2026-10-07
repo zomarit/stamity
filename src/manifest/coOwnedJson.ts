@@ -36,19 +36,20 @@
  *    adoption, each such container already present and holding nothing the
  *    engine recognises joins `preexisting`; later runs carry it forward while
  *    the container exists.
- * 5. *Members.* Absent → written and recorded. Recorded and unedited → a
- *    `collide` member is replaced silently; a `yield` member changes or leaves
- *    without a backup only when it equals the engine's current rendering — a
- *    recorded hash is a claim (S11) — so otherwise behind a verified `.bak`.
- *    Recorded and edited → `yield`: becomes the owner's (dropped from the
- *    record, a notice); `collide`: a collision naming it while the engine
- *    writes a different value (S12), removed behind a `.bak` once the
- *    rendering stops carrying it. The reducer holds the same bound, against
- *    the rendering its caller hands in (none: every `yield` removal is
- *    `mustBackUp`). Unrecorded and equal to the rendering → foreign.
- *    Unrecorded and different → `yield`: kept and the rendering not written;
- *    `collide`: a collision naming the pointer. Under a legacy row a member equal to the rendering,
- *    or any member of a file the ledger proves unedited, is the engine's. A
+ * 5. *Members.* A member's one proof is the engine's CURRENT rendering; a
+ *    recorded hash — the member's, or the whole file's under a legacy row — is
+ *    a claim (S11). Absent → written and recorded. Equal to the rendering →
+ *    nothing to write (recorded when the engine owns it). A `collide` member
+ *    that differs → a collision naming it, whatever the record says (S12,
+ *    review/45). A `yield` member that differs: recorded and edited → the
+ *    owner's (dropped from the record, a notice); recorded and unedited, or
+ *    the engine's under a legacy row → replaced behind a verified `.bak`;
+ *    unrecorded → kept and the rendering not written. A member the rendering
+ *    no longer carries leaves only behind a `.bak`. The reducer holds the
+ *    same bound for both kinds, against the rendering its caller hands in
+ *    (none: every member removal is `mustBackUp`). Under a legacy row a
+ *    member equal to the rendering, or any member of a file the ledger proves
+ *    unedited, is the engine's. A
  *    `structural` member is removed only when nothing foreign remains: the
  *    planner keeps one the rendering stops carrying, and the reducer removes
  *    it with the rest.
@@ -1120,12 +1121,6 @@ function planMember(
         `the engine no longer writes it.`;
       return outcome;
     }
-    // S12: a `collide` member the owner edited, where the engine still writes a
-    // different value, is a collision naming it — never replaced.
-    if (!proven && rendered !== undefined && !equalsRendering) {
-      outcome.collision = collide("differs from what the engine last wrote there", shownValue(rendered));
-      return outcome;
-    }
   } else if (state === "legacy" && (equalsRendering || unedited)) {
     engine = true;
     proven = true;
@@ -1133,36 +1128,42 @@ function planMember(
     engine = false;
     proven = false;
   }
+  // S11 and S12 (review/45): a member's one proof is the engine's CURRENT
+  // rendering; a recorded hash — the member's, or the whole file's under a
+  // legacy row — is a claim. So a `collide` member that differs from what the
+  // engine writes is a collision naming it, whatever the record says, and a
+  // forged record equal to the owner's value can never replace it silently.
+  if (member.spec.foreign === "collide" && rendered !== undefined && !equalsRendering) {
+    const why = !engine
+      ? "holds a value the engine did not write"
+      : !proven
+        ? "differs from what the engine last wrote there"
+        : "differs from the engine's current rendering, which is the one proof the engine has for it";
+    outcome.collision = collide(why, shownValue(rendered));
+    return outcome;
+  }
   if (!engine) {
     if (rendered === undefined || equalsRendering) return outcome;
-    if (member.spec.foreign === "collide") {
-      outcome.collision = collide("holds a value the engine did not write", shownValue(rendered));
-      return outcome;
-    }
     if (!owned) {
       outcome.notice = `Kept your ${name} in ${shown}; the engine's rendering of it is not written there — remove yours to get it back.`;
     }
     return outcome;
   }
-  // S11: a `yield` member's one proof is the engine's current rendering. A
-  // recorded hash — the member's, or the whole file's under a legacy row — is
-  // a claim, so changing or removing one that differs from it takes a backup.
-  const outsideBound = member.spec.foreign === "yield" && !equalsRendering;
+  // From here a member that differs from the rendering is a `yield` one (a
+  // differing `collide` one collided above): changing or removing it takes a
+  // backup, since only the current rendering proves the engine wrote it.
   const unprovenWarning = (verb: string, preposition: string): string =>
-    outsideBound
+    proven
       ? `${verb} ${name} ${preposition} ${shown}: the engine can prove it wrote a value there only when it equals ` +
         `its current rendering, and this one does not, ${BACKED_UP}`
       : `${verb} ${name} ${preposition} ${shown}: it differs from what the engine last wrote there, ${BACKED_UP}`;
   if (rendered !== undefined) {
     outcome.recorded = memberHash(rendered);
     if (equalsRendering) return outcome;
+    // A proven `yield` member the rendering moved past (an edited one became the owner's above).
     outcome.write = rendered;
-    // Proven here: an edited `collide` member collided above, and an edited
-    // `yield` one became the owner's. Only the bound can still owe a backup.
-    if (outsideBound) {
-      outcome.backup = true;
-      outcome.warning = unprovenWarning("Replaced", "of");
-    }
+    outcome.backup = true;
+    outcome.warning = unprovenWarning("Replaced", "of");
     return outcome;
   }
   // The rendering no longer carries the member. A structural one stays until
@@ -1171,11 +1172,11 @@ function planMember(
     if (proven) outcome.recorded = hash;
     return outcome;
   }
+  // Removed only behind a backup: a value the rendering no longer carries
+  // cannot equal it, so nothing proves the engine wrote it.
   outcome.remove = true;
-  if (!proven || outsideBound) {
-    outcome.backup = true;
-    outcome.warning = unprovenWarning("Removed", "from");
-  }
+  outcome.backup = true;
+  outcome.warning = unprovenWarning("Removed", "from");
   return outcome;
 }
 
@@ -1385,9 +1386,10 @@ function reduceDocument(
       engine = member.spec.structural === true || equalsRendering;
     }
     if (!engine) continue;
-    // S11, as the planner holds it: a `yield` member leaves without a backup
-    // only when it equals the engine's current rendering (`opts.rendered`).
-    const outsideBound = member.spec.foreign === "yield" && !equalsRendering;
+    // S11, as the planner holds it (review/31, review/45): a member of either
+    // kind leaves without a backup only when it equals the engine's current
+    // rendering (`opts.rendered`); a recorded hash alone is a claim.
+    const outsideBound = !equalsRendering;
     if (member.spec.structural === true) {
       structural.push({ member, proven: isProven && !outsideBound, outsideBound });
       continue;
