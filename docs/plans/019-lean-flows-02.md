@@ -45,9 +45,9 @@ not the recommended option); the declared defaults below stand.
 |---|---|
 | S1 | Seven classes, strongest wins: security-sensitive > public contract > product > config > tests > docs > records. No match, no base, a cross-class rename, or zero tests selected for a change that is not records or docs → `product`. |
 | S2 | The CLI decides the class: a hidden verb `stamity gate` with subcommands `classify` (this file) and `scan` (`p5`). A hidden verb moves the fewest surface pins. |
-| S3 | A repository extends the classes and declares its tests' non-code inputs in one optional file, `.stamity/change-classes.json`. The classifier reads that file **from the base commit**, so a change cannot lower its own checks, and a change to the file is `config`. |
-| S4 | Without a declared map, a changed non-code file selects every test whose source names its path, its folder or a glob that matches it. |
-| S5 | Invariant 4 is amended (invariants 1.1.0 → 1.2.0): done means the gates the change's class requires exit 0, the full gates run before the merge, and an unclear class runs the full gates. Invariant 1 is not touched. |
+| S3 | A repository extends the classes and declares its tests' non-code inputs in one optional file, `.stamity/change-classes.json`. Extensions only add: a glob may join a class or move a path to a stronger class, never remove a built-in security rule or move a path to a weaker class (the built-in security rules are a floor). The classifier reads that file **from the base commit**, so a change cannot lower its own checks, and a change to the file is `config`. |
+| S4 | Without a declared map, a change to a non-code file is unclear for test selection and runs the full suite; only a declared map, held by its guard test, proves a narrower set. A test source that names the path only adds tests to a map's selection, never narrows it. |
+| S5 | Invariant 4 is amended (invariants 1.1.0 → 1.2.0): done means the gates the change's class requires exit 0 (every test that can fail on the change, by a declared map held by its guard), an unclear class runs the full gates, and the repository's CI runs the full matrix on every product change and on a schedule. Invariant 1 is not touched. |
 | S6 | The review cap moves from 4 to 3; the light tier stops at 2. Minor handling stays as today, and every applied fix keeps its closure re-review. A finding not fixed twice, or a gate red after a fix, gets a fresh fixer at a higher effort on the same model, then the person. Self-rated confidence no longer triggers a round. |
 | S7 | The security class's defaults add the risk classes the 53 real finds sat in: CI and release workflows and their scripts, hook and settings files of any client, shell-outs and process spawns, file deletion and overwrite, registry and network calls, state read back as authority, plus the existing auth, crypto and dependency rows. A lockfile-only bump with no install-script change goes to the dependency audit first. |
 | S8 | The secret scan of the added lines reuses the shipped patterns in `src/mcp/secretScan.ts`. |
@@ -66,8 +66,8 @@ checks and the lenses the class requires; GIVEN a path no rule places THEN the c
 ### REQ-FLOW-062 — Tests that read files are declared (ADDED)
 
 GIVEN `.stamity/change-classes.json` at the base WHEN a non-code file changes THEN every test its map names is selected;
-GIVEN no map THEN S4 selects; GIVEN zero tests selected for a change that is not records or docs THEN the full suite
-runs; GIVEN this repository THEN a guard test fails when a test reads a non-code path the map does not declare.
+GIVEN no map THEN the full suite runs; GIVEN zero tests selected by a declared map for a change that is not records or
+docs THEN the full suite runs; GIVEN this repository THEN a guard test fails when a test reads a non-code path the map does not declare.
 
 ### REQ-FLOW-063 — The gates follow the class (ADDED)
 
@@ -103,7 +103,8 @@ it.
 
 ### REQ-FLOW-066 — Every change gets a secret scan of its added lines (ADDED)
 
-GIVEN `/st-quick` or `/st-work` THEN `stamity gate scan --base <ref>` runs and a hit stops the batch.
+GIVEN `/st-quick` or `/st-work` THEN `stamity gate scan --base <ref>` runs over the diff and every untracked, unignored
+file, and a hit stops the batch.
 
 ### REQ-FLOW-067 — A plan unit in a risk class carries a threat note (ADDED)
 
@@ -132,7 +133,7 @@ and the check that stops it, in at most five lines.
 | `id` | p1-classify |
 | `requirements` | REQ-FLOW-061 |
 | `files` | `src/change/classify.ts` (new, zero-import data plus pure functions, modelled on `src/roster/triggers.ts`), `src/cli/commands/gate.ts` (new hidden verb), `src/cli.ts` (registration; the "thirteen" comments), `test/change/classify.test.ts`, `test/cli/commands/gate.test.ts`, `test/cli/surface.e2e.test.ts` (`HIDDEN`, the counts, the title), `test/architecture/boundaries.test.ts` (`PLAN_MAP` wave-14 row; the `triggers.ts` `REGISTRY_ONLY_MODULES` row removed), `test/roster/roster.test.ts:451-487` (the classifier becomes the one `src/` reader), `docs/cli-reference.md` (regenerated), `README.md:79-80`, `docs/getting-started.md:234-242` |
-| `interfaces` | `type ChangeClass = "records"\|"docs"\|"tests"\|"config"\|"product"\|"security-sensitive"\|"public-contract"`; `interface ClassRule { class; paths: readonly string[]; addedLinePatterns?: readonly string[]; checks: readonly Check[]; rationale: string }`; `classifyChange({paths, addedLines?}, rules?) → { class, byPath: {path, class, rule}[], checks, lenses, reason }`; path semantics as `triggers.ts:213-230`. CLI: `stamity gate classify --base <ref> [--json]` prints one JSON document `{ok, command: "gate", subcommand: "classify", base, paths, class, checks, lenses, reason}` through the `runCli` funnel (`src/cli/kit/program.ts:353-363`), exit 0 for a report, 2 for a bad argument; subcommands as commander `choices`, like `ledger` (`src/cli/commands/ledger.ts:49-53`) |
+| `interfaces` | `type ChangeClass = "records"\|"docs"\|"tests"\|"config"\|"product"\|"security-sensitive"\|"public-contract"`; `interface ClassRule { class; paths: readonly string[]; linePatterns?: readonly string[]; checks: readonly Check[]; rationale: string }` (line patterns match added lines, removed lines and the hunk's context lines); `classifyChange({paths, hunks?}, rules?) → { class, byPath: {path, class, rule}[], checks, lenses, reason }`; path semantics as `triggers.ts:213-230`. CLI: `stamity gate classify --base <ref> [--json]` prints one JSON document `{ok, command: "gate", subcommand: "classify", base, paths, class, checks, lenses, reason}` through the `runCli` funnel (`src/cli/kit/program.ts:353-363`), exit 0 for a report, 2 for a bad argument; subcommands as commander `choices`, like `ledger` (`src/cli/commands/ledger.ts:49-53`) |
 | `testCriteria` | GIVEN one path per class THEN that class; GIVEN a plan or spec change THEN `docs` with one review pass; GIVEN a mixed change THEN the strongest; GIVEN an unknown path, no base, or a rename from `docs/` to `src/` THEN `product`. GIVEN `.stamity/change-classes.json` changed in the same diff THEN the base copy's rules apply and the change is at least `config`. GIVEN the surface test THEN `gate` is hidden and counted |
 | `edgeCases` | `content/**` is product here, not docs. `.stamity/manifest.json`, config and overrides are security-sensitive, never records. Windows paths are normalised to POSIX before matching |
 | `depends_on` | p0-make-room (shared file order only) |
@@ -184,9 +185,9 @@ and the check that stops it, in at most five lines.
 | `id` | p5-security-trigger |
 | `requirements` | REQ-FLOW-065, REQ-FLOW-066, REQ-FLOW-067 |
 | `files` | `src/roster/triggers.ts` (the security row's paths; added-line patterns move to the classifier rules), `src/change/classify.ts` (security rules), `src/cli/commands/gate.ts` (`scan`), `content/agents/stamity-security.md:24-39`, `:149-163`, `content/commands/st-work.md:285-309`, `content/skills/st-dep-audit/SKILL.md`, `content/commands/st-plan.md:101-125` (the threat note), the pins `test/corpus/agents/specialists.test.ts:321-337`, `test/corpus/commands/work.test.ts:807-811` (no trigger pattern string in the Specialist pass: describe the lockfile rule without naming a lockfile), `test/corpus/agents/verdictReturns.test.ts:232-245`, `test/corpus/commands/plan.test.ts:290-298`, eval sources citing `st-plan.md:101-125` |
-| `interfaces` | `stamity gate scan --base <ref> [--json]` → `{ok, hits: [{path, line, rule}], scanned}`, exit 1 on a hit, patterns from `src/mcp/secretScan.ts:39`; security rules: path globs (`.github/workflows/**`, `**/hooks/**`, `**/*.sh`, client settings and hook files, `Dockerfile`) and added-line patterns (process spawn, recursive delete or overwrite, a registry or network call, a token or secret name); the security agent reads `git log` after it has formed its findings; the plan unit's `threat:` field, at most five lines |
-| `testCriteria` | GIVEN an auth-path change, a deletion-logic change and a workflow change THEN each classifies security-sensitive and names the lens. GIVEN a lockfile-only bump THEN the checks name the dependency audit and not the lens; GIVEN its twin adding an install script THEN the lens. GIVEN a staged fake token in an added line THEN `scan` exits 1 naming the rule, never the token. GIVEN the parity tests THEN the agent body's table matches the roster |
-| `edgeCases` | A repository whose CLI paths fire the new rules on every change → it narrows them in `.stamity/change-classes.json` at the base; the lens is never gated by hit rate |
+| `interfaces` | `stamity gate scan --base <ref> [--json]` → `{ok, hits: [{path, line, rule}], scanned}`, exit 1 on a hit; it scans the added lines of `git diff <base>` (staged and unstaged) and every untracked, unignored file whole, with the same masking and binary limits; patterns from `src/mcp/secretScan.ts:39`; security rules: path globs (`.github/workflows/**`, `**/hooks/**`, `**/*.sh`, client settings and hook files, `Dockerfile`) and line patterns over added lines, removed lines and hunk context (process spawn, recursive delete or overwrite, a registry or network call, a token or secret name), so removing a guard around an existing dangerous call still classifies; the security agent reads `git log` after it has formed its findings; the plan unit's `threat:` field, at most five lines |
+| `testCriteria` | GIVEN an auth-path change, a deletion-logic change and a workflow change THEN each classifies security-sensitive and names the lens. GIVEN a lockfile-only bump THEN the checks name the dependency audit and not the lens; GIVEN its twin adding an install script THEN the lens. GIVEN a staged fake token in an added line, and its twin in a new untracked file, THEN `scan` exits 1 naming the rule, never the token. GIVEN a diff that only removes the guard around an existing recursive delete THEN the class is security-sensitive. GIVEN a class file that tries to drop a built-in security rule THEN the class does not narrow. GIVEN the parity tests THEN the agent body's table matches the roster |
+| `edgeCases` | A repository whose CLI paths fire the new rules on every change keeps the lens: the class file can add rules, never remove or weaken a built-in security rule, and a test pins that a file trying to does not narrow the class; the lens is never gated by hit rate |
 | `depends_on` | p1-classify |
 | `verify` | `npx vitest run test/change test/cli/commands/gate.test.ts test/corpus test/roster` |
 
@@ -197,8 +198,8 @@ and the check that stops it, in at most five lines.
 | `id` | p6-eval-cases-core |
 | `requirements` | REQ-FLOW-062, REQ-FLOW-063, REQ-FLOW-064, REQ-FLOW-065, REQ-FLOW-067, REQ-PROVE-009 |
 | `files` | New cases under `evals/cases-v6/golden/` and `adversarial/`, `evals/SET-v7.md` (roster counts and cells), `evals/README.md`, `test/evals/successorInputs.test.ts` |
-| `interfaces` | One case per reduced check, each with binding rows: (1) a docs edit to a file a test reads runs that test; (2) an unclear path gets the full gate; (3) an auth-path change and (4) a CLI file-deletion change get the security lens; (5) a lockfile-only bump gets the audit and no lens, with (6) its install-script twin getting the lens; (7) a light run with a finding still open at round 2 escalates instead of a round 3; (8) a gate red after a fix gets a fresh fixer at a higher effort; (9) a finding open at round 3 escalates instead of a round 4; (10) a light single pass catches a logic defect in a small diff; (11) a risk-class plan unit carries a threat note. Only `evals/cases-v6/` moves |
-| `testCriteria` | GIVEN `npx vitest run test/evals` THEN green (locators, roster, coverage, successor inputs). GIVEN `find evals/cases-v6 -name '*.md' \| wc -l` THEN the count is the base count plus 11 |
+| `interfaces` | One case per reduced check, each with binding rows: (1) a docs edit to a file a test reads runs that test; (2) an unclear path gets the full gate; (3) an auth-path change and (4) a CLI file-deletion change get the security lens; (5) a lockfile-only bump gets the audit and no lens, with (6) its install-script twin getting the lens; (7) a light run with a finding still open at round 2 escalates instead of a round 3; (8) a gate red after a fix gets a fresh fixer at a higher effort; (9) a finding open at round 3 escalates instead of a round 4; (10) a light single pass catches a logic defect in a small diff; (11) a risk-class plan unit carries a threat note; (12) a docs change in a repository without a declared map runs the full suite. Only `evals/cases-v6/` moves |
+| `testCriteria` | GIVEN `npx vitest run test/evals` THEN green (locators, roster, coverage, successor inputs). GIVEN `find evals/cases-v6 -name '*.md' \| wc -l` THEN the count is the base count plus 12 |
 | `edgeCases` | Plan 015's `b4` or plan 016's file 0 lands first and moves the counts → re-base on them (contract census); set source ranges from the landed text only |
 | `depends_on` | p3-gates-by-class, p4-loop-rules, p5-security-trigger |
 | `verify` | `npx vitest run test/evals` |
@@ -228,7 +229,7 @@ and the check that stops it, in at most five lines.
 
 | # | Row | Who |
 |---|---|---|
-| 1 | In a scratch repository, a README typo through `/st-quick` runs its gate in seconds and names the checks it ran | person |
+| 1 | In a scratch repository with a declared test-input map, a README typo through `/st-quick` runs its gate in seconds and names the checks it ran; without the map, the same typo runs the full suite | person |
 | 2 | In a scratch repository, a change to file-deletion code gets the security lens at the light tier | person |
 | 3 | `stamity gate classify --json` on this repository's last ten merged PRs gives the classes a reader would expect | auto, then a person reads the table |
 
