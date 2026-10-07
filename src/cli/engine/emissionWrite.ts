@@ -6,7 +6,7 @@ import { CODEX_CONFIG_FILE, CODEX_HOOKS_FILE, codexConfigTableRendering } from "
 import { COPILOT_HOOKS_PATH } from "../../adapters/copilot.ts";
 import { CURSOR_HOOKS_CONFIG_PATH, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../adapters/cursor.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
-import { readHookDefinitions } from "../../hooks/userHooks.ts";
+import { readHookDefinitions, type UserHookDefinition } from "../../hooks/userHooks.ts";
 import {
   claudeSettingsReclaimReducer,
   materializeClaudeSettings,
@@ -27,6 +27,7 @@ import {
   codexHooksSpec,
   cursorHooksSpec,
   describeCursorHookDefects,
+  directHookRendering,
   hookScriptReader,
 } from "../../manifest/hookDocuments.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
@@ -381,8 +382,9 @@ export interface CoOwnedDocumentLane {
    * True when the document wires hook commands, so a copy the reclaim sweep
    * leaves in place may still run an engine hook script and holds it back
    * (S17; `../../merge/reclaim.ts` `ReclaimOptions.hookDocuments`). The seam a
-   * hooks document registers through: the settings lane today, Cursor's and
-   * Codex's hook files with `u0-hook-files-ownership`.
+   * hooks document registers through: `.claude/settings.json`,
+   * `.cursor/hooks.json` and `.codex/hooks.json` declare it; `.codex/config.toml`
+   * does not, since it wires no hook command.
    */
   readonly wiresHooks: boolean;
   predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedLanePrediction>;
@@ -632,21 +634,29 @@ export function coOwnedReclaimReducers(
 const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;
 
 /**
- * What the engine renders now into each co-owned document whose rendering
- * needs a read, for the reclaim sweep's proof by re-rendering (S11;
- * `coOwnedReclaimReducers`' `renderings`). Today that is the settings document:
- * the user-hook entries of the definitions still in the user hooks folder,
- * rendered as the Claude adapter renders them into `.claude/settings.json`.
- * A user-hook entry equal to one of them leaves without a backup; an entry
- * whose definition is gone, or that differs, is outside the bound. None when
- * the plugin carries Claude's hooks (the repository renders none there) or the
- * folder cannot be read (nothing is then proved, so the backup is taken).
+ * The renderings of the definitions in the user hooks folder each hooks
+ * document's proof by re-rendering needs, for the reclaim sweep (S11;
+ * `coOwnedReclaimReducers`' `renderings`): into `.claude/settings.json`, the
+ * user-hook entries as the Claude adapter renders them now; into
+ * `.cursor/hooks.json` and `.codex/hooks.json`, the entries a release up to
+ * 1.6.0 wired them as directly (`../../manifest/hookDocuments.ts::directHookRendering`,
+ * the build/54 sign-off) — the runner's entries are in the bound by path. An
+ * entry equal to one of them is the engine's; one whose definition is gone, or
+ * that differs, is outside the bound. None for a client whose hooks a plugin
+ * carries (the repository renders none there), and none at all when the folder
+ * cannot be read (nothing is then proved, so the backup is taken).
  */
 export async function coOwnedReclaimRenderings(
   rootDir: string,
   manifest: SetupManifest,
 ): Promise<ReadonlyMap<string, unknown>> {
-  if (isPluginOwned(manifest, "claude", "hooks")) return new Map();
+  const documents: [Tool, string, (rows: readonly UserHookDefinition[]) => unknown][] = [
+    ["claude", CLAUDE_SETTINGS_PATH, (rows) => ({ hooks: claudeUserHookEntries(rows) })],
+    ["cursor", CURSOR_HOOKS_CONFIG_PATH, (rows) => directHookRendering("cursor", rows)],
+    ["codex", CODEX_HOOKS_FILE, (rows) => directHookRendering("codex", rows)],
+  ];
+  const rendered = documents.filter(([tool]) => !isPluginOwned(manifest, tool, "hooks"));
+  if (rendered.length === 0) return new Map();
   let read;
   try {
     read = await readHookDefinitions(resolve(rootDir, manifest.hooks?.userHooksDir ?? DEFAULT_USER_HOOKS_DIR), rootDir);
@@ -657,5 +667,6 @@ export async function coOwnedReclaimRenderings(
   }
   // The reader's rows carry provenance beside the interchange fields; the
   // renderer reads the interchange fields alone, as the emission does.
-  return read.hooks.length === 0 ? new Map() : new Map([[CLAUDE_SETTINGS_PATH, { hooks: claudeUserHookEntries(read.hooks) }]]);
+  const rows = read.hooks;
+  return rows.length === 0 ? new Map() : new Map(rendered.map(([, path, render]) => [path, render(rows)]));
 }

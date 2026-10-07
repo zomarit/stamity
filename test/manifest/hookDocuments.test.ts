@@ -11,10 +11,13 @@ import {
   cursorHookDefects,
   cursorHooksSpec,
   describeCursorHookDefects,
+  directHookRendering,
   hookScriptReader,
   isKnownCodexHooksDescription,
+  isKnownCodexHooksStamity,
   referencedHookScripts,
 } from "../../src/manifest/hookDocuments.ts";
+import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import { HOOKS_GENERATED_DIR } from "../../src/types/markers.ts";
 
 /**
@@ -33,6 +36,18 @@ const codexElement = codex.elements[0]!;
 const RELEASE_DESCRIPTIONS = JSON.parse(
   readFileSync(join(import.meta.dirname, "fixtures", "codex-hooks-descriptions.json"), "utf8"),
 ) as Record<string, string>;
+
+/** The `stamity` member 1.0.0–1.6.0 wrote into `.codex/hooks.json`, one value in every one of those tags' golden snapshots. */
+const RELEASE_STAMITY = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "codex-hooks-stamity-member.json"), "utf8")) as {
+  releases: string[];
+  stamity: Record<string, unknown>;
+};
+
+/** `.cursor/hooks.json` and `.codex/hooks.json` as 1.6.0's golden snapshot holds them, user hook included. */
+const RELEASE_ONE_SIX = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "release-1-6-0-hook-files.json"), "utf8")) as Record<
+  string,
+  string
+>;
 
 const row = (event: HookInterchange["event"], script: string): HookInterchange => ({ event, command: ["node", script] });
 const encoded = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -98,6 +113,32 @@ describe("cursorHookDefects", () => {
     const rendered = JSON.parse(buildHooksJson([row("session_start", `${HOOKS_GENERATED_DIR}/cursor/s.mjs`)]));
     expect(cursorHookDefects(rendered)).toEqual([]);
   });
+
+  // S19, amended 2026-10-07 after the vendor re-read: Cursor documents
+  // prompt-based hooks, `{ "type": "prompt", "prompt": … }` with no command.
+  it("reads each entry by its type: a command one needs a command, a prompt one a prompt, and any other type fails", () => {
+    const cursorExample = { version: 1, hooks: { beforeShellExecution: [{ type: "prompt", prompt: "Is this command safe?", timeout: 10 }] } };
+    expect(cursorHookDefects(cursorExample)).toEqual([]);
+    const doc = {
+      hooks: {
+        stop: [
+          { type: "command", command: "node a.mjs" },
+          { type: "command" },
+          { type: "prompt", prompt: "  " },
+          { type: "prompt", command: "node b.mjs" },
+          { type: "agent", command: "node c.mjs" },
+          { type: 3, prompt: "x" },
+        ],
+      },
+    };
+    expect(cursorHookDefects(doc)).toEqual([
+      { pointer: "/hooks/stop/1", reason: "no-command" },
+      { pointer: "/hooks/stop/2", reason: "no-prompt" },
+      { pointer: "/hooks/stop/3", reason: "no-prompt" },
+      { pointer: "/hooks/stop/4", reason: "unknown-type" },
+      { pointer: "/hooks/stop/5", reason: "unknown-type" },
+    ]);
+  });
 });
 
 describe("describeCursorHookDefects", () => {
@@ -130,6 +171,17 @@ describe("describeCursorHookDefects", () => {
     expect(said).toContain("/hooks/stop/0, /hooks/sessionEnd/0 run no command");
     expect(said).toContain("give each such entry a command, or remove it.");
     expect(said).not.toContain("\u0007");
+  });
+
+  it("names a prompt hook with no prompt and an entry of another type, each with its remedy", () => {
+    const said = describeCursorHookDefects("x.json", text({ hooks: { stop: [{ type: "prompt" }, { type: "agent" }, { type: "x" }] } }));
+    expect(said).toContain("/hooks/stop/0 is a prompt hook with no prompt");
+    expect(said).toContain('/hooks/stop/1, /hooks/stop/2 have a type Cursor does not run (it runs "command" and "prompt")');
+    expect(said).toContain('so it was kept: give each such prompt hook a prompt, or remove it; set each such type to "command" or "prompt", or remove the entry.');
+    const one = describeCursorHookDefects("x.json", text({ hooks: { stop: [{ type: "prompt" }, { type: "prompt" }, { type: "agent" }] } }));
+    expect(one).toContain("/hooks/stop/0, /hooks/stop/1 are prompt hooks with no prompt");
+    expect(one).toContain("/hooks/stop/2 has a type Cursor does not run");
+    expect(one).not.toContain("give each such entry a command");
   });
 
   it("names one commandless entry alone, with only its remedy", () => {
@@ -216,6 +268,10 @@ describe("codexHooksSpec", () => {
       group(starterHook(starter("stamity sync").replace("run stamity sync", "run stamity sync';evil();'"))),
       group({ type: "command", command: ["python3", `${HOOKS_GENERATED_DIR}/codex/a.py`] }),
       group({ type: "command", command: ["node", `${HOOKS_GENERATED_DIR}/codex/`] }),
+      // review/61: a segment that leaves the folder the prefix names, as `executedScript` refuses on Cursor.
+      group({ type: "command", command: ["node", `${HOOKS_GENERATED_DIR}/codex/../../../x.mjs`] }),
+      group({ type: "command", command: ["node", `${HOOKS_GENERATED_DIR}/codex/./x.mjs`] }),
+      group({ type: "command", command: ["node", `${HOOKS_GENERATED_DIR}/codex//x.mjs`] }),
       group({ type: "command", command: ["node"] }),
       group({ type: "command", command: 3 }),
       group("bare"),
@@ -246,6 +302,17 @@ describe("codexHooksSpec", () => {
     expect(isKnownCodexHooksDescription("Team hooks.")).toBe(false);
     expect(isKnownCodexHooksDescription(1)).toBe(false);
     expect(description?.known).toBe(isKnownCodexHooksDescription);
+  });
+
+  it("knows the stamity member 1.0.0–1.6.0 wrote, in any key order, and nothing edited (review/59)", () => {
+    const [, stamity] = codex.members;
+    expect(stamity).toMatchObject({ pointer: "/stamity", foreign: "yield" });
+    expect(stamity?.known).toBe(isKnownCodexHooksStamity);
+    expect(RELEASE_STAMITY.releases).toEqual(["v1.0.0", "v1.0.1", "v1.1.0", "v1.2.0", "v1.3.0", "v1.4.0", "v1.5.0", "v1.6.0"]);
+    expect(isKnownCodexHooksStamity(RELEASE_STAMITY.stamity)).toBe(true);
+    expect(isKnownCodexHooksStamity(JSON.parse(RELEASE_ONE_SIX[".codex/hooks.json"] as string).stamity)).toBe(true);
+    expect(isKnownCodexHooksStamity({ ...RELEASE_STAMITY.stamity, blockingExitCode: 1 })).toBe(false);
+    expect(isKnownCodexHooksStamity({ team: true })).toBe(false);
   });
 });
 
@@ -288,6 +355,129 @@ describe("the release-history bound through the core", () => {
     });
     expect(reduced).toMatchObject({ kind: "reduced", proven: true });
     expect(reduced).not.toHaveProperty("mustBackUp");
+  });
+});
+
+describe("the 1.0.0–1.6.0 stamity member through the core (review/59)", () => {
+  const oneSixDoc = JSON.parse(RELEASE_ONE_SIX[".codex/hooks.json"] as string) as { hooks: Record<string, unknown[]>; stamity: unknown };
+  // 1.6.0's file without its user hook: the engine's argv groups and the member.
+  const engineOnly = {
+    ...oneSixDoc,
+    hooks: { ...oneSixDoc.hooks, PreToolUse: (oneSixDoc.hooks["PreToolUse"] ?? []).filter((wired) => !JSON.stringify(wired).includes(".stamity/hooks/")) },
+  };
+  const emitted = `${JSON.stringify({ description: "Now.", hooks: {} }, null, 2)}\n`;
+  const legacy = { owned: true, legacy: true, record: null };
+
+  it("leaves silently on a write, whatever the ledger says; an owner's own stamity member is kept", () => {
+    for (const ownership of [legacy, { owned: true, legacy: false, record: {} }, { owned: false, legacy: false, record: null }]) {
+      const plan = planCoOwnedJson("/r/.codex/hooks.json", emitted, `${JSON.stringify({ hooks: {}, stamity: oneSixDoc.stamity }, null, 2)}\n`, codex, ownership);
+      expect(plan.backup).toBeNull();
+      expect(JSON.parse(plan.content as string)).not.toHaveProperty("stamity");
+    }
+    const owners = `${JSON.stringify({ stamity: { team: true }, hooks: {} }, null, 2)}\n`;
+    const kept = planCoOwnedJson("/r/.codex/hooks.json", emitted, owners, codex, { owned: true, legacy: false, record: {} });
+    expect(JSON.parse(kept.content as string)).toMatchObject({ stamity: { team: true } });
+  });
+
+  it("lets the sweep remove it from a legacy file, which then holds nothing foreign", () => {
+    const reduced = reduceCoOwnedJson(`${JSON.stringify(engineOnly, null, 2)}\n`, codex, {
+      record: null,
+      legacy: true,
+      deleteWhenEngineOnly: true,
+    });
+    expect(reduced).toMatchObject({ kind: "engine-only" });
+    expect(reduced).not.toHaveProperty("mustBackUp");
+  });
+});
+
+describe("directHookRendering — what releases up to 1.6.0 wired directly (build/54, review/60)", () => {
+  const user = { event: "pre_tool_use", matcher: "Bash", command: ["node", ".stamity/hooks/guard.mjs"], timeoutMs: 5000 };
+
+  it("renders a definition exactly as 1.6.0's golden snapshot holds it, on both clients", () => {
+    const cursorEntry = (JSON.parse(RELEASE_ONE_SIX[".cursor/hooks.json"] as string).hooks.preToolUse as unknown[])[1];
+    const codexGroup = (JSON.parse(RELEASE_ONE_SIX[".codex/hooks.json"] as string).hooks.PreToolUse as unknown[])[1];
+    expect(directHookRendering("cursor", [user])).toEqual({ hooks: { preToolUse: [cursorEntry] } });
+    expect(directHookRendering("codex", [user])).toEqual({ hooks: { PreToolUse: [codexGroup] } });
+  });
+
+  it("groups Codex rows by matcher, rounds a timeout up, quotes as 1.6.0 quoted, and skips the engine's own rows and a later event", () => {
+    const rows = [
+      { event: "stop", command: ["node", "scripts/a b.mjs", "it's"] },
+      { event: "stop", command: ["node", "scripts/c.mjs"], timeoutMs: 1 },
+      { event: "stop", matcher: "x", command: ["node", "scripts/d.mjs"] },
+      { event: "session_start", command: ["node", `${HOOKS_GENERATED_DIR}/codex/stamity-session-start.mjs`] },
+      { event: "session_start", command: ["node", ".stamity/packs/p/hook.mjs"] },
+      { event: "subagent_start", command: ["node", "scripts/e.mjs"] },
+      { event: "stop", command: [] },
+    ];
+    expect(directHookRendering("cursor", rows)).toEqual({
+      hooks: {
+        stop: [
+          { command: `node 'scripts/a b.mjs' 'it'\\''s'` },
+          { command: "node scripts/c.mjs" },
+          { command: "node scripts/d.mjs", matcher: "x" },
+          { command: "" },
+        ],
+      },
+    });
+    expect(directHookRendering("codex", rows)).toEqual({
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              { type: "command", command: ["node", "scripts/a b.mjs", "it's"] },
+              { type: "command", command: ["node", "scripts/c.mjs"], timeout: 1 },
+              { type: "command", command: [] },
+            ],
+          },
+          { matcher: "x", hooks: [{ type: "command", command: ["node", "scripts/d.mjs"] }] },
+        ],
+      },
+    });
+  });
+
+  it("is each spec's earlier rendering: the rows the runner's entries encode, re-rendered, and nothing else", () => {
+    const cursorRendering = JSON.parse(buildHooksJson([user as HookInterchange, row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`)]));
+    expect(cursor.earlier?.(cursorRendering)).toEqual(directHookRendering("cursor", [user]));
+    const startedUser = portableHookCommand("codex", user as HookInterchange, { syncCall: "stamity sync" });
+    const codexRendering = { hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: startedUser, commandWindows: startedUser }] }] } };
+    expect(codex.earlier?.(codexRendering)).toEqual(directHookRendering("codex", [user]));
+    // Nothing a runner's command does not carry: no hooks object, a value that
+    // is not an array or an object, a command that is not the runner's, a row
+    // that does not decode, is not an object, or names no string argv.
+    const runner = `node ${HOOKS_GENERATED_DIR}/cursor/stamity-portable-hook.mjs `;
+    const b64 = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
+    for (const rendering of [
+      {},
+      { hooks: [] },
+      { hooks: { stop: "x", sessionStart: ["bare", { command: "node scripts/x.mjs" }, { hooks: ["bare", { command: 3 }] }] } },
+      { hooks: { stop: [{ command: `${runner}!!` }, { command: `${runner}${b64([1])}` }, { command: `${runner}${b64({ event: "stop", command: [1] })}` }] } },
+      { hooks: { stop: [{ command: `${runner}${b64({ event: 1, command: [] })}` }, { command: `${runner}${b64({ event: "stop" })}` }] } },
+    ]) {
+      expect(cursor.earlier?.(rendering)).toEqual({ hooks: {} });
+    }
+    const odd = { event: "stop", matcher: 3, timeoutMs: "5", command: ["node", "scripts/x.mjs"] };
+    expect(cursor.earlier?.({ hooks: { stop: [{ command: `${runner}${b64(odd)}` }] } })).toEqual({ hooks: { stop: [{ command: "node scripts/x.mjs" }] } });
+  });
+
+  it("proves a 1.6.0 direct entry the engine's under a legacy row, through the planner and the reducer; an owner's differing entry stays", () => {
+    const emitted = buildHooksJson([user as HookInterchange]);
+    const lookalike = { command: "node .stamity/hooks/guard.mjs", matcher: "Edit", failClosed: true };
+    const direct = { command: "node .stamity/hooks/guard.mjs", matcher: "Bash", failClosed: true };
+    const existing = `${JSON.stringify({ version: 1, hooks: { preToolUse: [direct, lookalike] } }, null, 2)}\n`;
+    const legacy = { owned: true, legacy: true, record: null };
+
+    const plan = planCoOwnedJson("/r/.cursor/hooks.json", emitted, existing, cursor, legacy);
+    const written = JSON.parse(plan.content as string) as { hooks: { preToolUse: unknown[] } };
+    expect(written.hooks.preToolUse).toContainEqual(lookalike);
+    expect(written.hooks.preToolUse).not.toContainEqual(direct);
+    // Without the ledger's proof the file is unedited, the old entry leaves only behind a backup, as rule 3 says.
+    expect(plan.backup).toBe(existing);
+
+    const reduced = reduceCoOwnedJson(existing, cursor, { record: null, legacy: true, deleteWhenEngineOnly: true, rendered: directHookRendering("cursor", [user]) });
+    expect(reduced).toMatchObject({ kind: "reduced" });
+    expect(JSON.parse((reduced as { content: string }).content)).toEqual({ version: 1, hooks: { preToolUse: [lookalike] } });
+    expect(memberHash(direct)).not.toBe(memberHash(lookalike));
   });
 });
 

@@ -189,6 +189,12 @@ element of the event's array. A command added inside one of the engine's entries
 the next `sync` behind a verified `.bak` holding your edit, with a warning naming the entry. A
 `version` other than `1` in `.cursor/hooks.json` is refused as a collision naming it.
 
+Releases up to 1.6.0 wired each hook you define in `.stamity/hooks/` straight into these files,
+and wrote a top-level `stamity` block into `.codex/hooks.json`. On a direct upgrade the engine
+re-renders that old wiring from each definition still in `.stamity/hooks/`. An entry equal to it,
+and the old `stamity` block, are the engine's, so the first `sync` replaces them and your hook
+runs once. An entry that differs from that rendering stays yours.
+
 `clean` does not delete a hook script that a hooks file it keeps still runs. That covers a file it
 cannot read, and Copilot's `.github/hooks/stamity.json` when you edited it. Each kept script is
 reported as kept, naming the file. When such a script lives under `.stamity/`, `clean` keeps
@@ -196,7 +202,8 @@ reported as kept, naming the file. When such a script lives under `.stamity/`, `
 wiring from the named file, or fix or delete the file, then run `clean` again.
 
 **`check` fails on an entry Cursor rejects.** Cursor accepts 21 event names in `.cursor/hooks.json`
-(its hooks documentation, read 2026-10-07), and every entry needs a `command`. A key such as
+(its hooks documentation, read 2026-10-07). An entry with no `type`, or `"type": "command"`, needs
+a `command`; a `"type": "prompt"` entry needs a `prompt`; any other `type` is refused. A key such as
 `PreToolUse` is Claude Code's spelling, not Cursor's. While the file holds such an entry, Cursor
 loads none of its hooks, the engine's guards included (shown for Cursor 3.13.10 by
 microsoft/apm#3129). `check` exits 1 naming the entry by its pointer, for example

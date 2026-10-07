@@ -1,0 +1,19 @@
+{
+  "releases": [
+    "v1.0.0",
+    "v1.0.1",
+    "v1.1.0",
+    "v1.2.0",
+    "v1.3.0",
+    "v1.4.0",
+    "v1.5.0",
+    "v1.6.0"
+  ],
+  "stamity": {
+    "blockingExitCode": 2,
+    "failMode": "fail-closed",
+    "guarantee": "Adopts the interchange shape verbatim, exit-2 blocking included; emission is a config-dialect transform, not a semantic one.",
+    "interchange": "claude-shape",
+    "trust": "Each sha256 covers the generated script bytes this setup emits; verify with `stamity check` after any edit. User-authored hooks are wired verbatim and carry no digest — their commands are the repository's own trust domain."
+  }
+}

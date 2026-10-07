@@ -820,7 +820,35 @@ describe("coOwnedReclaimRenderings — the proof by re-rendering for user hooks 
     expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ hooks: { userHooksDir: "not-a-folder" } }))).size).toBe(0);
 
     await temp.seedFiles({ ".stamity/hooks/audit.mjs": "process.exit(0)\n", ".stamity/hooks/audit.json": definition });
+    // TEST CHANGE, justified: build/54 (revised sign-off) — Cursor's and Codex's
+    // hook files now take a rendering too, so a plugin carrying Claude's hooks
+    // drops the settings document's alone; one carrying all three drops them all.
     const plugin: SetupManifest["plugin"] = { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } };
-    expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin }))).size).toBe(0);
+    expect([...(await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin }))).keys()]).toEqual([".cursor/hooks.json", ".codex/hooks.json"]);
+    const all: SetupManifest["plugin"] = {
+      mode: "plugin-backed",
+      clients: Object.fromEntries((["claude", "cursor", "codex"] as const).map((tool) => [tool, { version: "1.9.0", classes: ["hooks"] }])),
+    };
+    expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin: all }))).size).toBe(0);
+  });
+
+  it("renders each definition into Cursor's and Codex's hook files as a release up to 1.6.0 wired it directly (build/54)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ ".stamity/hooks/audit.mjs": "process.exit(0)\n", ".stamity/hooks/audit.json": definition });
+
+    const renderings = await coOwnedReclaimRenderings(temp.dir, manifestOf());
+
+    expect(renderings.get(".cursor/hooks.json")).toEqual({
+      hooks: {
+        preToolUse: [{ command: "node .stamity/hooks/audit.mjs", matcher: "Bash", failClosed: true }],
+        sessionStart: [{ command: "node .stamity/hooks/audit.mjs" }],
+      },
+    });
+    expect(renderings.get(".codex/hooks.json")).toEqual({
+      hooks: {
+        PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: ["node", ".stamity/hooks/audit.mjs"], timeout: 2 }] }],
+        SessionStart: [{ hooks: [{ type: "command", command: ["node", ".stamity/hooks/audit.mjs"] }] }],
+      },
+    });
   });
 });

@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
@@ -313,6 +313,23 @@ describe(".cursor/hooks.json holding an entry Cursor rejects (S19)", () => {
     expect((doc["hooks"] as Record<string, unknown>)["subagentStart"]).toBeDefined();
   });
 
+  it("Cursor's own prompt-hook example passes check: a prompt entry runs no command (S19, amended 2026-10-07)", async () => {
+    const root = await freshRepo();
+    await init(root, ["cursor"]);
+    // Cursor's documented prompt-based hook (cursor.com/docs/hooks, re-read
+    // 2026-10-07); the record quotes its prompt elided, so this one is ours.
+    const doc = await readDoc(root, CURSOR_HOOKS);
+    (doc["hooks"] as Record<string, unknown>)["beforeShellExecution"] = [
+      { type: "prompt", prompt: "Is this shell command safe to run in this repository?", timeout: 10 },
+    ];
+    await writeDoc(root, CURSOR_HOOKS, doc);
+
+    const drift = await runDriftGate(root, ENGINE_VERSION);
+    expect(drift.changes.filter((entry) => entry.path === CURSOR_HOOKS)).toEqual([]);
+    const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
+    expect((JSON.parse(check.stdout.trim()) as { drift: { clean: boolean } }).drift.clean).toBe(true);
+  });
+
   it("an entry with no command fails check naming its pointer", async () => {
     const root = await freshRepo();
     await init(root, ["cursor"]);
@@ -443,6 +460,28 @@ describe("clean keeps every script a hooks document it keeps still runs (S17)", 
     }
   });
 
+  it("a .cursor/hooks.json no ledger row names is no candidate, and clean still keeps both guards it runs (review/58)", async () => {
+    const root = await freshRepo();
+    await init(root, ["cursor"]);
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    await writeManifest(root, { ...manifest, ledger: manifest.ledger.filter((row) => row.path !== CURSOR_HOOKS) }, { now: T1 });
+    const before = await readText(root, CURSOR_HOOKS);
+
+    const cleaned = await clean(root, ["--json"]);
+
+    expect(cleaned.code).toBe(0);
+    expect(await readText(root, CURSOR_HOOKS)).toBe(before);
+    expect(existsSync(abs(root, SUBAGENT_GUARD_PATH))).toBe(true);
+    expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(true);
+    const doc = JSON.parse(cleaned.stdout.trim()) as { entries: { path: string; action: string; detail: string }[] };
+    for (const path of [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, CURSOR_RUNNER]) {
+      const entry = doc.entries.find((candidate) => candidate.path === path);
+      expect(entry?.action).toBe("skipped-user-content");
+      expect(entry?.detail).toContain(CURSOR_HOOKS);
+    }
+  });
+
   it("Copilot's whole-file hooks document, edited by its owner, is kept whole and keeps its runner and .stamity/", async () => {
     const root = await freshRepo();
     await init(root, ["copilot"]);
@@ -480,6 +519,144 @@ describe("clean keeps every script a hooks document it keeps still runs (S17)", 
     for (const path of [CODEX_RUNNER, ...generated]) expect(existsSync(abs(root, path))).toBe(true);
     expect(cleaned.stdout).toContain(`Kept ${STATE_DIR}/`);
   });
+});
+
+// ── A direct upgrade from a release up to 1.6.0 ───────────────
+
+/** `.cursor/hooks.json` and `.codex/hooks.json` as 1.6.0's golden snapshot holds them (written by script from the tag). */
+const RELEASE_ONE_SIX = JSON.parse(
+  readFileSync(join(import.meta.dirname, "..", "manifest", "fixtures", "release-1-6-0-hook-files.json"), "utf8"),
+) as Record<string, string>;
+
+/** The user hook those 1.6.0 files wire directly: its script, and its definition in `.stamity/hooks/`. */
+const USER_SCRIPT = ".stamity/hooks/guard.mjs";
+const USER_DEFINITION = { hooks: [{ event: "pre_tool_use", matcher: "Bash", command: ["node", USER_SCRIPT], timeoutMs: 5000 }] };
+
+/** How many hooks in the document at `path` run `script`, whether wired directly or through a runner's encoded row. */
+async function runsOf(root: string, path: string, script: string): Promise<number> {
+  const runs = (command: unknown): boolean => {
+    if (Array.isArray(command)) return command.includes(script);
+    if (typeof command !== "string") return false;
+    if (command.includes(script)) return true;
+    try {
+      const row = JSON.parse(Buffer.from(command.slice(command.lastIndexOf(" ") + 1), "base64url").toString("utf8")) as { command?: unknown };
+      return Array.isArray(row.command) && row.command.includes(script);
+    } catch {
+      return false;
+    }
+  };
+  let count = 0;
+  for (const elements of Object.values((await readDoc(root, path))["hooks"] as Record<string, unknown[]>)) {
+    for (const element of elements as { command?: unknown; hooks?: { command?: unknown }[] }[]) {
+      if (runs(element.command)) count += 1;
+      for (const hook of element.hooks ?? []) if (runs(hook.command)) count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * A repository a release up to 1.6.0 set up for `tool`, upgraded straight to
+ * this one: the user hook defined, the hooks file holding 1.6.0's bytes (or
+ * `edit` of them), and a ledger of that release's shape (no co-owned record)
+ * whose whole-file hash is the bytes on disk.
+ */
+async function setUpByReleaseOneSix(
+  tool: "cursor" | "codex",
+  edit: (doc: Record<string, unknown>) => void = () => {},
+  sub = "repo",
+): Promise<string> {
+  const root = await freshRepo(sub);
+  await init(root, [tool]);
+  await mkdir(abs(root, ".stamity/hooks"), { recursive: true });
+  await writeFile(abs(root, USER_SCRIPT), "process.exit(0)\n", "utf8");
+  await writeFile(abs(root, ".stamity/hooks/guard.json"), JSON.stringify(USER_DEFINITION), "utf8");
+  const path = tool === "cursor" ? CURSOR_HOOKS : CODEX_HOOKS;
+  const doc = JSON.parse(RELEASE_ONE_SIX[path] as string) as Record<string, unknown>;
+  edit(doc);
+  await writeDoc(root, path, doc);
+  await asReleaseOneEleven(root);
+  await recordAsWritten(root, path);
+  return root;
+}
+
+describe("a direct upgrade from a release up to 1.6.0, which wired user hooks directly (build/54, review/59, review/60)", () => {
+  it.each([
+    ["cursor", CURSOR_HOOKS],
+    ["codex", CODEX_HOOKS],
+  ] as const)("%s: the first sync runs the user hook once, through the runner, and takes no .bak", async (tool, path) => {
+    const root = await setUpByReleaseOneSix(tool);
+    expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
+
+    const { report } = await sync(root);
+
+    expect(rowOf(report.wrote, path).action).toBe("updated");
+    expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
+    expect(await readText(root, path)).not.toContain(USER_SCRIPT);
+    expect(await backups(root)).toEqual([]);
+  });
+
+  it("codex: the first sync removes the stamity member 1.0.0–1.6.0 wrote, with no .bak (review/59)", async () => {
+    const root = await setUpByReleaseOneSix("codex", (doc) => {
+      const hooks = doc["hooks"] as Record<string, unknown[]>;
+      hooks["PreToolUse"] = (hooks["PreToolUse"] ?? []).filter((group) => !JSON.stringify(group).includes(USER_SCRIPT));
+    });
+    await rm(abs(root, ".stamity/hooks/guard.json"));
+    expect(await readDoc(root, CODEX_HOOKS)).toHaveProperty("stamity");
+
+    await sync(root);
+
+    expect(await readDoc(root, CODEX_HOOKS)).not.toHaveProperty("stamity");
+    expect(await backups(root)).toEqual([]);
+  });
+
+  it.each([
+    ["cursor", CURSOR_HOOKS],
+    ["codex", CODEX_HOOKS],
+  ] as const)("%s: clean deletes the 1.6.0 file, its direct user entry proved by the definition still present", async (tool, path) => {
+    const root = await setUpByReleaseOneSix(tool);
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(existsSync(abs(root, path))).toBe(false);
+    expect(await backups(root)).toEqual([]);
+  });
+
+  // review/60: the narrowed sign-off. A ledger edit can drop the record and
+  // point the whole-file hash at the owner-edited bytes; that proves no owner
+  // entry the engine's. Only an entry equal to 1.6.0's direct rendering of a
+  // definition still present is.
+  const OWNER_CURSOR_LOOKALIKE = { command: `node ${USER_SCRIPT}`, matcher: "Edit", failClosed: true };
+  const OWNER_CODEX_LOOKALIKE = { matcher: "Edit", hooks: [{ type: "command", command: ["node", USER_SCRIPT], timeout: 5 }] };
+
+  it.each([
+    ["cursor", CURSOR_HOOKS, "preToolUse", OWNER_CURSOR_LOOKALIKE, "afterFileEdit", OWNER_CURSOR_ENTRY],
+    ["codex", CODEX_HOOKS, "PreToolUse", OWNER_CODEX_LOOKALIKE, "PostToolUse", OWNER_CODEX_GROUP],
+  ] as const)(
+    "%s: a forged legacy row over owner-edited bytes removes no owner entry, by sync or by clean",
+    async (tool, path, event, lookalike, ownEvent, own) => {
+      const added = (doc: Record<string, unknown>): void => {
+        const hooks = doc["hooks"] as Record<string, unknown[]>;
+        hooks[event] = [...(hooks[event] ?? []), lookalike];
+        hooks[ownEvent] = [...(hooks[ownEvent] ?? []), own];
+      };
+      const owned = (doc: Record<string, unknown>): unknown[] => {
+        const hooks = doc["hooks"] as Record<string, unknown[]>;
+        return [...(hooks[event] ?? []), ...(hooks[ownEvent] ?? [])];
+      };
+      const synced = await setUpByReleaseOneSix(tool, added);
+
+      await sync(synced);
+
+      expect(owned(await readDoc(synced, path))).toEqual(expect.arrayContaining([lookalike, own]));
+      expect(await runsOf(synced, path, USER_SCRIPT)).toBe(2);
+
+      const cleaned = await setUpByReleaseOneSix(tool, added, "cleaned");
+      expect((await clean(cleaned)).code).toBe(0);
+      expect(owned(await readDoc(cleaned, path))).toEqual([lookalike, own]);
+    },
+  );
 });
 
 /** The `description` 1.7.0 rendered into `.codex/hooks.json` (its golden snapshot, read 2026-10-07). */

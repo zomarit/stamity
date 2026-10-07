@@ -32,8 +32,9 @@
  *    verified `.bak` of the file, with a warning naming `<member>[<index>]`.
  *    The bound is `inBound(e)` (proof by path), or `e` equal to an element of
  *    the current rendering (proof by re-rendering — the reducer's rendering is
- *    the one its caller hands in). A recorded hash outside the bound proves
- *    nothing.
+ *    the one its caller hands in), or equal to what an earlier release rendered
+ *    there for the same definitions (`CoOwnedJsonSpec.earlier`). A recorded
+ *    hash outside the bound proves nothing.
  * 4. *Containers.* An array or object on an engine pointer that the engine
  *    leaves empty is deleted, unless the record lists it as `preexisting`. On
  *    adoption, each such container already present and holding nothing the
@@ -160,6 +161,16 @@ export interface CoOwnedJsonSpec {
   members: readonly MemberSpec[];
   /** Appended to every warning about an engine entry that left behind a backup. */
   personalHint?: string;
+  /**
+   * What an earlier release rendered, in the same shape, for what `rendering`
+   * renders now: proof by re-rendering that release. An element equal to one
+   * of these at the same pointer is in the bound (rule 1's `inBound`), so under
+   * a legacy row it is the engine's and leaves as rule 3 says; it is never
+   * written. Read by the planner over the emitted rendering and by the reducer
+   * over the one its caller hands in. Absent: only the current rendering and
+   * `inBound` prove an element.
+   */
+  earlier?: (rendering: Record<string, unknown>) => unknown;
 }
 
 /** What the caller knows about the target that the bytes cannot say. */
@@ -630,6 +641,7 @@ function judge(
   state: OwnershipState,
   record: CoOwnership | null,
   renderedHashes: ReadonlySet<string>,
+  earlierHashes: ReadonlySet<string>,
 ): Judged[] {
   const recordedHashes = new Set(record?.elements?.[slot.pointer] ?? []);
   const { spec } = slot.owner;
@@ -638,14 +650,21 @@ function judge(
     const recognised = spec.recognise(element);
     // In bound by path (the spec), or by re-rendering: equal to an element the
     // engine renders there now (S11) — what proves a user-hook entry whose
-    // definition is still present (review/44).
-    const inBound = spec.inBound(element) || renderedHashes.has(hash);
+    // definition is still present (review/44) — or to what an earlier release
+    // rendered there for the same definition (`CoOwnedJsonSpec.earlier`).
+    const inBound = spec.inBound(element) || renderedHashes.has(hash) || earlierHashes.has(hash);
     const recorded = recordedHashes.has(hash);
     let engine = recognised;
     if (!engine && state === "legacy") engine = inBound || renderedHashes.has(hash);
     if (!engine && state === "recorded") engine = recorded && (inBound || spec.outsideBound === "backup");
     return { element, index, hash, engine, recorded, recognised, inBound };
   });
+}
+
+/** The hashes of what `earlier` holds at `slot` — an earlier release's rendering there — or none. */
+function earlierHashesAt(earlier: unknown, slot: Slot): ReadonlySet<string> {
+  const array = isPlainObject(earlier) ? readAt(earlier, slot.segments) : undefined;
+  return new Set(Array.isArray(array) ? array.map(memberHash) : []);
 }
 
 /** Why an engine element leaves only behind a backup; `null` when it leaves silently. */
@@ -1022,13 +1041,14 @@ function mergeInto(
   const elements: Record<string, string[]> = {};
   const members: Record<string, string> = {};
   const judgedBySlot = new Map<string, Judged[]>();
+  const earlier = spec.earlier?.(rendering);
 
   for (const slot of slotsOf(parsed, [rendering, doc])) {
     const existingArray = readAt(doc, slot.segments);
     const rendered = (readAt(rendering, slot.segments) as unknown[] | undefined) ?? [];
     if (existingArray !== undefined && !Array.isArray(existingArray)) continue;
     const renderedHashes = new Set(rendered.map(memberHash));
-    const judged = judge(slot, existingArray ?? [], state, record, renderedHashes);
+    const judged = judge(slot, existingArray ?? [], state, record, renderedHashes, earlierHashesAt(earlier, slot));
     judgedBySlot.set(slot.pointer, judged);
     const stale = !rendersAny(slot.owner, rendering);
     for (const entry of judged) {
@@ -1391,6 +1411,7 @@ function reduceDocument(
   const record = opts.legacy ? null : opts.record;
   const rendering = isPlainObject(opts.rendered) ? opts.rendered : {};
   const preexisting = new Set(record?.preexisting ?? []);
+  const earlier = spec.earlier?.(rendering);
   const out: Record<string, unknown> = { ...doc };
   const removed: string[] = [];
   let proven = true;
@@ -1401,7 +1422,7 @@ function reduceDocument(
     if (!Array.isArray(array)) continue;
     const rendered = readAt(rendering, slot.segments);
     const renderedHashes = new Set(Array.isArray(rendered) ? rendered.map(memberHash) : []);
-    const judged = judge(slot, array, state, record, renderedHashes);
+    const judged = judge(slot, array, state, record, renderedHashes, earlierHashesAt(earlier, slot));
     if (!judged.some((entry) => entry.engine)) continue;
     for (const entry of judged.filter((candidate) => candidate.engine)) {
       removed.push(`${shownMember(slot.segments)}[${entry.index}]`);

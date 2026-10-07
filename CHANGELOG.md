@@ -54,7 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Your own hooks in `.cursor/hooks.json` and `.codex/hooks.json` survive `sync` and `clean`.**
   Both files were written whole, so an entry of your own was dropped by the next `sync` behind a
   `.bak`. They are now merged entry by entry: the engine owns only the entries that run its own
-  scripts, Cursor's `version` and Codex's `description`. `clean` no longer deletes a hook script
+  scripts, Cursor's `version` and Codex's `description`. A hook that 1.6.0 or earlier wired
+  directly, and Codex's old `stamity` block, are replaced on the first `sync`, so the hook runs
+  once. `clean` no longer deletes a hook script
   that a hooks file it keeps still runs. Cursor's two `failClosed` guards are included: deleting
   them made Cursor deny every sub-agent spawn and MCP call.
 
@@ -64,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   object, or whose `permissions` or `hooks` has another type, is refused until you fix or delete
   it.
 - **`check` fails on a `.cursor/hooks.json` entry Cursor rejects.** An event key outside the 21
-  that Cursor accepts, or an entry with no `command`, makes Cursor load none of the file's hooks.
+  that Cursor accepts, a command entry with no `command`, a prompt entry with no `prompt`, or an
+  entry of another `type` makes Cursor load none of the file's hooks.
   `check` now names the entry and exits 1. `sync` and `init` keep the entry and warn.
 
 ## [1.11.0] - 2026-10-01

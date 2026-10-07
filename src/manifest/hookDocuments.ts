@@ -44,6 +44,7 @@ import { createHash } from "node:crypto";
 import { isPlainObject } from "../config/parse.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import { executedScript, printableName, type CoOwnedJsonSpec } from "./coOwnedJson.ts";
+import { memberHash } from "./jsonMembers.ts";
 
 // ── S19: the events Cursor accepts ───────────────────────────────────────
 
@@ -85,8 +86,32 @@ const CURSOR_HOOK_EVENTS_READ = "2026-10-07";
 export interface CursorHookDefect {
   /** RFC 6901 pointer: `/hooks/<event>` for an unknown event, `/hooks/<event>/<index>` for an entry. */
   pointer: string;
-  /** `unknown-event`: a key Cursor does not accept; `no-command`: an entry (or an event value) that runs no command. */
-  reason: "unknown-event" | "no-command";
+  /**
+   * `unknown-event`: a key Cursor does not accept; `no-command`: a command
+   * entry (`type` absent or `"command"`), or an event value, that runs no
+   * command; `no-prompt`: a `"prompt"` entry with no prompt; `unknown-type`: an
+   * entry whose `type` is neither of those.
+   */
+  reason: "unknown-event" | "no-command" | "no-prompt" | "unknown-type";
+}
+
+/** True for a string holding something other than white space. */
+function filled(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+/**
+ * What is wrong with one entry of a known event, by its `type` (S19, amended
+ * 2026-10-07 after the vendor re-read): Cursor runs a command hook (`type`
+ * absent or `"command"`, which needs a `command`) and a prompt hook (`"prompt"`,
+ * which needs a `prompt` and has no `command`); any other `type` it refuses.
+ */
+function entryDefect(entry: unknown): CursorHookDefect["reason"] | null {
+  if (!isPlainObject(entry)) return "no-command";
+  const type = entry["type"];
+  if (type === undefined || type === "command") return filled(entry["command"]) ? null : "no-command";
+  if (type === "prompt") return filled(entry["prompt"]) ? null : "no-prompt";
+  return "unknown-type";
 }
 
 /** One RFC 6901 reference token. */
@@ -96,10 +121,11 @@ function token(segment: string): string {
 
 /**
  * Every entry of a parsed `.cursor/hooks.json` Cursor rejects, whoever wrote
- * it (S19): an event key outside {@link CURSOR_HOOK_EVENTS}, and an entry with
- * no command (an event whose value is not an array has no entry that runs
- * one). A document that is not an object, or whose `hooks` is not one, yields
- * none here: the core refuses those as a `co-owned-shape` collision.
+ * it (S19): an event key outside {@link CURSOR_HOOK_EVENTS}; a command entry
+ * with no command (an event whose value is not an array has no entry that
+ * runs one); a prompt entry with no prompt; and an entry of any other `type`.
+ * A document that is not an object, or whose `hooks` is not one, yields none
+ * here: the core refuses those as a `co-owned-shape` collision.
  */
 export function cursorHookDefects(doc: unknown): CursorHookDefect[] {
   if (!isPlainObject(doc) || !isPlainObject(doc["hooks"])) return [];
@@ -115,8 +141,8 @@ export function cursorHookDefects(doc: unknown): CursorHookDefect[] {
       continue;
     }
     entries.forEach((entry, index) => {
-      const command = isPlainObject(entry) ? entry["command"] : undefined;
-      if (typeof command !== "string" || command.trim() === "") defects.push({ pointer: `${pointer}/${index}`, reason: "no-command" });
+      const reason = entryDefect(entry);
+      if (reason !== null) defects.push({ pointer: `${pointer}/${index}`, reason });
     });
   }
   return defects;
@@ -139,8 +165,12 @@ export function describeCursorHookDefects(shown: string, raw: string | null): st
   }
   const defects = cursorHookDefects(doc);
   if (defects.length === 0) return null;
-  const unknown = defects.filter((defect) => defect.reason === "unknown-event").map((defect) => printableName(defect.pointer));
-  const commandless = defects.filter((defect) => defect.reason === "no-command").map((defect) => printableName(defect.pointer));
+  const named = (reason: CursorHookDefect["reason"]): string[] =>
+    defects.filter((defect) => defect.reason === reason).map((defect) => printableName(defect.pointer));
+  const unknown = named("unknown-event");
+  const commandless = named("no-command");
+  const promptless = named("no-prompt");
+  const untyped = named("unknown-type");
   const found = [
     ...(unknown.length === 0
       ? []
@@ -149,6 +179,10 @@ export function describeCursorHookDefects(shown: string, raw: string | null): st
             `${CURSOR_HOOK_EVENTS.length} events cursor.com/docs/hooks listed on ${CURSOR_HOOK_EVENTS_READ})`,
         ]),
     ...(commandless.length === 0 ? [] : [`${commandless.join(", ")} ${commandless.length === 1 ? "runs" : "run"} no command`]),
+    ...(promptless.length === 0 ? [] : [`${promptless.join(", ")} ${promptless.length === 1 ? "is a prompt hook" : "are prompt hooks"} with no prompt`]),
+    ...(untyped.length === 0
+      ? []
+      : [`${untyped.join(", ")} ${untyped.length === 1 ? "has a type" : "have a type"} Cursor does not run (it runs "command" and "prompt")`]),
   ];
   const remedies = [
     ...(unknown.length === 0
@@ -159,6 +193,8 @@ export function describeCursorHookDefects(shown: string, raw: string | null): st
             `the event since ${CURSOR_HOOK_EVENTS_READ}, this engine's list is out of date`,
         ]),
     ...(commandless.length === 0 ? [] : ["give each such entry a command, or remove it"]),
+    ...(promptless.length === 0 ? [] : ["give each such prompt hook a prompt, or remove it"]),
+    ...(untyped.length === 0 ? [] : ['set each such type to "command" or "prompt", or remove the entry']),
   ];
   return (
     `Cursor rejects ${shown} as it stands: ${found.join("; ")}. While it holds such an entry Cursor loads none of ` +
@@ -214,6 +250,7 @@ export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
     ],
     members: [{ pointer: "/version", foreign: "collide", structural: true, known: (value) => CURSOR_HOOKS_VERSIONS.has(value) }],
     personalHint: "Personal hooks belong in ~/.cursor/hooks.json, which this engine never writes.",
+    earlier: (rendering) => directHookRendering("cursor", runnerRows(rendering)),
   };
 }
 
@@ -268,7 +305,14 @@ function codexHookInBound(hook: unknown): boolean {
   const { command, commandWindows } = hook;
   if (Array.isArray(command)) {
     const [program, script] = command;
-    return program === "node" && typeof script === "string" && script.startsWith(CODEX_SCRIPTS) && script.length > CODEX_SCRIPTS.length;
+    // Every segment named, as `./coOwnedJson.ts::executedScript` reads a
+    // Cursor command: a `..` would leave the folder the prefix names.
+    return (
+      program === "node" &&
+      typeof script === "string" &&
+      script.startsWith(CODEX_SCRIPTS) &&
+      script.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..")
+    );
   }
   if (typeof command !== "string" || !isEngineStarter(command)) return false;
   return commandWindows === undefined || (typeof commandWindows === "string" && isEngineStarter(commandWindows));
@@ -314,10 +358,31 @@ export function isKnownCodexHooksDescription(value: unknown): boolean {
 }
 
 /**
+ * The top-level `stamity` member 1.0.0–1.6.0 wrote into `.codex/hooks.json`,
+ * one value through all eight of those releases (each tag's golden snapshot,
+ * read 2026-10-07; `test/manifest/fixtures/codex-hooks-stamity-member.json`).
+ * 1.7.0 stopped writing it, so the engine renders it no more.
+ */
+const CODEX_HOOKS_STAMITY_1_0_TO_1_6 = memberHash({
+  blockingExitCode: 2,
+  failMode: "fail-closed",
+  guarantee: "Adopts the interchange shape verbatim, exit-2 blocking included; emission is a config-dialect transform, not a semantic one.",
+  interchange: "claude-shape",
+  trust: "Each sha256 covers the generated script bytes this setup emits; verify with `stamity check` after any edit. User-authored hooks are wired verbatim and carry no digest — their commands are the repository's own trust domain.",
+});
+
+/** True for the `stamity` member a release up to 1.6.0 wrote into `.codex/hooks.json`. */
+export function isKnownCodexHooksStamity(value: unknown): boolean {
+  return memberHash(value) === CODEX_HOOKS_STAMITY_1_0_TO_1_6;
+}
+
+/**
  * What the engine writes into `.codex/hooks.json`: each group of a
- * `hooks.<Event>` array, and `description`. A group is recognised when some
- * inner command names the generated Codex folder; it is in the bound when
- * every inner hook runs the engine's own script.
+ * `hooks.<Event>` array, `description`, and — written up to 1.6.0, never now —
+ * `stamity`. A group is recognised when some inner command names the
+ * generated Codex folder; it is in the bound when every inner hook runs the
+ * engine's own script. An old `stamity` is the engine's by its release value
+ * and leaves silently; any other `stamity` is the owner's.
  */
 export function codexHooksSpec(): CoOwnedJsonSpec {
   return {
@@ -333,8 +398,152 @@ export function codexHooksSpec(): CoOwnedJsonSpec {
         outsideBound: "backup",
       },
     ],
-    members: [{ pointer: "/description", foreign: "yield", known: isKnownCodexHooksDescription }],
+    members: [
+      { pointer: "/description", foreign: "yield", known: isKnownCodexHooksDescription },
+      { pointer: "/stamity", foreign: "yield", known: isKnownCodexHooksStamity },
+    ],
+    earlier: (rendering) => directHookRendering("codex", runnerRows(rendering)),
   };
+}
+
+// ── Up to 1.6.0: hooks wired directly ────────────────────────────────────
+
+/**
+ * One hook row, as `.stamity/hooks/` defines it and as a portable runner's
+ * encoded argument carries it: the fields a release up to 1.6.0 rendered an
+ * entry from.
+ */
+export interface DirectHookRow {
+  /** The canonical event (`pre_tool_use`). */
+  event: string;
+  matcher?: string;
+  /** Exec-form argv. */
+  command: readonly string[];
+  timeoutMs?: number;
+}
+
+/**
+ * Each client's event key per canonical event in 1.0.0–1.6.0, the releases
+ * that wired a hook directly (Cursor's `EVENT_RENAME`, Codex's
+ * `CLAUDE_EVENT_NAMES`; identical at every one of those tags, read 2026-10-07).
+ */
+const DIRECT_EVENTS: Readonly<Record<"cursor" | "codex", Readonly<Record<string, string>>>> = Object.freeze({
+  cursor: Object.freeze({
+    session_start: "sessionStart",
+    pre_tool_use: "preToolUse",
+    post_tool_use: "postToolUse",
+    user_prompt_submit: "beforeSubmitPrompt",
+    stop: "stop",
+    session_end: "sessionEnd",
+  }),
+  codex: Object.freeze({
+    session_start: "SessionStart",
+    pre_tool_use: "PreToolUse",
+    post_tool_use: "PostToolUse",
+    user_prompt_submit: "UserPromptSubmit",
+    stop: "Stop",
+    session_end: "SessionEnd",
+  }),
+});
+
+/** 1.0.0–1.6.0's shell-safe token, as Cursor's `shellCommand` quoted an argv then. */
+const DIRECT_SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+/** An argv as 1.0.0–1.6.0 rendered it into a Cursor `command`. */
+function directShellCommand(argv: readonly string[]): string {
+  return argv.map((word) => (DIRECT_SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`)).join(" ");
+}
+
+/**
+ * What a release up to 1.6.0 rendered into `client`'s hooks document for
+ * `rows` (the build/54 sign-off, as revised): each row wired directly, not
+ * through the portable runner — on Cursor `{ command, matcher?, failClosed? }`,
+ * `failClosed` on `preToolUse` (the one blocking event then); on Codex the
+ * rows grouped by matcher in their order, each `{ type, command: argv,
+ * timeout? }`. Rows the engine supplies itself (its generated scripts, an
+ * installed pack's) are left out: those releases grouped the core's rows with
+ * a digest this cannot re-render, so only a definition's own entry is proved
+ * this way — a group the core shared with one stays recognised and leaves
+ * behind a backup. Equal to an element on disk, an entry here proves it was
+ * the engine's direct wiring of a hook it still wires, so replacing it with
+ * the runner's entry runs that hook once.
+ */
+export function directHookRendering(client: "cursor" | "codex", rows: readonly DirectHookRow[]): { hooks: Record<string, unknown[]> } {
+  const hooks: Record<string, unknown[]> = {};
+  for (const row of rows) {
+    const event = DIRECT_EVENTS[client][row.event];
+    const script = row.command[1] ?? "";
+    if (event === undefined || script.startsWith(`${HOOKS_GENERATED_DIR}/`) || script.startsWith(`${STATE_DIR}/packs/`)) continue;
+    const entries = (hooks[event] ??= []);
+    if (client === "cursor") {
+      entries.push({
+        command: directShellCommand(row.command),
+        ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
+        ...(row.event === "pre_tool_use" ? { failClosed: true } : {}),
+      });
+      continue;
+    }
+    const hook = {
+      type: "command",
+      command: [...row.command],
+      ...(row.timeoutMs === undefined ? {} : { timeout: Math.ceil(row.timeoutMs / 1000) }),
+    };
+    const group = entries.find((candidate) => (candidate as { matcher?: string }).matcher === row.matcher) as { hooks: unknown[] } | undefined;
+    if (group === undefined) entries.push({ ...(row.matcher === undefined ? {} : { matcher: row.matcher }), hooks: [hook] });
+    else group.hooks.push(hook);
+  }
+  return { hooks };
+}
+
+/** The portable runner's command prefix on Cursor; its one argument is the encoded row. */
+const CURSOR_RUNNER_COMMAND = `node ${CURSOR_SCRIPTS}stamity-portable-hook.mjs `;
+
+/** The row a runner command's trailing base64url argument encodes, or `null` when it carries none this can read. */
+function encodedRow(command: string): DirectHookRow | null {
+  const argument = command.slice(command.lastIndexOf(" ") + 1);
+  let row: unknown;
+  try {
+    row = JSON.parse(Buffer.from(argument, "base64url").toString("utf8"));
+    // reason: not silent — a command carrying no row proves nothing, and nothing is proved from it.
+  } catch {
+    return null;
+  }
+  if (!isPlainObject(row) || typeof row["event"] !== "string" || !Array.isArray(row["command"])) return null;
+  const { event, matcher, command: argv, timeoutMs } = row;
+  if (!argv.every((word) => typeof word === "string")) return null;
+  return {
+    event,
+    command: argv as string[],
+    ...(typeof matcher === "string" ? { matcher } : {}),
+    ...(typeof timeoutMs === "number" ? { timeoutMs } : {}),
+  };
+}
+
+/**
+ * The rows the engine's current rendering of a hooks document wires through
+ * the portable runner, in its order: each Cursor entry, and each inner hook of
+ * a Codex group, whose command is the runner's (`CURSOR_RUNNER_COMMAND`, or a
+ * Codex starter) — the definitions it renders now, which
+ * {@link directHookRendering} re-renders as 1.6.0 did.
+ */
+function runnerRows(rendering: Record<string, unknown>): DirectHookRow[] {
+  const rows: DirectHookRow[] = [];
+  const hooks = rendering["hooks"];
+  if (!isPlainObject(hooks)) return rows;
+  const read = (command: unknown, runs: (text: string) => boolean): void => {
+    if (typeof command !== "string" || !runs(command)) return;
+    const row = encodedRow(command);
+    if (row !== null) rows.push(row);
+  };
+  for (const elements of Object.values(hooks)) {
+    if (!Array.isArray(elements)) continue;
+    for (const element of elements) {
+      if (!isPlainObject(element)) continue;
+      read(element["command"], (text) => text.startsWith(CURSOR_RUNNER_COMMAND));
+      for (const hook of innerHooks(element) ?? []) read(isPlainObject(hook) ? hook["command"] : undefined, isEngineStarter);
+    }
+  }
+  return rows;
 }
 
 // ── S17: the scripts a hooks document runs ───────────────────────────────
