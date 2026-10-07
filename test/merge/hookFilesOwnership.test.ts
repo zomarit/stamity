@@ -1025,6 +1025,8 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
     expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(true);
     expect(synced.stdout).toContain(OLD_MCP_GUARD);
     expect(await readText(root, CURSOR_HOOKS)).not.toContain(OLD_MCP_GUARD);
+    // Kept for its edit, not because a hooks document runs it: the owner's now, so its row is not carried (review/75, review/76).
+    expect((await readManifest(root))?.ledger.map((row) => row.path)).not.toContain(OLD_MCP_GUARD);
   });
 
   it("a 1.11.0 setup with an owner entry: clean -y before any sync keeps the entry alone, behind a verified .bak, and deletes both old guards it no longer runs", async () => {
