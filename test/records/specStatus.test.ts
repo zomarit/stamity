@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -22,6 +22,15 @@ import { describe, expect, it } from "vitest";
  * shipped. That keeps the gate a derivation rather than one more hand-kept pin
  * of the kind `.stamity/learnings/surface-pins-are-literals-that-drift.md`
  * records — nobody bumps a list here when a release is cut.
+ *
+ * A plan can be written, and stamped, a release or more before its spec's
+ * requirements are built: plan 015 named `docs/specs/board-writes.md` at its
+ * stamp, and the release after it shipped none of that spec. Restamping such a
+ * spec would be false, so a `design` spec a shipped plan named is flagged only
+ * when a file under `test/` cites one of the requirement ids the spec itself
+ * defines — the `REQ-<AREA>-<nnn>` join key plan units, deltas and test names
+ * share. A spec that defines no id keeps the old rule and is flagged. This is
+ * still derived from the tree, never typed into a list.
  *
  * The checks are PURE FUNCTIONS over text plus two injected git predicates, and
  * the tree is one caller among several: the fixture cases at the bottom drive
@@ -60,6 +69,38 @@ const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
  * writes.
  */
 const SPEC_REFERENCE = /docs\/specs\/[A-Za-z0-9._-]+\.md/g;
+
+/** The tree a citation is read from: a test names the requirement it proves. */
+const TESTS_DIR = "test";
+
+/**
+ * A requirement id: `REQ-<AREA>-<nnn>`, the area spelled the way
+ * `content/skills/st-verify/scripts/spec-plan-coverage.mjs` reads it.
+ */
+const REQUIREMENT_ID = "REQ-[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*-\\d{3,}";
+
+/**
+ * A line that defines a requirement rather than mentions one: a `###`–`######`
+ * heading or a `- **REQ-…` bullet, the two definition forms the coverage script
+ * reads. A spec's prose that cites another spec's id defines nothing here.
+ */
+const REQUIREMENT_DEFINITION = new RegExp(`^(?:#{3,6}\\s+|[-*]\\s+\\*\\*)(${REQUIREMENT_ID})`);
+
+/** Every requirement id cited anywhere in a text. */
+const REQUIREMENT_CITATION = new RegExp(REQUIREMENT_ID, "g");
+
+/** The requirement ids a spec defines, deduplicated, in document order. */
+const requirementIdsOf = (specText: string): readonly string[] => [
+  ...new Set(
+    specText.split("\n").flatMap((line) => {
+      const match = REQUIREMENT_DEFINITION.exec(line);
+      return match?.[1] === undefined ? [] : [match[1]];
+    }),
+  ),
+];
+
+/** Every requirement id one text cites, deduplicated. */
+const requirementIdsCitedIn = (text: string): readonly string[] => [...new Set(text.match(REQUIREMENT_CITATION) ?? [])];
 
 /** The value of a frontmatter field, or null where the head carries none. */
 const frontmatterField = (text: string, field: string): string | null => {
@@ -125,9 +166,22 @@ interface ShippedScan {
   readonly skipped: readonly string[];
 }
 
+/** What the tree says about a spec's requirements: the ids it defines, and who cites each. */
+interface Citations {
+  /** The requirement ids one spec defines; empty where it defines none. */
+  readonly idsOf: (spec: string) => readonly string[];
+  /** The first file under `test/` citing one id, or null where none does. */
+  readonly citedBy: (id: string) => string | null;
+}
+
+/** No ids known for any spec: every `design` spec a shipped plan named is flagged. */
+const NO_CITATIONS: Citations = { idsOf: () => [], citedBy: () => null };
+
 /**
  * The gate's core derivation, pure over its inputs: for each plan that shipped
- * under `tag`, every spec it names that still reads `design` is a problem.
+ * under `tag`, every spec it names that still reads `design` is a problem —
+ * unless the spec defines requirement ids and no test cites any of them, which
+ * is a spec the plan wrote ahead of the release that builds it.
  *
  * `statusOf` returns null for a spec file that does not exist — those belong to
  * the dangling-reference check below, which reports them once and asks git
@@ -138,6 +192,7 @@ const shippedDesignScan = (
   statusOf: (spec: string) => string | null,
   tag: string,
   shippingOf: (stamp: string) => Shipping,
+  citations: Citations = NO_CITATIONS,
 ): ShippedScan => {
   const problems: string[] = [];
   const skipped: string[] = [];
@@ -158,8 +213,18 @@ const shippedDesignScan = (
     }
     if (shipping === "unshipped") continue;
     for (const spec of specs) {
-      if (statusOf(spec) === "design") {
-        problems.push(`${spec} shipped with ${tag} through ${plan} and still reads design`);
+      if (statusOf(spec) !== "design") continue;
+      const problem = `${spec} shipped with ${tag} through ${plan} and still reads design`;
+      const ids = citations.idsOf(spec);
+      if (ids.length === 0) {
+        problems.push(problem);
+        continue;
+      }
+      for (const id of ids) {
+        const file = citations.citedBy(id);
+        if (file === null) continue;
+        problems.push(`${problem} (${file} cites ${id})`);
+        break;
       }
     }
   }
@@ -216,6 +281,28 @@ const shippingUnder =
     return gitExitCode(["merge-base", "--is-ancestor", stamp, "HEAD"]) === 0 ? "unshipped" : "unknown";
   };
 
+/**
+ * The tree's citations: each spec's own ids, and the first file under `test/`
+ * (sorted, POSIX) citing each id. Read only when the shipped-spec check runs.
+ */
+const treeCitations = (): Citations => {
+  const firstCiter = new Map<string, string>();
+  const files = readdirSync(join(REPO_ROOT, TESTS_DIR), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name))
+    .toSorted();
+  for (const file of files) {
+    const display = relative(REPO_ROOT, file).replaceAll("\\", "/");
+    for (const id of requirementIdsCitedIn(readFileSync(file, "utf8"))) {
+      if (!firstCiter.has(id)) firstCiter.set(id, display);
+    }
+  }
+  return {
+    idsOf: (spec) => requirementIdsOf(readDocument(spec)),
+    citedBy: (id) => firstCiter.get(id) ?? null,
+  };
+};
+
 const SPEC_PATHS = documentsIn(SPECS_DIR);
 const PLAN_PATHS = documentsIn(PLANS_DIR);
 
@@ -261,7 +348,13 @@ describe("spec statuses", () => {
 
   it.skipIf(NEWEST_TAG === null)("leaves no spec reading `design` that a released plan shipped", () => {
     const tag = NEWEST_TAG ?? "";
-    const scan = shippedDesignScan(PLAN_HEADS, (spec) => SPEC_STATUS.get(spec) ?? null, tag, shippingUnder(tag));
+    const scan = shippedDesignScan(
+      PLAN_HEADS,
+      (spec) => SPEC_STATUS.get(spec) ?? null,
+      tag,
+      shippingUnder(tag),
+      treeCitations(),
+    );
     for (const reason of scan.skipped) {
       console.info(`spec-status gate — undecided plan against ${tag}: ${reason}`);
     }
@@ -392,5 +485,66 @@ describe("fixtures — the gate fails where it must", () => {
       () => "shipped",
     );
     expect(scan.problems).toEqual([]);
+  });
+
+  it("(g) passes a spec a plan wrote ahead of the release until a test cites one of its ids", () => {
+    // The fixture ids use the area `DEMO`, which no spec defines: this file is
+    // itself under `test/`, so a real id written here would count as a citation.
+    const plans: readonly PlanHead[] = [
+      { plan: "docs/plans/020-ahead.md", stamp: "aaaaaaa", specs: ["docs/specs/ahead.md", "docs/specs/bare.md"] },
+    ];
+    const ids = new Map<string, readonly string[]>([
+      ["docs/specs/ahead.md", ["REQ-DEMO-001", "REQ-DEMO-002"]],
+      ["docs/specs/bare.md", []],
+    ]);
+    const idsOf = (spec: string): readonly string[] => ids.get(spec) ?? [];
+
+    // Written ahead: no test cites ahead.md's ids, so it is not flagged; bare.md
+    // defines no id at all, so it keeps the old rule and is.
+    const ahead = shippedDesignScan(plans, () => "design", "v1.12.0", fixtureShipping, {
+      idsOf,
+      citedBy: () => null,
+    });
+    expect(ahead.problems).toEqual([
+      "docs/specs/bare.md shipped with v1.12.0 through docs/plans/020-ahead.md and still reads design",
+    ]);
+
+    // One test citing one of its ids is the shipped behaviour the status must name.
+    const cited = shippedDesignScan(plans, () => "design", "v1.12.0", fixtureShipping, {
+      idsOf,
+      citedBy: (id) => (id === "REQ-DEMO-002" ? "test/demo/ahead.test.ts" : null),
+    });
+    expect(cited.problems).toEqual([
+      "docs/specs/ahead.md shipped with v1.12.0 through docs/plans/020-ahead.md and still reads design " +
+        "(test/demo/ahead.test.ts cites REQ-DEMO-002)",
+      "docs/specs/bare.md shipped with v1.12.0 through docs/plans/020-ahead.md and still reads design",
+    ]);
+  });
+
+  it("(h) reads a spec's own ids from its definitions, and a citation from any mention", () => {
+    const spec = [
+      "---",
+      "id: demo",
+      "status: design",
+      "---",
+      "# Demo",
+      "",
+      "Builds on REQ-OTHER-004, which this spec does not define.",
+      "",
+      "## Requirements",
+      "",
+      "### REQ-DEMO-001 — The first",
+      "#### REQ-DEMO-002 (MODIFIED)",
+      "- **REQ-DEMO-003** — a bullet definition",
+      "### REQ-DEMO-001 — repeated",
+      "### REQ-DEMO-WIDE-010 — an area with a hyphen",
+      "## Not a requirement heading: REQ-DEMO-099",
+    ].join("\n");
+    expect(requirementIdsOf(spec)).toEqual(["REQ-DEMO-001", "REQ-DEMO-002", "REQ-DEMO-003", "REQ-DEMO-WIDE-010"]);
+    expect(requirementIdsOf(head("design"))).toEqual([]);
+
+    const testText = 'it("REQ-DEMO-002: holds", () => {}); // and REQ-DEMO-1234, REQ-DEMO-002 again; REQ-12 is no id';
+    expect(requirementIdsCitedIn(testText)).toEqual(["REQ-DEMO-002", "REQ-DEMO-1234"]);
+    expect(requirementIdsCitedIn("no ids here")).toEqual([]);
   });
 });
