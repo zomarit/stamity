@@ -1033,12 +1033,13 @@ describe("the planner holds the manifest reader's record bound: too many selecte
 describe("reduceCodexConfigToml", () => {
   it("leaves an unreadable file untouched, naming the line", () => {
     const reduction = reduce("[a]\nx = [\n");
-    expect(reduction.kind).toBe("untouched");
+    expect(reduction).toMatchObject({ kind: "untouched", refused: true });
     expect(reduction.detail).toContain("line 2");
   });
 
   it("leaves a file holding none of the engine's tables untouched", () => {
-    expect(reduce('[profiles.x]\nmodel = "o3"\n', { record: recordFor("features") }).kind).toBe("untouched");
+    // The owner's file, not a refusal (review/97): the sweep keeps no row for it.
+    expect(reduce('[profiles.x]\nmodel = "o3"\n', { record: recordFor("features") })).toMatchObject({ kind: "untouched", refused: false });
   });
 
   it("an engine-created file with nothing else is engine-only and proven", () => {
@@ -1146,7 +1147,7 @@ describe("a standard table defined twice in the kept file is a co-owned-shape co
   it("reduce: leaves the file untouched, naming the table", () => {
     const raw = `${EMPTY}\n[profiles.x]\na = 1\n[profiles.x]\n`;
     const reduction = reduce(raw, { record: recordFor("features", "mcp_servers") });
-    expect(reduction.kind).toBe("untouched");
+    expect(reduction).toMatchObject({ kind: "untouched", refused: true });
     expect(reduction.detail).toContain("[profiles.x]");
     expect(reduction.detail).toContain("defined twice");
   });

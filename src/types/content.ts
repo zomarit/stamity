@@ -265,7 +265,19 @@ export type CoOwnedReduction =
    */
   | ({ kind: "reduced"; content: string; detail: string } & CoOwnedReductionProof)
   /** Nothing the engine can prove it wrote, or nothing readable — leave it be. */
-  | { kind: "untouched"; detail: string };
+  | {
+      kind: "untouched";
+      /**
+       * `true` when the reducer refused the document: it could not read it,
+       * or could not reduce it to its shape, so which of its entries are the
+       * engine's is unknown and the engine's claim stands (the sweep keeps the
+       * ledger row, review/97). `false` when it read the document and found
+       * none of the engine's entries in it: the document is the owner's, and
+       * nothing of it is left to reclaim.
+       */
+      refused: boolean;
+      detail: string;
+    };
 
 /**
  * What a reducer can say about the units it removed, for the sweep's backup

@@ -1012,20 +1012,27 @@ describe("reduceCoOwnedJson", () => {
     expect(out).toMatchObject({ kind: "reduced", content: doc({ model: "x" }), proven: false });
   });
 
+  // TEST CHANGE, justified: review/97 — `untouched` now says whether it is a refusal: a document
+  // holding none of the engine's entries is the owner's (`refused: false`), one the reducer cannot
+  // read or reduce to its shape is a refusal (`refused: true`), and only a refusal keeps a row.
   it("claims nothing in a file holding none of the engine's entries, or one it cannot read", () => {
     expect(reduce(OWNER_RAW, { elements: ENGINE_ELEMENTS })).toEqual({
       kind: "untouched",
+      refused: false,
       detail:
         "Co-owned settings document holding none of the entries this engine wrote — every entry in it is the " +
         "client's or the operator's, so the file is left exactly as it is.",
     });
     const bad = reduce("{ nope", null);
-    expect(bad.kind).toBe("untouched");
+    expect(bad).toMatchObject({ kind: "untouched", refused: true });
     expect(bad.detail).toMatch(/^This settings document is not valid JSON \(syntax error/);
     expect(bad.detail).not.toContain("nope");
+    expect(reduce("[]", null)).toMatchObject({ kind: "untouched", refused: true });
     expect(reduce("[]", null).detail).toContain("is an array, not a JSON object");
     // Nesting past the stack under an engine pointer, where the reducer must hash it.
-    expect(reduce(`{"hooks":{"Stop":[${"[".repeat(200_000)}${"]".repeat(200_000)}]}}`, null).detail).toContain("not a document this engine can serialise back");
+    const deep = reduce(`{"hooks":{"Stop":[${"[".repeat(200_000)}${"]".repeat(200_000)}]}}`, null);
+    expect(deep).toMatchObject({ kind: "untouched", refused: true });
+    expect(deep.detail).toContain("not a document this engine can serialise back");
   });
 
   describe("members", () => {

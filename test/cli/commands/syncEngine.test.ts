@@ -585,7 +585,7 @@ describe("collisions", () => {
         return Promise.resolve({ result: { path: _absPath, action: "unchanged" }, collision: null });
       },
       materialize: () => Promise.reject(new Error("the plan never writes")),
-      reducer: () => () => ({ kind: "untouched", detail: "" }),
+      reducer: () => () => ({ kind: "untouched", refused: false, detail: "" }),
     };
     const ledger = [
       { path: ".claude/settings.json", adapter: "claude", artifactId: "settings", artifactType: "infra", contentHash: "a".repeat(64) },

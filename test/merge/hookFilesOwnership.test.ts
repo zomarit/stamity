@@ -1273,6 +1273,36 @@ describe("a removed client's hooks document the sweep cannot reduce keeps its ro
     },
   );
 
+  // review/97: leaving a document whole is a refusal only when the reducer could not read it or
+  // reduce it to its shape. One holding none of the engine's entries is the owner's: it stays, and
+  // its row is gone after one sync. Each case is [client, path, refused, the owner's bytes].
+  const kept = [
+    ["cursor", CURSOR_HOOKS, false, `${JSON.stringify({ version: 1, hooks: { afterFileEdit: [OWNER_CURSOR_ENTRY] } }, null, 2)}\n`],
+    ["codex", ".codex/config.toml", false, 'model = "o3"\n\n[profiles.x]\na = 1\n'],
+    ["codex", ".codex/config.toml", true, 'model = "o3"\n\n[profiles.x]\na = 1\n\n[profiles.x]\nb = 2\n'],
+  ] as const;
+  it.each(kept)(
+    "%s's %s replaced by the owner's own (refused: %s): sync keeps the file byte for byte, and keeps its row only for a refusal",
+    async (client, path, refused, owner) => {
+      const root = await freshRepo();
+      await init(root, ["claude", client]);
+      const before = (await readManifest(root))?.ledger.filter((row) => row.path === path) ?? [];
+      expect(before.length).toBeGreaterThan(0);
+      await writeFile(abs(root, path), owner, "utf8");
+      await selectTools(root, ["claude"]);
+
+      const { report } = await sync(root);
+
+      const entry = report.reclaimed?.entries.find((candidate) => candidate.path === path);
+      expect(entry?.action).toBe("skipped-user-content");
+      expect(entry?.refused === true).toBe(refused);
+      expect(await readText(root, path)).toBe(owner);
+      const rows = (await readManifest(root))?.ledger.filter((row) => row.path === path) ?? [];
+      expect(rows).toEqual(refused ? before : []);
+      expect(await backups(root)).toEqual([]);
+    },
+  );
+
   it("a document the sweep reduced carries nothing: its owner entry stays, and no Cursor row is left", async () => {
     const root = await freshRepo();
     await init(root, ["claude", "cursor"]);

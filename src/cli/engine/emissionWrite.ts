@@ -436,22 +436,26 @@ function cursorGuardPathsFor(ledger: readonly LedgerEntry[]): string[] {
 }
 
 /**
- * The sweep outcomes that leave a co-owned document as it was: the reducer
- * refused it (it does not parse, or holds a shape it cannot read back), or the
- * sweep would not rewrite it (a link, a hard link, a file it cannot read).
+ * The sweep refused a co-owned document, so the engine's claim to it stands:
+ * its reducer refused it (it does not parse, or holds a shape it cannot read
+ * back — the entry's `refused`), or the sweep would not rewrite it (a link, a
+ * hard link, a file it cannot read). A document the reducer read and found
+ * none of the engine's entries in is the owner's, and is no refusal (review/97).
  */
-const LEFT_UNREDUCED: ReadonlySet<ReclaimActionEntry["action"]> = new Set(["skipped-user-content", "skipped-unsafe-path"]);
+const sweepRefused = (entry: ReclaimActionEntry): boolean =>
+  entry.action === "skipped-unsafe-path" || (entry.action === "skipped-user-content" && entry.refused === true);
 
 /**
  * The pre-run ledger rows the live sweep's refusals hold in place (review/91):
- * those of each co-owned document in `coOwned` the sweep left unreduced, and
+ * those of each co-owned document in `coOwned` the sweep refused, and
  * those of each script a hooks document it left in place still runs
  * (`ReclaimReport.wiringKept`, S17). The ledger rebuild has already dropped
  * them — a removed client's rows, or a renamed or deselected path's — so they
  * go back whole, the recorded hash and the co-owned record included, and the
  * files stay the engine's to reclaim: once the owner repairs the document, the
  * next sync reduces it and deletes the scripts by their recorded hash. A
- * document the sweep reduced or deleted carries nothing. 1.11.0's renamed
+ * document the sweep reduced or deleted carries nothing, and nor does one
+ * holding none of the engine's entries: it is the owner's (review/97). 1.11.0's renamed
  * guards are one case: a kept `.cursor/hooks.json` that still runs one keeps
  * its row, so the setup stays one that ran a release before the rename
  * ({@link cursorGuardPathsFor}, review/75). A file kept for any other reason —
@@ -465,7 +469,7 @@ export function rowsCarriedThroughSweep(
 ): LedgerEntry[] {
   if (reclaimed === null) return [];
   const held = new Set(reclaimed.wiringKept?.flatMap((kept) => kept.scripts) ?? []);
-  for (const entry of reclaimed.entries) if (coOwned.has(entry.path) && LEFT_UNREDUCED.has(entry.action)) held.add(entry.path);
+  for (const entry of reclaimed.entries) if (coOwned.has(entry.path) && sweepRefused(entry)) held.add(entry.path);
   return ledger.filter((row) => held.has(row.path) && VALID_TOOLS.has(row.adapter));
 }
 

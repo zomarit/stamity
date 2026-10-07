@@ -658,6 +658,7 @@ export function reduceCodexConfigToml(
   if (!cut.ok) {
     return {
       kind: "untouched",
+      refused: true,
       detail:
         `This Codex configuration does not read as TOML at line ${cut.line} (${cut.reason}), so which of its tables the ` +
         `engine wrote cannot be read. Nothing was removed and nothing was deleted — fix or delete the file by hand.`,
@@ -670,6 +671,7 @@ export function reduceCodexConfigToml(
   if (doubled !== null) {
     return {
       kind: "untouched",
+      refused: true,
       detail:
         `This Codex configuration defines [${doubled.name}] twice outside the engine's tables (lines ${doubled.first} and ` +
         `${doubled.line}), and TOML refuses a table defined twice, so what is left once the engine's tables are out ` +
@@ -680,6 +682,7 @@ export function reduceCodexConfigToml(
   if (held.length === 0) {
     return {
       kind: "untouched",
+      refused: false,
       detail:
         "Co-owned Codex configuration holding none of the tables this engine wrote — every table and key in it is the " +
         "operator's, so the file is left exactly as it is.",

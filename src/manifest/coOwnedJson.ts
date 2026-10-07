@@ -1427,6 +1427,7 @@ export function reduceCoOwnedJson(
 ): CoOwnedReduction {
   const unreadable = (why: string): CoOwnedReduction => ({
     kind: "untouched",
+    refused: true,
     detail:
       `This ${spec.noun} ${why}, so which of its entries the engine wrote cannot be read. Nothing was removed ` +
       `and nothing was deleted — fix or delete the file by hand.`,
@@ -1527,6 +1528,7 @@ function reduceDocument(
   if (removed.length === 0) {
     return {
       kind: "untouched",
+      refused: false,
       detail:
         `Co-owned ${spec.noun} holding none of the entries this engine wrote — every entry in it is the client's ` +
         `or the operator's, so the file is left exactly as it is.`,

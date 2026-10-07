@@ -488,6 +488,7 @@ export function reduceMcpDocumentToUserContent(
   if (filtered.unparseable !== undefined) {
     return {
       kind: "untouched",
+      refused: true,
       detail:
         `This MCP document is not valid JSON (${filtered.unparseable}), so which of its entries ` +
         `the engine wrote cannot be read. Nothing was removed and nothing was deleted — fix or ` +
@@ -497,6 +498,7 @@ export function reduceMcpDocumentToUserContent(
   if (filtered.removed.length === 0) {
     return {
       kind: "untouched",
+      refused: false,
       detail:
         "Co-owned MCP document holding no entry this repo can prove it wrote — every entry is " +
         "either one the ledger never claimed or one whose bytes no longer match what the engine " +

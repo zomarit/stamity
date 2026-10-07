@@ -863,11 +863,12 @@ describe("rowsCarriedThroughSweep (review/91)", () => {
     artifactType: "infra",
     contentHash: sha256(path),
   });
-  const entry = (path: string, action: ReclaimActionEntry["action"]): ReclaimActionEntry => ({
+  const entry = (path: string, action: ReclaimActionEntry["action"], refused = false): ReclaimActionEntry => ({
     path,
     candidateReason: "adapter-removed",
     action,
     detail: "",
+    ...(refused ? { refused: true as const } : {}),
   });
   const report = (entries: ReclaimActionEntry[], wiringKept?: ReclaimReport["wiringKept"]): ReclaimReport => ({
     entries,
@@ -877,13 +878,16 @@ describe("rowsCarriedThroughSweep (review/91)", () => {
     strippedCount: 0,
     skippedCount: 0,
   });
-  const coOwned = new Set([".cursor/hooks.json", ".cursor/mcp.json", ".codex/config.toml", ".codex/hooks.json"]);
+  const coOwned = new Set([".cursor/hooks.json", ".cursor/mcp.json", ".codex/config.toml", ".codex/hooks.json", ".vscode/mcp.json"]);
 
   it("carries no row when no sweep ran", () => {
     expect(rowsCarriedThroughSweep([row(".cursor/hooks.json")], null, coOwned)).toEqual([]);
   });
 
-  it("carries the rows of a co-owned document left unreduced and of each script a kept document runs, and nothing else", () => {
+  // TEST CHANGE, justified: review/97 — only a reducer's refusal (the flag on the entry) or an
+  // unsafe path carries a co-owned row; the first entry is now marked a refusal, and the
+  // holding-none `.vscode/mcp.json` below is the owner's and carries nothing.
+  it("carries the rows of a co-owned document the sweep refused and of each script a kept document runs, and nothing else", () => {
     const ledger = [
       row(".cursor/hooks.json"),
       row(".cursor/mcp.json"),
@@ -893,16 +897,18 @@ describe("rowsCarriedThroughSweep (review/91)", () => {
       row(".stamity/generated/hooks/cursor/a.mjs", "pack:acme__ops"),
       row(".stamity/generated/hooks/cursor/b.mjs"),
       row(".cursor/rules/x.mdc"),
+      row(".vscode/mcp.json", "copilot"),
     ];
     const swept = report(
       [
-        entry(".cursor/hooks.json", "skipped-user-content"),
+        entry(".cursor/hooks.json", "skipped-user-content", true),
         entry(".cursor/mcp.json", "skipped-unsafe-path"),
         entry(".codex/config.toml", "co-owned-reduced"),
         entry(".codex/hooks.json", "skipped-missing"),
         entry(".stamity/generated/hooks/cursor/a.mjs", "skipped-user-content"),
         entry(".stamity/generated/hooks/cursor/b.mjs", "skipped-user-content"),
         entry(".cursor/rules/x.mdc", "skipped-user-content"),
+        entry(".vscode/mcp.json", "skipped-user-content"),
       ],
       [{ path: ".cursor/hooks.json", scripts: [".stamity/generated/hooks/cursor/a.mjs"] }],
     );

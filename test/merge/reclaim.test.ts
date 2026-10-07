@@ -1458,7 +1458,7 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
         path,
         (content: string): CoOwnedReduction => {
           if (!content.includes(ENGINE_LINE)) {
-            return { kind: "untouched", detail: "Nothing here is the engine's." };
+            return { kind: "untouched", refused: false, detail: "Nothing here is the engine's." };
           }
           const left = content.split(ENGINE_LINE).join("");
           return left.trim() === ""
@@ -1539,7 +1539,29 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
     });
 
     expect(onlyEntry(report).action).toBe("skipped-user-content");
+    // The owner's document, not a refusal (review/97): nothing marks it one to keep a row for.
+    expect("refused" in onlyEntry(report)).toBe(false);
     expect(await readFile(join(root, CO_OWNED), "utf-8")).toBe(theirs);
+  });
+
+  it("marks the entry of a document the reducer refused (it cannot read it or reduce it to its shape), dry run or not (review/97)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const broken = `${ENGINE_LINE}{ not this format\n`;
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: broken });
+    const refusing: CoOwnedReducer = () => ({ kind: "untouched", refused: true, detail: "Cannot be read." });
+
+    for (const consent of [true, false]) {
+      const report = await sweepReclaimCandidates([coOwnedCandidate(broken)], {
+        rootDir: root,
+        consent,
+        trustedExactPaths: new Set([CO_OWNED]),
+        coOwnedPaths: new Map([[CO_OWNED, refusing]]),
+      });
+      expect(onlyEntry(report)).toMatchObject({ action: "skipped-user-content", refused: true });
+      expect(onlyEntry(report).detail).toContain("Cannot be read.");
+    }
+    expect(await readFile(join(root, CO_OWNED), "utf-8")).toBe(broken);
   });
 
   // S-W3: the co-owned lane settles ahead of the hash veto, so a document whose
@@ -2082,7 +2104,7 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
   const SETTINGS = ".claude/settings.json";
   const SCRIPT = ".stamity/generated/hooks/claude/stamity-guard.mjs";
   const SCRIPT_BODY = "export {};\n";
-  const untouched: CoOwnedReducer = () => ({ kind: "untouched", detail: "Left whole." });
+  const untouched: CoOwnedReducer = () => ({ kind: "untouched", refused: false, detail: "Left whole." });
   const settingsCandidate = (path: string, content: string): ReclaimCandidate => ({
     entry: { path, adapter: "claude", artifactId: "settings", artifactType: "infra", contentHash: sha256Of(content) },
     reason: "deselected",

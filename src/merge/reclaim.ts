@@ -176,6 +176,14 @@ export interface ReclaimActionEntry {
    * or the co-owned document's reducer. Absent on a refusal.
    */
   proof?: ReclaimProof;
+  /**
+   * On a co-owned document's `skipped-user-content`: the reducer refused it —
+   * it could not read the document or reduce it to its shape — so the engine's
+   * claim to it stands (`CoOwnedReduction`'s `untouched.refused`, review/97).
+   * Absent when the reducer read it and found none of the engine's entries:
+   * that document is the owner's.
+   */
+  refused?: true;
 }
 
 /** What proved the engine's claim to a file the sweep removes or rewrites. */
@@ -530,6 +538,8 @@ type ReclaimPlan =
       kind: "skip";
       action: "skipped-user-content" | "skipped-unsafe-path" | "skipped-missing";
       detail: string;
+      /** A co-owned document's reducer refused it ({@link ReclaimActionEntry.refused}). */
+      refused?: true;
     };
 
 interface SweepContext {
@@ -746,7 +756,9 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   const reduce = ctx.coOwned.get(path);
   if (reduce !== undefined) {
     const reduction = reduce(content);
-    if (reduction.kind === "untouched") return skip("skipped-user-content", reduction.detail);
+    if (reduction.kind === "untouched") {
+      return { kind: "skip", action: "skipped-user-content", detail: reduction.detail, ...(reduction.refused ? { refused: true as const } : {}) };
+    }
     // Drifted: the removal takes a verified backup first, as every write lane
     // does. Not a veto on this lane — the reducer already separated what the
     // engine can prove it wrote — but the sign that something it removes may
@@ -1123,7 +1135,7 @@ export async function sweepReclaimCandidates(
     const base = { path: group.path, candidateReason: group.reason };
 
     if (plan.kind === "skip") {
-      entries.push({ ...base, action: plan.action, detail: plan.detail + provenance });
+      entries.push({ ...base, action: plan.action, detail: plan.detail + provenance, ...(plan.refused ? { refused: true as const } : {}) });
       return;
     }
     if (!opts.consent) {

@@ -483,12 +483,14 @@ describe("reduceMcpDocumentToUserContent", () => {
     // entry owns it from that moment — and an untouched verdict means the sweep
     // writes nothing at all.
     expect(reduce(tuned).kind).toBe("untouched");
+    // The owner's document, not a refusal (review/97): the sweep keeps no row for it.
+    expect(reduce(tuned)).toMatchObject({ refused: false });
   });
 
   it("never claims a document it cannot parse", () => {
     const reduction = reduce("{ not json at all");
 
-    expect(reduction.kind).toBe("untouched");
+    expect(reduction).toMatchObject({ kind: "untouched", refused: true });
     expect(reduction.detail).toContain("not valid JSON");
   });
   it("answers proven when every removal was a re-rendered server, and unproven once it prunes an inputs row (REQ-FLOW-036)", () => {
