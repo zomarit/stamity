@@ -491,7 +491,12 @@ describe("deselection reclaim", () => {
   // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per table,
   // so the edited infra file this case keeps as salvage moves from
   // `.codex/config.toml` (now reduced table by table, the two cases below) to
-  // `.codex/hooks.json`, still a whole-file output here.
+  // `.codex/hooks.json`.
+  // TEST CHANGE, justified: REQ-FLOW-037 (S17) — `.codex/hooks.json` is now owned
+  // entry by entry too, and a hooks file the sweep keeps holds back every script
+  // it still runs. The operator's `//` line leaves the file unparseable, so it is
+  // kept whole as salvage, and the four Codex scripts its encoded rows name are
+  // kept with it rather than deleted out from under it: five salvaged paths, not one.
   it("keeps an edited infra file and discloses it as salvage", async () => {
     // The allowlist exempts a path from the ownership-marker gate ONLY. Bytes
     // that no longer hash to what the engine recorded are the user's, so the
@@ -506,13 +511,23 @@ describe("deselection reclaim", () => {
     const report = await apply(await plan());
 
     const kept = (report.reclaimed?.entries ?? []).filter((entry) => entry.action !== "deleted" && entry.path !== CODEX_CONFIG_FILE);
-    expect(kept.map((entry) => entry.path)).toEqual([CODEX_HOOKS_FILE]);
+    const heldScripts = [
+      "stamity-config-tamper-notice.mjs",
+      "stamity-portable-hook.mjs",
+      "stamity-pre-tool-use-guard.mjs",
+      "stamity-session-start.mjs",
+    ].map((name) => `${HOOKS_GENERATED_DIR}/${DESELECTED}/${name}`);
+    expect(kept.map((entry) => [entry.path, entry.action])).toEqual(
+      [CODEX_HOOKS_FILE, ...heldScripts].map((path) => [path, "skipped-user-content"]),
+    );
     await expect(readFile(edited, "utf8")).resolves.toContain("hand-edited by the operator");
+    const held = await Promise.all(heldScripts.map((script) => readFile(join(repo.rootDir, script), "utf8")));
+    expect(held.every((text) => text.length > 0)).toBe(true);
 
     const rendered = renderSyncReport(await plan(), report, plainPalette);
     expect(rendered).toContain("their ledger rows are dropped");
     expect(rendered).toContain(CODEX_HOOKS_FILE);
-    expect(syncJsonPayload(await plan(), report).counts).toMatchObject({ reclaimSalvaged: 1 });
+    expect(syncJsonPayload(await plan(), report).counts).toMatchObject({ reclaimSalvaged: 1 + heldScripts.length });
   });
 
   // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per table.
