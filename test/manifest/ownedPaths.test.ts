@@ -401,4 +401,19 @@ describe("the charter recogniser", () => {
     expect(bytesShowEngineOutput("CLAUDE.md", CHARTER_1_0_0)).toBe(false);
     expect(bytesShowEngineOutput(".codex/config.toml", "anything")).toBe(true);
   });
+
+  // The override repeats the shared AGENTS.md as the run leaves it — the
+  // owner's own text first under a `skip` or a `supplement` with text above the
+  // block — so the root appendix heading on a line of its own is its proof.
+  it("reads the root override by the root appendix heading on a line of its own", () => {
+    const heading = "## Conditional rules (Codex down-conversion)";
+    const owner = "# Team notes\n\nOur own agent instructions.\n";
+    expect(bytesShowEngineOutput("AGENTS.override.md", `${owner}\n${heading}\n\nRules.\n`)).toBe(true);
+    expect(bytesShowEngineOutput("AGENTS.override.md", `${owner}\r\n${heading}\r\n\r\nRules.\r\n`)).toBe(true);
+    expect(bytesShowEngineOutput("AGENTS.override.md", `${heading}\n\nRules.\n`)).toBe(true);
+    expect(bytesShowEngineOutput("AGENTS.override.md", owner)).toBe(false);
+    expect(bytesShowEngineOutput("AGENTS.override.md", `${owner}\nSee ${heading} below.\n`)).toBe(false);
+    expect(bytesShowEngineOutput("AGENTS.override.md", `${owner}\n### Conditional rules (Codex down-conversion)\n`)).toBe(false);
+    expect(bytesShowEngineOutput("AGENTS.md", `${owner}\n${heading}\n`)).toBe(false);
+  });
 });

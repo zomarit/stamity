@@ -295,6 +295,12 @@ const CHARTER_TITLE = "# Charter";
 /** How the Codex rule appendix opens when it is a folder's own `AGENTS.md` (`../adapters/codex.ts`). */
 const CODEX_APPENDIX_TITLE = "# Conditional rules (Codex down-conversion)";
 
+/**
+ * The root appendix's heading line in the Codex-only `AGENTS.override.md`
+ * (`../adapters/codex.ts`, the root appendix at title level 2, no scope).
+ */
+const CODEX_ROOT_APPENDIX_HEADING = "## Conditional rules (Codex down-conversion)";
+
 /** The header line every release's Copilot setup workflow carries (`../adapters/copilot.ts`). */
 const COPILOT_SETUP_HEADER_LINE =
   "# Prepares the environment the GitHub Copilot coding agent works in. The agent runs";
@@ -341,6 +347,11 @@ export function isEngineCharterDocument(text: string): boolean {
  * - `AGENTS.md` and `AGENTS.override.md`: a charter ({@link isEngineCharterDocument}),
  *   or, for an `AGENTS.md` below the root only, the Codex rule appendix (first
  *   non-blank line opening `# Conditional rules (Codex down-conversion)`).
+ * - `AGENTS.override.md` also: a line equal to the root appendix heading
+ *   `## Conditional rules (Codex down-conversion)`. The override repeats the
+ *   shared `AGENTS.md` as the run leaves it, which under a `skip` or a
+ *   `supplement` decision opens with the owner's own text rather than the
+ *   charter, so the appendix heading below it is what the engine's file carries.
  * - `CLAUDE.md`: never. The engine writes it as one managed block, so only a
  *   block spanning the file proves it, which the callers test on their own.
  * - The Copilot setup workflow: a line equal to the engine's header line.
@@ -353,5 +364,6 @@ export function bytesShowEngineOutput(path: string, text: string): boolean {
     return lines.includes(COPILOT_SETUP_HEADER_LINE);
   }
   if (isEngineCharterDocument(text)) return true;
+  if (path === "AGENTS.override.md") return lines.includes(CODEX_ROOT_APPENDIX_HEADING);
   return path.includes("/") && (firstNonBlankLine(lines)?.startsWith(CODEX_APPENDIX_TITLE) ?? false);
 }

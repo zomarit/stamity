@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -296,6 +297,7 @@ const OWNER_AGENTS = "# Team notes\n\nOur own agent instructions. Keep this.\n";
 interface ManifestDoc {
   ledger: LedgerEntry[];
   importChoice?: { path: string; mode: string }[];
+  tools?: string[];
 }
 
 /** Rewrites the committed manifest, as a hand edit of it does. */
@@ -457,6 +459,137 @@ describe("an instruction file leaves only on its own bytes", () => {
     expect(doc.reclaim.entries.find((candidate) => candidate.path === "packages/app/AGENTS.md")).toMatchObject({
       action: "deleted",
       proof: "hash",
+    });
+  });
+});
+
+// ── REQ-PLUGIN-046: the engine's own Codex override ───────────────────────
+
+/**
+ * The Codex-only root `AGENTS.override.md` repeats the shared `AGENTS.md` as
+ * the run leaves it, then the root rules appendix. Under a `skip` decision, or
+ * a `supplement` with owner text above the block, it opens with the owner's
+ * text rather than the charter, so the appendix heading on a line of its own
+ * is what proves the engine wrote it.
+ */
+describe("the engine's own AGENTS.override.md proves itself by its appendix heading", () => {
+  const OVERRIDE = "AGENTS.override.md";
+  const APPENDIX_HEADING = "## Conditional rules (Codex down-conversion)";
+
+  /** A codex repository whose owner `AGENTS.md` init imported under `mode`. */
+  async function codexRepo(mode: "skip" | "supplement"): Promise<string> {
+    const root = getTemp().path("repo");
+    await mkdir(root, { recursive: true });
+    await seed(root, { "AGENTS.md": OWNER_AGENTS });
+    const decisions = await buildInitDecisions(root, { tools: ["claude", "codex"] }, { history: null, skipWorkspaceProbe: true });
+    await applyInit({
+      rootDir: root,
+      decisions,
+      importChoice: [{ path: "AGENTS.md", mode }],
+      engineVersion: ENGINE_VERSION,
+      dryRun: false,
+      force: false,
+      now: T0,
+    });
+    expect((await readFile(join(root, OVERRIDE), "utf8")).split("\n")).toContain(APPENDIX_HEADING);
+    return root;
+  }
+
+  async function overrideBackups(root: string): Promise<string[]> {
+    return (await readdir(root)).filter((name) => name.startsWith(`${OVERRIDE}.bak`));
+  }
+
+  // Under `supplement` a first adoption puts the block on top, so the override
+  // still opens with the charter; the owner's text above the block is set up by
+  // one sync, and the change under test is the next one.
+  it.each([
+    ["skip", (bytes: string) => bytes],
+    ["supplement", (bytes: string) => `# Above\n\nThe owner's line above the block.\n\n${bytes}`],
+  ] as const)("a sync that changes the override under %s takes no .bak and no warning", async (mode, ownerAbove) => {
+    const root = await codexRepo(mode);
+    const agents = join(root, "AGENTS.md");
+    await writeFile(agents, ownerAbove(await readFile(agents, "utf8")), "utf8");
+    const setup = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+    expect(setup.code).toBe(0);
+    const before = await readFile(join(root, OVERRIDE), "utf8");
+    expect(before.startsWith("# Charter")).toBe(false);
+    await writeFile(agents, `${await readFile(agents, "utf8")}\nA line the owner added.\n`, "utf8");
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+
+    expect(sync.code).toBe(0);
+    const after = await readFile(join(root, OVERRIDE), "utf8");
+    expect(after).not.toBe(before);
+    expect(after).toContain("A line the owner added.");
+    expect(await overrideBackups(root)).toEqual([]);
+    expect(`${setup.stdout}${sync.stdout}`).not.toContain("may be yours");
+  }, 60_000);
+
+  it("deselecting codex removes the unedited override", async () => {
+    const root = await codexRepo("skip");
+    await editManifest(root, (manifest) => {
+      manifest.tools = ["claude"];
+    });
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code).toBe(0);
+    const doc = JSON.parse(sync.stdout.trim()) as { reclaim: { entries: { path: string; action: string; proof?: string }[] } };
+    expect(doc.reclaim.entries.find((entry) => entry.path === OVERRIDE)).toMatchObject({ action: "deleted", proof: "hash" });
+    expect(existsSync(join(root, OVERRIDE))).toBe(false);
+    expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(OWNER_AGENTS);
+  }, 60_000);
+
+  it("keeps a hand-edited override on deselect, and names it", async () => {
+    const root = await codexRepo("skip");
+    const edited = `${await readFile(join(root, OVERRIDE), "utf8")}\nMy own Codex note.\n`;
+    await writeFile(join(root, OVERRIDE), edited, "utf8");
+    await editManifest(root, (manifest) => {
+      manifest.tools = ["claude"];
+    });
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code).toBe(0);
+    const doc = JSON.parse(sync.stdout.trim()) as { reclaim: { entries: { path: string; action: string; detail: string }[] } };
+    const entry = doc.reclaim.entries.find((candidate) => candidate.path === OVERRIDE);
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry?.detail).toContain("edited since");
+    expect(await readFile(join(root, OVERRIDE), "utf8")).toBe(edited);
+  }, 60_000);
+
+  describe("an owner's own AGENTS.override.md without the heading keeps the fail-safe", () => {
+    const OWNER_OVERRIDE = "# Our Codex overrides\n\nUse the staging database.\n";
+
+    it("is backed up, with the warning, before a codex sync overwrites it under a row hashing it", async () => {
+      const root = await initialisedRepo(["claude", "codex"]);
+      await writeFile(join(root, OVERRIDE), OWNER_OVERRIDE, "utf8");
+      await editManifest(root, (manifest) => {
+        for (const row of manifest.ledger) if (row.path === OVERRIDE) row.contentHash = sha256(OWNER_OVERRIDE);
+      });
+
+      const sync = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+
+      expect(sync.code).toBe(0);
+      expect(sync.stdout).toContain("may be yours");
+      const backups = await overrideBackups(root);
+      expect(backups).toHaveLength(1);
+      expect(await readFile(join(root, backups[0] as string), "utf8")).toBe(OWNER_OVERRIDE);
+    }, 60_000);
+
+    it("is kept by the sweep under a forged row hashing it", async () => {
+      const root = await initialisedRepo();
+      await seed(root, { [OVERRIDE]: OWNER_OVERRIDE });
+      await forgeRows(root, [hashedInfraRow(OVERRIDE, OWNER_OVERRIDE, "codex")]);
+
+      const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+      expect(sync.code).toBe(0);
+      const doc = JSON.parse(sync.stdout.trim()) as { reclaim: { entries: { path: string; action: string; detail: string }[] } };
+      const entry = doc.reclaim.entries.find((candidate) => candidate.path === OVERRIDE);
+      expect(entry?.action).toBe("skipped-user-content");
+      expect(entry?.detail).toContain("only when its own bytes show the engine wrote it");
+      expect(await readFile(join(root, OVERRIDE), "utf8")).toBe(OWNER_OVERRIDE);
     });
   });
 });
