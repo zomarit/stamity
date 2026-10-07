@@ -59,6 +59,7 @@ import * as jsonMembers from "../manifest/jsonMembers.ts";
 import * as coOwnedJson from "../manifest/coOwnedJson.ts";
 import * as tomlTables from "../manifest/tomlTables.ts";
 import * as codexConfigToml from "../manifest/codexConfigToml.ts";
+import * as hookDocuments from "../manifest/hookDocuments.ts";
 import * as mcpCatalog from "../mcp/catalog.ts";
 import * as descriptionScan from "../mcp/descriptionScan.ts";
 import * as mcpEnv from "../mcp/env.ts";
@@ -177,6 +178,7 @@ export interface EngineRegistry {
     readonly coOwnedJson: typeof coOwnedJson;
     readonly tomlTables: typeof tomlTables;
     readonly codexConfigToml: typeof codexConfigToml;
+    readonly hookDocuments: typeof hookDocuments;
   };
   readonly mcp: {
     readonly catalog: typeof mcpCatalog;
@@ -374,6 +376,7 @@ export function createEngine(): EngineRegistry {
       coOwnedJson,
       tomlTables,
       codexConfigToml,
+      hookDocuments,
     },
     mcp: {
       catalog: mcpCatalog,
