@@ -4127,6 +4127,92 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     expect(row(doc, "expectations").status).toBe("fail");
   });
 
+  it("pins every remedy to the expected release when the running CLI, the clients and the mode all miss", async () => {
+    const root = await seedRepo(getRepo(), {
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
+    });
+    const flags = ["--expect-version", "9.9.9", "--expect-tools", "claude,cursor", "--expect-mode", "generated"];
+
+    const { code, doc } = await runExpecting(root, flags);
+
+    expect(code).toBe(1);
+    expect(failure(doc).code).toBe("EXPECTATION_ERROR");
+    // Followed in order, the steps leave the repository at the expected release:
+    // a step at the running one would regenerate there last and re-break
+    // `generatedBy` (review/21). `next` is one string, as every `check` failure
+    // document's is, its steps separated by "; " the way `why`'s mismatches are,
+    // one step per mismatch and in the same order (review/25).
+    const steps = (failure(doc).next ?? "").split("; ");
+    expect(steps).toEqual([
+      `regenerate with the expected release in a reviewed pull request: ${npxAt("9.9.9", "sync")}`,
+      `run this check with the expected release: ${npxAt("9.9.9", "check --expect-version 9.9.9")}`,
+      `${npxAt("9.9.9", "config set tools claude,cursor")}, then ${npxAt("9.9.9", "sync")}, ` +
+        "in a reviewed pull request",
+      `a repository changes install mode only through ${npxAt("9.9.9", "clean -y")}, ` +
+        `then ${npxAt("9.9.9", "init")}, in a reviewed pull request`,
+    ]);
+    expect((failure(doc).why ?? "").split("; ")).toHaveLength(steps.length);
+    expect(failure(doc).next).not.toContain(`@${RUNNING} `);
+
+    const human = await runInProcess([checkCommand], ["check", ...flags], { cwd: root });
+    const next = human.stdout.slice(human.stdout.indexOf("\nnext:\n"));
+    for (const [index, step] of steps.entries()) expect(next).toContain(`  ${index + 1}. ${step}\n`);
+  });
+
+  it("falls back to packageCommand's unpinned call when the package's own name is unrunnable", async () => {
+    // The branch `pinnedCallAt` takes when `pinnedCliCall` refuses the name
+    // (review/24). A legacy upper-case name fails the runnable-name grammar in
+    // `src/shared/cliCall.ts`, so `packageCommand` renders `npx <name> <verb>`,
+    // and the expected-release remedies render the same rather than a second form.
+    // The rename is applied the way the fork-name case above applies it: only
+    // the kit's own package-root walk is redirected.
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const pseudoInstall = handle.path("pseudo-install");
+    await mkdir(pseudoInstall, { recursive: true });
+    await writeFile(
+      join(pseudoInstall, "package.json"),
+      `${JSON.stringify({ name: "@Acme/Stamity", version: "1.8.0" })}\n`,
+    );
+    const kitDir = join("src", "cli", "kit");
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string =>
+          from.endsWith(kitDir) ? pseudoInstall : actual.findPackageRoot(from),
+      };
+    });
+    try {
+      const renamed = await import("../../../src/cli/commands/check.ts");
+      const { __setContentRootForTests: pinFreshCorpus } = await import(
+        "../../../src/content/contentRoot.ts"
+      );
+      pinFreshCorpus(handle.path("corpus"));
+      const result = await runInProcess(
+        [renamed.checkCommand],
+        ["check", "--json", "--expect-version", "9.9.9", "--expect-tools", "claude,cursor"],
+        { cwd: root },
+      );
+
+      expect(result.code).toBe(1);
+      const doc = JSON.parse(result.stdout.trim()) as Envelope;
+      expect(failure(doc).code).toBe("EXPECTATION_ERROR");
+      expect(failure(doc).next).toBe(
+        [
+          "regenerate with the expected release in a reviewed pull request: npx @Acme/Stamity sync",
+          "run this check with the expected release: npx @Acme/Stamity check --expect-version 9.9.9",
+          "npx @Acme/Stamity config set tools claude,cursor, then npx @Acme/Stamity sync, " +
+            "in a reviewed pull request",
+        ].join("; "),
+      );
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
+    }
+  });
+
   it("names generatedBy alone when only the manifest's release differs", async () => {
     expect(RUNNING).not.toBe("1.10.0");
     const root = await seedRepo(getRepo(), { generatedBy: "1.10.0" });
@@ -4204,6 +4290,22 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       expect(doc.doctor).toBeUndefined();
     },
   );
+
+  it("refuses an --expect-version with build metadata rather than comparing it without", async () => {
+    // `semver.valid` would hold `1.12.0+acme.1` as `1.12.0`, so the row would say
+    // "expected 1.12.0" for a value the caller never wrote, and pass it (review/23).
+    const root = await seedRepo(getRepo());
+
+    const { code, doc } = await runExpecting(root, ["--expect-version", "1.12.0+acme.1"]);
+
+    expect(code).toBe(1);
+    expect(failure(doc).code).toBe("VALIDATION_ERROR");
+    expect(failure(doc).message).toBe(
+      '--expect-version takes one exact release without build metadata, got "1.12.0+acme.1"',
+    );
+    expect(failure(doc).next).toBe("pass the release without its build metadata, such as 1.12.0");
+    expect(doc.doctor).toBeUndefined();
+  });
 
   it("refuses an unknown or empty --expect-tools with VALIDATION_ERROR before any probe", async () => {
     const root = await seedRepo(getRepo());

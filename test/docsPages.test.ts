@@ -2792,6 +2792,26 @@ describe("the guides", () => {
     expect(documented.toSorted()).toEqual([...probes].toSorted());
   });
 
+  it("troubleshooting's list of the codes it names is the codes it names", () => {
+    // The list is prose, so nothing moved it when a row started naming a new
+    // code (review/22). The codes are read out of `ErrorCode`'s union, as the
+    // probes above are read out of check.ts, and the page's named codes are
+    // every backticked member of that set anywhere on it.
+    const union = /export type ErrorCode =([^;]+);/.exec(read("src/types/errors.ts"))?.[1] ?? "";
+    const codes = new Set([...union.matchAll(/"([A-Z_]+)"/g)].map((match) => match[1] ?? ""));
+    expect(codes.size, "no error codes could be read out of src/types/errors.ts").toBeGreaterThanOrEqual(9);
+
+    const page = read(TROUBLESHOOTING);
+    const named = new Set(
+      [...page.matchAll(/`([A-Z_]+)`/g)].map((match) => match[1] ?? "").filter((name) => codes.has(name)),
+    );
+    const sentence = /The codes this page names are ([^.]+)\./.exec(page)?.[1];
+    expect(sentence, "the troubleshooting guide no longer lists the codes it names").toBeDefined();
+    const listed = [...(sentence ?? "").matchAll(/`([A-Z_]+)`/g)].map((match) => match[1] ?? "");
+
+    expect(listed.toSorted()).toEqual([...named].toSorted());
+  });
+
   it("troubleshooting sends a reporter to the two channels, and no third one", () => {
     const text = read(TROUBLESHOOTING);
     expect(text, "the troubleshooting guide names no issue tracker").toContain(

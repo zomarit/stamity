@@ -2301,8 +2301,8 @@ function readExpectations(opts: Record<string, unknown>): Expectations | null {
   const expectations: Expectations = {};
   const rawVersion = opts["expectVersion"];
   if (typeof rawVersion === "string") {
-    const version = semver.valid(rawVersion);
-    if (version === null) {
+    const parsed = semver.parse(rawVersion);
+    if (parsed === null) {
       throw new CliFailure({
         code: "VALIDATION_ERROR",
         message: `--expect-version takes one exact version, got ${JSON.stringify(rawVersion)}`,
@@ -2310,7 +2310,18 @@ function readExpectations(opts: Record<string, unknown>): Expectations | null {
         next: "pass the exact release, such as 1.12.0",
       });
     }
-    expectations.version = version;
+    // `parsed.version` drops build metadata, so `1.12.0+acme.1` would be held as
+    // `1.12.0`: compared against a release the caller never named, and passed by
+    // it. npm versions carry no build metadata, so the value is refused instead.
+    if (parsed.build.length > 0) {
+      throw new CliFailure({
+        code: "VALIDATION_ERROR",
+        message: `--expect-version takes one exact release without build metadata, got ${JSON.stringify(rawVersion)}`,
+        why: "an expectation names one published release, and npm versions carry no build metadata",
+        next: `pass the release without its build metadata, such as ${parsed.version}`,
+      });
+    }
+    expectations.version = parsed.version;
   }
   const rawTools = opts["expectTools"];
   if (typeof rawTools === "string") expectations.tools = readExpectedTools(rawTools);
@@ -2397,23 +2408,33 @@ function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorC
  * `pinnedCliCall`, as `packageCommand` renders every other remedy here.
  */
 function pinnedCallAt(version: string, verb: string): string {
+  const name = packageName();
   const npmChannel = hasNpmChannel();
   try {
-    return pinnedCliCall(packageName(), version, verb, { npmChannel });
+    return pinnedCliCall(name, version, verb, { npmChannel });
   } catch {
-    // An unrunnable own name: the unpinned-name fallback `packageCommand` takes.
-    return `npx ${npmChannel ? "-y" : "--no"} ${packageName()}@${version} ${verb}`;
+    // An unrunnable own name: the unpinned-name fallback `packageCommand` takes,
+    // spelled as it spells it, so the two remedies never differ for one name.
+    return npmChannel ? `npx ${name} ${verb}` : `npx --no ${name} ${verb}`;
   }
 }
 
 /**
- * One step per failed field, in field order. Each change lands through a
- * reviewed pull request: the caller's expectation is the approved state, and a
- * repository is moved to it, never the expectation to the repository.
+ * One step per mismatch {@link expectationMismatches} names, in the same order.
+ * Each change lands through a reviewed pull request: the caller's expectation
+ * is the approved state, and a repository is moved to it, never the
+ * expectation to the repository.
+ *
+ * With a release expected, every step runs that release, not the running one:
+ * a client-set or mode step at the running release would regenerate there last
+ * and break `generatedBy` again. Without one, they run the running release, as
+ * every other remedy here does.
  */
 function expectationSteps(report: ExpectationReport, manifestTools: readonly Tool[]): string[] {
   const steps: string[] = [];
   const { version, tools, mode } = report;
+  const call =
+    version === undefined ? packageCommand : (verb: string): string => pinnedCallAt(version.expected, verb);
   if (version !== undefined && version.generatedBy !== version.expected) {
     steps.push(
       `regenerate with the expected release in a reviewed pull request: ${pinnedCallAt(version.expected, "sync")}`,
@@ -2427,7 +2448,7 @@ function expectationSteps(report: ExpectationReport, manifestTools: readonly Too
   }
   if (tools !== undefined && !tools.ok) {
     steps.push(
-      `${packageCommand(`config set tools ${tools.expected.join(",")}`)}, then ${packageCommand("sync")}, ` +
+      `${call(`config set tools ${tools.expected.join(",")}`)}, then ${call("sync")}, ` +
         "in a reviewed pull request",
     );
   }
@@ -2435,10 +2456,10 @@ function expectationSteps(report: ExpectationReport, manifestTools: readonly Too
     const clients = (tools?.expected ?? manifestTools).join(",");
     const setup =
       mode.expected === "plugin-backed"
-        ? packageCommand(`plugin setup --client ${clients}`)
-        : packageCommand("init");
+        ? call(`plugin setup --client ${clients}`)
+        : call("init");
     steps.push(
-      `a repository changes install mode only through ${packageCommand("clean -y")}, then ${setup}, ` +
+      `a repository changes install mode only through ${call("clean -y")}, then ${setup}, ` +
         "in a reviewed pull request",
     );
   }
@@ -2609,7 +2630,11 @@ function checkFailureDoc(
       code: "EXPECTATION_ERROR",
       message: "check found the repository different from what its caller expects",
       why: expectations.mismatches.join("; "),
-      next: expectations.steps.join(" "),
+      // One string, as every `next` here is. Its steps are separated by "; ",
+      // as `why`'s mismatches are, one step per mismatch in the same order, so a
+      // machine reader splits both on "; ". No step holds one: a version, a
+      // client id and a runnable package name cannot.
+      next: expectations.steps.join("; "),
     };
   }
   if (drift.kind === "failed") {
