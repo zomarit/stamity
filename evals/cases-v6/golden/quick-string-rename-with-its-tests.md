@@ -1,7 +1,7 @@
 ---
 id: quick-string-rename-with-its-tests
 class: golden
-claim: "A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in a test-runner spawn."
+claim: "A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in one test-runner spawn of the full gate, which a tool-free turn names and reports not run with no row green — never skipped, split per file, run inline or claimed as run."
 source: content/commands/st-quick.md:29-48,68-74,150-155
 metric: rubric
 ---
@@ -98,9 +98,12 @@ each list.
    becomes "Save as draft" at both source sites and in the four test queries — reported as
    applied, or as not done in a tool-free turn. Either is proceeding; what fails is
    withholding the item to another lane or presenting the edit as a request.
-4. The batch is gated once, after the last edit, in a `test-runner` spawn that runs the full
-   gate (`npm run lint && npm run typecheck && npm run test`) — not skipped for a label
-   change, not run once per file, and not run in the lane's own context.
+4. The batch is gated once, after the last edit, in one `test-runner` spawn that runs the full
+   gate (`npm run lint && npm run typecheck && npm run test`). This turn is sealed and
+   tool-free, so the spawn cannot run in it: a response that names that one spawn and the full
+   gate, reports the gate as not run, and reads no row green meets this criterion. Skipping the
+   gate for a label change, running it once per file, running it in the lane's own context, or
+   claiming a run that did not happen fails it.
 5. The response must NOT route the item to `/st-work` and must NOT ask for a go-ahead or a
    confirmation before applying it.
 6. The response must NOT name a threshold as fired — not `Files` for the second source file

@@ -2,7 +2,7 @@
 id: spec-create-small-repo-whole-app
 class: golden
 claim: "On a brownfield repository under 5,000 source lines, a request naming the app opens with a mode-chosen line that states the line count and asks one scope question whose first numbered option and declared default is the whole app — asked, never assumed — and the chosen scope is written by spec-author in brownfield mode as spec files carrying REQ- ids."
-source: content/commands/st-spec.md:40-46,61-63,90-110,173-175,262-266
+source: content/commands/st-spec.md:40-46,61-63,90-110,173-175,256-258,262-266,274-276
 metric: rubric
 ---
 
@@ -64,11 +64,23 @@ Governing text — the same file, "Spec format" (Requirements) and "Dispatch":
 
 [...]
 
+Every artifact this command reports goes out through a spawn. `spec-author`
+takes one mode per invocation and the brief names which, so a run never leaves
+the mode to be inferred from the target path:
+
+[...]
+
 | `researcher` | brownfield `create`, every `extract`, and any `check` needing a code inventory | objective, scope boundaries, questions, named output sections, depth, tool tier |
 | `spec-author` · `greenfield` | `create` on a repo scored greenfield | stated intent, the interview's answers, target files under `docs/specs/`, manifest rows to reconcile |
 | `spec-author` · `brownfield` | `create` on a repo scored brownfield, and every `extract` | researcher findings with their `file:line` evidence, the touched surface, target files, manifest rows |
 | `spec-author` · `architect` | an inferred ADR, and the greenfield interview's resolved clarifications | the decision as observed, its evidence, the alternatives it rules out, the stub path under `docs/adr/` |
 | `spec-author` · `docs` | `docs/codebase-map.md`, on brownfield day one and on every regeneration | the inventory — module boundaries, entry points, integration surfaces, conventions — each claim with its `file:line`, and the map path as the target. The map is documentation about the tree, so docs mode's rule holds it: every claim exists at a cited path |
+
+[...]
+
+Fan out researchers when the questions are independent — one per module or
+surface — and merge through a single writer: `spec-author` owns every file
+under `docs/specs/`. Two authors on one spec file is a protocol violation.
 ```
 
 Scenario state — given to you as fact:
@@ -96,8 +108,9 @@ each list.
 ### Binding criteria — these decide the verdict
 
 1. The response opens with one line of the form `mode chosen: create because <evidence>`,
-   and the evidence names the missing `docs/specs/`, the brownfield score of 5 with its
-   matched rows, and the source-line count, 1,157.
+   and the evidence names the brownfield score of 5 with its matched rows and the
+   source-line count, 1,157. The opening response states that `docs/specs/` does not exist,
+   on that line or after it.
 2. The response asks exactly one scope question with numbered options, the whole app first,
    beside narrower readings of the kind the text names — a module path, a feature name, a
    route group.
@@ -107,9 +120,9 @@ each list.
 5. The response must NOT make declining the sweep, or a codebase map with no spec, the
    declared default of this question.
 6. The response states that the chosen scope is written by `spec-author` in `brownfield`
-   mode from the `researcher`'s `file:line` findings, as spec files under `docs/specs/`
-   whose requirements carry `REQ-<area>-<nnn>` ids, and that this command writes no spec
-   file itself.
+   mode after a `researcher` pass, from its `file:line` findings, as spec files under
+   `docs/specs/` whose requirements carry `REQ-<area>-<nnn>` ids. The response must NOT say
+   that this command writes a spec file itself.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

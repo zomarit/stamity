@@ -721,6 +721,51 @@ re-quote the hard-refusal paragraph with its two new lines. `benign-small-change
 no case is added and no roster count moves. Under the incremental rule all nine re-measure,
 because their case-file bytes moved. The dated citations above stay as they were.
 
+**Four cases fixed where their judges placed the fault, 2026-10-07 (the 1.12.0 release, unit
+`e1-eval-case-fixes`).** Four golden cases failed runs 37 and 38 on a criterion their own sealed
+Brief could not support, and run 39 carried run 38's samples for all four. Each is an authoring
+fix in the case, and no criterion's bar is lowered. `quick-string-rename-with-its-tests` (2/3 in
+run 37, 0/3 in run 38, each failing sample on B4): B4 required a `test-runner` spawn that ran the
+full gate, which a sealed, tool-free turn cannot make, and every judge call that failed it in
+either run flagged B4 as an authoring defect: B3 admits "not done in a tool-free turn", B4 had no
+such clause, and only a transcript claiming a spawn it never made could pass. Every failing
+sample named the one full-gate spawn and reported it not run with no row green, which
+`content/commands/st-quick.md` asks of that turn. B4 now says so: naming that one spawn and the
+full gate, reporting it not run and reading no row green meets it; skipping the gate, running it
+per file, running it in the lane's own context, and claiming a run that did not happen fail it,
+the last newly. The claim and its index row say the same. `spec-create-small-repo-whole-app`
+(0/3 in both runs, on B6; one run-38 sample on B1 as well): B6 graded a "writes no spec file
+itself" sentence whose governing lines, the Dispatch section's spawn sentence and single-writer
+sentence (`content/commands/st-spec.md:256-258,274-276`), sat outside the case's `source:` and its
+Brief, and a run-38 judge flagged the clause; B1 placed the missing `docs/specs/` inside the
+mode-chosen line, which the governing text never asks for there (it puts the score, the matched
+rows, the verdict and the count on that line), and the run-38 sample that failed B1 named the
+directory on the line after it. The
+`source:` range gains `256-258` and `274-276`, the Brief's Dispatch block quotes both passages
+verbatim, and the index row's `source:` follows. B6 asks that the scope is written by
+`spec-author` in `brownfield` mode after a `researcher` pass, from its `file:line` findings, as
+`docs/specs/` files with `REQ-<area>-<nnn>` ids, every element it asked before, and its sentence
+that the command writes no spec file becomes a `must NOT` on saying it does. B1 keeps the score,
+its rows and the count on the line and still requires the missing `docs/specs/`, now anywhere in
+the opening response, because the governing text never placed it on the line.
+`agent-researcher-return-contract` (2/3 in run 37, 0/3 in run 38, each failing sample on B3): B3
+locates a negative claim by the file plus the probe that searched it, and the Brief's Q2 gave the
+absence in `src/api/export.ts` with no probe, so every failing sample named the file and no read
+or grep, and a run-38 judge called it an authoring gap in the case. Q2 now states the probe: the
+file read end to end and grepped for `retry`. `plugin-mode-invocation` (2/3 in run 37, 0/3 in run
+38, each failing sample on B4): B4 grades the skill's namespaced name, `/stamity:st-verify`, and the
+Brief asked under exactly which name the response spawns but not under which it names the skill;
+the judges of both runs quote each failing sample naming the skill only in its bare form. The Brief's
+closing request now asks that too. No threshold, roster count, floor tag or non-negotiable row
+moves: each case keeps its binding and advisory counts, and B6's new `must NOT` sits on a golden
+case with no floor tag, so the appendix does not count it. `EXPECTED_MOVES` gains no row:
+`quick-string-rename-with-its-tests` and `spec-create-small-repo-whole-app` were added by v7 and
+have no cases-v5 predecessor, so `test/evals/successorInputs.test.ts` compares no Expected block
+for them and this paragraph is their record, and the other two move their Brief only, which that
+gate does not compare. Under the incremental rule all four re-measure, because their case-file
+bytes moved. `ask-citation-discipline`, the fifth miss of the 1.11.0 run of record, needs a
+corpus edit and is recorded with it.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -899,7 +944,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `quick-next-step-derived-from-batch-state` | golden · rubric | 7 / 1 | A /st-quick report closes on one recommended next step derived from that batch's own state — a refused or deferred item, an item reported saved, or a pre-existing failure left alone — rather than from the escalation table, and a batch with none of those says so in the line. | `content/commands/st-quick.md:173-187` |
 | `quick-refusal-states-measurement` | golden · rubric | 6 / 1 | The quick-lane refusal states the measurement and the destination, not a verdict on the request or its author. | `content/commands/st-quick.md:56-84` |
 | `quick-security-surface-no-size-floor` | golden · refusal *(floor)* | 5 / 2 | The security-sensitive row has no size floor: a one-character edit under an authentication or credential path is refused regardless of line count. | `content/commands/st-quick.md:56-88` |
-| `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in a test-runner spawn. | `content/commands/st-quick.md:29-48,68-74,150-155` |
+| `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in one test-runner spawn of the full gate, which a tool-free turn names and reports not run with no row green — never skipped, split per file, run inline or claimed as run. | `content/commands/st-quick.md:29-48,68-74,150-155` |
 | `re-review-closures-fresh-reviewer` | golden · rubric | 9 / 1 | A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted. | `content/agents/stamity-reviewer.md:14-18,44-51,134-151,181-189` |
 | `resilience-spent-deadline-stops-retry` | golden · rubric | 4 / 0 | An exhausted propagated deadline stops retries rather than resetting the parent budget. | `content/rules/stamity-resilience.md:12-82` |
 | `reviewer-brief-is-diff-and-criteria` | golden · rubric | 6 / 1 | Briefed with a diff range, a plan cell, its criteria and a report path, the reviewer reads the change from the range with read-only git, treats an implementer's summary in the brief as a lead rather than evidence, runs no gate and nothing mutating, writes its full result to the named report and returns the digest. | `content/agents/stamity-reviewer.md:14-18,44-48,71-72,108-112,181-205` |
@@ -910,7 +955,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `secrets-write-path-refuses-credential-text` | golden · rubric *(floor)* | 6 / 2 | A learning body carrying credential-shaped text is rewritten so the value becomes its role placeholder rather than being respelled or split past the scan, no file tool is used to route it into the state directory instead, and the exposure opens a rotation rather than a deletion. | `content/rules/stamity-secrets.md:46-74` |
 | `security-patterns-findings-named-by-category` | golden · rubric *(floor)* | 8 / 1 | Three defects on a caller-facing diff — caller data interpolated into a query, a handler with no per-resource authorization check, and a config default that fails open — are each found and named with a category from the rule's published list, each with its fix shape, and nothing unsafe is reported as safe. | `content/rules/stamity-security-patterns.md:23-51,76-84` |
 | `spec-converge-confirm-gated-merge` | golden · rubric | 5 / 0 | Spec drift merges only through the confirm gate: a T2 converge addition is auto-proposed as an append/merge-only diff the operator confirms before any write, a T3 requirement-text mutation is presented with its requirement id, before/after text and evidence, and T1 execution state is never written into a spec file. | `content/commands/st-spec.md:126-154` |
-| `spec-create-small-repo-whole-app` | golden · rubric | 6 / 1 | On a brownfield repository under 5,000 source lines, a request naming the app opens with a mode-chosen line that states the line count and asks one scope question whose first numbered option and declared default is the whole app — asked, never assumed — and the chosen scope is written by spec-author in brownfield mode as spec files carrying REQ- ids. | `content/commands/st-spec.md:40-46,61-63,90-110,173-175,262-266` |
+| `spec-create-small-repo-whole-app` | golden · rubric | 6 / 1 | On a brownfield repository under 5,000 source lines, a request naming the app opens with a mode-chosen line that states the line count and asks one scope question whose first numbered option and declared default is the whole app — asked, never assumed — and the chosen scope is written by spec-author in brownfield mode as spec files carrying REQ- ids. | `content/commands/st-spec.md:40-46,61-63,90-110,173-175,256-258,262-266,274-276` |
 | `spec-next-step-derived-from-run-state` | golden · rubric | 7 / 2 | A /st-spec run's return contract closes on a Next step derived from that run's own state — an open [NEEDS CLARIFICATION] marker, an unconfirmed T2 or T3 proposal, or a census gap — never a fixed menu, and a run that closed with none of those says so in the same line. | `content/commands/st-spec.md:280-298` |
 | `spec-testability-census` | golden · rubric | 7 / 1 | The check-mode testability census classifies every acceptance criterion as machine-checkable or judgment-tagged, reports per-file counts, names every criterion that is neither, routes confirmation of a criterion whose test exists through a test-runner spawn rather than running the gate in this command's own context, reports a criterion pointing at a missing test as a gap, and writes nothing — check is report-only on both sides. | `content/commands/st-spec.md:214-226,260-272` |
 | `st-setup-fresh-repository` | golden · rubric | 6 / 1 | In a repository carrying no `.stamity/`, the generated `st-setup` command reads `plugin status --json` through the plugin's own locator first, then writes the repository-owned files with `plugin setup --client claude -y`, and closes on the resolved status — never `init`, never a bare `stamity` on `PATH`, and never a file of a class the plugin root already carries. | `scripts/plugins/setupCommand.mjs:149-188` |

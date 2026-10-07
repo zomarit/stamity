@@ -82,8 +82,8 @@ Scenario state — your brief and what your probes returned, given to you as fac
 >   Q1. `src/http/retry.ts:41` — the backoff multiplier is 1.0, so retries fire at a fixed
 >   interval; three attempts; the multiplier is read once at construction,
 >   `src/http/retry.ts:12-18`.
->   Q2. `src/api/report.ts:77` constructs and calls the helper. `src/api/export.ts` does
->   not reference it anywhere.
+>   Q2. `src/api/report.ts:77` constructs and calls the helper. You read `src/api/export.ts`
+>   end to end and grepped it for `retry`; it does not reference the helper anywhere.
 >   Q3. You could not settle it. You read `src/http/retry.ts` end to end and grepped
 >   `src/http/` for `ECONNRESET`, `ETIMEDOUT` and `catch`. The retry predicate is supplied
 >   by the caller (`src/http/retry.ts:29`) and the file declares no default. The predicate

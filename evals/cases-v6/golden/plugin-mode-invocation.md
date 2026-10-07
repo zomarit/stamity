@@ -86,7 +86,7 @@ Scenario input — the operator's message:
 
 State how you run this: what you spawn and under exactly which name, who writes the plan
 artifact, what the `verify` line of one planned unit says, and how you reach the plan-lint gate's
-structural coverage pass.
+structural coverage pass and under exactly which name you name the skill it runs.
 
 ## Expected
 
