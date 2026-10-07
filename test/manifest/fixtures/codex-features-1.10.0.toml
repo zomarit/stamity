@@ -1,0 +1,35 @@
+# stamity — Codex CLI configuration. Generated file: regenerate rather than editing
+# it; local edits are overwritten.
+#
+# Composed by one writer: the MCP server tables below are rendered from the curated
+# catalog, and any adapter-level table joins them here rather than in a second file.
+#
+# Hooks: .codex/hooks.json · subagents: .codex/agents/ · standards: AGENTS.md.
+
+# Lifecycle hooks: an emitted hooks.json is read only while this key is on. It is written
+# explicitly, so the client's default does not decide it. Enabling it here is step 1 of 3.
+#
+# Three steps stand between this file and a hook the client runs.
+# 1. Feature flag: `features.hooks = true` (deprecated alias `features.codex_hooks`); this file
+#    is not read while it is off. .codex/config.toml writes it explicitly, so the client's
+#    default does not decide it. The per-invocation equivalent is `codex exec --enable hooks`,
+#    which is shorthand for `-c features.hooks=true`.
+# 2. Project trust: a project `.codex/` layer loads only when it is trusted. Record
+#    `projects.<path>.trust_level = "trusted"` in the Codex home config (`~/.codex/config.toml`),
+#    which is the operator's file and not one this engine writes.
+# 3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command.
+#    Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs
+#    enabled hooks with no persisted trust.
+# Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15).
+#
+# One writer: this whole file is generated, so a `[features]` table of your own does not
+# belong in it — TOML reads a second [features] header as a redefinition, not a merge, and
+# a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine
+# refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),
+# so keep your file and add `hooks = true` INTO your existing [features] table.
+# Removing this key (or setting it false) makes every emitted hook inert with no other
+# signal — the client reads none of them — and `sync` restores `hooks = true` on this file
+# the next time it regenerates it.
+
+[features]
+hooks = true

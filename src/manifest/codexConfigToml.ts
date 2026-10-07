@@ -11,7 +11,9 @@
  * ≤1.11.0 ledger, whose rows carry no record) when its data lines — neither
  * comment nor blank — equal those of the engine's rendering of it (an
  * `<id>` the manifest selects, for a server table), or when the ledger proves
- * the whole file unedited. Any other table of an engine name is the owner's, as
+ * the whole file unedited. `[features]` also has to be a rendering some release
+ * wrote ({@link RELEASED_FEATURES}), since it yields to an owner's own and a
+ * record or a hash can be forged over one. Any other table of an engine name is the owner's, as
  * the MCP JSON lane keeps a hand-tuned server (`./mcpFilter.ts`): an owner's
  * own table of that name, or an engine table the owner edited. It is kept, the
  * engine writes no second header, and the run warns — for `[features]` only
@@ -25,13 +27,16 @@
  * leaves the end of the file takes that blank line and that line break with it,
  * so `init` then `clean` gives the owner's bytes back. A block whose tables and
  * texts are unchanged keeps its bytes; otherwise it is rewritten from the
- * rendering in the file's own line ending.
+ * rendering in the file's own line ending. An owner's comment between two of
+ * the engine's tables stays above the table it sat above.
  *
  * Leaving. A table of the engine's the rendering no longer carries (a server
  * deselected, the client removed, `clean`) leaves silently when its normalised
  * text equals the engine's current rendering of that name (the `render`
  * callback, the re-render proof the MCP lane uses), and otherwise only behind a
- * verified `.bak` naming the table (S11).
+ * verified `.bak` naming the table (S11). A legacy server table refreshed while
+ * its text differs from the rendering takes the same `.bak`, unless the ledger
+ * proves the file unedited: its data lines prove it, its comments may be the owner's.
  *
  * The leading block. The engine renders every table's comments directly above
  * its header. So in a recorded document an engine table's leading block counts
@@ -42,7 +47,10 @@
  *
  * A text the segmenter cannot read is a `co-owned-shape` collision naming the
  * line, and `untouched` to the reclaim sweep (S12): nothing here offers
- * `--force`, because nothing in such a file is the engine's to replace.
+ * `--force`, because nothing in such a file is the engine's to replace. So is an
+ * owner key that defines, without a header, a table the engine writes a header
+ * for (`features.x = 1`, `features = { … }`, `github = { … }` in an owner's
+ * `[mcp_servers]`), naming the key: the header would be a second definition.
  */
 
 import { createHash } from "node:crypto";
@@ -52,7 +60,7 @@ import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
 import type { CoOwnedOwnership, CoOwnedPlan } from "./coOwnedJson.ts";
 import { memberPointer, type MemberSegments } from "./jsonMembers.ts";
-import { normaliseSegment, segmentTomlTables, tomlTableName, type TomlSegment } from "./tomlTables.ts";
+import { normaliseSegment, segmentTomlTables, tomlTableName, type TomlKeyLine, type TomlSegment } from "./tomlTables.ts";
 
 /** The engine's normalised rendering of a table name (`[mcp_servers.github]` → its text), or `null` when it renders none. */
 export type CodexTableRendering = (name: string) => string | null;
@@ -62,7 +70,28 @@ const HOOKS_OFF = /^\s*hooks\s*=\s*false\s*(#.*)?$/u;
 const BLANK = /^[ \t]*$/u;
 const COMMENT = /^[ \t]*#/u;
 
+/** The byte-order mark, built from its code point so no raw one sits in this source. */
+const BOM = String.fromCharCode(0xfeff);
+
 const sha256 = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+/**
+ * Every `[features]` a release wrote, as the sha256 of its normalised text
+ * (`./tomlTables.ts::normaliseSegment`, the whole leading block included): the
+ * one proof that a `[features]` table is the engine's (S16). An owner's own
+ * `[features]` wins, so a record or a whole-file hash that claims one proves
+ * nothing — either can be written over an owner's table, and a release's
+ * rendering cannot. A release that changes the rendering adds its own here;
+ * the planner suite's own-file case fails until it does.
+ */
+const RELEASED_FEATURES: ReadonlySet<string> = new Set([
+  // 1.8.0, the first release to write [features], through 1.9.1: `git show v1.8.0:src/adapters/codex.ts` (composeConfigToml).
+  "6adada2216f2855dfa7263b598557ab6966db0452044ab5ba579ab9e85dbcd3a",
+  // 1.10.0 through 1.11.0: `git show v1.10.0:src/adapters/codex.ts` (composeConfigToml).
+  "bb965a03f76b9bdc1b996133668fd8835021863cbf6c648b89fa1ac2b037e9aa",
+  // The current rendering, from per-table ownership on: ../adapters/codex.ts (composeConfigTomlText).
+  "b77caf7d42b9db5aacf02953b06d5028e3ddf04ef6bf7b38b877ce9d9419593c",
+]);
 
 /** True for a key path the engine renders a table at. */
 function isEngineKey(key: readonly string[] | null): key is MemberSegments {
@@ -112,29 +141,36 @@ interface Item {
   engine: boolean;
   /** The table's key path; `null` for the owner's bytes outside any table of an engine name. */
   key: readonly string[] | null;
+  /** The owner's comment lines the recut took off the top of the table of an engine name that follows. */
+  fragment: boolean;
 }
 
 /**
  * The document as items. A table of an engine name is split at the last blank
  * line of its leading block when `recut`: what lies above it is an owner's.
+ * A byte-order mark an editor put ahead of such a table is the owner's too.
  */
 function itemsOf(segments: readonly TomlSegment[], recut: boolean): Item[] {
   const items: Item[] = [];
-  const owner = (text: string): void => {
-    if (text !== "") items.push({ text, name: null, pointer: null, normal: "", engine: false, key: null });
+  const owner = (text: string, fragment = false): void => {
+    if (text !== "") items.push({ text, name: null, pointer: null, normal: "", engine: false, key: null, fragment });
   };
   for (const segment of segments) {
     if (segment.arrayTable || !isEngineKey(segment.key)) {
       // An owner's array of tables keeps an engine NAME from the engine as well:
       // writing the engine's table beside it is a redefinition Codex refuses.
       if (segment.arrayTable && segment.key !== null && isEngineKey(segment.key)) {
-        items.push({ text: segment.text, name: tomlTableName(segment.key), pointer: null, normal: "", engine: false, key: segment.key });
+        items.push({ text: segment.text, name: tomlTableName(segment.key), pointer: null, normal: "", engine: false, key: segment.key, fragment: false });
       } else {
         owner(segment.text);
       }
       continue;
     }
     let text = segment.text;
+    if (text.startsWith(BOM)) {
+      owner(BOM);
+      text = text.slice(BOM.length);
+    }
     if (recut) {
       const lines = linesOf(text);
       const header = lines.findIndex((line) => !BLANK.test(line.replace(/\r?\n$/u, "")) && !COMMENT.test(line));
@@ -143,7 +179,7 @@ function itemsOf(segments: readonly TomlSegment[], recut: boolean): Item[] {
         if (BLANK.test((lines[index] as string).replace(/\r?\n$/u, ""))) cut = index;
       }
       if (cut !== -1) {
-        owner(lines.slice(0, cut + 1).join(""));
+        owner(lines.slice(0, cut + 1).join(""), true);
         text = lines.slice(cut + 1).join("");
       }
     }
@@ -154,6 +190,7 @@ function itemsOf(segments: readonly TomlSegment[], recut: boolean): Item[] {
       normal: normaliseSegment(text),
       engine: false,
       key: segment.key,
+      fragment: false,
     });
   }
   return items;
@@ -176,9 +213,7 @@ function classify(items: Item[], judgement: Judgement): void {
     if (item.name === null || item.pointer === null) continue;
     if (judgement.state === "recorded") {
       item.engine = judgement.record?.members?.[item.pointer] === sha256(item.normal);
-      continue;
-    }
-    if (judgement.state === "legacy") {
+    } else if (judgement.state === "legacy") {
       const key = item.key as MemberSegments;
       const selectable = key.length === 1 || judgement.selected.includes(key[1]);
       const rendering = judgement.render(item.name);
@@ -186,6 +221,8 @@ function classify(items: Item[], judgement: Judgement): void {
         judgement.unedited ||
         (selectable && rendering !== null && dataLines(rendering).join("\n") === dataLines(item.text).join("\n"));
     }
+    // Whatever the record or the whole-file hash claims, a [features] no release wrote is the owner's.
+    if (item.name === "features") item.engine &&= RELEASED_FEATURES.has(sha256(item.normal));
   }
 }
 
@@ -242,6 +279,39 @@ const readFailure = (shown: string, line: number, reason: string): string =>
   `Skipped ${shown}: line ${line} does not read as TOML this engine can cut into tables (${reason}), so which of its ` +
   `tables are the engine's cannot be told. It was left untouched. Fix that line and re-run sync.`;
 
+const startsWith = (path: readonly string[], prefix: readonly string[]): boolean => prefix.every((segment, index) => path[index] === segment);
+
+/**
+ * The first owner key that defines, without a header, a table the engine is
+ * about to write a header for: the header would be a second definition, which
+ * TOML refuses. A key's path defines the tables it passes through below its own
+ * table, and the key itself is a value no header may open or reach under. A
+ * header may still add a sub-table beside a dotted key's path. Keys inside the
+ * engine's own tables sit below their table's name, which no other engine
+ * header shares, so the owner's keys are the ones that can collide.
+ */
+function redefinition(keys: readonly TomlKeyLine[], writes: readonly Item[]): { at: TomlKeyLine; path: readonly string[]; header: readonly string[] } | null {
+  for (const at of keys) {
+    const path = [...at.table, ...at.key];
+    for (const table of writes) {
+      const header = table.key as readonly string[];
+      const definesIt = header.length > at.table.length && header.length <= path.length && startsWith(path, header);
+      if (definesIt || (path.length < header.length && startsWith(header, path))) return { at, path, header };
+    }
+  }
+  return null;
+}
+
+function redefinitionFailure(shown: string, found: { at: TomlKeyLine; path: readonly string[]; header: readonly string[] }): string {
+  const own = found.header.length <= found.path.length ? found.header : found.path;
+  return (
+    `Skipped ${shown}: line ${found.at.line} defines \`${tomlTableName(found.path)}\` without a table header, where the engine ` +
+    `writes a [${tomlTableName(found.header)}] table, and TOML refuses a table defined twice. It was left untouched. Define ` +
+    `[${tomlTableName(own)}] under a header of your own instead (the engine then keeps your table and writes none of that ` +
+    `name), or remove that key, and re-run sync.`
+  );
+}
+
 function keptWarning(shown: string, name: string): string {
   return `Kept your ${shownTable(name)} in ${shown}; the engine's rendering of it is not written there — remove yours to get it back.`;
 }
@@ -285,7 +355,8 @@ export function planCodexConfigToml(
   const state: OwnershipState = !ownership.owned ? "adoption" : ownership.legacy ? "legacy" : "recorded";
   const record = state === "recorded" ? ownership.record : null;
   const items = itemsOf(cut.segments, state !== "legacy");
-  classify(items, { state, record, selected, render, unedited: state === "legacy" && isUnedited(filePath, existingRaw, ownership) });
+  const unedited = state === "legacy" && isUnedited(filePath, existingRaw, ownership);
+  classify(items, { state, record, selected, render, unedited });
 
   const renderedNames = new Map(rendered.map((table) => [table.name as string, table]));
   const ownerNames = new Set(items.filter((item) => item.name !== null && !item.engine).map((item) => item.name as string));
@@ -306,15 +377,27 @@ export function planCodexConfigToml(
   }
 
   const writes = rendered.filter((table) => !ownerNames.has(table.name as string));
+  const redefined = redefinition(cut.keys, writes);
+  if (redefined !== null) {
+    const reason = redefinitionFailure(shown, redefined);
+    return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
+  }
   const held = items.filter((item) => item.engine);
   let backup = false;
   for (const item of held) {
-    if (writes.some((table) => table.name === item.name)) continue;
-    if (render(item.name as string) === item.normal) continue;
+    const name = item.name as string;
+    if (render(name) === item.normal) continue;
+    if (writes.some((table) => table.name === name)) {
+      // A refresh is silent while the table's proof covers its every byte: its
+      // record's hash, or a released [features]. A legacy server table is proved
+      // by its data lines alone, so its comments may be the owner's.
+      if (state !== "legacy" || unedited || name === "features") continue;
+      backup = true;
+      warnings.push(`Refreshed ${shownTable(name)} in ${shown}: it differs from the engine's current rendering of it, so the previous file was backed up first.`);
+      continue;
+    }
     backup = true;
-    warnings.push(
-      `Removed ${shownTable(item.name as string)} from ${shown}: it differs from the engine's current rendering of it, so the previous file was backed up first.`,
-    );
+    warnings.push(`Removed ${shownTable(name)} from ${shown}: it differs from the engine's current rendering of it, so the previous file was backed up first.`);
   }
 
   const eol = eolOf(existingRaw);
@@ -336,23 +419,44 @@ export function planCodexConfigToml(
       text = head + withEol(writes.map((table) => table.normal).join("\n"), eol);
     }
   } else {
-    const before = items.slice(0, first);
-    const after = items.slice(first).filter((item) => !item.engine);
+    const last = items.findLastIndex((item) => item.engine);
+    const written = new Set(writes.map((table) => table.name as string));
+    // An owner entry inside the run moves after the block (S14). A comment the
+    // recut took off an engine table is no entry: it stays above that table's
+    // rendering, or goes ahead of the block when the table leaves — never
+    // behind it, where the next run would read it as the engine's last table.
+    const ahead: Item[] = [];
+    const above = new Map<string, string>();
+    const after: Item[] = [];
+    let inPlace = true;
+    for (const [index, item] of items.entries()) {
+      if (index < first || item.engine) continue;
+      const below = items[index + 1];
+      const anchor = item.fragment && below?.engine === true ? (below.name as string) : null;
+      if (anchor === null) {
+        after.push(item);
+        if (index < last) inPlace = false;
+      } else if (written.has(anchor)) {
+        above.set(anchor, (above.get(anchor) ?? "") + item.text);
+      } else {
+        ahead.push(item);
+      }
+    }
     // Kept byte for byte only while the block is one run of the rendering's own tables.
     const unchanged =
-      held.length === writes.length &&
-      held.every((item, index) => items[first + index] === item && item.name === writes[index]?.name && item.normal === writes[index]?.normal);
+      inPlace && held.length === writes.length && held.every((item, index) => item.name === writes[index]?.name && item.normal === writes[index]?.normal);
     let block: string;
     if (unchanged) {
-      block = held.map((item) => item.text).join("");
+      block = items.slice(first, last + 1).map((item) => item.text).join("");
     } else if (writes.length > 0) {
       // The blank lines that ended the block before stay; one separates it from an owner table it now meets.
       const run = trailingBlankRun((held.at(-1) as Item).text);
-      block = withEol(writes.map((table) => table.normal).join("\n"), eol) + (run !== "" || after.length === 0 ? run : eol);
+      const tables = writes.map((table) => (above.get(table.name as string) ?? "") + withEol(table.normal, eol));
+      block = tables.join(eol) + (run !== "" || after.length === 0 ? run : eol);
     } else {
       block = "";
     }
-    const assembled = assemble(before, block, after, { terminatorAdded, eol });
+    const assembled = assemble([...items.slice(0, first), ...ahead], block, after, { terminatorAdded, eol });
     text = assembled.text;
     if (assembled.terminatorDropped) terminatorAdded = false;
   }
@@ -425,7 +529,7 @@ export function reduceCodexConfigToml(
   });
   const proof = { proven, ...(mustBackUp ? { mustBackUp: true as const } : {}) };
   const list = `${held.length} ${held.length === 1 ? "table" : "tables"} (${held.map((item) => shownTable(item.name as string)).join(", ")})`;
-  if (BLANK.test(text.replaceAll(/\r?\n/gu, "")) && opts.deleteWhenEngineOnly) {
+  if (BLANK.test(text.replaceAll(/\r?\n/gu, "").replace(BOM, "")) && opts.deleteWhenEngineOnly) {
     return {
       kind: "engine-only",
       ...proof,

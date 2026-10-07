@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CODEX_CONFIG_FILE, codexConfigTableRendering } from "../../src/adapters/codex.ts";
 import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
@@ -98,6 +100,11 @@ async function init(root: string, mcpServers: string[] = []): ReturnType<typeof 
   });
 }
 
+async function initForce(root: string): ReturnType<typeof applyInit> {
+  const decisions = await buildInitDecisions(root, { tools: ["codex"] });
+  return applyInit({ rootDir: root, decisions, engineVersion: ENGINE_VERSION, dryRun: false, force: true, now: T1 });
+}
+
 async function sync(root: string): ReturnType<typeof applySync> {
   const syncPlan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
   return applySync(root, syncPlan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 });
@@ -139,6 +146,20 @@ async function editConfigRecord(root: string, edit: (record: CoOwnership | undef
     const { coOwned, ...rest } = row;
     const next = edit(coOwned === undefined ? undefined : structuredClone(coOwned));
     return next === undefined ? rest : { ...rest, coOwned: next };
+  });
+  await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+}
+
+/** Turn the config row into a ≤1.11.0 one (no record) whose whole-file hash claims the file's current bytes. */
+async function forgeLegacyRow(root: string): Promise<void> {
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  const contentHash = createHash("sha256").update(await readConfig(root)).digest("hex");
+  const ledger = manifest.ledger.map((row) => {
+    if (row.path !== CODEX_CONFIG_FILE) return row;
+    const legacy: LedgerEntry = { ...row, contentHash };
+    delete legacy.coOwned;
+    return legacy;
   });
   await writeManifest(root, { ...manifest, ledger }, { now: T1 });
 }
@@ -344,6 +365,66 @@ describe("a ledger record that claims an owner's table", () => {
   });
 });
 
+// ── A forged claim over an owner's [features] (S16) ────────────
+
+describe("a forged claim over an owner's [features]: only a [features] some release rendered is the engine's", () => {
+  const OWNER_FEATURES = "[features]\nhooks = false\nweb_search = true\n";
+  const forgeries: [string, (root: string) => Promise<void>][] = [
+    [
+      "a forged record",
+      (root) =>
+        editConfigRecord(root, (record) => ({
+          ...record,
+          members: { ...record?.members, "/features": createHash("sha256").update(normaliseSegment(OWNER_FEATURES)).digest("hex") },
+        })),
+    ],
+    ["a forged legacy whole-file hash", forgeLegacyRow],
+  ];
+  const verbs: [string, (root: string) => Promise<unknown>][] = [
+    ["sync", sync],
+    ["init --force", initForce],
+    ["clean", clean],
+  ];
+
+  for (const [forgery, forge] of forgeries) {
+    for (const [verb, run] of verbs) {
+      it(`${forgery}: ${verb} leaves the owner's [features] untouched, with no .bak`, async () => {
+        const root = await freshRepo();
+        await seedConfig(root, OWNER_FEATURES);
+        await init(root);
+        expect((await readConfig(root)).startsWith(OWNER_FEATURES)).toBe(true);
+        await forge(root);
+
+        await run(root);
+
+        const after = await readConfig(root);
+        expect(after.startsWith(OWNER_FEATURES)).toBe(true);
+        expect(headerCount(after, "[features]")).toBe(1);
+        expect(await backups(root)).toEqual([]);
+      });
+    }
+  }
+});
+
+// ── Owner keys that define an engine table without a header (S12) ──
+
+describe("an owner file defining features by a dotted key at its root", () => {
+  it("init skips it as a co-owned-shape collision naming the key, and leaves it untouched", async () => {
+    const root = await freshRepo();
+    const owner = 'model = "o3"\nfeatures.web_search = true\n';
+    await seedConfig(root, owner);
+
+    const report = await init(root);
+
+    expect(await readConfig(root)).toBe(owner);
+    const row = configRow(report.wrote);
+    expect(row.action).toBe("skipped");
+    expect(row.warning).toContain("features.web_search");
+    expect(row.warning).toContain("line 2");
+    expect(row.warning).not.toMatch(/force/iu);
+  });
+});
+
 // ── The planner and the reducer over bytes ─────────────────────
 
 const ROOT = "/repo";
@@ -376,20 +457,25 @@ function reduce(raw: string, opts: Partial<Parameters<typeof reduceCodexConfigTo
   return reduceCodexConfigToml(raw, { record: null, legacy: false, selected: [], render, deleteWhenEngineOnly: false, ...opts });
 }
 
-/** The 1.11.0 document: the same tables under the old comment text, a blank line inside the preamble. */
-const V1_11 = [
-  "# stamity — Codex CLI configuration. Generated file: regenerate rather than editing",
-  "# it; local edits are overwritten.",
-  "",
-  "# Lifecycle hooks: an emitted hooks.json is read only while this key is on.",
-  "",
-  "[features]",
-  "hooks = true",
-  "",
-  "# No MCP servers selected.",
-  "[mcp_servers]",
-  "",
-].join("\n");
+/**
+ * Every `[features]` a release wrote before this one, normalised, byte for
+ * byte: the 1.8.0 text (the first release to write the table, unchanged through
+ * 1.9.1) and the 1.10.0 text (unchanged through 1.11.0). Each was read from that
+ * release's `.codex/config.toml` golden (`test/emit/__snapshots__/
+ * crossClientGoldens.test.ts.snap` at the tag), which its `src/adapters/codex.ts`
+ * `composeConfigToml` rendered: the file preamble, a blank line, the hooks
+ * notice, then the table.
+ */
+const RELEASED_FEATURES: Readonly<Record<string, string>> = {
+  "1.8.0": readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "codex-features-1.8.0.toml"), "utf8"),
+  "1.10.0": readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "codex-features-1.10.0.toml"), "utf8"),
+};
+
+// TEST CHANGE, justified: REQ-FLOW-037, S16 (review/50) — a legacy `[features]`
+// is the engine's only when its text is one a release wrote, so the 1.11.0
+// document is now that release's own `[features]` text, not a shortened stand-in.
+/** The 1.11.0 document: its `[features]` as that release wrote it (a blank line inside the preamble), then the bare table. */
+const V1_11 = `${RELEASED_FEATURES["1.10.0"]}\n${table("mcp_servers")}`;
 
 describe("codexConfigTableRendering, as the planner reads it", () => {
   it("renders features, the bare mcp_servers and a curated server, and nothing for an unknown name", () => {
@@ -576,6 +662,180 @@ describe("planCodexConfigToml", () => {
     const existing = `${EMPTY}\n${table("mcp_servers")}`;
     const planned = plan(existing, recorded(recordFor("features", "mcp_servers")));
     expect(planned.content).toBe(EMPTY);
+  });
+});
+
+describe("[features] is the engine's only as a rendering some release wrote (S16, review/50)", () => {
+  const OWN = "[features]\nhooks = true\n";
+
+  for (const [release, text] of Object.entries(RELEASED_FEATURES)) {
+    it(`legacy: the unedited ${release} [features] is re-rendered silently`, () => {
+      const planned = plan(`${text}\n${table("mcp_servers")}`, LEGACY);
+      expect(planned.result).toEqual({ path: FILE, action: "updated" });
+      expect(planned.content).toBe(EMPTY);
+      expect(planned.backup).toBeNull();
+      expect(planned.record?.members).toEqual(recordFor("features", "mcp_servers").members);
+    });
+  }
+
+  it("the engine's current [features] is one of them: its own file re-plans unchanged with /features recorded", () => {
+    expect(plan(EMPTY, recorded(recordFor("features", "mcp_servers"))).record?.members).toHaveProperty("/features");
+  });
+
+  it("recorded: a record over a [features] no release wrote is a claim, not a proof — the table is the owner's and kept", () => {
+    const existing = `${OWN}\n${table("mcp_servers")}`;
+    const planned = plan(existing, recorded({ members: { "/features": hash(OWN), ...recordFor("mcp_servers").members } }));
+    expect(planned.result.action).toBe("unchanged");
+    expect(planned.backup).toBeNull();
+    expect(Object.keys(planned.record?.members ?? {})).toEqual(["/mcp_servers"]);
+  });
+
+  it("legacy: a whole-file hash over a [features] no release wrote leaves it the owner's, warned about hooks = false", () => {
+    const owner = "[features]\nhooks = false\n";
+    const existing = `${owner}\n${table("mcp_servers")}`;
+    const unedited: CoOwnedOwnership = {
+      ...LEGACY,
+      ledgerHashes: ledgerHashIndex(ROOT, [{ path: ".codex/config.toml", contentHash: createHash("sha256").update(existing).digest("hex") }]),
+    };
+    const planned = plan(existing, unedited);
+    expect(planned.result.action).toBe("unchanged");
+    expect(planned.result.warning).toContain("hooks = false");
+    expect(Object.keys(planned.record?.members ?? {})).toEqual(["/mcp_servers"]);
+  });
+
+  it("reduce: a record over a [features] no release wrote takes nothing to remove or back up there", () => {
+    const owner = "[features]\nhooks = false\n";
+    const reduction = reduce(`${owner}\n${table("mcp_servers")}`, { record: { members: { "/features": hash(owner), ...recordFor("mcp_servers").members } } });
+    expect(reduction).toMatchObject({ kind: "reduced", content: owner, proven: true });
+    expect("mustBackUp" in reduction).toBe(false);
+  });
+});
+
+describe("owner keys that define an engine table without a header are a co-owned-shape collision (S12, review/51)", () => {
+  const cases: [string, string, string[], string, number][] = [
+    ["a dotted key at the root", "features.web_search = true\n", [], "features.web_search", 1],
+    ["an inline table at the root", 'model = "o3"\nfeatures = { web_search = true }\n', [], "features", 2],
+    ["a dotted key at the root under the bare [mcp_servers] the engine writes", 'mcp_servers.team.command = "team-mcp"\n', [], "mcp_servers.team.command", 1],
+    ["an inline [mcp_servers] at the root beside a selected server", 'mcp_servers = { team = { command = "x" } }\n', ["github"], "mcp_servers", 1],
+    ["an inline server inside an owner's [mcp_servers]", '[mcp_servers]\ngithub = { command = "x" }\n', ["github"], "mcp_servers.github", 2],
+    ["a dotted server key inside an owner's [mcp_servers]", '[mcp_servers]\n"github" . command = "x"\n', ["github"], "mcp_servers.github.command", 2],
+    ["a server in an owner's [[mcp_servers]] element", '[[mcp_servers]]\ngithub = { command = "x" }\n', ["github"], "mcp_servers.github", 2],
+  ];
+  for (const [name, raw, servers, key, line] of cases) {
+    it(`${name}: skipped, naming \`${key}\` and line ${line}, never offering --force`, () => {
+      const emitted = emittedFor(servers);
+      for (const ownership of [ADOPTION, recorded(recordFor("features"))]) {
+        const planned = plan(raw, ownership, emitted, servers);
+        expect(planned.result.action).toBe("skipped");
+        expect(planned.content).toBeNull();
+        expect(planned.record).toBeNull();
+        expect(planned.collision).toContain(`\`${key}\``);
+        expect(planned.collision).toContain(`line ${line}`);
+        expect(planned.collision).toContain(".codex/config.toml");
+        expect(planned.collision).not.toMatch(/force/iu);
+      }
+    });
+  }
+
+  it("a dotted key at the root under a server table the engine does not write is no collision: TOML lets a header add a sub-table", () => {
+    const raw = 'mcp_servers.team.command = "team-mcp"\n';
+    const planned = plan(raw, ADOPTION, GITHUB, ["github"]);
+    expect(planned.collision).toBeNull();
+    expect(planned.content).toBe(`${raw}\n${GITHUB}`);
+  });
+
+  it("an engine name under another table, and a line that is no key, are no collision", () => {
+    const raw = '[profiles.x]\nfeatures.web_search = true\nmcp_servers = { a = 1 }\nstray words\n';
+    expect(plan(raw, ADOPTION).collision).toBeNull();
+  });
+});
+
+describe("an owner comment between two engine tables keeps its place (review/52)", () => {
+  const NOTE = "# owner note\n\n";
+  const between = `${table("features")}${NOTE}${table("mcp_servers.github")}`;
+  const record = recordFor("features", "mcp_servers.github");
+
+  it("an unchanged block keeps its bytes, comment and all, run after run", () => {
+    const first = plan(between, recorded(record), GITHUB, ["github"]);
+    expect(first.result.action).toBe("unchanged");
+    expect(first.record?.members).toEqual(record.members);
+    const second = plan(between, recorded(first.record as CoOwnership), GITHUB, ["github"]);
+    expect(second.result.action).toBe("unchanged");
+  });
+
+  it("a rebuilt block keeps the comment above the table it sat above, and the next run leaves it there", () => {
+    const emitted = emittedFor(["github", "linear"]);
+    const first = plan(between, recorded(record), emitted, ["github", "linear"]);
+    expect(first.content).toBe(`${table("features")}\n${NOTE}${table("mcp_servers.github")}\n${table("mcp_servers.linear")}`);
+    const second = plan(first.content as string, recorded(first.record as CoOwnership), emitted, ["github", "linear"]);
+    expect(second.result.action).toBe("unchanged");
+    expect(second.record).toEqual(first.record);
+  });
+
+  it("a comment above a table that leaves goes ahead of the block, and the next run leaves it there", () => {
+    const first = plan(`model = "o3"\n\n${between}`, recorded(record), EMPTY, []);
+    expect(first.content).toBe(`model = "o3"\n\n${NOTE}${EMPTY}`);
+    expect(first.backup).toBeNull();
+    const second = plan(first.content as string, recorded(first.record as CoOwnership), EMPTY, []);
+    expect(second.result.action).toBe("unchanged");
+    expect(second.record).toEqual(first.record);
+  });
+
+  it("an owner table inside the run moves after the block once (S14), and the next run leaves it there", () => {
+    const owner = '[profiles.x]\nmodel = "o3"\n';
+    const first = plan(`${table("features")}\n${owner}\n${table("mcp_servers")}`, recorded(recordFor("features", "mcp_servers")));
+    const second = plan(first.content as string, recorded(first.record as CoOwnership));
+    expect(second.result.action).toBe("unchanged");
+    expect(second.record).toEqual(first.record);
+  });
+});
+
+describe("a legacy table whose comments differ from the rendering is replaced only behind a .bak (review/53)", () => {
+  const github = table("mcp_servers.github");
+  const legacyFile = (body: string): string => `${RELEASED_FEATURES["1.10.0"]}\n${body}`;
+
+  for (const [where, body] of [
+    ["inside its body", github.replace('command = "npx"\n', 'command = "npx"\n# my note\n')],
+    ["after the last table", `${github}# my note\n`],
+  ] as const) {
+    it(`an owner comment ${where}: the previous file is backed up, the warning names the table`, () => {
+      const existing = legacyFile(body);
+      const planned = plan(existing, LEGACY, GITHUB, ["github"]);
+      expect(planned.content).toBe(GITHUB);
+      expect(planned.backup).toBe(existing);
+      expect(planned.result.warning).toContain("[mcp_servers.github]");
+    });
+  }
+
+  it("a file the ledger proves unedited is refreshed silently", () => {
+    const existing = legacyFile(`${github}# my note\n`);
+    const unedited: CoOwnedOwnership = {
+      ...LEGACY,
+      ledgerHashes: ledgerHashIndex(ROOT, [{ path: ".codex/config.toml", contentHash: createHash("sha256").update(existing).digest("hex") }]),
+    };
+    const planned = plan(existing, unedited, GITHUB, ["github"]);
+    expect(planned.content).toBe(GITHUB);
+    expect(planned.backup).toBeNull();
+  });
+});
+
+describe("a byte-order mark an editor adds stays the owner's and leaves the engine's tables the engine's (review/54)", () => {
+  const BOM = String.fromCharCode(0xfeff);
+
+  it("an unchanged file keeps its mark and its record", () => {
+    const planned = plan(`${BOM}${EMPTY}`, recorded(recordFor("features", "mcp_servers")));
+    expect(planned.result.action).toBe("unchanged");
+    expect(planned.record?.members).toEqual(recordFor("features", "mcp_servers").members);
+  });
+
+  it("a rebuilt block keeps the mark ahead of it", () => {
+    const planned = plan(`${BOM}${EMPTY}`, recorded(recordFor("features", "mcp_servers")), GITHUB, ["github"]);
+    expect(planned.content).toBe(`${BOM}${GITHUB}`);
+  });
+
+  it("reduce: the file is still engine-only", () => {
+    const reduction = reduce(`${BOM}${EMPTY}`, { record: { ...recordFor("features", "mcp_servers"), createdFile: true }, deleteWhenEngineOnly: true });
+    expect(reduction).toMatchObject({ kind: "engine-only", proven: true });
   });
 });
 

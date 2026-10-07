@@ -15,6 +15,11 @@
  * hands an owner's table to the engine (`src/adapters/toml.ts` refuses a
  * structural defect for the same reason).
  *
+ * The keys. Each `key = value` line at depth 0 is read for the key it assigns
+ * and the table it sits in, because a key can define a table without a header
+ * (`features.x = 1`, `features = { … }`) and a writer adding that table's
+ * header has to know (TOML refuses a table defined twice).
+ *
  * The cut. A line whose first non-blank character is `[`, at depth 0 and
  * outside any string, is a header: `[a.b]` or `[[a.b]]`, keys bare or quoted,
  * dots with optional spaces, an optional trailing comment. A table segment
@@ -36,8 +41,21 @@ export interface TomlSegment {
   text: string;
 }
 
-/** The segments in document order, or the first line the reader cannot model. */
-export type TomlSegmentation = { ok: true; segments: TomlSegment[] } | { ok: false; line: number; reason: string };
+/**
+ * A `key = value` line outside any string or open value: the key it assigns,
+ * quotes resolved, under the table whose header it follows (`[]` at the root).
+ * A dotted key defines the tables its path passes through without a header,
+ * and the key itself is a value; TOML refuses a header for either.
+ */
+export interface TomlKeyLine {
+  table: readonly string[];
+  key: readonly string[];
+  /** 1-based. */
+  line: number;
+}
+
+/** The segments in document order and the keys the lines assign, or the first line the reader cannot model. */
+export type TomlSegmentation = { ok: true; segments: TomlSegment[]; keys: TomlKeyLine[] } | { ok: false; line: number; reason: string };
 
 /** Keys and header segments that need no quoting (`src/adapters/toml.ts`'s rule). */
 const BARE_KEY = /^[A-Za-z0-9_-]+$/u;
@@ -55,6 +73,8 @@ interface Line {
   kind: LineKind;
   key?: string[];
   arrayTable?: boolean;
+  /** The key a `key = value` line assigns. */
+  assigns?: string[];
 }
 
 /** The first line the reader cannot model, and why. */
@@ -79,11 +99,29 @@ const SHORT_ESCAPES: Readonly<Record<string, string>> = {
  * whether it is an array-of-tables header, or why it does not parse.
  */
 function parseHeader(content: string, from: number, lineNo: number): { key: string[]; arrayTable: boolean } | Refusal {
-  let at = from + 1;
-  const arrayTable = content[at] === "[";
-  if (arrayTable) at += 1;
-  const key: string[] = [];
+  const arrayTable = content[from + 1] === "[";
   const refuse = (why: string): Refusal => ({ line: lineNo, reason: `the table header does not parse: ${why}` });
+  const path = parseKeyPath(content, from + (arrayTable ? 2 : 1), refuse);
+  if ("reason" in path) return path;
+  const { key } = path;
+  let at = path.at;
+  if (content[at] !== "]" || (arrayTable && content[at + 1] !== "]")) {
+    return refuse(arrayTable ? "it does not close with `]]`" : "it does not close with `]`");
+  }
+  at += arrayTable ? 2 : 1;
+  while (isSpace(content[at])) at += 1;
+  if (at < content.length && content[at] !== "#") return refuse("text follows the closing bracket");
+  return { key, arrayTable };
+}
+
+/**
+ * Parse the dotted key that starts at `content[from]` — bare, basic-quoted
+ * (escapes decoded) or literal-quoted segments, dots with optional spaces — and
+ * return it with the offset after it and the spaces that follow.
+ */
+function parseKeyPath(content: string, from: number, refuse: (why: string) => Refusal): { key: string[]; at: number } | Refusal {
+  let at = from;
+  const key: string[] = [];
   for (;;) {
     while (isSpace(content[at])) at += 1;
     const char = content[at];
@@ -129,16 +167,15 @@ function parseHeader(content: string, from: number, lineNo: number): { key: stri
       key.push(content.slice(begin, at));
     }
     while (isSpace(content[at])) at += 1;
-    if (content[at] !== ".") break;
+    if (content[at] !== ".") return { key, at };
     at += 1;
   }
-  if (content[at] !== "]" || (arrayTable && content[at + 1] !== "]")) {
-    return refuse(arrayTable ? "it does not close with `]]`" : "it does not close with `]`");
-  }
-  at += arrayTable ? 2 : 1;
-  while (isSpace(content[at])) at += 1;
-  if (at < content.length && content[at] !== "#") return refuse("text follows the closing bracket");
-  return { key, arrayTable };
+}
+
+/** The key a `key = value` line assigns, or `null` for a line that is not one. */
+function assignedKey(content: string, from: number, lineNo: number): string[] | null {
+  const path = parseKeyPath(content, from, (why) => ({ line: lineNo, reason: why }));
+  return "reason" in path || content[path.at] !== "=" ? null : path.key;
 }
 
 /**
@@ -158,7 +195,7 @@ class Lexer {
   }
 
   /** Classify one line (its terminator stripped) and advance the state over it. */
-  line(content: string, lineNo: number, first: boolean): Pick<Line, "kind" | "key" | "arrayTable"> {
+  line(content: string, lineNo: number, first: boolean): Pick<Line, "kind" | "key" | "arrayTable" | "assigns"> {
     if (this.continuing) {
       this.scan(content, 0, lineNo);
       return { kind: "other" };
@@ -175,8 +212,9 @@ class Lexer {
       }
       return { kind: "header", ...header };
     }
+    const assigns = assignedKey(content, at, lineNo);
     this.scan(content, at, lineNo);
-    return { kind: "other" };
+    return assigns === null ? { kind: "other" } : { kind: "other", assigns };
   }
 
   /** The refusal owed at the end of the input, when something is still open. */
@@ -291,7 +329,13 @@ export function segmentTomlTables(raw: string): TomlSegmentation {
   }
   previous.text = raw.slice(cursor);
   if (root !== null) segments.push(root);
-  return { ok: true, segments };
+  const keys: TomlKeyLine[] = [];
+  let table: readonly string[] = [];
+  for (const [index, line] of lines.entries()) {
+    if (line.kind === "header") table = line.key as string[];
+    if (line.assigns !== undefined) keys.push({ table, key: line.assigns, line: index + 1 });
+  }
+  return { ok: true, segments, keys };
 }
 
 /** A key path as a header names it, each segment quoted as `src/adapters/toml.ts` quotes one. */

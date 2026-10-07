@@ -157,6 +157,30 @@ describe("segmentTomlTables — what it refuses, naming the line", () => {
   }
 });
 
+describe("segmentTomlTables — the key each line assigns", () => {
+  function keyLines(raw: string): [string[], string[], number][] {
+    const cut = segmentTomlTables(raw);
+    if (!cut.ok) throw new Error(`refused at line ${cut.line}: ${cut.reason}`);
+    return cut.keys.map((entry) => [[...entry.table], [...entry.key], entry.line]);
+  }
+
+  it("reads dotted and quoted keys with the table they sit in and their line", () => {
+    expect(keyLines(`a.b = 1\n"c.d" . 'e' = { x = 1 }\n  [t]\nk = [\n  1,\n]\n[[arr]]\nm = 2\n`)).toEqual([
+      [[], ["a", "b"], 1],
+      [[], ["c.d", "e"], 2],
+      [["t"], ["k"], 4],
+      [["arr"], ["m"], 8],
+    ]);
+  });
+
+  it("reads no key from a line inside a string or an open value, nor from a line that is no key = value", () => {
+    expect(keyLines('s = """\nx = 1\n"""\nt = [\ny = 2,\n]\nstray words\nz 1\n= 3\n')).toEqual([
+      [[], ["s"], 1],
+      [[], ["t"], 4],
+    ]);
+  });
+});
+
 describe("tomlTableName", () => {
   it("writes bare segments bare and quotes the rest as src/adapters/toml.ts does", () => {
     expect(tomlTableName(["mcp_servers", "github"])).toBe("mcp_servers.github");
