@@ -529,6 +529,21 @@ describe("the Codex config lane (REQ-FLOW-037)", () => {
     expect(reducer?.(raw)).toMatchObject({ kind: "reduced", content: team, proven: true });
   });
 
+  it("wires no hooks, and proves its tables by the registry's own rendering whatever the sweep's renderings hold", () => {
+    expect(coOwnedDocumentLanes(manifest).get(CODEX_CONFIG_FILE)?.wiresHooks).toBe(false);
+    expect(coOwnedHookDocuments(manifest).has(CODEX_CONFIG_FILE)).toBe(false);
+    const raw = `${render("features")}\n${render("mcp_servers")}\n`;
+    const recorded = {
+      ...manifest,
+      ledger: [configRow({ members: { "/features": tableHash("features"), "/mcp_servers": tableHash("mcp_servers") } })],
+    };
+    const bare = coOwnedReclaimReducers(recorded).get(CODEX_CONFIG_FILE)?.(raw);
+    expect(bare).toMatchObject({ proven: true });
+    expect(bare).not.toHaveProperty("mustBackUp");
+    const handed = coOwnedReclaimReducers(recorded, [], new Map([[CODEX_CONFIG_FILE, { features: "not the rendering" }]])).get(CODEX_CONFIG_FILE)?.(raw);
+    expect(handed).toEqual(bare);
+  });
+
   it("reads the manifest's server selection for a legacy row's proof", () => {
     const github = `${render("features")}\n${render("mcp_servers.github")}`;
     const reduceWith = (servers: string[]) =>

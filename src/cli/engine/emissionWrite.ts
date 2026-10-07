@@ -375,7 +375,13 @@ export interface CoOwnedDocumentLane {
   readonly wiresHooks: boolean;
   predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedPrediction>;
   materialize(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedMergeResult>;
-  /** The sweep's view of the document; `rendered` is the engine's current rendering there, for the proof by re-rendering. */
+  /**
+   * The sweep's view of the document; `rendered` is the engine's current
+   * rendering there, for the proof by re-rendering. It carries only a rendering
+   * that needs a read (the settings lane's user hooks, `coOwnedReclaimRenderings`);
+   * a lane whose rendering is a pure function of the registry's own inputs (the
+   * Codex config's tables) closes over that rendering and takes no `rendered`.
+   */
   reducer(ownership: CoOwnedOwnership, deleteWhenEngineOnly: boolean, rendered?: unknown): CoOwnedReducer;
 }
 
@@ -412,10 +418,14 @@ export function coOwnedDocumentLanes(
   const codexConfig: CoOwnedDocumentLane = {
     path: CODEX_CONFIG_FILE,
     noun: codexNoun,
+    // `[features]` turns Codex's hooks on and runs no command: the hook
+    // commands live in `.codex/hooks.json`, so this document holds no script back.
     wiresHooks: false,
     predict: (absPath, emitted, ownership) => predictCoOwnedMerge(absPath, codexPlan(absPath, emitted, ownership), codexNoun),
     materialize: (absPath, emitted, ownership) =>
       materializeCoOwned(absPath, codexPlan(absPath, emitted, ownership), ownership, codexNoun),
+    // Its re-render proof is `render`, built above from the catalog and
+    // `packServers`; `coOwnedReclaimRenderings` carries nothing for this path.
     reducer: (ownership, deleteWhenEngineOnly) => (content) =>
       reduceCodexConfigToml(content, { record: ownership.record, legacy: ownership.legacy, selected, render, deleteWhenEngineOnly }),
   };
@@ -525,8 +535,9 @@ export function coOwnedReclaimReducers(
 const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;
 
 /**
- * What the engine renders now into each co-owned document, for the reclaim
- * sweep's proof by re-rendering (S11; `coOwnedReclaimReducers`' `renderings`):
+ * What the engine renders now into each co-owned document whose rendering
+ * needs a read, for the reclaim sweep's proof by re-rendering (S11;
+ * `coOwnedReclaimReducers`' `renderings`). Today that is the settings document:
  * the user-hook entries of the definitions still in the user hooks folder,
  * rendered as the Claude adapter renders them into `.claude/settings.json`.
  * A user-hook entry equal to one of them leaves without a backup; an entry
