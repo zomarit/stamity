@@ -211,6 +211,38 @@ microsoft/apm#3129). `check` exits 1 naming the entry by its pointer, for exampl
 key or rename it to the Cursor event it means. If an APM package wrote it, install that package
 without the `cursor` target.
 
+### Your own tables in `.codex/config.toml`
+
+`.codex/config.toml` is merged table by table. The engine owns only the tables it wrote:
+`[features]`, `[mcp_servers]` while no MCP server is selected, and one `[mcp_servers.<id>]` per
+server it renders, each while it still holds what the engine wrote there. Every other table, and
+every key above the first table, is yours, and `sync`, `clean` and a client's removal keep it byte
+for byte. A table of one of those names that you wrote yourself, or one of the engine's that you
+edited, is yours too. The engine keeps it and writes no second table of that name; remove yours to
+get the engine's back. An engine table that leaves while it differs from the engine's rendering
+leaves behind a verified `.bak`.
+
+Some shapes leave no room for the engine's tables. Then `init` and `sync` skip the file, leave it
+untouched and write nothing to it, and `check` exits 1 naming it. `--force` does not clear any of
+them. Each message names the line or the table, and the remedy is one of these:
+
+- **A line that does not read as TOML.** Fix that line.
+- **A key that defines one of the engine's tables without a header**, such as `features.x = 1`
+  or `features = { … }` above the first table, or `github = { … }` inside your own
+  `[mcp_servers]`. The engine's header would define that table a second time. Move the key under
+  a header of your own, such as `[features]`, and the engine then keeps your table and writes none
+  of that name. Or remove the key.
+- **An array of tables, `[[mcp_servers]]`**, while the engine writes an `[mcp_servers.<id>]`
+  table: the engine's table would land inside the last element of your array. Rename your array,
+  or define each of your servers as an `[mcp_servers.<id>]` table.
+- **A table defined twice**, such as two `[features]` tables or two `[profiles.x]` tables. A
+  quoted spelling such as `["features"]` is the same name. TOML refuses such a file, so Codex
+  would load none of it. Merge the two tables into one. A second copy that is the engine's own,
+  such as its table pasted twice, is not refused: `sync` drops the engine's copy.
+- **More than 63 MCP servers selected.** The ledger records at most 64 of the engine's tables for
+  one file, `[features]` included. Remove the servers you do not use with
+  `stamity config mcp remove <id>`.
+
 ### `sync` refuses a file it did not write
 
 A drift entry reading `collision` means a file already occupies a path the setup wants, with no
