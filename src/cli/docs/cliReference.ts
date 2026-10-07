@@ -153,6 +153,12 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
   LOCK_TIMEOUT:
     "a write lock could not be taken before the retry schedule ran out; another `stamity` " +
     "run was holding it",
+  // Thrown by `check` alone, and only when a caller passed `--expect-*`: a code
+  // of its own so an orchestrator can tell a repository its caller did not
+  // approve from drift, which `INTEGRITY_ERROR` already names (REQ-PLUGIN-047).
+  EXPECTATION_ERROR:
+    "`check` was told which release, clients or install mode to expect (`--expect-*`), and the " +
+    "repository records another",
 };
 
 /*

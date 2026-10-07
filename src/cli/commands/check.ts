@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { delimiter, join, relative, resolve, sep } from "node:path";
+import { Option, type Command } from "commander";
+import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
@@ -28,9 +30,11 @@ import {
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
 import type { PackArtifactReach, PackReach } from "../../types/content.ts";
-import { TOOLS, type Tool } from "../../types/core.ts";
+import { TOOLS, type Tool, VALID_TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import {
+  INSTALL_MODES,
+  type InstallMode,
   isPackOwner,
   type LedgerEntry,
   MANIFEST_FILE,
@@ -40,8 +44,9 @@ import {
 import { STATE_DIR } from "../../types/markers.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
-import type { FailureDoc } from "../kit/output.ts";
-import { packageCommand } from "../kit/packageName.ts";
+import { pinnedCliCall } from "../../shared/cliCall.ts";
+import { CliFailure, type FailureDoc } from "../kit/output.ts";
+import { hasNpmChannel, packageCommand, packageName } from "../kit/packageName.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
@@ -2050,8 +2055,11 @@ function renderNextSteps(
   outcome: DriftOutcome,
   ok: boolean,
   gates: CharterGateReport | null,
+  leading: readonly string[] = [],
 ): void {
-  const steps: string[] = [];
+  // First, as the error document puts them: the caller's expectation is the
+  // cause no other step below can clear (REQ-PLUGIN-047).
+  const steps: string[] = [...leading];
   if (doctor.some((row) => row.id === "manifest" && row.status === "fail")) {
     steps.push(`${packageCommand("init")} — this repository has no usable manifest`);
   }
@@ -2207,15 +2215,290 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+// ── Expectations ───────────────────────────────────────────────────────────
+
+/**
+ * What the caller says the repository must be (REQ-PLUGIN-047): the release
+ * that generated it and runs this check, the clients it targets, the install
+ * mode it records. Every surface the rest of `check` compares against — the
+ * manifest, the files, the running CLI — is one a pull request can change, so
+ * an expectation has to come from a caller the pull request cannot edit, such
+ * as a required workflow's input. A field left out is not checked.
+ */
+export interface Expectations {
+  version?: string;
+  tools?: readonly Tool[];
+  mode?: InstallMode;
+}
+
+/**
+ * The verdict on each field asked for, and only those. `recorded` and
+ * `generatedBy` are `null` when the manifest could not be read: nothing was
+ * compared, so nothing is `missing` or `extra` either, and the field is not ok.
+ */
+export interface ExpectationReport {
+  ok: boolean;
+  version?: { expected: string; running: string; generatedBy: string | null; ok: boolean };
+  tools?: { expected: Tool[]; recorded: Tool[] | null; missing: Tool[]; extra: Tool[]; ok: boolean };
+  mode?: { expected: InstallMode; recorded: InstallMode | null; ok: boolean };
+}
+
+/**
+ * Compare the caller's expectations with the manifest and the running release.
+ * Pure: the caller reads the manifest and passes the version.
+ *
+ * A version matches only when BOTH the running CLI and the manifest's
+ * `generatedBy` equal it, as strings — `1.12.0` does not match a fork's
+ * `1.12.0-acme.1`. The running half is what stops a pull request that moves the
+ * pin from making CI run a release nobody approved; the manifest half is what
+ * stops a hand-set `generatedBy`. Clients compare as sets, listed in `TOOLS`
+ * order so any spelling of the flag reads the same.
+ */
+export function evaluateExpectations(
+  expected: Expectations,
+  manifest: SetupManifest | null,
+  runningVersion: string,
+): ExpectationReport {
+  const report: ExpectationReport = { ok: true };
+  if (expected.version !== undefined) {
+    const generatedBy = manifest?.generatedBy ?? null;
+    report.version = {
+      expected: expected.version,
+      running: runningVersion,
+      generatedBy,
+      ok: runningVersion === expected.version && generatedBy === expected.version,
+    };
+  }
+  if (expected.tools !== undefined) {
+    const want = TOOLS.filter((tool) => expected.tools?.includes(tool));
+    const recorded = manifest === null ? null : TOOLS.filter((tool) => manifest.tools.includes(tool));
+    const missing = recorded === null ? [] : want.filter((tool) => !recorded.includes(tool));
+    const extra = recorded === null ? [] : recorded.filter((tool) => !want.includes(tool));
+    report.tools = {
+      expected: want,
+      recorded,
+      missing,
+      extra,
+      ok: recorded !== null && missing.length === 0 && extra.length === 0,
+    };
+  }
+  if (expected.mode !== undefined) {
+    const recorded = manifest === null ? null : readInstallMode(manifest);
+    report.mode = { expected: expected.mode, recorded, ok: recorded === expected.mode };
+  }
+  report.ok = [report.version, report.tools, report.mode].every((field) => field?.ok !== false);
+  return report;
+}
+
+/**
+ * The two free-valued `--expect-*` flags, parsed before any probe runs: a bad
+ * value costs nothing and is named, the way `workspace --tools` refuses one.
+ * `--expect-mode` needs no reading here — commander's `choices` already turned
+ * any other value into a usage error. `null` when no flag was given, which is
+ * what keeps a run without them byte-identical to one before they existed.
+ */
+function readExpectations(opts: Record<string, unknown>): Expectations | null {
+  const expectations: Expectations = {};
+  const rawVersion = opts["expectVersion"];
+  if (typeof rawVersion === "string") {
+    const version = semver.valid(rawVersion);
+    if (version === null) {
+      throw new CliFailure({
+        code: "VALIDATION_ERROR",
+        message: `--expect-version takes one exact version, got ${JSON.stringify(rawVersion)}`,
+        why: "a range, a tag or an empty value names no single release, so no repository could match it",
+        next: "pass the exact release, such as 1.12.0",
+      });
+    }
+    expectations.version = version;
+  }
+  const rawTools = opts["expectTools"];
+  if (typeof rawTools === "string") expectations.tools = readExpectedTools(rawTools);
+  const rawMode = opts["expectMode"];
+  if (typeof rawMode === "string") expectations.mode = rawMode as InstallMode;
+  return Object.keys(expectations).length === 0 ? null : expectations;
+}
+
+/** `--expect-tools <csv>`, split tolerantly and held to `VALID_TOOLS`, as `workspace --tools` is. */
+function readExpectedTools(raw: string): Tool[] {
+  const names = raw
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter((name) => name !== "");
+  const unknown = [...new Set(names.filter((name) => !VALID_TOOLS.has(name)))];
+  if (unknown.length > 0) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `unknown tool(s) ${unknown.map((name) => JSON.stringify(name)).join(", ")}`,
+      why: "--expect-tools names the clients the manifest must record, and this build ships no adapter for that id",
+      next: `valid tools: ${TOOLS.join(", ")}`,
+    });
+  }
+  const tools = TOOLS.filter((tool) => names.includes(tool));
+  if (tools.length === 0) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: "--expect-tools named no tool",
+      why: "a repository that targets no client is not one a caller can expect",
+      next: `pass a comma-separated list of: ${TOOLS.join(", ")}`,
+    });
+  }
+  return tools;
+}
+
+/** Each field that failed, in the operator's words, in field order. */
+function expectationMismatches(report: ExpectationReport): string[] {
+  const lines: string[] = [];
+  const { version, tools, mode } = report;
+  if (version !== undefined && version.generatedBy !== version.expected) {
+    lines.push(`generated by ${version.generatedBy ?? "nothing"}, expected ${version.expected}`);
+  }
+  if (version !== undefined && version.running !== version.expected) {
+    lines.push(`this check runs ${version.running}, expected ${version.expected}`);
+  }
+  if (tools !== undefined && !tools.ok) {
+    const gaps = [
+      ...(tools.missing.length > 0 ? [`${tools.missing.join(", ")} missing`] : []),
+      ...(tools.extra.length > 0 ? [`${tools.extra.join(", ")} not expected`] : []),
+    ];
+    lines.push(`clients ${(tools.recorded ?? []).join(", ") || "none"} — ${gaps.join(", ")}`);
+  }
+  if (mode !== undefined && !mode.ok) {
+    lines.push(`mode ${mode.recorded ?? "none"}, expected ${mode.expected}`);
+  }
+  return lines;
+}
+
+/**
+ * The `expectations` doctor row. Printed only when a flag asked for it, after
+ * `invariants` and outside {@link runDoctor}, so a run without the flags keeps
+ * its fifteen rows. A manifest that could not be read leaves nothing to compare
+ * against: the row says so, and the `manifest` row above it carries the cause.
+ */
+function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorCheck {
+  const id = "expectations";
+  if (!evaluated) {
+    return { id, status: "fail", detail: "not evaluated: the manifest could not be read" };
+  }
+  if (report.ok) {
+    const asked = [
+      ...(report.version === undefined ? [] : [`release ${report.version.expected}`]),
+      ...(report.tools === undefined ? [] : [`clients ${report.tools.expected.join(", ")}`]),
+      ...(report.mode === undefined ? [] : [`mode ${report.mode.expected}`]),
+    ];
+    return { id, status: "pass", detail: `${asked.join(", ")} — as expected` };
+  }
+  return { id, status: "fail", detail: expectationMismatches(report).join("; ") };
+}
+
+/**
+ * The pinned call at the release the caller expects, not the running one: the
+ * remedy for a release mismatch is to run that release. Rendered through
+ * `pinnedCliCall`, as `packageCommand` renders every other remedy here.
+ */
+function pinnedCallAt(version: string, verb: string): string {
+  const npmChannel = hasNpmChannel();
+  try {
+    return pinnedCliCall(packageName(), version, verb, { npmChannel });
+  } catch {
+    // An unrunnable own name: the unpinned-name fallback `packageCommand` takes.
+    return `npx ${npmChannel ? "-y" : "--no"} ${packageName()}@${version} ${verb}`;
+  }
+}
+
+/**
+ * One step per failed field, in field order. Each change lands through a
+ * reviewed pull request: the caller's expectation is the approved state, and a
+ * repository is moved to it, never the expectation to the repository.
+ */
+function expectationSteps(report: ExpectationReport, manifestTools: readonly Tool[]): string[] {
+  const steps: string[] = [];
+  const { version, tools, mode } = report;
+  if (version !== undefined && version.generatedBy !== version.expected) {
+    steps.push(
+      `regenerate with the expected release in a reviewed pull request: ${pinnedCallAt(version.expected, "sync")}`,
+    );
+  }
+  if (version !== undefined && version.running !== version.expected) {
+    steps.push(
+      `run this check with the expected release: ` +
+        pinnedCallAt(version.expected, `check --expect-version ${version.expected}`),
+    );
+  }
+  if (tools !== undefined && !tools.ok) {
+    steps.push(
+      `${packageCommand(`config set tools ${tools.expected.join(",")}`)}, then ${packageCommand("sync")}, ` +
+        "in a reviewed pull request",
+    );
+  }
+  if (mode !== undefined && !mode.ok) {
+    const clients = (tools?.expected ?? manifestTools).join(",");
+    const setup =
+      mode.expected === "plugin-backed"
+        ? packageCommand(`plugin setup --client ${clients}`)
+        : packageCommand("init");
+    steps.push(
+      `a repository changes install mode only through ${packageCommand("clean -y")}, then ${setup}, ` +
+        "in a reviewed pull request",
+    );
+  }
+  return steps;
+}
+
+/** The caller's expectations as one run reads them: the report, its row, and the steps a mismatch owes. */
+interface ExpectationOutcome {
+  readonly report: ExpectationReport;
+  readonly row: DoctorCheck;
+  /** Empty unless the manifest was read and a field failed. */
+  readonly steps: readonly string[];
+  readonly mismatches: readonly string[];
+}
+
+function expectationOutcome(
+  expected: Expectations,
+  manifest: SetupManifest | null,
+  runningVersion: string,
+): ExpectationOutcome {
+  const report = evaluateExpectations(expected, manifest, runningVersion);
+  const evaluated = manifest !== null;
+  const failed = evaluated && !report.ok;
+  return {
+    report,
+    row: expectationsRow(report, evaluated),
+    steps: failed ? expectationSteps(report, manifest.tools) : [],
+    mismatches: failed ? expectationMismatches(report) : [],
+  };
+}
+
 export const checkCommand: CommandModule = {
   name: "check",
   summary: "diagnose the environment and gate on drift between disk and the engine's output",
   mutating: false,
 
+  configure(cmd: Command): void {
+    cmd
+      .option(
+        "--expect-version <semver>",
+        "fail unless this exact release generated the repository and runs this check",
+      )
+      .option(
+        "--expect-tools <csv>",
+        `fail unless the manifest's clients are exactly these: ${TOOLS.join(", ")}`,
+      )
+      .addOption(
+        new Option("--expect-mode <mode>", "fail unless the manifest records this install mode").choices([
+          ...INSTALL_MODES,
+        ]),
+      );
+  },
+
   // No spinner: this is the CI gate, and progress chatter on stdout would sit
   // in the middle of the report a pipeline is reading.
-  async run(ctx: CliContext): Promise<CommandResult> {
+  async run(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
     const rootDir = ctx.app.runtime.cwd;
+    // Before any probe: a value no repository could match is the caller's
+    // defect, and it is named without a word of the report around it.
+    const expected = readExpectations(opts);
 
     // The manifest is read once here and handed to both consumers, because the
     // drift gate's swallow has to be conditioned on THIS read rather than on
@@ -2224,11 +2507,16 @@ export const checkCommand: CommandModule = {
     // one small JSON file, and threading one parse through every signature buys
     // less than it costs in coupling.
     const manifestState = await readManifestState(rootDir, ctx.engine);
-    const [doctor, drift, provenance] = await Promise.all([
+    const [probes, drift, provenance] = await Promise.all([
       runDoctor(rootDir, ctx.engine, ctx.app),
       evaluateDrift(rootDir, ctx.app.version, manifestState),
       readProvenance(rootDir, ctx.engine),
     ]);
+    // The caller's expectations, only when a flag asked (REQ-PLUGIN-047): one
+    // more row after the fifteen, so its `fail` reaches `ok` like any other.
+    const expectations =
+      expected === null ? null : expectationOutcome(expected, manifestState.manifest, ctx.app.version);
+    const doctor = expectations === null ? probes : [...probes, expectations.row];
 
     // One value, read by the exit code, the closing block and the payload, so
     // no two surfaces can answer this question differently. A gate that could
@@ -2251,7 +2539,7 @@ export const checkCommand: CommandModule = {
     renderDoctor(ctx, doctor);
     renderDrift(ctx, drift);
     renderProvenance(ctx, provenance);
-    renderNextSteps(ctx, doctor, drift, ok, gates);
+    renderNextSteps(ctx, doctor, drift, ok, gates, expectations?.steps ?? []);
 
     const report = driftReportOf(drift);
     return {
@@ -2279,6 +2567,7 @@ export const checkCommand: CommandModule = {
         // run: the refusal a manifest meets names a row, and this is the list
         // the operator reads it against.
         ownedPaths: OWNED_PATHS,
+        ...(expectations === null ? {} : { expectations: expectations.report }),
         // Data about the charter, so present whether or not the run is green;
         // absent only when there is no manifest to read it from. The exit code
         // never reads it: an unresolved gate is advisory.
@@ -2295,14 +2584,34 @@ export const checkCommand: CommandModule = {
         // gate's failure when there is one — that is the cause a machine
         // caller can act on — and otherwise a pointer to the failing rows,
         // which are in the same payload.
-        ...(ok ? {} : { error: checkFailureDoc(doctor, drift) }),
+        ...(ok ? {} : { error: checkFailureDoc(doctor, drift, expectations) }),
       },
     };
   },
 };
 
-/** The `error` document for a non-green run: the diagnosable cause, named. */
-function checkFailureDoc(doctor: readonly DoctorCheck[], drift: DriftOutcome): FailureDoc {
+/**
+ * The `error` document for a non-green run: the diagnosable cause, named.
+ *
+ * An evaluated expectation that failed comes first, before a drift gate that
+ * could not run: it says the repository is not the one its caller approved,
+ * which no fix to the drift makes true, and its own code lets an orchestrator
+ * tell that from drift (REQ-PLUGIN-047). An expectation that could not be
+ * evaluated keeps the order below, where the `manifest` row's failure leads.
+ */
+function checkFailureDoc(
+  doctor: readonly DoctorCheck[],
+  drift: DriftOutcome,
+  expectations: ExpectationOutcome | null = null,
+): FailureDoc {
+  if (expectations !== null && expectations.mismatches.length > 0) {
+    return {
+      code: "EXPECTATION_ERROR",
+      message: "check found the repository different from what its caller expects",
+      why: expectations.mismatches.join("; "),
+      next: expectations.steps.join(" "),
+    };
+  }
   if (drift.kind === "failed") {
     return {
       code: drift.code,

@@ -25,7 +25,7 @@ const MAX_CAUSE_DEPTH = 4;
 
 /**
  * Verdicts for the engine's own error codes. Two are transient by definition of
- * their exit code (`EX_TEMPFAIL`); three are settled by their input. The rest —
+ * their exit code (`EX_TEMPFAIL`); four are settled by their input. The rest —
  * `ADAPTER_ERROR`, `FS_ERROR`, `CLEAN_ERROR`, `UNKNOWN_ERROR` — are deliberately
  * absent: they wrap a cause of either kind, so the verdict comes from walking to
  * that cause rather than from the wrapper.
@@ -36,6 +36,8 @@ const ENGINE_CODE_VERDICTS: Record<string, FailureType | undefined> = {
   VALIDATION_ERROR: "substantive",
   CONFIG_ERROR: "substantive",
   INTEGRITY_ERROR: "substantive",
+  // Settled by the repository's state: the same check on the same tree answers the same.
+  EXPECTATION_ERROR: "substantive",
 } satisfies Partial<Record<ErrorCode, FailureType>>;
 
 /**

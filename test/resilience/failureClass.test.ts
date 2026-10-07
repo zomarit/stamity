@@ -54,6 +54,13 @@ describe("classifyFailure — engine error codes", () => {
     },
   );
 
+  // A caller's unmet expectation (REQ-PLUGIN-047) is settled by the repository's
+  // state: retrying the same check against the same tree answers the same.
+  it("classifies an EXPECTATION_ERROR as substantive", () => {
+    const error = new EngineError("the repository records another release", { code: "EXPECTATION_ERROR" });
+    expect(classifyFailure(error)).toBe("substantive");
+  });
+
   it.each(["NETWORK_ERROR", "LOCK_TIMEOUT"] as const)("classifies %s as transient", (code) => {
     expect(classifyFailure(new EngineError("temporary failure", { code }))).toBe("transient");
   });

@@ -378,6 +378,8 @@ describe("the restated kit contract", () => {
       "CLEAN_ERROR",
       "NETWORK_ERROR",
       "LOCK_TIMEOUT",
+      // TEST CHANGE, justified: REQ-PLUGIN-047 — the page publishes the new tenth code.
+      "EXPECTATION_ERROR",
     ];
     for (const errorCode of codes) {
       const row = tableRows(page).find((line) => cells(line)[0] === `\`${errorCode}\``);

@@ -44,7 +44,8 @@ export type ErrorCode =
   | "FS_ERROR"
   | "CLEAN_ERROR"
   | "NETWORK_ERROR"
-  | "LOCK_TIMEOUT";
+  | "LOCK_TIMEOUT"
+  | "EXPECTATION_ERROR";
 
 /** Process status for an ordinary failure. See the module header. */
 const FAILURE_EXIT_CODE = 1;

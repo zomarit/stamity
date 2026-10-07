@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decision only the four instruction files `init` imports, and a row with no content hash proves
   nothing; `check` names every path a `sync` would reclaim and refuses a manifest that breaks
   these rules.
+- **`check` can take what the repository must be from a caller the pull request cannot edit.**
+  `--expect-version`, `--expect-tools` and `--expect-mode` fail the check with
+  `EXPECTATION_ERROR` when the repository records another release, client set or install mode;
+  without them `check` is unchanged.
 
 ### Fixed
 

@@ -98,6 +98,7 @@ string — there is no second numbering to read.
 | `CLEAN_ERROR` | clean's confirmation was declined or could not be asked; nothing was removed |
 | `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out; another `stamity` run was holding it |
+| `EXPECTATION_ERROR` | `check` was told which release, clients or install mode to expect (`--expect-*`), and the repository records another |
 
 Two more codes exist only at the CLI edge and never come from the engine:
 `USAGE` for a rejected command line, and `FAILURE` for a fault that
@@ -133,7 +134,11 @@ diagnose the environment and gate on drift between disk and the engine's output
 
 Reads only. Nothing is written, so there is no preview mode to need.
 
-Adds no flags of its own beyond the shared matrix above.
+| Flag | What it does | Default |
+|---|---|---|
+| `--expect-version <semver>` | fail unless this exact release generated the repository and runs this check | — |
+| `--expect-tools <csv>` | fail unless the manifest's clients are exactly these: claude, cursor, copilot, codex | — |
+| `--expect-mode <mode>` | fail unless the manifest records this install mode — one of `generated`, `plugin-backed` | — |
 
 ## `stamity validate`
 

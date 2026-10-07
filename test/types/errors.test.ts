@@ -17,13 +17,17 @@ const CODE_NOTES: Record<ErrorCode, string> = {
   CLEAN_ERROR: "an I/O failure during clean",
   NETWORK_ERROR: "a transient network failure",
   LOCK_TIMEOUT: "a transient lock failure",
+  // TEST CHANGE, justified: REQ-PLUGIN-047 — `check --expect-*` adds a tenth code, so an
+  // orchestrator can tell a repository its caller did not approve from drift.
+  EXPECTATION_ERROR: "the repository records another release, client set or install mode",
 };
 
 const ALL_CODES = Object.keys(CODE_NOTES) as ErrorCode[];
 
 describe("the classification channel is `code`, not the exit number", () => {
-  it("keeps all 9 codes as the thing a caller branches on", () => {
-    expect(ALL_CODES).toHaveLength(9);
+  // TEST CHANGE, justified: REQ-PLUGIN-047 — nine codes became ten with EXPECTATION_ERROR.
+  it("keeps all 10 codes as the thing a caller branches on", () => {
+    expect(ALL_CODES).toHaveLength(10);
     for (const code of ALL_CODES) {
       expect(new EngineError("boom", { code }).code).toBe(code);
     }
