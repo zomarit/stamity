@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
 import { addCommand } from "../../src/cli/commands/add.ts";
 import { checkCommand } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
@@ -373,8 +374,11 @@ interface CheckDoc extends JsonDoc {
 describe("an import decision binds only as init records it", () => {
   it("refuses a skip decision for a file init never imports, naming each decision", async () => {
     const root = await initialisedRepo();
-    const guards = [".cursor/hooks.json", ".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/mcp-guard.mjs"];
+    // The guards' current names (REQ-FLOW-038), so the forgery drops their rows and files as measured.
+    const guards = [".cursor/hooks.json", SUBAGENT_GUARD_PATH, MCP_GUARD_PATH];
+    for (const path of guards) expect(existsSync(join(root, path)), path).toBe(true);
     await editManifest(root, (manifest) => {
+      expect(guards.every((path) => manifest.ledger.some((row) => row.path === path))).toBe(true);
       manifest.importChoice = [...(manifest.importChoice ?? []), ...guards.map((path) => ({ path, mode: "skip" }))];
       manifest.ledger = manifest.ledger.filter((row) => !guards.includes(row.path));
     });
