@@ -22,7 +22,7 @@ import {
 } from "../../types/manifest.ts";
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import { coOwnedHookDocuments, coOwnedReclaimReducers } from "../engine/emissionWrite.ts";
+import { coOwnedHookDocuments, coOwnedReclaimReducers, coOwnedReclaimRenderings } from "../engine/emissionWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import { packageCommand, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -529,7 +529,7 @@ async function runScopedClean(
     rootDir,
     consent: !ctx.dryRun,
     trustedExactPaths: trustedInfraPaths(manifest.ledger),
-    coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply),
+    coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
     hookDocuments: coOwnedHookDocuments(manifest, packSupply),
   });
   ctx.spinner.stop();
@@ -671,7 +671,7 @@ export const cleanCommand: CommandModule = {
       // client documents themselves, and it resolves pack supply BEFORE the
       // sweep, so the reducer can still prove a pack-supplied entry. The
       // selection goes with the state directory a few lines below.
-      coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply),
+      coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
       hookDocuments: coOwnedHookDocuments(manifest, packSupply),
     });
     ctx.spinner.stop();

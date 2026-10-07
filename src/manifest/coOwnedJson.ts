@@ -27,10 +27,13 @@
  *    engine element of the existing array (counted among the foreign ones),
  *    else appended.
  * 3. *What leaves, and how* (S11). An engine element the rendering no longer
- *    carries leaves silently when `inBound(e)` and it is recorded, or the file
- *    still hashes to what the ledger recorded; otherwise only behind a
+ *    carries leaves silently when it lies in the bound and is recorded, or the
+ *    file still hashes to what the ledger recorded; otherwise only behind a
  *    verified `.bak` of the file, with a warning naming `<member>[<index>]`.
- *    A recorded hash outside the bound proves nothing.
+ *    The bound is `inBound(e)` (proof by path), or `e` equal to an element of
+ *    the current rendering (proof by re-rendering — the reducer's rendering is
+ *    the one its caller hands in). A recorded hash outside the bound proves
+ *    nothing.
  * 4. *Containers.* An array or object on an engine pointer that the engine
  *    leaves empty is deleted, unless the record lists it as `preexisting`. On
  *    adoption, each such container already present and holding nothing the
@@ -607,7 +610,10 @@ function judge(
   return array.map((element, index) => {
     const hash = memberHash(element);
     const recognised = spec.recognise(element);
-    const inBound = spec.inBound(element);
+    // In bound by path (the spec), or by re-rendering: equal to an element the
+    // engine renders there now (S11) — what proves a user-hook entry whose
+    // definition is still present (review/44).
+    const inBound = spec.inBound(element) || renderedHashes.has(hash);
     const recorded = recordedHashes.has(hash);
     let engine = recognised;
     if (!engine && state === "legacy") engine = inBound || renderedHashes.has(hash);

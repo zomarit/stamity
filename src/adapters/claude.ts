@@ -930,10 +930,28 @@ function buildSettingsJson(
 }
 
 /**
+ * The `hooks` object this adapter renders into `.claude/settings.json` for
+ * `rows` alone — the repository's own user-hook rows — keyed and shaped exactly
+ * as {@link buildSettingsJson} keys and shapes them. The reclaim sweep's proof
+ * by re-rendering reads it (REQ-FLOW-036, S11): a user-hook entry equal to the
+ * current rendering of a definition still present is the engine's, and leaves
+ * without a backup. No fail-closed tail is appended: a user row never carries
+ * the core guard's path, and if one did, an entry that differs takes the backup.
+ */
+export function claudeUserHookEntries(rows: readonly HookInterchange[]): Record<string, unknown[]> {
+  const hooks: Record<string, ClaudeHookEntry[]> = {};
+  for (const event of CANONICAL_HOOK_EVENTS) {
+    const entries = rows.filter((row) => row.event === event).map((row) => hookEntryWith(row, undefined));
+    if (entries.length > 0) hooks[CLAUDE_EVENT_NAMES[event]] = entries;
+  }
+  return hooks;
+}
+
+/**
  * One interchange row as a client config entry; `failClosedTail` is appended
  * to the one row {@link failsClosedOnLaunchFailure} picks, and to no other.
  */
-function hookEntryWith(row: HookInterchange, failClosedTail: string): ClaudeHookEntry {
+function hookEntryWith(row: HookInterchange, failClosedTail: string | undefined): ClaudeHookEntry {
   return {
     ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
     hooks: [

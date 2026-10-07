@@ -55,6 +55,7 @@ import {
   coOwnedRowsCarriedThroughRefusal,
   coOwnedHookDocuments,
   coOwnedReclaimReducers,
+  coOwnedReclaimRenderings,
   installedPackServers,
   type CoOwnedDocumentLane,
   ledgerRowsForOutput,
@@ -655,7 +656,7 @@ export async function previewReclaim(
     rootDir,
     consent: false,
     trustedExactPaths: trustedInfraPaths(plan.manifest.ledger),
-    coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply),
+    coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest)),
     hookDocuments: coOwnedHookDocuments(plan.manifest, packMcpSupply),
     ...(now === undefined ? {} : { now }),
   });
@@ -904,7 +905,7 @@ export async function applySync(
   // emission ∪ the operator's own entries; handing the sweep a reducer is what
   // stops it reading a match as sole authorship and unlinking a document
   // carrying a hand-added server (`../../../merge/reclaim.ts` gate 4).
-  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply);
+  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest));
 
   // The collision gate, applied PER PATH rather than to the whole plan.
   //

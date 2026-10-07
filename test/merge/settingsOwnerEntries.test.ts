@@ -467,6 +467,66 @@ describe("an engine hook entry the operator edited, at clean -y (REQ-PLUGIN-016,
   });
 });
 
+describe("user hooks defined in .stamity/hooks/, proven by re-rendering (review/44, reading 1)", () => {
+  const SCRIPT = ".stamity/hooks/audit.mjs";
+  const DEFINITION = ".stamity/hooks/audit.json";
+  const define = async (root: string, matcher: string): Promise<void> => {
+    await mkdir(join(root, ".stamity", "hooks"), { recursive: true });
+    await writeFile(join(root, ...SCRIPT.split("/")), "process.exit(0)\n", "utf8");
+    await writeFile(
+      join(root, ...DEFINITION.split("/")),
+      JSON.stringify({ hooks: [{ event: "pre_tool_use", matcher, command: ["node", SCRIPT] }] }),
+      "utf8",
+    );
+  };
+  const userEntryIndex = async (root: string): Promise<number> => {
+    const groups = ((await settingsDoc(root))["hooks"] as Record<string, unknown[]>)["PreToolUse"] ?? [];
+    return groups.findIndex((group) => JSON.stringify(group).includes(SCRIPT));
+  };
+  /** The first fixture set up, then a user hook defined and synced in. */
+  const withUserHook = async (): Promise<string> => {
+    const root = await freshRepo();
+    await seedSettings(root, FIRST);
+    await init(root);
+    await define(root, "Bash");
+    await sync(root);
+    return root;
+  };
+
+  it("adding a definition wires its entry with no .bak, and records it", async () => {
+    const root = await withUserHook();
+    expect(await userEntryIndex(root)).toBeGreaterThan(-1);
+    expect(await backups(root)).toEqual([]);
+  });
+
+  it("clean in a repo with user hooks takes no .bak: the entry equals the current rendering of a definition still present", async () => {
+    const root = await withUserHook();
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(await backups(root)).toEqual([]);
+    expect(await readSettings(root)).toBe(FIRST);
+  });
+
+  it.each([
+    ["editing", async (root: string) => define(root, "Edit")],
+    ["removing", async (root: string) => rm(join(root, ...DEFINITION.split("/")))],
+  ] as const)("%s a definition leaves one verified .bak, and the warning names the old entry", async (_name, change) => {
+    const root = await withUserHook();
+    const index = await userEntryIndex(root);
+    const before = await readSettings(root);
+    await change(root);
+
+    const report = await sync(root);
+
+    const row = settingsRow(report.wrote);
+    expect(row.warning).toContain(`hooks.PreToolUse[${index}]`);
+    expect(await backups(root)).toEqual([`${SETTINGS_ABS(root)}.bak`]);
+    expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(before);
+  });
+});
+
 describe("an owner's hook entry that runs their own .stamity/hooks/ script (review/44)", () => {
   it("under a record claiming it, leaves only behind a verified .bak, and the warning names it", async () => {
     const root = await freshRepo();

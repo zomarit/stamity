@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
+import { resolve } from "node:path";
+import { CLAUDE_SETTINGS_PATH, claudeUserHookEntries } from "../../adapters/claude.ts";
+import { isPluginOwned } from "../../emit/ownership.ts";
+import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import {
   claudeSettingsReclaimReducer,
   materializeClaudeSettings,
@@ -24,6 +27,7 @@ import {
   type MergeResult,
 } from "../../types/content.ts";
 import { VALID_TOOLS, type Tool } from "../../types/core.ts";
+import { STATE_DIR } from "../../types/markers.ts";
 import type { CoOwnership, LedgerEntry, SetupManifest } from "../../types/manifest.ts";
 
 /**
@@ -367,7 +371,8 @@ export interface CoOwnedDocumentLane {
   readonly wiresHooks: boolean;
   predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedPrediction>;
   materialize(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedMergeResult>;
-  reducer(ownership: CoOwnedOwnership, deleteWhenEngineOnly: boolean): CoOwnedReducer;
+  /** The sweep's view of the document; `rendered` is the engine's current rendering there, for the proof by re-rendering. */
+  reducer(ownership: CoOwnedOwnership, deleteWhenEngineOnly: boolean, rendered?: unknown): CoOwnedReducer;
 }
 
 /**
@@ -385,8 +390,13 @@ export function coOwnedDocumentLanes(
     wiresHooks: true,
     predict: predictClaudeSettingsMerge,
     materialize: materializeClaudeSettings,
-    reducer: (ownership, deleteWhenEngineOnly) =>
-      claudeSettingsReclaimReducer({ record: ownership.record, legacy: ownership.legacy, deleteWhenEngineOnly }),
+    reducer: (ownership, deleteWhenEngineOnly, rendered) =>
+      claudeSettingsReclaimReducer({
+        record: ownership.record,
+        legacy: ownership.legacy,
+        deleteWhenEngineOnly,
+        ...(rendered === undefined ? {} : { rendered }),
+      }),
   };
   return new Map([[claude.path, claude]]);
 }
@@ -477,11 +487,47 @@ export function coOwnedHookDocuments(
 export function coOwnedReclaimReducers(
   manifest: SetupManifest,
   packServers: readonly PackSuppliedServer[] = [],
+  renderings: ReadonlyMap<string, unknown> = new Map(),
 ): Map<string, CoOwnedReducer> {
   const reducers = mcpReclaimReducers(packServers);
   for (const lane of coOwnedDocumentLanes(manifest, packServers).values()) {
     const ownership = coOwnedOwnershipOf(manifest.ledger, lane.path);
-    reducers.set(lane.path, lane.reducer(ownership, ownership.deleteWhenEngineOnly));
+    reducers.set(lane.path, lane.reducer(ownership, ownership.deleteWhenEngineOnly, renderings.get(lane.path)));
   }
   return reducers;
+}
+
+/** The user hooks folder when the manifest names none (`../../emit/hooksInfra.ts`'s default). */
+const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;
+
+/**
+ * What the engine renders now into each co-owned document, for the reclaim
+ * sweep's proof by re-rendering (S11; `coOwnedReclaimReducers`' `renderings`):
+ * the user-hook entries of the definitions still in the user hooks folder,
+ * rendered as the Claude adapter renders them into `.claude/settings.json`.
+ * A user-hook entry equal to one of them leaves without a backup; an entry
+ * whose definition is gone, or that differs, is outside the bound. None when
+ * the plugin carries Claude's hooks (the repository renders none there) or the
+ * folder cannot be read (nothing is then proved, so the backup is taken).
+ */
+export async function coOwnedReclaimRenderings(
+  rootDir: string,
+  manifest: SetupManifest,
+): Promise<ReadonlyMap<string, unknown>> {
+  if (isPluginOwned(manifest, "claude", "hooks")) return new Map();
+  let read;
+  try {
+    read = await readHookDefinitions(resolve(rootDir, manifest.hooks?.userHooksDir ?? DEFAULT_USER_HOOKS_DIR), rootDir);
+    // reason: not silent — with no rendering nothing is proved, and every
+    // user-hook removal takes the verified backup the sweep reports.
+  } catch {
+    return new Map();
+  }
+  const rows = read.hooks.map((hook) => ({
+    event: hook.event,
+    command: hook.command,
+    ...(hook.matcher === undefined ? {} : { matcher: hook.matcher }),
+    ...(hook.timeoutMs === undefined ? {} : { timeoutMs: hook.timeoutMs }),
+  }));
+  return rows.length === 0 ? new Map() : new Map([[CLAUDE_SETTINGS_PATH, { hooks: claudeUserHookEntries(rows) }]]);
 }

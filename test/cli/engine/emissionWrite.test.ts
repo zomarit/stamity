@@ -14,6 +14,7 @@ import {
   coOwnedOwnershipOf,
   coOwnedHookDocuments,
   coOwnedReclaimReducers,
+  coOwnedReclaimRenderings,
   installedPackServers,
   ledgerRowsForOutput,
   outputWriteOptions,
@@ -721,5 +722,46 @@ describe("installedPackServers", () => {
     expect(servers[0]?.sourcePackId).toBe("acme-ops");
     // A pack never claims to be the vendor of the service it fronts.
     expect(servers[0]?.firstParty).toBe(false);
+  });
+});
+
+describe("coOwnedReclaimRenderings — the proof by re-rendering for user hooks (review/44, reading 1)", () => {
+  const getTemp = useTempDir("emission-write-renderings");
+  const manifestOf = (extra: Partial<SetupManifest> = {}): SetupManifest => ({
+    ...createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "1.0.0", now: new Date(0) }),
+    ...extra,
+  });
+  const definition = JSON.stringify({
+    hooks: [
+      { event: "pre_tool_use", matcher: "Bash", command: ["node", ".stamity/hooks/audit.mjs"], timeoutMs: 1500 },
+      { event: "session_start", command: ["node", ".stamity/hooks/audit.mjs"] },
+    ],
+  });
+
+  it("renders each definition still present as the Claude adapter writes it into the settings document", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ ".stamity/hooks/audit.mjs": "process.exit(0)\n", ".stamity/hooks/audit.json": definition });
+
+    const renderings = await coOwnedReclaimRenderings(temp.dir, manifestOf());
+
+    const command = 'node "${CLAUDE_PROJECT_DIR}/.stamity/hooks/audit.mjs"';
+    expect(renderings.get(".claude/settings.json")).toEqual({
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command }] }],
+        PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command, timeout: 2 }] }],
+      },
+    });
+  });
+
+  it("renders nothing with no definitions, a folder it cannot read, or a plugin carrying Claude's hooks", async () => {
+    const temp = getTemp();
+    expect((await coOwnedReclaimRenderings(temp.dir, manifestOf())).size).toBe(0);
+
+    await temp.seedFiles({ "not-a-folder": "x" });
+    expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ hooks: { userHooksDir: "not-a-folder" } }))).size).toBe(0);
+
+    await temp.seedFiles({ ".stamity/hooks/audit.mjs": "process.exit(0)\n", ".stamity/hooks/audit.json": definition });
+    const plugin: SetupManifest["plugin"] = { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } };
+    expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin }))).size).toBe(0);
   });
 });

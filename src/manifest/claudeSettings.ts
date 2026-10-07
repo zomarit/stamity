@@ -181,6 +181,12 @@ export interface SettingsReduceOptions {
   record: CoOwnership | null;
   legacy: boolean;
   deleteWhenEngineOnly: boolean;
+  /**
+   * The engine's current rendering of what it would write here, for the proof
+   * by re-rendering — today the user-hook entries of the definitions still in
+   * the user hooks folder (`../cli/engine/emissionWrite.ts::coOwnedReclaimRenderings`).
+   */
+  rendered?: unknown;
 }
 
 /**

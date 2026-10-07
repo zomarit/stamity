@@ -967,6 +967,21 @@ describe("reduceCoOwnedJson", () => {
     });
   });
 
+  it("proves a recorded entry outside the path bound by re-rendering: equal to the rendering handed in, it leaves with no backup owed (review/44)", () => {
+    const USER = group('node "${CLAUDE_PROJECT_DIR}/.stamity/hooks/audit.mjs"');
+    const record: CoOwnership = { elements: { "/hooks/PreToolUse": [memberHash(USER)] } };
+    const raw = doc({ hooks: { PreToolUse: [USER] }, model: "x" });
+    expect(reduce(raw, record, { rendered: { hooks: { PreToolUse: [USER] } } })).toEqual({
+      kind: "reduced",
+      content: doc({ model: "x" }),
+      proven: true,
+      detail: expect.any(String) as unknown,
+    });
+    // Its definition gone (nothing rendered) or changed (another rendering): outside the bound.
+    expect(reduce(raw, record)).toMatchObject({ proven: false, mustBackUp: true });
+    expect(reduce(raw, record, { rendered: { hooks: { PreToolUse: [group("node other.mjs")] } } })).toMatchObject({ proven: false, mustBackUp: true });
+  });
+
   it("reads an edited engine group as the engine's, unproven", () => {
     const edited = { ...GUARD, hooks: [{ ...GUARD.hooks[0], timeout: 5 }] };
     const out = reduce(doc({ hooks: { PreToolUse: [edited] }, model: "x" }), { elements: ENGINE_ELEMENTS });
