@@ -602,10 +602,15 @@ describe("planCoOwnedJson — style (S15)", () => {
     expect(out.content).toBeNull();
   });
 
-  it("strips a leading byte-order mark and merges rather than refusing", () => {
+  // TEST CHANGE, justified: review/37 — the byte-order mark survives the round
+  // trip: the merge writes it back, and the reducer returns the file byte-identical.
+  it("merges past a leading byte-order mark rather than refusing, keeps it, and the reducer brings the file back byte-identical", () => {
     const bom = String.fromCharCode(0xfeff);
-    const out = plan(`${bom}{"model":"opus"}\n`, noRow(), EMITTED_PLUGIN);
-    expect(out.content).toBe('{"model":"opus","permissions":{"allow":["Read","Grep","Glob"]}}\n');
+    const raw = `${bom}{"model":"opus"}\n`;
+    const out = plan(raw, noRow(), EMITTED_PLUGIN);
+    expect(out.content).toBe(`${bom}{"model":"opus","permissions":{"allow":["Read","Grep","Glob"]}}\n`);
+    const back = reduceCoOwnedJson(out.content as string, SPEC, { record: out.record, legacy: false, deleteWhenEngineOnly: false });
+    expect(back).toMatchObject({ kind: "reduced", content: raw, proven: true });
   });
 
   it("round-trips a foreign __proto__ key and prints a file-authored key without its control bytes", () => {

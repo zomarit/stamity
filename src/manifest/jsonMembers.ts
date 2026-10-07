@@ -176,18 +176,24 @@ export interface JsonStyle {
   indent: string;
   eol: "\n" | "\r\n";
   finalNewline: boolean;
+  /** Present when the document opens with a byte-order mark, which is written back. */
+  bom?: true;
 }
 
 /** The engine's own document style (`./mcpFilter.ts::jsonDocument`). */
 export const ENGINE_JSON_STYLE: JsonStyle = { indent: "  ", eol: "\n", finalNewline: true };
 
+/** U+FEFF, the byte-order mark an editor may open a UTF-8 file with. */
+const BYTE_ORDER_MARK = 0xfeff;
+
 /** The first indented line's leading whitespace, when a non-blank character follows it. */
 const INDENTED_LINE = /^([ \t]+)\S/;
 
 /**
- * The style `raw` is written in. A leading byte-order mark is ignored. `eol` is
- * CRLF when the text holds one; `finalNewline` when it ends in a line break;
- * `indent` is `""` when the outermost value holds no line break, else the
+ * The style `raw` is written in. A leading byte-order mark is kept as `bom`
+ * and read past for the rest. `eol` is CRLF when the text holds one;
+ * `finalNewline` when it ends in a line break; `indent` is `""` when the
+ * outermost value holds no line break, else the
  * leading whitespace of the first indented, non-blank line after the first,
  * else the engine's two spaces.
  *
@@ -198,16 +204,18 @@ const INDENTED_LINE = /^([ \t]+)\S/;
  * depth-1 line and read a deeper one.
  */
 export function jsonStyleOf(raw: string): JsonStyle {
-  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  const hasBom = raw.charCodeAt(0) === BYTE_ORDER_MARK;
+  const text = hasBom ? raw.slice(1) : raw;
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const finalNewline = text.endsWith("\n");
+  const bom = hasBom ? { bom: true as const } : {};
   const lines = text.trim().split("\n");
-  if (lines.length === 1) return { indent: "", eol, finalNewline };
+  if (lines.length === 1) return { indent: "", eol, finalNewline, ...bom };
   for (const line of lines.slice(1)) {
     const match = INDENTED_LINE.exec(line);
-    if (match !== null) return { indent: match[1] as string, eol, finalNewline };
+    if (match !== null) return { indent: match[1] as string, eol, finalNewline, ...bom };
   }
-  return { indent: ENGINE_JSON_STYLE.indent, eol, finalNewline };
+  return { indent: ENGINE_JSON_STYLE.indent, eol, finalNewline, ...bom };
 }
 
 /** A run of tabs opening a line of `JSON.stringify(…, "\t")`'s output. */
@@ -229,5 +237,6 @@ export function serialiseJson(value: unknown, style: JsonStyle): string {
     if (style.indent !== "\t") text = text.replace(LEADING_TABS, (tabs) => style.indent.repeat(tabs.length));
   }
   if (style.eol !== "\n") text = text.replaceAll("\n", style.eol);
-  return style.finalNewline ? `${text}${style.eol}` : text;
+  if (style.finalNewline) text = `${text}${style.eol}`;
+  return style.bom === true ? `${String.fromCharCode(BYTE_ORDER_MARK)}${text}` : text;
 }

@@ -176,10 +176,19 @@ describe("jsonStyleOf / serialiseJson — the style round trip (S15)", () => {
     expect(jsonStyleOf('{\n   \n  "a": 1\n}\n').indent).toBe("  ");
   });
 
-  it("ignores a leading byte-order mark when it reads the style", () => {
+  // TEST CHANGE, justified: review/37 — a leading byte-order mark is part of
+  // the style now, so the document keeps it across a merge; the rest of the
+  // style is still read past it.
+  it("reads a leading byte-order mark as part of the style, and the rest of the style past it", () => {
     const bom = String.fromCharCode(0xfeff);
-    expect(jsonStyleOf(`${bom}{\n    "a": 1\n}`)).toEqual({ indent: "    ", eol: "\n", finalNewline: false });
-    expect(jsonStyleOf(`${bom}{"a":1}`)).toEqual({ indent: "", eol: "\n", finalNewline: false });
+    expect(jsonStyleOf(`${bom}{\n    "a": 1\n}`)).toEqual({ indent: "    ", eol: "\n", finalNewline: false, bom: true });
+    expect(jsonStyleOf(`${bom}{"a":1}`)).toEqual({ indent: "", eol: "\n", finalNewline: false, bom: true });
+    expect(jsonStyleOf('{"a":1}')).not.toHaveProperty("bom");
+  });
+
+  it.each(STYLED)("writes a byte-order mark back where it read one, byte-identical: %s", (_name, text) => {
+    const withBom = `${String.fromCharCode(0xfeff)}${text}`;
+    expect(serialiseJson(JSON.parse(text) as unknown, jsonStyleOf(withBom))).toBe(withBom);
   });
 
   it("writes a mixed-ending document wholly in CRLF", () => {

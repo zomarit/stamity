@@ -213,7 +213,8 @@ describe("planClaudeSettings — foreign keys", () => {
   it("strips a leading byte-order mark before parsing, so a BOM'd file is adopted rather than refused", () => {
     const plan = planClaudeSettings("x", EMITTED_PLUGIN, `﻿${CLIENT}`, own());
     expect(plan.result.action).toBe("updated");
-    expect(plan.content).toBe(doc({ enabledPlugins: { "stamity@stamity": true }, permissions: PERMISSIONS }));
+    // TEST CHANGE, justified: review/37 — the byte-order mark survives the merge.
+    expect(plan.content).toBe(`${String.fromCharCode(0xfeff)}${doc({ enabledPlugins: { "stamity@stamity": true }, permissions: PERMISSIONS })}`);
   });
 
   it("classifies a document it cannot serialise back (nesting past the stack) as a collision, never a thrown error", () => {

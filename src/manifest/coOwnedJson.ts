@@ -317,7 +317,8 @@ function describeJson(value: unknown): string {
 /**
  * A JSON object, or the reason the bytes are not one. Never throws, and never
  * carries a byte of the input: V8 quotes a snippet around a syntax error. A
- * leading byte-order mark is stripped and not written back.
+ * leading byte-order mark is stripped here; the style keeps it for the write
+ * (`./jsonMembers.ts::jsonStyleOf`).
  */
 function parseObject(raw: string): ObjectParse {
   let parsed: unknown;
