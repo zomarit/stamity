@@ -66,7 +66,7 @@ import {
   sha256,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
-import { hasNpmChannel, packageCommand, packageName } from "../../kit/packageName.ts";
+import { hasNpmChannel, packageCommand, packageName, registryOption } from "../../kit/packageName.ts";
 import type { GitRunner } from "../../../workspace/git.ts";
 
 /**
@@ -514,7 +514,7 @@ export async function planOutputEntries(
 export async function planSync(
   rootDir: string,
   engineVersion: string,
-  opts: { runner?: GitRunner; packageName?: string; npmChannel?: boolean } = {},
+  opts: { runner?: GitRunner; packageName?: string; npmChannel?: boolean; npmRegistry?: string } = {},
 ): Promise<SyncPlan> {
   const manifest = await readManifest(rootDir);
   if (manifest === null) {
@@ -551,6 +551,10 @@ export async function planSync(
     // Off the same manifest read as the name; a caller pinning the name pins
     // this beside it. A registry-less fork renders `npx --no`.
     npmChannel: opts.npmChannel ?? hasNpmChannel(),
+    // A `--registry` fork's scope registry, off the same read. A caller pinning
+    // the name pins this beside it, so a pinned name never meets the
+    // checkout's registry (REQ-PLUGIN-048).
+    ...registryOption(opts),
     facts: {
       monorepoPackages: repoInfo.monorepoPackages,
     },

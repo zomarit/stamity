@@ -28,7 +28,7 @@ import * as cursorContainer from "../../scripts/plugins/clients/cursor.mjs";
 // @ts-expect-error — as above.
 import * as tokens from "../../scripts/plugins/tokens.mjs";
 import { CLI_TOKEN, INVARIANTS_VERSION_TOKEN, REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
-import { pinnedCliPrefix } from "../../src/shared/cliCall.ts";
+import { pinnedCliPrefix, REGISTRY_URL } from "../../src/shared/cliCall.ts";
 import { canonical } from "../support/identity.ts";
 
 /**
@@ -90,6 +90,8 @@ interface PluginCli {
   packageName: string;
   version: string;
   npmChannel?: boolean;
+  /** A `--registry` fork's `publishConfig.registry`, named for the package's scope (REQ-PLUGIN-048). */
+  registry?: string;
 }
 
 const substitute = tokens.substitute as (
@@ -238,6 +240,36 @@ describe("charter-reference phrases (REQ-PLUGIN-004)", () => {
     expect(substitute(`${CLI_TOKEN} sync`, { ...cli, npmChannel: true }).text).toBe(
       "npx -y @acme/stamity@2.0.0 sync",
     );
+  });
+
+  it("names a registry fork's registry for its scope, as the engine does (REQ-PLUGIN-048)", () => {
+    // `scripts/generate-plugin-packages.mjs` passes `publishConfig.registry` as `registry`; the
+    // plugin roots' bodies then carry the same call `init` writes into a repository.
+    const cli = { packageName: "@acme/stamity", version: "2.0.0-acme.1", registry: "https://npm.pkg.github.com" };
+    const result = substitute(`${CLI_TOKEN} learn capture`, cli);
+    expect(result.text).toBe("npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@2.0.0-acme.1 learn capture");
+    expect(result.text).toBe(`${pinnedCliPrefix(cli.packageName, cli.version, cli)} learn capture`);
+    for (const npmChannel of [true, false]) {
+      expect(substitute(`${CLI_TOKEN} sync`, { ...cli, npmChannel }).text).toBe(
+        `${pinnedCliPrefix(cli.packageName, cli.version, { ...cli, npmChannel })} sync`,
+      );
+    }
+  });
+
+  it("restates the engine's registry grammar and refuses what the engine refuses", () => {
+    // The module runs under bare Node with no TypeScript, so the grammar is restated, not imported;
+    // equal sources keep the two from drifting apart.
+    expect((tokens.REGISTRY_URL as RegExp).source).toBe(REGISTRY_URL.source);
+    expect((tokens.REGISTRY_URL as RegExp).flags).toBe(REGISTRY_URL.flags);
+    for (const cli of [
+      { packageName: "stamity-internal", version: "2.0.0", registry: "https://npm.pkg.github.com" },
+      { packageName: "@acme/stamity", version: "2.0.0", registry: "http://npm.acme.example" },
+      { packageName: "@acme/stamity", version: "2.0.0", registry: "https://u:p@npm.acme.example" },
+      { packageName: "@acme/stamity", version: "2.0.0", registry: "https://npm.acme.example/$x" },
+    ]) {
+      expect(() => substitute(`${CLI_TOKEN} sync`, cli), JSON.stringify(cli)).toThrow(/registry/);
+      expect(() => pinnedCliPrefix(cli.packageName, cli.version, cli), JSON.stringify(cli)).toThrow(/registry/);
+    }
   });
 
   it("reports the CLI-call token as unresolved when the build passed no version", () => {

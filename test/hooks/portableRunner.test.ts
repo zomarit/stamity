@@ -219,6 +219,24 @@ describe("portable native hook boundary", () => {
     );
   });
 
+  it("renders a registry fork's sync call, whose `:` and `=` are plain text in the starter (REQ-PLUGIN-048)", async () => {
+    const project = await mkdtemp(join(tmpdir(), "stamity-hook-registry-"));
+    roots.push(project);
+    await mkdir(join(project, ".codex"), { recursive: true });
+    await writeFile(join(project, ".codex", "hooks.json"), "{}\n");
+    const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
+    const syncCall = "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 sync";
+    const starter = portableHookCommand("codex", hook, { syncCall });
+    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
+    expect(program, starter).not.toBeNull();
+    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+      cwd: project, shell: false, input: "{}", encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    // The call reaches the reader whole: the registry argument and the spec it precedes.
+    expect(result.stderr).toBe(`Stamity hook script missing beside .codex/hooks.json; run ${syncCall}`);
+  });
+
   it("refuses to render the Codex starter without a pinned sync call, or with one carrying shell syntax", () => {
     const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
     expect(() => portableHookCommand("codex", hook)).toThrow(/pinned sync call/);

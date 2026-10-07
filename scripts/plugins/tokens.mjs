@@ -38,16 +38,49 @@ export const CLI_TOKEN = '${STAMITY:CLI}'
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
 
 /**
+ * The registry URLs a call may name — `REGISTRY_URL` in `src/shared/cliCall.ts`, restated for the
+ * reason `PACKAGE_NAME` is and held equal by `test/ci/pluginModules.test.ts`: plain https, a host,
+ * an optional port and path, and none of the characters a shell, cmd, PowerShell, a JavaScript
+ * string or JSON would read as syntax.
+ */
+export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._~/-]*)?$/
+
+/**
+ * `--@<scope>:registry=<url>` for a package whose scope names its registry (REQ-PLUGIN-048), or
+ * `''` when `registry` is absent — `scopeRegistryArg` in `src/shared/cliCall.ts`, restated. Throws
+ * for an unscoped name with a registry and for a URL outside {@link REGISTRY_URL}, naming the rule
+ * and never the value, which may carry credentials.
+ */
+function scopeRegistryArg(packageName, registry) {
+  if (registry === undefined) return ''
+  const scope = /^(@[^/]+)\//.exec(packageName)?.[1]
+  if (scope === undefined) {
+    throw new Error(
+      'Cannot render the pinned CLI call: an unscoped package cannot name a scope registry; --registry would send every dependency there.',
+    )
+  }
+  if (typeof registry !== 'string' || !REGISTRY_URL.test(registry)) {
+    throw new Error(
+      `Cannot render the pinned CLI call: the registry named for ${scope} is not a plain https URL, so it is not written into a command.`,
+    )
+  }
+  return `--${scope}:registry=${registry}`
+}
+
+/**
  * The value `${STAMITY:CLI}` takes in a plugin body: `npx -y <packageName>@<version>`, or
  * `npx --no <packageName>@<version>` when `npmChannel` is `false` — a package no registry serves,
  * whose call runs an installed copy and never fetches one (`CliCallOptions` in
- * `src/shared/cliCall.ts`). An absent `npmChannel` is `-y`, as there.
+ * `src/shared/cliCall.ts`). An absent `npmChannel` is `-y`, as there. A `registry` — a
+ * `--registry` fork's `publishConfig.registry` — is named for the package's scope between the flag
+ * and the spec, as the engine names it (REQ-PLUGIN-048).
  *
  * Throws on a name that is not a runnable package and on a version that is not a plugin version
  * (`scripts/plugins/version.mjs`): `latest`, a range or an empty string would publish an
- * unpinned call, and build metadata has nowhere to go in an npm install spec.
+ * unpinned call, and build metadata has nowhere to go in an npm install spec. Throws on a
+ * registry {@link scopeRegistryArg} refuses.
  */
-export function pinnedCliPrefix({ packageName, version, npmChannel } = {}) {
+export function pinnedCliPrefix({ packageName, version, npmChannel, registry } = {}) {
   if (typeof packageName !== 'string' || !PACKAGE_NAME.test(packageName)) {
     throw new Error(
       `Cannot render the pinned CLI call: ${JSON.stringify(packageName)} is not a runnable npm package name.`,
@@ -58,7 +91,8 @@ export function pinnedCliPrefix({ packageName, version, npmChannel } = {}) {
       `Cannot render the pinned CLI call: version ${JSON.stringify(version)} is not a plugin version (major.minor.patch, an optional prerelease).`,
     )
   }
-  return `npx ${npmChannel === false ? '--no' : '-y'} ${packageName}@${version}`
+  const words = [npmChannel === false ? '--no' : '-y', scopeRegistryArg(packageName, registry)]
+  return ['npx', ...words, `${packageName}@${version}`].filter((word) => word !== '').join(' ')
 }
 
 /**
@@ -95,7 +129,7 @@ const TOKEN_PATTERN = /\$\{STAMITY:[^}\n]*\}/g
 
 /**
  * Replace every mapped token in `body` with its phrase — and `${STAMITY:CLI}` with the pinned
- * call when `cli` (`{ packageName, version, npmChannel? }`) is given — and report the rest.
+ * call when `cli` (`{ packageName, version, npmChannel?, registry? }`) is given — and report the rest.
  *
  * Pure. An unmapped token is LEFT IN PLACE rather than blanked, so the caller's refusal message
  * can quote the body as it stands; `unresolved` lists each distinct token once, in order of first

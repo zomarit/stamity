@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { applyInit } from "../../src/cli/commands/init/apply.ts";
+import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { buildConfigTamperNoticeScript } from "../../src/hooks/scripts.ts";
 import { cliCallHint, pinnedCliCall } from "../../src/shared/cliCall.ts";
 import { TOOLS } from "../../src/types/core.ts";
@@ -8,8 +10,12 @@ import {
   makeGoldenRepo,
   readEmittedTree,
   GOLDEN_ENGINE_VERSION,
+  GOLDEN_MCP_SERVER_ID,
+  GOLDEN_NOW,
+  GOLDEN_SEED_FILES,
   type GoldenRepo,
 } from "./goldenFixture.ts";
+import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
 /**
  * REQ-FLOW-002, the engine half: every file the engine renders from a template
@@ -155,5 +161,86 @@ describe("an all-four-client emission", () => {
     for (const command of commands) {
       expect(command).toContain("run npx -y @zomarit/stamity@1.0.0-golden sync");
     }
+  });
+});
+
+/**
+ * REQ-PLUGIN-048: a fork made with `fork-identity.mjs --registry` publishes `@<scope>/stamity` to
+ * its own registry, and npx finds a scope's registry only in npm's configuration. So every pinned
+ * call a four-client setup writes for such a fork names the registry for the scope ahead of the
+ * spec. Measured at the head before the fix: 44 bare calls in 23 files.
+ */
+describe("a registry fork's four-client emission", () => {
+  const FORK = "@acme/stamity";
+  const REGISTRY = "https://npm.pkg.github.com";
+  const ARG = `--@acme:registry=${REGISTRY}`;
+  let temp: TempDirHandle;
+  let tree: Record<string, string>;
+
+  beforeAll(async () => {
+    temp = await makeTempDir("stamity-registry-fork");
+    await temp.seedFiles({ ...GOLDEN_SEED_FILES });
+    const decisions = await buildInitDecisions(temp.dir, { maturityTier: "team" }, { history: null });
+    await applyInit({
+      rootDir: temp.dir,
+      decisions: { ...decisions, tools: [...TOOLS], toolsSource: "flag" },
+      defaults: { mcpServers: [GOLDEN_MCP_SERVER_ID] },
+      engineVersion: GOLDEN_ENGINE_VERSION,
+      packageName: FORK,
+      npmChannel: true,
+      npmRegistry: REGISTRY,
+      dryRun: false,
+      force: false,
+      now: GOLDEN_NOW,
+    });
+    tree = await readEmittedTree(temp.dir);
+  }, 60_000);
+
+  afterAll(async () => {
+    await temp?.cleanup();
+  });
+
+  /** `path` -> how many times the fork's pinned spec appears in it. */
+  function callsByPath(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const [path, content] of Object.entries(tree)) {
+      const hits = content.split(`${FORK}@`).length - 1;
+      if (hits > 0) counts.set(path, hits);
+    }
+    return counts;
+  }
+
+  it("names the registry ahead of every pinned spec, and leaves none bare", () => {
+    const counts = callsByPath();
+    // Non-degenerate: the calls sit in each client's bodies and hook surfaces, not in one file.
+    expect([...counts.values()].reduce((sum, n) => sum + n, 0)).toBeGreaterThanOrEqual(40);
+    expect([...counts.keys()]).toEqual(
+      expect.arrayContaining([
+        "AGENTS.md",
+        "AGENTS.override.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ...TOOLS.map((tool) => `.stamity/generated/hooks/${tool}/stamity-config-tamper-notice.mjs`),
+      ]),
+    );
+    expect([...counts.keys()].some((path) => path.startsWith(".cursor/hooks/") && path.endsWith(".mjs"))).toBe(true);
+    const bare: string[] = [];
+    for (const [path] of counts) {
+      const content = tree[path] ?? "";
+      for (let at = content.indexOf(`${FORK}@`); at !== -1; at = content.indexOf(`${FORK}@`, at + 1)) {
+        if (!content.slice(0, at).endsWith(`${ARG} `)) {
+          bare.push(`${path}: ${content.slice(Math.max(0, at - 40), at + 40).replaceAll("\n", " ")}`);
+        }
+      }
+    }
+    expect(bare).toEqual([]);
+  });
+
+  it("renders every registry-bound call with `-y`, the channel a registry fork has", () => {
+    const flags = new Set<string>();
+    for (const content of Object.values(tree)) {
+      for (const match of content.matchAll(/npx (\S+) --@acme:registry=/g)) flags.add(match[1] ?? "");
+    }
+    expect([...flags]).toEqual(["-y"]);
   });
 });

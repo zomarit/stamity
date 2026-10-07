@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--expect-version`, `--expect-tools` and `--expect-mode` fail the check with
   `EXPECTATION_ERROR` when the repository records another release, client set or install mode;
   without them `check` is unchanged.
+- **A fork made with `fork-identity.mjs --registry` names its registry in every CLI call it prints.**
+  Generated bodies, hook hints, guard messages, the CLI's remedies, the update banner, `sync --help`
+  and the plugin roots render `npx -y --@<scope>:registry=<url> @<scope>/stamity@<version> <verb>`,
+  so a machine without the scope mapping no longer asks the public registry for the fork's package.
+  The canonical package's output is unchanged.
 
 ### Fixed
 

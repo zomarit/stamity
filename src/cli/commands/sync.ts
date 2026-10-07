@@ -1,5 +1,6 @@
 import type { Command } from "commander";
-import { hasNpmChannel, packageName } from "../kit/packageName.ts";
+import { scopeRegistryArg } from "../../shared/cliCall.ts";
+import { hasNpmChannel, npmRegistry, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
@@ -67,8 +68,12 @@ function updatePathHelp(): string {
       `regenerating from the newest release is the update; no separate update command exists.`
     );
   }
+  // A `--registry` fork names its registry for its scope ahead of the spec
+  // (REQ-PLUGIN-048); `npmRegistry()` answers only a registry the call can write.
+  const registryArg = scopeRegistryArg(packageName(), npmRegistry() ?? undefined);
+  const call = ["npx -y", registryArg, `${packageName()}@<version> sync`].filter((word) => word !== "").join(" ");
   return (
-    `update = npx -y ${packageName()}@<version> sync, with <version> the release to move to — ` +
+    `update = ${call}, with <version> the release to move to — ` +
     `regenerating from that release is the update; no separate update command exists.`
   );
 }

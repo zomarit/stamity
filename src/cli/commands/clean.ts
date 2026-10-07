@@ -580,7 +580,7 @@ async function runScopedClean(
         `A real run also drops its ${candidates.length} ledger row(s)` +
         `${mcpSentence(mcp)} and leaves the rest of ${STATE_DIR}/ intact.\n`,
     );
-    nextSteps(ctx, [`apply it: stamity clean --pack ${packId}`]);
+    nextSteps(ctx, [`apply it: ${packageCommand(`clean --pack ${packId}`)}`]);
   } else {
     ctx.io.out(
       `${ctx.palette.green(`Pack "${packId}" removed`)} — ${report.deletedCount} file(s) deleted, ` +

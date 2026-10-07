@@ -2450,8 +2450,23 @@ describe("the skills-list budget", () => {
       `installed packs add: acme-demo ${acme} characters (8 skills), ` +
         `beta-tools ${beta} characters (1 skill)`,
     );
-    expect(message).toContain("`stamity clean --pack <id>`");
+    // TEST CHANGE, justified: REQ-PLUGIN-048 (inbox row 486) — the remedy named the bare
+    // `stamity clean --pack <id>`, which runs only where a global install put the binary; it now
+    // names the pinned call from the adapter's own CLI context, as every other remedy does.
+    expect(message).toContain(`\`npx -y @zomarit/stamity@${ENGINE_VERSION} clean --pack <id>\``);
+    expect(message).not.toContain("`stamity clean");
     expect(message).toContain('`ruleDelivery: "always-on"`');
+
+    // A registry fork's context carries its registry into the same remedy.
+    const forked = await codexResiduePlanner
+      .planResidue(core, { ...ctx, packageName: "@acme/stamity", npmRegistry: "https://npm.pkg.github.com" })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect((forked as EngineError).message).toContain(
+      `\`npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@${ENGINE_VERSION} clean --pack <id>\``,
+    );
   });
 
   it("names the core's share only when no pack is installed", async () => {

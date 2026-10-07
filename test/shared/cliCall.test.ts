@@ -5,6 +5,8 @@ import {
   DEFAULT_CLI_PACKAGE_NAME,
   pinnedCliCall,
   pinnedCliPrefix,
+  REGISTRY_URL,
+  scopeRegistryArg,
 } from "../../src/shared/cliCall.ts";
 import { EngineError } from "../../src/types/errors.ts";
 
@@ -135,5 +137,86 @@ describe("the npm-channel option", () => {
     expect(
       validationMessage(() => pinnedCliPrefix("-acme", "1.8.0", { npmChannel: false })),
     ).toMatch(/runnable npm package name/);
+  });
+});
+
+/**
+ * The scope registry (REQ-PLUGIN-048): a fork made with `fork-identity.mjs
+ * --registry` publishes `@<scope>/stamity` to its own registry, and npx finds a
+ * scope's registry only in npm's configuration. So the call names it ahead of
+ * the package spec — `--@<scope>:registry=<url>` — and npm takes the fork's
+ * package from the fork's registry and every other package from the default
+ * one. A value outside a plain https grammar is never written into a command.
+ */
+describe("the scope-registry option", () => {
+  const REGISTRY = "https://npm.pkg.github.com";
+
+  it("names the scope's registry between the npx flag and the package spec", () => {
+    expect(pinnedCliPrefix("@acme/stamity", "1.12.0-acme.1", { registry: REGISTRY })).toBe(
+      "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0-acme.1",
+    );
+    expect(pinnedCliPrefix("@acme/stamity", "1.12.0-acme.1", { registry: REGISTRY, npmChannel: false })).toBe(
+      "npx --no --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0-acme.1",
+    );
+    expect(pinnedCliCall("@acme/stamity", "1.12.0", "learn capture", { registry: REGISTRY })).toBe(
+      "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 learn capture",
+    );
+    expect(cliCallHint("@acme/stamity", "1.12.0", "check", { registry: REGISTRY })).toBe(
+      "`stamity check` where the CLI is installed, else " +
+        "`npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 check`",
+    );
+  });
+
+  it("renders a registry as recorded, a path and a trailing slash included", () => {
+    expect(pinnedCliPrefix("@acme/stamity", "1.0.0", { registry: "https://npm.acme.example/" })).toBe(
+      "npx -y --@acme:registry=https://npm.acme.example/ @acme/stamity@1.0.0",
+    );
+    expect(
+      pinnedCliPrefix("@acme/stamity", "1.0.0", { registry: "https://r.acme.example:8443/npm/v1_x-y~z/" }),
+    ).toBe("npx -y --@acme:registry=https://r.acme.example:8443/npm/v1_x-y~z/ @acme/stamity@1.0.0");
+  });
+
+  it("renders today's call byte for byte when no registry is named", () => {
+    expect(pinnedCliPrefix("@acme/stamity", "1.12.0", {})).toBe("npx -y @acme/stamity@1.12.0");
+    expect(pinnedCliPrefix("@zomarit/stamity", "1.11.0", { npmChannel: true })).toBe(
+      "npx -y @zomarit/stamity@1.11.0",
+    );
+    expect(scopeRegistryArg("@acme/stamity", undefined)).toBe("");
+  });
+
+  it("refuses a registry for an unscoped package: only `--registry` could carry it, and it moves every dependency", () => {
+    expect(validationMessage(() => pinnedCliPrefix("stamity-internal", "1.0.0", { registry: REGISTRY }))).toMatch(
+      /unscoped package cannot name a scope registry/,
+    );
+    expect(validationMessage(() => scopeRegistryArg("stamity", REGISTRY))).toMatch(/unscoped/);
+  });
+
+  it("refuses a registry outside the plain https grammar, never echoing it into a command", () => {
+    for (const registry of [
+      "http://r.example",
+      "https://u:p@r.example",
+      "https://r.example/?t=1",
+      "https://r.example/#x",
+      "https://r.example/a%20b",
+      "https://r.example/$x",
+      "https://r.example/a b",
+      'https://r.example/"x',
+      "https://r.example/'x",
+      "https://r.example/`id`",
+      "https://r.example/^x",
+      "https://r.example/a;b",
+      "https://r.example/a&b",
+      "https://r.example\n",
+      "",
+      "https://",
+    ]) {
+      const message = validationMessage(() => pinnedCliPrefix("@acme/stamity", "1.0.0", { registry }));
+      expect(message, JSON.stringify(registry)).toMatch(/is not a plain https URL/);
+      // The refused value may carry credentials, so the message names the rule, not the value
+      // (as `scripts/fork-identity.mjs` never echoes a URL it refused).
+      if (registry.length > "https://".length) expect(message, JSON.stringify(registry)).not.toContain(registry);
+      expect(REGISTRY_URL.test(registry), JSON.stringify(registry)).toBe(false);
+    }
+    expect(REGISTRY_URL.test(REGISTRY)).toBe(true);
   });
 });

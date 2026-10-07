@@ -76,6 +76,8 @@ export interface AgentsMdEmissionContext {
   packageName?: string;
   /** Whether that package has an npm channel; absent means it does (`npx -y`), `false` renders `npx --no`. */
   npmChannel?: boolean;
+  /** The registry that serves that package's scope (a `--registry` fork's); absent: the call names none. */
+  npmRegistry?: string;
   /** Live per-run detection decisions; only the monorepo layout is read here. */
   facts: {
     /** Workspace packages feeding the nested-copy plan; empty for single-package repos. */
@@ -161,6 +163,7 @@ export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<Agen
       engineVersion: ctx.engineVersion ?? UNSTAMPED_ENGINE_VERSION,
       ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
       ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
+      ...(ctx.npmRegistry === undefined ? {} : { npmRegistry: ctx.npmRegistry }),
     }),
   );
   const content = withSingleTrailingNewline(substituted);

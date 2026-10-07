@@ -6,6 +6,7 @@ import type * as PackageNameApi from "../../../src/cli/kit/packageName.ts";
 import {
   CANONICAL_PACKAGE_NAME,
   hasNpmChannel,
+  npmRegistry,
   packageCommand,
   packageName,
   repositorySlug,
@@ -94,6 +95,14 @@ describe("packageCommand — the canonical checkout", () => {
     },
   );
 
+  it.skipIf(!canonical().canonical)(
+    canonicalOnly("names no registry, so its remedies render what they rendered before (REQ-PLUGIN-048)"),
+    () => {
+      expect(npmRegistry()).toBeNull();
+      expect(packageCommand("sync")).not.toContain("registry");
+    },
+  );
+
   it("does not use the `st` bin alias — npx resolves a package name", () => {
     expect(packageCommand("sync").startsWith("npx ")).toBe(true);
     expect(packageCommand("sync")).not.toContain("npx st ");
@@ -152,9 +161,50 @@ describe("packageCommand — a renamed private downstream", () => {
     const kit = await loadKitRootedAt(fixture.dir);
 
     expect(kit.hasNpmChannel()).toBe(true);
-    expect(kit.packageCommand("sync")).toBe("npx -y @acme/stamity@1.8.0 sync");
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — a registry fork names its registry. The call
+    // keeps `-y` (what this case pins), and now carries `--@acme:registry=<url>` ahead of the
+    // spec, so a machine with no scope mapping fetches the fork's package from the fork's
+    // registry instead of whatever the public one serves under the name.
+    expect(kit.packageCommand("sync")).toBe(
+      `npx -y --@acme:registry=${manifest.publishConfig.registry} @acme/stamity@1.8.0 sync`,
+    );
+    expect(kit.npmRegistry()).toBe(manifest.publishConfig.registry);
     // The same read answers the registry the update notice asks (review/167).
     expect(kit.resolveOwnPackageFacts().registry).toBe(manifest.publishConfig.registry);
+  });
+
+  it("names the registry in the unpinned fallback too, when the version cannot be pinned", async () => {
+    const fixture = getFixture();
+    await fixture.seedFiles({
+      "package.json": `${JSON.stringify({
+        name: "@acme/stamity",
+        version: "next",
+        publishConfig: { registry: "https://npm.acme.example/" },
+      })}\n`,
+    });
+    const kit = await loadKitRootedAt(fixture.dir);
+
+    expect(kit.packageCommand("sync")).toBe("npx --@acme:registry=https://npm.acme.example/ @acme/stamity sync");
+  });
+
+  // REQ-PLUGIN-048, fail closed: a registry the strict https grammar refuses is never written into
+  // a command, so the fork loses its channel and every call renders `npx --no`, which fetches
+  // nothing. An unscoped name cannot carry a scope registry either (`--registry` would send every
+  // dependency there), so it fails closed the same way.
+  it.each([
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://u:p@npm.acme.example" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "http://npm.acme.example" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example/$(id)" } },
+    { name: "stamity-internal", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example" } },
+  ])("renders `npx --no` and names no registry for a registry it cannot write (%j)", async (manifest) => {
+    const fixture = getFixture();
+    await fixture.seedFiles({ "package.json": `${JSON.stringify(manifest)}\n` });
+    const kit = await loadKitRootedAt(fixture.dir);
+
+    expect(kit.npmRegistry()).toBeNull();
+    expect(kit.hasNpmChannel()).toBe(false);
+    expect(kit.packageCommand("sync")).toBe(`npx --no ${manifest.name}@1.8.0 sync`);
+    expect(kit.packageCommand("sync")).not.toContain("registry");
   });
 
   it.each([{ registry: "" }, { registry: 42 }, "https://npm.acme.example"])(
@@ -360,13 +410,16 @@ describe("a renamed fork's emission", () => {
       refused: "npx -y @acme/stamity",
     },
     {
-      label: "a fork made with --registry keeps `npx -y`",
+      label: "a fork made with --registry keeps `npx -y` and names its registry",
       manifest: { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
       name: "@acme/stamity",
-      call: "npx -y @acme/stamity@1.8.0",
-      // TEST CHANGE (sw26 fix round 2, prove/5): the pinned no-channel form only. The
-      // shared sentence legitimately carries the LOCAL form `npx --no stamity <verb>`.
-      refused: "npx --no @acme/stamity@",
+      // TEST CHANGE, justified: REQ-PLUGIN-048 — a registry fork names its registry. The call
+      // keeps `-y` (what this case pinned) and carries `--@acme:registry=<url>` ahead of the spec;
+      // the refused form becomes the bare `-y` call, the one that asks the default registry. The
+      // `npx --no @acme/stamity@` form it refused before stays absent by construction: every call
+      // here renders through one identity, whose channel the `-y` in `call` proves.
+      call: "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.8.0",
+      refused: "npx -y @acme/stamity@",
     },
     {
       label: "the canonical build keeps `npx -y`",

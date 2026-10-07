@@ -252,6 +252,8 @@ export interface HooksPlanContext {
   packageName?: string;
   /** Whether that package has an npm channel; absent means it does (`npx -y`), `false` renders `npx --no`. */
   npmChannel?: boolean;
+  /** The registry that serves that package's scope (a `--registry` fork's); absent: the call names none. */
+  npmRegistry?: string;
   /**
    * Hook definitions supplied by installed packs, already read through THIS
    * lane's ingress (`../pack/projection.ts` → `packHookDefinitions`) — the

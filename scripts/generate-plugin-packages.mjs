@@ -329,9 +329,21 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   // (`src/cli/kit/packageName.ts`) makes for init and sync, over the same fields. A
   // registry-less fork (private, no `publishConfig.registry`) renders every pinned call as
   // `npx --no`, which runs an installed copy and never fetches one under a name nobody holds.
+  //
+  // A `--registry` fork's registry is named for its scope in every pinned call the roots carry
+  // (REQ-PLUGIN-048), as `npmRegistry()` names it for init and sync. A registry the call cannot
+  // write (outside `tokens.REGISTRY_URL`, or on an unscoped name) is never rendered and costs the
+  // package its channel, as there: the call fails closed to `npx --no`.
+  const declaredRegistry =
+    typeof pkg.publishConfig?.registry === 'string' && pkg.publishConfig.registry !== ''
+      ? pkg.publishConfig.registry
+      : undefined
+  const registry =
+    declaredRegistry !== undefined && packageName.startsWith('@') && tokens.REGISTRY_URL.test(declaredRegistry)
+      ? declaredRegistry
+      : undefined
   const npmChannel =
-    !(pkg.private === true || pkg.private === 'true') ||
-    (typeof pkg.publishConfig?.registry === 'string' && pkg.publishConfig.registry !== '')
+    declaredRegistry === undefined ? !(pkg.private === true || pkg.private === 'true') : registry !== undefined
   const description = requirePkg('description', pkg.description, nonEmptyString)
   const license = requirePkg('license', pkg.license, nonEmptyString)
   const homepageUrl = requirePkg('homepage', pkg.homepage, nonEmptyString)
@@ -460,7 +472,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         forkRoot: join(ROOT, 'fork'),
         tokens,
         // `${STAMITY:CLI}` pins a body's CLI call to this build's own package and release.
-        cli: { packageName, version: releaseVersion, npmChannel },
+        cli: { packageName, version: releaseVersion, npmChannel, ...(registry === undefined ? {} : { registry }) },
       })
     } catch (err) {
       fail(err instanceof Error ? err.message : String(err))
@@ -508,6 +520,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
           // The package the hook scripts' CLI hints pin, as the bodies' token does above.
           packageName,
           npmChannel,
+          ...(registry === undefined ? {} : { npmRegistry: registry }),
           facts: { monorepoPackages: [], hookScriptsRoot: `\${${rootVar}}/${HOOKS_DIR}` },
           contentRoot,
         })

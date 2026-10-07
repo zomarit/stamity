@@ -195,6 +195,8 @@ export interface SkillsEmissionContext {
   packageName?: string;
   /** Whether that package has an npm channel; absent means it does (`npx -y`), `false` renders `npx --no`. */
   npmChannel?: boolean;
+  /** The registry that serves that package's scope (a `--registry` fork's); absent: the call names none. */
+  npmRegistry?: string;
 }
 
 /** Test seams; production callers pass nothing and read the bundled corpus. */

@@ -169,8 +169,7 @@ manifests are projected from it. The regenerated marketplace entry follows the p
 naming your repository instead of an npm package you never publish. With `--registry` the entry
 carries an `npm` source naming your package and version but no registry, so a developer's client
 fetches it from your registry only on a machine that maps your scope to that registry in its
-`.npmrc`, the same precondition the CLI calls below carry. Without the mapping it asks the public
-npm registry for your package name.
+`.npmrc`. Without the mapping it asks the public npm registry for your package name.
 
 The CLI calls your setup writes follow the same split. `init`, `sync` and the plugin build pin
 every call they write into `AGENTS.md`, the generated bodies, the hook hints, the guard messages
@@ -178,13 +177,19 @@ and `.codex/hooks.json` to your package at the version that wrote it, and the CL
 do the same. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
 the project already has installed, whatever package name that copy carries, and never a download —
 and falls back to the pinned call only where npm refuses because no copy is installed. With
-`--registry` the call is `npx -y @<scope>/stamity@<version> <verb>`, and npx fetches that version
-from your registry when the project has none, but only on a machine that maps your scope to that
-registry in its `.npmrc`, as **Consume the release** below shows. npx finds a scope's registry in
-npm's configuration; `publishConfig` in your manifest steers `npm publish` only. On a developer
-machine or CI runner without the mapping, the same call asks the public npm registry for your
-package name. Hold your scope on the public registry too, and publish nothing there, so a missing
-mapping ends with a 404 instead of fetching a package someone else published under your name. The
+`--registry` the call is `npx -y --@<scope>:registry=<url> @<scope>/stamity@<version> <verb>`.
+npx finds a scope's registry only in npm's configuration, and `publishConfig` in your manifest
+steers `npm publish` only, so the call carries the setting itself: npx takes your package from
+your registry on every machine, with or without a scope mapping in its `.npmrc`, and every other
+package from the default registry. The setup, the CLI's remedies, the update notice's move command,
+`sync --help` and the plugin roots all print this form. The flag outranks an `.npmrc` mapping, so a
+machine that reaches your scope through a mirror is sent to the registry you published to for the
+fallback call, while a project that installs the pinned version runs that copy with no registry
+request. A registry URL that is not plain https (credentials, a query, a fragment, a `%` or a shell
+character, which `--registry` already refuses and only a hand edit can leave) is never written into
+a command: such a fork's calls render `npx --no`, as without `--registry` below. Hold your scope on
+the public registry too, and publish nothing there, so a call someone types without the flag ends
+with a 404 instead of fetching a package someone else published under your name. The
 startup update notice asks your registry, never the public one, whether a newer version exists. It
 sends no credentials, so a registry that needs them leaves the notice silent. Without `--registry`
 the call is `npx --no @<scope>/stamity@<version> <verb>`. Your scope is a public, predictable name

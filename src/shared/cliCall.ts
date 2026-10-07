@@ -66,6 +66,56 @@ export interface CliCallOptions {
    * it; `--no` fails closed instead (`docs/enterprise-forks.md`).
    */
   readonly npmChannel?: boolean;
+  /**
+   * The registry that serves the package's scope (a fork's
+   * `publishConfig.registry`); absent: npm's configuration decides. npx finds a
+   * scope's registry only in that configuration, so on a machine without the
+   * scope mapping a bare call asks the default registry, where anyone may hold
+   * the name. Named, the call carries `--@<scope>:registry=<url>` ahead of the
+   * spec ({@link scopeRegistryArg}).
+   */
+  readonly registry?: string;
+}
+
+/**
+ * The registry URLs a call may name: plain https, a host, an optional port and
+ * an optional path of unreserved characters. No userinfo, query, fragment, `%`,
+ * `$`, quote, backtick, space or `^`: the value enters sh, cmd, PowerShell,
+ * JavaScript strings and JSON, so refusing beats escaping it for four dialects.
+ * Restated in `scripts/plugins/tokens.mjs`, held equal by
+ * `test/ci/pluginModules.test.ts`.
+ */
+export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._~/-]*)?$/;
+
+/**
+ * `--@<scope>:registry=<url>` — npm's per-scope registry setting as one argv
+ * word — or `""` when `registry` is absent. It must precede the package spec:
+ * npx hands everything after the spec to the package.
+ *
+ * Only a scoped name can carry it. `--registry=<url>` would send every
+ * dependency to the fork's registry too, where npm then fails with a 404.
+ * Throws `VALIDATION_ERROR` for an unscoped name with a registry, and for a URL
+ * outside {@link REGISTRY_URL}; the message names the rule, never the value,
+ * which may carry credentials.
+ */
+export function scopeRegistryArg(packageName: string, registry: string | undefined): string {
+  if (registry === undefined) return "";
+  const scope = /^(@[^/]+)\//.exec(packageName)?.[1];
+  if (scope === undefined) {
+    throw new EngineError(
+      "Cannot render the pinned CLI call: an unscoped package cannot name a scope registry; " +
+        "--registry would send every dependency there.",
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  if (!REGISTRY_URL.test(registry)) {
+    throw new EngineError(
+      `Cannot render the pinned CLI call: the registry named for ${scope} is not a plain https URL, ` +
+        "so it is not written into a command.",
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  return `--${scope}:registry=${registry}`;
 }
 
 /**
@@ -83,11 +133,14 @@ function npxFlag(opts: CliCallOptions): string {
  * `npx -y <packageName>@<version>` — the pinned call without a verb, which is
  * what the `${STAMITY:CLI}` token renders to so a body can write
  * `${STAMITY:CLI} <verb>` in prose. `npx --no …` for a package with no npm
- * channel ({@link CliCallOptions}).
+ * channel, and `npx -y --@<scope>:registry=<url> …` for a package whose scope
+ * names its registry ({@link CliCallOptions}); without one the string is what
+ * it always was.
  *
- * Throws `VALIDATION_ERROR` on an empty or unrunnable package name, and on a
- * version that is not semver-shaped: rendering either would emit a call that
- * fails, or one that silently runs a different version.
+ * Throws `VALIDATION_ERROR` on an empty or unrunnable package name, on a
+ * version that is not semver-shaped — rendering either would emit a call that
+ * fails, or one that silently runs a different version — and on a registry
+ * {@link scopeRegistryArg} refuses.
  */
 export function pinnedCliPrefix(
   packageName: string,
@@ -107,7 +160,8 @@ export function pinnedCliPrefix(
       { code: "VALIDATION_ERROR" },
     );
   }
-  return `npx ${npxFlag(opts)} ${packageName}@${version}`;
+  const words = ["npx", npxFlag(opts), scopeRegistryArg(packageName, opts.registry), `${packageName}@${version}`];
+  return words.filter((word) => word !== "").join(" ");
 }
 
 /**

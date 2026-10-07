@@ -100,7 +100,7 @@ import {
   type ResolvedPackContent,
 } from "../pack/projection.ts";
 import { hasManagedBlock, wrapInManagedBlock } from "../merge/managedBlocks.ts";
-import { pinnedCliCall } from "../shared/cliCall.ts";
+import { pinnedCliCall, scopeRegistryArg } from "../shared/cliCall.ts";
 import { cliCallContextOf, type CliCallContext } from "./substitution.ts";
 import {
   outputOwners,
@@ -146,6 +146,12 @@ export interface EmissionContext {
    * installed in the project and refuses to fetch one (`../shared/cliCall.ts`).
    */
   npmChannel?: boolean;
+  /**
+   * The registry that serves that package's scope — a `--registry` fork's
+   * `publishConfig.registry` — which every pinned call names ahead of the spec
+   * (`--@<scope>:registry=<url>`). Absent: the call names none.
+   */
+  npmRegistry?: string;
   /** Live per-run detection decisions. */
   facts: {
     /** Live monorepo package layout; empty for single-package repos. */
@@ -398,6 +404,7 @@ export async function buildCoreEmissionPlan(
       engineVersion: ctx.engineVersion,
       ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
       ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
+      ...(ctx.npmRegistry === undefined ? {} : { npmRegistry: ctx.npmRegistry }),
       facts: { monorepoPackages: ctx.facts.monorepoPackages },
       ...contentRoot,
     }),
@@ -418,6 +425,7 @@ export async function buildCoreEmissionPlan(
             engineVersion: ctx.engineVersion,
             ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
             ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
+            ...(ctx.npmRegistry === undefined ? {} : { npmRegistry: ctx.npmRegistry }),
           },
           {
             contentRoot: skillsRoots,
@@ -436,6 +444,7 @@ export async function buildCoreEmissionPlan(
         engineVersion: ctx.engineVersion,
         ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
         ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
+        ...(ctx.npmRegistry === undefined ? {} : { npmRegistry: ctx.npmRegistry }),
         packHooks: await packHookDefinitions(resolved.packs, ctx.rootDir),
         // The agent-class half of the same seam: without these rows the
         // emitted policy document carries the shipped roster alone and the
@@ -908,7 +917,16 @@ function remedyCall(cli: CliCallContext, verb: string): string {
   try {
     return pinnedCliCall(cli.packageName, cli.version, verb, cli);
   } catch {
-    return `npx ${cli.npmChannel === false ? "--no " : ""}${cli.packageName} ${verb}`;
+    // The fallback carries the scope's registry too. A registry the call
+    // refuses to write is never rendered; the fallback then fails closed to
+    // `--no`, which fetches nothing.
+    let words = [cli.npmChannel === false ? "--no" : ""];
+    try {
+      words.push(scopeRegistryArg(cli.packageName, cli.registry));
+    } catch {
+      words = ["--no"];
+    }
+    return ["npx", ...words, cli.packageName, verb].filter((word) => word !== "").join(" ");
   }
 }
 

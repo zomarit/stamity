@@ -29,12 +29,13 @@ export const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,
 /**
  * The characters a pinned CLI call (`npx -y <package>@<version> sync`) may carry
  * into the Codex starter: the runnable package-name and semver alphabets
- * (`../shared/cliCall.ts`) plus the separating space. None of them is syntax
- * inside the starter's double-quoted `node -e` argument under `sh` or `cmd`, or
- * inside the single-quoted JavaScript string it lands in — no quote, no `$`, no
- * backtick, no `%`, no `\\`.
+ * (`../shared/cliCall.ts`), the separating space, and the `:` and `=` of a
+ * registry fork's `--@<scope>:registry=<url>` (REQ-PLUGIN-048). None of them is
+ * syntax inside the starter's double-quoted `node -e` argument under `sh` or
+ * `cmd`, or inside the single-quoted JavaScript string it lands in — no quote,
+ * no `$`, no backtick, no `%`, no `\\`.
  */
-const STARTER_SAFE_CALL = /^[A-Za-z0-9@/._~+ -]+$/;
+const STARTER_SAFE_CALL = /^[A-Za-z0-9@/._~+:= -]+$/;
 
 /**
  * Shell syntax appears only at the native boundary, never in the child argv.

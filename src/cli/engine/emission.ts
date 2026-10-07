@@ -197,6 +197,12 @@ export interface EmissionContext {
    * installed in the project and refuses to fetch one (`../../shared/cliCall.ts`).
    */
   npmChannel?: boolean;
+  /**
+   * The registry that serves that package's scope — a `--registry` fork's
+   * `publishConfig.registry` — which every pinned call names ahead of the spec
+   * (`--@<scope>:registry=<url>`). Absent: the call names none.
+   */
+  npmRegistry?: string;
   /** Live per-run detection decisions (see {@link EmissionFacts}). */
   facts: EmissionFacts;
   /**

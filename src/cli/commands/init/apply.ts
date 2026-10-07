@@ -47,7 +47,7 @@ import {
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
-import { hasNpmChannel, packageName } from "../../kit/packageName.ts";
+import { hasNpmChannel, packageName, registryOption } from "../../kit/packageName.ts";
 import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
@@ -121,6 +121,12 @@ export interface InitApplyOptions {
    * this beside it, so its bytes do not depend on the checkout's manifest.
    */
   npmChannel?: boolean;
+  /**
+   * The registry every pinned call names for the package's scope. Absent means
+   * this installation's own (`npmRegistry()`) when `packageName` is absent too,
+   * and none when the caller pinned the name (`registryOption`).
+   */
+  npmRegistry?: string;
   dryRun: boolean;
   force: boolean;
   now?: Date;
@@ -262,6 +268,8 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     // Read off the same manifest as the name: a registry-less fork renders
     // `npx --no`, which runs an installed copy and never fetches one.
     npmChannel: opts.npmChannel ?? hasNpmChannel(),
+    // A `--registry` fork's scope registry, off the same read (REQ-PLUGIN-048).
+    ...registryOption(opts),
     facts: { monorepoPackages: decisions.monorepoPackages },
   });
 

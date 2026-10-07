@@ -471,9 +471,48 @@ describe("noticeOptionsFromFacts — the registry a fork's notice asks", () => {
     expect(opts.registryBaseUrl).toBe(FORK_REGISTRY);
     expect(fetch.calls).toEqual(["https://npm.acme.example/api/npm/%40acme%2Fstamity/latest"]);
     expect(fetch.calls[0]).not.toContain(DEFAULT_REGISTRY_BASE_URL);
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — a registry fork names its registry. The move
+    // command the banner prints now carries `--@acme:registry=<url>` ahead of the spec, so it
+    // fetches the fork's build where the probe found it; the registry asked is unchanged.
     expect(notice).toBe(
-      `Update available: 1.2.2 -> 1.2.3. To move: npx -y ${FORK}@1.2.3 sync. To stay on 1.2.2, do nothing.`,
+      `Update available: 1.2.2 -> 1.2.3. To move: npx -y --@acme:registry=${FORK_REGISTRY} ${FORK}@1.2.3 sync. ` +
+        "To stay on 1.2.2, do nothing.",
     );
+  });
+
+  it("names the fork's registry in the move command (REQ-PLUGIN-048)", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.12.0-acme.2");
+    const opts = noticeOptionsFromFacts(
+      { name: FORK, version: "1.12.0-acme.1", isPrivate: false, registry: "https://npm.pkg.github.com" },
+      {},
+      dir,
+    );
+
+    const notice = await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() });
+
+    expect(opts.packageRegistry).toBe("https://npm.pkg.github.com");
+    expect(notice).toBe(
+      "Update available: 1.12.0-acme.1 -> 1.12.0-acme.2. " +
+        "To move: npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0-acme.2 sync. " +
+        "To stay on 1.12.0-acme.1, do nothing.",
+    );
+  });
+
+  it("prints no banner rather than a command naming a registry outside the https grammar", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.2.3");
+    const opts = noticeOptionsFromFacts(
+      { name: FORK, version: CURRENT, isPrivate: false, registry: "https://npm.acme.example/$(id)/" },
+      {},
+      dir,
+    );
+
+    const notice = await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() });
+
+    // Non-degenerate: the probe ran and found a newer version, so only the refusal keeps it silent.
+    expect(fetch.calls).toHaveLength(1);
+    expect(notice).toBeNull();
   });
 
   it.each([
@@ -512,6 +551,7 @@ describe("noticeOptionsFromFacts — the registry a fork's notice asks", () => {
     const notice = await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() });
 
     expect(opts).not.toHaveProperty("registryBaseUrl");
+    expect(opts).not.toHaveProperty("packageRegistry");
     expect(fetch.calls).toEqual([`${DEFAULT_REGISTRY_BASE_URL}/${PKG_ENCODED}/latest`]);
     expect(notice).toContain(`npx -y ${PKG}@1.2.3 sync`);
   });

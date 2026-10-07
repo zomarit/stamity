@@ -160,6 +160,13 @@ export interface CliCallContext {
    * copy and never fetches one.
    */
   npmChannel?: boolean;
+  /**
+   * The registry that serves the package's scope (`CliCallOptions.registry` in
+   * `../shared/cliCall.ts`): a `--registry` fork's own, rendered as
+   * `--@<scope>:registry=<url>` ahead of the spec. Absent: the call names none
+   * and npm's configuration decides.
+   */
+  registry?: string;
 }
 
 /** Resolved verification commands that feed {@link substituteVerificationGateTokens}. */
@@ -296,7 +303,8 @@ export function substituteCharterTokens(
 /**
  * The CLI pass's input, read off an emission context: its `packageName` when
  * it carries one (a fork passes its own), else {@link DEFAULT_CLI_PACKAGE_NAME},
- * its engine version, and its `npmChannel` when it carries one. Structural, so
+ * its engine version, and its `npmChannel` and `npmRegistry` when it carries
+ * them (the latter as the call's `registry`). Structural, so
  * every context shape the call sites hold — the planner's, the skills
  * projection's, the charter renderer's — passes as it is.
  */
@@ -304,11 +312,13 @@ export function cliCallContextOf(ctx: {
   readonly packageName?: string;
   readonly engineVersion: string;
   readonly npmChannel?: boolean;
+  readonly npmRegistry?: string;
 }): CliCallContext {
   return {
     packageName: ctx.packageName ?? DEFAULT_CLI_PACKAGE_NAME,
     version: ctx.engineVersion,
     ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
+    ...(ctx.npmRegistry === undefined ? {} : { registry: ctx.npmRegistry }),
   };
 }
 

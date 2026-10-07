@@ -427,7 +427,7 @@ export const codexResiduePlanner: ResiduePlanner = {
     const shown = shownSkillRows([...core.skills, ...touchpoints]);
     const skillsListChars = skillsListCharacters(shown);
     if (skillsListChars > CODEX_SKILLS_LIST_BUDGET_CHARS) {
-      throw new EngineError(skillsListRefusal(skillsListChars, shown, packOf), {
+      throw new EngineError(skillsListRefusal(skillsListChars, shown, packOf, cliCallContextOf(ctx)), {
         code: "VALIDATION_ERROR",
       });
     }
@@ -708,12 +708,14 @@ function hidesFromModel(content: string, source: string): boolean {
  * by class and artifact id) carries pack provenance; everything else, corpus,
  * fork and override content, is the core selection. The pack remedy is named
  * only when a pack holds a share, so a setup with none is not told to remove
- * one.
+ * one. It is the pinned call from the adapter's own CLI context, as every other
+ * remedy is, so a fork's names the fork and a registry fork's its registry.
  */
 function skillsListRefusal(
   total: number,
   shown: readonly Pick<ProjectedFile, "path" | "content" | "artifactId" | "artifactType">[],
   packOf: ReadonlyMap<string, string>,
+  cli: CliCallContext,
 ): string {
   const core = { characters: 0, skills: 0 };
   const packs = new Map<string, { characters: number; skills: number }>();
@@ -738,7 +740,8 @@ function skillsListRefusal(
   const remedies =
     packShares.length === 0
       ? `Narrow the content selection, or set`
-      : `Remove a pack with \`stamity clean --pack <id>\`, narrow the content selection, or set`;
+      : `Remove a pack with \`${pinnedCliCall(cli.packageName, cli.version, "clean --pack <id>", cli)}\`, ` +
+        `narrow the content selection, or set`;
   return (
     `codex skills list is ${total} characters; this setup caps it at ` +
     `${CODEX_SKILLS_LIST_BUDGET_CHARS}. Codex holds the name and description of every skill ` +

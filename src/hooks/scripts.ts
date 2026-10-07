@@ -2966,13 +2966,13 @@ if (outcome !== null) {
  * `opts` is the package the notice's check hint pins and the version it pins
  * it to — the emission context's package name and engine version, so a
  * renamed fork's notice names the fork, plus its `npmChannel` (absent: `-y`;
- * `false`: `--no`). Throws `VALIDATION_ERROR` when either
- * cannot be pinned (`../shared/cliCall.ts`).
+ * `false`: `--no`) and its scope's `registry` (absent: none named). Throws
+ * `VALIDATION_ERROR` when either cannot be pinned (`../shared/cliCall.ts`).
  */
 export function planCoreHookScripts(
   policiesJsonPath: string,
   tool: Tool,
-  opts: { packageName: string; version: string; npmChannel?: boolean },
+  opts: { packageName: string; version: string; npmChannel?: boolean; registry?: string },
 ): GeneratedHookScript[] {
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";

@@ -797,7 +797,11 @@ describe("clean --pack --dry-run", () => {
     expect(result.stdout).toContain("Dry run");
     expect(result.stdout).toContain(PACK_FILE);
     expect(result.stdout).toContain(OPS_RECEIPT);
-    expect(result.stdout).toContain(`stamity clean --pack ${OPS_ID}`);
+    // TEST CHANGE, justified: REQ-PLUGIN-048 (inbox row 487) — the next step printed the bare
+    // `stamity clean --pack` form, which runs only where a global install put the binary; it now
+    // prints the pinned call every other remedy prints (`add`, `sync`, `pack-reach`), so a registry
+    // fork's carries its registry too. What this case pins, the apply step naming the pack, holds.
+    expect(result.stdout).toContain(`apply it: ${npxCommand(`clean --pack ${OPS_ID}`)}`);
     expect(await snapshot(root)).toEqual(before);
   });
 

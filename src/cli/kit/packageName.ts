@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { pinnedCliCall } from "../../shared/cliCall.ts";
+import { pinnedCliCall, scopeRegistryArg } from "../../shared/cliCall.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 
 /**
@@ -111,16 +111,24 @@ function factsOf(parsed: Record<string, unknown> | null): OwnPackageFacts {
   };
 }
 
+/** What a pinned call needs to know about this installation, from one read. */
+interface OwnCallIdentity {
+  name: string;
+  npmChannel: boolean;
+  /** The registry the call names for the package's scope; `null`: npm's configuration decides. */
+  registry: string | null;
+}
+
 /**
  * Memoized because every remedy line asks again: the answer cannot change
  * inside one process (the manifest being read is the running package's own),
- * and the read is a directory walk plus a parse. The name and the npm-channel
- * decision come from ONE read, so the call can never name one manifest's
- * package with another manifest's channel.
+ * and the read is a directory walk plus a parse. The name, the npm-channel
+ * decision and the registry come from ONE read, so the call can never name one
+ * manifest's package with another manifest's channel or registry.
  */
-let cachedIdentity: { name: string; npmChannel: boolean } | null = null;
+let cachedIdentity: OwnCallIdentity | null = null;
 
-function ownCallIdentity(): { name: string; npmChannel: boolean } {
+function ownCallIdentity(): OwnCallIdentity {
   if (cachedIdentity === null) {
     const { name, isPrivate, registry } = factsOf(readOwnManifest());
     cachedIdentity =
@@ -128,10 +136,28 @@ function ownCallIdentity(): { name: string; npmChannel: boolean } {
       // canonical fallback: a manifest that WAS read answers with its own name,
       // renamed or not. The canonical package is published, so it has a channel.
       name === ""
-        ? { name: CANONICAL_PACKAGE_NAME, npmChannel: true }
-        : { name, npmChannel: !isPrivate || registry !== null };
+        ? { name: CANONICAL_PACKAGE_NAME, npmChannel: true, registry: null }
+        : registry === null
+          ? { name, npmChannel: !isPrivate, registry: null }
+          : writableRegistry(name, registry)
+            ? { name, npmChannel: true, registry }
+            : // Fail closed (REQ-PLUGIN-048): a registry the call cannot write — not a
+              // plain https URL, or named for an unscoped package — is never rendered,
+              // and a bare `-y` call would ask the default registry for the name.
+              // `npx --no` runs an installed copy and fetches nothing.
+              { name, npmChannel: false, registry: null };
   }
   return cachedIdentity;
+}
+
+/** Whether {@link scopeRegistryArg} renders `registry` for `name`, rather than refusing it. */
+function writableRegistry(name: string, registry: string): boolean {
+  try {
+    scopeRegistryArg(name, registry);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -155,10 +181,42 @@ export function packageName(): string {
  * which runs a copy the project already has installed and refuses to fetch one
  * (`../../shared/cliCall.ts`). The canonical build, a fork made with
  * `--registry`, and the failed-self-read fallback (the canonical name) all
- * answer `true` and keep `npx -y`.
+ * answer `true` and keep `npx -y`. A `publishConfig.registry` the call cannot
+ * write ({@link npmRegistry}) answers `false` as well: the bare `-y` call would
+ * ask the default registry for the fork's name.
  */
 export function hasNpmChannel(): boolean {
   return ownCallIdentity().npmChannel;
+}
+
+/**
+ * The registry every pinned call names for this installation's scope: a fork's
+ * `publishConfig.registry` (`scripts/fork-identity.mjs --registry`), so a
+ * machine without the scope mapping takes the fork's package from the fork's
+ * registry rather than whatever the default one serves under the name
+ * (REQ-PLUGIN-048). `null` for the canonical build and a registry-less fork, and
+ * for a registry the call cannot write, which also costs the fork its channel
+ * ({@link hasNpmChannel} false, so the call renders `npx --no`).
+ */
+export function npmRegistry(): string | null {
+  return ownCallIdentity().registry;
+}
+
+/**
+ * The `npmRegistry` an emission context carries, for `planSync` and
+ * `applyInit`: the caller's own when it names one; else this installation's
+ * ({@link npmRegistry}) when the caller left the package name to this
+ * installation too; else none. A caller that pins the name (a fixture rendering
+ * checkout-independent bytes) pins the registry beside it, so a pinned name
+ * never meets the registry of whatever checkout runs it — the one-read rule of
+ * {@link ownCallIdentity}, applied to a pinned name.
+ */
+export function registryOption(opts: {
+  readonly packageName?: string;
+  readonly npmRegistry?: string;
+}): { npmRegistry?: string } {
+  const registry = opts.npmRegistry ?? (opts.packageName === undefined ? npmRegistry() : null);
+  return registry === null ? {} : { npmRegistry: registry };
 }
 
 /**
@@ -206,7 +264,8 @@ let cachedVersion: string | null = null;
  * A runnable invocation of this package, pinned to the running version:
  * `npx -y <own name>@<own version> <verb>` (`../../shared/cliCall.ts`, the one
  * spelling the emitted bodies and hook hints use too); `npx --no …` when the
- * package has no npm channel ({@link hasNpmChannel}).
+ * package has no npm channel ({@link hasNpmChannel}); with the scope's
+ * registry ahead of the spec when the fork names one ({@link npmRegistry}).
  *
  * Pinned because a remedy names flags and state this version understands; an
  * unpinned `npx <name>` runs whatever the registry serves today. `-y` because
@@ -224,13 +283,17 @@ let cachedVersion: string | null = null;
  */
 export function packageCommand(verb: string): string {
   cachedVersion ??= resolveOwnPackageFacts().version;
-  const { name, npmChannel } = ownCallIdentity();
+  const { name, npmChannel, registry } = ownCallIdentity();
+  const opts = { npmChannel, ...(registry === null ? {} : { registry }) };
   if (cachedVersion !== "") {
     try {
-      return pinnedCliCall(name, cachedVersion, verb, { npmChannel });
+      return pinnedCliCall(name, cachedVersion, verb, opts);
     } catch {
       // Unpinnable (see above): fall through to the unpinned form.
     }
   }
-  return npmChannel ? `npx ${name} ${verb}` : `npx --no ${name} ${verb}`;
+  // The registry was proven writable when the identity was read, so the
+  // argument renders here without throwing.
+  const words = ["npx", npmChannel ? "" : "--no", scopeRegistryArg(name, opts.registry), name, verb];
+  return words.filter((word) => word !== "").join(" ");
 }

@@ -95,6 +95,14 @@ export interface UpdateNoticeOptions {
   cacheDir: string;
   /** Registry origin. Defaults to {@link DEFAULT_REGISTRY_BASE_URL}. */
   registryBaseUrl?: string;
+  /**
+   * The registry the move command names for the package's scope
+   * (`CliCallOptions.registry` in `../../shared/cliCall.ts`): a `--registry`
+   * fork's own, so the banner's call fetches the fork's build where the probe
+   * found it. Absent: the command names none. {@link registryBaseUrl} stays the
+   * probe's seam.
+   */
+  packageRegistry?: string;
   /** Fetch seam. Defaults to global `fetch`; tests pass a stub. */
   fetchImpl?: typeof fetch;
   /** Cache trust window. Defaults to {@link DEFAULT_NOTICE_TTL_MS}. */
@@ -135,7 +143,7 @@ export function noticeOptionsFromFacts(
     isPrivate: facts.isPrivate,
     env,
     cacheDir,
-    ...(facts.registry === null ? {} : { registryBaseUrl: facts.registry }),
+    ...(facts.registry === null ? {} : { registryBaseUrl: facts.registry, packageRegistry: facts.registry }),
   };
 }
 
@@ -296,7 +304,9 @@ async function probeRegistry(opts: UpdateNoticeOptions): Promise<string | null> 
  * tag is exactly the version the banner names.
  *
  * The move command is the pinned call (`../../shared/cliCall.ts`), the one
- * spelling every other remedy uses: `npx -y <name>@<latest> sync`. `-y`
+ * spelling every other remedy uses: `npx -y <name>@<latest> sync`, with a
+ * `--registry` fork's `--@<scope>:registry=<url>` ahead of the spec. A registry
+ * the call refuses to write throws, and the net below turns it into no banner. `-y`
  * because the reader may be an agent's shell, and the exact version because an
  * `@latest` advice runs whatever the registry serves on the day it is typed.
  * The `npx --no` form of a package with no npm channel never renders here: such
@@ -315,9 +325,10 @@ function buildBanner(opts: UpdateNoticeOptions, latest: string | null): string |
   const target = semver.valid(latest);
   if (target === null || semver.valid(opts.currentVersion) === null) return null;
   if (!semver.gt(target, opts.currentVersion)) return null;
+  const callOpts = opts.packageRegistry === undefined ? {} : { registry: opts.packageRegistry };
   return (
     `Update available: ${opts.currentVersion} -> ${target}. ` +
-    `To move: ${pinnedCliCall(opts.packageName, target, "sync")}. ` +
+    `To move: ${pinnedCliCall(opts.packageName, target, "sync", callOpts)}. ` +
     `To stay on ${opts.currentVersion}, do nothing.`
   );
 }

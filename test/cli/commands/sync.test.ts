@@ -409,8 +409,11 @@ describe("sync — help text, by npm channel", () => {
     expect(stdout).not.toContain("npx @acme/stamity");
   });
 
+  // TEST CHANGE, justified: REQ-PLUGIN-048 — a registry fork names its registry. The it.each
+  // is split: the registry-less public fork keeps this case's bare pinned form unedited, and the
+  // `publishConfig.registry` manifest it used to share moves to the case below, whose line now
+  // carries `--@acme:registry=<url>`.
   it.each([
-    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
     { name: "@acme/stamity", version: "1.8.0" },
   ])("names the exact-version pinned sync for a package with a channel (%j)", async (manifest) => {
     const stdout = await helpFor(manifest);
@@ -423,6 +426,23 @@ describe("sync — help text, by npm channel", () => {
         "regenerating from that release is the update; no separate update command exists.",
     );
     expect(stdout).not.toContain("@latest");
+    expect(stdout).not.toContain("npx --no");
+    expect(stdout).not.toContain("registry=");
+  });
+
+  it("names the fork's registry for its scope in the pinned sync (REQ-PLUGIN-048)", async () => {
+    const stdout = await helpFor({
+      name: "@acme/stamity",
+      version: "1.8.0",
+      publishConfig: { registry: "https://npm.pkg.github.com" },
+    });
+
+    expect(stdout).toContain(
+      "update = npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@<version> sync, " +
+        "with <version> the release to move to — " +
+        "regenerating from that release is the update; no separate update command exists.",
+    );
+    expect(stdout).not.toContain("npx -y @acme/stamity@");
     expect(stdout).not.toContain("npx --no");
   });
 });
