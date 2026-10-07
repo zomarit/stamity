@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.11.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-03T12:45:57.273Z",
+  "updatedAt": "2026-10-07T17:10:06.689Z",
   "tools": [
     "claude"
   ],
@@ -267,6 +267,32 @@
       "adapter": "claude",
       "artifactId": "claude-settings",
       "artifactType": "infra",
+      "coOwned": {
+        "createdFile": true,
+        "elements": {
+          "/hooks/ConfigChange": [
+            "588865d5395a500b52bcee89672997464979560bc96ad2f543ea5996dd3a80f9"
+          ],
+          "/hooks/PreToolUse": [
+            "ec8c9b783bab7809aa642360fca6e61722b4c05ea38a8039e746c8f0f691bf80"
+          ],
+          "/hooks/SessionStart": [
+            "bb394fc4a890f086038cb792f485b5d9c294eb1ce696c4d83f9cd251980a39ae",
+            "588865d5395a500b52bcee89672997464979560bc96ad2f543ea5996dd3a80f9"
+          ],
+          "/hooks/SubagentStop": [
+            "35ec54ce50236a85b71978686daf6f1c01ba3ef049692edb9b99d1f17a37a8d7"
+          ],
+          "/hooks/TaskCompleted": [
+            "35ec54ce50236a85b71978686daf6f1c01ba3ef049692edb9b99d1f17a37a8d7"
+          ],
+          "/permissions/allow": [
+            "dac976f3a02bb127e020ea7c988cf8f2be384ec8e9375ff530147cd5f6414010",
+            "a40bdc22066d0f8c568ea49fd662db54fba9ab5771dabb65ebc72d7794ddf210",
+            "edc22f4c11bb763207f137a786e77c4e10b2398aa69f46dd68e4f345f8609415"
+          ]
+        }
+      },
       "contentHash": "99942326e438356b67e58e515ea664ff5b221f68e3f11ff574b7777c7af21e9e",
       "path": ".claude/settings.json"
     },

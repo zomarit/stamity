@@ -39,6 +39,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing; `check` names every path a `sync` would reclaim and refuses a manifest that breaks
   these rules.
 
+### Fixed
+
+- **Your deny rules, allow rows and hooks in `.claude/settings.json` survive setup, `sync` and
+  `clean`.** The engine owned all of `permissions` and `hooks`: an owner's key made `init` skip
+  the file, `--force` replaced it (deny rules included), and a deny rule added after setup was
+  removed by the next plain `sync`. The engine now owns only the allow rows and hook entries it
+  wrote, records each, merges beside everything else, and keeps the file's own indentation and
+  final newline; a key another tool adds no longer costs a `.bak` at `clean`.
+
+### Changed
+
+- **`--force` no longer replaces `.claude/settings.json`.** A settings file that is not a JSON
+  object, or whose `permissions` or `hooks` has another type, is refused until you fix or delete
+  it.
+
 ## [1.11.0] - 2026-10-01
 
 ### Added

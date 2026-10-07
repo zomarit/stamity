@@ -376,6 +376,10 @@ function cloneEntry(entry: LedgerEntry): LedgerEntry {
     artifactType: entry.artifactType,
     ...(entry.contentHash !== undefined ? { contentHash: entry.contentHash } : {}),
     ...(entry.stampedVersion !== undefined ? { stampedVersion: entry.stampedVersion } : {}),
+    // The record of the engine's entries inside a co-owned document
+    // (REQ-FLOW-036): dropped, the row would read as a 1.11.0 one, and an
+    // owner's rows equal to the engine's would count as the engine's.
+    ...(entry.coOwned !== undefined ? { coOwned: structuredClone(entry.coOwned) } : {}),
   };
 }
 

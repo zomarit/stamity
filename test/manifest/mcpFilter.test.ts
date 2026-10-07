@@ -491,6 +491,18 @@ describe("reduceMcpDocumentToUserContent", () => {
     expect(reduction.kind).toBe("untouched");
     expect(reduction.detail).toContain("not valid JSON");
   });
+  it("answers proven when every removal was a re-rendered server, and unproven once it prunes an inputs row (REQ-FLOW-036)", () => {
+    expect(reduce(withUserServer(engineDoc(["github"])))).toMatchObject({ kind: "reduced", proven: true });
+    expect(reduce(engineDoc(["github"]))).toMatchObject({ kind: "engine-only", proven: true });
+
+    const vscode = emitVsCodeServersJson(["github"]);
+    const managed = engineOwnedServerIds(".vscode/mcp.json", [], vscode, []);
+    const filtered = filterMcpServers(vscode, managed, new Set<string>());
+    expect(filtered.prunedInputs).toBe(inputIds(vscode).length);
+    expect(filtered.prunedInputs).toBeGreaterThan(0);
+    expect(reduceMcpDocumentToUserContent(vscode, managed)).toMatchObject({ proven: false });
+    expect(filterMcpServers("{ nope", managed, new Set<string>()).prunedInputs).toBe(0);
+  });
 });
 
 describe("filterMcpServers — orphaned `inputs` rows", () => {

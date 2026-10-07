@@ -825,9 +825,9 @@ async function duplicatesForClient(
   }
 
   // Source 1b — the client's own settings document, for the hooks class. The
-  // file is owned per top-level key (`../../../manifest/claudeSettings.ts`),
-  // so a `hooks` key in it is kept as the operator's under a plugin that
-  // carries hooks — and this client loads it beside the plugin's hooks. Neither
+  // file is owned per entry (`../../../manifest/claudeSettings.ts`), so an
+  // operator's own hook entries are kept under a plugin that carries hooks —
+  // and this client loads them beside the plugin's hooks. Neither
   // the ledger source (the generated hooks tree) nor the native scan below (the
   // content directories) reads this file, so nothing else can say so.
   if (tool === "claude" && classes.has("hooks")) findings.push(...(await settingsHooksDuplicate(rootDir)));

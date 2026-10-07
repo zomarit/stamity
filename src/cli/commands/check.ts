@@ -3,7 +3,6 @@ import { accessSync, constants as fsConstants, existsSync, statSync } from "node
 import { readFile } from "node:fs/promises";
 import { delimiter, join, relative, resolve, sep } from "node:path";
 import type { App, EngineRegistry } from "../../index.ts";
-import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
@@ -1932,8 +1931,9 @@ function renderProvenance(ctx: CliContext, provenance: ProvenanceRollup | null):
 
 /**
  * Paths a sync would refuse to write because a user file already holds them —
- * the ones {@link collisionStep}'s two remedies clear. A source refusal and an
- * `import-decision` collision are stated with their own steps instead.
+ * the ones {@link collisionStep}'s two remedies clear. A source refusal, an
+ * `import-decision` collision and a `co-owned-shape` one are stated with their
+ * own steps instead.
  */
 function collidingPaths(report: DriftReport): string[] {
   return report.changes
@@ -1941,9 +1941,22 @@ function collidingPaths(report: DriftReport): string[] {
       (entry) =>
         entry.action === "collision" &&
         entry.refusedAtSource !== true &&
-        entry.collisionKind !== "import-decision",
+        entry.collisionKind !== "import-decision" &&
+        entry.collisionKind !== "co-owned-shape",
     )
     .map((entry) => entry.path);
+}
+
+/**
+ * The step for a `co-owned-shape` collision (REQ-FLOW-036): the plan entry's
+ * own detail, which names the member of another type and the fix. Nothing in
+ * that document is the engine's to replace, so `sync --force` is not a remedy
+ * and the generic collision step, which offers it, never names these paths.
+ */
+function coOwnedShapeSteps(report: DriftReport): string[] {
+  return report.changes
+    .filter((entry) => entry.action === "collision" && entry.collisionKind === "co-owned-shape")
+    .map((entry) => `${entry.path}: ${entry.detail ?? ""}`);
 }
 
 /**
@@ -2010,16 +2023,7 @@ function collisionStep(paths: readonly string[]): string {
     `sync refuses them. Either move each aside and run ${packageCommand("sync")}, or run ` +
     `${packageCommand("sync --force")} to overwrite them after a verified .bak. Running sync ` +
     `without one of those two ` +
-    `changes nothing.` +
-    // The client settings document is owned per top-level key
-    // (`../../manifest/claudeSettings.ts`), so its collision is one key, never
-    // the file: moving it aside would take the client's own install record and
-    // the operator's keys with it, and force replaces only the engine's keys.
-    (paths.includes(CLAUDE_SETTINGS_PATH)
-      ? ` For ${CLAUDE_SETTINGS_PATH} the collision is one key, not the file: remove the named key ` +
-        `and re-run ${packageCommand("sync")}, or run ${packageCommand("sync --force")}, which ` +
-        `replaces only the engine's keys behind a verified .bak and keeps every other key.`
-      : "")
+    `changes nothing.`
   );
 }
 
@@ -2094,6 +2098,7 @@ function renderNextSteps(
       ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
       ...sourceRefusedEntries(outcome.report).map(sourceRefusalStep),
       ...importDecisionSteps(outcome.report),
+      ...coOwnedShapeSteps(outcome.report),
       ...(hasNonCollisionDrift(outcome.report)
         ? [`${packageCommand("sync")} — regenerate the files that drifted`]
         : []),
@@ -2323,6 +2328,7 @@ function checkFailureDoc(doctor: readonly DoctorCheck[], drift: DriftOutcome): F
     ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
     ...(drift.kind === "evaluated" ? sourceRefusedEntries(drift.report).map(sourceRefusalStep) : []),
     ...(drift.kind === "evaluated" ? importDecisionSteps(drift.report) : []),
+    ...(drift.kind === "evaluated" ? coOwnedShapeSteps(drift.report) : []),
   ];
   return {
     code: "INTEGRITY_ERROR",

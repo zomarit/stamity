@@ -158,7 +158,6 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
-import type { SetupManifest } from "../types/manifest.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -200,21 +199,11 @@ export const CLAUDE_SKILLS_DIR: string = NATIVE_SKILL_DIRS[TOOL] ?? "";
 export const CLAUDE_COMMANDS_DIR = ".claude/commands";
 
 /**
- * Project settings: hooks wiring plus the permissions chain. JSON merged by
- * top-level key ownership (`../manifest/claudeSettings.ts`), never written whole.
+ * Project settings: hooks wiring plus the permissions chain. JSON merged entry
+ * by entry (`../manifest/claudeSettings.ts`, REQ-FLOW-036): the engine owns
+ * each allow row and hook entry it wrote, never the file.
  */
 export const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
-
-/**
- * The top-level keys of `.claude/settings.json` this engine owns under the
- * install mode `manifest` records — exactly the keys {@link buildSettingsJson}
- * renders there: `permissions` always, `hooks` only while the repository owns
- * hooks. The reclaim sweep reads its reducer's key set off this rather than off
- * a rendering, because it reaches the path only once nothing renders it.
- */
-export function claudeSettingsOwnedKeys(manifest: SetupManifest | null | undefined): readonly string[] {
-  return isPluginOwned(manifest, TOOL, "hooks") ? ["permissions"] : ["permissions", "hooks"];
-}
 
 /**
  * The work-scoped review gate, placed beside the three core hook scripts under
@@ -862,9 +851,10 @@ interface ClaudeHookEntry {
 /**
  * `.claude/settings.json`: the permissions chain plus the hook wiring, as one
  * JSON document (plain `.json` takes no managed block — it has no comment
- * syntax to carry markers, per `src/types/markers.ts`). The writers merge it by
- * top-level key: this rendering's keys are the engine's, and a key the client or
- * the operator put there survives every write (`../manifest/claudeSettings.ts`).
+ * syntax to carry markers, per `src/types/markers.ts`). The writers merge it
+ * entry by entry: each allow row and hook entry this rendering carries is the
+ * engine's, and every other member, row or entry the client or the operator
+ * put there survives every write (`../manifest/claudeSettings.ts`).
  *
  * The hook transform is mechanical over the portable interchange: PascalCase
  * event names from `CLAUDE_EVENT_NAMES`, one entry per row in declaration

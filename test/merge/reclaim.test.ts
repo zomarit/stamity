@@ -1629,6 +1629,67 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
     expect(await snapshot(root)).toEqual({});
   });
 
+  // REQ-FLOW-036: a reducer that proves each unit it removed decides the backup
+  // itself — a key another tool added is drift, and costs no `.bak` — while a
+  // unit outside its bound always takes one, and a hashless row still proves
+  // nothing whatever the reducer says.
+  describe("the reducer's per-entry proof", () => {
+    const MERGED = `${ENGINE_LINE}operator server\n`;
+    /** The marker-line reducer, answering with `proof` on every reduction. */
+    const provingReducer = (proof: { proven?: boolean; mustBackUp?: true }): Map<string, CoOwnedReducer> =>
+      new Map([
+        [
+          CO_OWNED,
+          (content: string): CoOwnedReduction => ({
+            kind: "reduced",
+            content: content.split(ENGINE_LINE).join(""),
+            detail: "Engine lines removed.",
+            ...proof,
+          }),
+        ],
+      ]);
+
+    async function sweep(recordedBytes: string | null, proof: { proven?: boolean; mustBackUp?: true }): Promise<{ root: string; entry: ReclaimActionEntry }> {
+      const temp = tempDir();
+      const root = temp.path("repo");
+      await temp.seedFiles({ [`repo/${CO_OWNED}`]: MERGED });
+      const hashed = coOwnedCandidate(recordedBytes ?? MERGED);
+      const { contentHash: _dropped, ...hashless } = hashed.entry;
+      const report = await sweepReclaimCandidates([recordedBytes === null ? { entry: hashless, reason: "deselected" } : hashed], {
+        rootDir: root,
+        consent: true,
+        trustedExactPaths: new Set([CO_OWNED]),
+        coOwnedPaths: provingReducer(proof),
+      });
+      return { root, entry: onlyEntry(report) };
+    }
+
+    it("takes no backup of a drifted document when the reducer proved every removal", async () => {
+      const { root, entry } = await sweep("other bytes\n", { proven: true });
+      expect(entry.action).toBe("co-owned-reduced");
+      expect(entry.detail).not.toContain(".bak");
+      expect(await snapshot(root)).toEqual({ [CO_OWNED]: "operator server\n" });
+    });
+
+    it("backs a drifted document up when the reducer proves nothing", async () => {
+      const { root, entry } = await sweep("other bytes\n", {});
+      expect(entry.detail).toContain("outside what it can prove by path");
+      expect(await readFile(join(root, `${CO_OWNED}.bak`), "utf-8")).toBe(MERGED);
+    });
+
+    it("backs a hash-matched document up when a removed unit lay outside the bound", async () => {
+      const { root, entry } = await sweep(MERGED, { proven: false, mustBackUp: true });
+      expect(entry.detail).toContain(`${CO_OWNED}.bak`);
+      expect(await readFile(join(root, `${CO_OWNED}.bak`), "utf-8")).toBe(MERGED);
+    });
+
+    it("backs a hashless row's document up even when the reducer proved every removal", async () => {
+      const { root, entry } = await sweep(null, { proven: true });
+      expect(entry.detail).toContain("records no content hash");
+      expect(await readFile(join(root, `${CO_OWNED}.bak`), "utf-8")).toBe(MERGED);
+    });
+  });
+
   it("previews the backup under a dry run and writes nothing", async () => {
     const temp = tempDir();
     const root = temp.path("repo");

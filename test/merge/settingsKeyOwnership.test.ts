@@ -343,11 +343,10 @@ describe("repository mode and an operator's own keys", () => {
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
-  it("a hand-edit inside an engine-owned key of a ledgered file is replaced on sync behind a verified .bak, with a warning naming the key and the per-user file", async () => {
+  it("a hand-edit replacing the engine's allow rows with an owner's row: sync keeps the owner's row and puts the engine's rows back beside it, with no .bak", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
     await addKeys(root, { permissions: { allow: ["Bash"] }, model: "opus" });
-    const edited = await readSettings(root);
 
     const drift = await runDriftGate(root, ENGINE_VERSION);
     expect(drift.changes.map((entry) => [entry.path, entry.action])).toEqual([[CLAUDE_SETTINGS_PATH, "update"]]);
@@ -356,13 +355,14 @@ describe("repository mode and an operator's own keys", () => {
 
     const row = settingsRow(live.report.wrote);
     expect(row.action).toBe("updated");
-    expect(row.warning).toContain("permissions");
-    expect(row.warning).toContain(".claude/settings.local.json");
-    expect(row.warning).toContain(".bak");
+    // TEST CHANGE, justified: REQ-FLOW-036 — the `Bash` row is the owner's and stays beside the engine's
+    // rows; the engine's rows the owner removed were the engine's, so restoring
+    // them owes no backup. It replaced the whole key behind a `.bak`.
+    expect(row.warning).toBeUndefined();
     const doc = await settingsDoc(root);
-    expect(doc["permissions"]).toEqual(PERMISSIONS);
+    expect(doc["permissions"]).toEqual({ allow: ["Bash", ...PERMISSIONS.allow] });
     expect(doc["model"]).toBe("opus");
-    expect(await readFile(BAK_ABS(root), "utf8")).toBe(edited);
+    expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
   it("an engine key that moved while the bytes still match a ledgered hash is regenerated silently — the rendering moved, nobody edited", async () => {
@@ -408,7 +408,7 @@ describe("the hooks key when the install mode moves under the file", () => {
     expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true });
   });
 
-  it("a stale repository-mode hooks rendering under a plugin-backed manifest: sync removes it behind a .bak with the warning, clean leaves it in place", async () => {
+  it("a stale repository-mode hooks rendering under a plugin-backed manifest: sync removes it behind a .bak with the warning, and so does clean", async () => {
     const stale = {
       SessionStart: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"' }] }],
     };
@@ -426,13 +426,17 @@ describe("the hooks key when the install mode moves under the file", () => {
     expect(await readFile(BAK_ABS(synced), "utf8")).toBe(before);
     expect(await settingsDoc(synced)).toEqual({ permissions: PERMISSIONS });
 
-    // The clean lane strips only the mode's keys — the stale rendering is
-    // sync's to remove (behind the backup above) and the duplicates row's to name.
+    // TEST CHANGE, justified: REQ-FLOW-036 — the sweep recognises a stale repository-mode entry
+    // and removes it like sync does, behind a verified `.bak` because the
+    // ledger never recorded it; it left the entry in place. Nothing else is in
+    // the file and the engine created it, so the file goes.
     const cleaned = await freshRepo("cleaned");
     await pluginSetup(cleaned);
     await addKeys(cleaned, { hooks: stale });
+    const staleBytes = await readSettings(cleaned);
     expect((await clean(cleaned)).code).toBe(0);
-    expect(await settingsDoc(cleaned)).toEqual({ hooks: stale });
+    expect(existsSync(SETTINGS_ABS(cleaned))).toBe(false);
+    expect(await readFile(BAK_ABS(cleaned), "utf8")).toBe(staleBytes);
   });
 
   it("an operator's own hooks in a plugin-mode file is kept by setup, sync and clean, and the plugin-duplicates row reports the second loader", async () => {
@@ -509,42 +513,65 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
-  it("clean over a repository-mode file with an operator row inside the engine's hooks backs the file up first and names the .bak", async () => {
-    // The reducer strips by key name and cannot see a row inside the key; the
-    // bytes no longer hashing to what the ledger recorded is what says the
-    // file may carry rows of the operator's, and that earns the backup.
+  it("clean over a repository-mode file with an operator entry beside the engine's hooks keeps the operator's entry, with no .bak", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-036 — the reducer removes the engine's recorded entries one by
+    // one, so the operator's `Stop` entry stays and the removal is proven: no
+    // backup. It deleted the file behind a `.bak` (the reducer stripped keys by
+    // name and could not see the operator's row inside one).
     const root = await freshRepo();
     await repositoryInit(root);
     const hooks = (await settingsDoc(root))["hooks"] as Record<string, unknown>;
     await addKeys(root, { hooks: { ...hooks, ...OPERATOR_HOOKS } });
-    const before = await readSettings(root);
-
-    const result = await clean(root);
-
-    expect(result.code).toBe(0);
-    // The entry names the backup the way the engine spells a file it wrote: the
-    // resolved NATIVE path (backslashes on Windows), never a POSIX substring.
-    expect(result.stdout).toContain(BAK_ABS(root));
-    expect(existsSync(SETTINGS_ABS(root))).toBe(false);
-    expect(await readFile(BAK_ABS(root), "utf8")).toBe(before);
-  });
-
-  it("clean over a plugin-backed file with the client's key and a hand-extended permissions reduces it behind a .bak", async () => {
-    const root = await freshRepo();
-    await seedSettings(root, CLIENT_SETTINGS);
-    await pluginSetup(root);
-    await addKeys(root, { permissions: { allow: [...PERMISSIONS.allow, "Bash"] } });
-    const before = await readSettings(root);
 
     const result = await clean(root);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
-    // The entry names the backup the way the engine spells a file it wrote: the
-    // resolved NATIVE path (backslashes on Windows), never a POSIX substring.
-    expect(result.stdout).toContain(BAK_ABS(root));
-    expect(await readSettings(root)).toBe(CLIENT_SETTINGS);
-    expect(await readFile(BAK_ABS(root), "utf8")).toBe(before);
+    expect(await settingsDoc(root)).toEqual({ hooks: OPERATOR_HOOKS });
+    expect(existsSync(BAK_ABS(root))).toBe(false);
+  });
+
+  it("clean over a plugin-backed file with the client's key and a hand-extended permissions keeps the owner's row, with no .bak", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, CLIENT_SETTINGS);
+    await pluginSetup(root);
+    await addKeys(root, { permissions: { allow: [...PERMISSIONS.allow, "Bash"] } });
+
+    const result = await clean(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
+    // TEST CHANGE, justified: REQ-FLOW-036 — the owner's `Bash` row is theirs and stays; the engine's
+    // three recorded rows leave proven, so no `.bak`. It stripped the whole
+    // `permissions` key behind a backup.
+    expect(await settingsDoc(root)).toEqual({ enabledPlugins: { "stamity@stamity": true }, permissions: { allow: ["Bash"] } });
+    expect(existsSync(BAK_ABS(root))).toBe(false);
+  });
+
+  it("a key another writer merged in after a repository-mode setup: clean leaves exactly that key, reads co-owned-reduced, and takes no .bak", async () => {
+    const root = await freshRepo();
+    await repositoryInit(root);
+    await addKeys(root, { enabledPlugins: { "other@othermkt": true } });
+
+    const result = await clean(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
+    expect(await readSettings(root)).toBe('{\n  "enabledPlugins": {\n    "other@othermkt": true\n  }\n}\n');
+    expect(existsSync(BAK_ABS(root))).toBe(false);
+  });
+
+  it("the same after a plugin-backed setup", async () => {
+    const root = await freshRepo();
+    await pluginSetup(root);
+    await addKeys(root, { enabledPlugins: { "other@othermkt": true } });
+
+    const result = await clean(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
+    expect(await readSettings(root)).toBe('{\n  "enabledPlugins": {\n    "other@othermkt": true\n  }\n}\n');
+    expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
   it("the sync sweep (claude deselected) reduces the file the same way", async () => {
@@ -597,47 +624,53 @@ describe("collisions the lane keeps", () => {
     expect((await checkJson(root)).code).toBe(1);
   });
 
-  it("an unparseable file under sync --force: backed up, then the rendering is written", async () => {
+  it("an unparseable file under sync --force: refused, never attempted, and the bytes are untouched", async () => {
     const root = await freshRepo();
     await seedSettings(root, UNPARSEABLE);
     await pluginSetup(root);
 
-    const { report } = await sync(root, { force: true });
+    const { entries, report } = await sync(root, { force: true });
 
-    expect(settingsRow(report.wrote).action).toBe("updated");
-    expect(await readFile(BAK_ABS(root), "utf8")).toBe(UNPARSEABLE);
-    expect(await settingsDoc(root)).toEqual({ permissions: PERMISSIONS });
+    // TEST CHANGE, justified: REQ-FLOW-036 — `--force` no longer replaces an unparseable settings
+    // file: it is a `co-owned-shape` collision, refused forced or not. It was
+    // backed up and replaced whole.
+    expect(entries.find((entry) => entry.path === CLAUDE_SETTINGS_PATH)?.collisionKind).toBe("co-owned-shape");
+    expect(settingsRow(report.wrote).action).toBe("skipped");
+    expect(report.refused).toContain(CLAUDE_SETTINGS_PATH);
+    expect(await readSettings(root)).toBe(UNPARSEABLE);
+    expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
-  it("a hand-written permissions key with no ledger row: setup skips it naming the key, check reports a collision", async () => {
+  it("a hand-written permissions key with no ledger row: setup merges the engine's rows beside the owner's, and check is clean", async () => {
     const root = await freshRepo();
     await seedSettings(root, `${JSON.stringify({ permissions: { allow: ["Bash"] }, model: "opus" }, null, 2)}\n`);
 
     const report = await pluginSetup(root);
 
+    // TEST CHANGE, justified: REQ-FLOW-036 — an owner's `permissions` is merged, never a collision;
+    // it skipped the file and `check` reported an `unmanaged-name` collision.
     const row = settingsRow(report.wrote);
-    expect(row.action).toBe("skipped");
-    expect(row.warning).toContain("permissions");
-    expect(await settingsDoc(root)).toEqual({ permissions: { allow: ["Bash"] }, model: "opus" });
-
-    const drift = await runDriftGate(root, ENGINE_VERSION);
-    expect(drift.changes).toMatchObject([{ path: CLAUDE_SETTINGS_PATH, action: "collision", collisionKind: "unmanaged-name" }]);
-    expect(drift.changes[0]?.detail).toContain("permissions");
+    expect(row.action).toBe("updated");
+    expect(row.notice).toContain("permissions.allow ×1");
+    expect(await settingsDoc(root)).toEqual({ permissions: { allow: ["Bash", ...PERMISSIONS.allow] }, model: "opus" });
+    expect(await settingsLedgerRows(root)).toHaveLength(1);
+    expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true, changes: [] });
   });
 
-  it("sync --force over that collision replaces the engine's keys behind a .bak and keeps the operator's", async () => {
+  it("sync --force after that setup changes nothing: no force replacement exists, and the owner's row stays with no .bak", async () => {
     const root = await freshRepo();
     const handWritten = `${JSON.stringify({ permissions: { allow: ["Bash"] }, model: "opus" }, null, 2)}\n`;
     await seedSettings(root, handWritten);
     await pluginSetup(root);
+    const merged = await readSettings(root);
 
     const { report } = await sync(root, { force: true });
 
-    const row = settingsRow(report.wrote);
-    expect(row.action).toBe("updated");
-    expect(row.warning).toContain(".bak");
-    expect(await readFile(BAK_ABS(root), "utf8")).toBe(handWritten);
-    expect(await settingsDoc(root)).toEqual({ permissions: PERMISSIONS, model: "opus" });
+    // TEST CHANGE, justified: REQ-FLOW-036 — `--force` does not reach the settings lane; it replaced
+    // the engine's keys behind a `.bak`.
+    expect(settingsRow(report.wrote).action).toBe("unchanged");
+    expect(await readSettings(root)).toBe(merged);
+    expect(existsSync(BAK_ABS(root))).toBe(false);
     expect(await settingsLedgerRows(root)).toHaveLength(1);
   });
 
@@ -652,7 +685,7 @@ describe("collisions the lane keeps", () => {
     expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true });
   });
 
-  it("the ledger row is what licenses replacing an engine key: without it, check reports the collision rather than drift", async () => {
+  it("without a ledger row an owner's allow row reads as an update the merge keeps, not a collision", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
     await addKeys(root, { permissions: { allow: ["Bash"] } });
@@ -660,6 +693,8 @@ describe("collisions the lane keeps", () => {
 
     const drift = await runDriftGate(root, ENGINE_VERSION);
 
-    expect(drift.changes.map((entry) => [entry.path, entry.action])).toEqual([[CLAUDE_SETTINGS_PATH, "collision"]]);
+    // TEST CHANGE, justified: REQ-FLOW-036 — the merge adopts the file and adds the engine's rows beside
+    // the owner's, so the plan reads `update`; it read `collision`.
+    expect(drift.changes.map((entry) => [entry.path, entry.action])).toEqual([[CLAUDE_SETTINGS_PATH, "update"]]);
   });
 });

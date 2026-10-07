@@ -1037,8 +1037,11 @@ describe("plugin setup prints what the merge engine said about each file", () =>
     const adoption = await plugin(adopted, ["setup", "--client", "claude", "--plugin-root", installed, "-y"]);
 
     expect(adoption.code).toBe(0);
-    expect(adoption.stdout).toContain("Adopted .claude/settings.json");
-    expect(adoption.stdout).toContain("(enabledPlugins)");
+    // TEST CHANGE, justified: REQ-FLOW-036 — the adoption notice is the per-entry
+    // core's ("Merged into …: kept your 1 entry (enabledPlugins ×1)"); it read
+    // "Adopted …" and listed top-level keys.
+    expect(adoption.stdout).toContain("Merged into .claude/settings.json");
+    expect(adoption.stdout).toContain("(enabledPlugins ×1)");
 
     const stale = `${JSON.stringify(
       {
@@ -1055,7 +1058,9 @@ describe("plugin setup prints what the merge engine said about each file", () =>
     const removal = await plugin(leftBehind, ["setup", "--client", "claude", "--plugin-root", installed, "-y"]);
 
     expect(removal.code).toBe(0);
-    expect(removal.stdout).toContain("Removed the repository-mode hooks wiring (hooks) from .claude/settings.json");
+    // TEST CHANGE, justified: REQ-FLOW-036 — the warning names the entry it removed
+    // (`hooks.SessionStart[0]`), not the whole key.
+    expect(removal.stdout).toContain("Removed the repository-mode hooks wiring (hooks.SessionStart[0]) from .claude/settings.json");
     expect(JSON.parse(await readFile(join(leftBehind, ".claude", "settings.json"), "utf8"))).not.toHaveProperty("hooks");
   });
 });

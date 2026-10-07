@@ -121,7 +121,14 @@ const PRED_MANIFEST = `${JSON.stringify(
  * mark it. That is exactly why the writer refuses to claim it and why the file
  * needs naming: whatever it wires is what still fires after the migration.
  */
-const PRED_SETTINGS = `${JSON.stringify({ hooks: { SessionStart: [] } }, null, 2)}\n`;
+// TEST CHANGE, justified: REQ-FLOW-036 — init now merges into a predecessor's
+// settings document entry by entry instead of refusing it, so the residue line
+// for a document "this run refused to claim" fires only for a shape the merge
+// cannot keep beside its entries. The fixture's event is therefore an object
+// where the client expects an array (`hooks.SessionStart`), the one kind of
+// predecessor file init still leaves untouched; it was an empty array, which
+// merges now.
+const PRED_SETTINGS = `${JSON.stringify({ hooks: { SessionStart: {} } }, null, 2)}\n`;
 
 /** An instruction file with user prose around one stamped managed block. */
 const MARKED_DOC = [

@@ -2,7 +2,7 @@
 slug: /migration-from-hatch3r
 title: Migrating from hatch3r
 ---
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 239eb3a9. Re-attested 2026-10-07 for the entry-by-entry ownership of .claude/settings.json. -->
 <!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
      strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
      `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
@@ -376,14 +376,13 @@ no ownership ledger and no corpus, so nothing can regenerate it.
 Commit the repository before you run the sweep, so that prose is recoverable from git. Or move
 it out of the tree. Or skip the sweep and remove the leftovers by hand with `git rm`.
 
-### One key is worth losing on purpose
+### The previous setup's hooks stay beside this one's
 
-If hatch3r's `.claude/settings.json` was already there at init, stamity refused to claim its
-`hooks` key: that key is one this engine renders, its content differs, and no ownership ledger row
-proves the engine wrote it. Init left the file untouched, said so, and named it on the panel — so
-hatch3r's hooks are still the ones wired up. Remove the `hooks` key (and any `permissions` key)
-and run `sync`, or run `sync --force` to replace them after a verified `.bak`; every other key in
-the file is kept either way.
+If hatch3r's `.claude/settings.json` was already there at init, stamity merged into it: its own
+allow rows and hook entries were added beside hatch3r's, and every entry hatch3r wrote was kept
+— the engine owns only the entries it wrote. The init notice names the entries it kept, so
+hatch3r's hook entries keep firing beside this setup's. Remove the ones you no longer want by
+hand, then run `sync`; there is no `--force` for this file, and none is needed.
 
 ### In a monorepo, handle each package
 

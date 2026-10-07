@@ -10,6 +10,9 @@ import {
   safeWriteFile,
 } from "../../../src/merge/safeWrite.ts";
 import {
+  coOwnedDocumentLanes,
+  coOwnedOwnershipOf,
+  coOwnedReclaimReducers,
   installedPackServers,
   ledgerRowsForOutput,
   outputWriteOptions,
@@ -419,6 +422,77 @@ describe("ledgerRowsForOutput — the row shape both writers persist", () => {
  * against the WRITER it predicts (`materializeUserMcpJson`) rather than against
  * a restatement of the merge, so the promise is what goes red when it breaks.
  */
+describe("coOwnedOwnershipOf and the co-owned lanes (REQ-FLOW-036)", () => {
+  const PATH = ".claude/settings.json";
+  const row = (over: Partial<LedgerEntry> = {}): LedgerEntry => ({
+    path: PATH,
+    adapter: "claude",
+    artifactId: "claude-settings",
+    artifactType: "infra",
+    contentHash: "a".repeat(64),
+    ...over,
+  });
+  const h = (n: number): string => String(n).repeat(64).slice(0, 64);
+
+  it("reads no row as adoption, rows without a record as a 1.11.0 ledger, and unions the records of several rows", () => {
+    expect(coOwnedOwnershipOf([], PATH)).toEqual({ owned: false, legacy: false, record: null, deleteWhenEngineOnly: false });
+    // A row at another spelling is not this path's: rows match exactly.
+    expect(coOwnedOwnershipOf([row({ path: ".Claude/settings.json" })], PATH).owned).toBe(false);
+    expect(coOwnedOwnershipOf([row()], PATH, { boundaryDir: "/repo" })).toEqual({
+      owned: true,
+      legacy: true,
+      record: null,
+      deleteWhenEngineOnly: true,
+      boundaryDir: "/repo",
+    });
+
+    const hashes = new Map([["x", new Set(["y"])]]);
+    const both = coOwnedOwnershipOf(
+      [
+        row({ coOwned: { elements: { "/permissions/allow": [h(1), h(2)] }, preexisting: ["/permissions"] } }),
+        row({ adapter: "cursor", coOwned: { elements: { "/permissions/allow": [h(2), h(3)], "/hooks/Stop": [h(4)] }, members: { "/a": h(5) }, createdFile: true } }),
+      ],
+      PATH,
+      { ledgerHashes: hashes },
+    );
+    expect(both).toEqual({
+      owned: true,
+      legacy: false,
+      record: {
+        members: { "/a": h(5) },
+        elements: { "/permissions/allow": [h(1), h(2), h(3)], "/hooks/Stop": [h(4)] },
+        preexisting: ["/permissions"],
+        createdFile: true,
+      },
+      deleteWhenEngineOnly: true,
+      ledgerHashes: hashes,
+    });
+    // A recorded row the engine did not create keeps the file once only its entries are gone.
+    expect(coOwnedOwnershipOf([row({ coOwned: { elements: { "/permissions/allow": [h(1)] } } })], PATH)).toMatchObject({
+      record: { elements: { "/permissions/allow": [h(1)] } },
+      deleteWhenEngineOnly: false,
+    });
+  });
+
+  it("registers the settings lane, and hands the sweep a reducer over what the ledger records there", () => {
+    const lanes = coOwnedDocumentLanes(null);
+    expect([...lanes.keys()]).toEqual([PATH]);
+    expect(lanes.get(PATH)?.noun).toBe("settings document");
+
+    const raw = `${JSON.stringify({ permissions: { allow: ["Read", "Bash"] }, model: "opus" }, null, 2)}\n`;
+    const manifest = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "1.0.0", now: new Date(0) });
+    const reduce = (ledger: LedgerEntry[]) => coOwnedReclaimReducers({ ...manifest, ledger }).get(PATH)?.(raw);
+    // A 1.11.0 row: the in-bound row is the engine's, unproven.
+    expect(reduce([row()])).toMatchObject({ kind: "reduced", proven: false });
+    // A recorded row: proven, and the owner's `Bash` stays.
+    expect(reduce([row({ coOwned: { elements: { "/permissions/allow": [createHash("sha256").update('"Read"').digest("hex")] } } })])).toMatchObject({
+      kind: "reduced",
+      proven: true,
+      content: `${JSON.stringify({ permissions: { allow: ["Bash"] }, model: "opus" }, null, 2)}\n`,
+    });
+  });
+});
+
 describe("predictMcpDocumentMerge — the dry-run answer both verbs give", () => {
   const getTemp = useTempDir("emission-write-mcp-predict");
 

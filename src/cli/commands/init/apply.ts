@@ -1,6 +1,5 @@
 import { lstat, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentRoots } from "../../../content/catalog.ts";
 import {
   resolveBundledContentRoot,
@@ -19,19 +18,13 @@ import {
   writeManifest,
 } from "../../../manifest/manifest.ts";
 import { ensureStateScaffold, stateKeepPaths } from "../../../emit/stateScaffold.ts";
-import {
-  materializeClaudeSettings,
-  predictClaudeSettingsMerge,
-  type SettingsMergeResult,
-  type SettingsOwnership,
-} from "../../../manifest/claudeSettings.ts";
+import type { CoOwnedMergeResult, CoOwnedOwnership } from "../../../manifest/coOwnedJson.ts";
 import { materializeUserMcpJson, type McpMergeResult } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
 import { ensureGitignoreEntry } from "../../../mcp/env.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import {
-  isManagedPath,
   ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
@@ -45,6 +38,7 @@ import { EngineError } from "../../../types/errors.ts";
 import {
   isPackOwner,
   PACK_OWNER_PREFIX,
+  type CoOwnership,
   type ImportDecision,
   type LedgerEntry,
   type McpConfig,
@@ -55,8 +49,11 @@ import { STATE_DIR } from "../../../types/markers.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import { hasNpmChannel, packageName } from "../../kit/packageName.ts";
 import {
+  coOwnedDocumentLanes,
+  coOwnedOwnershipOf,
   installedPackServers,
   ledgerRowsForOutput,
+  type CoOwnedDocumentLane,
   outputWriteOptions,
   predictMcpDocumentMerge,
   readIfExists,
@@ -217,7 +214,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // BEFORE the emission plan below, because every consumer downstream reads the
   // packs off this ledger: the planner projects their content, and the MCP
   // ownership question at `packServers` resolves their servers.
-  if (force) manifest.ledger = [...manifest.ledger, ...(await carriedPackRows(rootDir))];
+  //
+  // The previous manifest is read once, here: its pack rows are carried, and its
+  // co-owned rows say what the engine owns inside each co-owned document, so a
+  // re-init keeps an owner's entries the way a sync does (REQ-FLOW-036).
+  const previous = force ? await readPreviousManifest(rootDir) : null;
+  if (force) manifest.ledger = [...manifest.ledger, ...(await carriedPackRows(rootDir, previous))];
 
   // State directories: probe first so the report lists only what this run adds.
   const missing = await Promise.all(
@@ -273,7 +275,10 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // hand-edited takes the verified `.bak` rather than the no-backup fast path
   // (`merge/safeWrite.ts::hasLedgerDrift`).
   //
-  // A core output — AGENTS.md, `.claude/settings.json`, the hook scripts — is in
+  // A co-owned document (`.claude/settings.json`) is judged off the PREVIOUS
+  // ledger instead, in its own lane below, because `--force` does not reach it.
+  //
+  // A core output — AGENTS.md, the hook scripts — is in
   // neither index here, so drift decides nothing for it on a re-init. That does
   // not leave it unprotected: `--force` reaches the writer for every output
   // below, so a marker-less file the engine cannot prove it wrote takes the
@@ -316,7 +321,14 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // the three merged MCP documents, which land as emission ∪ preserved operator
   // content. Read by the ledger loop below; see the `contentHash` note there.
   const writtenByPath = new Map<string, string>();
+  // What the engine owns inside each co-owned document after this run, for the
+  // ledger rows below (REQ-FLOW-036).
+  const writtenRecordByPath = new Map<string, CoOwnership>();
+  const coOwnedLanes = coOwnedDocumentLanes(manifest, packServers);
+  const previousLedger = previous?.ledger ?? [];
+  const previousHashes = ledgerHashIndex(rootDir, previousLedger);
   for (const output of outputs) {
+    const coOwnedLane = coOwnedLanes.get(output.path);
     const target = join(rootDir, ...output.path.split("/"));
     // single-writer: several outputs may address one shared file (AGENTS.md),
     // and the three MCP documents merge against what is already on disk, so
@@ -341,26 +353,25 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
       );
       result = merged;
       if (writtenContent !== null) writtenByPath.set(output.path, writtenContent);
-    } else if (output.path === CLAUDE_SETTINGS_PATH) {
-      // Co-owned by top-level key: the client's install record and the
-      // operator's own keys survive beside the engine's
-      // (`../../../manifest/claudeSettings.ts`), so the written bytes are the
-      // merged document and are handed to the ledger loop like the MCP lane's.
+    } else if (coOwnedLane !== undefined) {
+      // Co-owned entry by entry: the client's install record and the owner's
+      // own members, rows and entries survive beside the engine's
+      // (`../../engine/emissionWrite.ts::coOwnedDocumentLanes`), so the written
+      // bytes are the merged document and are handed to the ledger loop like
+      // the MCP lane's, with the record of the engine's entries. Ownership is
+      // the PREVIOUS setup's ledger on a `--force` re-init and nothing on a
+      // first one; `force` does not reach this lane.
       // oxlint-disable-next-line no-await-in-loop
-      const { writtenContent, ...merged } = await writeClaudeSettings(
+      const { writtenContent, writtenRecord, ...merged } = await writeCoOwnedDocument(
+        coOwnedLane,
         target,
         output.content,
         dryRun,
-        force || replacePaths.has(output.path),
-        {
-          owned: isManagedPath(target, ownedPaths),
-          ownedKeys: claudeSettingsOwnedKeys(manifest),
-          ledgerHashes: ownedHashes,
-          boundaryDir: rootDir,
-        },
+        coOwnedOwnershipOf(previousLedger, output.path, { boundaryDir: rootDir, ledgerHashes: previousHashes }),
       );
       result = merged;
       if (writtenContent !== null) writtenByPath.set(output.path, writtenContent);
+      if (writtenRecord !== null) writtenRecordByPath.set(output.path, writtenRecord);
     } else {
       // oxlint-disable-next-line no-await-in-loop
       result = await writeOutput(
@@ -410,6 +421,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
       writtenByPath.get(output.path) ?? null,
       managedBody,
       engineVersion,
+      writtenRecordByPath.get(output.path),
     )) {
       const rows = emittedByAdapter.get(row.adapter) ?? [];
       rows.push(row);
@@ -497,26 +509,24 @@ async function writeMcpDocument(
 }
 
 /**
- * The client settings document, merged by top-level key ownership instead of
- * written whole (`../../../manifest/claudeSettings.ts`). `owned` is the
- * ledger's answer, which on a fresh init is `false` for this path and on a
- * `--force` re-init is `false` too (the fresh ledger carries only pack rows) —
- * `force` then clears an engine-owned key the previous setup left with other
- * content, behind a verified `.bak`, and adopts one that still matches. The
- * dry-run leg runs the same planning and writes nothing.
+ * A document co-owned entry by entry (`.claude/settings.json`), merged by the
+ * per-entry core instead of written whole. `ownership` is the previous setup's
+ * ledger on a `--force` re-init and empty on a first init (adoption: only an
+ * entry the engine recognises is its own). The dry-run leg runs the same
+ * planning and writes nothing.
  */
-async function writeClaudeSettings(
+async function writeCoOwnedDocument(
+  lane: CoOwnedDocumentLane,
   target: string,
   content: string,
   dryRun: boolean,
-  force: boolean,
-  ownership: Omit<SettingsOwnership, "force">,
-): Promise<SettingsMergeResult> {
+  ownership: CoOwnedOwnership,
+): Promise<CoOwnedMergeResult> {
   if (dryRun) {
-    const { result } = await predictClaudeSettingsMerge(target, content, { ...ownership, force });
-    return { ...result, writtenContent: null };
+    const { result } = await lane.predict(target, content, ownership);
+    return { ...result, writtenContent: null, writtenRecord: null };
   }
-  return materializeClaudeSettings(target, content, { ...ownership, force });
+  return lane.materialize(target, content, ownership);
 }
 
 /**
@@ -560,6 +570,23 @@ async function writeOutput(
 }
 
 /**
+ * The manifest a `--force` re-init is replacing, or `null` when there is none
+ * or it cannot be read. A corrupt manifest is the case `--force` is FOR, so it
+ * is not a failure here: the only things dropped are the pack record, which
+ * `stamity add <pack>` rebuilds, and the record of the engine's entries in a
+ * co-owned document, whose absence reads as adoption (only a recognised entry
+ * is the engine's, and the owner's stay).
+ */
+async function readPreviousManifest(rootDir: string): Promise<SetupManifest | null> {
+  try {
+    return await readManifest(rootDir);
+  } catch {
+    // reason: not silent by omission — see the doc comment.
+    return null;
+  }
+}
+
+/**
  * The `pack:<id>` ledger rows of the setup a `--force` re-init is replacing.
  *
  * Init replaces the GENERATED setup; it does not uninstall anything. Pack bytes
@@ -575,21 +602,12 @@ async function writeOutput(
  * reported a clean repo over it. Carrying the rows is what makes the ownership
  * question at the call site resolve for init the way it already does for sync.
  *
- * A manifest that cannot be read yields no rows rather than a failure: `--force`
- * exists to replace broken state, and refusing here would take the repair path
- * away. The pack directories stay on disk either way, and re-installing the pack
- * re-records them.
+ * A manifest that cannot be read yields no rows rather than a failure
+ * ({@link readPreviousManifest}): `--force` exists to replace broken state, and
+ * refusing here would take the repair path away. The pack directories stay on
+ * disk either way, and re-installing the pack re-records them.
  */
-async function carriedPackRows(rootDir: string): Promise<LedgerEntry[]> {
-  let previous: SetupManifest | null;
-  try {
-    previous = await readManifest(rootDir);
-  } catch {
-    // reason: not silent by omission — this is the corrupt-manifest case
-    // `--force` is FOR, and the only thing dropped is the pack record, which
-    // `stamity add <pack>` rebuilds.
-    return [];
-  }
+async function carriedPackRows(rootDir: string, previous: SetupManifest | null): Promise<LedgerEntry[]> {
   // Only for packs whose content is still on disk. `discoverInstalledPacks`
   // REFUSES a row whose directory is gone — correctly, since a ledger row is an
   // ownership claim over files — and carrying such a row would turn `--force`

@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 239eb3a9. Re-attested 2026-10-07 for the entry-by-entry ownership of .claude/settings.json. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-30. `test/docsPages.test.ts` holds this
@@ -151,10 +151,10 @@ settings of your Claude configuration directory (`extraKnownMarketplaces` there)
 }
 ```
 
-`stamity plugin setup` keeps that key beside its own `permissions`, in either order, and says so:
-the file is owned per top-level key, so the client's enablement — and the marketplace declaration
-below, if you add it — survive setup, `sync`, `check` and `clean` (the rule is under
-[Set the repository up](#set-the-repository-up)).
+`stamity plugin setup` keeps that key beside its own `permissions` rows, in either order, and says
+so: the engine owns only the allow rows and hook entries it wrote in this file, so the client's
+enablement — and the marketplace declaration below, if you add it — survive setup, `sync`, `check`
+and `clean` (the rule is under [Set the repository up](#set-the-repository-up)).
 
 What makes the decision reviewable is a declaration you write into the project settings yourself —
 the same `extraKnownMarketplaces` block beside the enablement, so the committed file names the
@@ -342,20 +342,22 @@ Each of those runs `stamity plugin setup` through the plugin's own runtime. What
 
 - `AGENTS.md`, and the managed block in `CLAUDE.md`
 - `.claude/rules/` and the other repository-owned classes from the table above
-- `.claude/settings.json` **without** a `hooks` object, when the plugin owns hooks. The file is
-  merged by top-level key: setup adds `permissions` (and `hooks` only when the repository owns
-  hooks) and keeps every other key in place — including the `enabledPlugins` that
-  `plugin install --scope project` wrote. A `permissions` or `hooks` key the engine did not record
-  and that differs from what it renders is a collision: remove that key and re-run, or
-  `sync --force` replaces only the engine's keys behind a verified `.bak`. A repository-mode
-  `hooks` wiring an earlier setup left behind — its commands run scripts under
-  `.stamity/generated/hooks/` — is removed and reported, behind a `.bak` whenever the engine cannot
-  prove the file unedited (a lost setup left no ledger row, so it cannot); `clean` leaves such a
-  wiring in place and `sync` removes it. `clean` reclaims this file the way it writes it: behind a
-  verified `.bak`, named, when the bytes no longer match what the ledger recorded, with no backup
-  when they still do, and not at all when the backup cannot be taken. Under a plugin install, a
-  `hooks` key in this file is loaded by the client beside the plugin's hooks and `check` reports it
-  as an unmanaged duplicate.
+- `.claude/settings.json` **without** hook entries, when the plugin owns hooks. The file is
+  merged entry by entry: setup adds its `permissions.allow` rows (and its hook entries only when
+  the repository owns hooks) beside everything already there, and records each one on the ledger.
+  Your `deny`, `ask`, your own allow rows and hook entries, and every other key — including the
+  `enabledPlugins` that `plugin install --scope project` wrote — stay in place, in the file's own
+  indentation and line endings. The file collides only when it is not a JSON object or a member
+  the engine writes into has another type (`permissions` not an object, `allow` not an array,
+  `hooks` not an object, an event not an array); the message names the member and the fix, and
+  `--force` does not clear it. A repository-mode hook entry an earlier setup left behind — its
+  command runs a script under `.stamity/generated/hooks/` — is removed and reported, behind a
+  `.bak` whenever the ledger does not prove it (a lost setup left no ledger row, so it cannot);
+  `sync` and `clean` both remove it. `clean` takes back exactly the engine's entries: an entry it
+  recorded leaves with no backup, a key another tool added costs none, and it takes a verified
+  `.bak`, named, only when an entry it removes is not proven — and not at all when the backup
+  cannot be taken. Under a plugin install, hook entries of your own in this file are loaded by the
+  client beside the plugin's hooks and `check` reports them as an unmanaged duplicate.
 - MCP documents, when you select servers
 - `.stamity/` — the manifest, the ledger, and the state directories
 
@@ -609,8 +611,8 @@ row in [the troubleshooting guide](troubleshooting.md):
   case-insensitively, in its bare, GitHub-URL and subpath spellings alike. On Claude Code, a
   `hooks` key in `.claude/settings.json` under a plugin install is an `unmanaged` finding of this
   row too, because the client loads it beside the plugin's hooks: remove the key, or keep personal
-  rows in `.claude/settings.local.json`; `sync` removes a stale repository-mode rendering by itself
-  (`clean` does not — it strips only the keys the mode owns).
+  rows in `.claude/settings.local.json`; `sync` and `clean` both remove a stale repository-mode
+  hook entry by themselves, behind a `.bak` when the ledger does not prove it.
 - **`pack-reach`** — whether each installed pack reaches a client. A pack's skills always do;
   its commands, agents, rules and hooks do not reach a client whose plugin carries their class. It
   fails for a pack none of whose artifacts reaches any client — a command-only pack on Claude Code,

@@ -245,14 +245,23 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
   });
 
   // The co-owned lane: `.claude/settings.json` sits in the bound by its exact
-  // path, and its reducer strips `permissions` and `hooks` by key name, so a
-  // hand-added row with no hash in a repository that never selected claude
-  // used to delete or rewrite an owner's settings with no backup. A missing
-  // hash reads as drift there, so the change lands behind a verified `.bak`.
+  // path, so a hand-added row with no hash in a repository that never selected
+  // claude reaches its reducer. A missing hash reads as drift there, so any
+  // change lands behind a verified `.bak`.
+  //
+  // TEST CHANGE, justified: REQ-FLOW-036 — the reducer no longer strips
+  // `permissions` and `hooks` by key name; it removes only the engine's ENTRIES
+  // (an allow row inside `ENGINE_PERMISSION_ROWS`, a hook entry under
+  // `.stamity/`). An owner's deny-only `permissions` is not the engine's at all,
+  // so the sweep now keeps that file byte for byte with no `.bak` (it deleted
+  // it behind one). The hashless-row rule this block exists for is held on
+  // owner files that carry an in-bound `Read` row: the sweep removes that row,
+  // and still only behind the verified `.bak`, deny rules kept.
   describe("a co-owned settings document a hashless row names is backed up before the sweep changes it", () => {
     const SETTINGS = ".claude/settings.json";
     const OWNER_DENY_ONLY = `${JSON.stringify({ permissions: { deny: ["Read(./secrets/**)"] } }, null, 2)}\n`;
-    const OWNER_WITH_MODEL = `${JSON.stringify({ model: "owner-model", permissions: { deny: ["Bash(rm:*)"] } }, null, 2)}\n`;
+    const OWNER_READ_ONLY = `${JSON.stringify({ permissions: { allow: ["Read"] } }, null, 2)}\n`;
+    const OWNER_WITH_MODEL = `${JSON.stringify({ model: "owner-model", permissions: { allow: ["Read"], deny: ["Bash(rm:*)"] } }, null, 2)}\n`;
     const hashlessRow: LedgerEntry = { path: SETTINGS, adapter: "claude", artifactId: "forged-settings", artifactType: "infra" };
 
     /** `sync --json` nests the sweep under `reclaim`; `clean --json` is the sweep. */
@@ -266,21 +275,36 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       detail: string;
     }
 
-    it.each([
-      { verb: "sync", command: syncCommand, owner: OWNER_DENY_ONLY, action: "deleted" },
-      { verb: "clean", command: cleanCommand, owner: OWNER_DENY_ONLY, action: "deleted" },
-      { verb: "sync", command: syncCommand, owner: OWNER_WITH_MODEL, action: "co-owned-reduced" },
-      { verb: "clean", command: cleanCommand, owner: OWNER_WITH_MODEL, action: "co-owned-reduced" },
-    ])("$verb -y leaves the owner's bytes in $action's verified .bak", async ({ verb, command, owner, action }) => {
+    async function sweepOver(verb: string, command: typeof syncCommand, owner: string): Promise<{ root: string; entry: SweepEntry | undefined }> {
       const root = await initialisedRepo(["cursor"]);
       await seed(root, { [SETTINGS]: owner });
       await forgeRows(root, [hashlessRow]);
-
       const run = await runInProcess([command], [verb, "-y", "--json"], { cwd: root });
-
       expect(run.code).toBe(0);
       const doc = JSON.parse(run.stdout.trim()) as SweepDoc;
-      const entry = (doc.reclaim?.entries ?? doc.entries)?.find((candidate) => candidate.path === SETTINGS);
+      return { root, entry: (doc.reclaim?.entries ?? doc.entries)?.find((candidate) => candidate.path === SETTINGS) };
+    }
+
+    it.each([
+      { verb: "sync", command: syncCommand, owner: OWNER_READ_ONLY, action: "deleted", left: null },
+      { verb: "clean", command: cleanCommand, owner: OWNER_READ_ONLY, action: "deleted", left: null },
+      {
+        verb: "sync",
+        command: syncCommand,
+        owner: OWNER_WITH_MODEL,
+        action: "co-owned-reduced",
+        left: `${JSON.stringify({ model: "owner-model", permissions: { deny: ["Bash(rm:*)"] } }, null, 2)}\n`,
+      },
+      {
+        verb: "clean",
+        command: cleanCommand,
+        owner: OWNER_WITH_MODEL,
+        action: "co-owned-reduced",
+        left: `${JSON.stringify({ model: "owner-model", permissions: { deny: ["Bash(rm:*)"] } }, null, 2)}\n`,
+      },
+    ])("$verb -y leaves the owner's bytes in $action's verified .bak", async ({ verb, command, owner, action, left }) => {
+      const { root, entry } = await sweepOver(verb, command, owner);
+
       expect(entry?.action).toBe(action);
       expect(entry?.detail).toContain("records no content hash");
       // The detail names the backup the way the engine names every backup: the
@@ -288,6 +312,18 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       // built with `join` rather than spelled as a POSIX substring of it.
       expect(entry?.detail).toContain(`Your previous file is at ${join(root, `${SETTINGS}.bak`)}.`);
       expect(await readFile(join(root, `${SETTINGS}.bak`), "utf8")).toBe(owner);
+      if (left !== null) expect(await readFile(join(root, SETTINGS), "utf8")).toBe(left);
+    });
+
+    it.each([
+      { verb: "sync", command: syncCommand },
+      { verb: "clean", command: cleanCommand },
+    ])("$verb -y keeps an owner's deny-only settings byte for byte, with no .bak (REQ-FLOW-036)", async ({ verb, command }) => {
+      const { root, entry } = await sweepOver(verb, command, OWNER_DENY_ONLY);
+
+      expect(entry?.action).toBe("skipped-user-content");
+      expect(await readFile(join(root, SETTINGS), "utf8")).toBe(OWNER_DENY_ONLY);
+      await expect(readFile(join(root, `${SETTINGS}.bak`), "utf8")).rejects.toThrow(/ENOENT/);
     });
   });
 });

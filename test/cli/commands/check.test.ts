@@ -995,7 +995,7 @@ describe("check — key-level ownership of .claude/settings.json", () => {
     expect((await runHuman(root)).stdout).toContain("drift: clean");
   });
 
-  it("reports a hand-written engine-owned key the ledger does not claim as a collision naming the key, not as drift", async () => {
+  it("reads a hand-written permissions key the ledger does not claim as an update the merge keeps, not as a collision", async () => {
     const root = await seedRepo(getRepo());
     const manifest = await readManifest(root);
     if (manifest === null) throw new Error("fixture lost its manifest");
@@ -1010,15 +1010,38 @@ describe("check — key-level ownership of .claude/settings.json", () => {
 
     const { code, doc } = await runJson(root);
 
+    // TEST CHANGE, justified: REQ-FLOW-036 — an owner's `permissions` is merged entry by entry, so
+    // the plan is an `update` that keeps the `Bash` row; it was a collision
+    // whose step offered `sync --force`.
     expect(code).toBe(1);
-    expect(doc.drift?.changes).toEqual([{ path: SETTINGS, action: "collision" }].map((entry) => expect.objectContaining(entry)));
+    expect(doc.drift?.changes).toEqual([{ path: SETTINGS, action: "update" }].map((entry) => expect.objectContaining(entry)));
     const human = await runHuman(root);
-    expect(human.stdout).toContain(`collision ${SETTINGS}`);
-    expect(human.stdout).toContain("1 file(s) collide");
-    // The key-level remedy, not the whole-file one: this lane never needs the
-    // file moved aside, and force replaces only the engine's keys.
-    expect(human.stdout).toContain("remove the named key");
-    expect(human.stdout).toContain("replaces only the engine's keys behind a verified .bak");
+    expect(human.stdout).not.toContain("collide");
+    expect(human.stdout).not.toContain("--force");
+  });
+
+  it("reports a permissions member of another type as a co-owned-shape collision whose step names the member, and no line offers --force", async () => {
+    const root = await seedRepo(getRepo());
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    await writeManifest(
+      root,
+      { ...manifest, ledger: manifest.ledger.filter((entry) => entry.path !== SETTINGS) },
+      { now: T0 },
+    );
+    await getRepo().seedFiles({ [SETTINGS]: `{"permissions":"allow-all"}\n` });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(1);
+    expect(doc.drift?.changes).toEqual([
+      expect.objectContaining({ path: SETTINGS, action: "collision", collisionKind: "co-owned-shape" }),
+    ]);
+    expect(JSON.stringify(doc)).not.toContain("--force");
+    const human = await runHuman(root);
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("permissions is a string, not an object");
+    for (const line of `${human.stdout}${human.stderr}`.split("\n")) expect(line).not.toContain("--force");
   });
 });
 

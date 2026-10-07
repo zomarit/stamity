@@ -1,7 +1,16 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../adapters/claude.ts";
-import { claudeSettingsReclaimReducer } from "../../manifest/claudeSettings.ts";
+import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
+import {
+  claudeSettingsReclaimReducer,
+  materializeClaudeSettings,
+  predictClaudeSettingsMerge,
+} from "../../manifest/claudeSettings.ts";
+import type {
+  CoOwnedMergeResult,
+  CoOwnedOwnership,
+  CoOwnedPrediction,
+} from "../../manifest/coOwnedJson.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
@@ -14,7 +23,7 @@ import {
   type CoOwnedReducer,
   type MergeResult,
 } from "../../types/content.ts";
-import type { CoOwnership, SetupManifest } from "../../types/manifest.ts";
+import type { CoOwnership, LedgerEntry, SetupManifest } from "../../types/manifest.ts";
 
 /**
  * The write-side rules the two regeneration verbs must apply IDENTICALLY.
@@ -335,23 +344,107 @@ export async function installedPackServers(
 }
 
 /**
+ * One document the engine shares with its owner and writes ENTRY BY ENTRY on
+ * the per-entry core (`../../manifest/coOwnedJson.ts`, REQ-FLOW-036): how
+ * `sync`'s plan and `init`'s dry run preview a write there, how both verbs'
+ * write lanes perform it, and what the reclaim sweep reduces it to. One
+ * registry, so a verb cannot route such a path down the whole-file lane while
+ * another merges it.
+ */
+export interface CoOwnedDocumentLane {
+  /** Repo-relative POSIX path. */
+  readonly path: string;
+  /** The document's noun in messages. */
+  readonly noun: string;
+  predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedPrediction>;
+  materialize(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedMergeResult>;
+  reducer(ownership: CoOwnedOwnership, deleteWhenEngineOnly: boolean): CoOwnedReducer;
+}
+
+/**
+ * Every co-owned document lane, keyed by repo-relative path. This unit
+ * registers `.claude/settings.json`; `manifest` and `packServers` are the
+ * inputs a later lane's rendering facts are read from.
+ */
+export function coOwnedDocumentLanes(
+  _manifest: SetupManifest | null,
+  _packServers: readonly PackSuppliedServer[] = [],
+): ReadonlyMap<string, CoOwnedDocumentLane> {
+  const claude: CoOwnedDocumentLane = {
+    path: CLAUDE_SETTINGS_PATH,
+    noun: "settings document",
+    predict: predictClaudeSettingsMerge,
+    materialize: materializeClaudeSettings,
+    reducer: (ownership, deleteWhenEngineOnly) =>
+      claudeSettingsReclaimReducer({ record: ownership.record, legacy: ownership.legacy, deleteWhenEngineOnly }),
+  };
+  return new Map([[claude.path, claude]]);
+}
+
+/** `a` and `b`'s record, unioned: every pointer either names, each hash list without repeats. */
+function unionRecords(a: CoOwnership, b: CoOwnership): CoOwnership {
+  const members = { ...a.members, ...b.members };
+  const elements: Record<string, string[]> = { ...a.elements };
+  for (const [pointer, hashes] of Object.entries(b.elements ?? {})) {
+    elements[pointer] = [...new Set([...(elements[pointer] ?? []), ...hashes])];
+  }
+  const preexisting = [...new Set([...(a.preexisting ?? []), ...(b.preexisting ?? [])])];
+  return {
+    ...(Object.keys(members).length > 0 ? { members } : {}),
+    ...(Object.keys(elements).length > 0 ? { elements } : {}),
+    ...(preexisting.length > 0 ? { preexisting } : {}),
+    ...(a.createdFile === true || b.createdFile === true ? { createdFile: true as const } : {}),
+  };
+}
+
+/**
+ * What the ledger says about a co-owned `path`: `owned` when a row names it,
+ * `legacy` when rows name it and none carries a record (a 1.11.0 ledger), the
+ * union of the rows' records, and whether the sweep may delete the file once
+ * only the engine's entries were in it (the engine created it, or the row is
+ * legacy and keeps 1.11.0's rule). Rows are matched by their exact spelling,
+ * the ledger bound's rule (REQ-PLUGIN-045).
+ */
+export function coOwnedOwnershipOf(
+  ledger: readonly LedgerEntry[],
+  path: string,
+  opts: { boundaryDir?: string; ledgerHashes?: ReadonlyMap<string, ReadonlySet<string>> } = {},
+): CoOwnedOwnership & { deleteWhenEngineOnly: boolean } {
+  const rows = ledger.filter((row) => row.path === path);
+  const recorded = rows.flatMap((row) => (row.coOwned === undefined ? [] : [row.coOwned]));
+  const owned = rows.length > 0;
+  const legacy = owned && recorded.length === 0;
+  const record = recorded.length === 0 ? null : recorded.reduce(unionRecords);
+  return {
+    owned,
+    legacy,
+    record,
+    deleteWhenEngineOnly: legacy || recorded.some((row) => row.createdFile === true),
+    ...(opts.ledgerHashes === undefined ? {} : { ledgerHashes: opts.ledgerHashes }),
+    ...(opts.boundaryDir === undefined ? {} : { boundaryDir: opts.boundaryDir }),
+  };
+}
+
+/**
  * The reducers the reclaim sweep owes for every CO-OWNED document
  * (`../../merge/reclaim.ts` → `ReclaimOptions.coOwnedPaths`): the three
  * merged client MCP documents, keyed per dialect (`../../mcp/emit.ts`), plus
- * `.claude/settings.json`, whose engine-owned keys are a fact about the
- * install mode `manifest` records rather than about any rendering
- * (`../../adapters/claude.ts::claudeSettingsOwnedKeys`). One builder for the
- * sync sweep and both of clean's, because a caller that omits a path here
- * silently returns it to the whole-file delete branch, where a hash match over
- * merged bytes reads as sole authorship — the regression the MCP reducers exist
- * for, and the one `test/merge/settingsKeyOwnership.test.ts` drives at the
- * shipped verbs for the settings document.
+ * each {@link coOwnedDocumentLanes} lane over what `manifest`'s ledger records
+ * there. One builder for the sync sweep and both of clean's, because a caller
+ * that omits a path here silently returns it to the whole-file delete branch,
+ * where a hash match over merged bytes reads as sole authorship — the
+ * regression the MCP reducers exist for, and the one
+ * `test/merge/settingsKeyOwnership.test.ts` drives at the shipped verbs for the
+ * settings document.
  */
 export function coOwnedReclaimReducers(
   manifest: SetupManifest,
   packServers: readonly PackSuppliedServer[] = [],
 ): Map<string, CoOwnedReducer> {
   const reducers = mcpReclaimReducers(packServers);
-  reducers.set(CLAUDE_SETTINGS_PATH, claudeSettingsReclaimReducer(claudeSettingsOwnedKeys(manifest)));
+  for (const lane of coOwnedDocumentLanes(manifest, packServers).values()) {
+    const ownership = coOwnedOwnershipOf(manifest.ledger, lane.path);
+    reducers.set(lane.path, lane.reducer(ownership, ownership.deleteWhenEngineOnly));
+  }
   return reducers;
 }

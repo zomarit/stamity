@@ -1,7 +1,6 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
@@ -15,10 +14,6 @@ import {
 } from "../../../manifest/ledger.ts";
 import { manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../../manifest/ownedPaths.ts";
-import {
-  materializeClaudeSettings,
-  predictClaudeSettingsMerge,
-} from "../../../manifest/claudeSettings.ts";
 import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
@@ -27,7 +22,6 @@ import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
 import {
-  isManagedPath,
   ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
@@ -45,13 +39,22 @@ import {
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import type { DetectedSummary } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
-import { MANIFEST_FILE, type ImportDecision, type LedgerEntry, type SetupManifest } from "../../../types/manifest.ts";
+import {
+  MANIFEST_FILE,
+  type CoOwnership,
+  type ImportDecision,
+  type LedgerEntry,
+  type SetupManifest,
+} from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
 import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import {
+  coOwnedDocumentLanes,
+  coOwnedOwnershipOf,
   coOwnedReclaimReducers,
   installedPackServers,
+  type CoOwnedDocumentLane,
   ledgerRowsForOutput,
   outputWriteOptions,
   predictMcpDocumentMerge,
@@ -124,13 +127,26 @@ import type { GitRunner } from "../../../workspace/git.ts";
  *   owner's text. Not force-overridable: {@link applySync} never attempts the
  *   row under `--force` either, and the remedy is restoring `supplement` or
  *   `init --force --import-config replace`, which backs the file up first.
+ * - `co-owned-shape` — a document the engine writes ENTRY BY ENTRY
+ *   (`../../engine/emissionWrite.ts::coOwnedDocumentLanes`, REQ-FLOW-036)
+ *   that is not a JSON object, cannot be serialised back, or holds a member
+ *   the engine writes into with another type. Nothing in it is the engine's
+ *   to replace, so there is no force on that lane: {@link applySync} never
+ *   attempts the row under `--force` either, and the entry's detail names the
+ *   member and the fix.
  *
  * The per-lane account above is this file's only one. Every other comment here
  * defers to it or scopes itself to a single lane in its opening words, and
  * {@link COLLISION_REMEDY}'s `shared-name` sentence says the same thing to the
  * operator — a second, differently-worded mechanism is a defect, not a variant.
  */
-type CollisionKind = "unmanaged-name" | "deny-scan" | "shared-name" | "linked-source" | "import-decision";
+type CollisionKind =
+  | "unmanaged-name"
+  | "deny-scan"
+  | "shared-name"
+  | "linked-source"
+  | "import-decision"
+  | "co-owned-shape";
 
 /** One planned path and the disposition the apply run would give it. */
 export interface SyncPlanEntry {
@@ -322,11 +338,13 @@ export async function planOutputEntries(
   ledgerPaths?: ReadonlySet<string>,
   mcpServers?: readonly string[],
   packServers?: readonly PackSuppliedServer[],
-  /** The settings keys the install mode makes the engine's (`../../../adapters/claude.ts::claudeSettingsOwnedKeys`); the rendering's own keys when absent. */
-  settingsOwnedKeys?: readonly string[],
+  /** The co-owned document lanes and the ledger they judge ownership from; none registered and an empty ledger when absent. */
+  coOwned?: { lanes: ReadonlyMap<string, CoOwnedDocumentLane>; ledger: readonly LedgerEntry[] },
   /** The manifest's recorded import decisions, named in an `import-decision` collision's detail; none when absent. */
   importDecisions?: readonly ImportDecision[],
 ): Promise<SyncPlanEntry[]> {
+  const lanes = coOwned?.lanes ?? coOwnedDocumentLanes(null);
+  const ledger = coOwned?.ledger ?? [];
   return pLimit(PREDICT_CONCURRENCY).map([...outputs], async (output) => {
     const absPath = join(rootDir, output.path);
     const managedBody = extractManagedBlock(output.content, absPath);
@@ -391,21 +409,17 @@ export async function planOutputEntries(
       }
       return { ...base, action: ACTION_OF[predicted.result.action] };
     }
-    // The client settings document is co-owned too, by top-level KEY: the
-    // client's install record and the operator's own keys sit beside the
-    // engine's (`manifest/claudeSettings.ts`). The prediction runs the real
-    // merge over the current bytes, so a foreign key added since the last
-    // write is neither drift nor a collision; what does collide is an
-    // engine-owned key with other content in a file the ledger does not
-    // claim, or a file that is not a JSON object — the two `--force` clears
-    // behind a `.bak` — and a linked target, which nothing clears.
-    if (output.path === CLAUDE_SETTINGS_PATH) {
-      const predicted = await predictClaudeSettingsMerge(absPath, output.content, {
-        owned: isManagedPath(absPath, ledgerPaths),
-        force: false,
-        boundaryDir: rootDir,
-        ...(settingsOwnedKeys === undefined ? {} : { ownedKeys: settingsOwnedKeys }),
-      });
+    // A document co-owned ENTRY BY ENTRY (`.claude/settings.json`): the
+    // client's install record and the owner's own members, rows and entries
+    // sit beside the engine's (`../../engine/emissionWrite.ts::coOwnedDocumentLanes`).
+    // The prediction runs the real merge over the current bytes, so an owner
+    // entry added since the last write is neither drift nor a collision; what
+    // collides is a shape the engine cannot merge beside (`co-owned-shape`,
+    // which nothing but fixing the member clears) and a linked target
+    // (`shared-name`, which nothing clears).
+    const lane = lanes.get(output.path);
+    if (lane !== undefined) {
+      const predicted = await lane.predict(absPath, output.content, coOwnedOwnershipOf(ledger, output.path, { boundaryDir: rootDir }));
       if (predicted.collision !== null) {
         return {
           ...base,
@@ -548,7 +562,7 @@ export async function planSync(
     ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path)),
     manifest.mcp?.servers ?? [],
     packServers,
-    claudeSettingsOwnedKeys(manifest),
+    { lanes: coOwnedDocumentLanes(manifest, packServers), ledger: manifest.ledger },
     manifest.importChoice,
   );
   const collisions = entries.filter((entry) => entry.action === "collision").map((entry) => entry.path);
@@ -679,6 +693,7 @@ const COLLISION_KIND_ORDER = [
   "shared-name",
   "linked-source",
   "import-decision",
+  "co-owned-shape",
 ] as const;
 
 /**
@@ -705,6 +720,9 @@ const COLLISION_REMEDY: Record<CollisionKind, (paths: readonly string[]) => stri
     `re-run.`,
   "import-decision": () =>
     `An import-decision collision is never force-overridable — see the plan entry's detail.`,
+  "co-owned-shape": (paths) =>
+    `${paths.join(", ")}: the engine adds its entries beside yours there and cannot read where they go; ` +
+    `each plan entry's detail names the member and the fix. --force does not clear it.`,
 };
 
 /**
@@ -721,9 +739,13 @@ export function refusalRemedyLines(plan: SyncPlan, refused: readonly string[]): 
   const byDecision = new Set(
     plan.entries.filter((entry) => entry.collisionKind === "import-decision").map((entry) => entry.path),
   );
-  const unproven = refused.filter((path) => !atSource.has(path) && !byDecision.has(path));
+  const byShape = new Set(
+    plan.entries.filter((entry) => entry.collisionKind === "co-owned-shape").map((entry) => entry.path),
+  );
+  const unproven = refused.filter((path) => !atSource.has(path) && !byDecision.has(path) && !byShape.has(path));
   const sourceRefused = refused.filter((path) => atSource.has(path));
   const decisionRefused = refused.filter((path) => !atSource.has(path) && byDecision.has(path));
+  const shapeRefused = refused.filter((path) => !atSource.has(path) && byShape.has(path));
   if (unproven.length > 0) {
     lines.push(
       `${unproven.length} file(s) were NOT written — they collide with files the engine ` +
@@ -746,6 +768,14 @@ export function refusalRemedyLines(plan: SyncPlan, refused: readonly string[]): 
         `(named above). Everything else in the plan is on disk. --force does not clear this: restore ` +
         `\`supplement\` for the path under importChoice in ${STATE_DIR}/${MANIFEST_FILE} and run sync, or run ` +
         `${packageCommand("init --force --import-config replace")} to replace it behind a verified .bak.`,
+    );
+  }
+  if (shapeRefused.length > 0) {
+    lines.push(
+      `${shapeRefused.length} file(s) were NOT written — ${shapeRefused.join(", ")} hold(s) a member the ` +
+        `engine writes its entries into with another type, or is not a JSON object it can merge beside ` +
+        `(named above). Everything else in the plan is on disk. --force does not clear this: fix the member ` +
+        `the warning names, or delete the file, then run sync.`,
     );
   }
   return lines;
@@ -887,12 +917,14 @@ export async function applySync(
   // non-zero, so a CI probe still fails on a collision it has not resolved.
   // A row whose producer refused its source is never attempted, forced or not.
   // Nor, forced or not, is a path whose owner text the recorded import
-  // decision would replace (`import-decision`, REQ-PLUGIN-046).
+  // decision would replace (`import-decision`, REQ-PLUGIN-046), or a co-owned
+  // document the engine cannot merge its entries into (`co-owned-shape`,
+  // REQ-FLOW-036): nothing in it is the engine's to replace.
   const refused = force
     ? new Set([
         ...plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path),
         ...plan.entries
-          .filter((entry) => entry.collisionKind === "import-decision")
+          .filter((entry) => entry.collisionKind === "import-decision" || entry.collisionKind === "co-owned-shape")
           .map((entry) => entry.path),
       ])
     : new Set(plan.collisions);
@@ -901,9 +933,11 @@ export async function applySync(
   // or `init --force --import-config replace`); the whole-plan message names
   // every class present and offers `--force` for the ones it clears, which is
   // false for this row, forced or not.
+  // A co-owned-shape row's detail names the member and the fix the same way,
+  // and the whole-plan message would offer `--force` beside it.
   const importDecisionDetails = new Map(
     plan.entries
-      .filter((entry) => entry.collisionKind === "import-decision")
+      .filter((entry) => entry.collisionKind === "import-decision" || entry.collisionKind === "co-owned-shape")
       .map((entry) => [entry.path, entry.detail]),
   );
 
@@ -922,6 +956,7 @@ export async function applySync(
   // wrote, and only the pair licenses replacing a file with no `.bak`.
   const ownedPaths = ledgerPathSet(rootDir, plan.manifest.ledger.map((row) => row.path));
   const ownedHashes = ledgerHashIndex(rootDir, plan.manifest.ledger);
+  const coOwnedLanes = coOwnedDocumentLanes(plan.manifest, packMcpSupply);
 
   const wrote: MergeResult[] = [];
   const emitted: EmittedArtifact[] = [];
@@ -959,6 +994,10 @@ export async function applySync(
     // MCP paths. It is the ledger's hash input below, and hashing the emission
     // there would record a document that was never written.
     let written: string | null = null;
+    // What the engine owns INSIDE a co-owned document after this write — the
+    // record the ledger row carries (REQ-FLOW-036); absent on every other lane.
+    let coOwnedRecord: CoOwnership | undefined;
+    const coOwnedLane = coOwnedLanes.get(output.path);
     if (MERGED_MCP_JSON_PATHS.has(output.path)) {
       // The plan's `shared-name` collision is gated by `--force` above, and on
       // this lane force clears nothing real: the other two lanes survive a
@@ -984,22 +1023,21 @@ export async function applySync(
       );
       result = merged;
       if (writtenContent !== null) written = writtenContent;
-    } else if (output.path === CLAUDE_SETTINGS_PATH) {
-      // Key-level ownership (`manifest/claudeSettings.ts`): the engine's keys
-      // are regenerated, every other key survives in place, and the ledger
-      // hashes the MERGED bytes below exactly as it does for the MCP lane.
-      // `force` here is the collision gate's: it replaces an unowned engine
-      // key or an unparseable file behind a verified `.bak`, and on a healthy
-      // file changes nothing.
-      const { writtenContent, ...merged } = await materializeClaudeSettings(absPath, output.content, {
-        owned: isManagedPath(absPath, ownedPaths),
-        force,
-        boundaryDir: rootDir,
-        ownedKeys: claudeSettingsOwnedKeys(plan.manifest),
-        ledgerHashes: ownedHashes,
-      });
+    } else if (coOwnedLane !== undefined) {
+      // Entry-level ownership (`../../engine/emissionWrite.ts::coOwnedDocumentLanes`):
+      // the engine's entries are regenerated, every other member, row and entry
+      // survives in place, and the ledger hashes the MERGED bytes below exactly
+      // as it does for the MCP lane, beside the record of the engine's entries.
+      // `force` does not reach this lane: a shape it cannot merge beside is
+      // refused above, forced or not.
+      const { writtenContent, writtenRecord, ...merged } = await coOwnedLane.materialize(
+        absPath,
+        output.content,
+        coOwnedOwnershipOf(plan.manifest.ledger, output.path, { boundaryDir: rootDir, ledgerHashes: ownedHashes }),
+      );
       result = merged;
       if (writtenContent !== null) written = writtenContent;
+      if (writtenRecord !== null) coOwnedRecord = writtenRecord;
     } else {
       result = await safeWriteFile(absPath, output.content, outputWriteOptions(managedBody, engineVersion, force, rootDir, ownedPaths, ownedHashes));
     }
@@ -1013,7 +1051,7 @@ export async function applySync(
     // `init` records through as well, so the same emission yields the same
     // ledger whichever verb produced it.
     if (result.action === "skipped") continue;
-    emitted.push(...ledgerRowsForOutput(output, written, managedBody, engineVersion));
+    emitted.push(...ledgerRowsForOutput(output, written, managedBody, engineVersion, coOwnedRecord));
   }
 
   // Rebuild the ledger over the full closed tool set: an active tool's rows

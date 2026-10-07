@@ -1491,6 +1491,32 @@ describe("applyPackInstall", () => {
     ).toHaveLength(3);
   });
 
+  it("keeps every other row's coOwned record byte for byte, a copy the input's mutation does not reach (REQ-FLOW-036)", async () => {
+    await seedPack();
+    // A co-owned document's row as `init` records it: dropped, the record would
+    // make the next sync read the row as a 1.11.0 one.
+    const settingsRow: LedgerEntry = {
+      path: ".claude/settings.json",
+      adapter: "claude",
+      artifactId: "claude-settings",
+      artifactType: "infra",
+      contentHash: digest("{}"),
+      coOwned: {
+        elements: { "/permissions/allow": [digest('"Read"'), digest('"Grep"')] },
+        preexisting: ["/permissions"],
+      },
+    };
+    const before = structuredClone(settingsRow);
+
+    const { manifest } = await apply(await plan(), projectManifest([foreignRow, settingsRow]));
+
+    const kept = manifest.ledger.find((entry) => entry.path === settingsRow.path);
+    expect(kept?.coOwned).toEqual(before.coOwned);
+    expect(JSON.stringify(kept)).toBe(JSON.stringify(before));
+    settingsRow.coOwned?.preexisting?.push("/hooks");
+    expect(kept?.coOwned?.preexisting).toEqual(["/permissions"]);
+  });
+
   it("refuses while the plan carries collisions and writes nothing", async () => {
     const project = getProject();
     await seedPack();

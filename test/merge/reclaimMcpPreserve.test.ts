@@ -423,6 +423,34 @@ describe("clean lane — the uninstall verb over documents holding operator cont
   });
 });
 
+describe("clean lane — the backup follows what the reducer cannot prove (REQ-FLOW-036)", () => {
+  it("takes no .bak of a drifted .mcp.json when every server it removes is proved by re-rendering", async () => {
+    // Drifted: the operator's server was hand-added AFTER the last sync, so the
+    // bytes no longer hash to the ledger's record. The engine's server is still
+    // proved its own entry by entry, and a key another writer added costs no backup.
+    const rootDir = await syncedRepo();
+    await addUserContent(rootDir, CLAUDE_DOC);
+
+    const result = await runClean(rootDir);
+
+    expect(result.code).toBe(0);
+    expect(await idsIn(rootDir, CLAUDE_DOC)).toEqual([USER_SERVER_ID]);
+    expect(await readIfPresent(`${abs(rootDir, CLAUDE_DOC)}.bak`)).toBeNull();
+  });
+
+  it("takes the .bak of a drifted .vscode/mcp.json whose removal prunes an inputs row the engine cannot prove", async () => {
+    const rootDir = await syncedRepo();
+    await addUserContent(rootDir, VSCODE_DOC);
+    const before = await readFile(abs(rootDir, VSCODE_DOC), "utf8");
+
+    const result = await runClean(rootDir);
+
+    expect(result.code).toBe(0);
+    expect(await inputIdsIn(rootDir)).toEqual([USER_INPUT_ID]);
+    expect(await readIfPresent(`${abs(rootDir, VSCODE_DOC)}.bak`)).toBe(before);
+  });
+});
+
 // ── The other direction ────────────────────────────────────────
 
 describe("documents holding only the engine's own entries are still reclaimed", () => {

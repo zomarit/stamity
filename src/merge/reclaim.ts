@@ -695,24 +695,31 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   if (reduce !== undefined) {
     const reduction = reduce(content);
     if (reduction.kind === "untouched") return skip("skipped-user-content", reduction.detail);
-    // Drifted: the bytes no longer hash to what the ledger recorded. On this
-    // lane that is not a veto — the reducer already separated what the engine
-    // can prove it wrote — but it is the one sign that an entry the engine
-    // owns may carry a row of the operator's, so the mutation takes a verified
-    // backup first, as every write lane does.
+    // Drifted: the removal takes a verified backup first, as every write lane
+    // does. Not a veto on this lane — the reducer already separated what the
+    // engine can prove it wrote — but the sign that something it removes may
+    // be the operator's. A reducer that proved every unit it removed
+    // (`proven`, REQ-FLOW-036) needs no whole-file hash: a key another tool
+    // added costs no `.bak`. One that removed a unit outside its bound
+    // (`mustBackUp`) takes the backup whatever the hash says. Otherwise the
+    // bytes hashing to what the ledger recorded is the proof.
     //
     // A row with no hash proves nothing here either (REQ-PLUGIN-045): every
     // release records one, so a hashless row is not the engine's record of
-    // writing these bytes, and the reducer removes keys by name. It reads as
-    // drift — the write lane's reading of an empty hash set — so a hand-added
-    // row cannot strip or delete an owner's document without the `.bak`.
+    // writing these bytes, and neither is the entry record it carries. It
+    // reads as drift — the write lane's reading of an empty hash set — so a
+    // hand-added row cannot strip or delete an owner's document without the
+    // `.bak`, whatever the reducer proves.
     const hashless = group.recordedHashes.size === 0;
-    const drifted = hashless || !matchesRecordedHash(group.recordedHashes, bytes, content);
+    const drifted =
+      hashless ||
+      reduction.mustBackUp === true ||
+      (reduction.proven !== true && !matchesRecordedHash(group.recordedHashes, bytes, content));
     const driftDetail = !drifted
       ? ""
       : hashless
-        ? " The row records no content hash, so the bytes cannot be proved the engine's and the keys it removes may be yours; the previous file is backed up first."
-        : " The bytes no longer hash to what the ledger recorded writing here, so the engine's keys may carry rows of yours; the previous file is backed up first.";
+        ? " The row records no content hash, so the bytes cannot be proved the engine's and the entries it removes may be yours; the previous file is backed up first."
+        : " The bytes no longer hash to what the ledger recorded writing here, so the engine's entries may carry rows of yours, or one lies outside what it can prove by path; the previous file is backed up first.";
     if (reduction.kind === "engine-only") {
       return {
         kind: "delete",

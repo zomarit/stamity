@@ -593,8 +593,16 @@ const RELEASE_CUT_DATE = "2026-10-01";
  * of 2026-09-30 among them, so the commit form has no members and the assertion's else branch
  * requires this constant to equal RELEASE_CUT_DATE. Their `Re-attested 2026-09-30` clauses are
  * not carried: each page now says it was verified at the cut, and the cut is the later pass.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-07, from 2026-10-01, by plan 016 file 0's
+ * u0-settings-ownership pass (REQ-FLOW-036). `.claude/settings.json` is now owned entry by entry
+ * and `--force` no longer replaces it, so `docs/plugins.md`, `docs/troubleshooting.md` and
+ * `docs/migration.md` were re-read for that claim against the lane base 239eb3a9 and moved onto
+ * the commit form with `Re-attested 2026-10-07`. A page re-read today can honestly carry only
+ * today's date, which the 2026-10-01 pin refused as later than the pass it ships in. Every other
+ * page keeps its cut date.
  */
-const REATTESTATION_DATE = "2026-10-01";
+const REATTESTATION_DATE = "2026-10-07";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

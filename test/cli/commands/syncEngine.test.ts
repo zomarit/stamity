@@ -12,8 +12,10 @@ import {
   planOutputEntries,
   planSync,
   previewReclaim,
+  refusalRemedyLines,
   type SyncPlan,
 } from "../../../src/cli/commands/sync/engine.ts";
+import { syncCommand } from "../../../src/cli/commands/sync.ts";
 import {
   provenanceFromManifest,
   renderSyncReport,
@@ -40,6 +42,7 @@ import {
   type SetupManifest,
 } from "../../../src/types/manifest.ts";
 import { npxCommand } from "../../support/identity.ts";
+import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
  * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
@@ -564,6 +567,28 @@ describe("collisions", () => {
     const forced = await rejectionOf(applySync(root, plan, { ...applyOpts, force: true }));
     expect(forced?.code).toBe("INTEGRITY_ERROR");
     expect(await readFile(join(root, "CLAUDE.md"), "utf8")).toContain("old body");
+  });
+
+  it("a settings document whose permissions is a string is a co-owned-shape collision that --force does not clear: sync -y --force exits 1 and the file is byte-identical (REQ-FLOW-036)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    const raw = `{"permissions":"allow-all"}\n`;
+    await handle.seedFiles({ "repo/.claude/settings.json": raw });
+
+    const plan = await planSync(root, ENGINE_VERSION);
+    const entry = plan.entries.find((candidate) => candidate.path === ".claude/settings.json");
+    expect(entry).toMatchObject({ action: "collision", collisionKind: "co-owned-shape" });
+    expect(entry?.detail).toContain("permissions is a string, not an object");
+    expect(entry?.detail).not.toContain("force");
+    // The remedy lines a refused path prints offer no --force for this class.
+    expect(refusalRemedyLines(plan, [".claude/settings.json"]).join(" ")).not.toMatch(/re-run with --force|--force overwrites/);
+
+    const result = await runInProcess([syncCommand], ["sync", "-y", "--force"], { cwd: root });
+
+    expect(result.code).toBe(1);
+    expect(await readFile(join(root, ".claude/settings.json"), "utf8")).toBe(raw);
+    expect(existsSync(join(root, ".claude/settings.json.bak"))).toBe(false);
+    expect(`${result.stdout}${result.stderr}`).toContain("--force does not clear");
   });
 });
 

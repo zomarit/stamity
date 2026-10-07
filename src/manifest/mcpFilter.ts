@@ -312,6 +312,12 @@ export interface FilterMcpResult {
   removed: string[];
   /** Entries the ledger does not claim, carried through untouched. */
   preservedUserServers: string[];
+  /**
+   * `inputs` rows taken out because only a removed entry referenced them. The
+   * engine cannot prove it wrote such a row — the owner may have — so the
+   * reclaim lane counts one as an unproven removal.
+   */
+  prunedInputs: number;
   /** Parse failure message. Present only when the input could not be read. */
   unparseable?: string;
 }
@@ -332,7 +338,7 @@ export function filterMcpServers(
 ): FilterMcpResult {
   const parsed = parseMcpJsonDocument(raw);
   if (!parsed.ok) {
-    return { content: raw, removed: [], preservedUserServers: [], unparseable: parsed.error };
+    return { content: raw, removed: [], preservedUserServers: [], prunedInputs: 0, unparseable: parsed.error };
   }
 
   const kept: Record<string, unknown> = {};
@@ -356,12 +362,12 @@ export function filterMcpServers(
   // carrying both spellings would otherwise have every survivor rebuilt into the
   // primary map while the other map was republished untouched — duplicating the
   // entries in one direction and resurrecting the deselected ones in the other.
+  const pruned = pruneOrphanedInputs(parsed.doc, kept, dropped);
   return {
-    content: jsonDocument(
-      withFilteredServers(pruneOrphanedInputs(parsed.doc, kept, dropped), parsed.maps, kept),
-    ),
+    content: jsonDocument(withFilteredServers(pruned.doc, parsed.maps, kept)),
     removed,
     preservedUserServers,
+    prunedInputs: pruned.count,
   };
 }
 
@@ -387,13 +393,13 @@ function pruneOrphanedInputs(
   doc: Record<string, unknown>,
   kept: Record<string, unknown>,
   dropped: Record<string, unknown>,
-): Record<string, unknown> {
+): { doc: Record<string, unknown>; count: number } {
   const inputs = doc[INPUTS_KEY];
-  if (!Array.isArray(inputs) || Object.keys(dropped).length === 0) return doc;
+  if (!Array.isArray(inputs) || Object.keys(dropped).length === 0) return { doc, count: 0 };
 
   const orphaned = referencedInputIds(dropped);
   for (const id of referencedInputIds(kept)) orphaned.delete(id);
-  if (orphaned.size === 0) return doc;
+  if (orphaned.size === 0) return { doc, count: 0 };
 
   const pruned = inputs.filter((row) => {
     const id = inputIdOf(row);
@@ -401,7 +407,7 @@ function pruneOrphanedInputs(
     // the direction every unowned entry in this module takes.
     return id === null || !orphaned.has(id);
   });
-  return { ...doc, [INPUTS_KEY]: pruned };
+  return { doc: { ...doc, [INPUTS_KEY]: pruned }, count: inputs.length - pruned.length };
 }
 
 /**
@@ -499,9 +505,14 @@ export function reduceMcpDocumentToUserContent(
   }
 
   const removed = filtered.removed.join(", ");
+  // Every removed server was proved by re-rendering it (`managedIds`); a pruned
+  // `inputs` row was not, so it leaves the removal unproven and the sweep falls
+  // back to its whole-file hash for the backup.
+  const proven = filtered.prunedInputs === 0;
   if (holdsOnlyEngineContent(filtered.content)) {
     return {
       kind: "engine-only",
+      proven,
       detail:
         `Co-owned MCP document that proved to be engine-only: removing ${removed} left no server ` +
         `entry and no top-level field the operator authored, so nothing in it is theirs to keep.`,
@@ -510,6 +521,7 @@ export function reduceMcpDocumentToUserContent(
   return {
     kind: "reduced",
     content: filtered.content,
+    proven,
     detail:
       `Co-owned MCP document: the ${filtered.removed.length} entry(ies) the engine can prove it ` +
       `wrote (${removed}) were removed, and the ${filtered.preservedUserServers.length} entry(ies) ` +

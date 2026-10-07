@@ -11,8 +11,8 @@ import {
   CLAUDE_SETTINGS_PATH,
   CLAUDE_SKILLS_DIR,
   claudeResiduePlanner,
-  claudeSettingsOwnedKeys,
 } from "../../src/adapters/claude.ts";
+import { ENGINE_PERMISSION_ROWS } from "../../src/manifest/claudeSettings.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
 import { parseFrontmatter } from "../../src/content/frontmatter.ts";
 import { HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
@@ -2074,19 +2074,21 @@ describe("claude residue under plugin ownership", () => {
   });
 });
 
-describe("claudeSettingsOwnedKeys", () => {
-  /**
-   * The reclaim sweep strips exactly these keys from a settings document once
-   * nothing renders it, so the set is pinned to the rendering itself rather than
-   * to a literal: under either install mode, the keys the manifest says the
-   * engine owns are the keys the settings row actually carries.
-   */
-  it("names exactly the top-level keys the settings document renders, under either install mode", async () => {
+// TEST CHANGE, justified: REQ-FLOW-036 — `claudeSettingsOwnedKeys` is gone: the
+// engine owns allow rows and hook entries, not top-level keys. What the reclaim
+// sweep and the planner need from the rendering now is that every allow row it
+// emits lies inside the bound `ENGINE_PERMISSION_ROWS` declares, so a row
+// leaves silently only when the engine can prove it by name.
+describe("the settings document's allow rows and the per-entry bound", () => {
+  it("renders only allow rows inside ENGINE_PERMISSION_ROWS, under either install mode, and hooks only while the repository owns them", async () => {
     const generated = await planned();
-    expect(claudeSettingsOwnedKeys(generated.ctx.manifest)).toEqual(
-      Object.keys(JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content)),
-    );
-    expect(claudeSettingsOwnedKeys(generated.ctx.manifest)).toEqual(["permissions", "hooks"]);
+    const repoDoc = JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content) as {
+      permissions: { allow: string[] };
+      hooks?: unknown;
+    };
+    expect(repoDoc.permissions.allow.length).toBeGreaterThan(0);
+    for (const row of repoDoc.permissions.allow) expect(ENGINE_PERMISSION_ROWS).toContain(row);
+    expect(repoDoc).toHaveProperty("hooks");
 
     const pluginBacked = await planned({
       plugin: {
@@ -2094,12 +2096,11 @@ describe("claudeSettingsOwnedKeys", () => {
         clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
       },
     });
-    expect(claudeSettingsOwnedKeys(pluginBacked.ctx.manifest)).toEqual(
-      Object.keys(JSON.parse(byPath(pluginBacked.rows).get(CLAUDE_SETTINGS_PATH)!.content)),
-    );
-    expect(claudeSettingsOwnedKeys(pluginBacked.ctx.manifest)).toEqual(["permissions"]);
-    // No manifest at all reads as the generated mode.
-    expect(claudeSettingsOwnedKeys(null)).toEqual(["permissions", "hooks"]);
+    const pluginDoc = JSON.parse(byPath(pluginBacked.rows).get(CLAUDE_SETTINGS_PATH)!.content) as {
+      permissions: { allow: string[] };
+    };
+    expect(pluginDoc.permissions.allow).toEqual(repoDoc.permissions.allow);
+    expect(pluginDoc).not.toHaveProperty("hooks");
   });
 });
 
