@@ -564,6 +564,18 @@ function runnerRows(rendering: Record<string, unknown>): DirectHookRow[] {
 /** A repo-relative script path the engine writes and a hooks document may name. */
 const SCRIPT_PATH = /(?:\.stamity\/[A-Za-z0-9._/-]+|\.cursor\/hooks\/[A-Za-z0-9._-]+)\.(?:mjs|cjs|js|sh|py)\b/gu;
 
+/**
+ * A run of path separators, either spelling: a kept document may name a script
+ * Windows-style, and the ledger and the sweep spell every path with one `/`.
+ * Read as one `/` before matching, so retention errs toward keeping.
+ */
+const SEPARATORS = /[\\/]+/gu;
+
+/** `text` with each run of {@link SEPARATORS} read as one `/`. */
+function forwardSlashes(text: string): string {
+  return text.replace(SEPARATORS, "/");
+}
+
 /** A run of base64url characters long enough to be a portable runner's encoded row. */
 const ENCODED_TOKEN = /[A-Za-z0-9_-]{16,}/gu;
 
@@ -584,9 +596,11 @@ function encodedRowScripts(encoded: string): string[] {
     return [];
   }
   if (!isPlainObject(row) || !Array.isArray(row["command"])) return [];
-  return row["command"].flatMap((word) =>
-    typeof word === "string" && word.includes("/") && !word.startsWith("/") ? [word.startsWith("./") ? word.slice(2) : word] : [],
-  );
+  return row["command"].flatMap((raw) => {
+    if (typeof raw !== "string") return [];
+    const word = forwardSlashes(raw);
+    return word.includes("/") && !word.startsWith("/") ? [word.startsWith("./") ? word.slice(2) : word] : [];
+  });
 }
 
 /**
@@ -595,7 +609,8 @@ function encodedRowScripts(encoded: string): string[] {
  * each relative path in the `command` argv of a portable runner's encoded row,
  * which names the script the runner launches and carries it only base64url
  * encoded. A document that parses is read value by value, so a JSON escape
- * (`\/`) hides nothing; one that does not is read as text.
+ * (`\/`) hides nothing; one that does not is read as text. Either way a run of
+ * `\` or `/` reads as one `/` ({@link SEPARATORS}).
  */
 export function referencedHookScripts(text: string): Set<string> {
   const texts: string[] = [];
@@ -606,7 +621,8 @@ export function referencedHookScripts(text: string): Set<string> {
     texts.push(text);
   }
   const scripts = new Set<string>();
-  for (const value of texts) {
+  for (const raw of texts) {
+    const value = forwardSlashes(raw);
     for (const match of value.matchAll(SCRIPT_PATH)) scripts.add(match[0]);
     for (const match of value.matchAll(ENCODED_TOKEN)) for (const script of encodedRowScripts(match[0])) scripts.add(script);
   }
@@ -626,16 +642,16 @@ export function hookScriptReader(guardPaths: readonly string[]): {
 } {
   const guards = new Set(guardPaths);
   // One entry per document text, so a sweep alternating between documents parses each once.
-  const read = new Map<string, Set<string>>();
+  const read = new Map<string, { scripts: Set<string>; flat: string }>();
   return {
     isHookScript: (path) => path.startsWith(`${HOOKS_GENERATED_DIR}/`) || path.startsWith(`${STATE_DIR}/packs/`) || guards.has(path),
     runs: (text, path) => {
-      let scripts = read.get(text);
-      if (scripts === undefined) {
-        scripts = referencedHookScripts(text);
-        read.set(text, scripts);
+      let entry = read.get(text);
+      if (entry === undefined) {
+        entry = { scripts: referencedHookScripts(text), flat: forwardSlashes(text) };
+        read.set(text, entry);
       }
-      return scripts.has(path) || text.includes(path);
+      return entry.scripts.has(path) || entry.flat.includes(path);
     },
   };
 }

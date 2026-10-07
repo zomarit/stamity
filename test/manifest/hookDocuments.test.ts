@@ -600,6 +600,32 @@ describe("referencedHookScripts", () => {
     ];
     expect([...referencedHookScripts(`run ${tokens.join(" ")}`)]).toEqual([".stamity/packs/acme__ops/hook.ts"]);
   });
+
+  // review/92: a kept document may spell a script with Windows separators. Read only as
+  // forward slashes, the sweep took such a script for unwired and deleted it from under the
+  // command that still runs it. Runs of either separator read as one `/`, so retention errs
+  // toward keeping.
+  it("reads backslash and mixed separators as the ledger's forward slashes, in plain commands and encoded rows", () => {
+    const back = (path: string): string => path.replaceAll("/", String.fromCharCode(92));
+    const runner = `${HOOKS_GENERATED_DIR}/cursor/stamity-portable-hook.mjs`;
+    const core = `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`;
+    const token = encoded({ event: "sessionStart", command: ["node", `.${String.fromCharCode(92)}${back(core)}`] });
+    const doc = JSON.stringify({ version: 1, hooks: { sessionStart: [{ command: `node ${back(runner)} ${token}` }] } });
+    expect([...referencedHookScripts(doc)].toSorted()).toEqual([core, runner].toSorted());
+    const mixed = JSON.stringify({ hooks: { x: [{ command: `node .stamity${String.fromCharCode(92, 92)}/hooks//guard.mjs` }] } });
+    expect([...referencedHookScripts(mixed)]).toEqual([".stamity/hooks/guard.mjs"]);
+    // A document that does not parse is read as text, its JSON-escaped backslashes included.
+    expect([...referencedHookScripts(`{ ${JSON.stringify(back(runner))}`)]).toEqual([runner]);
+    // An absolute argv word stays outside, however it is spelled.
+    expect([...referencedHookScripts(`run ${encoded({ command: ["node", back("/abs/x.mjs")] })}`)]).toEqual([]);
+    const reader = hookScriptReader(GUARDS);
+    expect(reader.runs(doc, runner)).toBe(true);
+    expect(reader.runs(doc, core)).toBe(true);
+    // A path no pattern reads (a pack's TypeScript hook) counts through the text, separators read the same way.
+    const pack = JSON.stringify({ hooks: { x: [{ command: `node ${back(".stamity/packs/acme__ops/hook.ts")}` }] } });
+    expect(reader.runs(pack, ".stamity/packs/acme__ops/hook.ts")).toBe(true);
+    expect(reader.runs(pack, ".stamity/packs/acme__ops/other.ts")).toBe(false);
+  });
 });
 
 describe("hookScriptReader", () => {
