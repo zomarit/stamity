@@ -660,6 +660,35 @@ describe("planCoOwnedJson — style (S15)", () => {
     expect(back).toMatchObject({ kind: "reduced", content: raw, proven: true });
   });
 
+  // review/34: a document that cannot round-trip loses an owner's value on any
+  // write, so the write is backed up first and the warning says why.
+  it.each([
+    ['{"model":"a","model":"b"}\n', "repeats a key inside one object, and writing it back keeps only the last value"],
+    ['{"limit":1e400}\n', "holds a number that writing it back would change, past what a double holds exactly"],
+    ['{"id":12345678901234567890}\n', "holds a number that writing it back would change, past what a double holds exactly"],
+  ])("backs up %j before writing it, naming why it cannot round-trip", (raw, why) => {
+    const out = plan(raw, noRow(), EMITTED_PLUGIN);
+    expect(out.result.action).toBe("updated");
+    expect(out.backup).toBe(raw);
+    expect(out.result.warning).toBe(`${SHOWN} ${why}, so the previous file was backed up first.`);
+  });
+
+  it("owes no backup for a document that cannot round-trip when nothing is written", () => {
+    const raw = '{"permissions":{"allow":["Read","Grep","Glob"]},"n":1e400}\n';
+    const out = plan(raw, recorded({ elements: { "/permissions/allow": ENGINE_ROWS.map(memberHash) } }), EMITTED_PLUGIN);
+    expect(out.result.action).toBe("unchanged");
+    expect(out.backup).toBeNull();
+  });
+
+  it("marks a reduction of a document that cannot round-trip mustBackUp, naming why", () => {
+    const raw = '{"permissions":{"allow":["Read","Grep","Glob"]},"model":"a","model":"b"}\n';
+    const out = reduceCoOwnedJson(raw, SPEC, { record: { elements: { "/permissions/allow": ENGINE_ROWS.map(memberHash) } }, legacy: false, deleteWhenEngineOnly: false });
+    expect(out).toMatchObject({ kind: "reduced", proven: true, mustBackUp: true });
+    expect(out.detail).toContain(
+      "It repeats a key inside one object, and writing it back keeps only the last value, so it is backed up first.",
+    );
+  });
+
   it("round-trips a foreign __proto__ key and prints a file-authored key without its control bytes", () => {
     const raw = '{"__proto__":{"x":1},"hooks":{"Ev\\nil\\u001b[2J":[{"hooks":[{"command":"x"}]}]}}\n';
     const out = plan(raw, noRow(), EMITTED_PLUGIN);

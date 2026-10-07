@@ -13,9 +13,11 @@
  * four spaces, a tab, or one line), line ending and final newline it was read
  * in, and in its own key order (the parsed value keeps it). What
  * `JSON.stringify` cannot write — aligned colons, an inline array inside an
- * indented object, `1.0`, an escaped `é`, duplicate keys, integer-like keys out
- * of numeric order — comes back with the same keys and values, not the same
- * bytes: that residue is named, not hidden.
+ * indented object, `1.0`, an escaped `é`, integer-like keys out of numeric
+ * order — comes back with the same keys and values, not the same bytes: that
+ * residue is named, not hidden. What it cannot write back at all — a value
+ * shadowed by a duplicate key, a number past what a double holds — is a loss,
+ * not a residue ({@link roundTripLoss}), and the writer backs the file up first.
  *
  * Pure: no filesystem, no clock.
  */
@@ -225,6 +227,80 @@ export function jsonStyleOf(raw: string): JsonStyle {
     if (match !== null) return { indent: match[1] as string, eol, finalNewline, ...bom };
   }
   return { indent: ENGINE_JSON_STYLE.indent, eol, finalNewline, ...bom };
+}
+
+/** A JSON number token, read where one starts. */
+const NUMBER_TOKEN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+/** A JSON number's sign, integer digits, fraction digits and exponent. */
+const NUMBER_PARTS = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
+/** The index just past the string token opening at `start` (its quote). */
+function stringEnd(text: string, start: number): number {
+  let index = start + 1;
+  while (index < text.length && text[index] !== '"') index += text[index] === "\\" ? 2 : 1;
+  return index + 1;
+}
+
+/** `token`'s exact decimal value in one spelling: digits with no leading or trailing zero, and an exponent. */
+function decimalOf(token: string): string {
+  const parts = NUMBER_PARTS.exec(token) as RegExpExecArray;
+  const fraction = parts[3] ?? "";
+  const digits = `${parts[2] as string}${fraction}`.replace(/^0+/, "");
+  if (digits === "") return "0";
+  const significant = digits.replace(/0+$/, "");
+  const exponent = Number(parts[4] ?? "0") - fraction.length + (digits.length - significant.length);
+  return `${parts[1] as string}${significant}e${exponent}`;
+}
+
+/** True when `token` written back through a double keeps its exact decimal value. */
+function numberSurvives(token: string): boolean {
+  const value = Number(token);
+  return Number.isFinite(value) && decimalOf(token) === decimalOf(JSON.stringify(value));
+}
+
+/**
+ * Why writing the document `raw` holds back through `JSON.parse` and
+ * {@link serialiseJson} would change a VALUE, not only its spelling, or
+ * `null` when nothing is lost: a key repeated inside one object (the parse
+ * keeps the last value and the earlier one is gone), or a number a double
+ * cannot hold exactly (`1e400` becomes `null`, an integer past 2^53 is
+ * rounded). The phrase completes a sentence naming the file. `raw` must
+ * parse; a leading byte-order mark is read past.
+ */
+export function roundTripLoss(raw: string): string | null {
+  const text = raw.charCodeAt(0) === BYTE_ORDER_MARK ? raw.slice(1) : raw;
+  // One frame per open container: an object's keys so far and whether a key
+  // comes next; `null` for an array.
+  const open: ({ keys: Set<string>; keyNext: boolean } | null)[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index] as string;
+    const top = open.at(-1) ?? null;
+    if (char === '"') {
+      const end = stringEnd(text, index);
+      if (top?.keyNext === true) {
+        const key = JSON.parse(text.slice(index, end)) as string;
+        if (top.keys.has(key)) return "repeats a key inside one object, and writing it back keeps only the last value";
+        top.keys.add(key);
+        top.keyNext = false;
+      }
+      index = end;
+      continue;
+    }
+    if (char === "-" || (char >= "0" && char <= "9")) {
+      NUMBER_TOKEN.lastIndex = index;
+      const token = (NUMBER_TOKEN.exec(text) as RegExpExecArray)[0];
+      if (!numberSurvives(token)) return "holds a number that writing it back would change, past what a double holds exactly";
+      index += token.length;
+      continue;
+    }
+    if (char === "{") open.push({ keys: new Set(), keyNext: true });
+    else if (char === "[") open.push(null);
+    else if (char === "}" || char === "]") open.pop();
+    else if (char === "," && top !== null) top.keyNext = true;
+    index += 1;
+  }
+  return null;
 }
 
 /** A run of tabs opening a line of `JSON.stringify(…, "\t")`'s output. */

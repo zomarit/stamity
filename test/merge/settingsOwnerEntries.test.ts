@@ -170,9 +170,14 @@ describe("an owner's permissions and hooks before setup", () => {
     expect(hooks["PreToolUse"]).toHaveLength(2);
     expect(isEngineGroup(hooks["PreToolUse"]?.[1])).toBe(true);
     // The owner's bytes, as the file spells them: the merge keeps the two-space style.
+    // review/34: compared as bytes, not as parsed values — each owner member's
+    // own spelling, at its own depth, is in the file.
     const raw = await readSettings(root);
     expect(raw).toContain(`"deny": [\n      "${DENY_RULE}"\n    ]`);
+    expect(raw).toContain(`"allow": [\n      "${OWNER_ROW}",`);
     expect(raw).toContain(`"model": "opus"`);
+    const ownerGroupBytes = JSON.stringify(OWNER_GROUP, null, 2).split("\n").join("\n      ");
+    expect(raw).toContain(`"PreToolUse": [\n      ${ownerGroupBytes},`);
 
     const rows = await settingsLedgerRows(root);
     expect(rows).toHaveLength(1);
@@ -193,7 +198,10 @@ describe("an owner's permissions and hooks before setup", () => {
     await init(root);
 
     // In turn, on purpose: each verb runs over the tree the previous one left.
+    // review/34: the claim is bytes, so the whole file is compared as bytes.
+    const afterInit = await readSettings(root);
     const expectOwnerContentKept = async (): Promise<void> => {
+      expect(await readSettings(root)).toBe(afterInit);
       const doc = await settingsDoc(root);
       expect((doc["permissions"] as { deny: unknown })["deny"]).toEqual([DENY_RULE]);
       expect((doc["hooks"] as Record<string, unknown[]>)["PreToolUse"]?.[0]).toEqual(OWNER_GROUP);

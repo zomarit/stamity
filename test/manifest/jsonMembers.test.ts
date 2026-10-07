@@ -11,6 +11,7 @@ import {
   proveMember,
   readMember,
   removeOwnedMembers,
+  roundTripLoss,
   serialiseJson,
 } from "../../src/manifest/jsonMembers.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -227,10 +228,44 @@ describe("jsonStyleOf / serialiseJson — the style round trip (S15)", () => {
     expect(out).not.toBe(text);
   });
 
+  it.each(RESIDUE)("the residue is style only: nothing in it changes a value (review/34): %s", (_name, text) => {
+    expect(roundTripLoss(text)).toBeNull();
+  });
+
   it("re-orders integer-like keys first (the object model's order), content-equal", () => {
     const text = '{\n  "b": 1,\n  "1": 2\n}\n';
     const out = serialiseJson(JSON.parse(text) as unknown, jsonStyleOf(text));
     expect(out).toBe('{\n  "1": 2,\n  "b": 1\n}\n');
+  });
+
+  // review/34: what JSON.parse equality hides. A duplicate key's earlier value
+  // and a number past a double are gone once written back, so they are a loss,
+  // not a residue of style.
+  const DUPLICATE = "repeats a key inside one object, and writing it back keeps only the last value";
+  const NUMBER = "holds a number that writing it back would change, past what a double holds exactly";
+  it.each([
+    ['{"a":1,"a":2}', DUPLICATE],
+    ['{"o":{"x":1,"y":[{"k":1}],"x":2}}', DUPLICATE],
+    ['{"a":1,"\\u0061":2}', DUPLICATE],
+    ['{"n":1e400}', NUMBER],
+    ['{"n":-1e400}', NUMBER],
+    ['{"n":1e-400}', NUMBER],
+    ['{"n":12345678901234567890}', NUMBER],
+    ['{"n":9007199254740993}', NUMBER],
+    ['[0.1000000000000000055511151231257827]', NUMBER],
+    [`${String.fromCharCode(0xfeff)}{"a":1,"a":1}`, DUPLICATE],
+  ])("names why %j does not survive being written back", (text, why) => {
+    expect(roundTripLoss(text)).toBe(why);
+  });
+
+  it.each([
+    '{"a":{"x":1},"b":{"x":1},"c":[{"x":1},{"x":2}]}',
+    '{"s":"}{\\"a\\":1,","a":[1,"a"],"t":"\\\\"}',
+    '{"n":[0,-0,1.0,1E2,1.5e-7,0.1,9007199254740992,-12.50,1e21,12345e-10]}',
+    '"plain"',
+    "{}",
+  ])("finds nothing lost in %j", (text) => {
+    expect(roundTripLoss(text)).toBeNull();
   });
 
   it("lets a RangeError past the stack propagate for the planner to classify", () => {

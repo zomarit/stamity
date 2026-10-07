@@ -96,6 +96,7 @@ import {
   memberHash,
   memberPointer,
   parseMemberPointer,
+  roundTripLoss,
   serialiseJson,
   type MemberPointer,
   type MemberSegments,
@@ -1033,6 +1034,13 @@ function mergeInto(
   if (sameJson(merged, doc)) {
     return { result: { path: filePath, action: "unchanged", ...notice }, content: null, backup: null, collision: null, record: nextRecord };
   }
+  // A document the write cannot carry back whole loses an owner's value on
+  // any write (`./jsonMembers.ts::roundTripLoss`), so the write owes a backup.
+  const loss = roundTripLoss(existingRaw);
+  if (loss !== null) {
+    backup = true;
+    warnings.push(`${shown} ${loss}, ${BACKED_UP}`);
+  }
   const allWarnings = [...leaving.warnings(), ...warnings];
   return {
     result: {
@@ -1398,7 +1406,11 @@ function reduceDocument(
         `or the operator's, so the file is left exactly as it is.`,
     };
   }
-  const proof = { proven, ...(mustBackUp ? { mustBackUp: true as const } : {}) };
+  // A reduction rewrites or deletes the file, so a value it cannot carry back
+  // whole (`./jsonMembers.ts::roundTripLoss`) is backed up first.
+  const loss = roundTripLoss(raw);
+  const lossNote = loss === null ? "" : ` It ${loss}, so it is backed up first.`;
+  const proof = { proven, ...(mustBackUp || loss !== null ? { mustBackUp: true as const } : {}) };
   const list = `${removed.length} ${entries(removed.length)} (${removed.join(", ")})`;
   if (!foreignRemains && opts.deleteWhenEngineOnly) {
     return {
@@ -1406,7 +1418,7 @@ function reduceDocument(
       ...proof,
       detail:
         `Co-owned ${spec.noun} that proved to be engine-only: removing the engine's ${list} left nothing of the ` +
-        `client's or the operator's.`,
+        `client's or the operator's.${lossNote}`,
     };
   }
   // Something was removed, so the document differs and so do its bytes: a
@@ -1415,6 +1427,6 @@ function reduceDocument(
     kind: "reduced",
     content: serialiseJson(out, jsonStyleOf(raw)),
     ...proof,
-    detail: `Co-owned ${spec.noun}: the engine's ${list} were removed and everything else in it is kept, so the file stays.`,
+    detail: `Co-owned ${spec.noun}: the engine's ${list} were removed and everything else in it is kept, so the file stays.${lossNote}`,
   };
 }
