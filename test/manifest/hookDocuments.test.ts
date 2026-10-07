@@ -507,7 +507,7 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
 
   it("re-renders a Codex group 1.6.0 shared between a user row and a pack row, user row first, from the runner's rendering (review/69)", () => {
     const pack = { event: "pre_tool_use", matcher: "Bash", command: ["node", PACK_SCRIPT] };
-    const started = (value: typeof user): { type: string; command: string; commandWindows: string } => {
+    const started = (value: unknown): { type: string; command: string; commandWindows: string } => {
       const command = portableHookCommand("codex", value as HookInterchange, { syncCall: "stamity sync" });
       return { type: "command", command, commandWindows: command };
     };

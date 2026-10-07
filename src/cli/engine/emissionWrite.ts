@@ -414,14 +414,25 @@ interface CoOwnedLanePrediction extends CoOwnedPrediction {
 }
 
 /**
- * Cursor's guards, as `.cursor/hooks.json` runs them and the sweep reads them:
- * the current names and the 1.11.0 ones (REQ-FLOW-038). With the old names
- * here, the first sync after an upgrade recognises an entry running one as the
- * engine's and replaces it, and a hooks document the sweep leaves in place —
- * kept, refused or linked — still holds an old guard it runs back from the
- * sweep that reclaims the old names.
+ * Cursor's guards, as the sweep reads them: the current names and the 1.11.0
+ * ones (REQ-FLOW-038), so a hooks document the sweep leaves in place — kept,
+ * refused or linked — still holds an old guard it runs back from the sweep that
+ * reclaims the old names.
  */
 const CURSOR_GUARD_PATHS: readonly string[] = [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, ...LEGACY_CURSOR_GUARD_PATHS];
+
+/**
+ * Cursor's guards, as `.cursor/hooks.json`'s spec recognises and bounds them:
+ * the current names, and a 1.11.0 name only where `ledger` records that path
+ * — a setup that ran a release before the rename (REQ-FLOW-038; the review/70
+ * sign-off). There the first sync recognises an entry running the old name as
+ * the engine's and replaces it; anywhere else the old names are free, and an
+ * entry running one is the owner's.
+ */
+function cursorGuardPathsFor(ledger: readonly LedgerEntry[]): string[] {
+  const recorded = new Set(ledger.map((row) => row.path));
+  return [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, ...LEGACY_CURSOR_GUARD_PATHS.filter((path) => recorded.has(path))];
+}
 
 /**
  * A lane for a hooks document owned entry by entry on the core's own rules
@@ -468,11 +479,14 @@ function hookDocumentLane(
  * entry by entry (`../../manifest/hookDocuments.ts`), and `.codex/config.toml`
  * table by table (`../../manifest/codexConfigToml.ts`), all REQ-FLOW-037. The
  * Codex config's renderings resolve against `packServers`, and its legacy
- * proof reads `manifest`'s server selection.
+ * proof reads `manifest`'s server selection. `ledger`, the rows the lanes
+ * judge ownership from (`manifest`'s, or on init the previous setup's), says
+ * which of Cursor's old guard names are still the engine's.
  */
 export function coOwnedDocumentLanes(
   manifest: SetupManifest | null,
   packServers: readonly PackSuppliedServer[] = [],
+  ledger: readonly LedgerEntry[] = manifest?.ledger ?? [],
 ): ReadonlyMap<string, CoOwnedDocumentLane> {
   const claude: CoOwnedDocumentLane = {
     path: CLAUDE_SETTINGS_PATH,
@@ -488,7 +502,7 @@ export function coOwnedDocumentLanes(
         ...(rendered === undefined ? {} : { rendered }),
       }),
   };
-  const cursorHooks = hookDocumentLane(CURSOR_HOOKS_CONFIG_PATH, cursorHooksSpec({ guardPaths: CURSOR_GUARD_PATHS }), describeCursorHookDefects);
+  const cursorHooks = hookDocumentLane(CURSOR_HOOKS_CONFIG_PATH, cursorHooksSpec({ guardPaths: cursorGuardPathsFor(ledger) }), describeCursorHookDefects);
   const codexHooks = hookDocumentLane(CODEX_HOOKS_FILE, codexHooksSpec());
   const render = codexConfigTableRendering(packServers);
   const selected = manifest?.mcp?.servers ?? [];

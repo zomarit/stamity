@@ -325,8 +325,9 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // What the engine owns inside each co-owned document after this run, for the
   // ledger rows below (REQ-FLOW-036).
   const writtenRecordByPath = new Map<string, CoOwnership>();
-  const coOwnedLanes = coOwnedDocumentLanes(manifest, packServers);
   const previousLedger = previous?.ledger ?? [];
+  // Judged off the previous ledger, as each co-owned document's ownership is below.
+  const coOwnedLanes = coOwnedDocumentLanes(manifest, packServers, previousLedger);
   const previousHashes = ledgerHashIndex(rootDir, previousLedger);
   for (const output of outputs) {
     const coOwnedLane = coOwnedLanes.get(output.path);

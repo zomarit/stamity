@@ -560,8 +560,8 @@ async function runsOf(root: string, path: string, script: string): Promise<numbe
 /**
  * A repository a release up to 1.6.0 set up for `tool`, upgraded straight to
  * this one: the user hook defined, the hooks file holding 1.6.0's bytes (or
- * `edit` of them), and a ledger of that release's shape (no co-owned record)
- * whose whole-file hash is the bytes on disk.
+ * `edit` of them), and a ledger of that release's shape (no co-owned record,
+ * Cursor's guards at their old names) whose whole-file hash is the bytes on disk.
  */
 async function setUpByReleaseOneSix(
   tool: "cursor" | "codex",
@@ -570,6 +570,8 @@ async function setUpByReleaseOneSix(
 ): Promise<string> {
   const root = await freshRepo(sub);
   await init(root, [tool]);
+  // Every release up to 1.11.0 wrote and recorded the guards at their old names.
+  if (tool === "cursor") await moveGuardsToOldNames(root);
   await mkdir(abs(root, ".stamity/hooks"), { recursive: true });
   await writeFile(abs(root, USER_SCRIPT), "process.exit(0)\n", "utf8");
   await writeFile(abs(root, ".stamity/hooks/guard.json"), JSON.stringify(USER_DEFINITION), "utf8");
@@ -796,31 +798,38 @@ const OLD_MCP_GUARD = RENAMED_GUARDS[1][0];
 async function setUpByReleaseOneEleven(sub = "repo", ownerEntry = false): Promise<string> {
   const root = await freshRepo(sub);
   await init(root, ["cursor"]);
-  const respell = (text: string): string =>
-    RENAMED_GUARDS.reduce((acc, [old, current]) => acc.replaceAll(current, old), text);
-  const moved = await Promise.all(
-    RENAMED_GUARDS.map(async ([old, current]) => {
-      const text = respell(await readText(root, current));
-      await writeFile(abs(root, old), text, "utf8");
-      await rm(abs(root, current));
-      return [old, sha256(text)] as const;
-    }),
-  );
-  const hashes = new Map<string, string>(moved);
-  const hooks = respell(await readText(root, CURSOR_HOOKS));
-  await writeFile(abs(root, CURSOR_HOOKS), hooks, "utf8");
-  hashes.set(CURSOR_HOOKS, sha256(hooks));
-  const manifest = await readManifest(root);
-  if (manifest === null) throw new Error("fixture lost its manifest");
-  const ledger = manifest.ledger.map((row) => {
-    const { coOwned: _dropped, ...rest } = row;
-    const path = RENAMED_GUARDS.find(([, current]) => current === row.path)?.[0] ?? row.path;
-    const contentHash = hashes.get(path);
-    return { ...rest, path, ...(contentHash === undefined ? {} : { contentHash }) };
-  });
-  await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+  await moveGuardsToOldNames(root);
+  await writeFile(abs(root, CURSOR_HOOKS), respellGuards(await readText(root, CURSOR_HOOKS)), "utf8");
+  await asReleaseOneEleven(root);
+  await recordAsWritten(root, CURSOR_HOOKS);
   if (ownerEntry) await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
   return root;
+}
+
+/** `text` with each guard's current name respelled as its name up to 1.11.0. */
+function respellGuards(text: string): string {
+  return RENAMED_GUARDS.reduce((acc, [old, current]) => acc.replaceAll(current, old), text);
+}
+
+/**
+ * Cursor's guards moved back to the names every release up to 1.11.0 wrote:
+ * each file at its old path (its own bytes naming that path), and its ledger
+ * row at that path with the hash of those bytes.
+ */
+async function moveGuardsToOldNames(root: string): Promise<void> {
+  const moved = await Promise.all(
+    RENAMED_GUARDS.map(async ([old, current]) => {
+      const text = respellGuards(await readText(root, current));
+      await writeFile(abs(root, old), text, "utf8");
+      await rm(abs(root, current));
+      return [current, { path: old, contentHash: sha256(text) }] as const;
+    }),
+  );
+  const renamed = new Map<string, { path: string; contentHash: string }>(moved);
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  const ledger = manifest.ledger.map((row) => ({ ...row, ...renamed.get(row.path) }));
+  await writeManifest(root, { ...manifest, ledger }, { now: T1 });
 }
 
 /** The script each guard entry of `.cursor/hooks.json` runs, by event. */
@@ -832,7 +841,71 @@ async function guardCommands(root: string): Promise<Record<string, unknown>> {
   };
 }
 
+/** Whether a reclaim keeps or deletes each of `paths`, as `check --json` and `sync --dry-run` preview it before any write (review/73). */
+async function reclaimPreview(root: string, paths: readonly string[]): Promise<Record<string, { check: string; dryRun: string }>> {
+  const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
+  const drift = (JSON.parse(check.stdout.trim()) as { drift: { reclaim: { path: string; action: string }[] } }).drift.reclaim;
+  const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+  const dry = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: true, now: T1 });
+  return Object.fromEntries(
+    paths.map((path) => {
+      const previewed = dry.reclaimed?.entries.find((entry) => entry.path === path);
+      return [path, { check: drift.find((entry) => entry.path === path)?.action ?? "none", dryRun: previewed?.wouldBe === "deleted" ? "delete" : "keep" }];
+    }),
+  );
+}
+
+/** What the write did to each of `paths`, in {@link reclaimPreview}'s terms, read off the disk. */
+function reclaimDone(root: string, paths: readonly string[]): Record<string, { check: string; dryRun: string }> {
+  return Object.fromEntries(
+    paths.map((path) => {
+      const done = existsSync(abs(root, path)) ? "keep" : "delete";
+      return [path, { check: done, dryRun: done }];
+    }),
+  );
+}
+
+const OLD_GUARDS = RENAMED_GUARDS.map(([old]) => old);
+
 describe("the Cursor guards carry the stamity- prefix, and the first sync after an upgrade moves them (REQ-FLOW-038)", () => {
+  it("a setup that never ran a release before the rename: an owner's entry running an old guard name is the owner's, kept by sync and clean with no .bak (review/70)", async () => {
+    const own = { command: `node ${OLD_MCP_GUARD}` };
+    const ownersSetup = async (sub: string): Promise<string> => {
+      const root = await freshRepo(sub);
+      await init(root, ["cursor"]);
+      await writeFile(abs(root, OLD_MCP_GUARD), "process.exit(0)\n", "utf8");
+      await addHookEntry(root, CURSOR_HOOKS, "beforeMCPExecution", own);
+      return root;
+    };
+    const synced = await ownersSetup("synced");
+    const check = await runInProcess([checkCommand], ["check"], { cwd: synced });
+    expect(check.code, check.stdout + check.stderr).toBe(0);
+
+    await sync(synced);
+
+    expect(((await readDoc(synced, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeMCPExecution"]).toEqual([
+      { command: `node ${MCP_GUARD_PATH}`, failClosed: true },
+      own,
+    ]);
+    expect(existsSync(abs(synced, OLD_MCP_GUARD))).toBe(true);
+    expect(await backups(synced)).toEqual([]);
+
+    const cleaned = await ownersSetup("cleaned");
+    expect((await clean(cleaned)).code).toBe(0);
+    expect(await readDoc(cleaned, CURSOR_HOOKS)).toEqual({ version: 1, hooks: { beforeMCPExecution: [own] } });
+    expect(existsSync(abs(cleaned, OLD_MCP_GUARD))).toBe(true);
+    expect(await backups(cleaned)).toEqual([]);
+
+    // init over the owner's own file, no setup before it: the entry is merged beside the engine's, not replaced.
+    const adopted = await freshRepo("adopted");
+    await mkdir(abs(adopted, ".cursor/hooks"), { recursive: true });
+    await writeFile(abs(adopted, OLD_MCP_GUARD), "process.exit(0)\n", "utf8");
+    await writeDoc(adopted, CURSOR_HOOKS, { version: 1, hooks: { beforeMCPExecution: [own] } });
+    await init(adopted, ["cursor"]);
+    expect(((await readDoc(adopted, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeMCPExecution"]).toContainEqual(own);
+    expect(await backups(adopted)).toEqual([]);
+  });
+
   it("init -y --tools cursor writes exactly the two stamity- guards and runs them fail-closed", async () => {
     const root = await freshRepo();
     await init(root, ["cursor"]);
@@ -906,9 +979,15 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
   it("a 1.11.0 setup with an owner entry: sync -y keeps the entry, rewires the guards behind a verified .bak, deletes both old names, and check then exits 0", async () => {
     const root = await setUpByReleaseOneEleven("repo", true);
     const edited = await readText(root, CURSOR_HOOKS);
+    const preview = await reclaimPreview(root, OLD_GUARDS);
+    expect(preview).toEqual(Object.fromEntries(OLD_GUARDS.map((old) => [old, { check: "delete", dryRun: "delete" }])));
 
-    await sync(root);
+    const { entries, report } = await sync(root);
 
+    // The preview is the write (review/73): each old guard, and the hooks document's own row.
+    expect(reclaimDone(root, OLD_GUARDS)).toEqual(preview);
+    expect(entries.find((entry) => entry.path === CURSOR_HOOKS)?.action).toBe("update");
+    expect(rowOf(report.wrote, CURSOR_HOOKS).action).toBe("updated");
     for (const [old, current] of RENAMED_GUARDS) {
       expect(existsSync(abs(root, old)), old).toBe(false);
       expect(existsSync(abs(root, current)), current).toBe(true);
@@ -933,10 +1012,14 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
     const root = await setUpByReleaseOneEleven();
     const edited = `${await readText(root, OLD_MCP_GUARD)}// the team's own tweak\n`;
     await writeFile(abs(root, OLD_MCP_GUARD), edited, "utf8");
+    const preview = await reclaimPreview(root, OLD_GUARDS);
+    expect(preview).toEqual({ [OLD_SUBAGENT_GUARD]: { check: "delete", dryRun: "delete" }, [OLD_MCP_GUARD]: { check: "keep", dryRun: "keep" } });
 
     const synced = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
 
     expect(synced.code, synced.stderr).toBe(0);
+    // The preview is the write (review/73).
+    expect(reclaimDone(root, OLD_GUARDS)).toEqual(preview);
     expect(await readText(root, OLD_MCP_GUARD)).toBe(edited);
     expect(existsSync(abs(root, OLD_SUBAGENT_GUARD))).toBe(false);
     expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(true);
