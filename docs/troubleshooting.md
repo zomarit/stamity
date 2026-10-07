@@ -151,8 +151,9 @@ re-run the command. `check --json` lists the paths a release writes under `owned
 A row inside those paths still proves nothing on its own. `sync` and `clean` delete or overwrite
 a file without a backup only when its bytes still hash to what the row recorded, together with
 an engine-minted `st-` or `stamity-` name in an agent, skill, rule or command folder, or when a
-managed block spans the file. A row with no content hash keeps its file, and an overwrite of one
-takes a verified `.bak` first.
+managed block spans the file. A row with no content hash keeps its file unless a managed block
+spans it, and an overwrite of one takes a verified `.bak` first. So does removing the engine's
+keys from a shared settings or MCP document such a row names.
 
 ### `check` reports drift after you edited a managed file
 
@@ -200,6 +201,36 @@ the engine wrote is regenerated on the next `sync` — with a `.bak` and a warni
 when the file no longer hashes to what the engine wrote, and silently when it still does — the
 case of a rendering that merely moved with an engine upgrade; personal permission rows belong in
 `.claude/settings.local.json`, which this engine never writes.
+
+### `sync` refuses an instruction file with an `import-decision` collision
+
+`check` names the file in its next steps. `sync` writes everything else, skips this file and
+exits non-zero:
+
+```text
+AGENTS.md holds your text outside the engine's managed block, the shape a `supplement` import
+leaves, but the manifest records `skip` for it, so sync would replace your text.
+```
+
+When `init` met an existing `AGENTS.md`, `AGENT.md`, `CLAUDE.md` or
+`.github/copilot-instructions.md`, it recorded what to do with it under `importChoice` in
+`.stamity/manifest.json`. A `supplement` keeps your text and puts the engine's block beside it.
+Here the file still has your text beside the block, but the record says something else, or
+nothing, so a `sync` would overwrite the whole file and your text with it. The manifest is
+committed and anyone can edit it, so the file's bytes win over the record and nothing is
+written.
+
+`--force` does not clear this. A forced `sync` skips these files too, because forcing would
+replace exactly the text the refusal protects. There are two remedies:
+
+- Keep your text: set the path's `mode` back to `supplement` under `importChoice`, then run
+  `sync`.
+- Let the engine own the whole file: run `init --force --import-config replace`. It records
+  `replace` and copies your bytes to a verified `.bak` before it writes.
+
+```sh
+npx @zomarit/stamity init --force --import-config replace
+```
 
 ### A client has no files
 

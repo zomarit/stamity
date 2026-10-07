@@ -91,7 +91,14 @@ async function decideCharter(repo: GoldenRepo, mode: "supplement" | "skip"): Pro
   if (manifest === null) throw new Error("fixture lost its manifest");
   await writeManifest(
     repo.rootDir,
-    { ...manifest, importChoice: [{ path: AGENTS_MD_FILE, mode }] },
+    {
+      ...manifest,
+      importChoice: [{ path: AGENTS_MD_FILE, mode }],
+      // TEST CHANGE, justified: REQ-PLUGIN-046 — a `skip` decision beside a
+      // ledger row for the same path is refused, and init never records one
+      // there; the `AGENTS.md` rows go, the ledger the next sync rebuilds anyway.
+      ...(mode === "skip" ? { ledger: manifest.ledger.filter((row) => row.path !== AGENTS_MD_FILE) } : {}),
+    },
     { now: GOLDEN_NOW },
   );
 }
