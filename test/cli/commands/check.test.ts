@@ -863,17 +863,26 @@ describe("check — the reclaim preview", () => {
     expect(human.stdout).not.toContain("more\n");
   });
 
-  it("names a kept file and a refused one with the sweep's reason, and folds them past the bound", async () => {
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — `check` names every path a sync
+  // would reclaim in its text, so no reclaim line folds past the bound; this
+  // case used to pin the keep and refuse lines folding into "… and 2 more".
+  it("names a kept, a refused and a stripped file with the sweep's reason, and folds none of them past the bound", async () => {
     const edited = ".claude/agents/stamity-edited.md";
     const hashless = ".claude/agents/stamity-hashless.md";
-    const missing = Array.from({ length: 20 }, (_, index) => `.stamity/packs/demo/m-${String(index).padStart(2, "0")}.md`);
+    const stripped = ".claude/agents/stamity-noted.md";
+    const missing = Array.from({ length: 21 }, (_, index) => `.stamity/packs/demo/m-${String(index).padStart(2, "0")}.md`);
     const root = await seedRepo(getRepo(), {
       ledger: [
         agentRow(edited, "engine agent\n"),
         { path: hashless, adapter: "claude", artifactId: "hashless", artifactType: "agent" },
+        { path: stripped, adapter: "claude", artifactId: "noted", artifactType: "agent" },
         ...missing.map((path) => ({ path, adapter: packOwner("demo"), artifactId: path, artifactType: "infra" as const })),
       ],
-      files: { [edited]: "my own agent\n", [hashless]: "engine agent\n" },
+      files: {
+        [edited]: "my own agent\n",
+        [hashless]: "engine agent\n",
+        [stripped]: `${wrapInManagedBlock("engine body")}my notes\n`,
+      },
     });
 
     const { doc } = await runJson(root);
@@ -882,11 +891,36 @@ describe("check — the reclaim preview", () => {
     expect(doc.drift?.reclaim).toEqual([
       expect.objectContaining({ path: edited, action: "keep", why: expect.stringContaining("edited since") }),
       expect.objectContaining({ path: hashless, action: "refuse", why: expect.stringContaining("records no content hash") }),
+      { path: stripped, reason: "deselected", action: "strip", proof: "block" },
     ]);
-    expect(doc.drift?.reclaim.map((preview) => preview.proof)).toEqual([undefined, undefined]);
-    // Twenty missing lines fill the bound, so both reclaim lines fold.
-    expect(human.stdout).toContain("… and 2 more");
-    expect(human.stdout).not.toContain(`keep      ${edited}`);
+    expect(doc.drift?.reclaim.map((preview) => preview.proof)).toEqual([undefined, undefined, "block"]);
+    // Twenty-one missing lines overflow the bound by one, and only that one folds.
+    expect(human.stdout).toContain("… and 1 more");
+    expect(human.stdout).toContain(`  keep      ${edited} — `);
+    expect(human.stdout).toContain(`  refuse    ${hashless} — `);
+    expect(human.stdout).toContain(`  strip     ${stripped} (block)`);
+  });
+
+  it("spells control and escape characters in a reclaim path visibly in the text, and keeps --json as recorded", async () => {
+    const esc = String.fromCodePoint(0x1b);
+    const rlo = String.fromCodePoint(0x202e);
+    const hostile = `.claude/agents/stamity-${esc}[1A${esc}[2K${rlo}x.md`;
+    // Ledger only: Windows refuses such a file name, and the preview prints the
+    // recorded path whatever the disk holds.
+    const root = await seedRepo(getRepo(), {
+      ledger: [{ path: hostile, adapter: "claude", artifactId: "hostile", artifactType: "agent" }],
+    });
+
+    const { doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(doc.drift?.reclaim.map((preview) => preview.path)).toEqual([hostile]);
+    const backslash = String.fromCodePoint(0x5c);
+    const spelled = `.claude/agents/stamity-${backslash}u{1b}[1A${backslash}u{1b}[2K${backslash}u{202e}x.md`;
+    expect(human.stdout).toContain(`  missing   ${spelled}\n`);
+    expect(human.stdout).toContain(`  gone      ${spelled} — `);
+    expect(human.stdout).not.toContain(esc);
+    expect(human.stdout).not.toContain(rlo);
   });
 
   it("prints a keep line with the sweep's reason when there is room", async () => {

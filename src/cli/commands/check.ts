@@ -21,6 +21,7 @@ import {
   withoutPolicyWarningPrint,
 } from "../../pack/projection.ts";
 import { receiptRelPath } from "../../pack/receipt.ts";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
 import {
   describePackIntegrityFinding,
   packReinstallSteps,
@@ -1855,15 +1856,13 @@ function renderDrift(ctx: CliContext, outcome: DriftOutcome): void {
       `reclaim\n`,
   );
   const rows: { line: string; bounded: boolean }[] = [
-    ...drift.changes.map((entry) => ({ line: `  ${entry.action.padEnd(9)} ${entry.path}`, bounded: true })),
-    ...drift.missing.map((path) => ({ line: `  ${"missing".padEnd(9)} ${path}`, bounded: true })),
-    // A delete is never folded into the `… and N more` row: it is the one line
-    // that names a file the next sync removes, and the operator reads this list
-    // to decide whether to run it (REQ-PLUGIN-045).
-    ...drift.reclaim.map((preview) => ({
-      line: reclaimLine(preview),
-      bounded: preview.action !== "delete",
-    })),
+    ...drift.changes.map((entry) => ({ line: `  ${entry.action.padEnd(9)} ${visibleText(entry.path)}`, bounded: true })),
+    ...drift.missing.map((path) => ({ line: `  ${"missing".padEnd(9)} ${visibleText(path)}`, bounded: true })),
+    // No reclaim line is folded into the `… and N more` row: each names a file
+    // the next sync deletes, strips or reduces, or one it keeps or refuses and
+    // why, and the operator reads this list to decide whether to run it —
+    // `check` names every path a sync would reclaim (REQ-PLUGIN-045).
+    ...drift.reclaim.map((preview) => ({ line: reclaimLine(preview), bounded: false })),
   ];
   let shown = 0;
   let folded = 0;
@@ -1880,8 +1879,30 @@ function renderDrift(ctx: CliContext, outcome: DriftOutcome): void {
 
 /** One reclaim preview as a drift line: the action, the path, and the proof or the reason. */
 function reclaimLine(preview: ReclaimPreview): string {
-  const head = `  ${preview.action.padEnd(9)} ${preview.path}`;
-  return preview.proof === undefined ? `${head} — ${preview.why ?? ""}` : `${head} (${preview.proof})`;
+  const head = `  ${preview.action.padEnd(9)} ${visibleText(preview.path)}`;
+  return preview.proof === undefined
+    ? `${head} — ${visibleText(preview.why ?? "")}`
+    : `${head} (${preview.proof})`;
+}
+
+/** The escape character a {@link visibleText} spelling opens with. */
+const BACKSLASH = "\\";
+
+/**
+ * Ledger-derived text as a drift line prints it: every control, bidi,
+ * zero-width, separator and tag character is spelled as its `\u{…}` escape
+ * text. A ledger path is committed text anyone can edit, and one carrying an
+ * escape sequence could otherwise move the cursor and erase the line above it
+ * — the `delete` line the operator reads before running `sync`. Spelled rather
+ * than dropped, so the line still shows that the path holds such a character.
+ * `--json` carries the path as recorded.
+ */
+function visibleText(text: string): string {
+  return text.replace(UNPRINTABLE_CHARS, escapeCodePoint).replace(UNICODE_TAG_CHARS, escapeCodePoint);
+}
+
+function escapeCodePoint(char: string): string {
+  return `${BACKSLASH}u{${Number(char.codePointAt(0)).toString(16)}}`;
 }
 
 /**
