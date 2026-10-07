@@ -2116,7 +2116,9 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
         `pointing at nothing, and a guard wired that way fails closed on every tool call. Remove that wiring from ` +
         `${SETTINGS}, then re-run.`,
     );
-    expect(report.wiringKept).toEqual([{ path: SETTINGS }]);
+    // TEST CHANGE, justified: REQ-FLOW-037 (S17) — each kept document now lists the
+    // scripts it held back, so `clean` keeps the state directory only for one under it.
+    expect(report.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT] }]);
     expect(await readFile(join(root, SCRIPT), "utf-8")).toBe(SCRIPT_BODY);
   });
 
@@ -2156,7 +2158,8 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
         `nothing, and a guard wired that way fails closed on every tool call. Replace ${SETTINGS} with a regular file ` +
         `this sweep can read (or delete it), then re-run.`,
     );
-    expect(report.wiringKept).toEqual([{ path: SETTINGS, unreadable: true }]);
+    // TEST CHANGE, justified: REQ-FLOW-037 (S17) — the held-back scripts are listed per document.
+    expect(report.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT], unreadable: true }]);
   });
 
   it("holds nothing back for a co-owned document that wires no hooks, linked or not (an MCP document; review/49)", async () => {
@@ -2170,6 +2173,89 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
 
     expect(report.entries.find((entry) => entry.path === SCRIPT)).toMatchObject({ action: "deleted" });
     expect(report).not.toHaveProperty("wiringKept");
+  });
+
+  // REQ-FLOW-037 (S17): the hooks documents' grammar is the caller's. A
+  // reader handed in decides which candidates are hook scripts (Cursor's guards
+  // lie outside the generated folder) and whether a kept text runs one (a
+  // portable runner names its script only inside an encoded row).
+  it("asks the reader it is handed which candidates are hook scripts and whether a kept document runs one", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const GUARD = ".cursor/hooks/mcp-guard.mjs";
+    const CURSOR = ".cursor/hooks.json";
+    const text = '{"hooks":{"x":[{"command":"opaque"}]}}\n';
+    await temp.seedFiles({ [`repo/${CURSOR}`]: text, [`repo/${GUARD}`]: SCRIPT_BODY, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+    const asked: string[] = [];
+    const report = await sweepReclaimCandidates(
+      [hashedCandidate(GUARD, SCRIPT_BODY), hashedCandidate(SCRIPT, SCRIPT_BODY), settingsCandidate(CURSOR, text)],
+      {
+        rootDir: root,
+        consent: true,
+        trustedExactPaths: new Set([CURSOR, GUARD]),
+        coOwnedPaths: new Map([[CURSOR, untouched]]),
+        hookDocuments: new Set([CURSOR]),
+        hookScripts: {
+          isHookScript: (path) => path === GUARD,
+          runs: (body, path) => {
+            asked.push(path);
+            return body === text && path === GUARD;
+          },
+        },
+      },
+    );
+
+    expect(report.entries.map((entry) => [entry.path, entry.action])).toEqual([
+      [GUARD, "skipped-user-content"],
+      [SCRIPT, "deleted"],
+      [CURSOR, "skipped-user-content"],
+    ]);
+    expect(asked).toEqual([GUARD]);
+    expect(report.wiringKept).toEqual([{ path: CURSOR, scripts: [GUARD] }]);
+  });
+
+  it("reads a document the sweep reduced as it wrote it, and a whole-file hook document before any script", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const OTHER = ".stamity/generated/hooks/claude/stamity-other.mjs";
+    const COPILOT = ".github/hooks/stamity.json";
+    const reducedText = `{"hooks":{"Stop":[{"hooks":[{"command":"node ${SCRIPT}"}]}]}}\n`;
+    const copilotText = `{"hooks":{"x":[{"bash":"node ${OTHER}"}]}}\n`;
+    const reduces: CoOwnedReducer = () => ({ kind: "reduced", content: reducedText, proven: true, detail: "Reduced." });
+    await temp.seedFiles({
+      [`repo/${SETTINGS}`]: "{}\n",
+      [`repo/${COPILOT}`]: copilotText,
+      [`repo/${SCRIPT}`]: SCRIPT_BODY,
+      [`repo/${OTHER}`]: SCRIPT_BODY,
+    });
+
+    const report = await sweepReclaimCandidates(
+      [
+        hashedCandidate(SCRIPT, SCRIPT_BODY),
+        hashedCandidate(OTHER, SCRIPT_BODY),
+        settingsCandidate(SETTINGS, "{}\n"),
+        // The owner edited Copilot's whole-file document: its hash no longer matches, so it is kept.
+        settingsCandidate(COPILOT, "{}\n"),
+      ],
+      {
+        rootDir: root,
+        consent: true,
+        trustedExactPaths: new Set([SETTINGS, COPILOT]),
+        coOwnedPaths: new Map([[SETTINGS, reduces]]),
+        hookDocuments: new Set([SETTINGS, COPILOT]),
+      },
+    );
+
+    expect(report.entries.map((entry) => [entry.path, entry.action])).toEqual([
+      [SCRIPT, "skipped-user-content"],
+      [OTHER, "skipped-user-content"],
+      [SETTINGS, "co-owned-reduced"],
+      [COPILOT, "skipped-user-content"],
+    ]);
+    expect(report.wiringKept).toEqual([
+      { path: SETTINGS, scripts: [SCRIPT] },
+      { path: COPILOT, scripts: [OTHER] },
+    ]);
   });
 
   it("holds nothing back for a refused document that is not on disk", async () => {

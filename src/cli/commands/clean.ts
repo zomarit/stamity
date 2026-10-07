@@ -22,7 +22,7 @@ import {
 } from "../../types/manifest.ts";
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import { coOwnedHookDocuments, coOwnedReclaimReducers, coOwnedReclaimRenderings } from "../engine/emissionWrite.ts";
+import { coOwnedReclaimReducers, coOwnedReclaimRenderings, hookScriptRetention } from "../engine/emissionWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import { packageCommand, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -72,6 +72,12 @@ import { confirm, promptGate } from "../kit/prompts.ts";
  * block is stripped instead), unsafe paths are refused, missing files are
  * reported rather than fatal. `.gitignore` entries are left alone — the file is
  * the user's, and stale ignore lines are inert.
+ *
+ * One exception keeps the state directory (S17): a hooks document the sweep
+ * leaves in place — an owner's entries kept in it, or a file it cannot read —
+ * that still runs a hook script under `.stamity/` holds that script back, and
+ * deleting the directory would take it anyway. The run says so, names the
+ * document, and `--json` lists the held scripts as `stateDirKept`.
  */
 
 /** Fresh row copy, so a candidate never aliases the manifest the caller holds. */
@@ -530,7 +536,7 @@ async function runScopedClean(
     consent: !ctx.dryRun,
     trustedExactPaths: trustedInfraPaths(manifest.ledger),
     coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
-    hookDocuments: coOwnedHookDocuments(manifest, packSupply),
+    ...hookScriptRetention(manifest, packSupply),
   });
   ctx.spinner.stop();
 
@@ -672,15 +678,20 @@ export const cleanCommand: CommandModule = {
       // sweep, so the reducer can still prove a pack-supplied entry. The
       // selection goes with the state directory a few lines below.
       coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
-      hookDocuments: coOwnedHookDocuments(manifest, packSupply),
+      ...hookScriptRetention(manifest, packSupply),
     });
     ctx.spinner.stop();
 
-    // A hooks document the sweep left in place that still runs an engine hook
-    // script keeps the state directory whole, since the script lives in it
-    // (S17's settings case, `../../merge/reclaim.ts::hookDocumentsLeftInPlace`).
-    const wiringKept = report.wiringKept ?? [];
-    const stateDirRemoved = ctx.dryRun || wiringKept.length > 0 ? false : await removeStateDir(rootDir);
+    // A hooks document the sweep left in place that still runs a hook script
+    // under the state directory keeps the directory whole, since deleting it
+    // would take the script with it (S17, `../../merge/reclaim.ts::hookDocumentsLeftInPlace`).
+    // A document that runs only scripts elsewhere (Cursor's guards) keeps those
+    // alone. Until file 01's `u1-clean-keeps-state` prunes around them, the
+    // whole directory stays.
+    const underStateDir = (path: string): boolean => path.startsWith(`${STATE_DIR}/`);
+    const wiringKept = (report.wiringKept ?? []).filter((doc) => doc.scripts.some(underStateDir));
+    const stateDirKept = [...new Set(wiringKept.flatMap((doc) => doc.scripts.filter(underStateDir)))];
+    const stateDirRemoved = ctx.dryRun || stateDirKept.length > 0 ? false : await removeStateDir(rootDir);
 
     const formatted = formatReclaimReport(report);
     if (formatted !== "") ctx.io.out(`${formatted}\n`);
@@ -722,6 +733,8 @@ export const cleanCommand: CommandModule = {
         stripped: report.strippedCount,
         skipped: report.skippedCount,
         stateDirRemoved,
+        // The held-back scripts that kept the state directory, when any did (S17).
+        ...(stateDirKept.length > 0 ? { stateDirKept } : {}),
         entries: report.entries,
         // The same lines the human report prints, so a machine caller driving
         // an uninstall reads the steps this verb did not take.

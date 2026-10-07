@@ -192,6 +192,22 @@ export type ReclaimProof = "hash" | "block" | "co-owned";
  * it and neither may import the other.
  */
 
+/**
+ * Which candidate paths are hook scripts, and whether a hooks document's text
+ * runs one — the grammar of the hooks documents, which this module leaves to
+ * its caller as it leaves a co-owned document's to its reducer.
+ */
+export interface HookScriptReader {
+  isHookScript(path: string): boolean;
+  runs(text: string, path: string): boolean;
+}
+
+/** The reader when none is handed in: the generated hooks folder, named in the text. */
+const DEFAULT_HOOK_SCRIPTS: HookScriptReader = {
+  isHookScript: (path) => path.startsWith(`${HOOKS_GENERATED_DIR}/`),
+  runs: (text, path) => text.includes(path),
+};
+
 /** Inputs to {@link sweepReclaimCandidates}. */
 export interface ReclaimOptions {
   /** Repo root every candidate path resolves against; must exist. */
@@ -229,6 +245,16 @@ export interface ReclaimOptions {
    * collected by `coOwnedHookDocuments`); none when absent.
    */
   hookDocuments?: ReadonlySet<string>;
+  /**
+   * How a kept hooks document is read for the scripts it runs (S17). Default:
+   * a candidate under the generated hooks folder is a hook script, and a
+   * document runs it when its text names it. The engine's reader
+   * (`../manifest/hookDocuments.ts::hookScriptReader`, handed in by
+   * `../cli/engine/emissionWrite.ts`) also reads the Cursor guards, an
+   * installed pack's scripts, and the scripts a portable runner's encoded row
+   * names.
+   */
+  hookScripts?: HookScriptReader;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -238,11 +264,12 @@ export interface ReclaimReport {
   entries: ReclaimActionEntry[];
   /**
    * The hook documents this sweep left in place that still run an engine hook
-   * script, whose scripts it therefore kept (S17's settings case), each marked
+   * script, with the `scripts` it therefore kept (S17), each marked
    * `unreadable` when the sweep could not read it to prove it does not; absent
-   * when there are none. `clean` keeps the state directory whole for them.
+   * when there are none. `clean` keeps the state directory whole when one of
+   * those scripts lives in it.
    */
-  wiringKept?: { path: string; unreadable?: true }[];
+  wiringKept?: { path: string; scripts: string[]; unreadable?: true }[];
   /**
    * The `consent` the sweep ran under — `false` means nothing was written,
    * whatever the entries look like.
@@ -977,11 +1004,6 @@ async function pruneEmptyParents(target: string, ctx: SweepContext): Promise<voi
   }
 }
 
-/** True for a path under the engine's generated hooks folder: a script some client's hooks document may run. */
-function isEngineHookScript(path: string): boolean {
-  return path.startsWith(`${HOOKS_GENERATED_DIR}/`);
-}
-
 /** A document that wires hooks, left in place by this sweep, with its text or `null` when it may not be read. */
 interface HookDocumentLeft {
   path: string;
@@ -990,7 +1012,8 @@ interface HookDocumentLeft {
 
 /**
  * The hook documents (`ReclaimOptions.hookDocuments`) this sweep left in
- * place — refused or left untouched, not gone — each with its text, or
+ * place — refused, left untouched, or reduced to the owner's entries, not
+ * gone — each with its text (a reduced one's as the sweep wrote it), or
  * `null` when it is not a regular file this sweep may read (a link, a hard
  * link, an unreadable file): such a document is taken to run every engine hook
  * script, since nothing proves it does not. A co-owned document that wires no
@@ -1004,7 +1027,7 @@ async function hookDocumentsLeftInPlace(
   const kept: HookDocumentLeft[] = [];
   for (const entry of entries) {
     if (!hookDocuments.has(entry.path)) continue;
-    if (entry.action !== "skipped-user-content" && entry.action !== "skipped-unsafe-path") continue;
+    if (entry.action !== "skipped-user-content" && entry.action !== "skipped-unsafe-path" && entry.action !== "co-owned-reduced") continue;
     const target = join(root, ...entry.path.split("/"));
     let content: string | null = null;
     try {
@@ -1186,22 +1209,28 @@ export async function sweepReclaimCandidates(
     });
   };
 
-  // Co-owned documents settle first, so a hook script is judged against the
-  // documents this sweep leaves in place (S17's settings case): one of them
+  // Co-owned documents and hook documents settle first, so a hook script is
+  // judged against the documents this sweep leaves in place (S17): one of them
   // still naming the script would be left pointing at nothing, and a guard
   // wired that way fails closed on every tool call.
-  const coOwnedGroups = groups.filter((group) => ctx.coOwned.has(group.path));
-  for (const group of coOwnedGroups) await sweepOne(group);
-  const keptDocuments = await hookDocumentsLeftInPlace(entries, opts.hookDocuments ?? new Set<string>(), ctx.root);
-  const wiringKept = new Map<string, HookDocumentLeft>();
+  const hookDocuments = opts.hookDocuments ?? new Set<string>();
+  const reader = opts.hookScripts ?? DEFAULT_HOOK_SCRIPTS;
+  const settlesFirst = (group: CandidateGroup): boolean => ctx.coOwned.has(group.path) || hookDocuments.has(group.path);
+  for (const group of groups.filter(settlesFirst)) await sweepOne(group);
+  const keptDocuments = await hookDocumentsLeftInPlace(entries, hookDocuments, ctx.root);
+  const wiringKept = new Map<string, { doc: HookDocumentLeft; scripts: string[] }>();
   for (const group of groups) {
-    if (ctx.coOwned.has(group.path)) continue;
-    const holder = isEngineHookScript(group.path) ? keptDocuments.find((doc) => doc.content === null || doc.content.includes(group.path)) : undefined;
+    if (settlesFirst(group)) continue;
+    const holder = reader.isHookScript(group.path)
+      ? keptDocuments.find((doc) => doc.content === null || reader.runs(doc.content, group.path))
+      : undefined;
     if (holder === undefined) {
       await sweepOne(group);
       continue;
     }
-    wiringKept.set(holder.path, holder);
+    const held = wiringKept.get(holder.path) ?? { doc: holder, scripts: [] };
+    held.scripts.push(group.path);
+    wiringKept.set(holder.path, held);
     entries.push({ path: group.path, candidateReason: group.reason, action: "skipped-user-content", detail: keptScriptDetail(holder) });
   }
   // The report reads in the candidates' own order, whatever order they settled in.
@@ -1214,7 +1243,9 @@ export async function sweepReclaimCandidates(
     ...(wiringKept.size > 0
       ? {
           // In the order the sweep met them, which follows the candidates.
-          wiringKept: [...wiringKept.values()].map((doc) => (doc.content === null ? { path: doc.path, unreadable: true as const } : { path: doc.path })),
+          wiringKept: [...wiringKept.values()].map(({ doc, scripts }) =>
+            doc.content === null ? { path: doc.path, scripts, unreadable: true as const } : { path: doc.path, scripts },
+          ),
         }
       : {}),
     deletedCount: entries.filter((entry) => entry.action === "deleted").length,

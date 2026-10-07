@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 239eb3a9. Re-attested 2026-10-07 for the entry-by-entry ownership of .claude/settings.json. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit b229f3ba. Re-attested 2026-10-07 for the entry-by-entry ownership of .claude/settings.json and of Cursor's and Codex's hook files. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -177,6 +177,32 @@ To keep the change, move it **outside** the block. Text outside a managed block 
 survives every sync. Where the edit belongs inside a shipped agent, rule, command or skill, author
 it as an override instead. [Customization](customization.md) is that lane. If you deleted a
 generated file, sync rewrites it.
+
+### Your own hooks in Cursor's and Codex's hook files
+
+`.cursor/hooks.json` and `.codex/hooks.json` are merged entry by entry, like
+`.claude/settings.json`. The engine owns only the entries it wrote: those that run its scripts
+under `.stamity/generated/hooks/`, and Cursor's two guards. It also owns Cursor's `version` and,
+unless you wrote your own, Codex's `description`. Every other entry is yours, and `sync`, `clean`
+and a client's removal leave it where it is, with no `.bak`. Add a hook of your own as its own
+element of the event's array. A command added inside one of the engine's entries is replaced on
+the next `sync` behind a verified `.bak` holding your edit, with a warning naming the entry. A
+`version` other than `1` in `.cursor/hooks.json` is refused as a collision naming it.
+
+`clean` does not delete a hook script that a hooks file it keeps still runs. That covers a file it
+cannot read, and Copilot's `.github/hooks/stamity.json` when you edited it. Each kept script is
+reported as kept, naming the file. When such a script lives under `.stamity/`, `clean` keeps
+`.stamity/` and says so, and `clean --json` lists those scripts as `stateDirKept`. Remove the
+wiring from the named file, or fix or delete the file, then run `clean` again.
+
+**`check` fails on an entry Cursor rejects.** Cursor accepts 21 event names in `.cursor/hooks.json`
+(its hooks documentation, read 2026-10-07), and every entry needs a `command`. A key such as
+`PreToolUse` is Claude Code's spelling, not Cursor's. While the file holds such an entry, Cursor
+loads none of its hooks, the engine's guards included (shown for Cursor 3.13.10 by
+microsoft/apm#3129). `check` exits 1 naming the entry by its pointer, for example
+`/hooks/PreToolUse`. `sync` keeps the entry, because it is not the engine's, and warns. Remove the
+key or rename it to the Cursor event it means. If an APM package wrote it, install that package
+without the `cursor` target.
 
 ### `sync` refuses a file it did not write
 

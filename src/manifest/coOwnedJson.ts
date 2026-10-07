@@ -39,7 +39,10 @@
  *    adoption, each such container already present and holding nothing the
  *    engine recognises joins `preexisting`; later runs carry it forward while
  *    the container exists.
- * 5. *Members.* A member's one proof is the engine's CURRENT rendering; a
+ * 5. *Members.* A member's one proof is the engine's CURRENT rendering, or a
+ *    value an earlier release rendered there when the spec declares that
+ *    bound (`MemberSpec.known`: such a value moves to the rendering, or
+ *    leaves, silently); a
  *    recorded hash — the member's, or the whole file's under a legacy row — is
  *    a claim (S11). Absent → written and recorded. Equal to the rendering →
  *    nothing to write (recorded when the engine owns it). A `collide` member
@@ -137,6 +140,16 @@ export interface MemberSpec {
   foreign: "collide" | "yield";
   /** Removed only when nothing foreign remains (Cursor's `version`). */
   structural?: true;
+  /**
+   * True for a value some release of the engine rendered at this member — the
+   * release-history bound. Such a value is the engine's whatever the record
+   * says, and it is updated, or removed, without a backup: the engine can
+   * prove it wrote it by re-rendering an earlier release. Without this bound
+   * the member's one proof is the CURRENT rendering, so a release that changed
+   * the value would make every older file collide (`collide`) or take a backup
+   * (`yield`). Absent: only the current rendering proves the member.
+   */
+  known?: (value: unknown) => boolean;
 }
 
 /** What the engine writes into one co-owned JSON document. */
@@ -208,16 +221,33 @@ export interface CoOwnedMergeResult extends MergeResult {
  * exactly the forms the engine renders; anything else is outside the bound.
  */
 export function commandRunsStateScript(command: string): boolean {
-  if (command.includes(ROOT_WORD)) return false;
+  const script = executedScript(command);
+  return script !== null && isStateScriptPath(script);
+}
+
+/**
+ * The repo-relative path of the script `command` EXECUTES, by the grammar
+ * {@link commandRunsStateScript} reads: the program itself, or the first
+ * argument after an allowed launcher, with a leading `./` or a double-quoted
+ * `${CLAUDE_PROJECT_DIR}/` dropped. `null` when the command is not one this
+ * grammar reads, or the path holds an empty, `.` or `..` segment. A hook
+ * document's spec bounds its entries by where this path lies (S11).
+ */
+export function executedScript(command: string): string | null {
+  if (command.includes(ROOT_WORD)) return null;
   const simple = firstSimpleCommand(command);
-  if (simple === null) return false;
-  if (simple.rest !== "" && !GUARD_TAIL.test(simple.rest)) return false;
+  if (simple === null) return null;
+  if (simple.rest !== "" && !GUARD_TAIL.test(simple.rest)) return null;
   const [program, ...args] = simple.words;
-  if (program === undefined) return false;
-  if (isStateScriptPath(program)) return true;
-  if (!ALLOWED_LAUNCHERS.has(program)) return false;
-  const script = RUN_FILE_LAUNCHERS.has(program) && args[0] === "run" ? args[1] : args[0];
-  return script !== undefined && isStateScriptPath(script);
+  if (program === undefined) return null;
+  const word = !ALLOWED_LAUNCHERS.has(program) ? program : RUN_FILE_LAUNCHERS.has(program) && args[0] === "run" ? args[1] : args[0];
+  if (word === undefined) return null;
+  let path = word;
+  if (path.startsWith(`${ROOT_WORD}/`)) path = path.slice(ROOT_WORD.length + 1);
+  else if (path.startsWith("./")) path = path.slice(2);
+  const segments = path.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === ".." || segment.includes(ROOT_WORD))) return null;
+  return path;
 }
 
 /** The launchers whose `run` word names a file to run (`../shared/launcherAllowlist.ts`'s RUN_FILE_SUBCOMMANDS). */
@@ -236,16 +266,12 @@ const ROOT_VARIABLES = ["${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR"] as const
 const GENERATED_HOOK_SEGMENTS: readonly string[] = HOOKS_GENERATED_DIR.split("/");
 
 /**
- * True for a path, relative or on the root variable, that names a file below
- * the engine's generated hooks folder or below one installed pack's folder
- * (`.stamity/packs/<id>/…`), with no empty, `.` or `..` segment.
+ * True for a repo-relative path ({@link executedScript}'s) that names a file
+ * below the engine's generated hooks folder or below one installed pack's
+ * folder (`.stamity/packs/<id>/…`).
  */
-function isStateScriptPath(word: string): boolean {
-  let path = word;
-  if (path.startsWith(`${ROOT_WORD}/`)) path = path.slice(ROOT_WORD.length + 1);
-  else if (path.startsWith("./")) path = path.slice(2);
+function isStateScriptPath(path: string): boolean {
   const segments = path.split("/");
-  if (segments.some((segment) => segment === "" || segment === "." || segment === ".." || segment.includes(ROOT_WORD))) return false;
   const under = (root: readonly string[]): boolean => root.every((segment, index) => segments[index] === segment);
   if (under(GENERATED_HOOK_SEGMENTS)) return segments.length > GENERATED_HOOK_SEGMENTS.length;
   // `.stamity/packs/<id>/<file…>`: a pack id folder and a file below it.
@@ -375,7 +401,7 @@ function isUnprintable(codePoint: number): boolean {
  * `../cli/kit/prompts.ts::sanitizeLabel` applies to every label an operator
  * reads, mirrored here because this module sits below the CLI.
  */
-function safeName(name: string): string {
+export function printableName(name: string): string {
   let out = "";
   for (const char of name) {
     if (char === "\n" || char === "\r" || char === "\t") out += " ";
@@ -386,13 +412,13 @@ function safeName(name: string): string {
 
 /** A member as messages name it: `hooks.PreToolUse`. */
 function shownMember(segments: MemberSegments): string {
-  return segments.map(safeName).join(".");
+  return segments.map(printableName).join(".");
 }
 
 /** The engine's own value as a remedy may print it: short scalars only, never the owner's bytes. */
 function shownValue(value: unknown): string {
   const text = canonicalJson(value);
-  return (typeof value !== "object" || value === null) && text.length <= 64 ? safeName(text) : "the engine's value";
+  return (typeof value !== "object" || value === null) && text.length <= 64 ? printableName(text) : "the engine's value";
 }
 
 const entries = (count: number): string => (count === 1 ? "entry" : "entries");
@@ -1116,6 +1142,16 @@ function planMember(
   const collide = (why: string, expected: string): string =>
     `Skipped ${shown}: ${name} ${why}, where it writes ${expected}, so the engine cannot add its entries beside ` +
     `yours without replacing it. It was left untouched. Make it ${expected} (or remove it) and re-run sync.`;
+  // The release-history bound: a value an earlier release rendered is the
+  // engine's, proven by re-rendering that release, so it moves on silently.
+  if (!equalsRendering && member.spec.known?.(value) === true) {
+    if (rendered !== undefined) {
+      outcome.write = rendered;
+      outcome.recorded = memberHash(rendered);
+    } else if (member.spec.structural === true) outcome.recorded = hash;
+    else outcome.remove = true;
+    return outcome;
+  }
   let engine: boolean;
   let proven: boolean;
   if (recordedHash !== undefined) {
@@ -1382,11 +1418,13 @@ function reduceDocument(
     const hash = memberHash(value);
     const recordedHash = record?.members?.[member.spec.pointer];
     const rendered = readAt(rendering, member.segments);
-    const equalsRendering = rendered !== undefined && hash === memberHash(rendered);
+    // In the bound: equal to the engine's current rendering (`opts.rendered`),
+    // or a value an earlier release rendered there (the spec's `known`).
+    const equalsRendering = (rendered !== undefined && hash === memberHash(rendered)) || member.spec.known?.(value) === true;
     let isProven = false;
     let engine = false;
     if (recordedHash !== undefined) {
-      isProven = hash === recordedHash;
+      isProven = hash === recordedHash || member.spec.known?.(value) === true;
       engine = isProven || member.spec.foreign === "collide";
     } else if (state === "legacy") {
       engine = member.spec.structural === true || equalsRendering;
@@ -1394,7 +1432,7 @@ function reduceDocument(
     if (!engine) continue;
     // S11, as the planner holds it (review/31, review/45): a member of either
     // kind leaves without a backup only when it equals the engine's current
-    // rendering (`opts.rendered`); a recorded hash alone is a claim.
+    // rendering or a release's (`known`); a recorded hash alone is a claim.
     const outsideBound = !equalsRendering;
     if (member.spec.structural === true) {
       structural.push({ member, proven: isProven && !outsideBound, outsideBound });

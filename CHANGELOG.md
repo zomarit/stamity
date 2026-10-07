@@ -51,12 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed by the next plain `sync`. The engine now owns only the allow rows and hook entries it
   wrote, records each, merges beside everything else, and keeps the file's own indentation and
   final newline; a key another tool adds no longer costs a `.bak` at `clean`.
+- **Your own hooks in `.cursor/hooks.json` and `.codex/hooks.json` survive `sync` and `clean`.**
+  Both files were written whole, so an entry of your own was dropped by the next `sync` behind a
+  `.bak`. They are now merged entry by entry: the engine owns only the entries that run its own
+  scripts, Cursor's `version` and Codex's `description`. `clean` no longer deletes a hook script
+  that a hooks file it keeps still runs. Cursor's two `failClosed` guards are included: deleting
+  them made Cursor deny every sub-agent spawn and MCP call.
 
 ### Changed
 
 - **`--force` no longer replaces `.claude/settings.json`.** A settings file that is not a JSON
   object, or whose `permissions` or `hooks` has another type, is refused until you fix or delete
   it.
+- **`check` fails on a `.cursor/hooks.json` entry Cursor rejects.** An event key outside the 21
+  that Cursor accepts, or an entry with no `command`, makes Cursor load none of the file's hooks.
+  `check` now names the entry and exits 1. `sync` and `init` keep the entry and warn.
 
 ## [1.11.0] - 2026-10-01
 

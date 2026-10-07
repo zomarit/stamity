@@ -479,7 +479,9 @@ describe("coOwnedOwnershipOf and the co-owned lanes (REQ-FLOW-036)", () => {
 
   it("names only the co-owned documents that wire hooks, never an MCP document, for the sweep's script keep (review/49)", () => {
     const manifest = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "1.0.0", now: new Date(0) });
-    expect([...coOwnedHookDocuments(manifest)]).toEqual([PATH]);
+    // TEST CHANGE, justified: REQ-FLOW-037 — Cursor's and Codex's hook files join the
+    // settings document as co-owned documents that wire hooks.
+    expect([...coOwnedHookDocuments(manifest)]).toEqual([PATH, ".cursor/hooks.json", ".codex/hooks.json"]);
     expect([...coOwnedReclaimReducers(manifest).keys()]).toContain(".mcp.json");
     expect(coOwnedHookDocuments(manifest).has(".mcp.json")).toBe(false);
     expect(coOwnedDocumentLanes(null).get(PATH)?.wiresHooks).toBe(true);
@@ -487,9 +489,16 @@ describe("coOwnedOwnershipOf and the co-owned lanes (REQ-FLOW-036)", () => {
 
   it("registers the settings lane, and hands the sweep a reducer over what the ledger records there", () => {
     const lanes = coOwnedDocumentLanes(null);
-    // TEST CHANGE, justified: REQ-FLOW-037 — the Codex config is owned per
-    // table, so `.codex/config.toml` is a co-owned lane beside the settings one.
-    expect([...lanes.keys()]).toEqual([PATH, CODEX_CONFIG_FILE]);
+    // TEST CHANGE, justified: REQ-FLOW-037 — the hook-file unit registers Cursor's and
+    // Codex's hook files, and the Codex config is owned per table, so four lanes sit
+    // side by side; only the config wires no hook command (integration of both halves).
+    expect([...lanes.keys()]).toEqual([PATH, ".cursor/hooks.json", ".codex/hooks.json", CODEX_CONFIG_FILE]);
+    expect([...lanes.values()].map((lane) => [lane.path, lane.wiresHooks])).toEqual([
+      [PATH, true],
+      [".cursor/hooks.json", true],
+      [".codex/hooks.json", true],
+      [CODEX_CONFIG_FILE, false],
+    ]);
     expect(lanes.get(PATH)?.noun).toBe("settings document");
 
     const raw = `${JSON.stringify({ permissions: { allow: ["Read", "Bash"] }, model: "opus" }, null, 2)}\n`;

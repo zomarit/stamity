@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isPlainObject } from "../../src/config/parse.ts";
 import {
   commandRunsStateScript,
+  executedScript,
   materializeCoOwned,
   planCoOwnedJson,
   predictCoOwnedMerge,
@@ -1131,6 +1132,28 @@ describe("reduceCoOwnedJson", () => {
         content: doc({ hooks: { stop: [O] } }),
       });
     });
+  });
+});
+
+// ── executedScript ───────────────────────────────────────────────────────
+
+describe("executedScript", () => {
+  // REQ-FLOW-037: the hook documents bound an entry by where the script it
+  // executes lies, read by the same grammar `commandRunsStateScript` uses.
+  it.each([
+    ["node .cursor/hooks/mcp-guard.mjs", ".cursor/hooks/mcp-guard.mjs"],
+    ["node ./.stamity/generated/hooks/cursor/a.mjs eyJhIjoxfQ", ".stamity/generated/hooks/cursor/a.mjs"],
+    ['node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/a.mjs"', ".stamity/generated/hooks/claude/a.mjs"],
+    ["scripts/run.sh --flag", "scripts/run.sh"],
+    ["deno run scripts/x.ts", "scripts/x.ts"],
+    ["node", null],
+    ["deno run", null],
+    ["", null],
+    ["node a//b.mjs", null],
+    ["node ../x.mjs", null],
+    ["node x.mjs; rm -rf y", null],
+  ] as const)("%j → %j", (cmd, expected) => {
+    expect(executedScript(cmd)).toBe(expected);
   });
 });
 

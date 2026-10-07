@@ -186,6 +186,22 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-07, plan 016 file 0, unit u0-hook-files-ownership, the JSON
+  //     half's pass 1 (run 2026-10-07_security-fixes). Only the manifest moved:
+  //     the ledger rows of `.cursor/hooks.json` and `.codex/hooks.json` now
+  //     carry the per-entry record (`coOwned`, REQ-FLOW-037). No emitted path
+  //     was added or removed.
+  //
+  //     CHANGED `.stamity/manifest.json` — cursor 20965 -> 21847, codex
+  //       20663 -> 21208, all-four 79617 -> 81044 (on top of the TOML half's
+  //       refresh below; each selection grows by the same bytes it grew by on
+  //       the pre-TOML base: cursor +882, codex +545, all-four +1427). claude
+  //       and copilot did not move.
+  //
+  //     What did NOT move: every emitted file other than the manifest, the two
+  //       hook documents included — their rendering is unchanged; only how
+  //       the engine merges them is.
+  //
   //   - 2026-10-07, plan 016 file 0, unit u0-hook-files-ownership, its TOML
   //     half (run 2026-10-07_security-fixes). `.codex/config.toml` is owned
   //     table by table (REQ-FLOW-037), and its comments say so. No emitted path

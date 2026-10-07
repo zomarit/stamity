@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { CLAUDE_SETTINGS_PATH, claudeUserHookEntries } from "../../adapters/claude.ts";
-import { CODEX_CONFIG_FILE, codexConfigTableRendering } from "../../adapters/codex.ts";
+import { CODEX_CONFIG_FILE, CODEX_HOOKS_FILE, codexConfigTableRendering } from "../../adapters/codex.ts";
+import { COPILOT_HOOKS_PATH } from "../../adapters/copilot.ts";
+import { CURSOR_HOOKS_CONFIG_PATH, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../adapters/cursor.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import {
@@ -13,16 +15,26 @@ import {
 import { planCodexConfigToml, reduceCodexConfigToml } from "../../manifest/codexConfigToml.ts";
 import {
   materializeCoOwned,
+  planCoOwnedJson,
   predictCoOwnedMerge,
+  reduceCoOwnedJson,
+  type CoOwnedJsonSpec,
   type CoOwnedMergeResult,
   type CoOwnedOwnership,
   type CoOwnedPrediction,
 } from "../../manifest/coOwnedJson.ts";
+import {
+  codexHooksSpec,
+  cursorHooksSpec,
+  describeCursorHookDefects,
+  hookScriptReader,
+} from "../../manifest/hookDocuments.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
-import type { SafeWriteFileOptions } from "../../merge/safeWrite.ts";
+import type { HookScriptReader } from "../../merge/reclaim.ts";
+import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
 import {
   outputOwners,
@@ -373,7 +385,7 @@ export interface CoOwnedDocumentLane {
    * Codex's hook files with `u0-hook-files-ownership`.
    */
   readonly wiresHooks: boolean;
-  predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedPrediction>;
+  predict(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedLanePrediction>;
   materialize(absPath: string, emitted: string, ownership: CoOwnedOwnership): Promise<CoOwnedMergeResult>;
   /**
    * The sweep's view of the document; `rendered` is the engine's current
@@ -386,11 +398,72 @@ export interface CoOwnedDocumentLane {
 }
 
 /**
+ * A lane's prediction, plus what the client would reject in the document as
+ * the write leaves it (S19): `check` fails on it, while `sync` and `init`
+ * keep the document and warn — it is not a collision, so it never stops a run.
+ */
+interface CoOwnedLanePrediction extends CoOwnedPrediction {
+  rejected?: string;
+}
+
+/** Cursor's guards, as `.cursor/hooks.json` runs them and the sweep reads them. */
+const CURSOR_GUARD_PATHS: readonly string[] = [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH];
+
+/**
+ * A lane for a hooks document owned entry by entry on the core's own rules
+ * (`../../manifest/hookDocuments.ts`, REQ-FLOW-037). `rejects` reads, for
+ * Cursor, which entries the client would refuse in the document as the write
+ * leaves it (S19); that sentence rides the prediction as `rejected` and the
+ * write's result as a warning.
+ */
+function hookDocumentLane(
+  path: string,
+  spec: CoOwnedJsonSpec,
+  rejects: (shown: string, text: string | null) => string | null = () => null,
+): CoOwnedDocumentLane {
+  const plan = (absPath: string, emitted: string, ownership: CoOwnedOwnership) => (existingRaw: string | null) =>
+    planCoOwnedJson(absPath, emitted, existingRaw, spec, ownership);
+  return {
+    path,
+    noun: spec.noun,
+    wiresHooks: true,
+    predict: async (absPath, emitted, ownership) => {
+      // The text the write would leave: the plan's bytes, or the file's when it writes none.
+      const left: { text: string | null } = { text: null };
+      const prediction = await predictCoOwnedMerge(
+        absPath,
+        (existingRaw) => {
+          const planned = plan(absPath, emitted, ownership)(existingRaw);
+          left.text = planned.content ?? existingRaw;
+          return planned;
+        },
+        spec.noun,
+      );
+      const rejected = prediction.collision === null ? rejects(displayPath(absPath, ownership.boundaryDir), left.text) : null;
+      return rejected === null ? prediction : { ...prediction, rejected };
+    },
+    materialize: async (absPath, emitted, ownership) => {
+      const result = await materializeCoOwned(absPath, plan(absPath, emitted, ownership), ownership, spec.noun);
+      const rejected = rejects(displayPath(absPath, ownership.boundaryDir), result.writtenContent);
+      return rejected === null ? result : { ...result, warning: `${result.warning ?? ""} ${rejected}`.trim() };
+    },
+    reducer: (ownership, deleteWhenEngineOnly, rendered) => (content) =>
+      reduceCoOwnedJson(content, spec, {
+        record: ownership.record,
+        legacy: ownership.legacy,
+        deleteWhenEngineOnly,
+        ...(rendered === undefined ? {} : { rendered }),
+      }),
+  };
+}
+
+/**
  * Every co-owned document lane, keyed by repo-relative path:
- * `.claude/settings.json` entry by entry, and `.codex/config.toml` table by
- * table (REQ-FLOW-037, `../../manifest/codexConfigToml.ts`), whose renderings
- * resolve against `packServers` and whose legacy proof reads `manifest`'s
- * server selection.
+ * `.claude/settings.json` entry by entry, Cursor's and Codex's hook files
+ * entry by entry (`../../manifest/hookDocuments.ts`), and `.codex/config.toml`
+ * table by table (`../../manifest/codexConfigToml.ts`), all REQ-FLOW-037. The
+ * Codex config's renderings resolve against `packServers`, and its legacy
+ * proof reads `manifest`'s server selection.
  */
 export function coOwnedDocumentLanes(
   manifest: SetupManifest | null,
@@ -410,6 +483,8 @@ export function coOwnedDocumentLanes(
         ...(rendered === undefined ? {} : { rendered }),
       }),
   };
+  const cursorHooks = hookDocumentLane(CURSOR_HOOKS_CONFIG_PATH, cursorHooksSpec({ guardPaths: CURSOR_GUARD_PATHS }), describeCursorHookDefects);
+  const codexHooks = hookDocumentLane(CODEX_HOOKS_FILE, codexHooksSpec());
   const render = codexConfigTableRendering(packServers);
   const selected = manifest?.mcp?.servers ?? [];
   const codexNoun = "Codex configuration";
@@ -431,6 +506,8 @@ export function coOwnedDocumentLanes(
   };
   return new Map([
     [claude.path, claude],
+    [cursorHooks.path, cursorHooks],
+    [codexHooks.path, codexHooks],
     [codexConfig.path, codexConfig],
   ]);
 }
@@ -504,6 +581,26 @@ export function coOwnedHookDocuments(
   packServers: readonly PackSuppliedServer[] = [],
 ): ReadonlySet<string> {
   return new Set([...coOwnedDocumentLanes(manifest, packServers).values()].filter((lane) => lane.wiresHooks).map((lane) => lane.path));
+}
+
+/**
+ * What the reclaim sweep reads to keep every hook script a hooks document it
+ * leaves in place still runs (S17; `../../merge/reclaim.ts`
+ * `hookDocuments`/`hookScripts`): the co-owned documents that wire hooks,
+ * Copilot's whole-file `COPILOT_HOOKS_PATH` (kept whole when its owner edited
+ * it), and the engine's reader of the scripts such a document runs — the
+ * generated hooks folder, an installed pack's scripts, Cursor's guards, and
+ * the scripts a portable runner's encoded row names. One builder for the sync
+ * sweep, its preview and both of clean's.
+ */
+export function hookScriptRetention(
+  manifest: SetupManifest,
+  packServers: readonly PackSuppliedServer[] = [],
+): { hookDocuments: ReadonlySet<string>; hookScripts: HookScriptReader } {
+  return {
+    hookDocuments: new Set([...coOwnedHookDocuments(manifest, packServers), COPILOT_HOOKS_PATH]),
+    hookScripts: hookScriptReader(CURSOR_GUARD_PATHS),
+  };
 }
 
 /**

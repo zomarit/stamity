@@ -439,6 +439,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // Wave 6 since plan 016 file 0: its link guard and locked write moved into
   // the wave-5 per-entry core below, which it now imports.
   "src/manifest/claudeSettings.ts": { unit: "p15-s4", wave: 6 },
+  // Cursor's and Codex's hook files on the wave-5 per-entry core, with the
+  // wave-1 plain-object guard and the wave-0 generated-hooks marker; the
+  // Cursor event list and guard paths come in as data, since it cannot import
+  // the adapters.
+  "src/manifest/hookDocuments.ts": { unit: "p20-u0-hook-files-ownership", wave: 6 },
   // The per-entry core for a JSON document the engine shares with its owner:
   // over the wave-2 member helpers, the wave-4 MCP merge lane's read helper
   // and the wave-4 safe-write lane's backup and drift compare.

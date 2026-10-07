@@ -125,7 +125,10 @@ export interface DoctorCheck {
 /** What a sync would do, expressed as drift. Clean means: nothing, to any file. */
 export interface DriftReport {
   clean: boolean;
-  /** Plan entries that are not `unchanged` — create, update, or collision. */
+  /**
+   * Plan entries that are not `unchanged` — create, update, or collision —
+   * and any the client would reject as the write leaves it (`rejected`, S19).
+   */
   changes: SyncPlanEntry[];
   /** Repo-relative ledger paths with no file on disk, first appearance order. */
   missing: string[];
@@ -1508,7 +1511,9 @@ export async function runDoctor(
  *
  * Three independent sources of drift:
  *
- * - a plan entry that is not `unchanged` — create, update, or collision. A
+ * - a plan entry that is not `unchanged` — create, update, or collision — or
+ *   one carrying `rejected`: a document the client would refuse (S19), which
+ *   `sync` keeps and warns about, so only this gate can stop it. A
  *   content-hash comparison is not needed on top: `predictMergeAction` already
  *   compares the bytes sync would write against the bytes on disk, so a
  *   silently edited managed file is exactly what `update` means;
@@ -1524,7 +1529,7 @@ export async function runDriftGate(rootDir: string, engineVersion: string): Prom
   // The dry-run sweep `sync --dry-run` runs, so the path list here and the
   // one a sync would act on are one computation, not two kept in agreement.
   const preview = await previewReclaim(rootDir, plan);
-  const changes = plan.entries.filter((entry) => entry.action !== "unchanged");
+  const changes = plan.entries.filter((entry) => entry.action !== "unchanged" || entry.rejected !== undefined);
 
   const missing: string[] = [];
   const seen = new Set<string>();
@@ -1860,7 +1865,10 @@ function renderDrift(ctx: CliContext, outcome: DriftOutcome): void {
       `reclaim\n`,
   );
   const rows: { line: string; bounded: boolean }[] = [
-    ...drift.changes.map((entry) => ({ line: `  ${entry.action.padEnd(9)} ${visibleText(entry.path)}`, bounded: true })),
+    ...drift.changes.map((entry) => ({
+      line: `  ${(entry.action === "unchanged" && entry.rejected !== undefined ? "rejected" : entry.action).padEnd(9)} ${visibleText(entry.path)}`,
+      bounded: true,
+    })),
     ...drift.missing.map((path) => ({ line: `  ${"missing".padEnd(9)} ${visibleText(path)}`, bounded: true })),
     // No reclaim line is folded into the `… and N more` row: each names a file
     // the next sync deletes, strips or reduces, or one it keeps or refuses and
@@ -1965,6 +1973,15 @@ function coOwnedShapeSteps(report: DriftReport): string[] {
 }
 
 /**
+ * The step for a document the client would reject (S19): the plan entry's own
+ * `rejected` sentence, which names each entry and the remedy. `sync` keeps
+ * such an entry, since it is not the engine's, so `sync` is never the step.
+ */
+function rejectedSteps(report: DriftReport): string[] {
+  return report.changes.flatMap((entry) => (entry.rejected === undefined ? [] : [entry.rejected]));
+}
+
+/**
  * The step for an `import-decision` collision (REQ-PLUGIN-046): the plan
  * entry's own detail, which names the recorded decision and the two remedies
  * that work — restoring `supplement`, or `init --force --import-config
@@ -1999,10 +2016,10 @@ function sourceRefusalStep(entry: SyncPlanEntry): string {
   );
 }
 
-/** Whether anything a plain sync CAN fix is drifted, collisions aside. */
+/** Whether anything a plain sync CAN fix is drifted, collisions and rejected documents aside. */
 function hasNonCollisionDrift(report: DriftReport): boolean {
   return (
-    report.changes.some((entry) => entry.action !== "collision") ||
+    report.changes.some((entry) => entry.action !== "collision" && entry.action !== "unchanged") ||
     report.missing.length > 0 ||
     report.reclaimPending > 0
   );
@@ -2107,6 +2124,7 @@ function renderNextSteps(
       ...sourceRefusedEntries(outcome.report).map(sourceRefusalStep),
       ...importDecisionSteps(outcome.report),
       ...coOwnedShapeSteps(outcome.report),
+      ...rejectedSteps(outcome.report),
       ...(hasNonCollisionDrift(outcome.report)
         ? [`${packageCommand("sync")} — regenerate the files that drifted`]
         : []),
@@ -2663,6 +2681,7 @@ function checkFailureDoc(
     ...(drift.kind === "evaluated" ? sourceRefusedEntries(drift.report).map(sourceRefusalStep) : []),
     ...(drift.kind === "evaluated" ? importDecisionSteps(drift.report) : []),
     ...(drift.kind === "evaluated" ? coOwnedShapeSteps(drift.report) : []),
+    ...(drift.kind === "evaluated" ? rejectedSteps(drift.report) : []),
   ];
   return {
     code: "INTEGRITY_ERROR",

@@ -53,7 +53,7 @@ import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
   coOwnedRowsCarriedThroughRefusal,
-  coOwnedHookDocuments,
+  hookScriptRetention,
   coOwnedReclaimReducers,
   coOwnedReclaimRenderings,
   installedPackServers,
@@ -172,6 +172,13 @@ export interface SyncPlanEntry {
    * Absent on every other entry.
    */
   refusedAtSource?: true;
+  /**
+   * Present when the client would reject the document as the write leaves it
+   * (S19: an entry of `.cursor/hooks.json` Cursor refuses, whoever wrote it):
+   * the entries and the remedy. Not a collision — `sync` writes and warns —
+   * but `check` fails on it, since the client then loads none of the file.
+   */
+  rejected?: string;
   /**
    * Present on collisions: why, and what unblocks the write. Carries the write
    * lane's own refusal message verbatim for the classes that have one, and the
@@ -434,7 +441,11 @@ export async function planOutputEntries(
           detail: predicted.collision.detail,
         };
       }
-      return { ...base, action: ACTION_OF[predicted.result.action] };
+      return {
+        ...base,
+        action: ACTION_OF[predicted.result.action],
+        ...(predicted.rejected === undefined ? {} : { rejected: predicted.rejected }),
+      };
     }
     const existing = await readIfExists(absPath);
     // A whole-file write (a row with no managed block) over an instruction
@@ -657,7 +668,7 @@ export async function previewReclaim(
     consent: false,
     trustedExactPaths: trustedInfraPaths(plan.manifest.ledger),
     coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest)),
-    hookDocuments: coOwnedHookDocuments(plan.manifest, packMcpSupply),
+    ...hookScriptRetention(plan.manifest, packMcpSupply),
     ...(now === undefined ? {} : { now }),
   });
 }
@@ -1090,7 +1101,7 @@ export async function applySync(
           consent: true,
           trustedExactPaths: trustedPaths,
           coOwnedPaths,
-          hookDocuments: coOwnedHookDocuments(plan.manifest, packMcpSupply),
+          ...hookScriptRetention(plan.manifest, packMcpSupply),
           now,
         })
       : null;
