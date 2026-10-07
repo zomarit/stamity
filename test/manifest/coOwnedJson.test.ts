@@ -8,6 +8,7 @@ import {
   materializeCoOwned,
   planCoOwnedJson,
   predictCoOwnedMerge,
+  printableName,
   reduceCoOwnedJson,
   refuseLinkedCoOwnedTarget,
   type CoOwnedJsonSpec,
@@ -20,6 +21,7 @@ import type * as AtomicWrite from "../../src/merge/atomicWrite.ts";
 import type * as FsPromises from "node:fs/promises";
 import { ledgerHashIndex } from "../../src/merge/safeWrite.ts";
 import { sha256 } from "../../src/cli/engine/emissionWrite.ts";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../src/runs/layout.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import type { CoOwnership } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -1435,6 +1437,28 @@ describe("planCoOwnedJson / reduceCoOwnedJson — edges", () => {
     const unprintable = [0x07, 0x85, 0x200b, 0x202a, 0x2060, 0x2066, 0xfeff].map((code) => String.fromCharCode(code)).join("");
     const out = plan(doc({ hooks: { [`A${unprintable}B\tC`]: [OWNER_STOP] } }), noRow(), EMITTED_PLUGIN);
     expect(out.result.notice).toContain("hooks.AB C ×1");
+  });
+
+  // review/94: the printed name drops at least every code point the drift renderer's two sets
+  // cover. The Arabic letter mark, the line and paragraph separators and the tag block passed
+  // through, so a committed hooks or settings key could reorder or hide the entry a collision,
+  // removal or rejected-hook diagnostic names.
+  it("drops every code point UNPRINTABLE_CHARS and UNICODE_TAG_CHARS cover, keeping the line-break-to-space form", () => {
+    const covered = (char: string): boolean =>
+      new RegExp(UNPRINTABLE_CHARS.source, "u").test(char) || new RegExp(UNICODE_TAG_CHARS.source, "u").test(char);
+    let checked = 0;
+    for (let code = 0; code <= 0xe007f; code += 1) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      const char = String.fromCodePoint(code);
+      if (!covered(char)) continue;
+      checked += 1;
+      const expected = char === "\n" || char === "\r" || char === "\t" ? "A B" : "AB";
+      expect(printableName(`A${char}B`), `U+${code.toString(16).toUpperCase()}`).toBe(expected);
+    }
+    expect(checked).toBeGreaterThan(128 + 32);
+    const named = [0x061c, 0x2028, 0x2029, 0xe0041, 0xe007f].map((code) => String.fromCodePoint(code)).join("");
+    const out = plan(doc({ hooks: { [`A${named}B`]: [OWNER_STOP] } }), noRow(), EMITTED_PLUGIN);
+    expect(out.result.notice).toContain("hooks.AB ×1");
   });
 
   it("rethrows a failure that is not the stack's, from the planner and the reducer alike", () => {

@@ -110,6 +110,7 @@ import {
   type MemberPointer,
   type MemberSegments,
 } from "./jsonMembers.ts";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { ALLOWED_LAUNCHERS } from "../shared/launcherAllowlist.ts";
 import { readTextOrNull } from "./mcpFilter.ts";
 
@@ -432,30 +433,34 @@ function parseObject(raw: string): ObjectParse {
   return { ok: true, doc: parsed };
 }
 
-/** True for the code points a printed name must not carry: controls, bidi controls, zero-width marks. */
-function isUnprintable(codePoint: number): boolean {
-  return (
-    codePoint <= 0x1f ||
-    (codePoint >= 0x7f && codePoint <= 0x9f) ||
-    (codePoint >= 0x200b && codePoint <= 0x200f) ||
-    (codePoint >= 0x202a && codePoint <= 0x202e) ||
-    codePoint === 0x2060 ||
-    (codePoint >= 0x2066 && codePoint <= 0x2069) ||
-    codePoint === 0xfeff
-  );
+/**
+ * The drift renderer's two sets, un-flagged for a one-character test: a global
+ * regex keeps its `lastIndex` between `test` calls.
+ */
+const UNPRINTABLE = new RegExp(UNPRINTABLE_CHARS.source, "u");
+const UNICODE_TAG = new RegExp(UNICODE_TAG_CHARS.source, "u");
+
+/**
+ * True for the code points a printed name must not carry: everything
+ * `../runs/layout.ts` keeps out of a terminal (controls, the Arabic letter
+ * mark, zero-width marks, line and paragraph separators, bidi controls, the
+ * byte-order mark) and the Unicode tag block.
+ */
+function isUnprintable(char: string): boolean {
+  return UNPRINTABLE.test(char) || UNICODE_TAG.test(char);
 }
 
 /**
  * A file-authored name as a message may print it: line breaks and tabs become
- * spaces, and every other unprintable code point is dropped — the rule
- * `../cli/kit/prompts.ts::sanitizeLabel` applies to every label an operator
- * reads, mirrored here because this module sits below the CLI.
+ * spaces, and every other unprintable code point ({@link isUnprintable}) is
+ * dropped — the form `../cli/kit/prompts.ts::sanitizeLabel` gives every label
+ * an operator reads, over the drift renderer's wider set.
  */
 export function printableName(name: string): string {
   let out = "";
   for (const char of name) {
     if (char === "\n" || char === "\r" || char === "\t") out += " ";
-    else if (!isUnprintable(char.codePointAt(0) as number)) out += char;
+    else if (!isUnprintable(char)) out += char;
   }
   return out;
 }
