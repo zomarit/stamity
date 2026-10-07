@@ -15,6 +15,7 @@ import {
   hasEngineMintedName,
   isEngineCharterDocument,
   needsByteProof,
+  ownedFolderOf,
   ownedPathDefect,
   ownedPathKind,
   packDirName,
@@ -115,6 +116,23 @@ describe("ownedPathKind", () => {
 
   it("has no defect to name for a row inside the bound", () => {
     expect(ownedPathDefect(tool("CLAUDE.md"))).toBeNull();
+  });
+});
+
+describe("ownedFolderOf", () => {
+  it.each([
+    [".claude/agents/stamity-x.md", ".claude/agents/"],
+    [".agents/skills/st-verify/references/x.md", ".agents/skills/"],
+    [".stamity/generated/x/keep-me.md", ".stamity/generated/"],
+    [".stamity/mcp/servers.json", ".stamity/mcp/"],
+    [".stamity/packs/acme__ops/agents/reviewer.md", ".stamity/packs/acme__ops/"],
+    [".stamity/packs/stray.md", ".stamity/packs/"],
+    [".claude/settings.json", null],
+    ["AGENTS.md", null],
+    ["docs/AGENTS.md", null],
+    [".stamity/learnings/keep-me.md", null],
+  ])("places %j in %j", (path, folder) => {
+    expect(ownedFolderOf(path)).toBe(folder);
   });
 });
 

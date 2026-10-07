@@ -161,6 +161,27 @@ export function ownedPathKind(row: OwnedPathRow): OwnedPathKind | null {
 }
 
 /**
+ * The bound's folder a path sits under — the content root, the state folder,
+ * or the installed pack's own folder — or `null` for a path the bound names by
+ * itself (a platform file, a charter). The folders are disjoint, so the path
+ * alone decides.
+ *
+ * The bound is lexical, so the reclaim sweep reads this to hold a file's
+ * symlink-resolved parent inside the resolved folder the row claims: a
+ * committed directory link under `.stamity/generated/` cannot carry a hashed
+ * delete into `.stamity/learnings/`.
+ */
+export function ownedFolderOf(path: string): string | null {
+  const root = [...OWNED_PATHS.contentRoots, ...OWNED_PATHS.stateRoots].find((folder) =>
+    isStrictlyUnder(path, folder),
+  );
+  if (root !== undefined) return root;
+  if (!isStrictlyUnder(path, OWNED_PATHS.packRoot)) return null;
+  const rest = path.slice(OWNED_PATHS.packRoot.length);
+  return `${OWNED_PATHS.packRoot}${rest.slice(0, rest.indexOf("/") + 1)}`;
+}
+
+/**
  * Why a ledger row lies outside the bound, or `null` when it lies inside. The
  * clause completes a sentence that opens with the row's path.
  */

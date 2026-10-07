@@ -345,6 +345,70 @@ describe("sweepReclaimCandidates — containment", () => {
     expect(await readFile(temp.path("outside/rules/stamity-secret.mdc"), "utf-8")).toBe("not ours\n");
   });
 
+  // The bound is lexical, so gate 3 holds the resolved parent inside the
+  // resolved folder the row claims: a committed directory link under one state
+  // folder cannot carry a hashed delete into an owner's learnings.
+  it("refuses a hashed state row reached through a directory link inside its folder", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const owner = "owner learning\n";
+    await temp.seedFiles({ "repo/.stamity/learnings/keep-me.md": owner });
+    await mkdir(join(root, ".stamity/generated"), { recursive: true });
+    await symlink(join(root, ".stamity/learnings"), join(root, ".stamity/generated/x"), "dir");
+
+    const report = await sweepReclaimCandidates([hashedCandidate(".stamity/generated/x/keep-me.md", owner)], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(onlyEntry(report).detail).toContain("the folder the row's path lies in");
+    expect(await readFile(join(root, ".stamity/learnings/keep-me.md"), "utf-8")).toBe(owner);
+  });
+
+  it("still reclaims through a content folder that is itself an in-repo alias", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "repo/shared/rules/stamity-x.mdc": managedWhole("rule") });
+    await mkdir(join(root, ".cursor"), { recursive: true });
+    await symlink(join(root, "shared/rules"), join(root, ".cursor/rules"), "dir");
+
+    const report = await sweepReclaimCandidates([candidate(".cursor/rules/stamity-x.mdc")], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "block" });
+    expect(Object.keys(await snapshot(root))).not.toContain("shared/rules/stamity-x.mdc");
+  });
+
+  // A case-insensitive volume answers the row's spelling with a file spelled
+  // otherwise; the folder's listing is the spelling on disk. Runs where the
+  // temp volume folds case (APFS, NTFS by default); the injected listing in
+  // `coverageGaps.test.ts` holds the branch on every volume.
+  it("keeps an owner's file a hashed row reaches only by another spelling", async (ctx) => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const owner = "owner notes\n";
+    await temp.seedFiles({ "repo/.claude/agents/Stamity-Notes.md": owner });
+    const folds = await lstat(join(root, ".claude/agents/stamity-notes.md")).then(
+      () => true,
+      () => false,
+    );
+    if (!folds) ctx.skip();
+
+    const row = recorded(candidate(".claude/agents/stamity-notes.md", "deselected", "claude"), owner);
+    const report = await sweepReclaimCandidates([row], { rootDir: root, consent: true });
+
+    expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(onlyEntry(report).detail).toContain("spelled exactly `stamity-notes.md`");
+    expect(await snapshot(root)).toEqual({
+      ".claude/": "",
+      ".claude/agents/": "",
+      ".claude/agents/Stamity-Notes.md": owner,
+    });
+  });
+
   it("refuses a symlink standing in for the recorded file", async () => {
     const temp = tempDir();
     const root = temp.path("repo");
@@ -1475,6 +1539,31 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
     expect(entry.detail).toContain("rows of yours");
     expect(entry.detail).toContain(`${CO_OWNED}.bak`);
     expect(await snapshot(root)).toEqual({ [`${CO_OWNED}.bak`]: ENGINE_LINE });
+  });
+
+  // REQ-PLUGIN-045: a row with no hash proves nothing, on this lane too. The
+  // reducer removes keys by name, so a hand-added hashless row reads as drift
+  // and the reduction lands behind a verified .bak.
+  it("backs a co-owned document up when its row records no hash, and says so", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const merged = `${ENGINE_LINE}operator server\n`;
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: merged });
+    const { contentHash: _dropped, ...hashless } = coOwnedCandidate(merged).entry;
+
+    const report = await sweepReclaimCandidates([{ entry: hashless, reason: "deselected" }], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([CO_OWNED]),
+      coOwnedPaths: reducerFor(),
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("co-owned-reduced");
+    expect(entry.detail).toContain("records no content hash");
+    expect(entry.detail).toContain(`${CO_OWNED}.bak`);
+    expect(await readFile(join(root, `${CO_OWNED}.bak`), "utf-8")).toBe(merged);
+    expect(await readFile(join(root, CO_OWNED), "utf-8")).toBe("operator server\n");
   });
 
   it("takes no backup of a co-owned document whose bytes still match the recorded hash", async () => {

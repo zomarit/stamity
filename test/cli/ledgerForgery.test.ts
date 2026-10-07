@@ -242,6 +242,50 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       proof: "hash",
     });
   });
+
+  // The co-owned lane: `.claude/settings.json` sits in the bound by its exact
+  // path, and its reducer strips `permissions` and `hooks` by key name, so a
+  // hand-added row with no hash in a repository that never selected claude
+  // used to delete or rewrite an owner's settings with no backup. A missing
+  // hash reads as drift there, so the change lands behind a verified `.bak`.
+  describe("a co-owned settings document a hashless row names is backed up before the sweep changes it", () => {
+    const SETTINGS = ".claude/settings.json";
+    const OWNER_DENY_ONLY = `${JSON.stringify({ permissions: { deny: ["Read(./secrets/**)"] } }, null, 2)}\n`;
+    const OWNER_WITH_MODEL = `${JSON.stringify({ model: "owner-model", permissions: { deny: ["Bash(rm:*)"] } }, null, 2)}\n`;
+    const hashlessRow: LedgerEntry = { path: SETTINGS, adapter: "claude", artifactId: "forged-settings", artifactType: "infra" };
+
+    /** `sync --json` nests the sweep under `reclaim`; `clean --json` is the sweep. */
+    interface SweepDoc {
+      reclaim?: { entries: SweepEntry[] };
+      entries?: SweepEntry[];
+    }
+    interface SweepEntry {
+      path: string;
+      action: string;
+      detail: string;
+    }
+
+    it.each([
+      { verb: "sync", command: syncCommand, owner: OWNER_DENY_ONLY, action: "deleted" },
+      { verb: "clean", command: cleanCommand, owner: OWNER_DENY_ONLY, action: "deleted" },
+      { verb: "sync", command: syncCommand, owner: OWNER_WITH_MODEL, action: "co-owned-reduced" },
+      { verb: "clean", command: cleanCommand, owner: OWNER_WITH_MODEL, action: "co-owned-reduced" },
+    ])("$verb -y leaves the owner's bytes in $action's verified .bak", async ({ verb, command, owner, action }) => {
+      const root = await initialisedRepo(["cursor"]);
+      await seed(root, { [SETTINGS]: owner });
+      await forgeRows(root, [hashlessRow]);
+
+      const run = await runInProcess([command], [verb, "-y", "--json"], { cwd: root });
+
+      expect(run.code).toBe(0);
+      const doc = JSON.parse(run.stdout.trim()) as SweepDoc;
+      const entry = (doc.reclaim?.entries ?? doc.entries)?.find((candidate) => candidate.path === SETTINGS);
+      expect(entry?.action).toBe(action);
+      expect(entry?.detail).toContain("records no content hash");
+      expect(entry?.detail).toContain(`${SETTINGS}.bak`);
+      expect(await readFile(join(root, `${SETTINGS}.bak`), "utf8")).toBe(owner);
+    });
+  });
 });
 
 // ── REQ-PLUGIN-046: the import decisions ───────────────────────────────────

@@ -430,6 +430,23 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
     expect(report.entries[0]?.detail).toContain("not a regular file");
   });
 
+  // A case-insensitive volume answers the row's spelling with a file spelled
+  // otherwise. The listing is injected so the refusal is held on a
+  // case-sensitive volume too; `reclaim.test.ts` runs the real one where the
+  // temp volume folds case.
+  it("refuses a path its folder lists only under another spelling", async () => {
+    arm({ fn: "readdir", match: "rules", resolve: ["Stamity-Rule.md"] });
+
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
+      rootDir: tempDir().dir,
+      consent: true,
+    });
+
+    expect(report.entries[0]?.action).toBe("skipped-unsafe-path");
+    expect(report.entries[0]?.detail).toContain("spelled exactly `stamity-rule.md`");
+    expect(await readFile(tempDir().path(RULE), "utf-8")).toBe(CONTENT);
+  });
+
   it("reports a file removed between the inspection and the read as missing", async () => {
     arm({ fn: "readFile", match: "stamity-rule.md", reject: errno("ENOENT") });
 

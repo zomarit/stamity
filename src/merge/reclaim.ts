@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, realpath, rmdir, unlink } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, rmdir, unlink } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ReclaimCandidate } from "../manifest/ledger.ts";
 import {
   bytesShowEngineOutput,
   carriesEngineMintedPrefix,
   hasEngineMintedName,
+  ownedFolderOf,
   ownedPathKind,
   type OwnedPathKind,
 } from "../manifest/ownedPaths.ts";
@@ -68,7 +69,10 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  *    content folder, or a managed block that spans the file. A row with no recorded
  *    hash proves nothing: no release ever wrote one, so it is a hand edit.
  * 3. **Containment (physical).** The parent directory's realpath still resolves
- *    under the root's realpath, and the candidate itself is a regular file. A
+ *    under the root's realpath — and under the realpath of the bound folder the
+ *    row's path lies in, when it lies in one — the candidate itself is a regular
+ *    file, and its folder lists it under exactly the recorded spelling (a
+ *    case-insensitive volume answers other spellings too). A
  *    symlinked directory anywhere on the path, a symlink in place of the recorded
  *    file, or a directory where a file was recorded all end the sweep for that
  *    path — the sweep never follows a link out of the repo and never removes a
@@ -550,11 +554,20 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   }
 
   const recordedTarget = resolve(ctx.root, path);
+  // The bound is lexical: a committed directory link inside the folder the row
+  // claims would carry the file's real parent out of it, and a hash admissible
+  // in `.stamity/generated/` would then delete in `.stamity/learnings/`. So the
+  // resolved parent has to stay inside the resolved folder, which still lets a
+  // content root that is itself an in-repo alias (`.cursor/rules -> shared/rules`)
+  // reclaim through the alias.
+  const folder = ownedFolderOf(path);
   let parentReal: string;
   let parentIdentity: DirectoryIdentity;
+  let folderReal: string | null = null;
   try {
     parentReal = await realpath(dirname(recordedTarget));
     parentIdentity = await readDirectoryIdentity(parentReal);
+    if (folder !== null) folderReal = await realpath(resolve(ctx.root, folder));
   } catch (err) {
     if (errnoCode(err) === "ENOENT") {
       return skip("skipped-missing", "The parent directory is already gone.");
@@ -570,17 +583,26 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       `The parent directory resolves to ${parentReal}, outside the repo root — a symlinked directory on the path.`,
     );
   }
+  if (folderReal !== null && !isWithin(parentReal, folderReal)) {
+    return skip(
+      "skipped-unsafe-path",
+      `The parent directory resolves to ${parentReal}, outside ${folderReal}, the folder the row's path lies in — a symlinked directory inside that folder, so this is not a file the row can name.`,
+    );
+  }
   // Every syscall from here on addresses the RESOLVED parent rather than the
   // recorded spelling, so a symlinked directory that was on the path is behind
   // us: the remaining exposure is a swap of the resolved directory itself,
   // which the identity pin catches at mutation time.
   // `lastIndexOf` + 1 is total: a path with no separator yields index 0 and the
   // whole string, so there is no "no final segment" case to defend against.
-  const target = join(parentReal, path.slice(path.lastIndexOf("/") + 1));
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const target = join(parentReal, name);
 
   let stats;
+  let siblings: string[];
   try {
     stats = await lstat(target);
+    siblings = await readdir(parentReal);
   } catch (err) {
     if (errnoCode(err) === "ENOENT") return skip("skipped-missing", "Already absent from disk.");
     return skip("skipped-unsafe-path", `The file could not be inspected: ${describeError(err)}.`);
@@ -599,6 +621,16 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   }
   if (!stats.isFile()) {
     return skip("skipped-unsafe-path", "The path is not a regular file.");
+  }
+  // A case-insensitive volume (APFS and NTFS by default) answers the row's
+  // spelling with a file spelled otherwise, so a hashed row `stamity-notes.md`
+  // would reach an owner's `Stamity-Notes.md`. The folder's own listing is the
+  // spelling on disk, and the row has to name it exactly.
+  if (!siblings.includes(name)) {
+    return skip(
+      "skipped-unsafe-path",
+      `No entry in its folder is spelled exactly \`${name}\`: the file system matched the recorded name to a file spelled otherwise (a case-insensitive volume), so this is not the file the row records.`,
+    );
   }
   const pin: TargetPin = {
     parentReal,
@@ -636,11 +668,19 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     // can prove it wrote — but it is the one sign that an entry the engine
     // owns may carry a row of the operator's, so the mutation takes a verified
     // backup first, as every write lane does.
-    const drifted =
-      group.recordedHashes.size > 0 && !matchesRecordedHash(group.recordedHashes, bytes, content);
-    const driftDetail = drifted
-      ? " The bytes no longer hash to what the ledger recorded writing here, so the engine's keys may carry rows of yours; the previous file is backed up first."
-      : "";
+    //
+    // A row with no hash proves nothing here either (REQ-PLUGIN-045): every
+    // release records one, so a hashless row is not the engine's record of
+    // writing these bytes, and the reducer removes keys by name. It reads as
+    // drift — the write lane's reading of an empty hash set — so a hand-added
+    // row cannot strip or delete an owner's document without the `.bak`.
+    const hashless = group.recordedHashes.size === 0;
+    const drifted = hashless || !matchesRecordedHash(group.recordedHashes, bytes, content);
+    const driftDetail = !drifted
+      ? ""
+      : hashless
+        ? " The row records no content hash, so the bytes cannot be proved the engine's and the keys it removes may be yours; the previous file is backed up first."
+        : " The bytes no longer hash to what the ledger recorded writing here, so the engine's keys may carry rows of yours; the previous file is backed up first.";
     if (reduction.kind === "engine-only") {
       return {
         kind: "delete",
