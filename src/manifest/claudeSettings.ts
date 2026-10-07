@@ -19,7 +19,10 @@
  * The bound ({@link claudeSettingsSpec}). An engine entry leaves silently only
  * when it lies inside what the engine can prove it wrote by path: an allow row
  * the engine renders ({@link ENGINE_PERMISSION_ROWS}), or a hook entry whose
- * every command runs a script under `.stamity/`. A recorded allow row outside
+ * every command executes one of the engine's own scripts — under
+ * `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`,
+ * never the user's `.stamity/hooks/` (`./coOwnedJson.ts::commandRunsStateScript`).
+ * A recorded allow row outside
  * that bound is the owner's whatever the record says; a recorded hook entry
  * outside it leaves only behind a verified `.bak`, with a warning naming it.
  *
@@ -96,7 +99,7 @@ export function isEngineHookGroup(element: unknown): boolean {
   );
 }
 
-/** A hook entry with commands, every one of which runs a script under `.stamity/`. */
+/** A hook entry with commands, every one of which executes one of the engine's own scripts. */
 function hookGroupInBound(element: unknown): boolean {
   const commands = commandsOf(element);
   return commands !== null && commands.length > 0 && commands.every(commandRunsStateScript);

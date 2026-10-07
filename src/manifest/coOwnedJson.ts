@@ -87,6 +87,7 @@ import { backupBeforeOverwrite, displayPath, hasLedgerDrift, toLedgerKey } from 
 import type { CoOwnedReduction, MergeResult } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
+import { HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import {
   ENGINE_JSON_STYLE,
   MAX_CO_OWNED_ELEMENTS,
@@ -187,8 +188,12 @@ export interface CoOwnedMergeResult extends MergeResult {
 }
 
 /**
- * True when the script `command` EXECUTES lies under `.stamity/` (S11): the
- * program itself, or the first argument after an allowed launcher
+ * True when the script `command` EXECUTES is one of the engine's own (S11,
+ * narrowed in the safe direction): under `.stamity/generated/hooks/`, which
+ * only the engine writes, or an installed pack's `.stamity/packs/<id>/`
+ * (`../pack/receipt.ts::packDirRelPath`). The user's `.stamity/hooks/` and
+ * the rest of `.stamity/` are the owner's, so an entry running a script there
+ * leaves only behind a backup. The executed script is the program itself, or the first argument after an allowed launcher
  * (`../shared/launcherAllowlist.ts`; `deno run` and `bun run` step over their
  * one run-file word). A `.stamity/` path anywhere else — a flag's value, an
  * argument to another script, a second command — does not count, and neither
@@ -223,14 +228,24 @@ const ROOT_WORD = String.fromCharCode(0);
 /** The project-root variable the Claude adapter anchors every hook script on. */
 const ROOT_VARIABLES = ["${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR"] as const;
 
-/** True for a path under `.stamity/`, relative or on the root variable, that names a file and never climbs out. */
+/** The engine's generated hook scripts, as path segments. */
+const GENERATED_HOOK_SEGMENTS: readonly string[] = HOOKS_GENERATED_DIR.split("/");
+
+/**
+ * True for a path, relative or on the root variable, that names a file below
+ * the engine's generated hooks folder or below one installed pack's folder
+ * (`.stamity/packs/<id>/…`), with no empty, `.` or `..` segment.
+ */
 function isStateScriptPath(word: string): boolean {
   let path = word;
   if (path.startsWith(`${ROOT_WORD}/`)) path = path.slice(ROOT_WORD.length + 1);
   else if (path.startsWith("./")) path = path.slice(2);
-  if (!path.startsWith(".stamity/") || path.includes(ROOT_WORD)) return false;
   const segments = path.split("/");
-  return segments.at(-1) !== "" && !segments.includes("..");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === ".." || segment.includes(ROOT_WORD))) return false;
+  const under = (root: readonly string[]): boolean => root.every((segment, index) => segments[index] === segment);
+  if (under(GENERATED_HOOK_SEGMENTS)) return segments.length > GENERATED_HOOK_SEGMENTS.length;
+  // `.stamity/packs/<id>/<file…>`: a pack id folder and a file below it.
+  return under([STATE_DIR, "packs"]) && segments.length >= 4;
 }
 
 /**

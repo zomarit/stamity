@@ -325,6 +325,29 @@ describe("a ledger record that claims an owner's members", () => {
   });
 });
 
+describe("an owner's hook entry that runs their own .stamity/hooks/ script (review/44)", () => {
+  it("under a record claiming it, leaves only behind a verified .bak, and the warning names it", async () => {
+    const root = await freshRepo();
+    const userGroup = { matcher: "Bash", hooks: [{ type: "command", command: "node .stamity/hooks/my-guard.mjs" }] };
+    await seedSettings(root, `${JSON.stringify({ hooks: { PreToolUse: [userGroup] } }, null, 2)}\n`);
+    await init(root);
+    await editSettingsRecord(root, (record) => ({
+      ...record,
+      elements: {
+        ...record?.elements,
+        "/hooks/PreToolUse": [memberHash(userGroup), ...(record?.elements?.["/hooks/PreToolUse"] ?? [])],
+      },
+    }));
+    const before = await readSettings(root);
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(cleaned.stdout).toContain("hooks.PreToolUse[0]");
+    expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(before);
+  });
+});
+
 // ── A shape the engine cannot merge beside ─────────────────────
 
 describe("a member the engine writes into, of another type", () => {

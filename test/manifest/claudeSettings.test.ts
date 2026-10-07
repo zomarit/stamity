@@ -708,13 +708,16 @@ describe("claudeSettingsSpec", () => {
     expect(hooks?.outsideBound).toBe("backup");
   });
 
-  it("bounds a hook entry by every command running a script under .stamity/, and recognises one by the generated hooks directory", () => {
+  it("bounds a hook entry by every command running an engine script, and recognises one by the generated hooks directory", () => {
     const [, hooks] = claudeSettingsSpec().elements;
     const group = ENGINE_HOOKS.SessionStart[0];
     expect(hooks?.inBound(group)).toBe(true);
     expect(isEngineHookGroup(group)).toBe(true);
+    // TEST CHANGE, justified: review/44 (signed off) — the user's own
+    // `.stamity/hooks/` is outside the backup-free bound; a pack's folder is in it.
     const userHook = { hooks: [{ type: "command", command: "node .stamity/hooks/mine.mjs" }] };
-    expect(hooks?.inBound(userHook)).toBe(true);
+    expect(hooks?.inBound(userHook)).toBe(false);
+    expect(hooks?.inBound({ hooks: [{ type: "command", command: "node .stamity/packs/acme/hooks/audit.mjs" }] })).toBe(true);
     expect(isEngineHookGroup(userHook)).toBe(false);
     // One command outside the state directory takes the whole entry out of the bound.
     expect(hooks?.inBound({ hooks: [...(group?.hooks ?? []), { type: "command", command: "./scripts/guard.sh" }] })).toBe(false);
