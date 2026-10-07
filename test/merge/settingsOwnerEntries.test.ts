@@ -388,6 +388,26 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     expect(await readSettings(root)).toBe(FIRST);
   });
 
+  it("clean keeps every engine hook script the settings file it leaves in place still names, reports each kept naming the file, and keeps .stamity/ (S17's settings case)", async () => {
+    const root = await freshRepo();
+    await init(root);
+    const raw = await readSettings(root);
+    const scripts = [...new Set([...raw.matchAll(/\.stamity\/generated\/hooks\/claude\/[A-Za-z0-9._-]+/g)].map((match) => match[0]))];
+    expect(scripts.length).toBeGreaterThan(0);
+    // The owner breaks the file: the sweep cannot read which entries are the engine's, so it leaves it whole.
+    await writeFile(SETTINGS_ABS(root), `${raw}}`, "utf8");
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    for (const script of scripts) {
+      expect(existsSync(join(root, ...script.split("/"))), script).toBe(true);
+      expect(cleaned.stdout).toMatch(new RegExp(`skipped-user-content  ${script.replaceAll(".", "\\.")} — Kept: \\.claude/settings\\.json`));
+    }
+    expect(existsSync(join(root, ".stamity"))).toBe(true);
+    expect(cleaned.stdout).toContain("Kept .stamity/: .claude/settings.json still runs a hook script under it");
+  });
+
   it("init --force carries the previous row through a co-owned-shape refusal too", async () => {
     const root = await freshRepo();
     await seedSettings(root, FIRST);

@@ -673,10 +673,20 @@ export const cleanCommand: CommandModule = {
     });
     ctx.spinner.stop();
 
-    const stateDirRemoved = ctx.dryRun ? false : await removeStateDir(rootDir);
+    // A hooks document the sweep left in place that still runs an engine hook
+    // script keeps the state directory whole, since the script lives in it
+    // (S17's settings case, `../../merge/reclaim.ts::documentsLeftInPlace`).
+    const wiringKept = report.wiringKept ?? [];
+    const stateDirRemoved = ctx.dryRun || wiringKept.length > 0 ? false : await removeStateDir(rootDir);
 
     const formatted = formatReclaimReport(report);
     if (formatted !== "") ctx.io.out(`${formatted}\n`);
+    if (wiringKept.length > 0) {
+      ctx.io.out(
+        `Kept ${STATE_DIR}/: ${wiringKept.join(", ")} still runs a hook script under it, so deleting it would leave ` +
+          `that hook pointing at nothing. Remove that wiring, then re-run stamity clean.\n`,
+      );
+    }
 
     if (ctx.dryRun) {
       ctx.io.out(

@@ -2075,3 +2075,101 @@ describe("formatReclaimReport", () => {
     expect(await readFile(join(root, "docs/README.md"), "utf-8")).toBe("user doc\n");
   });
 });
+
+// ── S17's settings case: a hooks document left in place keeps its scripts ──
+
+describe("sweepReclaimCandidates — a co-owned document left in place keeps the engine hook scripts it still runs (review/40)", () => {
+  const SETTINGS = ".claude/settings.json";
+  const SCRIPT = ".stamity/generated/hooks/claude/stamity-guard.mjs";
+  const SCRIPT_BODY = "export {};\n";
+  const untouched: CoOwnedReducer = () => ({ kind: "untouched", detail: "Left whole." });
+  const settingsCandidate = (path: string, content: string): ReclaimCandidate => ({
+    entry: { path, adapter: "claude", artifactId: "settings", artifactType: "infra", contentHash: sha256Of(content) },
+    reason: "deselected",
+  });
+  const sweep = (root: string, documentPath: string, documentBody: string, consent = true): Promise<ReclaimReport> =>
+    sweepReclaimCandidates([hashedCandidate(SCRIPT, SCRIPT_BODY), settingsCandidate(documentPath, documentBody)], {
+      rootDir: root,
+      consent,
+      trustedExactPaths: new Set([documentPath]),
+      coOwnedPaths: new Map([[documentPath, untouched]]),
+    });
+  const wiring = `{"hooks":{"PreToolUse":[{"hooks":[{"command":"node ${SCRIPT}"}]}]}}\n`;
+
+  it("keeps a script the document still names, reports it naming the document, and lists the document; entries keep the candidates' order", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+
+    const report = await sweep(root, SETTINGS, wiring);
+
+    expect(report.entries.map((entry) => [entry.path, entry.action])).toEqual([
+      [SCRIPT, "skipped-user-content"],
+      [SETTINGS, "skipped-user-content"],
+    ]);
+    expect(report.entries[0]?.detail).toBe(
+      `Kept: ${SETTINGS}, which this sweep left in place, still runs this script — deleting it would leave that hook ` +
+        `pointing at nothing, and a guard wired that way fails closed on every tool call. Remove that wiring from ` +
+        `${SETTINGS}, then re-run.`,
+    );
+    expect(report.wiringKept).toEqual([SETTINGS]);
+    expect(await readFile(join(root, SCRIPT), "utf-8")).toBe(SCRIPT_BODY);
+  });
+
+  it("previews the same keep on a dry run", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+
+    const report = await sweep(root, SETTINGS, wiring, false);
+
+    expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+  });
+
+  it("deletes a script no document left in place names", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: "{}\n", [`repo/${SCRIPT}`]: SCRIPT_BODY });
+
+    const report = await sweep(root, SETTINGS, "{}\n");
+
+    expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "deleted" });
+    expect(report).not.toHaveProperty("wiringKept");
+  });
+
+  it("keeps every script behind a linked document it cannot read, saying so", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "outside.json": "{}\n", [`repo/${SCRIPT}`]: SCRIPT_BODY, "repo/.claude/.keep": "" });
+    await symlink(temp.path("outside.json"), join(root, SETTINGS));
+
+    const report = await sweep(root, SETTINGS, "{}\n");
+
+    expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+    expect(report.entries[0]?.detail).toContain("could not be read to prove it no longer runs this script");
+  });
+
+  it("holds nothing back for a refused document that is not on disk", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SCRIPT}`]: SCRIPT_BODY });
+
+    // A path the sweep refuses by its shape, naming nothing on disk.
+    const report = await sweep(root, "x/../absent.json", "{}\n");
+
+    expect(report.entries.find((entry) => entry.path === SCRIPT)).toMatchObject({ action: "deleted" });
+  });
+
+  it.skipIf(!CAN_TEST_PERMISSIONS)("keeps every script behind a document whose folder it cannot read", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+    await chmod(join(root, ".claude"), 0o000);
+    try {
+      const report = await sweep(root, SETTINGS, wiring);
+      expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+    } finally {
+      await chmod(join(root, ".claude"), 0o755);
+    }
+  });
+});

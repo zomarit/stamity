@@ -12,7 +12,7 @@ import {
 } from "../manifest/ownedPaths.ts";
 import type { CoOwnedReducer } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import { ENGINE_CONTENT_PREFIXES, STATE_DIR } from "../types/markers.ts";
+import { ENGINE_CONTENT_PREFIXES, HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import {
   atomicWriteFile,
   isSharedRegularFile,
@@ -229,6 +229,12 @@ export interface ReclaimOptions {
 /** One entry per candidate path, plus tallies of the actions actually taken. */
 export interface ReclaimReport {
   entries: ReclaimActionEntry[];
+  /**
+   * The co-owned documents this sweep left in place that still run an engine
+   * hook script, whose scripts it therefore kept (S17's settings case); absent
+   * when there are none. `clean` keeps the state directory whole for them.
+   */
+  wiringKept?: string[];
   /**
    * The `consent` the sweep ran under — `false` means nothing was written,
    * whatever the entries look like.
@@ -974,6 +980,37 @@ async function pruneEmptyParents(target: string, ctx: SweepContext): Promise<voi
  * is a caller error and happens before any candidate is examined; per-candidate
  * failures are reported, never thrown.
  */
+/** True for a path under the engine's generated hooks folder: a script some client's hooks document may run. */
+function isEngineHookScript(path: string): boolean {
+  return path.startsWith(`${HOOKS_GENERATED_DIR}/`);
+}
+
+/**
+ * The co-owned documents this sweep left in place — refused or left untouched,
+ * not gone — each with its text, or `null` when it is not a regular file this
+ * sweep may read (a link, a hard link, an unreadable file): such a document is
+ * taken to run every engine hook script, since nothing proves it does not.
+ */
+async function documentsLeftInPlace(
+  entries: readonly ReclaimActionEntry[],
+  ctx: SweepContext,
+): Promise<{ path: string; content: string | null }[]> {
+  const kept: { path: string; content: string | null }[] = [];
+  for (const entry of entries) {
+    if (entry.action !== "skipped-user-content" && entry.action !== "skipped-unsafe-path") continue;
+    const target = join(ctx.root, ...entry.path.split("/"));
+    let content: string | null = null;
+    try {
+      const stat = await lstat(target);
+      if (stat.isFile() && stat.nlink === 1) content = await readFile(target, "utf8");
+    } catch (err) {
+      if (errnoCode(err) === "ENOENT") continue;
+    }
+    kept.push({ path: entry.path, content });
+  }
+  return kept;
+}
+
 export async function sweepReclaimCandidates(
   candidates: readonly ReclaimCandidate[],
   opts: ReclaimOptions,
@@ -1003,7 +1040,7 @@ export async function sweepReclaimCandidates(
   };
   const stamp = (opts.now ?? new Date()).toISOString();
 
-  for (const group of groups) {
+  const sweepOne = async (group: CandidateGroup): Promise<void> => {
     const plan = await planFor(group, ctx);
     const provenance =
       group.owners.length > 1 ? ` Recorded by ${group.owners.join(" and ")}.` : "";
@@ -1011,7 +1048,7 @@ export async function sweepReclaimCandidates(
 
     if (plan.kind === "skip") {
       entries.push({ ...base, action: plan.action, detail: plan.detail + provenance });
-      continue;
+      return;
     }
     if (!opts.consent) {
       const verb =
@@ -1027,12 +1064,12 @@ export async function sweepReclaimCandidates(
         wouldBe: plan.kind === "delete" ? "deleted" : plan.action,
         proof: plan.proof,
       });
-      continue;
+      return;
     }
     const verdict = await verifyPinStillHolds(plan.target, plan.pin, ctx);
     if (verdict.kind === "refused") {
       entries.push({ ...base, action: "skipped-unsafe-path", detail: verdict.detail + provenance });
-      continue;
+      return;
     }
     if (verdict.kind === "missing" && plan.kind === "strip") {
       // The delete lane falls through on `missing` so the unlink itself reports
@@ -1046,7 +1083,7 @@ export async function sweepReclaimCandidates(
           `${plan.action === "co-owned-reduced" ? "reduce" : "strip"}; the file was not ` +
           `re-created.${provenance}`,
       });
-      continue;
+      return;
     }
     // The backup a drifted co-owned document owes, taken in the same tick as
     // the mutation it precedes and after the pin was re-proved. A backup that
@@ -1063,7 +1100,7 @@ export async function sweepReclaimCandidates(
           action: "skipped-unsafe-path",
           detail: `The previous file could not be backed up, so nothing was removed: ${describeError(err)}.${provenance}`,
         });
-        continue;
+        return;
       }
     }
     if (plan.kind === "delete") {
@@ -1083,7 +1120,7 @@ export async function sweepReclaimCandidates(
                 detail: `The unlink failed and the file is still on disk: ${describeError(err)}.${provenance}`,
               },
         );
-        continue;
+        return;
       }
       await pruneEmptyParents(plan.target, ctx);
       entries.push({
@@ -1092,7 +1129,7 @@ export async function sweepReclaimCandidates(
         detail: `${plan.detail}${backedUp} Deleted at ${stamp}.${provenance}`,
         proof: plan.proof,
       });
-      continue;
+      return;
     }
     try {
       // The boundary is passed even though the parent was just re-resolved: the
@@ -1109,7 +1146,7 @@ export async function sweepReclaimCandidates(
         action: "skipped-unsafe-path",
         detail: `${failure} and the file is unchanged: ${describeError(err)}.${provenance}`,
       });
-      continue;
+      return;
     }
     entries.push({
       ...base,
@@ -1117,11 +1154,42 @@ export async function sweepReclaimCandidates(
       detail: `${plan.detail}${backedUp} ${plan.action === "co-owned-reduced" ? "Reduced" : "Stripped"} at ${stamp}.${provenance}`,
       proof: plan.proof,
     });
+  };
+
+  // Co-owned documents settle first, so a hook script is judged against the
+  // documents this sweep leaves in place (S17's settings case): one of them
+  // still naming the script would be left pointing at nothing, and a guard
+  // wired that way fails closed on every tool call.
+  const coOwnedGroups = groups.filter((group) => ctx.coOwned.has(group.path));
+  for (const group of coOwnedGroups) await sweepOne(group);
+  const keptDocuments = await documentsLeftInPlace(entries, ctx);
+  const wiringKept = new Set<string>();
+  for (const group of groups) {
+    if (ctx.coOwned.has(group.path)) continue;
+    const holder = isEngineHookScript(group.path) ? keptDocuments.find((doc) => doc.content === null || doc.content.includes(group.path)) : undefined;
+    if (holder === undefined) {
+      await sweepOne(group);
+      continue;
+    }
+    wiringKept.add(holder.path);
+    entries.push({
+      path: group.path,
+      candidateReason: group.reason,
+      action: "skipped-user-content",
+      detail:
+        `Kept: ${holder.path}, which this sweep left in place, ${holder.content === null ? "could not be read to prove it no longer runs" : "still runs"} ` +
+        `this script — deleting it would leave that hook pointing at nothing, and a guard wired that way fails closed on ` +
+        `every tool call. Remove that wiring from ${holder.path}, then re-run.`,
+    });
   }
+  // The report reads in the candidates' own order, whatever order they settled in.
+  const order = new Map(groups.map((group, index) => [group.path, index]));
+  entries.sort((a, b) => (order.get(a.path) as number) - (order.get(b.path) as number));
 
   return {
     entries,
     consent: opts.consent,
+    ...(wiringKept.size > 0 ? { wiringKept: [...wiringKept].toSorted() } : {}),
     deletedCount: entries.filter((entry) => entry.action === "deleted").length,
     strippedCount: entries.filter(
       (entry) => entry.action === "managed-block-stripped" || entry.action === "co-owned-reduced",
