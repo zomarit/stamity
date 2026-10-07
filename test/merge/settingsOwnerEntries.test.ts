@@ -215,6 +215,40 @@ describe("an owner's permissions and hooks before setup", () => {
     await expectOwnerContentKept();
   });
 
+  it("init --force judges the file against the previous ledger, never as an adoption: the engine's rows stay recorded, the notice claims none of them, and clean restores the bytes (review/39)", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, FIRST);
+    await init(root);
+    const engineRows = ["Read", "Grep", "Glob"].map(memberHash);
+
+    const report = await init(root, true);
+
+    const row = settingsRow(report.wrote);
+    expect(row.notice ?? "").not.toContain("permissions.allow");
+    expect(row.notice ?? "").not.toContain("Merged into");
+    const rows = await settingsLedgerRows(root);
+    expect(rows[0]?.coOwned?.elements?.["/permissions/allow"]).toEqual(engineRows);
+    expect(rows[0]?.coOwned?.createdFile).toBeUndefined();
+    const cleaned = await clean(root);
+    expect(cleaned.code).toBe(0);
+    expect(await readSettings(root)).toBe(FIRST);
+    expect(await backups(root)).toEqual([]);
+  });
+
+  it("init --force keeps createdFile for a file the engine created, so clean still deletes it (review/39)", async () => {
+    const root = await freshRepo();
+    await init(root);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.createdFile).toBe(true);
+
+    await init(root, true);
+
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.createdFile).toBe(true);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/permissions/allow"]).toEqual(["Read", "Grep", "Glob"].map(memberHash));
+    const cleaned = await clean(root);
+    expect(cleaned.code).toBe(0);
+    expect(existsSync(SETTINGS_ABS(root))).toBe(false);
+  });
+
   it("init then clean leaves the file byte-identical to before setup, with no .bak", async () => {
     const root = await freshRepo();
     await seedSettings(root, FIRST);
