@@ -2320,6 +2320,34 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
     expect(report.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT], unreadable: true }]);
   });
 
+  // review/68: a preview runs before the write it previews, so a hooks
+  // document that write rewrites is read as the write will leave it — a script
+  // the new text stops naming previews as the delete the live sweep makes.
+  it("reads a hooks document the previewed write rewrites as that write's text, not the bytes on disk (review/68)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+    const preview = (after: string): Promise<ReclaimReport> =>
+      sweepReclaimCandidates([hashedCandidate(SCRIPT, SCRIPT_BODY)], {
+        rootDir: root,
+        consent: false,
+        hookDocuments: new Set([SETTINGS]),
+        hookDocumentsAfterWrite: new Map([[SETTINGS, after]]),
+      });
+
+    // The write drops the wiring: the script previews as deleted, though the
+    // bytes on disk still name it.
+    const dropped = await preview("{}\n");
+    expect(dropped.entries[0]).toMatchObject({ path: SCRIPT, action: "dry-run", wouldBe: "deleted" });
+    expect(dropped).not.toHaveProperty("wiringKept");
+
+    // The write keeps it: kept, as the live sweep after that write keeps it.
+    const kept = await preview(wiring);
+    expect(kept.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+    expect(kept.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT] }]);
+    expect(await readFile(join(root, SCRIPT), "utf-8")).toBe(SCRIPT_BODY);
+  });
+
   it("does not read a hooks document consent would delete: a dry run previews deleting its scripts too", async () => {
     const temp = tempDir();
     const root = temp.path("repo");

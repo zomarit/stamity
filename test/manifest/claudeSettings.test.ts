@@ -598,9 +598,12 @@ describe("predictClaudeSettingsMerge", () => {
     expect((await predictClaudeSettingsMerge(path, EMITTED_PLUGIN, own())).result.action).toBe("created");
 
     await writeFile(path, EMITTED_PLUGIN, "utf8");
+    // TEST CHANGE, justified: review/68 — a prediction now also carries `after`, the text the write
+    // leaves (here the unchanged bytes), so a preview reads a hooks document as the write will leave it.
     expect(await predictClaudeSettingsMerge(path, EMITTED_PLUGIN, own(LEGACY))).toEqual({
       result: { path, action: "unchanged" },
       collision: null,
+      after: EMITTED_PLUGIN,
     });
 
     // TEST CHANGE, justified: REQ-FLOW-036 — an owner's `permissions` and `hooks` merge; the collision is

@@ -655,6 +655,12 @@ function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"
  * `check --json` name the same paths with the same actions. Both allowlists
  * come off `plan.manifest`, the run's pre-rebuild ledger, exactly as the live
  * sweep builds them in {@link applySync}.
+ *
+ * The live sweep runs after the write loop, so it reads each hooks document as
+ * this sync wrote it; this preview runs before any write, so it reads each one
+ * the plan writes as the write will leave it ({@link hookDocumentsAfterWrite},
+ * review/68). A script the write stops naming — a guard renamed by a release —
+ * then previews as the delete `sync -y` makes, not as "Kept".
  */
 export async function previewReclaim(
   rootDir: string,
@@ -663,14 +669,51 @@ export async function previewReclaim(
 ): Promise<ReclaimReport | null> {
   if (plan.reclaim.length === 0) return null;
   const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
+  const retention = hookScriptRetention(plan.manifest, packMcpSupply);
   return sweepReclaimCandidates(plan.reclaim, {
     rootDir,
     consent: false,
     trustedExactPaths: trustedInfraPaths(plan.manifest.ledger),
     coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest)),
-    ...hookScriptRetention(plan.manifest, packMcpSupply),
+    ...retention,
+    hookDocumentsAfterWrite: await hookDocumentsAfterWrite(rootDir, plan, retention.hookDocuments, coOwnedDocumentLanes(plan.manifest, packMcpSupply)),
     ...(now === undefined ? {} : { now }),
   });
+}
+
+/**
+ * The text each hooks document in `hookDocuments` holds once `plan`'s write
+ * lands, for the documents that write touches: a co-owned one as its lane
+ * predicts the merge (the same prediction `planOutputEntries` makes, over the
+ * same ledger hashes), a whole-file one (Copilot's) as the emitted bytes. A
+ * document the plan refuses (`collision`) or does not plan is left out, so the
+ * preview reads it from disk exactly as the live sweep will.
+ */
+async function hookDocumentsAfterWrite(
+  rootDir: string,
+  plan: SyncPlan,
+  hookDocuments: ReadonlySet<string>,
+  lanes: ReadonlyMap<string, CoOwnedDocumentLane>,
+): Promise<Map<string, string>> {
+  const ledgerHashes = ledgerHashIndex(rootDir, plan.manifest.ledger);
+  const written = plan.outputs.filter(
+    (output) =>
+      hookDocuments.has(output.path) &&
+      plan.entries.some((entry) => entry.path === output.path && entry.action !== "collision"),
+  );
+  const texts = await Promise.all(
+    written.map(async (output): Promise<[string, string | null | undefined]> => {
+      const lane = lanes.get(output.path);
+      if (lane === undefined) return [output.path, output.content];
+      const predicted = await lane.predict(
+        join(rootDir, output.path),
+        output.content,
+        coOwnedOwnershipOf(plan.manifest.ledger, output.path, { boundaryDir: rootDir, ledgerHashes }),
+      );
+      return [output.path, predicted.after];
+    }),
+  );
+  return new Map(texts.flatMap(([path, text]) => (typeof text === "string" ? [[path, text] as const] : [])));
 }
 
 /**

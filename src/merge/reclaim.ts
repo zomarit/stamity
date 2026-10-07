@@ -255,6 +255,17 @@ export interface ReclaimOptions {
    * names.
    */
   hookScripts?: HookScriptReader;
+  /**
+   * For a sweep that previews a write it runs ahead of (`check`'s drift gate,
+   * `sync --dry-run`): the text each hooks document will hold once that write
+   * lands, keyed by repo-relative path. A document listed here is read as this
+   * text rather than as the bytes on disk, so a script the write stops naming
+   * previews as the delete the live sweep — which runs after the write — makes
+   * (review/68). A document the write leaves alone (refused, linked, not
+   * planned) is not listed and is read from disk, as the live sweep reads it.
+   * None for a live sweep, which reads what was written.
+   */
+  hookDocumentsAfterWrite?: ReadonlyMap<string, string>;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -1029,11 +1040,17 @@ async function hookDocumentsLeftInPlace(
   entries: readonly ReclaimActionEntry[],
   hookDocuments: ReadonlySet<string>,
   root: string,
+  afterWrite: ReadonlyMap<string, string>,
 ): Promise<HookDocumentLeft[]> {
   const previewed = new Set(entries.filter((entry) => entry.action === "dry-run").map((entry) => entry.path));
   const kept: HookDocumentLeft[] = [];
   for (const path of hookDocuments) {
     if (previewed.has(path)) continue;
+    const written = afterWrite.get(path);
+    if (written !== undefined) {
+      kept.push({ path, content: written });
+      continue;
+    }
     const target = join(root, ...path.split("/"));
     let content: string | null = null;
     try {
@@ -1223,7 +1240,7 @@ export async function sweepReclaimCandidates(
   const reader = opts.hookScripts ?? DEFAULT_HOOK_SCRIPTS;
   const settlesFirst = (group: CandidateGroup): boolean => ctx.coOwned.has(group.path) || hookDocuments.has(group.path);
   for (const group of groups.filter(settlesFirst)) await sweepOne(group);
-  const keptDocuments = await hookDocumentsLeftInPlace(entries, hookDocuments, ctx.root);
+  const keptDocuments = await hookDocumentsLeftInPlace(entries, hookDocuments, ctx.root, opts.hookDocumentsAfterWrite ?? new Map());
   const wiringKept = new Map<string, { doc: HookDocumentLeft; scripts: string[] }>();
   for (const group of groups) {
     if (settlesFirst(group)) continue;

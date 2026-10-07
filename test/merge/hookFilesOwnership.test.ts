@@ -766,6 +766,31 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
     expect(check.code, check.stdout + check.stderr).toBe(0);
   });
 
+  it("a 1.11.0 setup: check and sync --dry-run name both old guards as deleted by hash proof, and sync -y does exactly that (review/68)", async () => {
+    const root = await setUpByReleaseOneEleven();
+
+    // The preview reads `.cursor/hooks.json` as the write will leave it, not
+    // as 1.11.0 left it: the write rewires it to the new names, so nothing it
+    // keeps still runs an old guard.
+    const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
+    const drift = (JSON.parse(check.stdout.trim()) as { drift: { reclaim: unknown[] } }).drift;
+    for (const [old] of RENAMED_GUARDS) {
+      expect(drift.reclaim, old).toContainEqual({ path: old, reason: "path-renamed", action: "delete", proof: "hash" });
+    }
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    const dry = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: true, now: T1 });
+    for (const [old] of RENAMED_GUARDS) {
+      expect(dry.reclaimed?.entries.find((entry) => entry.path === old), old).toMatchObject({ action: "dry-run", wouldBe: "deleted", proof: "hash" });
+      expect(existsSync(abs(root, old)), old).toBe(true);
+    }
+
+    const { report } = await sync(root);
+
+    for (const [old] of RENAMED_GUARDS) {
+      expect(report.reclaimed?.entries.find((entry) => entry.path === old), old).toMatchObject({ action: "deleted", proof: "hash" });
+    }
+  });
+
   it("a 1.11.0 setup with an owner entry: sync -y keeps the entry, rewires the guards behind a verified .bak, deletes both old names, and check then exits 0", async () => {
     const root = await setUpByReleaseOneEleven("repo", true);
     const edited = await readText(root, CURSOR_HOOKS);
@@ -829,6 +854,12 @@ describe("no verb deletes a renamed guard a kept .cursor/hooks.json still runs (
     const doc = await readDoc(root, CURSOR_HOOKS);
     await writeDoc(root, CURSOR_HOOKS, { ...doc, version: 2 });
     const before = await readText(root, CURSOR_HOOKS);
+
+    // The preview agrees with the write (review/68): the refused file is read
+    // from disk, where it still runs both old guards.
+    const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
+    const preview = (JSON.parse(check.stdout.trim()) as { drift: { reclaim: { path: string; action: string }[] } }).drift.reclaim;
+    for (const [old] of RENAMED_GUARDS) expect(preview.find((entry) => entry.path === old)?.action, old).toBe("keep");
 
     const { entries, report } = await sync(root);
 

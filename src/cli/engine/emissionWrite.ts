@@ -442,18 +442,9 @@ function hookDocumentLane(
     noun: spec.noun,
     wiresHooks: true,
     predict: async (absPath, emitted, ownership) => {
-      // The text the write would leave: the plan's bytes, or the file's when it writes none.
-      const left: { text: string | null } = { text: null };
-      const prediction = await predictCoOwnedMerge(
-        absPath,
-        (existingRaw) => {
-          const planned = plan(absPath, emitted, ownership)(existingRaw);
-          left.text = planned.content ?? existingRaw;
-          return planned;
-        },
-        spec.noun,
-      );
-      const rejected = prediction.collision === null ? rejects(displayPath(absPath, ownership.boundaryDir), left.text) : null;
+      const prediction = await predictCoOwnedMerge(absPath, plan(absPath, emitted, ownership), spec.noun);
+      // Judged on the text the write would leave (`after`), absent only on a collision.
+      const rejected = prediction.collision === null ? rejects(displayPath(absPath, ownership.boundaryDir), prediction.after ?? null) : null;
       return rejected === null ? prediction : { ...prediction, rejected };
     },
     materialize: async (absPath, emitted, ownership) => {

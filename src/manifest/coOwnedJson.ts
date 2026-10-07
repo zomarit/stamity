@@ -205,6 +205,14 @@ export interface CoOwnedPrediction {
   result: MergeResult;
   /** `shared-name` for a linked target, `co-owned-shape` for a document the merge cannot keep beside its entries. */
   collision: { kind: "shared-name" | "co-owned-shape"; detail: string } | null;
+  /**
+   * The text the document holds once the write lands — the planned bytes, or
+   * the bytes on disk when the plan writes none; `null` when there is no file
+   * either way. Absent on a collision, where nothing is written. A preview
+   * reads a hooks document through it, so it judges the scripts the document
+   * will run rather than the ones it runs now (review/68).
+   */
+  after?: string | null;
 }
 
 /** A merge outcome plus the bytes the file holds afterwards and the record of what the engine owns there. */
@@ -1301,11 +1309,11 @@ export async function predictCoOwnedMerge(
       collision: { kind: "shared-name", detail: error.message },
     };
   }
-  const planned = plan(await readTextOrNull(filePath, noun));
-  return {
-    result: planned.result,
-    collision: planned.collision === null ? null : { kind: "co-owned-shape", detail: planned.collision },
-  };
+  const existingRaw = await readTextOrNull(filePath, noun);
+  const planned = plan(existingRaw);
+  return planned.collision === null
+    ? { result: planned.result, collision: null, after: planned.content ?? existingRaw }
+    : { result: planned.result, collision: { kind: "co-owned-shape", detail: planned.collision } };
 }
 
 /**
