@@ -42,7 +42,7 @@ import {
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
 import type * as ChildProcessApi from "node:child_process";
-import { canonical, npxCommand } from "../../support/identity.ts";
+import { canonical, npxCommand, npxCommandOf } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
@@ -4076,10 +4076,14 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     return { code: result.code, doc: JSON.parse(lines[0] ?? "") as Envelope & { expectations?: unknown } };
   }
 
-  /** The pinned call at another release, spelled out rather than asked of the production helper. */
+  /**
+   * The pinned call at another release, spelled out rather than asked of the production helper.
+   * TEST CHANGE, justified: REQ-PLUGIN-048 (build/21) — derived through the support module's
+   * `npxCommandOf`, so a `--registry` fork's own checkout expects the registry word its CLI now
+   * prints; on this tree the string is byte-for-byte the `npx -y <name>@<version> <verb>` it was.
+   */
   function npxAt(version: string, verb: string): string {
-    const { name, npmChannel } = canonical();
-    return `npx ${npmChannel ? "-y" : "--no"} ${name}@${version} ${verb}`;
+    return npxCommandOf({ ...canonical(), version }, verb);
   }
 
   function failure(doc: Envelope): { code?: string; message?: string; why?: string; next?: string } {
@@ -4207,6 +4211,90 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
             "in a reviewed pull request",
         ].join("; "),
       );
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
+    }
+  });
+
+  it.each([
+    {
+      fork: "a --registry fork",
+      publishConfig: { registry: "https://npm.pkg.github.com" },
+      prefix: "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@9.9.9",
+    },
+    {
+      // Outside the call grammar (http): never rendered, and the call fails closed to
+      // `--no`, which runs an installed copy and fetches nothing.
+      fork: "a fork whose registry the call cannot name",
+      publishConfig: { registry: "http://npm.acme.example/" },
+      prefix: "npx --no @acme/stamity@9.9.9",
+    },
+  ])("names $fork's registry in every expected-release remedy, as packageCommand does", async ({
+    publishConfig,
+    prefix,
+  }) => {
+    // build/21 (REQ-PLUGIN-048): with --expect-version every step is pinned to the
+    // expected release, and each one reads the identity `packageCommand` reads —
+    // name, channel and registry from one manifest — so a registry fork's remedy
+    // never asks the default registry for the fork's name. The rename is applied
+    // the way the fork-name case above applies it: only the kit's own
+    // package-root walk is redirected.
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
+    });
+    const pseudoInstall = handle.path("pseudo-install");
+    await mkdir(pseudoInstall, { recursive: true });
+    await writeFile(
+      join(pseudoInstall, "package.json"),
+      `${JSON.stringify({ name: "@acme/stamity", version: "1.8.0", publishConfig })}\n`,
+    );
+    const kitDir = join("src", "cli", "kit");
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string =>
+          from.endsWith(kitDir) ? pseudoInstall : actual.findPackageRoot(from),
+      };
+    });
+    try {
+      const renamed = await import("../../../src/cli/commands/check.ts");
+      const { __setContentRootForTests: pinFreshCorpus } = await import(
+        "../../../src/content/contentRoot.ts"
+      );
+      pinFreshCorpus(handle.path("corpus"));
+      const result = await runInProcess(
+        [renamed.checkCommand],
+        [
+          "check",
+          "--json",
+          "--expect-version",
+          "9.9.9",
+          "--expect-tools",
+          "claude,cursor",
+          "--expect-mode",
+          "generated",
+        ],
+        { cwd: root },
+      );
+
+      expect(result.code).toBe(1);
+      const doc = JSON.parse(result.stdout.trim()) as Envelope;
+      expect(failure(doc).code).toBe("EXPECTATION_ERROR");
+      expect((failure(doc).next ?? "").split("; ")).toEqual([
+        `regenerate with the expected release in a reviewed pull request: ${prefix} sync`,
+        `run this check with the expected release: ${prefix} check --expect-version 9.9.9`,
+        `${prefix} config set tools claude,cursor, then ${prefix} sync, in a reviewed pull request`,
+        `a repository changes install mode only through ${prefix} clean -y, then ${prefix} init, ` +
+          "in a reviewed pull request",
+      ]);
+      // No step escapes the identity: no bare `-y` call for the fork's name, and a
+      // refused registry is never echoed.
+      expect(failure(doc).next).not.toMatch(/npx -y @acme\/stamity@/);
+      expect(failure(doc).next).not.toContain("npm.acme.example");
     } finally {
       vi.doUnmock("../../../src/shared/paths.ts");
       vi.resetModules();

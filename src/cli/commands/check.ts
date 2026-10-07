@@ -44,9 +44,8 @@ import {
 import { STATE_DIR } from "../../types/markers.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
-import { pinnedCliCall } from "../../shared/cliCall.ts";
 import { CliFailure, type FailureDoc } from "../kit/output.ts";
-import { hasNpmChannel, packageCommand, packageName } from "../kit/packageName.ts";
+import { packageCommand, packageCommandAt } from "../kit/packageName.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
@@ -2422,19 +2421,13 @@ function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorC
 
 /**
  * The pinned call at the release the caller expects, not the running one: the
- * remedy for a release mismatch is to run that release. Rendered through
- * `pinnedCliCall`, as `packageCommand` renders every other remedy here.
+ * remedy for a release mismatch is to run that release. Rendered by
+ * `packageCommandAt`, from the identity `packageCommand` reads for every other
+ * remedy here — name, channel and a registry fork's registry together, with
+ * the same unpinned fallback for an unrunnable own name.
  */
 function pinnedCallAt(version: string, verb: string): string {
-  const name = packageName();
-  const npmChannel = hasNpmChannel();
-  try {
-    return pinnedCliCall(name, version, verb, { npmChannel });
-  } catch {
-    // An unrunnable own name: the unpinned-name fallback `packageCommand` takes,
-    // spelled as it spells it, so the two remedies never differ for one name.
-    return npmChannel ? `npx ${name} ${verb}` : `npx --no ${name} ${verb}`;
-  }
+  return packageCommandAt(version, verb);
 }
 
 /**

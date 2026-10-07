@@ -283,13 +283,26 @@ let cachedVersion: string | null = null;
  */
 export function packageCommand(verb: string): string {
   cachedVersion ??= resolveOwnPackageFacts().version;
+  return packageCommandAt(cachedVersion, verb);
+}
+
+/**
+ * {@link packageCommand} pinned to `version` instead of the running one: the
+ * remedy that asks for another release (`check --expect-version`) runs that
+ * release. The name, the channel and the registry come from the same one read
+ * {@link packageCommand} takes, so the two remedies never differ for one
+ * installation — a registry fork's call names its registry here too
+ * (REQ-PLUGIN-048). An empty or unpinnable `version` takes the same unpinned
+ * fallback.
+ */
+export function packageCommandAt(version: string, verb: string): string {
   const { name, npmChannel, registry } = ownCallIdentity();
   const opts = { npmChannel, ...(registry === null ? {} : { registry }) };
-  if (cachedVersion !== "") {
+  if (version !== "") {
     try {
-      return pinnedCliCall(name, cachedVersion, verb, opts);
+      return pinnedCliCall(name, version, verb, opts);
     } catch {
-      // Unpinnable (see above): fall through to the unpinned form.
+      // Unpinnable (see packageCommand): fall through to the unpinned form.
     }
   }
   // The registry was proven writable when the identity was read, so the
