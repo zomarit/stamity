@@ -221,6 +221,24 @@ describe("the scope-registry option", () => {
     expect(REGISTRY_URL.test(REGISTRY)).toBe(true);
   });
 
+  // review/95: a port is a value from 1 to 65535. Five digits alone let `:99999` through, a URL
+  // that WHATWG parsing refuses and that every pinned call would then render and fetch nothing with.
+  it("holds a registry port to the values 1 to 65535", () => {
+    const inRange = ["1", "80", "443", "8443", "9999", "10000", "59999", "60000", "64999", "65000", "65499"];
+    for (const port of [...inRange, "65500", "65529", "65530", "65535"]) {
+      const registry = `https://r.example:${port}/npm/`;
+      expect(REGISTRY_URL.test(registry), registry).toBe(true);
+      expect(new URL(registry).port === "" || new URL(registry).port === port, registry).toBe(true);
+    }
+    for (const port of ["0", "00", "080", "65536", "65540", "65600", "66000", "70000", "99999", "100000", ""]) {
+      const registry = `https://r.example:${port}/npm/`;
+      expect(REGISTRY_URL.test(registry), registry).toBe(false);
+      expect(validationMessage(() => pinnedCliPrefix("@acme/stamity", "1.0.0", { registry })), registry).toMatch(
+        /is not a plain https URL/,
+      );
+    }
+  });
+
   // review/3 (the plan's "Windows parsing" risk): npx is `npx.cmd` on Windows, which only a shell
   // runs, so the rendered words reach npm through cmd.exe there. `shell: true` is cmd.exe on
   // win32 and /bin/sh elsewhere; the POSIX run proves the harness, the Windows leg proves cmd.

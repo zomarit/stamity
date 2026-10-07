@@ -82,7 +82,7 @@ let cached: RepositoryIdentity | null = null;
  * restated for the reason {@link npxCommand} gives and held equal by
  * `test/cli/kit/packageName.test.ts`.
  */
-export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._~/-]*)?$/;
+export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
 
 /**
  * The identity a `package.json` declares, read the way the CLI reads its own

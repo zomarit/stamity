@@ -78,14 +78,16 @@ export interface CliCallOptions {
 }
 
 /**
- * The registry URLs a call may name: plain https, a host, an optional port and
- * an optional path of unreserved characters. No userinfo, query, fragment, `%`,
+ * The registry URLs a call may name: plain https, a host, an optional port from
+ * 1 to 65535 written without a leading zero (a larger one is no URL at all, and
+ * a call naming it fetches nothing) and an optional path of unreserved
+ * characters. No userinfo, query, fragment, `%`,
  * `$`, quote, backtick, space or `^`: the value enters sh, cmd, PowerShell,
  * JavaScript strings and JSON, so refusing beats escaping it for four dialects.
  * Restated in `scripts/plugins/tokens.mjs`, held equal by
  * `test/ci/pluginModules.test.ts`.
  */
-export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._~/-]*)?$/;
+export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
 
 /**
  * `--@<scope>:registry=<url>` — npm's per-scope registry setting as one argv

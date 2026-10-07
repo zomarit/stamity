@@ -41,9 +41,9 @@ const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
  * The registry URLs a call may name — `REGISTRY_URL` in `src/shared/cliCall.ts`, restated for the
  * reason `PACKAGE_NAME` is and held equal by `test/ci/pluginModules.test.ts`: plain https, a host,
  * an optional port and path, and none of the characters a shell, cmd, PowerShell, a JavaScript
- * string or JSON would read as syntax.
+ * string or JSON would read as syntax. The port is a value from 1 to 65535 without a leading zero.
  */
-export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._~/-]*)?$/
+export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/
 
 /**
  * `--@<scope>:registry=<url>` for a package whose scope names its registry (REQ-PLUGIN-048), or

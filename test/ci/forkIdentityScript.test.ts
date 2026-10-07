@@ -459,6 +459,8 @@ describe("scripts/fork-identity.mjs", () => {
       "https://registry.example.invalid:8443/npm/feed/",
       "https://pkgs.example.invalid/org/_packaging/feed/npm/registry/",
       "https://registry.example.invalid/a~b_c.d-e",
+      "https://registry.example.invalid:1/",
+      "https://registry.example.invalid:65535/npm/",
     ];
     const refused = [
       "",
@@ -482,6 +484,9 @@ describe("scripts/fork-identity.mjs", () => {
       "https://registry.example.invalid/a^b",
       "https://registry_example.invalid",
       `https://b${String.fromCodePoint(0xfc)}cher.example.invalid`,
+      "https://registry.example.invalid:0/",
+      "https://registry.example.invalid:65536/npm/",
+      "https://registry.example.invalid:99999",
     ];
     const scriptAccepts = (value: string): boolean => {
       try {
