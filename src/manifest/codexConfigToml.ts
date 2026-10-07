@@ -51,6 +51,8 @@
  * owner key that defines, without a header, a table the engine writes a header
  * for (`features.x = 1`, `features = { … }`, `github = { … }` in an owner's
  * `[mcp_servers]`), naming the key: the header would be a second definition.
+ * So is a selection whose record would name more tables than the manifest
+ * reader takes for one file ({@link planCodexConfigToml}).
  */
 
 import { createHash } from "node:crypto";
@@ -59,7 +61,7 @@ import type { CoOwnedReduction } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
 import type { CoOwnedOwnership, CoOwnedPlan } from "./coOwnedJson.ts";
-import { memberPointer, type MemberSegments } from "./jsonMembers.ts";
+import { MAX_CO_OWNED_POINTERS, memberPointer, type MemberSegments } from "./jsonMembers.ts";
 import { normaliseSegment, segmentTomlTables, tomlTableName, type TomlKeyLine, type TomlSegment } from "./tomlTables.ts";
 
 /** The engine's normalised rendering of a table name (`[mcp_servers.github]` → its text), or `null` when it renders none. */
@@ -333,8 +335,34 @@ function recordOf(tables: readonly Item[], createdFile: boolean, terminatorAdded
  * What writing `emitted` into `filePath` does to the bytes `existingRaw`, by
  * the table rules above. `render` is the engine's current rendering of any
  * table name, `selected` the manifest's server ids (a legacy row's proof).
+ *
+ * The writer holds the manifest reader's bound (`./jsonMembers.ts`
+ * `MAX_CO_OWNED_POINTERS`), as the JSON planner does: a plan whose record
+ * would name more tables than one ledger row takes — `[features]` plus more
+ * than 63 selected servers — is a `co-owned-shape` collision and writes
+ * nothing, never a manifest the next run refuses. The record names tables
+ * only (`members`), so the reader's per-array bound has nothing to hold here.
  */
 export function planCodexConfigToml(
+  filePath: string,
+  emitted: string,
+  existingRaw: string | null,
+  ownership: CoOwnedOwnership,
+  render: CodexTableRendering,
+  selected: readonly string[],
+): CoOwnedPlan {
+  const planned = planUnbounded(filePath, emitted, existingRaw, ownership, render, selected);
+  const tables = Object.keys(planned.record?.members ?? {}).length;
+  if (tables <= MAX_CO_OWNED_POINTERS) return planned;
+  const reason =
+    `Skipped ${displayPath(filePath, ownership.boundaryDir)}: it would hold ${tables} of the engine's tables, more than ` +
+    `the ${MAX_CO_OWNED_POINTERS} the ledger can record for one file, so the engine could not tell its own tables from ` +
+    `yours on the next run. Nothing was written to it. Remove MCP servers you do not use ` +
+    `(\`stamity config mcp remove <id>\`) and re-run sync.`;
+  return { result: { path: filePath, action: "skipped", warning: reason }, content: null, backup: null, collision: reason, record: null };
+}
+
+function planUnbounded(
   filePath: string,
   emitted: string,
   existingRaw: string | null,

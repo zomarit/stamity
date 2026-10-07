@@ -17,8 +17,9 @@ import {
 import { createApp } from "../../src/index.ts";
 import { planCodexConfigToml, reduceCodexConfigToml } from "../../src/manifest/codexConfigToml.ts";
 import type { CoOwnedOwnership, CoOwnedPlan } from "../../src/manifest/coOwnedJson.ts";
-import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
-import { normaliseSegment } from "../../src/manifest/tomlTables.ts";
+import { collectManifestErrors, createManifest, readManifest, writeManifest } from "../../src/manifest/manifest.ts";
+import { normaliseSegment, tomlTableName } from "../../src/manifest/tomlTables.ts";
+import { CURATED_MCP_SERVERS, type McpServerMeta, type PackSuppliedServer } from "../../src/mcp/catalog.ts";
 import { ledgerHashIndex } from "../../src/merge/safeWrite.ts";
 import type { CoOwnedReduction, MergeResult } from "../../src/types/content.ts";
 import type { CoOwnership, LedgerEntry } from "../../src/types/manifest.ts";
@@ -836,6 +837,57 @@ describe("a byte-order mark an editor adds stays the owner's and leaves the engi
   it("reduce: the file is still engine-only", () => {
     const reduction = reduce(`${BOM}${EMPTY}`, { record: { ...recordFor("features", "mcp_servers"), createdFile: true }, deleteWhenEngineOnly: true });
     expect(reduction).toMatchObject({ kind: "engine-only", proven: true });
+  });
+});
+
+describe("the planner holds the manifest reader's record bound: too many selected servers is a named collision, never a refused manifest (review/57)", () => {
+  /** `count` pack-supplied servers, each rendered as the adapter renders a selected one. */
+  const selection = (count: number) => {
+    const servers: PackSuppliedServer[] = Array.from({ length: count }, (_, i) => ({
+      ...(CURATED_MCP_SERVERS["context7"] as McpServerMeta),
+      id: `opspack.s${i}`,
+      firstParty: false,
+      sourcePackId: "opspack",
+    }));
+    const renderMany = codexConfigTableRendering(servers);
+    const ids = servers.map((server) => server.id);
+    const emitted = ["features", ...ids.map((id) => tomlTableName(["mcp_servers", id]))]
+      .map((name) => renderMany(name) ?? "")
+      .join("\n");
+    return { ids, emitted, planWith: (existing: string | null, ownership: CoOwnedOwnership) => planCodexConfigToml(FILE, emitted, existing, ownership, renderMany, ids) };
+  };
+  const refusal = (tables: number): string =>
+    `Skipped .codex/config.toml: it would hold ${tables} of the engine's tables, more than the 64 the ledger can record ` +
+    `for one file, so the engine could not tell its own tables from yours on the next run. Nothing was written to it. ` +
+    `Remove MCP servers you do not use (\`stamity config mcp remove <id>\`) and re-run sync.`;
+
+  it("63 selected servers: [features] plus 63 server tables is the bound itself, recorded, and the reader takes the record", () => {
+    const { planWith } = selection(63);
+    const planned = planWith(null, ADOPTION);
+    expect(planned.collision).toBeNull();
+    expect(planned.result.action).toBe("created");
+    expect(Object.keys(planned.record?.members ?? {})).toHaveLength(64);
+    const manifest = createManifest({ tools: ["codex"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "1.0.0", now: T0 });
+    const row: LedgerEntry = { path: CODEX_CONFIG_FILE, adapter: "codex", artifactId: "codex-config", artifactType: "infra", contentHash: "0".repeat(64), coOwned: planned.record as CoOwnership };
+    expect(collectManifestErrors({ ...manifest, ledger: [row] })).toEqual([]);
+  });
+
+  it("64 selected servers: refused as a co-owned-shape collision naming the bound, over a new file and over an existing one, never offering --force", () => {
+    const { planWith } = selection(64);
+    const owner = `model = "o3"\n\n${TEAM_TABLE}`;
+    for (const [existing, ownership] of [
+      [null, ADOPTION],
+      [owner, ADOPTION],
+      [EMPTY, recorded({ ...recordFor("features", "mcp_servers"), createdFile: true })],
+    ] as const) {
+      const planned = planWith(existing, ownership);
+      expect(planned.result).toEqual({ path: FILE, action: "skipped", warning: refusal(65) });
+      expect(planned.collision).toBe(refusal(65));
+      expect(planned.content).toBeNull();
+      expect(planned.backup).toBeNull();
+      expect(planned.record).toBeNull();
+      expect(planned.collision).not.toMatch(/force/iu);
+    }
   });
 });
 
