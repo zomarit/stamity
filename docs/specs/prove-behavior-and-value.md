@@ -423,7 +423,14 @@ newest `v*` tag may not read `design` either (`test/records/specStatus.test.ts:4
 `overlay-layers.md:4` are `design` → `shipped-with-1.7.0` and three `shipped-with-1.1.0`.
 
 - GIVEN a spec reading `draft` WHEN the records test runs THEN it fails naming the file and the three
-  forms; one reading `design` that a pre-tag plan names fails naming the plan and the tag.
+  forms; one reading `design` that a pre-tag plan names fails naming the plan and the tag when it defines
+  no requirement id or a file under `test/` cites one of its ids, and passes while no test cites any.
+
+Amended 2026-10-08 (run `2026-10-07_release-1-12-0`, unit `e3-spec-status-written-ahead`; cited at
+`4589ace1`). A `design` spec a pre-tag plan names is flagged only when it defines no `REQ-<AREA>-<nnn>` id
+or a file under `test/` cites one of the ids it defines, both read from the tree, so a spec a plan wrote
+ahead of the release that builds it (`board-writes.md` at the 1.12.0 cut) keeps `design`
+(`test/records/specStatus.test.ts:190-232`, the tree's citations at `:288-304`).
 
 ### REQ-PROVE-017 — Eval documentation currency
 
