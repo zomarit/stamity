@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.11.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-07T17:10:06.689Z",
+  "updatedAt": "2026-10-07T23:34:16.793Z",
   "tools": [
     "claude"
   ],
@@ -134,7 +134,7 @@
       "adapter": "claude",
       "artifactId": "cmd-ask",
       "artifactType": "command",
-      "contentHash": "d2fb20fb5eb852a81f3935d80099654d3feba3c80fd364dcbcce656e84628b96",
+      "contentHash": "dcb4cdf93a8bb189bb2266b202935594ebed66feb112f197ab63328067548b9f",
       "path": ".claude/commands/st-ask.md"
     },
     {

@@ -186,6 +186,24 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-07, the 1.12.0 release, unit e1-eval-case-fixes (run
+  //     2026-10-07_release-1-12-0). The st-ask touchpoint moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-ask touchpoint wherever it is emitted
+  //       (`.claude/commands/st-ask.md` and `.github/prompts/st-ask.prompt.md`
+  //       8606 -> 8862, `.agents/skills/st-ask/SKILL.md` 8650 -> 8906): the
+  //       Citation rule's medium-or-low paragraph says the band and the
+  //       assumption sit before the claim's full stop, gives one inline
+  //       example, and puts a band after the full stop or an assumption opened
+  //       as its own sentence outside the claim (+3 lines).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: every charter, agent, rule, other skill, other
+  //       touchpoint, companion, hook script, guard and policy document. The
+  //       sibling suite's golden holds no st-ask body and did not move.
+  //
   //   - 2026-10-07, plan 016 file 0, unit u0-hook-files-ownership, the JSON
   //     half's pass 2 (run 2026-10-07_security-fixes). Cursor's two guards
   //     carry the stamity- prefix (REQ-FLOW-038, S18): two emitted paths
