@@ -21,7 +21,10 @@ import {
   renderSyncReport,
   syncJsonPayload,
 } from "../../../src/cli/commands/sync/report.ts";
+import type { CoOwnedDocumentLane } from "../../../src/cli/engine/emissionWrite.ts";
 import { makePalette } from "../../../src/cli/kit/terminal.ts";
+import type { CoOwnedOwnership } from "../../../src/manifest/coOwnedJson.ts";
+import { ledgerHashIndex } from "../../../src/merge/safeWrite.ts";
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
@@ -567,6 +570,34 @@ describe("collisions", () => {
     const forced = await rejectionOf(applySync(root, plan, { ...applyOpts, force: true }));
     expect(forced?.code).toBe("INTEGRITY_ERROR");
     expect(await readFile(join(root, "CLAUDE.md"), "utf8")).toContain("old body");
+  });
+
+  it("predicts a co-owned document with the ledger hashes the write uses, so check previews exactly the write (review/41)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    const seen: CoOwnedOwnership[] = [];
+    const lane: CoOwnedDocumentLane = {
+      path: ".claude/settings.json",
+      noun: "settings document",
+      predict: (_absPath, _emitted, ownership) => {
+        seen.push(ownership);
+        return Promise.resolve({ result: { path: _absPath, action: "unchanged" }, collision: null });
+      },
+      materialize: () => Promise.reject(new Error("the plan never writes")),
+      reducer: () => () => ({ kind: "untouched", detail: "" }),
+    };
+    const ledger = [
+      { path: ".claude/settings.json", adapter: "claude", artifactId: "settings", artifactType: "infra", contentHash: "a".repeat(64) },
+    ] as const;
+
+    await planOutputEntries(root, [output(".claude/settings.json", "{}\n", "settings")], ENGINE_VERSION, undefined, undefined, undefined, {
+      lanes: new Map([[lane.path, lane]]),
+      ledger,
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.ledgerHashes).toEqual(ledgerHashIndex(root, ledger));
+    expect(seen[0]?.boundaryDir).toBe(root);
   });
 
   it("a settings document whose permissions is a string is a co-owned-shape collision that --force does not clear: sync -y --force exits 1 and the file is byte-identical (REQ-FLOW-036)", async () => {

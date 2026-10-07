@@ -345,6 +345,9 @@ export async function planOutputEntries(
 ): Promise<SyncPlanEntry[]> {
   const lanes = coOwned?.lanes ?? coOwnedDocumentLanes(null);
   const ledger = coOwned?.ledger ?? [];
+  // The same whole-file hashes the write lane judges by (`applySync`), so the
+  // prediction — what `check` and `--dry-run` show — is exactly the write.
+  const ledgerHashes = ledgerHashIndex(rootDir, ledger);
   return pLimit(PREDICT_CONCURRENCY).map([...outputs], async (output) => {
     const absPath = join(rootDir, output.path);
     const managedBody = extractManagedBlock(output.content, absPath);
@@ -419,7 +422,7 @@ export async function planOutputEntries(
     // (`shared-name`, which nothing clears).
     const lane = lanes.get(output.path);
     if (lane !== undefined) {
-      const predicted = await lane.predict(absPath, output.content, coOwnedOwnershipOf(ledger, output.path, { boundaryDir: rootDir }));
+      const predicted = await lane.predict(absPath, output.content, coOwnedOwnershipOf(ledger, output.path, { boundaryDir: rootDir, ledgerHashes }));
       if (predicted.collision !== null) {
         return {
           ...base,
