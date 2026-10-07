@@ -2269,6 +2269,76 @@ describe("sweepReclaimCandidates — a co-owned document left in place keeps the
     expect(report.entries.find((entry) => entry.path === SCRIPT)).toMatchObject({ action: "deleted" });
   });
 
+  // review/58: retention reads every hook document still on disk, not only
+  // this sweep's candidates — a client still selected whose write a run
+  // refused (a link, a `co-owned-shape` file), or a document no ledger row
+  // names, still runs what it names.
+  const sweepScriptOnly = (root: string, consent = true): Promise<ReclaimReport> =>
+    sweepReclaimCandidates([hashedCandidate(SCRIPT, SCRIPT_BODY)], { rootDir: root, consent, hookDocuments: new Set([SETTINGS]) });
+
+  it("keeps a script that a hooks document no candidate names still runs, and deletes one it does not (review/58)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+
+    const report = await sweepScriptOnly(root);
+
+    expect(report.entries).toHaveLength(1);
+    expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+    expect(report.entries[0]?.detail).toContain(`Remove that wiring from ${SETTINGS}`);
+    expect(report.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT] }]);
+    expect(await readFile(join(root, SCRIPT), "utf-8")).toBe(SCRIPT_BODY);
+
+    const other = temp.path("other");
+    await temp.seedFiles({ [`other/${SETTINGS}`]: "{}\n", [`other/${SCRIPT}`]: SCRIPT_BODY });
+    expect((await sweepScriptOnly(other)).entries[0]).toMatchObject({ path: SCRIPT, action: "deleted" });
+  });
+
+  it("keeps every hook script behind a linked hooks document no candidate names, naming the remedy (review/58)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "outside.json": wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY, "repo/.claude/.keep": "" });
+    await symlink(temp.path("outside.json"), join(root, SETTINGS));
+
+    const report = await sweepScriptOnly(root);
+
+    expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+    expect(report.entries[0]?.detail).toContain(`Replace ${SETTINGS} with a regular file this sweep can read`);
+    expect(report.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT], unreadable: true }]);
+    expect(await readFile(join(root, SCRIPT), "utf-8")).toBe(SCRIPT_BODY);
+  });
+
+  it("reads no hooks document through a folder that resolves outside the repository: it holds every hook script (review/58)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "elsewhere/settings.json": "{}\n", [`repo/${SCRIPT}`]: SCRIPT_BODY });
+    await symlink(temp.path("elsewhere"), join(root, ".claude"), "junction");
+
+    const report = await sweepScriptOnly(root);
+
+    expect(report.entries[0]).toMatchObject({ path: SCRIPT, action: "skipped-user-content" });
+    expect(report.wiringKept).toEqual([{ path: SETTINGS, scripts: [SCRIPT], unreadable: true }]);
+  });
+
+  it("does not read a hooks document consent would delete: a dry run previews deleting its scripts too", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SETTINGS}`]: wiring, [`repo/${SCRIPT}`]: SCRIPT_BODY });
+
+    const report = await sweepReclaimCandidates([hashedCandidate(SCRIPT, SCRIPT_BODY), settingsCandidate(SETTINGS, wiring)], {
+      rootDir: root,
+      consent: false,
+      trustedExactPaths: new Set([SETTINGS]),
+      hookDocuments: new Set([SETTINGS]),
+    });
+
+    expect(report.entries.map((entry) => [entry.path, entry.action])).toEqual([
+      [SCRIPT, "dry-run"],
+      [SETTINGS, "dry-run"],
+    ]);
+    expect(report).not.toHaveProperty("wiringKept");
+  });
+
   it.skipIf(!CAN_TEST_PERMISSIONS)("keeps every script behind a document whose folder it cannot read", async () => {
     const temp = tempDir();
     const root = temp.path("repo");

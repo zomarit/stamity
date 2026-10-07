@@ -1011,32 +1011,38 @@ interface HookDocumentLeft {
 }
 
 /**
- * The hook documents (`ReclaimOptions.hookDocuments`) this sweep left in
- * place — refused, left untouched, or reduced to the owner's entries, not
- * gone — each with its text (a reduced one's as the sweep wrote it), or
- * `null` when it is not a regular file this sweep may read (a link, a hard
- * link, an unreadable file): such a document is taken to run every engine hook
- * script, since nothing proves it does not. A co-owned document that wires no
- * hooks (an MCP document) holds nothing back, whatever state it is in.
+ * The hook documents (`ReclaimOptions.hookDocuments`) on disk once this
+ * sweep's documents have settled — every one that exists, not only this
+ * sweep's candidates (review/58): one it refused, left untouched or reduced to
+ * the owner's entries (read as the sweep wrote it), and one that was no
+ * candidate at all — a client still selected whose write this run refused, a
+ * document no ledger row names. Each still runs what it names. A candidate
+ * this sweep only previewed (`dry-run`) is left out: consent would delete or
+ * reduce it. Each comes with its text, or `null` when it is not a regular file
+ * this sweep may read (a link, a hard link, a file under a folder that
+ * resolves outside the repository, a file it cannot open): such a document is
+ * taken to run every engine hook script, since nothing proves it does not. A
+ * co-owned document that wires no hooks (an MCP document) holds nothing back,
+ * whatever state it is in.
  */
 async function hookDocumentsLeftInPlace(
   entries: readonly ReclaimActionEntry[],
   hookDocuments: ReadonlySet<string>,
   root: string,
 ): Promise<HookDocumentLeft[]> {
+  const previewed = new Set(entries.filter((entry) => entry.action === "dry-run").map((entry) => entry.path));
   const kept: HookDocumentLeft[] = [];
-  for (const entry of entries) {
-    if (!hookDocuments.has(entry.path)) continue;
-    if (entry.action !== "skipped-user-content" && entry.action !== "skipped-unsafe-path" && entry.action !== "co-owned-reduced") continue;
-    const target = join(root, ...entry.path.split("/"));
+  for (const path of hookDocuments) {
+    if (previewed.has(path)) continue;
+    const target = join(root, ...path.split("/"));
     let content: string | null = null;
     try {
       const stat = await lstat(target);
-      if (stat.isFile() && stat.nlink === 1) content = await readFile(target, "utf8");
+      if (stat.isFile() && stat.nlink === 1 && isWithin(await realpath(dirname(target)), root)) content = await readFile(target, "utf8");
     } catch (err) {
       if (errnoCode(err) === "ENOENT") continue;
     }
-    kept.push({ path: entry.path, content });
+    kept.push({ path, content });
   }
   return kept;
 }
