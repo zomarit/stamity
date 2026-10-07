@@ -1178,7 +1178,10 @@ describe("a hashless ledger row in the write lane", () => {
 
     const row = report.wrote.find((result) => result.path === WORKFLOW);
     expect(row?.action).toBe("updated");
-    expect(row?.warning).toContain(`${WORKFLOW}.bak`);
+    // The warning names the backup the way the engine names every backup: the
+    // resolved NATIVE path (backslashes on Windows), so the expectation is built
+    // with `join` rather than spelled as a POSIX substring of it.
+    expect(row?.warning).toContain(`Your previous file is at ${join(root, `${WORKFLOW}.bak`)}.`);
     expect(await readFile(join(root, `${WORKFLOW}.bak`), "utf8")).toBe(OWNER_WORKFLOW);
     expect(await readFile(join(root, WORKFLOW), "utf8")).not.toBe(OWNER_WORKFLOW);
   });
@@ -1236,7 +1239,10 @@ describe("the byte proof in the write lane", () => {
 
     const row = report.wrote.find((result) => result.path === WORKFLOW);
     expect(row?.action).toBe("updated");
-    expect(row?.warning).toContain(`${WORKFLOW}.bak`);
+    // The warning names the backup the way the engine names every backup: the
+    // resolved NATIVE path (backslashes on Windows), so the expectation is built
+    // with `join` rather than spelled as a POSIX substring of it.
+    expect(row?.warning).toContain(`Your previous file is at ${join(root, `${WORKFLOW}.bak`)}.`);
     expect(await readFile(join(root, `${WORKFLOW}.bak`), "utf8")).toBe(OWNER_WORKFLOW);
   });
 

@@ -283,7 +283,10 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       const entry = (doc.reclaim?.entries ?? doc.entries)?.find((candidate) => candidate.path === SETTINGS);
       expect(entry?.action).toBe(action);
       expect(entry?.detail).toContain("records no content hash");
-      expect(entry?.detail).toContain(`${SETTINGS}.bak`);
+      // The detail names the backup the way the engine names every backup: the
+      // resolved NATIVE path (backslashes on Windows), so the expectation is
+      // built with `join` rather than spelled as a POSIX substring of it.
+      expect(entry?.detail).toContain(`Your previous file is at ${join(root, `${SETTINGS}.bak`)}.`);
       expect(await readFile(join(root, `${SETTINGS}.bak`), "utf8")).toBe(owner);
     });
   });
