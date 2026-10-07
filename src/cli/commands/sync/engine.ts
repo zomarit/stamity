@@ -54,6 +54,7 @@ import {
   coOwnedOwnershipOf,
   coOwnedRowsCarriedThroughRefusal,
   hookScriptRetention,
+  legacyGuardRowsStillWired,
   coOwnedReclaimReducers,
   coOwnedReclaimRenderings,
   installedPackServers,
@@ -1148,6 +1149,8 @@ export async function applySync(
           now,
         })
       : null;
+  // An old guard name a kept hooks document still runs keeps its row (review/75).
+  ledger = [...ledger, ...legacyGuardRowsStillWired(plan.manifest.ledger, reclaimed)];
 
   // The state scaffold, restored on every live sync — the same helper init
   // runs. `check`'s state-dirs row names THIS verb as its remedy, and it named

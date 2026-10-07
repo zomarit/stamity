@@ -1043,6 +1043,64 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
   });
 });
 
+describe("a first sync that refuses .cursor/hooks.json leaves the rename to the next one (REQ-FLOW-038, review/75)", () => {
+  // Each refusal, and how the owner clears it.
+  const refusals = [
+    [
+      "an owner's version",
+      async (root: string): Promise<() => Promise<void>> => {
+        const before = await readText(root, CURSOR_HOOKS);
+        await writeDoc(root, CURSOR_HOOKS, { ...(await readDoc(root, CURSOR_HOOKS)), version: 2 });
+        return () => writeFile(abs(root, CURSOR_HOOKS), before, "utf8");
+      },
+    ],
+    [
+      "a hard link",
+      async (root: string): Promise<() => Promise<void>> => {
+        const other = getTemp().path("outside-hooks.json");
+        await link(abs(root, CURSOR_HOOKS), other);
+        return () => rm(other);
+      },
+    ],
+  ] as const;
+
+  // A hard link: Windows reports no link count this check can rely on, the
+  // posture `./reclaim.test.ts` takes for its hard-link cases.
+  it.each(refusals.filter(([name]) => name !== "a hard link" || process.platform !== "win32"))(
+    "refused for %s, then fixed: the next sync rewires the old guards to the new names and deletes their scripts by hash, with no .bak; the preview is the write at each step",
+    async (_name, refuse) => {
+      const root = await setUpByReleaseOneEleven();
+      const fix = await refuse(root);
+
+      const kept = await reclaimPreview(root, OLD_GUARDS);
+      expect(kept).toEqual(Object.fromEntries(OLD_GUARDS.map((old) => [old, { check: "keep", dryRun: "keep" }])));
+      const refused = await sync(root);
+      expect(refused.entries.find((entry) => entry.path === CURSOR_HOOKS)?.action).toBe("collision");
+      expect(reclaimDone(root, OLD_GUARDS)).toEqual(kept);
+      // The kept document still runs the old guards, so their rows stay with it.
+      const rows = (await readManifest(root))?.ledger.map((row) => row.path) ?? [];
+      for (const old of OLD_GUARDS) expect(rows, old).toContain(old);
+
+      await fix();
+
+      const deleted = await reclaimPreview(root, OLD_GUARDS);
+      expect(deleted).toEqual(Object.fromEntries(OLD_GUARDS.map((old) => [old, { check: "delete", dryRun: "delete" }])));
+      const { report } = await sync(root);
+      expect(reclaimDone(root, OLD_GUARDS)).toEqual(deleted);
+      for (const old of OLD_GUARDS) {
+        expect(report.reclaimed?.entries.find((entry) => entry.path === old), old).toMatchObject({ action: "deleted", proof: "hash" });
+      }
+      expect(await guardCommands(root)).toEqual({
+        subagentStart: [`node ${SUBAGENT_GUARD_PATH}`],
+        beforeMCPExecution: [`node ${MCP_GUARD_PATH}`],
+      });
+      expect(await backups(root)).toEqual([]);
+      const after = (await readManifest(root))?.ledger.map((row) => row.path) ?? [];
+      for (const old of OLD_GUARDS) expect(after, old).not.toContain(old);
+    },
+  );
+});
+
 describe("no verb deletes a renamed guard a kept .cursor/hooks.json still runs (REQ-FLOW-038 with S17, review/58)", () => {
   it("a .cursor/hooks.json sync refuses (an owner's version) keeps both old guards it still names", async () => {
     const root = await setUpByReleaseOneEleven();

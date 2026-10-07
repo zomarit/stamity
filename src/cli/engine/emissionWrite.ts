@@ -39,7 +39,7 @@ import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
-import type { HookScriptReader } from "../../merge/reclaim.ts";
+import type { HookScriptReader, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
 import {
@@ -432,6 +432,22 @@ const CURSOR_GUARD_PATHS: readonly string[] = [SUBAGENT_GUARD_PATH, MCP_GUARD_PA
 function cursorGuardPathsFor(ledger: readonly LedgerEntry[]): string[] {
   const recorded = new Set(ledger.map((row) => row.path));
   return [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, ...LEGACY_CURSOR_GUARD_PATHS.filter((path) => recorded.has(path))];
+}
+
+/**
+ * The pre-run ledger rows of each 1.11.0 guard name the live sweep kept because
+ * a hooks document it left in place still runs it (`ReclaimReport.wiringKept`,
+ * S17) — a `.cursor/hooks.json` this run refused, say. They go back into the
+ * rebuilt ledger, so the setup stays one that ran a release before the rename
+ * ({@link cursorGuardPathsFor}, review/75): once the owner clears the refusal,
+ * the next sync recognises the old guard entries and rewires them, and the
+ * sweep then deletes the old scripts by their recorded hash. A guard kept for
+ * any other reason — edited by hand — is the owner's, and its row is not
+ * carried.
+ */
+export function legacyGuardRowsStillWired(ledger: readonly LedgerEntry[], reclaimed: ReclaimReport | null): LedgerEntry[] {
+  const wired = new Set(reclaimed?.wiringKept?.flatMap((held) => held.scripts) ?? []);
+  return ledger.filter((row) => (LEGACY_CURSOR_GUARD_PATHS as readonly string[]).includes(row.path) && wired.has(row.path));
 }
 
 /**
