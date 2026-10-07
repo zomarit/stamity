@@ -185,9 +185,10 @@ const DIALECT_PATH: Record<McpDialect, string> = {
  * These three are the only emissions that must be MERGED rather than written:
  * a client's MCP file is common ground, so an entry the engine never wrote is
  * the operator's and survives (`../manifest/mcpFilter.ts`). The other two are
- * engine-owned whole files — the Copilot repo-settings env document lives under
- * the state directory, and `.codex/config.toml` is composed by the codex
- * residue as one document.
+ * not merged here — the Copilot repo-settings env document is an engine-owned
+ * whole file under the state directory, and `.codex/config.toml`'s engine
+ * tables are composed by the codex residue and merged table by table beside
+ * the owner's on their own lane (`../manifest/codexConfigToml.ts`).
  */
 const MERGED_JSON_DIALECTS: readonly McpDialect[] = ["claude-json", "cursor-json", "vscode-json"];
 

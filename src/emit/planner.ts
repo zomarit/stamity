@@ -31,8 +31,10 @@
  * exposes each tool's dialect documents for its adapter to place, and the
  * composer itself places none. The `codex-toml` dialect is excluded from that
  * generic surface entirely — `.codex/config.toml` is a COMPOSED document the
- * codex adapter owns whole (MCP tables plus adapter tables), and handing out
- * a standalone MCP rendering of the same path would invite a double write.
+ * codex adapter alone renders (MCP tables plus adapter tables), and handing
+ * out a standalone MCP rendering of the same path would invite a double write.
+ * The file itself is owned table by table: the engine's tables are merged
+ * beside the owner's (`../manifest/codexConfigToml.ts`).
  *
  * The context and planner types here are engine-side structural twins of the
  * CLI layer's `EmissionContext`/`EmissionPlanner` (`src/cli/engine/emission.ts`):
@@ -220,13 +222,14 @@ export interface CoreEmissionPlan {
    * The MCP documents `tool`'s adapter places, in the tool's dialect order —
    * empty when the manifest selects no servers. `codex` always answers empty:
    * the `codex-toml` dialect is reserved for the codex residue composer,
-   * which owns `.codex/config.toml` whole (see the module header).
+   * which renders the engine's tables of `.codex/config.toml`, a file owned
+   * table by table (see the module header).
    */
   mcpFor(tool: Tool): McpEmission[];
   /**
    * Every MCP server the installed packs supply, sorted by id — the same rows
    * {@link mcpFor} resolves against, exposed for the ONE adapter that renders
-   * its own MCP document (codex composes `.codex/config.toml` whole). Any
+   * its own MCP tables (codex composes the engine's tables of `.codex/config.toml`). Any
    * other consumer takes {@link mcpFor}; this field is not a second selection
    * surface, and what a repo emits is still `manifest.mcp.servers`.
    */
@@ -493,7 +496,8 @@ export async function buildCoreEmissionPlan(
     mcpFor: (tool) => {
       // Zero servers is a real answer: no document at all, for any tool —
       // never a present-but-empty config. codex is excluded by design (the
-      // codex residue composer owns .codex/config.toml whole).
+      // codex residue composer renders .codex/config.toml's engine tables,
+      // which are merged table by table beside the owner's).
       if (serverIds.length === 0 || tool === "codex") return [];
       return planMcpEmissions(serverIds, [tool], {
         ...(protocolVersion === undefined ? {} : { protocolVersion }),
