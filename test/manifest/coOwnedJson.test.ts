@@ -919,6 +919,66 @@ describe("commandRunsStateScript", () => {
   ] as const)("%j → %s", (cmd, expected) => {
     expect(commandRunsStateScript(cmd)).toBe(expected);
   });
+
+  // review/32 (signed off): the EXECUTED script decides — the program, or the
+  // first argument after the interpreter — in each form the engine renders. A
+  // `.stamity/` path anywhere else in the command does not count.
+  const TAIL = `|| { s=$?; [ "$s" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\`' >&2; exit 2; }`;
+  it.each([
+    [`node "\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs" ${TAIL}`, true],
+    ["node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJhIjoxfQ", true],
+    ["deno run .stamity/hooks/x.ts", true],
+    ["bun run .stamity/hooks/x.ts", true],
+    ["python3 .stamity/hooks/x.py --flag value", true],
+    ['"${CLAUDE_PROJECT_DIR}/.stamity/hooks/x.sh"', true],
+    ["./scripts/guard.sh --config .stamity/guard.json", false],
+    ["node scripts/x.mjs .stamity/a.json", false],
+    ["node --import .stamity/x.mjs scripts/evil.mjs", false],
+    ["node .stamity/../scripts/evil.mjs", false],
+    ["node .stamity/", false],
+    ["node .stamity/x.mjs; ./evil.sh", false],
+    ["node .stamity/x.mjs && ./evil.sh", false],
+    ["node .stamity/x.mjs | sh", false],
+    ["node .stamity/x.mjs || ./evil.sh", false],
+    ["node .stamity/x.mjs > out.txt", false],
+    ["sh -c 'node .stamity/x.mjs'", false],
+    ["bash .stamity/x.sh", false],
+    ["/tmp/node .stamity/x.mjs", false],
+    ["deno .stamity/x.ts", true],
+    ["deno run --allow-all .stamity/x.ts", false],
+    ['node "$HOME/.stamity/x.mjs"', false],
+    ["node $CLAUDE_PROJECT_DIR/.stamity/x.mjs", false],
+    ["node '${CLAUDE_PROJECT_DIR}/.stamity/x.mjs'", false],
+    ['node "x${CLAUDE_PROJECT_DIR}/.stamity/x.mjs"', false],
+    ['node "${CLAUDE_PROJECT_DIR}/scripts/x.mjs" .stamity/a.json', false],
+    ["node $(echo .stamity/x.mjs)", false],
+    ["node `echo .stamity/x.mjs`", false],
+    ['node "unterminated', false],
+    ["node 'unterminated", false],
+    [`node .stamity/x${String.fromCharCode(0)}.mjs`, false],
+    ['node "$CLAUDE_PROJECT_DIR/.stamity/x.mjs"', true],
+    ['node "$CLAUDE_PROJECT_DIRX/.stamity/x.mjs"', false],
+    ['node "${CLAUDE_PROJECT_DIR}', false],
+    ['node ".stamity/`x`.mjs"', false],
+    ['node ".stamity/x\\".mjs"', false],
+    ["node .stamity/x\\ y.mjs", false],
+    ["node \t .stamity/x.mjs  ", true],
+    [`node ".stamity/a"'b'.mjs`, true],
+    ['"./.stamity/x.sh"', true],
+    [`node .stamity/x.mjs || { s=$?; [ "$s" -eq 2 ] && exit 2; echo 'a'\\''b' >&2; exit 2; }`, false],
+    ["", false],
+  ] as const)("the executed script decides: %j → %s", (cmd, expected) => {
+    expect(commandRunsStateScript(cmd)).toBe(expected);
+  });
+
+  it("holds every command of the engine's own rendered settings document in bound", async () => {
+    const settings = JSON.parse(await readFile(join(process.cwd(), ".claude", "settings.json"), "utf8")) as {
+      hooks: Record<string, { hooks: { command: string }[] }[]>;
+    };
+    const commands = Object.values(settings.hooks).flatMap((groups) => groups.flatMap((entry) => entry.hooks.map((hook) => hook.command)));
+    expect(commands.length).toBeGreaterThan(0);
+    for (const cmd of commands) expect(commandRunsStateScript(cmd), cmd).toBe(true);
+  });
 });
 
 // ── predictCoOwnedMerge / materializeCoOwned ─────────────────────────────

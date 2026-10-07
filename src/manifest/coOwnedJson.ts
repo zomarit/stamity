@@ -92,6 +92,7 @@ import {
   type MemberPointer,
   type MemberSegments,
 } from "./jsonMembers.ts";
+import { ALLOWED_LAUNCHERS } from "../shared/launcherAllowlist.ts";
 import { readTextOrNull } from "./mcpFilter.ts";
 
 // ── The spec ─────────────────────────────────────────────────────────────
@@ -176,12 +177,121 @@ export interface CoOwnedMergeResult extends MergeResult {
   writtenRecord: CoOwnership | null;
 }
 
-/** True when `command` runs a script under `.stamity/` — a path segment, not a substring of another name. */
+/**
+ * True when the script `command` EXECUTES lies under `.stamity/` (S11): the
+ * program itself, or the first argument after an allowed launcher
+ * (`../shared/launcherAllowlist.ts`; `deno run` and `bun run` step over their
+ * one run-file word). A `.stamity/` path anywhere else — a flag's value, an
+ * argument to another script, a second command — does not count, and neither
+ * does a command this grammar cannot read: an expansion other than a
+ * double-quoted `${CLAUDE_PROJECT_DIR}` opening the path, a command
+ * substitution, a redirect, or a second command other than the guard's own
+ * fail-closed tail (`../adapters/claude.ts::guardFailClosedTail`). Those are
+ * exactly the forms the engine renders; anything else is outside the bound.
+ */
 export function commandRunsStateScript(command: string): boolean {
-  return STATE_SCRIPT.test(command);
+  if (command.includes(ROOT_WORD)) return false;
+  const simple = firstSimpleCommand(command);
+  if (simple === null) return false;
+  if (simple.rest !== "" && !GUARD_TAIL.test(simple.rest)) return false;
+  const [program, ...args] = simple.words;
+  if (program === undefined) return false;
+  if (isStateScriptPath(program)) return true;
+  if (!ALLOWED_LAUNCHERS.has(program)) return false;
+  const script = RUN_FILE_LAUNCHERS.has(program) && args[0] === "run" ? args[1] : args[0];
+  return script !== undefined && isStateScriptPath(script);
 }
 
-const STATE_SCRIPT = /(?:^|[\s"'/])\.stamity\//;
+/** The launchers whose `run` word names a file to run (`../shared/launcherAllowlist.ts`'s RUN_FILE_SUBCOMMANDS). */
+const RUN_FILE_LAUNCHERS: ReadonlySet<string> = new Set(["deno", "bun"]);
+
+/** The guard's fail-closed tail as `../adapters/claude.ts` renders it: builtins and one single-quoted echo. */
+const GUARD_TAIL = /^\|\| \{ s=\$\?; \[ "\$s" -eq 2 \] && exit 2; echo '[^']*' >&2; exit 2; \}$/;
+
+/** Stands for an expanded `${CLAUDE_PROJECT_DIR}` in a parsed word; a command holding it is refused first. */
+const ROOT_WORD = String.fromCharCode(0);
+
+/** The project-root variable the Claude adapter anchors every hook script on. */
+const ROOT_VARIABLES = ["${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR"] as const;
+
+/** True for a path under `.stamity/`, relative or on the root variable, that names a file and never climbs out. */
+function isStateScriptPath(word: string): boolean {
+  let path = word;
+  if (path.startsWith(`${ROOT_WORD}/`)) path = path.slice(ROOT_WORD.length + 1);
+  else if (path.startsWith("./")) path = path.slice(2);
+  if (!path.startsWith(".stamity/") || path.includes(ROOT_WORD)) return false;
+  const segments = path.split("/");
+  return segments.at(-1) !== "" && !segments.includes("..");
+}
+
+/**
+ * The words of `command`'s first simple command, as a POSIX shell splits them,
+ * and the text from the first control or redirect operator on; `null` when a
+ * word holds what this grammar does not read (a substitution, an expansion it
+ * cannot resolve, an unterminated quote).
+ */
+function firstSimpleCommand(command: string): { words: string[]; rest: string } | null {
+  const words: string[] = [];
+  let word: string | null = null;
+  let index = 0;
+  const end = (): void => {
+    if (word !== null) words.push(word);
+    word = null;
+  };
+  while (index < command.length) {
+    const char = command[index] as string;
+    if (char === " " || char === "\t") {
+      end();
+      index += 1;
+    } else if ("|&;<>()`\n\r".includes(char)) {
+      break;
+    } else if (char === "'") {
+      const close = command.indexOf("'", index + 1);
+      if (close === -1) return null;
+      word = (word ?? "") + command.slice(index + 1, close);
+      index = close + 1;
+    } else if (char === '"') {
+      const quoted = doubleQuoted(command, index + 1, word === null);
+      if (quoted === null) return null;
+      word = (word ?? "") + quoted.text;
+      index = quoted.next;
+    } else if (char === "\\" || char === "$") {
+      // An unquoted escape or expansion: the engine renders neither.
+      return null;
+    } else {
+      word = (word ?? "") + char;
+      index += 1;
+    }
+  }
+  end();
+  return { words, rest: command.slice(index).trim() };
+}
+
+/**
+ * The text of a double-quoted span opening at `start` (just past its quote),
+ * and the index after its closing quote. The root variable is read only when
+ * it opens the word (`atWordStart` and first in the span); any other `$`, a
+ * backtick or an escape makes the span unreadable.
+ */
+function doubleQuoted(command: string, start: number, atWordStart: boolean): { text: string; next: number } | null {
+  let text = "";
+  let index = start;
+  while (index < command.length) {
+    const char = command[index] as string;
+    if (char === '"') return { text, next: index + 1 };
+    if (char === "`" || char === "\\") return null;
+    if (char === "$") {
+      const variable = atWordStart && index === start ? ROOT_VARIABLES.find((name) => command.startsWith(name, index)) : undefined;
+      if (variable === undefined || /[A-Za-z0-9_]/.test(command[index + variable.length] ?? "")) return null;
+      text += ROOT_WORD;
+      index += variable.length;
+      continue;
+    }
+    text += char;
+    index += 1;
+  }
+  return null;
+}
 
 // ── Parsing, naming, serialising ─────────────────────────────────────────
 
