@@ -898,8 +898,8 @@ describe("ci.yml — the merge-blocking gate", () => {
   // pull request already proved skips the test matrix. The risk is one direction only — a push
   // read as proven when it was not — so what is pinned here is that the reader runs on a push to
   // `main` alone, holds read grants only, takes the sha as data, and that the four lanes it gates
-  // skip exactly when it said `true` and the classifier is green. Which check runs count as
-  // evidence (the GitHub Actions app's alone) is proven in test/ci/prProven.test.ts.
+  // skip exactly when it said `true` and the classifier is green. What counts as evidence (ci.yml's
+  // own pull-request run, with no second producer on the head) is proven in test/ci/prProven.test.ts.
   describe("the proven-push skip", () => {
     // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): the
     // `records` lane is the `lanes` job now, and the side each lane takes is read off `full`.
@@ -910,9 +910,13 @@ describe("ci.yml — the merge-blocking gate", () => {
       const job = jobOf(ci, "prove-pr");
       expect(job["runs-on"]).toBe("ubuntu-latest");
       expect(job["timeout-minutes"]).toBe(5);
-      // The three reads the script makes: the commits (contents), the pull requests that hold the
-      // pushed commit (pull-requests) and the check runs on each head (checks). Nothing writes.
-      expect(job.permissions).toEqual({ contents: "read", checks: "read", "pull-requests": "read" });
+      // The four reads the script makes: the commits (contents), the pull requests that hold the
+      // pushed commit (pull-requests), ci.yml's runs on each head and their jobs (actions) and the
+      // check runs on each head (checks). Nothing writes.
+      // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, fix round 1,
+      // review/9): `actions: read` joins, because the evidence is now ci.yml's own run, read
+      // through the Actions API; the pin stays an exact equality, so no grant can widen unseen.
+      expect(job.permissions).toEqual({ actions: "read", contents: "read", checks: "read", "pull-requests": "read" });
       // It needs nothing, so it runs beside `changes` rather than after it.
       expect(job.needs).toBeUndefined();
       expect(job.outputs).toEqual({ proven: "${{ steps.prove.outputs.proven }}" });

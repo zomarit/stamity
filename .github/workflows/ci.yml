@@ -28,14 +28,16 @@
 #     the lanes, their suites, `site_build`, `cli_check`, and `records_only` (kept one release).
 #   - `prove-pr`, one leg, on a push to `main` only (skipped on every other trigger), beside
 #     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
-#     tree equals the head tree of a pull request holding that commit, and that head's
-#     `all-ci-checks` check run, created by the GitHub Actions app (`app.slug` `github-actions`),
-#     concluded `success`. Then `check`, `apm-install`, `plugin-route` and `lanes` all skip: the
-#     tree they would test is the one the pull request's run already passed. A check run of that
-#     name from any other app or from none, any other conclusion, a tree no head carries, and any
-#     failed or malformed read all print `false`, which is full CI and never a red reader. The
-#     push-only workflows (`pack-signing-rehearsal.yml`, `docs-site.yml`) are untouched and still
-#     run on the push.
+#     tree equals the head tree of a pull request holding that commit, and that head's newest
+#     `ci.yml` pull-request run passed: its latest attempt's one `all-ci-checks` job concluded
+#     `success`. Then `check`, `apm-install`, `plugin-route` and `lanes` all skip: the tree they
+#     would test is the one the pull request's run already passed. The evidence is this
+#     workflow's own run, not the app that reports it: every workflow's jobs report as GitHub
+#     Actions, so an `all-ci-checks` check run on the head from any other check suite is a second
+#     producer. That, any other conclusion, a tree no head carries, and any failed, malformed or
+#     stalled read all print `false`, which is full CI and never a red reader. The push-only
+#     workflows (`pack-signing-rehearsal.yml`, `docs-site.yml`) are untouched and still run on
+#     the push.
 #   - `lanes`, one leg, and ONLY when `changes` said `full=false` and no push was proven. It stands
 #     in for `check`, `apm-install` and `plugin-route`, which skip. No lane's paths feed the package
 #     build or a published byte, so what a change can break is what reads them: the suites that
@@ -44,10 +46,9 @@
 #     scan. The `learnings` lane adds the CLI build and its dogfood `check` (the session hook reads
 #     the learnings); the `website` lane adds the docs site build. The aggregator asserts which side
 #     ran, so a lanes pass can never stand in for a full one.
-#   - `check`, four legs, on every change no lane covers, unless `prove-pr` proved the
-#     push. ubuntu on the declared
-#     engines floor (22.22.2) and on the LTS canonical (24), plus windows on 24 as two legs that
-#     each run one half of the suite
+#   - `check`, four legs, on every change no lane covers, unless `prove-pr` proved the push.
+#     ubuntu on the declared engines floor (22.22.2) and on the LTS canonical (24), plus windows
+#     on 24 as two legs that each run one half of the suite
 #     (`--shard=1/2`, `--shard=2/2`). Every leg installs, builds and runs its tests through
 #     `scripts/ci/test-run.mjs`; the floor, the LTS and the first windows shard also re-prove the
 #     committed dogfood configs with the binary they just built and run the leak gate. The test
@@ -186,10 +187,12 @@ jobs:
 
   # Proven or not: on a push to `main`, whether a pull request already passed the pushed tree. It
   # runs beside `changes` with no dependency, on a push to `main` only; on every other trigger it is
-  # skipped and reads as not proven. Only a check run the GitHub Actions app created counts as
-  # evidence, because any integration holding `checks: write` can create one under the name
-  # `all-ci-checks`. Every failed or malformed read prints `proven=false` and exits 0, so a rate
-  # limit or a 404 means full CI rather than a red job. The four lanes it gates carry `!cancelled()`
+  # skipped and reads as not proven. Only `ci.yml`'s own pull-request run on the head counts as
+  # evidence, read through the Actions API (`actions: read`): every workflow's jobs report as the
+  # GitHub Actions app, so an `all-ci-checks` check run from any other check suite on that head is a
+  # second producer and reads not proven. Every failed, malformed or stalled read prints
+  # `proven=false` and exits 0 (each read has a timeout), so a rate limit, a 404 or a hang means
+  # full CI rather than a red job. The four lanes it gates carry `!cancelled()`
   # because a job whose need was skipped is itself skipped unless its `if` calls a status function,
   # and `needs.changes.result == 'success'` puts back the guard the implicit `success()` gave.
   prove-pr:
@@ -198,6 +201,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       checks: read
       pull-requests: read
