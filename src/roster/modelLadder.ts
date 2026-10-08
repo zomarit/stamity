@@ -34,16 +34,18 @@
  * class once a round is mechanical.
  *
  * TWO FLOW PLACEMENTS ARE NOT RECORDED HERE, and a reader has to know which.
- * The first is the review loop's round-4 rule. That rule — a fresh fixer on a stronger model class,
- * stated in `content/agents/stamity-fixer.md` and `content/commands/st-work.md`
- * — names no class, and no row below places `fixer` above `standard`. So an
- * agent verifying a role's class against this table after substitution will not
- * find the round-4 class in it, and nothing here resolves a value for it: that
- * escalation is prompt-carried, and the flow acts on the sentence rather than on
- * an emitted key. Written down as a gap rather than closed by adding a row,
- * because a role column here is pinned in both directions against the corpus
- * frontmatter and the shipped table, and inventing a placement to make the
- * sentence resolve would move all three.
+ * The first is the review loop's escalation: a fresh fixer spawn at one effort
+ * level above its declared one, on the same model, set per dispatch where the
+ * client takes one; no row records it. That rule, stated in
+ * `content/agents/stamity-fixer.md` and `content/commands/st-work.md`, names no
+ * class, and no row below places `fixer` above `standard` or carries its effort
+ * step. So an agent verifying a role's class or effort against this table after
+ * substitution will not find the escalation in it, and nothing here resolves a
+ * value for it: that escalation is prompt-carried, and the flow acts on the
+ * sentence rather than on an emitted key. Written down as a gap rather than
+ * closed by adding a row, because a role column here is pinned in both
+ * directions against the corpus frontmatter and the shipped table, and
+ * inventing a placement to make the sentence resolve would move all three.
  *
  * The second is the capacity rung in `content/commands/st-work.md`'s Dispatch
  * contract: under a `limit-no-reset` stop (credits, or a model limit with no
@@ -51,8 +53,8 @@
  * further, named in the proof block; a build role with no class below it stops
  * as BLOCKED_DEPENDENCY. The drop is relative to the role's own class and names
  * no target rung, so no row below carries it and nothing here resolves a value
- * for it: that drop is prompt-carried too, for the same reason the round-4
- * class is.
+ * for it: that drop is prompt-carried too, for the same reason the
+ * escalation's effort step is.
  * Verdict roles and the spec-author never fall back to a weaker class.
  *
  * NEVER INVENT A VALUE. A class this module cannot resolve for a client yields

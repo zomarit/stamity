@@ -2,7 +2,7 @@
 id: agent-fixer-return-contract
 class: golden
 claim: "A fix round returns status DONE carrying a disposition for every finding it received — fixed, rejected with reasoning, or unresolved with a reason — plus the changed-file list, the tests, and deferrals; a finding judged wrong is rejected with technical reasoning at path:line rather than silently left or applied anyway, the round is not certified green or closed from here, and ledgered Minor rows and opportunistic edits stay out of the pass."
-source: content/agents/stamity-fixer.md:14-55,92-125
+source: content/agents/stamity-fixer.md:14-55,96-129
 metric: rubric
 ---
 

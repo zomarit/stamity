@@ -69,22 +69,26 @@ the economy class:
 
 ## Round policy
 
-- **Rounds 1–2: the same fixer.** Continuity is the point — the instance holds what was
-  already tried and why it did not work, so round two does not re-attempt round one.
-- **Round 3: a fresh fixer on a stronger model class,** with the round history attached. A
-  third attempt by the same instance against the same finding repeats its own blind spot;
-  the escalation exists to break that, not to add attempts. What "stronger" resolves to is
-  the flow's own placement, not a rung anything records: the shipped model-ladder table
-  lists this role at its declared class and at the mechanical lane's cheaper one, and at no
-  rung above either. So the round-3 class reaches no emitted model key, and an agent
-  verifying a role's class against that table will not find it there. The stage is
-  prompt-carried; reading it as a resolved model setting is the misread this sentence exists
-  to prevent.
-- **Round 3 is the default cap's last round.** The flow stops there unless an operator
-  raised the cap, which the engine clamps to `1..10`. A raised cap buys further
-  fresh-fixer rounds — each one a full round of latency and spend — and adds no new stage.
-- **At the cap the run stops** as `BLOCKED_FAILURE` to the human, carrying the open
-  findings, what was tried per round, and the last gate output.
+- **The same fixer until an escalation.** Continuity is the point — the instance holds what
+  was already tried and why it did not work, so round two does not re-attempt round one.
+- **Escalation, on what the run shows:** a finding whose ledger row carries two
+  `re-review not-fixed` notes, a gate red after a fix, or a finding still open at the cap
+  round. It goes to a fresh fixer spawn, never the resumed one, at one effort level above
+  this role's declared one, on the same model, with the round history attached. A third
+  attempt by the same instance against the same finding repeats its own blind spot; the
+  escalation exists to break that, not to add attempts.
+- **The effort step is the flow's own placement.** It reaches the `effort` key only where
+  the client's dispatch takes one per spawn; elsewhere the fresh spawn is the escalation and
+  the proof block records `effort: not settable`. The shipped model-ladder table lists this
+  role at its declared class and at the mechanical lane's cheaper one, and no row records the
+  step; the step is prompt-carried, and reading it as an emitted setting is the misread this
+  sentence exists to prevent.
+- **Then the human.** A finding the escalation fixer leaves open stops the run as
+  `BLOCKED_FAILURE`, carrying the open findings, what was tried per round, and the last gate
+  output.
+- **No round past the cap runs.** The engine clamps an operator-raised cap to `1..10`; a
+  raised cap buys further rounds — each one a full round of latency and spend — and adds no
+  new stage.
 - **Convergence is expected by round two or three.** An unchanged finding set across two
   consecutive rounds exits as diverged, and findings oscillating between two states exit
   as diverged, rather than spending the remaining rounds on a loop that is not closing.

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { MODEL_LADDER } from "../../../src/roster/modelLadder.ts";
-import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../../src/roster/reviewCaps.ts";
 import { FUNCTIONAL_TOOL_CATEGORIES } from "../../../src/tools/categories.ts";
 import {
   assertDenyClean,
@@ -768,54 +767,63 @@ describe("fixer — bounded scope, escalating rounds", () => {
   });
 
   /**
-   * The stage numbers derive from {@link DEFAULT_MAX_REVIEW_ITERATIONS} rather than being
-   * spelled here. This case previously pinned the literal "rounds 4–5", the ladder the
-   * body inherited from a SoT written against a cap of at least five; at the shipped cap
-   * of four that stage was unreachable, so the body promised a round that never runs.
-   * Hardcoding is what let that ship, so the assertions now track the engine: a
-   * cap change fails this case instead of leaving a stale promise green. The same-fixer
-   * run ends one round below the cap and the cap's own round carries the escalation, so
-   * both bounds move together.
+   * The escalation names no round number: it fires on what the run shows, so no stage here
+   * derives from the engine cap. This case once pinned the literal "rounds 4–5", a ladder
+   * the body inherited from a SoT written against a cap of at least five, and then a pair
+   * derived from the cap ("rounds 1–2: the same fixer", "round 3: a fresh fixer on a stronger
+   * model class" at a cap of 3); both are retired.
    *
-   * Scope split: the cross-body half — that this body and the work body state the same
-   * stages, and that no body names a round past the cap — is invariant 16's. What stays
-   * local is the fixer's own contract prose: the blind-spot rationale the escalation
-   * exists for, and the two divergence exits.
+   * Scope split: the cross-body half — that this body and the work body name the same
+   * escalation, and that no body names a round past the cap — is invariant 16's. What stays
+   * local is the fixer's own contract prose: the three triggers in order, the effort
+   * placement, the blind-spot rationale the escalation exists for, and the two divergence
+   * exits.
    */
-  it("keeps the same fixer until the cap's last round, which escalates", async () => {
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4b-fixer-escalation): the case
+  // pinned "rounds 1–2: the same fixer", "round 3: a fresh fixer on a stronger model class" and
+  // the paragraph on what "stronger" resolves to. Escalation now keys on what the run shows —
+  // two `re-review not-fixed` notes, a gate red after a fix, or a finding still open at the cap
+  // round — and runs as a fresh spawn at one effort level above on the same model
+  // (REQ-FLOW-064, REQ-LADDER-003). So the three triggers are pinned in order, the effort
+  // placement replaces the class placement (still checked against the ladder table, which
+  // records no step for this role), and the retired stronger-class phrase is asserted absent.
+  // The blind-spot rationale and the two divergence exits stay pinned as before.
+  it("keeps the same fixer until an escalation, which a fresh spawn at a higher effort takes", async () => {
     const rounds = section(await load("agents/stamity-fixer.md"), "Round policy").replace(
       /\s+/g,
       " ",
     );
 
-    expect(rounds).toMatch(
-      new RegExp(`rounds 1[–-]${DEFAULT_MAX_REVIEW_ITERATIONS - 1}: the same fixer`, "i"),
-    );
-    expect(rounds).toMatch(
-      new RegExp(
-        `round ${DEFAULT_MAX_REVIEW_ITERATIONS}: a fresh fixer on a stronger model class`,
-        "i",
-      ),
+    expect(rounds).toMatch(/the same fixer until an escalation/i);
+    const triggers = [
+      "a finding whose ledger row carries two `re-review not-fixed` notes",
+      "a gate red after a fix",
+      "a finding still open at the cap round",
+    ];
+    for (const trigger of triggers) expect(rounds, trigger).toContain(trigger);
+    const positions = triggers.map((trigger) => rounds.indexOf(trigger));
+    expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
+    expect(rounds).toContain(
+      "a fresh fixer spawn, never the resumed one, at one effort level above this role's declared one, on the same model",
     );
     expect(rounds).toMatch(/repeats its own blind spot/i);
-    expect(rounds).toContain("BLOCKED_FAILURE");
+    expect(rounds).toMatch(/a finding the escalation fixer leaves open stops the run as `?BLOCKED_FAILURE/i);
     expect(rounds).toMatch(/convergence is expected by round two or three/i);
     expect(rounds).toMatch(/exits as diverged/i);
+    expect(rounds).not.toMatch(/stronger model class/i);
 
-    // MODIFIED with the round-4 honesty fix. What moved: the stage sentence is unchanged
-    // (the engine cap still derives it, and the cross-body invariant still holds both
-    // bodies to it), and the body now also states what "stronger" does NOT resolve to. The
-    // promise was readable as an emitted model setting while the ladder places this role on
-    // two rungs, neither above its declared class — so the claim about the table is checked
-    // against the table, next to the sentence that makes it.
+    // The effort placement: the step reaches a client's `effort` key only where a dispatch
+    // takes one per spawn, and the ladder table records no step for this role — so the claim
+    // about the table is checked against the table, next to the sentence that makes it.
     const rungs = MODEL_LADDER.filter((entry) => entry.roles.includes("fixer")).map(
       (entry) => entry.modelClass,
     );
     expect(rungs).toEqual(["standard", "economy"]);
-    expect(rounds).toMatch(/what "stronger" resolves to is the flow's own placement/i);
-    expect(rounds).toMatch(/at no rung above either/i);
-    expect(rounds).toMatch(/reaches no emitted model key/i);
-    expect(rounds).toMatch(/the stage is prompt-carried/i);
+    expect(rounds).toContain(
+      "reaches the `effort` key only where the client's dispatch takes one per spawn; elsewhere the fresh spawn is the escalation and the proof block records `effort: not settable`",
+    );
+    expect(rounds).toMatch(/no row records the step/i);
+    expect(rounds).toMatch(/the step is prompt-carried/i);
   });
 
   it("takes gate evidence from the runner and never closes its own loop", async () => {

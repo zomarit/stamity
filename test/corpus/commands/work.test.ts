@@ -755,19 +755,36 @@ describe("/st-work — Prove", () => {
     expect(loop).toContain(`${MIN_MAX_REVIEW_ITERATIONS}..${HARD_MAX_REVIEW_ITERATIONS}`);
   });
 
-  it("escalates the fixer ladder and stops as BLOCKED at the cap", async () => {
-    const loop = collapse(section(await body(), "### Review loop"));
-    // Ladder stages derived from the engine cap, not restated: the same-fixer
-    // run ends one round below the cap, and the cap's own round is the single
-    // escalation. A cap change makes both numbers wrong here rather than
-    // shipping a promise of a round that never runs.
-    expect(loop).toContain(`rounds 1–${DEFAULT_MAX_REVIEW_ITERATIONS - 1} keep the same fixer`);
-    expect(loop).toContain(`round ${DEFAULT_MAX_REVIEW_ITERATIONS} spawns a fresh fixer`);
-    expect(loop).toContain("fresh fixer on a stronger model class");
-    expect(loop).toContain("BLOCKED_FAILURE");
-    // Raising the cap is an operator act with a stated cost, not a free stage.
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4b-fixer-escalation): the pins read
+  // "rounds 1–2 keep the same fixer", "round 3 spawns a fresh fixer" and "fresh fixer on a
+  // stronger model class". Escalation now keys on what the run shows — two `re-review not-fixed`
+  // notes on a finding's ledger row, a gate red after a fix, or a finding still open at the cap
+  // round — and goes to a fresh fixer spawn on the same model at one effort level above
+  // (REQ-FLOW-064, REQ-LADDER-003). The stronger-class stage is retired, so its phrase is asserted
+  // absent from the whole body; the cap's BLOCKED_FAILURE stop and a raised cap's "no new stage"
+  // stay pinned, and the light tier's cap is pinned as prose (the hook cannot see a tier).
+  it("escalates on what the run shows and stops as BLOCKED past the escalation fixer", async () => {
+    const text = await body();
+    const loop = collapse(section(text, "### Review loop"));
+    expect(loop).toContain(`${DEFAULT_MAX_REVIEW_ITERATIONS} rounds by default (2 at light)`);
+    // The three triggers, in order.
+    const triggers = [
+      "a finding whose ledger row carries two `re-review not-fixed` notes",
+      "a gate red after a fix",
+      "a finding still open at the cap round",
+    ];
+    for (const trigger of triggers) expect(loop, trigger).toContain(trigger);
+    const positions = triggers.map((trigger) => loop.indexOf(trigger));
+    expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
+    expect(loop).toContain("goes to a fresh fixer spawn — never the resumed one");
+    expect(loop).toContain("on the same model at one effort level above the fixer's declared one");
+    expect(loop).toContain("the proof block records `effort: not settable`");
+    expect(loop).toContain("A finding that fixer leaves open stops the run as BLOCKED_FAILURE");
+    expect(loop).toContain("No round past the cap runs");
+    // Raising the cap is an operator act, not a free stage.
     expect(loop).toContain("raises the cap");
     expect(loop).toContain("adds no new stage");
+    expect(collapse(text)).not.toContain("fresh fixer on a stronger model class");
   });
 
   it("claims no ladder round past the default cap", async () => {
@@ -1227,9 +1244,17 @@ describe("/st-work — dispatch contract", () => {
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4a-review-cap): the pin read
     // "the fixer on rounds 1–3". The default review cap moved from 4 to 3, so the same-fixer
     // rounds that count as a build role are now rounds 1–2; round 3 is the escalation.
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4b-fixer-escalation): the pin
+    // read "the fixer on rounds 1–2", and the verdict roles named "the stronger-class fixer".
+    // Escalation no longer sits at a fixed round or on a stronger class: it fires on what the run
+    // shows and runs at a higher effort on the same model (REQ-FLOW-064, REQ-LADDER-003). So the
+    // build role is the fixer before an escalation and the role that never falls back is the
+    // escalation fixer; the enumeration and its never-fall-back rule are otherwise unchanged.
     expect(dispatch).toContain(
-      "the implementer, the fixer on rounds 1–2, the researcher, the creator, the test-runner",
+      "the implementer, the fixer before an escalation, the researcher, the creator, the test-runner",
     );
+    expect(dispatch).toContain("the lenses, the escalation fixer — and the spec-author never fall back");
+    expect(dispatch).not.toContain("stronger-class fixer");
     expect(dispatch).toContain("and the spec-author never fall back to a weaker class");
     // build/60: one rung and no further; a role already at the bottom stops instead.
     expect(dispatch).toContain("one class below its assigned class and no further");

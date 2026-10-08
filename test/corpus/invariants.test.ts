@@ -97,6 +97,22 @@ const WORK_CAP_STATEMENT = /Iteration cap: (\d+) rounds by default/;
  */
 const LADDER_BODIES: readonly string[] = [WORK_RELATIVE_PATH, "agents/stamity-fixer.md"];
 
+/**
+ * The phrases both ladder bodies carry for the escalation: a fresh spawn, never
+ * the resumed fixer, one effort level above on the same model, the record where
+ * no effort can be set, and the stop when that fixer leaves a finding open.
+ */
+const ESCALATION_PHRASES: readonly string[] = [
+  "fresh fixer spawn",
+  "never the resumed one",
+  "one effort level above",
+  "`effort: not settable`",
+  "BLOCKED_FAILURE",
+];
+
+/** The stage the escalation replaced; no ladder body may carry it. */
+const RETIRED_ESCALATION = "fresh fixer on a stronger model class";
+
 /** Any round number a body names, singly or as a range (`rounds 1–3`, `round 4`). */
 const ROUND_NUMBERS = /\bround(?:s)?\s+(\d+)(?:\s*[–-]\s*(\d+))?/gi;
 
@@ -1591,21 +1607,20 @@ describe("invariant 15 — the work body's stated review cap locksteps the engin
 describe("invariant 16 — the escalation ladder locksteps the engine cap wherever it is stated", () => {
   /**
    * The ladder is prompt-carried on every client (SoT 24), so its stages exist
-   * only as text — in two bodies, which the shipped ladder inherited from a SoT
-   * written against a cap of at least five. At the shipped default of four the
-   * second stage was unreachable, so both bodies promised a round that never
-   * runs.
+   * only as text — in two bodies. The shipped ladder once inherited a SoT
+   * written against a cap of at least five, so both bodies promised a round
+   * that never ran; the checker still holds them to the engine's cap: no body
+   * may name a round beyond {@link DEFAULT_MAX_REVIEW_ITERATIONS}, and a cap
+   * change fails for every body at once — the property a two-body contract
+   * needs.
    *
-   * The checker derives the stages from {@link DEFAULT_MAX_REVIEW_ITERATIONS}
-   * rather than restating them: the same-fixer run ends one round below the
-   * cap, the cap's own round carries the single escalation, and no body may
-   * name a round beyond it. A cap change fails here instead of shipping a stale
-   * promise, and it fails for every body at once — which is the property a
-   * two-body contract needs.
+   * The escalation itself names no round. It fires on what the run shows and
+   * goes to a fresh fixer spawn at one effort level above, on the same model,
+   * so both bodies must carry {@link ESCALATION_PHRASES} and neither may carry
+   * {@link RETIRED_ESCALATION}, the stronger-class stage it replaced.
    */
   function violations(files: readonly CorpusFile[]): string[] {
     const problems: string[] = [];
-    const lastSameFixer = DEFAULT_MAX_REVIEW_ITERATIONS - 1;
 
     for (const relPath of LADDER_BODIES) {
       const file = files.find((candidate) => candidate.relPath === relPath);
@@ -1615,23 +1630,16 @@ describe("invariant 16 — the escalation ladder locksteps the engine cap wherev
       }
       const flat = file.parsed.body.replaceAll(/\s+/g, " ");
 
-      if (!flat.toLowerCase().includes(`rounds 1–${lastSameFixer}`)) {
+      for (const phrase of ESCALATION_PHRASES) {
+        if (!flat.includes(phrase)) {
+          problems.push(`${relPath}: the escalation must name "${phrase}"`);
+        }
+      }
+      if (flat.includes(RETIRED_ESCALATION)) {
         problems.push(
-          `${relPath}: the same-fixer stage must read "rounds 1–${lastSameFixer}" — ` +
-            `one round below the engine's cap of ${DEFAULT_MAX_REVIEW_ITERATIONS}`,
+          `${relPath}: names the retired stage "${RETIRED_ESCALATION}" — the escalation runs ` +
+            `at a higher effort on the same model`,
         );
-      }
-      if (!flat.toLowerCase().includes(`round ${DEFAULT_MAX_REVIEW_ITERATIONS}`)) {
-        problems.push(
-          `${relPath}: the escalation stage must name round ${DEFAULT_MAX_REVIEW_ITERATIONS}, ` +
-            `the last round the default cap reaches`,
-        );
-      }
-      if (!flat.includes("fresh fixer on a stronger model class")) {
-        problems.push(`${relPath}: the escalation stage must name the fresh fixer and its class`);
-      }
-      if (!flat.includes("BLOCKED_FAILURE")) {
-        problems.push(`${relPath}: the cap must terminate as BLOCKED_FAILURE`);
       }
       for (const match of flat.matchAll(ROUND_NUMBERS)) {
         for (const group of [match[1], match[2]]) {
@@ -1646,12 +1654,8 @@ describe("invariant 16 — the escalation ladder locksteps the engine cap wherev
     return problems;
   }
 
-  it("holds across the corpus", async () => {
-    expect(violations(await corpus)).toEqual([]);
-  });
-
-  it("fixture: the inherited two-stage ladder is flagged in whichever body carries it", () => {
-    const stale = LADDER_BODIES.map((relPath) => {
+  function bodiesSaying(text: string): CorpusFile[] {
+    return LADDER_BODIES.map((relPath) => {
       const isCommand = classOf(relPath) === "command";
       return corpusFileOf(
         relPath,
@@ -1660,25 +1664,52 @@ describe("invariant 16 — the escalation ladder locksteps the engine cap wherev
             ...head(filenameSlug(relPath), isCommand ? "command" : "agent"),
             ...(isCommand ? ["spawns: [implementer]"] : []),
           ],
-          `Rounds 1–3 keep the same fixer; rounds 4–5 spawn a fresh fixer on a stronger ` +
-            `model class; at the cap the run stops as BLOCKED_FAILURE.`,
+          text,
         ),
       );
     });
+  }
 
-    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4a-review-cap): the
-    // engine's default cap moved from 4 to 3 (REQ-FLOW-064), so the same stale ladder
-    // now yields four defects per body instead of two: its same-fixer stage ("rounds 1–3")
-    // no longer ends one round below the cap ("rounds 1–2"), the cap's round ("round 3")
-    // is named nowhere, and both 4 and 5 in "rounds 4–5" lie past the cap. The fixture
-    // text is unchanged; only the derivation's result moved with the constant.
-    expect(violations(stale)).toEqual(
+  it("holds across the corpus", async () => {
+    expect(violations(await corpus)).toEqual([]);
+  });
+
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4b-fixer-escalation): the checker
+  // required "rounds 1–2", "round 3" and "fresh fixer on a stronger model class", and the fixture
+  // was the inherited "rounds 1–3 … rounds 4–5" ladder. Escalation now keys on what the run shows
+  // and goes to a fresh fixer spawn at one effort level above, on the same model (REQ-FLOW-064,
+  // REQ-LADDER-003), so the checker requires the new stage's five phrases and flags the retired
+  // stronger-class phrase; the past-cap check is kept as it was. The fixtures are rewritten to the
+  // new stage list: the cap-of-3 stronger-class ladder (the text this unit replaced) is flagged
+  // five ways per body, a past-cap round is still flagged, and the new escalation passes clean.
+  it("fixture: the retired stronger-class ladder is flagged in whichever body carries it", () => {
+    const retired = bodiesSaying(
+      `Rounds 1–2 keep the same fixer; round 3 spawns a fresh fixer on a stronger model class; ` +
+        `at the cap the run stops as BLOCKED_FAILURE.`,
+    );
+    expect(violations(retired)).toEqual(
       LADDER_BODIES.flatMap((relPath) => [
-        expect.stringMatching(new RegExp(`${relPath}: the same-fixer stage must read "rounds 1–2"`)),
-        expect.stringMatching(new RegExp(`${relPath}: the escalation stage must name round 3`)),
-        expect.stringMatching(new RegExp(`${relPath}: "rounds 4–5" names a round past`)),
-        expect.stringMatching(new RegExp(`${relPath}: "rounds 4–5" names a round past`)),
+        expect.stringMatching(new RegExp(`${relPath}: the escalation must name "fresh fixer spawn"`)),
+        expect.stringMatching(new RegExp(`${relPath}: the escalation must name "never the resumed one"`)),
+        expect.stringMatching(new RegExp(`${relPath}: the escalation must name "one effort level above"`)),
+        expect.stringMatching(new RegExp(`${relPath}: the escalation must name "\`effort: not settable\`"`)),
+        expect.stringMatching(new RegExp(`${relPath}: names the retired stage`)),
       ]),
+    );
+  });
+
+  it("fixture: a round past the cap is flagged, and the new escalation passes clean", () => {
+    const escalation =
+      "A finding still open at the cap round goes to a fresh fixer spawn, never the resumed one, " +
+      "at one effort level above the declared one; where none can be set the proof block records " +
+      "`effort: not settable`. A finding that fixer leaves open stops the run as BLOCKED_FAILURE.";
+    expect(violations(bodiesSaying(escalation))).toEqual([]);
+
+    const pastCap = DEFAULT_MAX_REVIEW_ITERATIONS + 1;
+    expect(violations(bodiesSaying(`${escalation} Round ${pastCap} runs the person.`))).toEqual(
+      LADDER_BODIES.map((relPath) =>
+        expect.stringMatching(new RegExp(`${relPath}: "Round ${pastCap}" names a round past`)),
+      ),
     );
   });
 });

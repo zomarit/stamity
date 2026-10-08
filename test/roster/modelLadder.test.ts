@@ -653,7 +653,7 @@ function ladderProse(): string {
  * so on an unpinned repo this module resolves nothing for them and the CLIENT's router picks
  * the model — the sizing decision the ladder just made never reaches the emitted file. And
  * the module claimed every placement no frontmatter can declare was named in a row's
- * `rationale`, while the review loop's round-4 escalation is named in no row at all. Each
+ * `rationale`, while the review loop's escalation is named in no row at all. Each
  * case asserts the behaviour first and the sentence second, so the prose cannot outlive what
  * it describes and a reworded paragraph cannot quietly drop it.
  */
@@ -687,15 +687,23 @@ describe("the ladder's own exposure disclosures", () => {
     expect(ladderProse()).toMatch(/`frontier` resolves to a value on NO client without a pin/);
   });
 
-  it("records the round-4 escalation as a placement it does not carry", () => {
-    // Two bodies promise a fresh fixer on a stronger class at round 4. No row places the
-    // role above its declared class, so nothing here resolves that class — and the header
-    // used to say every flow placement was named in a row's `rationale`, which sent a reader
-    // looking for a rung that does not exist.
-    const rungs = MODEL_LADDER.filter((entry) => entry.roles.includes("fixer")).map(
-      (entry) => entry.modelClass,
-    );
-    expect(rungs).toEqual(["standard", "economy"]);
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4b-fixer-escalation): the case was
+  // named for "the round-4 escalation" and pinned a header naming "a fresh fixer on a stronger
+  // model class". The review loop's escalation now fires on what the run shows and runs as a fresh
+  // fixer spawn at one effort level above its declared one, on the same model (REQ-FLOW-064,
+  // REQ-LADDER-003), so the header names that effort placement, the retired class framing is
+  // asserted absent, and the behaviour half also checks that no fixer row records the step.
+  // "TWO FLOW PLACEMENTS" and the capacity-rung pins are unchanged.
+  it("records the review loop's escalation as a placement it does not carry", () => {
+    // Two bodies promise a fresh fixer spawn at one effort level above on an escalation. No row
+    // places the role above its declared class or records that step, so nothing here resolves
+    // it — and the header used to say every flow placement was named in a row's `rationale`,
+    // which sent a reader looking for a rung that does not exist.
+    const fixerRows = MODEL_LADDER.filter((entry) => entry.roles.includes("fixer"));
+    expect(fixerRows.map((entry) => entry.modelClass)).toEqual(["standard", "economy"]);
+    for (const fixerRow of fixerRows) {
+      expect(fixerRow.rationale, fixerRow.modelClass).not.toMatch(/escalat/i);
+    }
 
     const prose = ladderProse();
     // TEST CHANGE, justified (2026-09-23): the pin read "ONE FLOW PLACEMENT IS NOT
@@ -705,6 +713,10 @@ describe("the ladder's own exposure disclosures", () => {
     // are unchanged and the new placement gets its own assertions.
     expect(prose).toContain("TWO FLOW PLACEMENTS ARE NOT RECORDED HERE");
     expect(prose).not.toContain("ONE FLOW PLACEMENT IS NOT RECORDED HERE");
+    expect(prose).toContain(
+      "the review loop's escalation: a fresh fixer spawn at one effort level above its declared one, on the same model, set per dispatch where the client takes one; no row records it",
+    );
+    expect(prose).not.toMatch(/round-4|stronger model class/);
     expect(prose).toMatch(/no row below places `fixer` above `standard`/);
     expect(prose).toMatch(/that escalation is prompt-carried/i);
     // The second: the capacity rung's drop names no target class either.
