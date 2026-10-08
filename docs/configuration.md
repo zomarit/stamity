@@ -59,7 +59,7 @@ clients your own manifest selects.
 | `effort.advanced` | one of minimal \| low \| medium \| high \| xhigh \| max — carried on claude, cursor, codex, omitted on copilot; the levels are the union of the clients' documented scales, so one a selected client cannot express is refused here | `claude=high, cursor=(not expressed), copilot=(not expressed), codex=high` |
 | `effort.standard` | one of minimal \| low \| medium \| high \| xhigh \| max — carried on claude, cursor, codex, omitted on copilot; the levels are the union of the clients' documented scales, so one a selected client cannot express is refused here | `claude=medium, cursor=(not expressed), copilot=(not expressed), codex=medium` |
 | `effort.economy` | one of minimal \| low \| medium \| high \| xhigh \| max — carried on claude, cursor, codex, omitted on copilot; the levels are the union of the clients' documented scales, so one a selected client cannot express is refused here | `claude=low, cursor=(not expressed), copilot=(not expressed), codex=low` |
-| `review.maxIterations` | a whole number of review rounds within 1..10 | `4` |
+| `review.maxIterations` | a whole number of review rounds within 1..10 | `3` |
 | `gates.test` | a shell command line, or `none` to clear | `detected: npm run test` |
 | `gates.lint` | a shell command line, or `none` to clear | `detected: npm run lint` |
 | `gates.typecheck` | a shell command line, or `none` to clear | `detected: npm run typecheck` |

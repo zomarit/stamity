@@ -71,7 +71,10 @@ describe("review-iteration caps", () => {
 
   it("pins the values generated prompt text is lockstepped against", () => {
     expect(MIN_MAX_REVIEW_ITERATIONS).toBe(1);
-    expect(DEFAULT_MAX_REVIEW_ITERATIONS).toBe(4);
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4a-review-cap): the default
+    // review cap moved from 4 to 3 (REQ-FLOW-064: rounds stop when they stop paying);
+    // the floor and the ceiling are unchanged.
+    expect(DEFAULT_MAX_REVIEW_ITERATIONS).toBe(3);
     expect(HARD_MAX_REVIEW_ITERATIONS).toBe(10);
   });
 });

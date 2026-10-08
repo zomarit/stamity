@@ -16,7 +16,7 @@
  * rather than converging exits through its own escape conditions well before
  * the cap, so raising this number buys little and costs a full round.
  */
-export const DEFAULT_MAX_REVIEW_ITERATIONS: number = 4;
+export const DEFAULT_MAX_REVIEW_ITERATIONS: number = 3;
 
 /**
  * Floor. One iteration is a single review pass with no fixer round — a valid

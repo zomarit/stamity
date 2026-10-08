@@ -93,7 +93,7 @@ Say the work is a rate limit on an existing endpoint. It is a feature. It lands 
 3. **Execute.** `/st-work` runs Frame, Understand, Plan, Build and Prove. Build dispatches to sub-agents. Charter invariant 7 keeps the orchestrator
    out of product files itself.
 4. **Prove.** Each pass spawns a dedicated `test-runner`. It returns the verification gates one by one, with the exact command and any verbatim
-   failing excerpt. Bare pass or fail is not a result. Then a reviewer and fixer loop on `file:line` evidence, capped at four rounds by default. A
+   failing excerpt. Bare pass or fail is not a result. Then a reviewer and fixer loop on `file:line` evidence, capped at three rounds by default. A
    loop that runs out stops as blocked, with the open findings attached.
 5. **Close.** The QA human checkpoint is mandatory at every intensity. You get a what-to-verify summary naming each observable behaviour the change
    added or altered, each with a check you can run in under a minute. Then a guided pass: each row closes walked, auto-proven or accepted-unwalked; when every row auto-proves nothing is asked, and an unattended run records `not signed`.

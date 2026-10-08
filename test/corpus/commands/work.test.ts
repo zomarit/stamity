@@ -1224,8 +1224,11 @@ describe("/st-work — dispatch contract", () => {
     // build/54: the recorded line keeps the stop class the second/third-stop rules key on.
     expect(dispatch).toContain("`- <UTC> capacity: <role> <stop class> →");
     // build/53: "build role" is enumerated, and the spec-author sits with the roles that never fall back.
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4a-review-cap): the pin read
+    // "the fixer on rounds 1–3". The default review cap moved from 4 to 3, so the same-fixer
+    // rounds that count as a build role are now rounds 1–2; round 3 is the escalation.
     expect(dispatch).toContain(
-      "the implementer, the fixer on rounds 1–3, the researcher, the creator, the test-runner",
+      "the implementer, the fixer on rounds 1–2, the researcher, the creator, the test-runner",
     );
     expect(dispatch).toContain("and the spec-author never fall back to a weaker class");
     // build/60: one rung and no further; a role already at the bottom stops instead.

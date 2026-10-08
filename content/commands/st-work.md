@@ -138,7 +138,7 @@ Every spawn runs under these contracts:
   agent as a probe before the rest; a later reset is BLOCKED_DEPENDENCY naming
   the reset time.
   `limit-no-reset` (credits, or a model limit with no reset): a build role —
-  the implementer, the fixer on rounds 1–3, the researcher, the creator, the
+  the implementer, the fixer on rounds 1–2, the researcher, the creator, the
   test-runner — may run one class below its assigned class and no further,
   named in the proof block; with no class below it, or for any other role,
   the work stops as BLOCKED_DEPENDENCY. Verdict roles — the reviewer, the
@@ -236,9 +236,9 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   on a stronger class before it counts. With no gate declared, an approval
   counts as given and no extra round runs; the review-gate hook still refuses
   an approval the reviewer rated `low`.
-- Iteration cap: 4 rounds by default, operator-configurable within 1..10 — the
+- Iteration cap: 3 rounds by default, operator-configurable within 1..10 — the
   engine clamps to that band, and this text stays lockstepped with its default.
-- Escalation ladder: rounds 1–3 keep the same fixer; round 4 spawns a fresh
+- Escalation ladder: rounds 1–2 keep the same fixer; round 3 spawns a fresh
   fixer on a stronger model class; at the cap the run stops as BLOCKED_FAILURE
   to the human with the open findings attached. An operator who raises the cap
   within the band buys further fresh-fixer rounds, each costing a full round

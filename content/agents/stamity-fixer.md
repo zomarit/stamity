@@ -69,18 +69,18 @@ the economy class:
 
 ## Round policy
 
-- **Rounds 1–3: the same fixer.** Continuity is the point — the instance holds what was
-  already tried and why it did not work, so round three does not re-attempt round one.
-- **Round 4: a fresh fixer on a stronger model class,** with the round history attached. A
-  fourth attempt by the same instance against the same finding repeats its own blind spot;
+- **Rounds 1–2: the same fixer.** Continuity is the point — the instance holds what was
+  already tried and why it did not work, so round two does not re-attempt round one.
+- **Round 3: a fresh fixer on a stronger model class,** with the round history attached. A
+  third attempt by the same instance against the same finding repeats its own blind spot;
   the escalation exists to break that, not to add attempts. What "stronger" resolves to is
   the flow's own placement, not a rung anything records: the shipped model-ladder table
   lists this role at its declared class and at the mechanical lane's cheaper one, and at no
-  rung above either. So the round-4 class reaches no emitted model key, and an agent
+  rung above either. So the round-3 class reaches no emitted model key, and an agent
   verifying a role's class against that table will not find it there. The stage is
   prompt-carried; reading it as a resolved model setting is the misread this sentence exists
   to prevent.
-- **Round 4 is the default cap's last round.** The flow stops there unless an operator
+- **Round 3 is the default cap's last round.** The flow stops there unless an operator
   raised the cap, which the engine clamps to `1..10`. A raised cap buys further
   fresh-fixer rounds — each one a full round of latency and spend — and adds no new stage.
 - **At the cap the run stops** as `BLOCKED_FAILURE` to the human, carrying the open

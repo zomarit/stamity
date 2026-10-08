@@ -1666,11 +1666,17 @@ describe("invariant 16 — the escalation ladder locksteps the engine cap wherev
       );
     });
 
-    // Round 5 is the stale promise; the "round 4" stage sentence is absent too,
-    // so each body reports both defects.
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4a-review-cap): the
+    // engine's default cap moved from 4 to 3 (REQ-FLOW-064), so the same stale ladder
+    // now yields four defects per body instead of two: its same-fixer stage ("rounds 1–3")
+    // no longer ends one round below the cap ("rounds 1–2"), the cap's round ("round 3")
+    // is named nowhere, and both 4 and 5 in "rounds 4–5" lie past the cap. The fixture
+    // text is unchanged; only the derivation's result moved with the constant.
     expect(violations(stale)).toEqual(
       LADDER_BODIES.flatMap((relPath) => [
-        expect.stringMatching(new RegExp(`${relPath}: the escalation stage must name round 4`)),
+        expect.stringMatching(new RegExp(`${relPath}: the same-fixer stage must read "rounds 1–2"`)),
+        expect.stringMatching(new RegExp(`${relPath}: the escalation stage must name round 3`)),
+        expect.stringMatching(new RegExp(`${relPath}: "rounds 4–5" names a round past`)),
         expect.stringMatching(new RegExp(`${relPath}: "rounds 4–5" names a round past`)),
       ]),
     );
