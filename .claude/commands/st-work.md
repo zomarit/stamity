@@ -132,13 +132,13 @@ Every spawn runs under these contracts:
   agent as a probe before the rest; a later reset is BLOCKED_DEPENDENCY naming
   the reset time.
   `limit-no-reset` (credits, or a model limit with no reset): a build role —
-  the implementer, the fixer on rounds 1–3, the researcher, the creator, the
-  test-runner — may run one class below its assigned class and no further,
-  named in the proof block; with no class below it, or for any other role,
-  the work stops as BLOCKED_DEPENDENCY. Verdict roles — the reviewer, the
-  lenses, the stronger-class fixer — and the spec-author never fall back to a
-  weaker class. A resume is neither a ladder rung nor a review round. Each
-  event is one run-record line:
+  the implementer, the fixer before an escalation, the researcher, the
+  creator, the test-runner — may run one class below its assigned class and
+  no further, named in the proof block; with no class below it, or for any
+  other role, the work stops as BLOCKED_DEPENDENCY. Verdict roles — the
+  reviewer, the lenses, the escalation fixer — and the spec-author never fall
+  back to a weaker class. A resume is neither a ladder rung nor a review
+  round. Each event is one run-record line:
   `- <UTC> capacity: <role> <stop class> → <resumed | waited until <UTC> | BLOCKED_DEPENDENCY>`.
 - **CLI calls.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.12.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
   When neither form runs, the orchestrator, still the one writer, edits `ledger.jsonl` by hand in the row grammar under Proof block and records `ledger: by hand (no CLI)`.
@@ -230,13 +230,18 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   on a stronger class before it counts. With no gate declared, an approval
   counts as given and no extra round runs; the review-gate hook still refuses
   an approval the reviewer rated `low`.
-- Iteration cap: 4 rounds by default, operator-configurable within 1..10 — the
-  engine clamps to that band, and this text stays lockstepped with its default.
-- Escalation ladder: rounds 1–3 keep the same fixer; round 4 spawns a fresh
-  fixer on a stronger model class; at the cap the run stops as BLOCKED_FAILURE
-  to the human with the open findings attached. An operator who raises the cap
-  within the band buys further fresh-fixer rounds, each costing a full round
-  of latency and spend, and adds no new stage.
+- Iteration cap: 3 rounds by default (2 at light), operator-configurable
+  within 1..10 — the engine clamps to that band, and this text stays
+  lockstepped with its default.
+- Escalation: a finding whose ledger row carries two `re-review not-fixed`
+  notes, a gate red after a fix, or a finding still open at the cap round goes
+  to a fresh fixer spawn — never the resumed one — on the same model at one
+  effort level above the fixer's declared one where the client's dispatch
+  accepts an effort setting; where it accepts none, the fresh spawn is the
+  escalation and the proof block records `effort: not settable`. A finding
+  that fixer leaves open stops the run as BLOCKED_FAILURE to the human with
+  the open findings attached. No round past the cap runs; an operator who
+  raises the cap within the band buys further rounds and adds no new stage.
 - Escape before the cap: an at-confidence approval exits; an unchanged finding
   set across two consecutive rounds, or findings oscillating between two states,
   exit as diverged (BLOCKED_FAILURE), not burning the remaining rounds.
