@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
 status: shipped-with-1.12.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -36,6 +36,10 @@ REQ-PLUGIN-031 to 044 belong to files 1 to 3 of the same plan, which merge later
 (`fix/plan-016-file-0` at `fa8163a3`; the registry unit and the hook-file unit's JSON half, integrated after the merge,
 at their integration commits, `u0-registry-bound-calls` at `6d2fb2e7` and the JSON half at `8d4b932e`). All five units
 are integrated. They shipped with 1.12.0, which set `status` to `shipped-with-1.12.0`.
+
+The paragraphs headed "Amended 2026-10-08" that name run `2026-10-08_maintainer-tooling` come from that run's spec
+deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
+integration head `47acb16e`. They are unreleased, and `status` does not move.
 
 ## Intent
 
@@ -673,6 +677,23 @@ no requirement covered is recorded here rather than given an id of its own (ledg
 `src/emit/hooksInfra.ts` raises a planning warning when an accepted user or pack hook row cannot
 reach a plugin-backed client, because that client's hook configuration now comes from the plugin.
 
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`): `.claude/settings.json` no
+longer splits that way. The engine renders no `permissions` member under either install mode; its `hooks` object is
+still emitted only when hooks are not plugin-owned, so under a plugin that carries hooks the engine's rendering is `{}`,
+and the settings row stays planned (`src/adapters/claude.ts`, `buildSettingsJson` and the settings row it feeds). That
+planned row is how a recorded allow row leaves, by the per-entry merge, on the next `sync` (REQ-FLOW-025,
+REQ-FLOW-036); `plugin setup` refuses a repository that already carries a setup, so it is not that path. A `permissions`
+member that is not an object, or an `allow` that is not an array, still collides on both routes, as it did while
+releases up to 1.12.0 rendered the rows (`planClaudeSettings`, `src/manifest/claudeSettings.ts`). It read: "its
+`permissions` half always emitted".
+
+- GIVEN `plugin setup --client claude -y` over a repository whose `.claude/settings.json` holds only `enabledPlugins`
+  THEN the file holds the client's bytes unchanged, `enabledPlugins` alone with no `permissions` key, the settings row
+  reports `unchanged`, and the notice names the kept entry. GIVEN a plugin-backed setup whose ledger records the three
+  rows WHEN `sync -y` runs THEN the rows leave with no `.bak` and `enabledPlugins` stays. Test evidence:
+  `test/cli/commands/plugin.test.ts`, `test/cli/commands/pluginSetup.test.ts`, `test/adapters/claude.test.ts`,
+  `test/merge/settingsKeyOwnership.test.ts`.
+
 As built (2026-09-21), one row of the runtime surface these doctor rows share: the `node` row is
 never `unstated` when no root's locator answers. `requiredNodeRange()` moved out of its private home
 in `check.ts` into the shared probe, where `engineNodeFacts()` reads this build's declared
@@ -686,7 +707,8 @@ exactly the write `sync` would make. The engine owns each `permissions.allow` ro
 ledger records each by the hash of its canonical JSON, and the engine owns nothing else in the file: it never writes or
 removes `permissions.deny`, `permissions.ask` or an owner's entry. An entry equal to the rendering needs no proof. An
 engine entry that leaves or changes goes silently only when the ledger records it (or proves the file unedited) and it
-lies inside the engine's bound: an allow row the engine renders, or a hook entry whose every command runs a script under
+lies inside the engine's bound: an allow row a release rendered (`Read`, `Grep`, `Glob`; the engine renders none since
+2026-10-08, and before it read "an allow row the engine renders"), or a hook entry whose every command runs a script under
 `.stamity/`. Otherwise it goes behind a verified `.bak`, whose warning names the entry and `.claude/settings.local.json`
 for personal rows. `clean`, and a client's removal through the reclaim sweep, remove the engine's entries, a stale
 repository-mode hook entry included (recognised by its script under `.stamity/generated/hooks/`). They keep every other
@@ -1017,6 +1039,13 @@ request whose every changed path is a record — under `.stamity/runs/`, `.stami
 `.stamity/inbox.md` — skips `plugin-route`, `check` and `apm-install`, and runs the `records` job in their place; the
 aggregator asserts which side ran, so a records-only pass never stands in for a full one
 (`.github/workflows/ci.yml:19-31` at `b855876a`).
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `a1-proven-push` and `a2-ci-lanes`): "merge-blocking
+through `all-ci-checks`" holds on every change that no lane covers and no proven push skips. A change whose every path
+sits in a lane skips `plugin-route` with `check` and `apm-install`, and the `lanes` job runs in their place; a push
+whose tree a pull request already proved skips all of them (REQ-PROVE-030, REQ-PROVE-031;
+`.github/workflows/ci.yml:19-68` at `47acb16e`). It replaces the reading "holds on every change that is not
+records-only".
 
 Amended 2026-09-26 (plan 010 file 1, units `e3-codex-remote-walk` and `e3-codex-install-ref`): the
 Codex route now runs against a remote source, and its install line carries a ref. On codex-cli

@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
 status: shipped-with-1.12.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
@@ -10,7 +10,10 @@ What the nine commands and the setup that serves them do for a user day to day: 
 honestly, records say what happened, and the person is asked only what needs the person. The area code is `FLOW`.
 REQ-FLOW-001 to REQ-FLOW-026 shipped with 1.11.0, and REQ-FLOW-036 to REQ-FLOW-038 with 1.12.0, which set
 `status: shipped-with-1.12.0`. REQ-FLOW-025's allowlist sentence did not ship with them; `## Concerns` says so, and
-an inbox row follows it up.
+an inbox row follows it up. It landed on 2026-10-08 in run `2026-10-08_maintainer-tooling` (REQ-FLOW-025, amended),
+unreleased at that merge, so `status` does not move. The text dated 2026-10-08 that names that run comes from its spec
+deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
+integration head `47acb16e`.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -565,13 +568,20 @@ write and edit tools — never a shell redirect, a heredoc or `cat >` — and to
 `ledger` verb (REQ-CTX-005) (`content/commands/st-work.md:42-45`); a build or fix dispatch names the report path,
 written with the file write tool (`:172`).
 
-Not shipped: the plan's sentence "Setup writes no permission allowlist". Setup still writes the session-wide
-`permissions.allow` rows for the `read` category into `.claude/settings.json` (`src/adapters/claude.ts:391-425`).
-Dropping them needs a decision this run did not take: the engine owns the whole `permissions` key, so keeping the key
-with an empty list collides with a hand-added row, and dropping the key changes the settings-ownership contract
-(ledger `build/124`, decision needed, answered on 2026-09-30 at 14:29Z: deferred). The rows are harmless, since the
-client already allows reads inside the working directory. A follow-up row at the run's close names both readings for
-the maintainer; the plan carries it under Follow-ups (`docs/plans/013-optimization-sweep-03.md`).
+Landed 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`, inbox row 324; unreleased at
+that merge): setup writes no permission allowlist. The engine renders no `permissions` member in
+`.claude/settings.json`, in repository setups and in plugin setups alike (`stamity plugin setup`, where a plugin that
+carries hooks leaves the engine no member to write; `buildSettingsJson`, `src/adapters/claude.ts`). The three `read`
+rows a release rendered (`Read`, `Grep`, `Glob`) leave on the next `sync` without a backup where the ledger records
+them, and an owner's equal row with no record stays; a ledger from 1.11.0, which records no entries, takes them by
+REQ-FLOW-036's expand/contract rule. A bare `Read` rule matches every file read, and reads inside the working
+directory need no rule, so the rows only removed prompts for reads outside the project
+(code.claude.com/docs/en/permissions, read 2026-10-08). It read: "Not shipped: the plan's sentence "Setup writes no
+permission allowlist"", deferred under ledger `build/124` (answered on 2026-09-30 at 14:29Z) with a follow-up row in
+`docs/plans/013-optimization-sweep-03.md`.
+
+- **Proof (2026-10-08):** `test/merge/settingsOwnerEntries.test.ts` (the describe "the Read, Grep and Glob allow rows
+  an earlier release rendered (inbox row 324)"), `test/adapters/claude.test.ts`.
 
 - **Proof:** `test/corpus/recordWrites.test.ts` (the Frame text, and a line lint over `content/` that fails on a shell
   redirect, heredoc or `tee` aimed under `.stamity/`); must-holds `work-proof-block-fields` and the floor
@@ -651,8 +661,8 @@ or an entry it did not write.
   object, an event not an array); the message names the member and the fix, `--force` does not clear it, and no command
   offers `--force` for it.
 - **What leaves, and when it takes a `.bak`.** An engine entry the rendering no longer carries leaves without a backup
-  only when the ledger records it (or proves the file unedited) and it lies inside the engine's bound: an allow row the
-  engine renders (`Read`, `Grep`, `Glob`), or a hook entry whose every command runs a script under `.stamity/`. Any other
+  only when the ledger records it (or proves the file unedited) and it lies inside the engine's bound: an allow row a
+  release rendered (`Read`, `Grep`, `Glob`; the engine renders none since 2026-10-08), or a hook entry whose every command runs a script under `.stamity/`. Any other
   engine entry leaves only behind a verified `.bak`, with a warning naming it. A hook entry recognised by its script under
   `.stamity/generated/hooks/` but not recorded (an earlier setup's, or one edited by hand) is the engine's to replace or
   remove, behind that backup. A recorded hash outside the bound proves nothing, and an allow row outside it stays the
@@ -1211,7 +1221,8 @@ exists, it is the normative record for that requirement.
   and a Windows venv, keep the default rendering plus the warning from REQ-FLOW-008. `config detect` does not compare
   `detected.packageManager` (deferred).
 - REQ-FLOW-012 leaves the method for counting source lines to the Source tree probe the command already runs.
-- REQ-FLOW-025 ships without its allowlist sentence; the follow-up row names both readings.
+- REQ-FLOW-025's allowlist sentence landed on 2026-10-08 (unit `b4-no-read-allow-rows`), unreleased at that merge;
+  its one residual is the lost-manifest case the REQ-FLOW-036 line below names.
 - REQ-FLOW-022: the Copilot workflow's bun branch still tells the reader to "add its setup step here" in a file that
   says edits are overwritten (`src/adapters/copilot.ts:606-608`); the unit fixed only the non-Node branch. The file
   name the pin scan skips has two sources (`COPILOT_SETUP_STEPS_PATH` and `ENGINE_EMITTED_WORKFLOWS`). That `check`
@@ -1221,7 +1232,7 @@ exists, it is the normative record for that requirement.
   tree. No shipped command uses `tools:` (the unit's deferral M-1).
 - REQ-FLOW-036 and REQ-FLOW-037: the residues the plan records as follow-up rows stay open — a user-hook entry edited in
   `.claude/settings.json` instead of its definition stays beside the engine's rendering; after a lost manifest the
-  engine's three allow rows read as the owner's; a key an owner adds inside an engine Codex table makes the whole table
+  three allow rows a release rendered read as the owner's; a key an owner adds inside an engine Codex table makes the whole table
   the owner's; and inside the bound a forged
   record still proves a selected `[mcp_servers.<id>]` (`docs/plans/016-fork-distribution-00.md`, Follow-ups and the
   2026-10-07 amendment of S16).

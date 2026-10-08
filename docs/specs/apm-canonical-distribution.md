@@ -1,6 +1,6 @@
 ---
 id: apm-canonical-distribution
-# A design document, authored outside the spec command and excluded from the site build.
+# A design document, authored outside the spec command, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
 status: shipped-with-1.4.0
 obsolete_when: the getting-started page and the README carry the route and its client floor, and the mirror repository no longer exists
 ---
@@ -105,10 +105,14 @@ symptom into a failure on its own.
    a supported class deploys zero files, when an expected id is missing, when a deployed body
    lacks its source's heading, or when the lockfile types the package as anything but
    `apm_package`.
-4. The regression witness runs on every push: the same smoke against 0.29.0 with
-   `--expect-failure` detects routing failures after a completed install. The historical
+4. The regression witness runs on every push that takes the full matrix: the same smoke against
+   0.29.0 with `--expect-failure` detects routing failures after a completed install. The historical
    misclassification proof additionally records `package_type: agent_plugin` and zero
    deployed primitives; a generic missing-file witness alone does not establish that cause.
+   (Amended 2026-10-08, run `2026-10-08_maintainer-tooling`: a push whose every path sits in a
+   lane, or whose tree a pull request already proved, skips the witness with `apm-install`
+   (REQ-APM-002, `.github/workflows/ci.yml:478` at `47acb16e`). It read "runs on every push", which
+   the records lane of 2026-09-30 had already narrowed.)
 
 ## Requirements
 
@@ -116,13 +120,17 @@ symptom into a failure on its own.
   the declarative route (a clean export of the checkout by default, or `owner/repo[#ref]`),
   and verifies deployment per target for claude, copilot, cursor and codex.
 - REQ-APM-002 — `ci.yml` runs the smoke at 0.29.1 (minimum), 0.30.0 (current) and 0.29.0
-  (`--expect-failure`), required through `all-ci-checks` on every change that is not records-only.
-  A change whose every path is a record — under `.stamity/runs/`, `.stamity/handoffs/` or
-  `docs/plans/`, or `.stamity/inbox.md` — skips `apm-install` beside `check` and `plugin-route`,
-  and the `records` job runs in their place; the aggregator asserts which side ran
-  (`.github/workflows/ci.yml:19-31` at `b855876a`). (Amended 2026-09-30,
-  `docs/plans/013-optimization-sweep-03.md` unit `sw06-records-only-ci-lane`, ledger `build/82`;
-  it read "required through `all-ci-checks`.")
+  (`--expect-failure`), required through `all-ci-checks` on every change that no lane covers and
+  no proven push skips (REQ-PROVE-030, REQ-PROVE-031). A change whose every path sits in a lane,
+  or a push whose tree a pull request already proved, skips `apm-install` beside `check` and
+  `plugin-route`; the aggregator asserts which side ran (`.github/workflows/ci.yml:19-68` at
+  `47acb16e`). (Amended 2026-09-30, `docs/plans/013-optimization-sweep-03.md` unit
+  `sw06-records-only-ci-lane`, ledger `build/82`; it read "required through `all-ci-checks`."
+  Amended 2026-10-08, run `2026-10-08_maintainer-tooling`, units `a1-proven-push` and
+  `a2-ci-lanes`; it read "on every change that is not records-only" and "A change whose every path
+  is a record — under `.stamity/runs/`, `.stamity/handoffs/` or `docs/plans/`, or
+  `.stamity/inbox.md` — skips `apm-install` beside `check` and `plugin-route`, and the `records`
+  job runs in their place", citing `.github/workflows/ci.yml:19-31` at `b855876a`.)
 - REQ-APM-003 — `release.yml` runs the smoke against the canonical remote at the release SHA
   in its separate, credential-free `apm-route` job. That job runs independently of `gates`
   and cannot access its packed artifact; `publish` requires both jobs to pass. This is a

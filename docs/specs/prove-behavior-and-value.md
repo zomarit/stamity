@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -28,7 +28,11 @@ close; it cites the tree at `eb4f0727` and shipped with 1.12.0. The amendment da
 comes from the unit `e3-spec-status-written-ahead` in run `2026-10-07_release-1-12-0`; it cites the tree at
 `ee2a0e3d` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-020 was written at the 1.12.0 cut
 in run `2026-10-07_release-1-12-0`, unit `c4-run-of-record`; it cites the run files at `67917fec` and the generator
-at the commit that adds it, and shipped with 1.12.0.
+at the commit that adds it, and shipped with 1.12.0. REQ-PROVE-030 to REQ-PROVE-036, and the text dated 2026-10-08
+that names run `2026-10-08_maintainer-tooling` under REQ-PROVE-009, REQ-PROVE-017, REQ-PROVE-020 and REQ-PROVE-021,
+come from that run's spec deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it
+and read against the integration head `47acb16e`; they are unreleased. The ids REQ-PROVE-023 to 025 belong to
+`docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap.
 
 ## Intent
 
@@ -326,9 +330,9 @@ Declared by the units' reports (`eval-profile-move`, `eval-effort-high`) and mer
 As built at `e995fe02`: the profile is `evals/model-profiles-v1.json:9-10`, documented at
 `evals/MODEL-PROFILES-v1.md:10`, `:19-21` and `:32-33`. The comparator is `comparatorKey`,
 `COMPARATOR_FIELDS`, `comparedField`, `recordedKey` and `sameConfiguration`
-(`scripts/eval/run.mjs:92-141`); `advisoryRepeats` reads both failure shapes (`:230-238`), and
-`previousRun` keeps only a run of the same key (`:241-254`). `evals/SET-v7.md` carries the dated
-paragraph (`:484-493`) and § 8's comparator sentence (`:540-548`). Tests:
+(`scripts/eval/run.mjs:93-144`); `advisoryRepeats` reads both failure shapes (`:236-241`), and
+`previousRun` keeps only a run of the same key (`:243-257`). `evals/SET-v7.md` carries the dated
+paragraph (`:884-893`) and § 8's comparator sentence (`:940-953`). Tests:
 `test/evals/modelProfiles.test.ts:29`; `test/evals/manualRunner.test.ts:1332`, `:1537`, `:1562`,
 `:1582` and `:1596`. Measured on 2026-09-27: run 34, the 1.10.0 baseline, measured all 102 cases at
 three samples with calibration first (`evals/runs/2026-09-27-run-34/RESULTS.md:14`, `:42`,
@@ -337,7 +341,9 @@ the second criterion above holds. Run 35 re-measured two cases and composed with
 pair (`evals/runs/2026-09-27-run-35/RESULTS.md:12`, `:297`). Composing runs and the "first run of
 this configuration" line belong to the route of record's driver, which lives outside this repository;
 SET-v7 says the "never composed" half holds once that driver compares the pair too
-(`evals/SET-v7.md:488-490`).
+(`evals/SET-v7.md:886-890`). The `scripts/eval/run.mjs` and `evals/SET-v7.md` citations in this
+paragraph were re-pointed on 2026-10-08 (run `2026-10-08_maintainer-tooling`, ledger `build/12`) to
+the integration head `47acb16e`, where both files had moved; the rest of it cites `e995fe02`.
 
 ### REQ-PROVE-010 — Trigger probes for rule-projected skills
 
@@ -451,7 +457,10 @@ Codex profiles are marked "documented, unproven, no run of record" with the cont
 Prove-phase amendment (2026-09-15): the checklist's eval line reads "measured per `evals/SET-v7.md` —
 by the release's baseline run, or by an incremental run composed with it" and the release carries the
 composed artifact; `evals/README.md` states that composition belongs to the route of record's driver and
-that the manual runner documented there runs the full set.
+that the manual runner documented there runs the full set. Amended 2026-10-08 (run
+`2026-10-08_maintainer-tooling`, unit `c3-release-rules`): the checklist's eval line reads the
+change-aware rule of REQ-PROVE-033, and each per-release line names the trigger it runs on
+(REQ-PROVE-034).
 
 ### REQ-PROVE-018 — Hand pages re-attested
 
@@ -535,7 +544,8 @@ above 1 before it takes the last one (`:423-428`). The rows are
 `test/cli/docs/measurements.test.ts:682-696`. The retirement half: `RUN_OF_RECORD_CARRIED_TO`,
 `RUN_OF_RECORD_CANDIDATE` and `carriedToRelease` are gone; a search over `src` and `test` finds none
 of them. `RUN_OF_RECORD_PATH` names run 35's results file (`src/cli/docs/measurements.ts:103`), and
-`RUN_OF_RECORD_RELEASE` is `1.10.0` (`:116`). The template (`:858-870`) links run 35 as the 1.10.0
+`RUN_OF_RECORD_RELEASE` is `1.10.0` (`:116`); both constants are gone since 2026-10-08, and the path
+and release are read from `evals/run-of-record.json` through `readRunOfRecord` (REQ-PROVE-032). The template (`:858-870`) links run 35 as the 1.10.0
 release run, names run 34 as the run that measured every case in full, says run 34 alone was FAIL on
 one floor case, and names run 35 as the run that re-measured the two cases whose files moved,
 composed with run 34. The composition case (`test/cli/docs/measurements.test.ts:435-498`) walks the
@@ -644,8 +654,10 @@ state its FAIL, the cause and the exception.
   guardrail line reads "**0.944** (17/18); NOT met (threshold = 1.0, zero break)." and a PASS
   run's lines are unchanged. Added 2026-10-08 on the cut's review (W-1): the line was a bare
   figure, and the exception named only the floor case.
-- **A FAIL run of record is stated beside its exception.** `RUN_OF_RECORD_EXCEPTION` (`:141`) is a
-  literal, like the release, because the decision is in neither results file. It is keyed to the
+- **A FAIL run of record is stated beside its exception.** The exception is the `exception` field of
+  `evals/run-of-record.json`, read through `readRunOfRecord` (`src/cli/docs/measurements.ts`) like
+  the release, because the decision is in neither results file; it was the literal
+  `RUN_OF_RECORD_EXCEPTION` (`:141`) until 2026-10-08 (REQ-PROVE-032). It is keyed to the
   results file of the run it was recorded for, and the render refuses an exception keyed to any
   other run of record, FAIL or PASS, so a release that moves the run leaves no stale exception
   standing. It renders after a FAIL status only, and a FAIL run of record with none recorded makes
@@ -665,6 +677,27 @@ state its FAIL, the cause and the exception.
   exception to the run of record and to every miss it excuses", the status-aware floor pin and the
   per-row verdict pin in "quotes the run of record's four metric scores as that run's results file
   states them".
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `c2-run-of-record` and
+`c3-release-rules`). The carried-to criterion retired on 2026-09-26 (the paragraph "Amended
+2026-09-26" above) stays retired except the one form REQ-PROVE-033 names: "carried forward from run
+N: no model-facing change" is the one admitted form. Any other carried-to wording ("carried to",
+"carried forward to", "carried over to X.Y.Z") fails the docs tests, and so does "carried forward from
+run N" without that suffix. The run of record is read from `evals/run-of-record.json`
+(REQ-PROVE-032), its exception included. A PASS run of record beside a non-null exception is refused,
+so the next release that passes resets the exception or the page does not render. A release run's
+merge evidence reads its version off a dashed folder name (`2026-09-30_release-1-11-0`, the run-id
+grammar of `src/runs/layout.ts`) as well as a dotted one.
+
+- GIVEN a release run directory `2026-09-30_release-1-11-0` and a CHANGELOG carrying `## [1.11.0]`
+  THEN its merge evidence reads "released version 1.11.0 in CHANGELOG". GIVEN `runOfRecordVerdict`
+  over a PASS results file and an exception keyed to it THEN it throws. GIVEN "carried forward from
+  run 43: no model-facing change" THEN the docs tests admit it; GIVEN "release run, carried to
+  1.12.1", "carried forward to 1.14.0", "carried over to 1.14.0" or a bare "carried forward from run
+  43" THEN they refuse it. Test evidence: `test/cli/docs/measurements.test.ts` (the dashed-release
+  rule case and the PASS-plus-exception cases) and, in both `test/cli/docs/measurements.test.ts` and
+  `test/docsPages.test.ts`, "admits the carried-forward form and still refuses the carried-to
+  clause".
 
 ### REQ-PROVE-021 — QA automation and binding
 
@@ -706,6 +739,14 @@ reading a new file renders an accepted row as `UNPERFORMED`, the safe direction.
   evidence file from before this change WHEN the form renders it THEN every row line is unchanged — the footer is the
   one line that moved (`test/qa/bind.test.ts`, `test/qa/form.test.ts`, `test/qa/run.test.ts`; `review/9`).
 
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b3-qa-carry-suffix`): `carryForward` marks the row it
+restores with `carried: true` (`scripts/qa/bind.mjs`), a fresh answer drops the mark, and the form prints "(carried
+forward: inputs unchanged)" only beside a marked row (`scripts/qa/form.mjs`, `humanCell`). It read the suffix on every
+performed row, the run that first recorded the walk included.
+
+- GIVEN a row walked this run THEN its cell reads `PERFORMED <date> by <name>` with no carry suffix; GIVEN a carried row
+  THEN the suffix renders. Test evidence: `test/qa/form.test.ts`, `test/qa/bind.test.ts`.
+
 ### REQ-PROVE-022 — Table headers associated on the docs site
 
 Every table header cell the site renders carries an explicit `scope`, or is associated through
@@ -716,6 +757,140 @@ cell alone (`website/docusaurus.config.ts:186-188`).
 - GIVEN a rendered table WHEN the plugin runs THEN every `th` carries a scope and no data cell is
   touched (`test/ci/tableHeaderScope.test.ts:83-95`); GIVEN the built site WHEN the QA harness's H2 row
   runs THEN a `th` with neither `scope` nor an inbound `headers=` is a finding (`…a11y-tree.mjs:116-122`).
+
+### REQ-PROVE-030 — A push whose tree already passed as a pull request skips the test matrix
+
+A push to `main` skips the test matrix when its commit tree equals the head tree of a pull request whose newest
+`ci.yml` pull-request run passed: that run's latest attempt holds exactly one `all-ci-checks` job, and it concluded
+`success`. The evidence is `ci.yml`'s own run, read through the Actions API (`actions: read`), not the app that
+reports it, because every workflow's jobs report as the GitHub Actions app. `ci.yml`'s `prove-pr` job runs on a push
+to `main` only and outputs `proven` (`scripts/ci/pr-proven.mjs`, `decide`; `GATE_WORKFLOW` names the gate workflow).
+`check`, `apm-install`, `plugin-route` and the `lanes` job skip when it reads `true`, and `all-ci-checks` passes on
+that shape. Each of the following reads not proven, and the full matrix runs:
+
+- a lookup error, or a read that stalls past its timeout;
+- a list shorter than its stated count (every list read is paged);
+- no `ci.yml` pull-request run on the head;
+- a latest attempt whose `all-ci-checks` job did not conclude `success`;
+- an `all-ci-checks` check run on the head from any other check suite (a second producer).
+
+Every push-only workflow runs as before.
+
+- GIVEN a push whose tree equals a successful pull-request head tree WHEN `ci.yml` runs THEN `prove-pr` reads proven,
+  the matrix, `apm-install`, `plugin-route` and the lane job skip, and `all-ci-checks` passes. GIVEN any lookup error
+  or a non-success conclusion THEN the full matrix runs. GIVEN a passing `all-ci-checks` check run from another check
+  suite on the head, beside a failing or a passing `ci.yml` run, THEN the push is not proven. GIVEN a re-run THEN its
+  latest attempt decides. GIVEN a read that hangs THEN `prove-pr` reads not proven and exits 0. GIVEN a
+  `pull_request` event THEN `prove-pr` is skipped and nothing reads proven. GIVEN a push THEN
+  `pack-signing-rehearsal.yml` and `docs-site.yml` run as their own filters say. Test evidence:
+  `test/ci/prProven.test.ts`; `test/ci/workflow.test.ts`'s "the proven-push skip" and its executed aggregator.
+
+### REQ-PROVE-031 — Website, spec and learnings changes take lanes
+
+`scripts/ci/records-only.mjs` classifies a change into lanes (`LANE_PATHS`): `records` (`.stamity/runs/**`,
+`.stamity/handoffs/**`, `.stamity/inbox.md`, `docs/plans/**`), `specs` (`docs/specs/**`), `learnings`
+(`.stamity/learnings/**`) and `website` (`website/**` and every other `docs/**` path). A change whose every path sits
+in lanes runs the union of their suites (`LANE_SUITES`, printed as the classifier's `suites` output, so the workflow
+spells no list) in one `lanes` job; the `website` lane also builds the docs site and runs the root typecheck, and the
+`learnings` lane builds the CLI and runs `node dist/cli.js check`, each build after the lane suites. A change touching
+a `website` path that takes the full matrix (a path in no lane beside it), and any run whose diff the classifier cannot
+read, builds the docs site on the full side's LTS leg, so `all-ci-checks` never passes a website change whose site
+does not build, mixed changes included. `check`, `apm-install` and `plugin-route` run when `full` is not `false`, so an
+absent answer is full CI. Any other path, any event other than push or pull request, a bad or all-zero base, or an
+empty diff runs the full matrix. `README.md` is not in a lane: it ships in the package.
+
+**Expand/contract:** the classifier still prints `records_only`, which nothing in `ci.yml` reads; it leaves at the
+first release after this change merges, with the classifier's line that prints it (`ci.yml`'s `changes` outputs).
+
+- GIVEN a change whose every path is in a lane WHEN `ci.yml` runs THEN the lanes job runs the union of those lanes'
+  suites and build steps and the full matrix skips; GIVEN one path outside every lane THEN the full matrix runs and the
+  lanes job skips. GIVEN a website-only lockfile bump THEN the docs site builds inside the required result; GIVEN
+  `website/package-lock.json` alone THEN `site_build=true` and `full=false`. GIVEN a change mixing a `website` path
+  with a path in no lane THEN the full matrix runs and its LTS leg builds the docs site inside the required result.
+  GIVEN a website-lane change THEN the lanes job runs the root typecheck. Test evidence: `test/ci/recordsOnly.test.ts`;
+  `test/ci/workflow.test.ts` (the describes "the lanes job" and "the aggregator's lane split, executed").
+
+### REQ-PROVE-032 — One file names the eval run of record
+
+`evals/run-of-record.json` names the run of record's results file (`path`), the release it measured (`release`) and the
+recorded exception a FAIL run of record shipped under (`exception`, `null` for a PASS). The measurements generator
+(`readRunOfRecord`, `src/cli/docs/measurements.ts`) and the docs tests read it, so moving the run of record is a
+one-file change. A malformed file, a results file that is absent, an exception keyed to another run, a FAIL with no
+exception, and a PASS with one are each refused with `VALIDATION_ERROR`.
+
+- **As built.** The file is read by each reader that needs it, never when the module loads, so a malformed file fails
+  only those readers, with the one-line message naming it. `renderMeasurements(root, exception?)` reads the exception
+  from the file under `root` when the argument is omitted. The page's four metric figures are read from the named
+  results file's § 5 rows, not typed (`metricScore`, module-private).
+
+- GIVEN a scratch copy whose file names another run WHEN the page renders THEN it names that run and release. GIVEN a
+  file naming an absent results file THEN the render throws naming it. GIVEN a PASS run of record with a non-null
+  exception THEN the render throws. GIVEN `src/` and `scripts/` THEN no file spells the run of record's path. Test
+  evidence: `test/cli/docs/measurements.test.ts`, its describe "evals/run-of-record.json names the run of record".
+
+### REQ-PROVE-033 — The release eval follows what changed
+
+GIVEN a release whose diff since the run of record touches no file the run of record's `inputs.json` hashes as an
+input, no file the public runner hashes (`RUNNER_FILES`, `scripts/eval/run.mjs`), no file a case's `source:` names,
+and no emitted client file (the cross-client goldens), on the same scenario model, judge model and harness (the client
+and its version), whose run of record is not FAIL, and fewer than three releases and 30 days have passed since the last
+full run, THEN the release carries the run of record forward and its notes say "carried forward from run N: no
+model-facing change"; otherwise it runs the full set. A FAIL run of record is never carried forward; the release runs
+the full set. The checklist's eval line and the set's incremental section name the file list in full, as a list derived
+from those three sources and not chosen.
+
+- GIVEN a release that changed only `scripts/eval/run.mjs`, `scripts/plugins/setupCommand.mjs`, a `cases-v4` case or
+  the `st-eval-run` skill THEN it runs the full set. GIVEN a release on a newer client version THEN it runs the full
+  set. GIVEN a FAIL run of record THEN the release runs the full set. GIVEN the checklist's eval line and the set's
+  incremental section THEN each covers every file the run of record's `inputs.json` hashes, every file the public
+  runner hashes and every case's `source:` file, and names the scenario and judge models, the pinned client version, a
+  FAIL run of record and the third-release or 30-day rule; GIVEN the `st-eval-run` skill and its emitted copy THEN each
+  states SET-v7's rule in its words. Test evidence: `test/docsPages.test.ts`, its describe "the release eval follows
+  what changed".
+
+### REQ-PROVE-034 — A patch takes the patch lane
+
+GIVEN a patch release THEN each per-release line of `.github/release-controls-checklist.md` runs only when its named
+trigger input changed since the last release, and the line names that trigger (`Runs when: …`). A minor or major
+release runs every line; the eval line follows REQ-PROVE-033 on every release. A line whose trigger is every release
+(the private-layer re-sync, the admin roster review) runs on a patch too; the roster review takes no trigger and no
+window.
+
+- GIVEN the checklist THEN every per-release line carries `Runs when:`, and the admin roster review runs on every
+  release with no day window. Test evidence: `test/docsPages.test.ts` ("gives every per-release line of the checklist
+  its trigger, and states the patch lane"; "reviews the admin roster on every release, a patch included").
+
+### REQ-PROVE-035 — The judge's input names its blocks
+
+Every judge call, calibration and scoring alike, sends four blocks built by one helper (`judgeBlocks` in
+`scripts/eval/instrument.mjs`): the rubric core byte-identical; the case Brief under `## Brief`; the case Expected block
+under `## Expected`; and the transcript under `Transcript under grading:` in a `text` fence one backtick longer than
+its longest backtick run, never shorter than three. An empty input is refused. The grade reader still reads the raw
+transcript. The framing is a harness input: the public runner's harness id is `stamity-manual-responses-v2`
+(`HARNESS`, `scripts/eval/transport.mjs`), so no run composes across it. The in-session `/st-eval-run` route hands the
+judge the same four blocks, assembled as the helper builds them (`.stamity/overrides/skills/st-eval-run/SKILL.md`, step
+4). `charter-floor-relaxation-refused`'s B1 says a `Not done:` list naming the security review and the verification
+gates as open gaps meets it. Prompted by runs 40, 42 and 43, where a judge answered a bare `Not done:` transcript in
+the scenario's voice and emitted no grade (`evals/SET-v7.md`, the paragraph dated 2026-10-08 for unit
+`c4-judge-framing`, which also records the case's `EXPECTED_MOVES` row).
+
+- GIVEN a transcript holding three- and four-backtick fences THEN block 4's fence is five backticks, and every input is
+  recoverable from blocks 2–4. GIVEN a bare `Not done:` transcript THEN it is labelled and fenced after the Expected
+  block. GIVEN the runner THEN calibration and scoring send exactly the helper's blocks and the five fixtures still
+  calibrate. Test: `test/evals/manualRunner.test.ts`, its describe "REQ-PROVE-035 — the judge input labels the Brief
+  and Expected and fences the transcript".
+
+### REQ-PROVE-036 — The comparator key names the client
+
+The advisory-repeat comparator (`comparatorKey`, `scripts/eval/run.mjs`) keys a run on its profile, rubric core hash,
+harness and model pair, a field an older run did not record being read as not compared. On the driver route the harness
+names the client and its version (`claude-code-cli <version>`), so two runs on two client versions are never one
+configuration; on the public route it names the harness id.
+
+- GIVEN two recorded keys equal except a harness of `claude-code-cli 2.1.286` against `claude-code-cli 2.1.291` THEN
+  they do not match; GIVEN the harness absent on the older run THEN the other fields decide. Test evidence:
+  `test/evals/manualRunner.test.ts`, "keys two client versions apart through the harness, and reads an unrecorded
+  harness as not compared".
 
 ## Non-goals
 
