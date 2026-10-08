@@ -77,9 +77,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte. A `[features]` table of your own is kept instead of the engine's; when it sets
   `hooks = false`, Codex runs none of the hooks, the engine's guards included, so `sync` warns and
   `check` exits 1 naming the line. A file that defines `features` or `mcp_servers` keys without a
-  table header, or holds an `[[mcp_servers]]` array beside a server table the engine writes, is
-  refused as `co-owned-shape` naming the line, and so is a selection of more than 63 MCP servers.
+  table header, holds an `[[mcp_servers]]` array beside a server table the engine writes, or
+  defines one of your tables twice (Codex loads none of such a file) is refused as
+  `co-owned-shape` naming the line, and so is a selection of more than 63 MCP servers.
   The comments above `[features]` are rewritten on the next `sync`.
+- **A co-owned file the reclaim sweep cannot take apart stays the engine's.** When a client is
+  removed and its settings, hooks or Codex configuration file cannot be read table by table or
+  entry by entry, or a hook script is still run by a hooks file you keep, the file keeps its ledger
+  rows, so the next `sync` finishes the reclaim once you fix what its line names. The sync report
+  lists these files apart from the ones that are now yours, and a reclaim entry in `sync --json`
+  and `clean --json` carries `refused: true` when the engine refused to reduce the file.
 
 ### Changed
 
