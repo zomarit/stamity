@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+// Type-only, so the `importOriginal<...>()` argument below adds no runtime
+// import that could race the `vi.mock` hoisting.
+import type * as ChildProcessModule from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -35,6 +38,25 @@ import { useTempDir } from "../support/tempDir.ts";
  * exactly as it is in the subject.
  */
 /* oxlint-disable no-await-in-loop */
+
+/**
+ * Every argument array `safeWrite.ts` hands `execFile("git", …)` — the
+ * tracked-and-clean check's calls. The real `execFile` still runs; the fixtures'
+ * `spawnSync` is not wrapped and records nothing.
+ */
+const gitCheckCalls = vi.hoisted(() => ({ args: [] as string[][] }));
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcessModule>();
+  const original = actual.execFile as unknown as (...args: unknown[]) => unknown;
+  return {
+    ...actual,
+    execFile: (...args: unknown[]): unknown => {
+      if (args[0] === "git" && Array.isArray(args[1])) gitCheckCalls.args.push(args[1].map(String));
+      return original(...args);
+    },
+  };
+});
 
 const VERSION = "1.0.0";
 const LOCK_ENV_KEYS = ["STAMITY_LOCK", "STAMITY_LOCK_STALE_MS"] as const;
@@ -1375,6 +1397,44 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     expect(result.warning).toBeUndefined();
     expect(result.notice).toContain("its previous content is in git history");
     expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+
+  /** The `-c` values a git argument array sets before its subcommand. */
+  function configBeforeSubcommand(args: readonly string[]): string[] {
+    const values: string[] = [];
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index]!;
+      if (arg === "-c") {
+        values.push(args[index + 1] ?? "");
+        index += 1;
+      } else if (!arg.startsWith("-")) {
+        break;
+      }
+    }
+    return values;
+  }
+
+  // Without `safe.bareRepository=explicit` a committed bare-repository layout at
+  // the setup root answers the check; without `core.fsmonitor=false` a
+  // configured monitor command runs. Each call must carry both.
+  it("passes safe.bareRepository=explicit and core.fsmonitor=false to every git call the check makes", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    gitCheckCalls.args.length = 0;
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(result.notice).toContain("its previous content is in git history");
+    expect(gitCheckCalls.args.map((args) => args.find((arg) => !arg.startsWith("-") && !arg.includes("=")))).toEqual([
+      "rev-parse",
+      "ls-files",
+      "diff-index",
+    ]);
+    for (const args of gitCheckCalls.args) {
+      expect(configBeforeSubcommand(args)).toEqual(expect.arrayContaining(["safe.bareRepository=explicit", "core.fsmonitor=false"]));
+    }
   });
 
   // The controls: the engine's own files keep updating with no `.bak`.

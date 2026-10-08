@@ -49,9 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   guard names, a delete needs bytes the engine renders (or, at those two names, the bytes 1.11.0
   rendered for that setup). A copy no rendering proves is kept and named. At a charter or
   instruction file and at `.github/hooks/stamity.json`, an overwrite the engine's rendering does
-  not prove keeps your previous content: in git history when git tracks the file with no
-  uncommitted change (a notice names the file, no `.bak` is taken), behind a verified `.bak`
-  otherwise, including when git is missing. A setup you have not committed therefore gets an
+  not prove keeps your previous content: in git history when the file is tracked and clean in the
+  repository whose top level is the setup root (a notice names the file, no `.bak` is taken), and
+  behind a verified `.bak` and a warning otherwise: for an uncommitted or untracked file, a setup
+  in a monorepo subfolder, a charter inside a submodule, and any git check that fails, git missing
+  included. A setup you have not committed, or one in a monorepo subfolder, therefore gets an
   `AGENTS.md.bak` when a release changes the charter. What stays open, as `SECURITY.md` says: a
   pack or override planted beside the forged row can still prove the delete of a file it renders
   byte for byte, through `sync`, `clean` and `clean --pack`; and at the other paths the engine

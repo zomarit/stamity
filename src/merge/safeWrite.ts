@@ -1060,6 +1060,10 @@ async function isTrackedAndClean(filePath: string, existingContent: string, root
     if (entry?.[2] !== pathspec) return false;
     await runGitCheck(["diff-index", "--cached", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", "--", pathspec], root);
     const blobId = String(entry[1]);
+    // Looser than git, which calls a CRLF copy of an LF blob modified unless a
+    // line-ending translation is configured. Safe for the no-`.bak` answer: the
+    // folded text must equal the committed blob, so all an overwrite can lose
+    // beyond git history is carriage returns, never content.
     const folded = existingContent.replaceAll("\r\n", "\n");
     return [existingContent, folded].some((text) => gitBlobId(Buffer.from(text, "utf8"), blobId.length) === blobId);
   } catch {
