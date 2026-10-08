@@ -38,7 +38,7 @@ of that day to retire the replay; no plan file carries it.
 REQ-CTX-017 and REQ-CTX-018, and the paragraphs and criteria marked "amended 2026-09-30" or "added 2026-09-30", come
 from the spec deltas of `docs/plans/013-optimization-sweep-02.md` (B) and `docs/plans/013-optimization-sweep-03.md`
 (B), merged at the Prove phase of the run `.stamity/runs/2026-09-30_optimization-sweep/`, with the run's contract
-census and sign-offs. They are merged on the package branch and are not in a release yet: `status` still names 1.10.0.
+census and sign-offs. They shipped with 1.11.0; `status` still names 1.10.0, the release this spec first shipped with.
 Their `path:line` citations are to the package head `b855876a`; where the built code and a delta differed, the text
 states what the code does.
 

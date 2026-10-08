@@ -11,22 +11,22 @@ surfaces), as shipped in 1.8.0. Baseline claims carry a `path:line` citation fro
 `949bde9` — `main` after 1.7.0; claims amended in the Prove phase (2026-09-15) cite the built tree.
 The amendments dated 2026-09-26 to REQ-PROVE-009 and REQ-PROVE-020 come from the spec delta of
 `docs/plans/010-enterprise-release-02.md` (the 1.10.0 cut) and the deltas its units' reports
-declared; they cite the tree at `e995fe02`, and they are not in a release yet. REQ-PROVE-020's
+declared; they cite the tree at `e995fe02`, and they shipped with 1.10.0. REQ-PROVE-020's
 as-built text, and the criterion added with it, were merged on 2026-09-28 from the unit
 `run-of-record-1-10-0`; they cite the tree at `0f018460`, as do the refreshed citations in that
 requirement's first paragraph. The amendment dated 2026-09-30 to REQ-PROVE-021 comes from the spec delta of
 `docs/plans/013-optimization-sweep-02.md` (D), merged at the Prove phase of its run; it cites the tree at `b855876a`
-and is not in a release yet. The amendments dated 2026-09-30 to REQ-PROVE-003, REQ-PROVE-004 and REQ-PROVE-005 come
+and shipped with 1.11.0. The amendments dated 2026-09-30 to REQ-PROVE-003, REQ-PROVE-004 and REQ-PROVE-005 come
 from the spec delta of `docs/plans/013-optimization-sweep-03.md` (D) and the units `sw18-codex-rules-leave-shared-charter`
 and `sw17-touchpoints-as-shared-skills`, merged in the same run's second and third spec-merge passes. The amendment
 to REQ-PROVE-003 cites the tree at `cdfaa723`; those to REQ-PROVE-004 and REQ-PROVE-005 cite `a9e94f06`, the package
-head once `sw17-touchpoints-as-shared-skills` had integrated. They are not in a release yet. The
+head once `sw17-touchpoints-as-shared-skills` had integrated. They shipped with 1.11.0. The
 amendment dated 2026-10-01 to REQ-PROVE-020 was written at the 1.11.0 cut, on the release branch; it
-cites the tree at `108c57e0` and is not in a release yet. The amendment dated 2026-10-06 to REQ-PROVE-004 comes from
+cites the tree at `108c57e0` and shipped with 1.11.0. The amendment dated 2026-10-06 to REQ-PROVE-004 comes from
 the spec delta the unit `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at that run's
 close; it cites the tree at `eb4f0727` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-016
 comes from the unit `e3-spec-status-written-ahead` in run `2026-10-07_release-1-12-0`; it cites the tree at
-`4589ace1` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-020 was written at the 1.12.0 cut
+`ee2a0e3d` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-020 was written at the 1.12.0 cut
 in run `2026-10-07_release-1-12-0`, unit `c4-run-of-record`; it cites the run files at `67917fec` and the generator
 at the commit that adds it, and shipped with 1.12.0.
 
@@ -431,7 +431,7 @@ newest `v*` tag may not read `design` either (`test/records/specStatus.test.ts:4
   no requirement id or a file under `test/` cites one of its ids, and passes while no test cites any.
 
 Amended 2026-10-08 (run `2026-10-07_release-1-12-0`, unit `e3-spec-status-written-ahead`; cited at
-`4589ace1`). A `design` spec a pre-tag plan names is flagged only when it defines no `REQ-<AREA>-<nnn>` id
+`ee2a0e3d`). A `design` spec a pre-tag plan names is flagged only when it defines no `REQ-<AREA>-<nnn>` id
 or a file under `test/` cites one of the ids it defines, both read from the tree, so a spec a plan wrote
 ahead of the release that builds it (`board-writes.md` at the 1.12.0 cut) keeps `design`
 (`test/records/specStatus.test.ts:190-232`, the tree's citations at `:288-304`).
