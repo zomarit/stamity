@@ -721,14 +721,17 @@ describe("plugin setup — what it refuses", () => {
 
     expect(second.code).toBe(1);
     expect(second.stderr).toContain("a generated setup exists");
-    expect(second.stderr).toContain(npxCommand("clean -y"));
-    expect(second.stderr).toContain(npxCommand("plugin setup --client claude"));
+    // build/74: the route leads with `sync`, since after an upgrade `clean` refuses
+    // until this version has rewritten its files (review/128).
+    expect(second.stderr).toContain(
+      `run ${npxCommand("sync")}, then ${npxCommand("clean -y")}, then ${npxCommand("plugin setup --client claude")}`,
+    );
     // Not one byte moved: the refusal is ahead of the plan, not a writer that
     // was asked nicely.
     expect(await shaMap(root)).toEqual(before);
   });
 
-  it("refuses a generated setup with the same clean-then-setup route", async () => {
+  it("refuses a generated setup with the same sync-clean-setup route", async () => {
     const root = await makeRepo();
     await seedGenerated(root);
     const installed = await pluginRoot("claude-root");
@@ -738,6 +741,7 @@ describe("plugin setup — what it refuses", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("a generated setup exists");
+    expect(result.stderr).toContain(`run ${npxCommand("sync")}, then ${npxCommand("clean -y")}, then `);
     expect(await shaMap(root)).toEqual(before);
   });
 

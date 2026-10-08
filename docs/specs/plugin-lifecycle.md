@@ -570,8 +570,9 @@ rules, `.claude/settings.json` without a `hooks` object, MCP documents when serv
 and `.stamity/` state — and 0 files of a class the root's `stamity-plugin.json` declares
 `carried`; a second identical invocation exits 0 and reports 0 changed paths with every
 previously written file's sha-256 unchanged; when a generated setup is already present it writes
-0 files, exits 1 and names `stamity clean -y` followed by `stamity plugin setup`; an unreadable `--plugin-root` exits 1 naming
-the path; and without `--plugin-root` the root is read from `CLAUDE_PLUGIN_ROOT`,
+0 files, exits 1 and names `stamity sync`, then `stamity clean -y`, then `stamity plugin setup` (amended 2026-10-08,
+`build/74`: it led with `clean -y`, which refuses after an upgrade until a `sync` runs); an unreadable `--plugin-root`
+exits 1 naming the path; and without `--plugin-root` the root is read from `CLAUDE_PLUGIN_ROOT`,
 `CURSOR_PLUGIN_ROOT` or `PLUGIN_ROOT`, refusing with exit 1 when none is set.
 
 As built (2026-09-20): FOUR root variables, not three — `CLAUDE_PLUGIN_ROOT`, `CURSOR_PLUGIN_ROOT`,

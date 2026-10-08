@@ -381,7 +381,7 @@ the whole of the boundary, and `sync` honours it afterwards — it writes nothin
 plugin-owned class and prints one `plugin-owned` line per client naming the classes it skipped.
 
 Two refusals worth knowing before you run it. On a repository that already carries a generated
-setup it writes nothing and exits 1, naming the two-step route (see
+setup it writes nothing and exits 1, naming the route out — `sync`, `clean -y`, `plugin setup` (see
 [Move an existing setup](#move-an-existing-setup)). With no `--plugin-root` and no root variable
 in the environment it exits 1 naming the variables it looked for.
 
@@ -526,9 +526,10 @@ path and its version, and whether the running Node satisfies the runtime's floor
 
 A repository with a generated setup is **not** migrated in place. `stamity plugin setup` refuses
 on the manifest's presence, ahead of any detection walk, so a refused run writes nothing at all.
-The route is two commands:
+The route is three commands:
 
 ```sh
+stamity sync
 stamity clean -y
 stamity plugin setup --client <csv>
 ```
@@ -544,10 +545,9 @@ manifest included, and names that file. Remove that wiring and run `stamity clea
 `plugin setup`, which otherwise refuses on the manifest still there. **Save first** whatever of
 that you want to keep:
 copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setup`.
-If a file `clean` would keep is one a `sync` with the running version rewrites — after an upgrade,
-or after the detected stack or the gates changed since the last `sync` — `clean` refuses with
-`CLEAN_ERROR` before touching anything and names the files: run `stamity sync` first, then
-`stamity clean -y`.
+The `sync` comes first because `clean` refuses with `CLEAN_ERROR`, before touching anything, while
+a file it would keep is one a `sync` with the running version rewrites — after an upgrade, or after
+the detected stack or the gates changed since the last `sync` — and names those files.
 `stamity clean --dry-run` writes nothing and names what a real run removes. `clean` also prints
 one uninstall command line per client the manifest recorded, so the plugin side can be removed
 the same way it was added.

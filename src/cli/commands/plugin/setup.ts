@@ -160,7 +160,8 @@ export async function planPluginSetup(input: PluginSetupInput): Promise<PluginSe
  * cleaned before it can run on a plugin, so the already-initialised refusal
  * `applyInit` raises is the intended outcome and travels up unchanged;
  * `../plugin.ts` (unit C4) is what turns it into the
- * `stamity clean -y`, then `stamity plugin setup` sentence for the operator.
+ * `stamity sync`, then `stamity clean -y`, then `stamity plugin setup` sentence for
+ * the operator.
  */
 export async function applyPluginSetup(input: PluginSetupInput): Promise<InitApplyReport> {
   const { decisions, plugin } = await planPluginSetup(input);

@@ -47,8 +47,8 @@ import { buildPluginStatus, type PluginStatusReport } from "./plugin/status.ts";
  * detection walk or plan, so "writes nothing" is a property of the control flow
  * rather than of a writer that was asked nicely. `applyInit` would refuse the
  * same case on its own — that refusal stays as the engine's floor — but its
- * message speaks about init, and the operator here needs the two-step route out
- * (`clean -y`, then `plugin setup`) that REQ-PLUGIN-015 names.
+ * message speaks about init, and the operator here needs the route out
+ * (`sync`, then `clean -y`, then `plugin setup`) that REQ-PLUGIN-015 names.
  *
  * ONE FILE plus a `./plugin/` directory, and the split is not stylistic: the
  * setup engine (C6) and the probe and report modules sit under `./plugin/`
@@ -81,11 +81,15 @@ const LABEL_WIDTH = Math.max(
 /** Indent for a row's continuation lines, so a wrapped detail stays in column. */
 const CONTINUATION = `  ${" ".repeat(LABEL_WIDTH)}  `;
 
-/** The clean-then-setup route REQ-PLUGIN-015 names, with the clients it would act on. */
+/**
+ * The route REQ-PLUGIN-015 names, with the clients it would act on. It leads
+ * with `sync`: after an upgrade `clean` refuses until this version has
+ * rewritten its files (review/128, build/74).
+ */
 function cleanThenSetup(clients: readonly Tool[]): string {
   const csv = clients.length === 0 ? "<csv>" : clients.join(",");
   return (
-    `a generated setup exists; run ${packageCommand("clean -y")}, then ` +
+    `a generated setup exists; run ${packageCommand("sync")}, then ${packageCommand("clean -y")}, then ` +
     `${packageCommand(`plugin setup --client ${csv}`)}`
   );
 }
