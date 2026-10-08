@@ -2,7 +2,13 @@
 // The CI test step, with one re-run for a load timeout and never for anything else. Importing it
 // performs no I/O.
 //
-//   node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>]
+//   node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>] [<test file>...]
+//
+// Named test files make a scoped run: vitest runs exactly those files, and `--coverage` is not
+// passed on, because the floors in `vitest.config.ts` are per-file and keyed over all of `src/**`,
+// so a partial run reports every file it did not load below its floor and is red for no defect;
+// collecting coverage with the thresholds off would only add wall time for a report no gate
+// reads. The per-file floors are measured on the full run, CI's command, which names no file.
 //
 // It runs vitest once, with this file as an extra reporter (the default export below) that writes
 // every failure's error name and message to a JSON report. Exit 0 from vitest is a pass. Otherwise
@@ -15,8 +21,8 @@
 // `$GITHUB_STEP_SUMMARY` — so a flaky pass is never read as a clean one. Everything else is red
 // (exit 1): an assertion failure, a timeout beside any other failure, a failed file with no
 // message, an unhandled error, an interrupted run, a coverage floor, a missing report, and any
-// failure at all on the re-run, a second timeout included. Exit 2 is an argument this script does
-// not know, so a typo in the workflow is red rather than quietly unsharded.
+// failure at all on the re-run, a second timeout included. Exit 2 is a flag this script does not
+// know, so a typo in the workflow is red rather than quietly unsharded.
 //
 // Why its own reporter rather than vitest's built-in `json` one: the built-in report carries a
 // file's own errors and each test's, but not a `describe` block's, so an `afterAll` inside a
@@ -43,7 +49,7 @@ const ASSERTION_ERROR = 'AssertionError'
 export const REPORT_ENV = 'STAMITY_TEST_RUN_REPORT'
 
 const SELF = fileURLToPath(import.meta.url)
-const USAGE = 'usage: node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>]'
+const USAGE = 'usage: node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>] [<test file>...]'
 
 /**
  * The vitest reporter. It writes
@@ -122,9 +128,13 @@ export function decide({ exitCode, report }) {
   return { action: 'rerun', files, reason: `every failure is a timeout, in ${files.length} file(s)` }
 }
 
-/** `{ coverage, shard? }` or `{ error }`. An empty `--shard=` is an unsharded leg. */
+/**
+ * `{ coverage, shard?, files? }` or `{ error }`. An empty `--shard=` is an unsharded leg; every
+ * word not starting with `-` is a test file, kept in order; any other flag is an error.
+ */
 export function parseArgs(argv) {
   const args = { coverage: false }
+  const files = []
   for (const arg of argv) {
     if (arg === '--coverage') {
       args.coverage = true
@@ -136,10 +146,13 @@ export function parseArgs(argv) {
         return { error: `malformed shard "${value}": want <i>/<n> with 1 <= i <= n` }
       }
       args.shard = value
+    } else if (arg !== '' && !arg.startsWith('-')) {
+      files.push(arg)
     } else {
       return { error: `unknown argument: ${arg}` }
     }
   }
+  if (files.length > 0) args.files = files
   return args
 }
 
@@ -169,10 +182,20 @@ function escapeData(text) {
  * `io.out`, `io.err` and `io.summary` take text. Returns the exit code.
  */
 export function runTests(argv, io) {
-  const args = parseArgs(argv)
-  if (args.error !== undefined) {
-    io.err(`test-run: ${args.error}\n${USAGE}\n`)
+  const parsed = parseArgs(argv)
+  if (parsed.error !== undefined) {
+    io.err(`test-run: ${parsed.error}\n${USAGE}\n`)
     return 2
+  }
+  // A scoped run collects no coverage (see the head of this file), so its timeout re-run is the
+  // failed files alone, the same as a leg without coverage.
+  const scoped = parsed.files !== undefined
+  const args = scoped ? { ...parsed, coverage: false } : parsed
+  if (scoped && parsed.coverage) {
+    io.err(
+      `test-run: a scoped run of ${parsed.files.length} file(s), coverage off: ` +
+        'the per-file coverage floors are measured on the full run only\n',
+    )
   }
   const decision = decide(io.vitest(vitestArgs(args, io.env)))
   if (decision.action === 'pass') return 0

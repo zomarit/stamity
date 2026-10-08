@@ -54,7 +54,12 @@ interface Io {
 
 const decideTyped = decide as (outcome: Outcome) => Decision;
 const runTyped = runTests as (argv: readonly string[], io: Io) => number;
-const argsTyped = parseArgs as (argv: readonly string[]) => { coverage: boolean; shard?: string; error?: string };
+const argsTyped = parseArgs as (argv: readonly string[]) => {
+  coverage: boolean;
+  shard?: string;
+  files?: readonly string[];
+  error?: string;
+};
 const vitestArgsTyped = vitestArgs as (
   run: { coverage: boolean; shard?: string | undefined; files?: readonly string[] },
   env: Readonly<Record<string, string | undefined>>,
@@ -176,10 +181,20 @@ describe("the arguments", () => {
     expect(argsTyped(["--shard="])).toEqual({ coverage: false });
   });
 
-  it("refuses an argument it does not know and a malformed shard", () => {
-    for (const argv of [["--bail"], ["--shard=3/2"], ["--shard=0/2"], ["--shard=1"], ["--shard=a/b"], ["x"]]) {
+  // TEST CHANGE 2026-10-08 (integration fixer, round 1): a bare word is now a test file, so
+  // `["x"]` left the refused list; an unknown flag beside a file is still refused.
+  it("refuses a flag it does not know and a malformed shard", () => {
+    for (const argv of [["--bail"], ["--shard=3/2"], ["--shard=0/2"], ["--shard=1"], ["--shard=a/b"], ["test/a.test.ts", "--bail"]]) {
       expect(argsTyped(argv).error, argv.join(" ")).toBeTypeOf("string");
     }
+  });
+
+  it("reads every bare word as a test file, in order, beside the flags", () => {
+    expect(argsTyped(["--coverage", "test/ci/a.test.ts", "test/b.test.ts"])).toEqual({
+      coverage: true,
+      files: ["test/ci/a.test.ts", "test/b.test.ts"],
+    });
+    expect(argsTyped(["x"])).toEqual({ coverage: false, files: ["x"] });
   });
 
   it("hands vitest this file as a reporter, and the github-actions one only on a runner", () => {
@@ -278,6 +293,33 @@ describe("runTests — the one re-run and what it says", () => {
     expect([...run.out, ...run.summary]).toEqual([]);
   });
 
+  it("runs exactly the named files, with coverage off, and says why", () => {
+    const run = scripted(GREEN);
+    expect(runTyped(["--coverage", "test/ci/recordsOnly.test.ts", "test/ci/testRun.test.ts"], run.io)).toBe(0);
+    expect(run.calls).toHaveLength(1);
+    expect(run.calls[0]?.slice(0, 3)).toEqual(["run", "test/ci/recordsOnly.test.ts", "test/ci/testRun.test.ts"]);
+    expect(run.calls[0]).not.toContain("--coverage");
+    expect(run.err.join("")).toContain("per-file coverage floors");
+  });
+
+  it("re-runs a timed-out named file alone on a scoped run, never the whole suite", () => {
+    const run = scripted(
+      failed({ file: "test/upstream/lane.test.ts", errors: [HOOK] }),
+      GREEN,
+    );
+    expect(runTyped(["--coverage", "test/upstream/lane.test.ts", "test/ci/recordsOnly.test.ts"], run.io)).toBe(0);
+    expect(run.calls).toHaveLength(2);
+    expect(run.calls[1]?.slice(0, 2)).toEqual(["run", "test/upstream/lane.test.ts"]);
+    expect(run.calls[1]).not.toContain("--coverage");
+    expect(run.out.join("")).toContain("::warning title=flaky test::test/upstream/lane.test.ts");
+  });
+
+  it("is red on a scoped run's assertion failure, with one run", () => {
+    const run = scripted(failed({ file: "test/hooks/scripts.test.ts", errors: [ASSERTION] }));
+    expect(runTyped(["test/hooks/scripts.test.ts"], run.io)).toBe(1);
+    expect(run.calls).toHaveLength(1);
+  });
+
   it("exits 2 on an argument it does not know, before running anything", () => {
     const run = scripted();
     expect(runTyped(["--shard=1/0"], run.io)).toBe(2);
@@ -368,6 +410,22 @@ it("fails", () => { expect(29).toBe(30); });
       expect(result.stdout).not.toContain("flaky test");
       expect(result.stderr).toContain("no re-run");
       expect(result.summary).toBe("");
+    },
+    CLI_MS,
+  );
+
+  it(
+    "runs only the named file when given one, and exits 0",
+    () => {
+      const loads = `import { appendFileSync } from "node:fs";
+import { it, expect } from "vitest";
+appendFileSync(new URL("./loads", import.meta.url), import.meta.url.split("/").pop() + "\\n");
+it("passes", () => { expect(1).toBe(1); });
+`;
+      const root = project("scoped", { "picked.test.mjs": loads, "other.test.mjs": loads });
+      const result = cli(root, ["--coverage", "picked.test.mjs"]);
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(readFileSync(join(root, "loads"), "utf8")).toBe("picked.test.mjs\n");
     },
     CLI_MS,
   );
