@@ -117,23 +117,25 @@ lanes, the engine's `.gitkeep` excepted at every location:
   `.stamity/handoffs/`, and plans under `docs/plans/`.
 - `specs`: the spec under `docs/specs/`.
 - `learnings`: `.stamity/learnings/`.
-- `website`: `website/` and every other page under `docs/`.
+- `website`: `website/` and every other path under `docs/`.
 
 The job runs the suites that read the lanes the change fell in, the generate-and-diff step, the
 leak gate and, on pull requests, the hygiene scan. The `learnings` lane adds the CLI build and its
 dogfood `check`, because the session hook reads the learnings. The `website` lane adds the docs site
-build and the root typecheck, because a test imports a `website/` module. Any path in no lane, a
-push with no earlier commit to compare, a diff the script cannot read, the weekly schedule and a
-manual run get the full three lanes. On that side the LTS leg also builds the docs site, last,
-when the change touches a `website` path or no diff was read.
+build and the root typecheck, because a test imports a `website/` module. Any path in no lane, an
+empty diff, a push with no earlier commit to compare, a diff the script cannot read, the weekly
+schedule and a manual run get the full three lanes. On that side the LTS leg also builds the docs
+site, last, when the change touches a `website` path or no diff was read.
 
 A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed
 commit's tree is the head tree of a pull request whose latest `ci.yml` pull-request run passed
 `all-ci-checks`. When it is, the check matrix, the two route lanes and the `lanes` job all skip:
-that tree was already proven. Only `ci.yml`'s own run counts as evidence, and a failed or unclear
-read means full CI, never a red job. The push-only workflows, `pack-signing-rehearsal.yml` and
-`docs-site.yml`, still run on the push. `all-ci-checks` asserts which of the three shapes ran, a
-proven push, the `lanes` job or the full side, so neither short answer reads as a full pass.
+that tree was already proven. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
+answers not proven rather than failing a job, so the push runs the `lanes` job or the full side, as
+`records-only.mjs` decides for its diff. The skip reaches only `ci.yml`:
+`pack-signing-rehearsal.yml` and `docs-site.yml` still run on a push whose paths match their own
+filters. `all-ci-checks` asserts which of the three shapes ran, a proven push, the `lanes` job or
+the full side, so neither short answer reads as a full pass.
 
 Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
 `STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`

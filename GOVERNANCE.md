@@ -89,20 +89,22 @@ rather than reddening the lane; a broken root is red.
 A change whose every path falls in a lane takes the `lanes` job in place of those three lanes.
 There are four lanes: `records` (run records, the deferral inbox, handoffs and plans), `specs`
 (the spec), `learnings` (the recorded learnings) and `website` (the docs site and every other
-`docs/` page). The job runs what those paths can break: the suites that read them, the
+`docs/` path). The job runs what those paths can break: the suites that read them, the
 generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. The `learnings` lane
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
-typecheck. `scripts/ci/records-only.mjs` decides. Any path in no lane, a diff it cannot read, the
-weekly schedule and a manual run get the full three lanes, and there the LTS leg also builds the
-docs site when the change touches a `website` path or no diff was read.
+typecheck. `scripts/ci/records-only.mjs` decides. Any path in no lane, an empty diff, a diff it
+cannot read, the weekly schedule and a manual run get the full three lanes, and there the LTS leg
+also builds the docs site when the change touches a `website` path or no diff was read.
 [CONTRIBUTING.md](CONTRIBUTING.md) lists each lane's paths.
 
 A push to `main` whose tree a pull request already proved skips both sides.
 `scripts/ci/pr-proven.mjs` answers proven only when the pushed tree is the head tree of a pull
-request whose latest `ci.yml` pull-request run passed `all-ci-checks`; any other answer, a failed
-read included, is full CI. Only that workflow's own run counts as evidence, not a check of the same
-name from another workflow. `all-ci-checks` asserts which of the three shapes ran, a proven push,
-the `lanes` job or the full side, so neither short answer reads as a full pass.
+request whose latest `ci.yml` pull-request run passed `all-ci-checks`. Any other answer, a failed
+read included, is not proven, and the push then runs the `lanes` job or the full side as
+`scripts/ci/records-only.mjs` decides for its diff. Only that workflow's own run counts as
+evidence, not a check of the same name from another workflow. `all-ci-checks` asserts which of the
+three shapes ran, a proven push, the `lanes` job or the full side, so neither short answer reads as
+a full pass.
 
 ### What `all-pr-checks` covers
 
