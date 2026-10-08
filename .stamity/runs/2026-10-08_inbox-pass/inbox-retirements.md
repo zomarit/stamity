@@ -10,9 +10,10 @@ it; **scheduled-fold** — the pass folded it into the named unit or place (`357
 last: it names the learning commit this pass made.
 
 Rows: 416 decided · removed here: 401 (396 in part 1, and in part 2 the five that waited on lane D: rows 519, 560,
-585, 586, 588) · staying: 15 (named with their places in `record.md`) · re-filed remainders: 3 (row 524's, as
-`2026-10-08_inbox-pass/pass/1`, row 306's, as `2026-10-08_inbox-pass/pass/2`, and row 519's residual (3), as
-`2026-10-08_inbox-pass/pass/3`).
+585, 586, 588) · staying: 15 (named with their places in `record.md`) · re-filed remainders: 4 (row 524's, as
+`2026-10-08_inbox-pass/pass/1`, row 306's, as `2026-10-08_inbox-pass/pass/2`, row 519's residual (3), as
+`2026-10-08_inbox-pass/pass/3`, and row 519's remainder at the current `stamity-` Cursor guards, as
+`2026-10-08_inbox-pass/pass/4`).
 
 The review of the pass's mechanics corrected some lines; `record.md`'s "Corrections after review" section carries
 each correction. A ledger-ref row's line below stays as its ledger row's `retired` field carries it, since a retired
