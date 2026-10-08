@@ -76,10 +76,10 @@ Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings 
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`plugin` · `clean` — ten verbs. Behind them are three plumbing verbs an agent calls and nobody
-types, `learn`, `handoff` and `ledger`. What each verb does, every flag it takes and every status
-it exits with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders from the
-program itself, so it cannot describe a verb the CLI does not have, or miss one it does.
+`plugin` · `clean` — ten verbs. Behind them are four plumbing verbs an agent calls and nobody
+types, `learn`, `handoff`, `ledger` and `gate`. What each verb does, every flag it takes and every
+status it exits with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders
+from the program itself, so it cannot describe a verb the CLI does not have, or miss one it does.
 
 ## Working on this repository
 

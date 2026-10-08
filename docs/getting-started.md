@@ -231,15 +231,16 @@ Four things, because each is about how two parts fit together rather than about 
 Every flag and every exit status is in [the CLI reference](cli-reference.md). Every settable key
 is in [the configuration reference](configuration.md).
 
-### The three hidden verbs
+### The four hidden verbs
 
-There are three more verbs, kept off `stamity --help`. `learn` records a learning through the
+There are four more verbs, kept off `stamity --help`. `learn` records a learning through the
 engine's write gates. `handoff` prepares, resumes, lists, completes and prunes handoffs through
 those same gates. `ledger` appends a run's findings to its ledger, closes its rows and prints the
 resume card of a run in progress (or, with none, of the newest closed run dated within the last two
 days, with its closing status), as the one serialized writer. The card also lists the run ids of
 open debug rounds on a line of their own, and when those are all there is, it prints a card that
-names no run. All three are plumbing an agent calls; the
+names no run. `gate` classifies a change by its paths — the class, the checks that class calls for
+and the review lenses it adds — and writes nothing. All four are plumbing an agent calls; the
 session-start hook prints the card after a compaction or on a resume, when the client's payload
 says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
