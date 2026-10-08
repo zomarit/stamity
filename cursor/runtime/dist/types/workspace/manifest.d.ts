@@ -1,0 +1,10 @@
+import type { ManifestMigration } from "../types/manifest.ts";
+import { type WorkspaceDefaults, type WorkspaceManifest, type WorkspaceRepoEntry } from "./model.ts";
+export declare function isUnsafeRepoPath(repoPath: string): boolean;
+export declare function normalizeRepoPathKey(repoPath: string): string;
+export declare function collectWorkspaceManifestErrors(data: unknown): string[];
+export declare const WORKSPACE_MANIFEST_MIGRATIONS: readonly ManifestMigration[];
+export declare function migrateWorkspaceManifest(raw: Record<string, unknown>): Record<string, unknown>;
+export declare function readWorkspaceManifest(rootDir: string): Promise<WorkspaceManifest | null>;
+export declare function writeWorkspaceManifest(rootDir: string, manifest: WorkspaceManifest): Promise<void>;
+export declare function createWorkspaceManifest(defaults: WorkspaceDefaults, repos: readonly WorkspaceRepoEntry[]): WorkspaceManifest;

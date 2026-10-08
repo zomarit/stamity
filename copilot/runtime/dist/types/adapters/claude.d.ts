@@ -1,0 +1,10 @@
+import type { AdapterDialectFacts, ResiduePlanner } from "../emit/planner.ts";
+import { type HookInterchange } from "../hooks/model.ts";
+export declare const CLAUDE_MD_PATH = "CLAUDE.md";
+export declare const CLAUDE_SKILLS_DIR: string;
+export declare const CLAUDE_COMMANDS_DIR = ".claude/commands";
+export declare const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
+export declare const CLAUDE_REVIEW_GATE_PATH: string;
+export declare const CLAUDE_DIALECT_FACTS: AdapterDialectFacts;
+export declare const claudeResiduePlanner: ResiduePlanner;
+export declare function claudeUserHookEntries(rows: readonly HookInterchange[]): Record<string, unknown[]>;
