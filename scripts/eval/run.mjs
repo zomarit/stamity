@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { aggregate, calibrationMatches, EvalBlocked, headings, parseCase, parseGrade, parseRubric, requireEvidence, sha256 } from './instrument.mjs'
+import { aggregate, calibrationMatches, EvalBlocked, headings, judgeBlocks, parseCase, parseGrade, parseRubric, requireEvidence, sha256 } from './instrument.mjs'
 import { boundedMap, callWithRetries, CONTROLS, HARNESS, makeRequest, responsesTransport } from './transport.mjs'
 
 const PROFILE_PATH = 'evals/model-profiles-v1.json'
@@ -322,7 +322,7 @@ export async function runEvaluation({ root, runId, profileName, trigger, capacit
     })
     summary.calibration = await boundedMap(loaded.rubric.fixtures, capacity, async fixture => {
       const grade = await invoke(`calibration-${fixture.id}`, loaded.profile.judge,
-        [loaded.rubric.core, fixture.scenario.brief, fixture.scenario.expected, fixture.transcript],
+        judgeBlocks(loaded.rubric.core, fixture.scenario.brief, fixture.scenario.expected, fixture.transcript),
         value => parseGrade(value.transcript, fixture.scenario, fixture.transcript))
       const match = calibrationMatches(fixture, grade)
       return { fixture: fixture.id, match, expected: { verdict: fixture.verdict, binding: fixture.binding, advisory: fixture.advisory }, grade }
@@ -335,7 +335,7 @@ export async function runEvaluation({ root, runId, profileName, trigger, capacit
       const name = `${scenario.id}-sample-${sample}`
       const scenarioOutput = await invoke(`scenario-${name}`, loaded.profile.scenario, [scenario.brief], value => value, true)
       const grade = await invoke(`judge-${name}`, loaded.profile.judge,
-        [loaded.rubric.core, scenario.brief, scenario.expected, scenarioOutput.transcript],
+        judgeBlocks(loaded.rubric.core, scenario.brief, scenario.expected, scenarioOutput.transcript),
         value => parseGrade(value.transcript, scenario, scenarioOutput.transcript))
       const result = { caseId: scenario.id, sample, grade, transcript: scenarioOutput.transcript,
         outputType: scenarioOutput.outputType, parts: scenarioOutput.parts }

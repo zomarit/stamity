@@ -60,6 +60,21 @@ export function parseCase(raw, path) {
     source: field('source')?.split(':')[0], brief, expected, binding, advisory, hash: sha256(raw) }
 }
 
+/**
+ * The judge's four input blocks, each saying what it is (REQ-PROVE-035). Unlabelled, a bare answer
+ * read as a draft after the Brief's own "Respond exactly as you would", and the judge answered the
+ * Brief instead of grading. The core is untouched, so its hash holds. The transcript's fence is one
+ * backtick longer than its longest backtick run, never under three, so nothing inside can close it;
+ * this is the form a rubric fixture's transcript is written in (`parseRubric` below).
+ */
+export function judgeBlocks(core, brief, expected, transcript) {
+  requireEvidence([core, brief, expected, transcript].every(block => typeof block === 'string' && block.length > 0), 'request-block-empty')
+  const longest = Math.max(0, ...(transcript.match(/`+/g) ?? []).map(run => run.length))
+  const fence = '`'.repeat(Math.max(3, longest + 1))
+  return [core, `## Brief\n\n${brief}`, `## Expected\n\n${expected}`,
+    `Transcript under grading:\n\n${fence}text\n${transcript}${transcript.endsWith('\n') ? '' : '\n'}${fence}`]
+}
+
 /** v6 keys are exhaustive; prose omissions must never imply a passing label. */
 function explicitFixtureLabels(section, scenario, label, verdict, ratio) {
   const markers = [...section.matchAll(/^```calibration-labels[^\n]*$/gm)]

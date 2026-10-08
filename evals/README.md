@@ -7,8 +7,8 @@ under a declared threshold.
 
 **Current set: `SET-v7.md`.** v6, v5, v4, v3, v2 and v1 are retained beside it, all
 unchanged, as baselines. v7 keeps v6's scoring rule, criteria, floors and metric numbers;
-what moves is the corpus: `cases-v6/` carries v5's 78 cases, 67 of them with their `##
-Expected` block byte-identical and 11 moved by reviewed dispositions, an amendment or
+what moves is the corpus: `cases-v6/` carries v5's 78 cases, 66 of them with their `##
+Expected` block byte-identical and 12 moved by reviewed dispositions, two amendments or
 re-syncs to the landed corpus, plus the cases v7 adds. Each moved block carries an `EXPECTED_MOVES` row in `SET-v7.md`. Eight
 carried Briefs and `source:` ranges moved with the corpus on the same night, named in
 `SET-v7.md` under "What v7 adds".
@@ -28,7 +28,7 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 | `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v6/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v6/probes/` | Skill-selection classification cases: the ones that should trigger a skill, and the near misses that should not. |
-| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 67 with the `## Expected` block byte-identical and 11 moved by reviewed dispositions, an amendment or re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
+| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 66 with the `## Expected` block byte-identical and 12 moved by reviewed dispositions, two amendments or re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
 | `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `SET-v4.md`, `cases-v4/**`, `coverage-exemptions-v4.md` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
 | `SET-v3.md`, `rubric-v3.md`, `cases-v3/**`, `coverage-exemptions-v3.md` | **Retained baseline, do not edit.** The instrument runs 3 and 4 were produced with. |
@@ -41,8 +41,8 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 
 v7 keeps v6's scoring rule, its four metrics and their declared thresholds; the rule itself
 keeps the name SET-v6, because that name is how a scored run says which rule decided it. What
-moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases, 67 with the
-`## Expected` block byte-identical and 11 moved by reviewed dispositions, an amendment or
+moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases, 66 with the
+`## Expected` block byte-identical and 12 moved by reviewed dispositions, two amendments or
 re-syncs to the landed corpus (eight carried Briefs and `source:` ranges moved with the corpus) plus the cases v7 adds — those additions, and every count they move, are documented in
 `SET-v7.md` under "What v7 adds". The coverage gate reads `coverage-exemptions-v6.md`, and the
 default `claude` profile selects `rubric-v7.md`.
@@ -105,7 +105,14 @@ What v4 moved is the judge's input set. Per transcript the judge receives four t
 nothing else: the rubric, the case's `## Brief` verbatim, the case's `## Expected` block, and
 the transcript verbatim. Run 4 found the runner skill withholding the Brief that the rubric's
 own procedure reads, which made any criterion phrased against a value the Brief seeds
-undecidable — and an undecidable criterion is graded `fail`.
+undecidable — and an undecidable criterion is graded `fail`. Since 2026-10-08 the manual runner
+(`scripts/eval-run.mjs`) also says which block is which, through `judgeBlocks` in
+`scripts/eval/instrument.mjs`, and the route of record's driver must take the same helper before
+its next run: the rubric core
+unchanged, the Brief under `## Brief`, the Expected block under `## Expected`, and the
+transcript under `Transcript under grading:` in a `text` fence one backtick longer than its
+longest backtick run. Unlabelled, a bare `Not done:` answer read as a draft after the Brief's
+"Respond exactly as you would", and the judge answered the Brief instead of grading it.
 
 A judge-model change is a calibration event, and so is an edit to the rubric. Calibration runs
 against five fixtures today, and that number is not a literal maintained in this file: it is
@@ -465,8 +472,9 @@ stateless request per sample and per judge call. No profile argument keeps the `
 default, which this transport reports as unavailable. It never switches profiles or
 reads native CLI authentication tokens. Importing the script and `--help` make no calls.
 
-The request has one exact Brief block for a scenario, or four exact rubric-core, Brief,
-Expected and transcript blocks for a judge. The API receives no extra instructions,
+The request has one exact Brief block for a scenario, or the four blocks `judgeBlocks`
+builds for a judge: the rubric core, the labelled Brief, the labelled Expected block and the
+labelled, fenced transcript. The API receives no extra instructions,
 conversation, previous response or tools. Requests go only to the official Responses
 endpoint with redirects disabled. The harness checks the complete provider response's
 exact model and reasoning effort, context controls and output trace before admission.
@@ -477,7 +485,9 @@ Non-scoring probes establish both role controls before calibration;
 all five retained fixtures use their original `cases-v4` Brief/Expected blocks. Each
 binding and advisory label must match before any scenario is scored.
 
-This is a separate harness/isolation baseline, named `stamity-manual-responses-v1`.
+This is a separate harness/isolation baseline, named `stamity-manual-responses-v2`. v1
+judged the four blocks unlabelled and unfenced; the comparator keys on the harness, so no run
+composes across that change.
 The [official conversation-state contract](https://developers.openai.com/api/docs/guides/conversation-state)
 describes independent stateless requests; the
 [Responses API reference](https://developers.openai.com/api/reference/typescript/resources/responses/methods/create)

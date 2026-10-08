@@ -1,7 +1,9 @@
 import { EvalBlocked, requireEvidence, sha256 } from './instrument.mjs'
 
 export const ENDPOINT = 'https://api.openai.com/v1/responses'
-export const HARNESS = 'stamity-manual-responses-v1'
+// v2 (2026-10-08): the judge's blocks are labelled and its transcript fenced (`judgeBlocks`), so a v1
+// run and a v2 run are two configurations and never compose.
+export const HARNESS = 'stamity-manual-responses-v2'
 export const CONTROLS = Object.freeze({ transport: 'stateless-responses-api', tools: 'removed',
   history: 'omitted', projectContext: 'absent', trace: 'complete-response-output',
   providerInternalInstructions: 'not exposed by API', attestation: 'unavailable; no prompt appended',
