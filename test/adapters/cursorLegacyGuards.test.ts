@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LEGACY_CURSOR_GUARD_PATHS } from "../../src/adapters/cursor.ts";
@@ -43,10 +44,22 @@ import { useTempDir } from "../support/tempDir.ts";
  * The MCP guard embeds no roster: both later captures wrote the same bytes as
  * the core one. The `.cursor/hooks.json` each capture wrote ran the guards with
  * exactly the two entries {@link CURSOR_1_11_0_GUARD_ENTRIES} pins.
+ *
+ * The integrity line above is provenance a test cannot re-check offline, so
+ * {@link CAPTURED_SHA256} pins each fixture's bytes as captured: a fixture
+ * edited to match an edited copy shows up as an edit to this file too.
  */
 
 const FIXTURES = join(import.meta.dirname, "fixtures", "cursor-guards-1.11.0");
 const fixture = (name: string): string => readFileSync(join(FIXTURES, name), "utf8");
+
+/** Each fixture's SHA-256 as captured from the published 1.11.0 package on 2026-10-08. */
+const CAPTURED_SHA256: Readonly<Record<string, string>> = {
+  "mcp-guard.mjs.txt": "8b1c44386e8b01f871a88b2a4a640c402bff7007aae2410ad048d02773021896",
+  "subagent-guard.mjs.txt": "92255907cb1d25ce965368c7f87d4ee9398af70d38e56c46dc8245e5b15cb836",
+  "subagent-guard-ops.mjs.txt": "9bfe7067ab03271c00bf7eae8efb948d9528a8379f2e2815241a669891b5aaa6",
+  "subagent-guard-override.mjs.txt": "ab938c8625872a4b93dacd6fc1cc7308266d8fdb4b452a473259701c8e821ac9",
+};
 
 const SUBAGENT = ".cursor/hooks/subagent-guard.mjs";
 const MCP = ".cursor/hooks/mcp-guard.mjs";
@@ -62,6 +75,13 @@ function guardsFor(agentIds: readonly string[], packageName = CANONICAL, npmChan
 }
 
 describe("the frozen 1.11.0 Cursor guard builder reproduces the published 1.11.0 bytes", () => {
+  it("holds every fixture to the bytes captured from the published package (review/101)", () => {
+    expect(readdirSync(FIXTURES).toSorted()).toEqual(Object.keys(CAPTURED_SHA256).toSorted());
+    for (const [name, sha256] of Object.entries(CAPTURED_SHA256)) {
+      expect(createHash("sha256").update(readFileSync(join(FIXTURES, name))).digest("hex"), name).toBe(sha256);
+    }
+  });
+
   it("renders both guards at 1.11.0's names, the paths the engine reads as the old guards", () => {
     expect([...guardsFor(CURSOR_1_11_0_RUNTIME_AGENT_IDS).keys()].toSorted()).toEqual([...LEGACY_CURSOR_GUARD_PATHS].toSorted());
     expect(CURSOR_1_11_0_VERSION).toBe("1.11.0");

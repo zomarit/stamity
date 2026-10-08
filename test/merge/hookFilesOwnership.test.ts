@@ -1395,6 +1395,68 @@ describe("the first sync recognises a 1.11.0 guard by the bytes 1.11.0 rendered 
       expect(existsSync(abs(getTemp().path("canonical"), old)), old).toBe(true);
     }
   });
+
+  /** The two old guards' rows as path-renamed candidates, from a 1.11.0 setup made under `sub`. */
+  const oldGuardCandidates = async (sub: string): Promise<{ root: string; ledger: Parameters<typeof trustedInfraPaths>[0] }> => {
+    const root = await setUpByReleaseOneEleven(sub);
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    return { root, ledger: manifest.ledger };
+  };
+  const asCandidates = (ledger: Parameters<typeof trustedInfraPaths>[0]) =>
+    ledger.filter((row) => (OLD_GUARDS as readonly string[]).includes(row.path)).map((entry) => ({ entry, reason: "path-renamed" as const }));
+
+  // build/60 (review/87's rule at the old names): the full `clean` removes the setup, ledger
+  // and all, so an old guard the proof could not judge keeps no row and no later sync tries
+  // again. Its entry says so and asks for the delete by hand, unless the file is the owner's.
+  it("a full clean that cannot judge an old guard promises no retry it removes", async () => {
+    const { root, ledger } = await oldGuardCandidates("unbuilt-clean");
+
+    const report = await sweepReclaimCandidates(asCandidates(ledger), {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: trustedInfraPaths(ledger),
+      renderings: new Map(),
+      renderingsUnbuilt: "the plan threw",
+      setupRemoved: true,
+    });
+
+    for (const old of OLD_GUARDS) {
+      const entry = report.entries.find((candidate) => candidate.path === old);
+      expect(entry, old).toMatchObject({ action: "skipped-user-content", unproven: true });
+      expect(entry?.detail, old).toContain("could not be built (the plan threw)");
+      expect(entry?.detail, old).toContain("the setup is being removed");
+      expect(entry?.detail, old).toContain("delete it by hand unless it is yours");
+      expect(entry?.detail, old).not.toContain("next sync");
+      expect(entry?.detail, old).not.toContain("kept with its ledger row");
+      expect(existsSync(abs(root, old)), old).toBe(true);
+    }
+  });
+
+  // review/98: the 1.11.0 re-render never depends on the running engine's plan. When it judged
+  // an old guard and the bytes are not its rendering, the file is disproven, whatever else the
+  // plan failed to build; it is not reported unproven and carried.
+  it("an old guard the 1.11.0 re-render judged is disproven even when the running engine's plan did not build", async () => {
+    const { root, ledger } = await oldGuardCandidates("judged-unbuilt");
+    const notTheseBytes = new Map(OLD_GUARDS.map((old) => [old, new Set([sha256("a different 1.11.0 rendering\n")])] as const));
+
+    const report = await sweepReclaimCandidates(asCandidates(ledger), {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: trustedInfraPaths(ledger),
+      renderings: notTheseBytes,
+      renderingsUnbuilt: "another path's plan threw",
+    });
+
+    for (const old of OLD_GUARDS) {
+      const entry = report.entries.find((candidate) => candidate.path === old);
+      expect(entry?.action, old).toBe("skipped-user-content");
+      expect(entry?.unproven, old).toBeUndefined();
+      expect(entry?.detail, old).toContain("and these are not");
+      expect(entry?.detail, old).not.toContain("could not be built");
+      expect(existsSync(abs(root, old)), old).toBe(true);
+    }
+  });
 });
 
 describe("a first sync that refuses .cursor/hooks.json leaves the rename to the next one (REQ-FLOW-038, review/75)", () => {

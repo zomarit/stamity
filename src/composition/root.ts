@@ -116,6 +116,7 @@ import * as emitPlanner from "../emit/planner.ts";
 import * as capabilityMatrix from "../emit/capabilityMatrix.ts";
 import * as adapterClaude from "../adapters/claude.ts";
 import * as adapterCursor from "../adapters/cursor.ts";
+import * as adapterCursorLegacyGuards from "../adapters/cursorLegacyGuards.ts";
 import * as adapterCopilot from "../adapters/copilot.ts";
 import * as adapterCodex from "../adapters/codex.ts";
 import * as adapterToml from "../adapters/toml.ts";
@@ -296,6 +297,15 @@ export interface EngineRegistry {
   readonly adapters: {
     readonly claude: typeof adapterClaude;
     readonly cursor: typeof adapterCursor;
+    /**
+     * The frozen copy of the Cursor guard builder as 1.11.0 shipped it. It writes
+     * nothing: it renders the bytes 1.11.0 wrote at the two old guard names, so
+     * the first sync after an upgrade can prove those files the engine's
+     * (REQ-FLOW-038). Wired like any other engine module even though its only
+     * production caller is that proof (`src/cli/engine/emissionWrite.ts`): the
+     * registry is what declares a module reachable.
+     */
+    readonly cursorLegacyGuards: typeof adapterCursorLegacyGuards;
     readonly copilot: typeof adapterCopilot;
     readonly codex: typeof adapterCodex;
     readonly toml: typeof adapterToml;
@@ -444,6 +454,7 @@ export function createEngine(): EngineRegistry {
     adapters: {
       claude: adapterClaude,
       cursor: adapterCursor,
+      cursorLegacyGuards: adapterCursorLegacyGuards,
       copilot: adapterCopilot,
       codex: adapterCodex,
       toml: adapterToml,

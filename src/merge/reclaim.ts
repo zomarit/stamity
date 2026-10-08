@@ -306,9 +306,10 @@ export interface ReclaimOptions {
   renderingsUnbuilt?: string;
   /**
    * Set by the full `clean`, which removes the setup after the sweep, ledger
-   * included: no row and no later `sync` outlive it, so a content-folder file
-   * kept unjudged under {@link renderingsUnbuilt} is named for a delete by
-   * hand, unless it is the operator's, instead of promised a retry (review/87).
+   * included: no row and no later `sync` outlive it, so a file kept unjudged
+   * under {@link renderingsUnbuilt} (in a content folder or at a Cursor 1.11.0
+   * guard name) is named for a delete by hand, unless it is the operator's,
+   * instead of promised a retry (review/87, build/60).
    */
   setupRemoved?: boolean;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
@@ -637,6 +638,17 @@ function skip(action: Extract<ReclaimPlan, { kind: "skip" }>["action"], detail: 
   return { kind: "skip", action, detail };
 }
 
+/**
+ * What happens to a file kept unjudged under
+ * {@link ReclaimOptions.renderingsUnbuilt}: the next sync tries the proof
+ * again, unless the run removes the setup and no sync follows (review/87).
+ */
+function keptUnjudged(ctx: SweepContext): string {
+  return ctx.setupRemoved
+    ? "the file is kept, and the setup is being removed with its ledger, so no sync tries the proof again: delete it by hand unless it is yours."
+    : "the file is kept with its ledger row, and the next sync tries the proof again.";
+}
+
 /** Run gates 1-4 for one candidate path. Reads only; never mutates. */
 async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<ReclaimPlan> {
   const path = group.path;
@@ -911,11 +923,13 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     const renderingProof = needsRenderingProof(path);
     if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
       // Unproven is not disproven (review/61), as for a content folder below.
-      if (ctx.renderingsUnbuilt !== undefined) {
+      // The 1.11.0 re-render never runs the engine's plan, so a rendering it
+      // built judged the file whatever else failed to build (review/98).
+      if (ctx.renderingsUnbuilt !== undefined && !ctx.renderings.has(path)) {
         return {
           kind: "skip",
           action: "skipped-user-content",
-          detail: `A file at a name Cursor's guards carried up to 1.11.0 is deleted only when its bytes are the guard 1.11.0 rendered for this setup, and the renderings could not be built (${ctx.renderingsUnbuilt}) — the file is kept with its ledger row, and the next sync tries the proof again.`,
+          detail: `A file at a name Cursor's guards carried up to 1.11.0 is deleted only when its bytes are the guard 1.11.0 rendered for this setup, and the renderings could not be built (${ctx.renderingsUnbuilt}) — ${keptUnjudged(ctx)}`,
           unproven: true,
         };
       }
@@ -971,13 +985,10 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
         // bytes were never judged, so the claim stands for the next sync —
         // unless the run removes the setup, and no sync follows (review/87).
         if (ctx.renderingsUnbuilt !== undefined) {
-          const kept = ctx.setupRemoved
-            ? "the file is kept, and the setup is being removed with its ledger, so no sync tries the proof again: delete it by hand unless it is yours."
-            : "the file is kept with its ledger row, and the next sync tries the proof again.";
           return {
             kind: "skip",
             action: "skipped-user-content",
-            detail: `A file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and that rendering could not be built (${ctx.renderingsUnbuilt}) — ${kept}`,
+            detail: `A file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and that rendering could not be built (${ctx.renderingsUnbuilt}) — ${keptUnjudged(ctx)}`,
             unproven: true,
           };
         }
