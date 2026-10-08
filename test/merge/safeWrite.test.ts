@@ -1070,6 +1070,17 @@ describe.skipIf(process.platform === "win32")("mode preservation across the merg
  * answer. These cases run real git in a fresh repository per case.
  */
 describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hooks file stays recoverable", () => {
+  /**
+   * TEST CHANGE, justified (2026-10-08, review/129, review/132 and build/66,
+   * the maintainer's sign-off on the whole-branch review's W-2): every case
+   * below that took the `.bak` read "may be yours". The fingerprint and the
+   * recorded hash passed in each, and only git could not confirm the previous
+   * bytes are committed, so the warning now says that and names the `.bak`;
+   * "may be yours" stays where the bytes do not show the engine wrote them
+   * (`test/cli/ledgerForgery.test.ts`, the owner's override without the
+   * heading). Each case still asserts the `.bak` and its bytes.
+   */
+  const GIT_UNCONFIRMED = "git could not confirm the previous bytes are committed";
   /** A charter as an owner copies it: the title and the four headings, in their own words. */
   const OWNER_CHARTER =
     "# Charter\n\nOur own rules.\n\n## Repo facts\n\nMonorepo.\n\n## Invariants\n\nNo force pushes.\n\n## Touchpoints\n\nAsk Ana.\n\n## Conditional layer\n\nNone.\n";
@@ -1144,7 +1155,9 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     expect(result.action).toBe("updated");
     expect(result.warning).toContain(`Overwrote ${path}:`);
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
+    expect(result.warning).not.toContain("may be yours");
+    expect(result.warning).toContain(`${path.slice(path.lastIndexOf("/") + 1)}.bak`);
     expect(result.notice).toBeUndefined();
     expect(await backupsOf(root, path)).toEqual([owner]);
     expect(await readFile(join(root, path), "utf8")).toBe(incoming);
@@ -1177,7 +1190,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     const result = await safeWriteFile(join(root, path), incoming, rowFor(root, path, bytes));
 
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(await backupsOf(root, path)).toEqual([bytes]);
   });
 
@@ -1192,7 +1205,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", edited));
 
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(await backupsOf(root, "AGENTS.md")).toEqual([edited]);
   });
 
@@ -1202,7 +1215,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
 
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
   });
 
@@ -1217,7 +1230,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     try {
       const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
 
-      expect(result.warning).toContain("may be yours");
+      expect(result.warning).toContain(GIT_UNCONFIRMED);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -1238,7 +1251,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     try {
       const result = await safeWriteFile(join(target, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(target, "AGENTS.md", OWNER_CHARTER));
 
-      expect(result.warning).toContain("may be yours");
+      expect(result.warning).toContain(GIT_UNCONFIRMED);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -1281,7 +1294,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     const result = await safeWriteFile(join(hooks, "stamity.json"), ENGINE_HOOKS, rowFor(root, ".github/hooks/stamity.json", OWNER_HOOKS));
 
     expect(await exists(marker)).toBe(false);
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(result.notice).toBeUndefined();
     expect(await backupsOf(root, ".github/hooks/stamity.json")).toEqual([OWNER_HOOKS]);
   });
@@ -1295,7 +1308,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
 
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(result.notice).toBeUndefined();
     expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
   });
@@ -1309,7 +1322,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), noRoot);
 
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
   });
 
@@ -1359,7 +1372,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", staged));
 
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(await backupsOf(root, "AGENTS.md")).toEqual([staged]);
   });
 
@@ -1381,7 +1394,7 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", conflicted));
 
     expect(conflicted).toContain("<<<<<<<");
-    expect(result.warning).toContain("may be yours");
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
     expect(await backupsOf(root, "AGENTS.md")).toEqual([conflicted]);
   });
 
@@ -1448,7 +1461,10 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     expect(result.action).toBe("updated");
     expect(result.warning).toBeUndefined();
+    expect(result.notice).toContain("Overwrote AGENTS.md:");
     expect(result.notice).toContain("git history");
+    // review/129: the routine case reads as routine.
+    expect(result.notice).not.toContain("could not be proven");
     expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
     expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(ENGINE_CHARTER("2.0.0"));
   });

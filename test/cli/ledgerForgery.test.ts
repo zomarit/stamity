@@ -1145,7 +1145,13 @@ describe("an owner's charter-shaped or exact-path file under a forged row and ha
       expect(await backupsBeside(root, path), path).toEqual([owner]);
       expect(sync.stdout, path).toContain(`Overwrote ${path}:`);
     }
-    expect(sync.stdout).toContain("may be yours");
+    // TEST CHANGE, justified (2026-10-08, review/129 and review/132, the
+    // maintainer's sign-off on the whole-branch review's W-2): read "may be
+    // yours". Both files pass the fingerprint and the forged hash, and only git
+    // could not confirm the previous bytes are committed (they are untracked),
+    // so the warning says that; the `.bak` assertions above are unchanged.
+    expect(sync.stdout).toContain("git could not confirm the previous bytes are committed");
+    expect(sync.stdout).not.toContain("may be yours");
   }, 60_000);
 
   it("sync -y overwrites them tracked and clean with no .bak, naming git history", async () => {

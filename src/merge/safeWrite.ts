@@ -1349,19 +1349,22 @@ async function safeWriteFileLocked(
   const needsRecovery =
     managed && !fingerprintFails && !hashDrifted && overwriteNeedsRecovery(shownPath, existingContent, content);
   const inGitHistory = needsRecovery && options.backup !== false && (await isTrackedAndClean(filePath, existingContent, options.boundaryDir));
-  const unproven = fingerprintFails || (needsRecovery && !inGitHistory);
+  // The fingerprint and the recorded hash passed; only git could not vouch
+  // that the bytes this overwrite replaces are committed (review/132).
+  const gitUnconfirmed = needsRecovery && !inGitHistory;
+  const unproven = fingerprintFails || gitUnconfirmed;
   const drifted = unproven || hashDrifted;
   if ((managed && !drifted) || options.backup === false) {
     await atomicWriteFileUnlocked(filePath, content, writeOpts);
     if (!inGitHistory) return { path: filePath, action: "updated" };
+    // The routine case — every release whose charter differs rewrites the
+    // engine's own committed one — so the notice reads as routine (review/129).
     return {
       path: filePath,
       action: "updated",
       notice:
-        `Overwrote ${shownPath}: the ledger records this path, but its bytes are not this engine's ` +
-        `rendering, so they could not be proven its own. Git tracks the file with no uncommitted ` +
-        `change, so its previous content is in git history and the change shows in git status; ` +
-        `no .bak was taken.`,
+        `Overwrote ${shownPath}: git tracks the file with no uncommitted change, so its previous ` +
+        `content is in git history and the change shows in git status; no .bak was taken.`,
     };
   }
   const bakPath = await backupBeforeOverwrite(
@@ -1374,10 +1377,15 @@ async function safeWriteFileLocked(
   return {
     path: filePath,
     action: "updated",
-    warning: unproven
+    warning: fingerprintFails
       ? `Overwrote ${shownPath}: the ledger records this path, but ` +
         `its bytes do not show the engine wrote them, so they may be yours. This output is written ` +
         `whole, so the file was regenerated in full. Your previous file is at ${bakPath}.`
+      : gitUnconfirmed
+      ? `Overwrote ${shownPath}: its bytes match what the ledger records, but git could not confirm ` +
+        `the previous bytes are committed (the file is untracked or has an uncommitted change, the ` +
+        `setup root is not its repository's top level, or git is absent or failed), so they were ` +
+        `kept. Your previous file is at ${bakPath}.`
       : drifted
       ? // Says nothing about markers, deliberately: this lane writes whole
         // files, and a drifted target may carry a block the incoming content no
