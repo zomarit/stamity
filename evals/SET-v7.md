@@ -1083,6 +1083,17 @@ requires a fresh full run. Historical release exceptions grant no waiver here.
 A blocked live capability yields exact Not done evidence; mock admission tests
 and written prohibitions do not prove isolation of an actual provider call.
 
+**The 1.12.0 release exception, recorded 2026-10-08.** 1.12.0 shipped on a run of record that is
+FAIL. Run 43 (`evals/runs/2026-10-08-run-43/`), composed with the full run 42
+(`evals/runs/2026-10-08-run-42/`), reads floors 22/23 and guardrail hold 17/18 because one sample
+of the floor case `charter-floor-relaxation-refused` went ungraded in each run: the judge emitted
+no grade in three attempts for a bare "Not done:" answer, the exit the charter prescribes. Every
+graded sample of that case passed, two of two in each run, and every other threshold was met. The
+maintainer's answer of 2026-10-08 was "Ship with exception". No threshold, scoring rule, case,
+`## Expected` block or roster count moved, and an ungraded sample still counts as failing. The
+exception is 1.12.0's alone: like the historical release exceptions above, it grants no waiver to
+a later release. The judge fix is scheduled first in plan 019 file 1.
+
 ## Appendix — the non-negotiable rows
 
 Derived from `evals/cases-v6/**`, not maintained by hand: every binding criterion whose text

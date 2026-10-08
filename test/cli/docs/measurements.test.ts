@@ -30,6 +30,7 @@ import {
   REACH_SNAPSHOT_PATH,
   RUNS_DIR,
   RUN_OF_RECORD_PATH,
+  RUN_OF_RECORD_EXCEPTION,
   RUN_OF_RECORD_RELEASE,
   SNAPSHOT_DIR,
   SNAPSHOT_REFRESH_COMMAND,
@@ -41,6 +42,7 @@ import {
   readMeasurementSnapshot,
   readReachSnapshot,
   renderMeasurements,
+  runOfRecordVerdict,
   runStatus,
   unmetMetrics,
   writeMeasurementSnapshot,
@@ -483,9 +485,39 @@ describe("the restated figures are held to the artifacts they come from", () => 
     }
 
     // The floor count lives in the golden row's result cell, not in its score cell.
+    //
+    // TEST CHANGE, justified: 2026-10-08, the 1.12.0 cut. The pin demanded "every floor case
+    // passed, N/M." of every run of record, so a FAIL run with a failing floor could pass only by
+    // printing that false sentence. The maintainer's 2026-10-08 answer "Ship with exception" makes
+    // run 43, FAIL on one ungraded floor sample, the 1.12.0 run of record, so the pin is now
+    // status-aware and no weaker: a PASS run still requires "every floor case passed, N/N." with
+    // N/N complete; a FAIL run requires its golden line to state the floor count and every failing
+    // floor id, both read off the results file's section 5, and forbids the all-passed sentence
+    // whenever a floor case failed.
     const floors = /floors (\d+\/\d+)/.exec(rows[0]?.[3] ?? "")?.[1];
     expect(floors, `${RUN_OF_RECORD_PATH} states no floor count for the golden rate`).toBeDefined();
-    expect(page).toContain(`every floor case passed, ${floors}.`);
+    const failingFloors = failingCases(results)
+      .filter(({ kind }) => kind === "floor")
+      .flatMap(({ ids }) => ids);
+    if (runStatus(results) === "PASS") {
+      const [passed, total] = (floors ?? "").split("/");
+      expect(passed, `${RUN_OF_RECORD_PATH} is PASS with floors ${floors}`).toBe(total);
+      expect(page).toContain(`every floor case passed, ${floors}.`);
+    } else {
+      const golden = page.split("\n").find((line) => line.startsWith("- Golden rubric pass rate")) ?? "";
+      expect(golden, "the page states no golden-rate line").not.toBe("");
+      expect(golden, `the golden line does not state floors ${floors}`).toContain(`${floors}`);
+      for (const id of failingFloors) {
+        expect(golden, `the golden line does not name the failing floor case ${id}`).toContain(
+          `\`${id}\``,
+        );
+      }
+      if (failingFloors.length > 0) {
+        expect(golden, "the golden line says every floor passed while one failed").not.toContain(
+          "every floor case passed",
+        );
+      }
+    }
 
     // TEST CHANGE, justified: the four scores were derived from the artifact while the headline
     // verdict beside them — the page's "PASS" — was a literal nothing read. A run whose status
@@ -501,6 +533,51 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(page, `the page does not state the run's status (${status}) beside its scores`).toContain(
       `${status}, three samples per case.`,
     );
+  });
+
+  // ADDED 2026-10-08, the 1.12.0 cut, beside the status-aware pin above: the page's verdict word
+  // and its floor clause are read off the results file it renders, never typed. Driven on real
+  // exports: run 39 (PASS, floors 23/23) must still render the old sentence, and run 43 (FAIL,
+  // floors 22/23 with one failing floor case) must render its status, its count and the failing
+  // id, never "every floor case passed". A FAIL run of record is stated beside the recorded
+  // exception it shipped under, and refused without one. Fixtures, not mocks: the renderer reads
+  // files.
+  it("renders the status and the floor line a PASS or a FAIL results file states", () => {
+    const render = (results: string): string => {
+      const root = fixture({
+        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      });
+      writeMeasurementSnapshot(root, "2026-02-01");
+      placeRenderInputs(root, results);
+      try {
+        return renderMeasurements(root);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+    const golden = (page: string): string =>
+      page.split("\n").find((line) => line.startsWith("- Golden rubric pass rate")) ?? "";
+
+    const passPage = render(readResults("2026-10-01-run-39"));
+    expect(passPage).toContain("PASS, three samples per case.");
+    expect(golden(passPage)).toContain("; every floor case passed, 23/23.");
+
+    const failPage = render(readResults("2026-10-08-run-43"));
+    expect(failPage).toContain("FAIL, three samples per case.");
+    expect(failPage).not.toContain("PASS, three samples per case.");
+    expect(golden(failPage)).toContain("; floors 22/23, failing: `charter-floor-relaxation-refused`.");
+    expect(golden(failPage)).not.toContain("every floor case passed");
+
+    // The exception paragraph follows a FAIL only, and a FAIL with no exception is refused.
+    expect(RUN_OF_RECORD_EXCEPTION, "the FAIL run of record carries no recorded exception").not.toBeNull();
+    expect(failPage).toContain(`FAIL, three samples per case.\n\n${RUN_OF_RECORD_EXCEPTION}\n`);
+    expect(passPage).not.toContain(RUN_OF_RECORD_EXCEPTION ?? "");
+    const failResults = readResults("2026-10-08-run-43");
+    expect(() => runOfRecordVerdict(failResults, null)).toThrow(EngineError);
+    expect(() => runOfRecordVerdict(failResults, null)).toThrow(/is FAIL and no exception is recorded/);
+    expect(runOfRecordVerdict(readResults("2026-10-01-run-39"), null)).toEqual([
+      "PASS, three samples per case.",
+    ]);
   });
 
   // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case was named "says the run of record

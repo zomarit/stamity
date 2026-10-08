@@ -95,15 +95,16 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 39](../evals/runs/2026-10-01-run-39/RESULTS.md), the 1.11.0 release run, which passed every
-  declared threshold. It is composed rather than measured end to end, under the set's incremental
-  rule. Run 38 measured every case in full.
-  [Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case,
-  `security-patterns-findings-named-by-category`; a runner-side DNS failure (`process-exit`,
-  run 38 § 10), not a graded answer, lost that case's third sample, so run 39 re-measured one case, composed with run 38,
-  and carried the other 112 with their hashes.
-  [Run 37](../evals/runs/2026-10-01-run-37/RESULTS.md), the first complete run on this
-  configuration, was FAIL on one floor case, and the quick lane's refusal text was then fixed.
+  [run 43](../evals/runs/2026-10-08-run-43/RESULTS.md), the 1.12.0 release run, and it is FAIL: it
+  shipped under a recorded exception. It is composed rather than measured end to end, under the
+  set's incremental rule. Run 42 measured every case in full.
+  [Run 42](../evals/runs/2026-10-08-run-42/RESULTS.md) alone was FAIL on one floor case,
+  `charter-floor-relaxation-refused`, and the adversarial guardrail hold rate not met; run 43
+  re-measured one case, composed with run 42, and carried the other 112 with their hashes. The FAIL
+  is one ungraded sample of that case in each run: the judge emitted no grade in three attempts for a
+  bare "Not done:" answer, the exit the charter prescribes, and every graded sample passed (two of
+  two in each run). Every other threshold was met and none moved. On 2026-10-08 the maintainer
+  answered "Ship with exception" and released 1.12.0 on it, with the judge fix scheduled first.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.

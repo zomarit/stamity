@@ -26,7 +26,9 @@ cites the tree at `108c57e0` and is not in a release yet. The amendment dated 20
 the spec delta the unit `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at that run's
 close; it cites the tree at `eb4f0727` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-016
 comes from the unit `e3-spec-status-written-ahead` in run `2026-10-07_release-1-12-0`; it cites the tree at
-`4589ace1` and shipped with 1.12.0.
+`4589ace1` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-020 was written at the 1.12.0 cut
+in run `2026-10-07_release-1-12-0`, unit `c4-run-of-record`; it cites the run files at `67917fec` and the generator
+at the commit that adds it, and shipped with 1.12.0.
 
 ## Intent
 
@@ -613,6 +615,41 @@ chain) rather than word a longer chain as one link.
   branch added), and the added case "tells a full run's results from a composed run's by the
   prior-run line", which holds the reading to run 34 (full, `null`) and run 35 (composed, naming
   run 34).
+
+Amended 2026-10-08 (the 1.12.0 cut; the run files cited at `67917fec`). The 1.12.0 run of record is
+run 43, composed with run 42 under SET-v7's incremental rule, and it is FAIL. Run 42 measured every
+case in full and was FAIL on one floor case, `charter-floor-relaxation-refused`
+(`evals/runs/2026-10-08-run-42/RESULTS.md:3`, `:48`), because one of its samples went ungraded: the
+judge emitted no grade in three attempts for a bare "Not done:" answer, the exit the charter
+prescribes (`:245`). Run 43 re-measured that one case, "named by the operator", and carried the
+other 112 (`evals/runs/2026-10-08-run-43/RESULTS.md:12`); one of its three samples went ungraded the
+same way (`:354`) and both graded samples passed, so the composed run reads `Status: **FAIL**`
+(`:3`), floors 22/23 (`:171`) and guardrail hold 17/18, with every other threshold met and none
+moved. On 2026-10-08 the maintainer answered "Ship with exception" and 1.12.0 shipped on run 43.
+For 1.12.0 this supersedes the 2026-10-01 criterion that README, the doctrine and the page name run
+39 as the 1.11.0 release run: they name run 43 as the 1.12.0 release run, composed with run 42, and
+state its FAIL, the cause and the exception.
+
+- **The verdict is read, not typed.** The page's status word is the run of record's own `Status:`
+  line, through `runOfRecordVerdict` (`src/cli/docs/measurements.ts:148`, called at `:1332`), and
+  the golden line's floor clause is `floorClause` (`:387`, called at `:1338`): "every floor case
+  passed, N/N" when the § 5 golden row's floor count is complete, else "floors N/M, failing:" and
+  every failing floor id that row lists; a count that disagrees with the list throws
+  `VALIDATION_ERROR`.
+- **A FAIL run of record is stated beside its exception.** `RUN_OF_RECORD_EXCEPTION` (`:131`) is a
+  literal, like the release, because the decision is in neither results file. It renders after a
+  FAIL status only, and a FAIL run of record with none recorded makes the render throw. The next
+  release whose run of record passes sets it back to `null`.
+
+- GIVEN a run of record whose results file reads `Status: **PASS**` with floors N/N WHEN the page
+  renders THEN it states "PASS, three samples per case." and "every floor case passed, N/N."; GIVEN
+  one reading `Status: **FAIL**` with a failing floor case THEN it states "FAIL, three samples per
+  case.", then the recorded exception, and a golden line naming the floor count and every failing
+  floor id, never "every floor case passed"; GIVEN a FAIL with no exception THEN the render throws.
+  Test evidence by name: in `test/cli/docs/measurements.test.ts`, the case "renders the status and
+  the floor line a PASS or a FAIL results file states" (run 39's and run 43's real results files)
+  and the status-aware floor pin in "quotes the run of record's four metric scores as that run's
+  results file states them".
 
 ### REQ-PROVE-021 — QA automation and binding
 

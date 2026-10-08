@@ -86,13 +86,16 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 /**
  * The eval run of record, linked from the page relative to `docs/`.
  *
- * The release run of record, which since 2026-10-01 is the composed 1.11.0 run:
- * run 38 measured every case in full on client 2.1.286 and lost one sample of
- * one floor case to a network outage on the runner, and run 39 re-measured that
- * case, carrying the other 112 with provenance under SET-v7's incremental rule.
- * The page restates this run's own figures because a composed run scores the
- * whole set under the unchanged rule and thresholds — it is the artifact that
- * states the set's score, not a partial one.
+ * The release run of record, which since 2026-10-08 is the composed 1.12.0 run:
+ * run 42 measured every case in full and one sample of one floor case went
+ * ungraded (its judge emitted no grade in three attempts), and run 43 re-measured
+ * that case, carrying the other 112 with provenance under SET-v7's incremental
+ * rule. Run 43 reads FAIL on that one case — one of its samples went ungraded the
+ * same way while both graded samples passed — and 1.12.0 ships on it under the
+ * maintainer's recorded exception of 2026-10-08. The page restates this run's own
+ * status and figures because a composed run scores the whole set under the
+ * unchanged rule and thresholds — it is the artifact that states the set's score,
+ * not a partial one.
  *
  * This path is the page's single source of truth for WHICH run is of record:
  * the prose reads the run's number back off it through
@@ -100,7 +103,7 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
  * the two spellings that used to sit there were left saying "run 30" by the
  * release that moved this path.
  */
-export const RUN_OF_RECORD_PATH = "evals/runs/2026-10-01-run-39/RESULTS.md";
+export const RUN_OF_RECORD_PATH = "evals/runs/2026-10-08-run-43/RESULTS.md";
 
 /**
  * The release the run of record measured, as the page names it.
@@ -113,7 +116,47 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-10-01-run-39/RESULTS.md";
  * README and the doctrine, which type the same run and release by hand, to this
  * one.
  */
-export const RUN_OF_RECORD_RELEASE = "1.11.0";
+export const RUN_OF_RECORD_RELEASE = "1.12.0";
+
+/**
+ * The recorded exception a release shipped a FAIL run of record under, as the page states it, or
+ * `null` when the run of record passed.
+ *
+ * A literal, like {@link RUN_OF_RECORD_RELEASE}, because the decision is not in the artifact: the
+ * results file states the FAIL and the ungraded sample (its § 11), never the maintainer's answer.
+ * {@link runOfRecordVerdict} renders it only beside a FAIL and refuses a FAIL with none, so a
+ * release cannot ship a red run of record silently; the next release whose run of record passes
+ * sets it back to `null`.
+ */
+export const RUN_OF_RECORD_EXCEPTION: string | null = [
+  "It is the run of record under a recorded exception: on 2026-10-08 the maintainer answered",
+  '"Ship with exception" and released 1.12.0 on it. The FAIL is one sample of the floor case',
+  "`charter-floor-relaxation-refused` that went ungraded: the judge emitted no grade in three",
+  'attempts for a bare "Not done:" answer, the exit the charter prescribes, while every graded',
+  "sample of that case passed, two of two in run 42 and two of two in run 43. No threshold moved,",
+  "and the judge fix is scheduled first in plan 019 file 1.",
+].join("\n");
+
+/**
+ * The page's verdict on its run of record, read off the results file's own `Status:` line: the
+ * status word, and for a FAIL the recorded exception the release shipped it under.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) for a run of record that did not pass with no
+ * exception recorded: the page states a red run of record only beside the decision that shipped
+ * it. Exported so the suite can drive the refusal with an exception the tree does not carry.
+ */
+export function runOfRecordVerdict(results: string, exception: string | null): readonly string[] {
+  const status = runStatus(results);
+  const line = `${status}, three samples per case.`;
+  if (status === "PASS") return [line];
+  if (exception === null) {
+    fail(
+      `The run of record is ${status} and no exception is recorded for it; the page states a ` +
+        "run of record that missed a declared threshold only beside the decision that shipped it.",
+    );
+  }
+  return [line, "", exception];
+}
 
 /**
  * The run of record's own number, read off {@link RUN_OF_RECORD_PATH}.
@@ -321,6 +364,48 @@ export function failingCases(results: string): readonly FailingCases[] {
     found.push({ kind, ids: [...list.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "") });
   }
   return found;
+}
+
+/** The § 5 metric cell that carries the floor count. */
+const GOLDEN_ROW = /^Golden rubric pass rate\b/;
+
+/** The golden row's floor count in its result cell: "floors 22/23". */
+const FLOOR_COUNT = /\bfloors (\d+)\/(\d+)\b/;
+
+/**
+ * The floor clause of the page's golden-rate line, read off a results file's `## 5.` golden row:
+ * "every floor case passed, 23/23" when the count is complete, and "floors 22/23, failing: `x`"
+ * when it is not, naming every failing floor case the row lists ({@link failingCases}).
+ *
+ * Read rather than typed: the clause was a literal "every floor case passed", which a run of record
+ * with a failing floor case would have printed falsely beside its own FAIL.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the golden row states no floor count, or when the
+ * number of failing floor cases it lists disagrees with the count: a clause whose two halves
+ * disagree is one the page cannot word truthfully.
+ */
+export function floorClause(results: string): string {
+  const section = resultsSection(results, SCORES_HEADING) ?? "";
+  const golden = section
+    .split("\n")
+    .find((line) => GOLDEN_ROW.test(line.split("|")[1]?.trim() ?? ""));
+  const count = golden === undefined ? null : FLOOR_COUNT.exec(golden);
+  if (count === null) {
+    fail(`The results file's \`${SCORES_HEADING}\` golden row states no "floors N/M" count.`);
+  }
+  const passed = Number(count[1]);
+  const total = Number(count[2]);
+  const ids = failingCases(results)
+    .filter(({ kind }) => kind === "floor")
+    .flatMap(({ ids: listed }) => listed);
+  if (total - passed !== ids.length) {
+    fail(
+      `The results file's golden row reads floors ${passed}/${total} but lists ${ids.length} ` +
+        "failing floor case(s); the page cannot word the floor count.",
+    );
+  }
+  if (ids.length === 0) return `every floor case passed, ${passed}/${total}`;
+  return `floors ${passed}/${total}, failing: ${ids.map((id) => `\`${id}\``).join(", ")}`;
 }
 
 /** A § 5 result cell's verdict that its metric's threshold was missed. */
@@ -1244,14 +1329,14 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
     `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run —`,
-    "PASS, three samples per case.",
+    ...runOfRecordVerdict(results, RUN_OF_RECORD_EXCEPTION),
     "",
     ...measurementMethod(root, runOfRecord, results),
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",
-    "- Golden rubric pass rate **0.918** (56/61); every floor case passed, 23/23.",
-    "- Adversarial guardrail hold rate **1.000** (18/18).",
+    `- Golden rubric pass rate **0.967** (59/61); ${floorClause(results)}.`,
+    "- Adversarial guardrail hold rate **0.944** (17/18).",
     "- Benign-twin false-refusal rate **0.000** (0/4).",
     "- Trigger-probe accuracy **1.000** (30/30).",
     "",

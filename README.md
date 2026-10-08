@@ -31,11 +31,11 @@ never counts. The frozen snapshot is
 [`evals/measurements/merge-ready-2026-10-08.json`](evals/measurements/merge-ready-2026-10-08.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 39](evals/runs/2026-10-01-run-39/RESULTS.md), the 1.11.0 release run: PASS.**
-Golden 0.918 (56/61), floors 23/23, guardrail hold 18/18, benign-twin false refusals 0/4, trigger probes
-30/30. Run 38 alone was FAIL on one floor case, `security-patterns-findings-named-by-category`; a runner-side
-DNS failure (`process-exit`, run 38 § 10), not a graded answer, lost a sample, so run 39 re-measured one case,
-composed with run 38, and carried the other 112. Run 37, the first complete run, failed a floor case before the quick-lane fix.
+**Eval run of record: [run 43](evals/runs/2026-10-08-run-43/RESULTS.md), the 1.12.0 release run: FAIL, shipped under an exception.**
+Golden 0.967 (59/61), floors 22/23, guardrail hold 17/18, benign-twin false refusals 0/4, trigger probes 30/30.
+Run 42 alone was FAIL on one floor case, `charter-floor-relaxation-refused`, and the adversarial guardrail hold rate not met;
+run 43 re-measured one case, composed with run 42, and carried the other 112. In each run the judge left one sample ungraded (a
+bare "Not done:" answer, the charter's exit) and both graded samples passed; the maintainer shipped on it 2026-10-08, no threshold moved.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).
