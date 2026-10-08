@@ -996,7 +996,11 @@ describe("the documented route off a generated setup (REQ-PLUGIN-015, REQ-PLUGIN
     const table = await plugin(root, ["status", "--plugin-root", installed]);
 
     const duplicates = doc.duplicates as { source: string; remedy: string; files: number }[];
-    const remedy = `${npxCommand("clean -y")} then ${npxCommand("plugin setup --client claude")}`;
+    // TEST CHANGE, justified (2026-10-08, build/71): read `clean -y then plugin setup`. After an
+    // upgrade `clean` refuses until a `sync` with the running version runs (review/128), so the
+    // printed remedy leads with `sync`, as docs/troubleshooting.md's row reads.
+    const remedy =
+      `${npxCommand("sync")}, then ${npxCommand("clean -y")}, then ${npxCommand("plugin setup --client claude")}`;
     expect(duplicates).toHaveLength(1);
     expect(duplicates[0]).toMatchObject({ source: "ledger", remedy });
     expect(duplicates[0]?.files).toBeGreaterThan(0);

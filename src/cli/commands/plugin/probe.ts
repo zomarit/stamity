@@ -820,7 +820,9 @@ async function duplicatesForClient(
       source: "ledger",
       files: paths.length,
       paths,
-      remedy: `${packageCommand("clean -y")} then ${packageCommand(`plugin setup --client ${tool}`)}`,
+      // Led by `sync`: after an upgrade `clean` refuses until this version has
+      // rewritten its files (review/128, build/71).
+      remedy: `${packageCommand("sync")}, then ${packageCommand("clean -y")}, then ${packageCommand(`plugin setup --client ${tool}`)}`,
     });
   }
 

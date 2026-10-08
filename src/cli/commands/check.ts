@@ -2472,7 +2472,9 @@ function expectationSteps(report: ExpectationReport, manifestTools: readonly Too
         ? call(`plugin setup --client ${clients}`)
         : call("init");
     steps.push(
-      `a repository changes install mode only through ${call("clean -y")}, then ${setup}, ` +
+      // Led by `sync`: after an upgrade `clean` refuses until this version has
+      // rewritten its files (review/128, build/71).
+      `a repository changes install mode only through ${call("sync")}, then ${call("clean -y")}, then ${setup}, ` +
         "in a reviewed pull request",
     );
   }

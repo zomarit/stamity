@@ -850,7 +850,8 @@ not the `VALIDATION_ERROR` a separate refusal would have introduced.
 Given a repository where a generated file, an APM-deployed file or a hand-placed file and an
 installed plugin carry the same class for one client, When `stamity check` runs, Then the
 `plugin-duplicates` row names each duplicated class with its path, its source (`ledger`, `apm` or
-`unmanaged`) and the remedy for that source (`stamity clean -y` then `plugin setup`, the APM dependency to remove, or
+`unmanaged`) and the remedy for that source (`stamity sync`, then `clean -y`, then `plugin setup` — amended
+2026-10-08, `build/71`, as `clean` refuses after an upgrade until a `sync` runs — the APM dependency to remove, or
 the file to remove or keep as an override), its status is `warn` (exit 0) while the manifest says
 `mode: "generated"` and `fail` (exit 1) once the manifest records `plugin-backed` for that client;
 `stamity plugin status --json` carries `coexistence: true` with the same list; and across

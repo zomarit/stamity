@@ -4186,7 +4186,10 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       `run this check with the expected release: ${npxAt("9.9.9", "check --expect-version 9.9.9")}`,
       `${npxAt("9.9.9", "config set tools claude,cursor")}, then ${npxAt("9.9.9", "sync")}, ` +
         "in a reviewed pull request",
-      `a repository changes install mode only through ${npxAt("9.9.9", "clean -y")}, ` +
+      // TEST CHANGE, justified (2026-10-08, build/71): the mode step read "only through clean -y,
+      // then init". After an upgrade `clean` refuses until a `sync` runs (review/128), so the step
+      // leads with `sync`, at the expected release like every other step.
+      `a repository changes install mode only through ${npxAt("9.9.9", "sync")}, then ${npxAt("9.9.9", "clean -y")}, ` +
         `then ${npxAt("9.9.9", "init")}, in a reviewed pull request`,
     ]);
     expect((failure(doc).why ?? "").split("; ")).toHaveLength(steps.length);
@@ -4322,7 +4325,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
         `regenerate with the expected release in a reviewed pull request: ${prefix} sync`,
         `run this check with the expected release: ${prefix} check --expect-version 9.9.9`,
         `${prefix} config set tools claude,cursor, then ${prefix} sync, in a reviewed pull request`,
-        `a repository changes install mode only through ${prefix} clean -y, then ${prefix} init, ` +
+        // TEST CHANGE, justified (2026-10-08, build/71): the step leads with `sync` (review/128).
+        `a repository changes install mode only through ${prefix} sync, then ${prefix} clean -y, then ${prefix} init, ` +
           "in a reviewed pull request",
       ]);
       // No step escapes the identity: no bare `-y` call for the fork's name, and a
