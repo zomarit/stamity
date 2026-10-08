@@ -1001,7 +1001,8 @@ async function appendClientKey(root: string): Promise<void> {
 describe("check — key-level ownership of .claude/settings.json", () => {
   const SETTINGS = ".claude/settings.json";
 
-  it("reads the client's enabledPlugins beside the engine's permissions as clean, and exits 0", async () => {
+  // Retitled 2026-10-08 (build/40): it named the engine's permissions, which no setup renders since the allow rows left.
+  it("reads the client's enabledPlugins beside the engine's hook entries as clean, and exits 0", async () => {
     // The documented consumer route: `plugin install --scope project` writes
     // this key into the engine's file, and a sync would leave it there — so
     // neither drift nor a collision is true of it.
