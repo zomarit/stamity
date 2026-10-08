@@ -992,7 +992,8 @@ export interface RenderingProof {
  * that copy is the root charter verbatim (`../../emit/agentsMd.ts`), and once
  * its package has left no plan renders the folder, yet the copy is still the
  * engine's to remove (REQ-PLUGIN-046). The root charter is read off the plan,
- * never off disk.
+ * never off disk, and as rendered before an import decision on the root: when
+ * one is recorded, off a second plan without it.
  */
 export async function engineRenderingsFor(
   rootDir: string,
@@ -1015,7 +1016,11 @@ export async function engineRenderingsFor(
   const clients = TOOLS.filter(
     (tool) => manifest.tools.includes(tool) || manifest.ledger.some((row) => row.adapter === tool),
   );
+  const nestedCharters = clients.some(emitsPerPackage)
+    ? [...wanted].filter((path) => path.endsWith(`/${OWNED_PATHS.charterFileName}`))
+    : [];
   let outputs: readonly AdapterOutput[];
+  let charter: AdapterOutput | undefined;
   try {
     const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
     const setupClients = structuredClone(manifest);
@@ -1023,9 +1028,23 @@ export async function engineRenderingsFor(
     setupClients.selection = fullCorpusSelection(index);
     setupClients.detected = summarizeDetection(repoInfo);
     delete setupClients.plugin;
-    outputs = await withoutPolicyWarningPrint(() =>
-      ignoringPolicyDenialForProof(() => planFor(setupClients, { monorepoPackages: repoInfo.monorepoPackages })),
-    );
+    const plan = (planned: SetupManifest): Promise<readonly AdapterOutput[]> =>
+      withoutPolicyWarningPrint(() =>
+        ignoringPolicyDenialForProof(() => planFor(planned, { monorepoPackages: repoInfo.monorepoPackages })),
+      );
+    outputs = await plan(setupClients);
+    charter = outputs.find((output) => output.path === OWNED_PATHS.charterFileName);
+    // A nested copy is the root charter as rendered before the import
+    // decisions: a decision on the root wraps its row (`supplement`) or drops
+    // it (`skip`) and leaves the copies bare (review/106), so the copy is read
+    // off a plan without that decision.
+    const decisions = setupClients.importChoice ?? [];
+    const otherDecisions = decisions.filter((choice) => choice.path !== OWNED_PATHS.charterFileName);
+    if (nestedCharters.length > 0 && otherDecisions.length !== decisions.length) {
+      const undecided = structuredClone(setupClients);
+      undecided.importChoice = otherDecisions;
+      charter = (await plan(undecided)).find((output) => output.path === OWNED_PATHS.charterFileName);
+    }
     // reason: not silent — with no rendering nothing is proved, and the sweep
     // keeps each file that needed one, with its row, and names this reason.
   } catch (error) {
@@ -1042,11 +1061,8 @@ export async function engineRenderingsFor(
   for (const output of outputs) {
     if (wanted.has(output.path)) add(output.path, output.content);
   }
-  const charter = outputs.find((output) => output.path === OWNED_PATHS.charterFileName);
-  if (charter !== undefined && clients.some(emitsPerPackage)) {
-    for (const path of wanted) {
-      if (path.endsWith(`/${OWNED_PATHS.charterFileName}`)) add(path, charter.content);
-    }
+  if (charter !== undefined) {
+    for (const path of nestedCharters) add(path, charter.content);
   }
   return { renderings };
 }

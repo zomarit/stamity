@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { link, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -92,6 +93,26 @@ const APPENDIX_HEADING = "## Conditional rules (Codex down-conversion)";
 
 /** A line only an operator would write, so its presence in the override is traceable to them. */
 const OPERATOR_TEXT = "## Team notes\n\nOperator line QX-4471: deploys go through the release train.\n";
+
+/**
+ * Commits every file under `root` into a new repository, as an owner commits a
+ * setup. Git reads no system or global config and no `GIT_*` variable from the
+ * caller.
+ */
+function commitAll(root: string): void {
+  const env = {
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))),
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+  };
+  for (const args of [["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "setup"]]) {
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test", "-c", "commit.gpgsign=false", ...args], {
+      cwd: root,
+      env,
+      stdio: "ignore",
+    });
+  }
+}
 
 async function withRepo<T>(tools: readonly Tool[], body: (repo: GoldenRepo) => Promise<T>, seed?: Readonly<Record<string, string>>): Promise<T> {
   const repo = await makeGoldenRepo({ tools, ...(seed === undefined ? {} : { seed }) });
@@ -583,6 +604,12 @@ describe("after the override is refused at its source", () => {
     });
   });
 
+  // TEST CHANGE, justified (2026-10-08, rows 519 and 586, the overwrite half):
+  // the setup is committed before the repair. A ledger row's hash and the
+  // appendix heading no longer license a backup-free overwrite of the override
+  // on their own, since a hand-added row can hash an owner's file there; the
+  // previous bytes must be recoverable. A file git tracks with no uncommitted
+  // change is, so the repaired sync still takes no `.bak`; uncommitted, it would.
   it("keeps the override's ledger row, so a repaired AGENTS.md syncs without --force", async () => {
     await withRepo(["claude", "codex"], async (repo) => {
       await plantLinkedCharter(repo);
@@ -590,6 +617,7 @@ describe("after the override is refused at its source", () => {
       const refused = await apply(repo, await plan(repo));
       expect(refused.refused).toEqual([CODEX_AGENTS_OVERRIDE_FILE]);
       expect(refused.manifest?.ledger.some((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)).toBe(true);
+      commitAll(repo.rootDir);
 
       // The operator follows the remedy: a regular file with their own text.
       const charterPath = join(repo.rootDir, AGENTS_MD_FILE);

@@ -1,5 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -1033,5 +1034,243 @@ describe.skipIf(process.platform === "win32")("mode preservation across the merg
     expect(result.action).toBe("updated");
     expect(await readFile(target, "utf8")).toBe('{"v":2}\n');
     expect((await stat(target)).mode & 0o777).toBe(0o600);
+  });
+});
+
+/**
+ * Rows 519 and 586, the overwrite half. At a charter or instruction file and at
+ * Copilot's hooks file a hand-added ledger row can hash an owner's bytes, and an
+ * owner's charter passes the structural fingerprint, so the whole-file lane
+ * replaced the owner's file with no `.bak`. Now an overwrite there that the
+ * incoming rendering cannot prove keeps the previous content recoverable: in git
+ * history when git tracks the file with no uncommitted change (a notice says
+ * so), in a verified `.bak` otherwise, and in a `.bak` whenever git cannot
+ * answer. These cases run real git in a fresh repository per case.
+ */
+describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hooks file stays recoverable", () => {
+  /** A charter as an owner copies it: the title and the four headings, in their own words. */
+  const OWNER_CHARTER =
+    "# Charter\n\nOur own rules.\n\n## Repo facts\n\nMonorepo.\n\n## Invariants\n\nNo force pushes.\n\n## Touchpoints\n\nAsk Ana.\n\n## Conditional layer\n\nNone.\n";
+  const ENGINE_CHARTER = (version: string): string =>
+    `# Charter\n\nCLI ${version}\n\n## Repo facts\n\n## Invariants\n\n## Touchpoints\n\n## Conditional layer\n`;
+  const OWNER_HOOKS = `${JSON.stringify({ version: 1, hooks: { sessionStart: [{ type: "command", bash: "./ours.sh" }] } })}\n`;
+  const ENGINE_HOOKS = `${JSON.stringify({ version: 1, hooks: {} })}\n`;
+  const CASES = [
+    { path: "AGENTS.md", owner: OWNER_CHARTER, incoming: ENGINE_CHARTER("2.0.0") },
+    { path: ".github/hooks/stamity.json", owner: OWNER_HOOKS, incoming: ENGINE_HOOKS },
+  ] as const;
+
+  /**
+   * The caller's environment minus `GIT_*` (a hook's `GIT_DIR` cannot aim the
+   * fixture's git elsewhere), reading no system or global git config.
+   */
+  function fixtureEnv(): NodeJS.ProcessEnv {
+    return {
+      ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))),
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+    };
+  }
+
+  function git(cwd: string, ...args: string[]): void {
+    const result = spawnSync(
+      "git",
+      ["-c", "user.name=Test", "-c", "user.email=test", "-c", "commit.gpgsign=false", ...args],
+      { cwd, encoding: "utf8", env: fixtureEnv() },
+    );
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")} exited ${String(result.status)}: ${result.stderr}`);
+  }
+
+  /** A repository with one commit, so `HEAD` names a revision. */
+  function gitRepo(root: string): void {
+    git(root, "init", "-q");
+    git(root, "commit", "-q", "--allow-empty", "-m", "base");
+  }
+
+  async function put(root: string, path: string, bytes: string): Promise<void> {
+    await mkdir(join(root, path, ".."), { recursive: true });
+    await writeFile(join(root, path), bytes, "utf8");
+  }
+
+  function commit(root: string, path: string): void {
+    git(root, "add", "--", path);
+    git(root, "commit", "-q", "-m", `add ${path}`);
+  }
+
+  /** A ledger row for `path` recording the hash of `bytes`: the forged row, or the engine's own. */
+  function rowFor(root: string, path: string, bytes: string): SafeWriteFileOptions {
+    return {
+      ledgerPaths: ledgerPathSet(root, [path]),
+      ledgerHashes: ledgerHashIndex(root, [{ path, contentHash: sha256(bytes) }]),
+      boundaryDir: root,
+    };
+  }
+
+  async function backupsOf(root: string, path: string): Promise<string[]> {
+    const folder = join(root, path, "..");
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    const names = (await readdir(folder)).filter((entry) => entry.startsWith(`${name}.bak`));
+    return Promise.all(names.map((entry) => readFile(join(folder, entry), "utf8")));
+  }
+
+  it.each(CASES)("takes the verified .bak under a forged row hashing an owner's untracked $path", async ({ path, owner, incoming }) => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, path, owner);
+
+    const result = await safeWriteFile(join(root, path), incoming, rowFor(root, path, owner));
+
+    expect(result.action).toBe("updated");
+    expect(result.warning).toContain(`Overwrote ${path}:`);
+    expect(result.warning).toContain("may be yours");
+    expect(result.notice).toBeUndefined();
+    expect(await backupsOf(root, path)).toEqual([owner]);
+    expect(await readFile(join(root, path), "utf8")).toBe(incoming);
+  });
+
+  it.each(CASES)("overwrites an owner's tracked, clean $path with no .bak and a notice naming git history", async ({ path, owner, incoming }) => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, path, owner);
+    commit(root, path);
+
+    const result = await safeWriteFile(join(root, path), incoming, rowFor(root, path, owner));
+
+    expect(result.action).toBe("updated");
+    expect(result.warning).toBeUndefined();
+    expect(result.notice).toContain(`Overwrote ${path}:`);
+    expect(result.notice).toContain("its previous content is in git history");
+    expect(result.notice).toContain("no .bak was taken");
+    expect(await backupsOf(root, path)).toEqual([]);
+    expect(await readFile(join(root, path), "utf8")).toBe(incoming);
+  });
+
+  it.each(CASES)("takes the .bak when the tracked $path has an uncommitted edit", async ({ path, owner, incoming }) => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, path, owner);
+    commit(root, path);
+    const bytes = `${owner}\n`;
+    await writeFile(join(root, path), bytes, "utf8");
+
+    const result = await safeWriteFile(join(root, path), incoming, rowFor(root, path, bytes));
+
+    expect(result.warning).toContain("may be yours");
+    expect(await backupsOf(root, path)).toEqual([bytes]);
+  });
+
+  it("takes the .bak when the tracked file's edit is hidden from git diff by assume-unchanged", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    git(root, "update-index", "--assume-unchanged", "--", "AGENTS.md");
+    const edited = `${OWNER_CHARTER}\nA local note.\n`;
+    await writeFile(join(root, "AGENTS.md"), edited, "utf8");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", edited));
+
+    expect(result.warning).toContain("may be yours");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([edited]);
+  });
+
+  it("takes the .bak outside a git work tree", async () => {
+    const root = tempDir().dir;
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(result.warning).toContain("may be yours");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
+  it("takes the .bak when git is missing", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    const noGit = join(root, ".no-git-here");
+    await mkdir(noGit);
+    vi.stubEnv("PATH", noGit);
+    try {
+      const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+      expect(result.warning).toContain("may be yours");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
+  it("ignores a GIT_DIR that points the check at another repository's index", async () => {
+    const root = tempDir().dir;
+    const other = join(root, "other");
+    const target = join(root, "target");
+    await mkdir(other);
+    await mkdir(target);
+    gitRepo(other);
+    await put(other, "AGENTS.md", OWNER_CHARTER);
+    commit(other, "AGENTS.md");
+    await put(target, "AGENTS.md", OWNER_CHARTER);
+    vi.stubEnv("GIT_DIR", join(other, ".git"));
+    try {
+      const result = await safeWriteFile(join(target, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(target, "AGENTS.md", OWNER_CHARTER));
+
+      expect(result.warning).toContain("may be yours");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(await backupsOf(target, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
+  // The controls: the engine's own files keep updating with no `.bak`.
+  it("updates the engine's own clean, tracked AGENTS.md after a version bump with no .bak", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", ENGINE_CHARTER("1.0.0"));
+    commit(root, "AGENTS.md");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", ENGINE_CHARTER("1.0.0")));
+
+    expect(result.action).toBe("updated");
+    expect(result.warning).toBeUndefined();
+    expect(result.notice).toContain("git history");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+    expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(ENGINE_CHARTER("2.0.0"));
+  });
+
+  it("takes no .bak and says nothing where the incoming rendering proves the bytes (a CRLF checkout), outside git", async () => {
+    const root = tempDir().dir;
+    const rendering = ENGINE_CHARTER("2.0.0");
+    await put(root, "AGENTS.md", rendering.replaceAll("\n", "\r\n"));
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), rendering, rowFor(root, "AGENTS.md", rendering));
+
+    expect(result).toEqual({ path: join(root, "AGENTS.md"), action: "updated" });
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+
+  it("takes no .bak where a managed block spans the file, outside git", async () => {
+    const root = tempDir().dir;
+    const before = generated("v1", "AGENTS.md");
+    await put(root, "AGENTS.md", before);
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), generated("v2", "AGENTS.md"), rowFor(root, "AGENTS.md", before));
+
+    expect(result).toEqual({ path: join(root, "AGENTS.md"), action: "updated" });
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+
+  it("honours backup: false with no git check, no .bak and no notice", async () => {
+    const root = tempDir().dir;
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), {
+      ...rowFor(root, "AGENTS.md", OWNER_CHARTER),
+      backup: false,
+    });
+
+    expect(result).toEqual({ path: join(root, "AGENTS.md"), action: "updated" });
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
   });
 });

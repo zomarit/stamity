@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { useCliFixture } from "../support/cliHarness.ts";
+import { buildChildEnv, spawnCollect, useCliFixture } from "../support/cliHarness.ts";
 import { npxCommand } from "../support/identity.ts";
 /**
  * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
@@ -85,6 +85,28 @@ describe("the full lifecycle journey", () => {
     // which is the observable proof of the no-process.exit() discipline.
     expect(init.stdout.trimEnd().endsWith("st-onboard/SKILL.md")).toBe(true);
 
+    // ── the owner commits the setup ──────────────────────────────────────
+    // TEST CHANGE, justified (rows 519 and 586, the overwrite half): a ledger
+    // row's hash no longer licenses a backup-free overwrite of the charter,
+    // since a hand-added row can hash an owner's file there. The config edit
+    // below rewrites AGENTS.md, and that overwrite now keeps the previous bytes
+    // recoverable: in git history when git tracks the file with no uncommitted
+    // change, in a `.bak` otherwise. Uncommitted, the journey's clean would
+    // leave `AGENTS.md.bak` behind; committed, as an owner keeps a setup, the
+    // tree after clean is unchanged and the resync names git history instead.
+    const gitEnv = {
+      ...buildChildEnv(fixture.home),
+      GIT_AUTHOR_NAME: "Fixture One",
+      GIT_AUTHOR_EMAIL: "fixture",
+      GIT_COMMITTER_NAME: "Fixture One",
+      GIT_COMMITTER_EMAIL: "fixture",
+    };
+    for (const args of [["add", "-A"], ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "stamity setup"]]) {
+      // oxlint-disable-next-line no-await-in-loop -- the commit needs the staged tree
+      const git = await spawnCollect("git", args, { cwd: fixture.repoDir, env: gitEnv });
+      expect(git.code, git.stderr).toBe(0);
+    }
+
     // ── the real corpus reached the manifest: every class carries picks ───
     const manifestPath = join(fixture.repoDir, ".stamity", "manifest.json");
     const afterInit = await readManifest(manifestPath);
@@ -134,6 +156,8 @@ describe("the full lifecycle journey", () => {
     const resync = await fixture.run(["sync"]);
     expect(resync.code).toBe(0);
     expect(resync.stdout).toMatch(/synced: 0 created, [1-9]\d* updated/);
+    expect(resync.stdout).toContain("Overwrote AGENTS.md:");
+    expect(resync.stdout).toContain("its previous content is in git history");
 
     const checkAfterResync = await fixture.run(["check"]);
     expect(checkAfterResync.code).toBe(0);

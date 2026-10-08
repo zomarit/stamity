@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -96,6 +97,29 @@ async function forgeRows(root: string, rows: readonly LedgerEntry[]): Promise<vo
 /** An `infra` row recording the hash of the owner's own bytes at `path`. */
 function hashedInfraRow(path: string, content: string, adapter: Tool = "claude"): LedgerEntry {
   return { path, adapter, artifactId: `forged:${path}`, artifactType: "infra", contentHash: sha256(content) };
+}
+
+/**
+ * Commits every file under `root` (initialising the repository first when it
+ * has none), as an owner commits a setup. Git reads no system or global config
+ * and no `GIT_*` variable from the caller.
+ */
+function commitAll(root: string): void {
+  const env = {
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))),
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+  };
+  const git = (...args: string[]): void => {
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test", "-c", "commit.gpgsign=false", ...args], {
+      cwd: root,
+      env,
+      stdio: "ignore",
+    });
+  };
+  if (!existsSync(join(root, ".git"))) git("init", "-q");
+  git("add", "-A");
+  git("commit", "-q", "--allow-empty", "-m", "setup");
 }
 
 /** Every file under `dir` outside `.git/`, as `posix/path` -> bytes. */
@@ -605,6 +629,39 @@ describe("the renderings are the setup's own", () => {
     expect(withCodex.renderings.get("AGENTS.md")).toEqual(new Set([sha256(charter)]));
   });
 
+  // review/106: the nested copy is the root charter as rendered BEFORE the
+  // import decisions. A `supplement` wraps the root row in a managed block and
+  // a `skip` drops it, while the nested copies stay the bare charter, so the
+  // engine's own unedited nested copy whose package left must still be proven.
+  it.each(["supplement", "skip"] as const)(
+    "renders the bare root charter at a nested AGENTS.md under a %s decision on the root",
+    async (mode) => {
+      const root = await initialisedRepo(["claude"]);
+      const onDisk = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
+      const charter = "# Charter\n\nthe root render\n";
+      const wrapped = `<!-- STAMITY:BEGIN -->\n${charter}<!-- STAMITY:END -->\n`;
+      const owner = { adapter: "claude" as const, artifactId: "charter", artifactType: "infra" as const };
+      const seen: SetupManifest[] = [];
+      // The planner applies the root's decision last, over the finished rows (`src/emit/planner.ts`).
+      const plan: Parameters<typeof engineRenderingsFor>[3] = async (setupClients) => {
+        seen.push(setupClients);
+        const decision = setupClients.importChoice?.find((choice) => choice.path === "AGENTS.md")?.mode;
+        if (decision === "skip") return [];
+        return [{ path: "AGENTS.md", content: decision === "supplement" ? wrapped : charter, owner }];
+      };
+      const manifest = { ...onDisk, tools: ["claude", "codex"], importChoice: [{ path: "AGENTS.md", mode }] } as SetupManifest;
+
+      const proof = await engineRenderingsFor(root, manifest, ["packages/gone/AGENTS.md", "AGENTS.md"], plan);
+
+      expect(proof.renderings.get("packages/gone/AGENTS.md")).toEqual(new Set([sha256(charter)]));
+      // The root keeps the rendering its decision produces: the wrapped block, or none under `skip`.
+      expect(proof.renderings.get("AGENTS.md")).toEqual(mode === "skip" ? undefined : new Set([sha256(wrapped)]));
+      // The decided plan is the one the root is judged by; the caller's manifest keeps its decision.
+      expect(seen[0]?.importChoice).toEqual([{ path: "AGENTS.md", mode }]);
+      expect(manifest.importChoice).toEqual([{ path: "AGENTS.md", mode }]);
+    },
+  );
+
   it("previews a deselected client's unedited file as a delete, and keeps it under a plan with no engine version", async () => {
     const root = await initialisedRepo(["claude", "cursor"]);
     const manifestFile = join(root, ".stamity", "manifest.json");
@@ -912,6 +969,50 @@ describe("an instruction file leaves only on its own bytes", () => {
       proof: "hash",
     });
   });
+
+  // review/106, through the real planner: an owner's root AGENTS.md that init
+  // imported leaves the nested copies the bare charter, so the proof renders
+  // them before that decision.
+  it.each(["supplement", "skip"] as const)(
+    "deletes the engine's unedited per-package charter once its package leaves, under a %s decision on the root",
+    async (mode) => {
+      const root = getTemp().path("repo");
+      await mkdir(root, { recursive: true });
+      await seed(root, {
+        "AGENTS.md": OWNER_AGENTS,
+        "package.json": `${JSON.stringify({ name: "x", private: true, workspaces: ["packages/*"] })}\n`,
+        "packages/app/package.json": `${JSON.stringify({ name: "app", version: "1.0.0" })}\n`,
+      });
+      const decisions = await buildInitDecisions(root, { tools: ["codex"] }, { history: null, skipWorkspaceProbe: true });
+      await applyInit({
+        rootDir: root,
+        decisions,
+        importChoice: [{ path: "AGENTS.md", mode }],
+        engineVersion: ENGINE_VERSION,
+        dryRun: false,
+        force: false,
+        now: T0,
+      });
+      // The nested copy is the bare charter, whatever the root's decision did to the root.
+      const nested = await readFile(join(root, "packages/app/AGENTS.md"), "utf8");
+      expect(nested).toContain("# Charter\n");
+      expect(nested).not.toContain("STAMITY:BEGIN");
+      await rm(join(root, "packages/app/package.json"));
+
+      const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+      expect(sync.code, sync.stderr).toBe(0);
+      const doc = JSON.parse(sync.stdout.trim()) as {
+        reclaim: { entries: { path: string; action: string; proof?: string }[] };
+      };
+      expect(doc.reclaim.entries.find((candidate) => candidate.path === "packages/app/AGENTS.md")).toMatchObject({
+        action: "deleted",
+        proof: "hash",
+      });
+      expect(existsSync(join(root, "packages/app/AGENTS.md"))).toBe(false);
+    },
+    60_000,
+  );
 });
 
 // ── Rows 586 and 519: the fingerprint no longer proves a delete ────────────
@@ -1011,6 +1112,57 @@ describe("an owner's charter-shaped or exact-path file under a forged row and ha
     expect(kept.some((bytes) => bytes.includes("Our own rules.") && bytes.includes("Ask Ana."))).toBe(true);
   }, 60_000);
 
+  // The overwrite half: a forged row hashing an owner's root charter, or
+  // Copilot's hooks file while Copilot is selected, made `sync` replace the
+  // file whole with no `.bak`. Now the previous bytes stay recoverable.
+  async function forgedOverwriteRepo(): Promise<{ root: string; owners: Readonly<Record<string, string>> }> {
+    const root = await initialisedRepo(["claude", "copilot"]);
+    const owners = { "AGENTS.md": OWNER_CHARTER, ".github/hooks/stamity.json": bytesOf(".github/hooks/stamity.json") };
+    await seed(root, owners);
+    await editManifest(root, (manifest) => {
+      for (const row of manifest.ledger) {
+        const owner = owners[row.path as keyof typeof owners];
+        if (owner !== undefined) row.contentHash = sha256(owner);
+      }
+    });
+    return { root, owners };
+  }
+
+  async function backupsBeside(root: string, path: string): Promise<string[]> {
+    const folder = dirname(join(root, path));
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    const names = (await readdir(folder)).filter((entry) => entry.startsWith(`${name}.bak`));
+    return Promise.all(names.map((entry) => readFile(join(folder, entry), "utf8")));
+  }
+
+  it("sync -y keeps the owner's untracked root charter and Copilot hooks file in a verified .bak", async () => {
+    const { root, owners } = await forgedOverwriteRepo();
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    for (const [path, owner] of Object.entries(owners)) {
+      expect(await backupsBeside(root, path), path).toEqual([owner]);
+      expect(sync.stdout, path).toContain(`Overwrote ${path}:`);
+    }
+    expect(sync.stdout).toContain("may be yours");
+  }, 60_000);
+
+  it("sync -y overwrites them tracked and clean with no .bak, naming git history", async () => {
+    const { root, owners } = await forgedOverwriteRepo();
+    commitAll(root);
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    for (const path of Object.keys(owners)) {
+      expect(await backupsBeside(root, path), path).toEqual([]);
+      expect(sync.stdout, path).toContain(`Overwrote ${path}:`);
+    }
+    expect(sync.stdout).toContain("its previous content is in git history");
+    expect(sync.stdout).not.toContain("may be yours");
+  }, 60_000);
+
   // The controls: the engine's own renderings at these paths still leave.
   it("clean -y still deletes the engine's own AGENTS.md, proven as its rendering", async () => {
     const root = await initialisedRepo();
@@ -1082,15 +1234,25 @@ describe("the engine's own AGENTS.override.md proves itself by its appendix head
   // Under `supplement` a first adoption puts the block on top, so the override
   // still opens with the charter; the owner's text above the block is set up by
   // one sync, and the change under test is the next one.
+  //
+  // TEST CHANGE, justified (rows 519 and 586, the overwrite half): the setup is
+  // committed before each sync, as an owner keeps one. At the override a matching hash
+  // and the appendix heading no longer license a backup-free overwrite on
+  // their own (a hand-added row can hash an owner's file carrying the
+  // heading); the previous bytes must be recoverable, and a file git tracks
+  // with no uncommitted change is, so it takes no `.bak` and gets a notice
+  // rather than a warning. Uncommitted, it would take the `.bak`.
   it.each([
     ["skip", (bytes: string) => bytes],
     ["supplement", (bytes: string) => `# Above\n\nThe owner's line above the block.\n\n${bytes}`],
   ] as const)("a sync that changes the override under %s takes no .bak and no warning", async (mode, ownerAbove) => {
     const root = await codexRepo(mode);
+    commitAll(root);
     const agents = join(root, "AGENTS.md");
     await writeFile(agents, ownerAbove(await readFile(agents, "utf8")), "utf8");
     const setup = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
     expect(setup.code).toBe(0);
+    commitAll(root);
     const before = await readFile(join(root, OVERRIDE), "utf8");
     expect(before.startsWith("# Charter")).toBe(false);
     await writeFile(agents, `${await readFile(agents, "utf8")}\nA line the owner added.\n`, "utf8");
@@ -1103,6 +1265,7 @@ describe("the engine's own AGENTS.override.md proves itself by its appendix head
     expect(after).toContain("A line the owner added.");
     expect(await overrideBackups(root)).toEqual([]);
     expect(`${setup.stdout}${sync.stdout}`).not.toContain("may be yours");
+    expect(sync.stdout).toContain(`Overwrote ${OVERRIDE}:`);
   }, 60_000);
 
   it("deselecting codex removes the unedited override", async () => {

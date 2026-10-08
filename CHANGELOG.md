@@ -47,10 +47,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A forged ledger row and hash alone no longer delete your file.** At an engine-named content
   file, a charter or instruction file, the Copilot workflow and hooks file, and Cursor's 1.11.0
   guard names, a delete needs bytes the engine renders (or, at those two names, the bytes 1.11.0
-  rendered for that setup). A copy no rendering proves is kept and named. What stays open, as
-  `SECURITY.md` says: a pack or override planted beside the forged row can still prove the delete
-  of a file it renders byte for byte, through `sync`, `clean` and `clean --pack`; and a forged row
-  hashing your file at a path the engine writes still lets `sync` overwrite it without a `.bak`.
+  rendered for that setup). A copy no rendering proves is kept and named. At a charter or
+  instruction file and at `.github/hooks/stamity.json`, an overwrite the engine's rendering does
+  not prove keeps your previous content: in git history when git tracks the file with no
+  uncommitted change (a notice names the file, no `.bak` is taken), behind a verified `.bak`
+  otherwise, including when git is missing. A setup you have not committed therefore gets an
+  `AGENTS.md.bak` when a release changes the charter. What stays open, as `SECURITY.md` says: a
+  pack or override planted beside the forged row can still prove the delete of a file it renders
+  byte for byte, through `sync`, `clean` and `clean --pack`; and at the other paths the engine
+  writes, a forged row hashing your file still lets `sync` overwrite it without a `.bak`.
 
 ### Changed
 
@@ -107,8 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "(carried forward: inputs unchanged)" beside every performed row, the walk's first recording
   included.
 - **`sync --dry-run --force` previews what `sync -y --force` deletes.** When `--force` would
-  overwrite a hooks file the engine cannot prove it wrote, such as an edited
-  `.github/hooks/stamity.json`, the preview now reads that file as the forced write leaves it. A
+  overwrite a hooks file the engine cannot prove it wrote, such as a `.github/hooks/stamity.json`
+  its ledger does not record, the preview now reads that file as the forced write leaves it. A
   hook script the new file stops running shows as deleted, not kept. A hooks file the forced write
   cannot replace, such as a link, is still read from disk.
 

@@ -1,10 +1,11 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants as FS } from "node:fs";
 import type { Stats } from "node:fs";
 // `open` is aliased: `readPrefixFrontmatterField` already binds that name to its
 // frontmatter-fence cursor, and the local reads better than the import would.
 import { lstat, mkdir, open as openFile, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   INJECTION_PATTERNS,
   INVISIBLE_SMUGGLING_CHARS,
@@ -15,7 +16,7 @@ import {
   scanForDeniedPatterns,
 } from "../denyscan/denyScan.ts";
 import type { DenyHit } from "../denyscan/denyScan.ts";
-import { bytesShowEngineOutput } from "../manifest/ownedPaths.ts";
+import { bytesShowEngineOutput, renderingProofClass } from "../manifest/ownedPaths.ts";
 import type { MergeResult, SourceRefusal } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import { MANAGED_BLOCK_VARIANTS, getMarkersForPath } from "../types/markers.ts";
@@ -946,6 +947,92 @@ function bytesProveEngineOutput(path: string, existingContent: string): boolean 
   return hasManagedBlock(existingContent, path) && !hasOwnerTextOutsideBlock(existingContent, path);
 }
 
+/**
+ * True when a whole-file overwrite at a repo-relative `path` must keep the
+ * bytes it replaces recoverable even though the ledger records the path and
+ * its hash: a charter or instruction file and Copilot's hooks file
+ * (`../manifest/ownedPaths.ts::renderingProofClass`, `instruction` and
+ * `copilot-hooks`), unless the incoming rendering proves the bytes on disk
+ * (they equal it once `\r\n` is read as `\n`, a checkout's line-ending
+ * translation) or a managed block spans the file.
+ *
+ * A hand-added row can hash an owner's bytes there, and the fingerprint
+ * ({@link bytesProveEngineOutput}) passes an owner's charter, so the recorded
+ * hash proves nothing about who wrote the file. The incoming rendering is the
+ * only rendering this lane holds, and bytes that already equal it never reach
+ * the overwrite, so at these paths nearly every overwrite needs recovery.
+ */
+function overwriteNeedsRecovery(path: string, existingContent: string, incoming: string): boolean {
+  const proofClass = renderingProofClass(path);
+  if (proofClass !== "instruction" && proofClass !== "copilot-hooks") return false;
+  if (existingContent.replaceAll("\r\n", "\n") === incoming) return false;
+  return !(hasManagedBlock(existingContent, path) && !hasOwnerTextOutsideBlock(existingContent, path));
+}
+
+/** Ceiling on one git check's wall time; a hung git falls back to the `.bak`. */
+const GIT_CHECK_TIMEOUT_MS = 5_000;
+
+/**
+ * The environment the git checks run in: the caller's, minus every `GIT_*`
+ * variable (inside a git hook `GIT_DIR` and `GIT_INDEX_FILE` would point the
+ * check at another repository's index), plus `GIT_OPTIONAL_LOCKS=0`, so the
+ * check never takes the index lock a concurrent git command holds.
+ */
+function gitCheckEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!/^GIT_/i.test(key)) env[key] = value;
+  }
+  env["GIT_OPTIONAL_LOCKS"] = "0";
+  return env;
+}
+
+/** One git command by argument array, no shell, in `cwd`; rejects on any non-zero exit. */
+function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(
+      "git",
+      ["--literal-pathspecs", ...args],
+      { cwd, env: gitCheckEnv(), encoding: "utf8", timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
+      (error, stdout) => {
+        if (error === null) resolvePromise(stdout);
+        else rejectPromise(error);
+      },
+    );
+  });
+}
+
+/**
+ * True when git tracks `filePath` and it has no uncommitted change, so the
+ * bytes an overwrite replaces are in git history and the overwrite shows in
+ * `git status`. Two checks, run in the file's own folder:
+ *
+ * 1. `git ls-files -v --error-unmatch` — the index has the path, as an
+ *    ordinary entry (tag `H`). An `assume-unchanged` (`h`) or `skip-worktree`
+ *    (`S`) entry is not enough: `git diff` does not look at its work-tree
+ *    bytes, which an owner may have edited on purpose.
+ * 2. `git diff --quiet HEAD --` — the work tree and the index agree with
+ *    `HEAD` at the path (a staged, uncommitted file differs from `HEAD`).
+ *
+ * `false` when git is absent, the folder is outside a work tree, `HEAD` names
+ * no commit, either check exits non-zero, or a check outlives its timeout:
+ * the caller then takes the verified `.bak`.
+ */
+async function isTrackedAndClean(filePath: string): Promise<boolean> {
+  const cwd = dirname(filePath);
+  const name = basename(filePath);
+  try {
+    const listed = (await runGitCheck(["ls-files", "-v", "--error-unmatch", "--", name], cwd))
+      .split("\n")
+      .filter((line) => line !== "");
+    if (listed.length === 0 || !listed.every((line) => line.startsWith("H "))) return false;
+    await runGitCheck(["diff", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", "--", name], cwd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The ledger's spelling of a content hash — `../cli/engine/emissionWrite.ts::sha256`. */
 function ledgerHash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -1210,13 +1297,34 @@ async function safeWriteFileLocked(
   // engine writes, and a hand-added row can hash the owner's bytes. There the
   // bytes must also show the engine wrote them, or the overwrite takes the
   // `.bak` like any drifted one.
-  const unproven =
-    managed && !bytesProveEngineOutput(displayPath(filePath, options.boundaryDir), existingContent);
-  const drifted =
-    managed && (unproven || hasLedgerDrift(filePath, existingContent, options.ledgerHashes));
+  const shownPath = displayPath(filePath, options.boundaryDir);
+  const fingerprintFails = managed && !bytesProveEngineOutput(shownPath, existingContent);
+  const hashDrifted = managed && hasLedgerDrift(filePath, existingContent, options.ledgerHashes);
+  // Rows 519 and 586, the overwrite half. At a charter or instruction file and
+  // at Copilot's hooks file, neither the recorded hash (a hand-added row can
+  // hash an owner's bytes) nor the fingerprint (an owner's charter can carry its
+  // title and headings) proves the bytes are the engine's. Unless the incoming
+  // rendering proves them ({@link overwriteNeedsRecovery}), the previous content
+  // stays recoverable: from git history when git tracks the file with no
+  // uncommitted change ({@link isTrackedAndClean}), from a verified `.bak`
+  // otherwise, and from a `.bak` whenever git cannot answer.
+  const needsRecovery =
+    managed && !fingerprintFails && !hashDrifted && overwriteNeedsRecovery(shownPath, existingContent, content);
+  const inGitHistory = needsRecovery && options.backup !== false && (await isTrackedAndClean(filePath));
+  const unproven = fingerprintFails || (needsRecovery && !inGitHistory);
+  const drifted = unproven || hashDrifted;
   if ((managed && !drifted) || options.backup === false) {
     await atomicWriteFileUnlocked(filePath, content, writeOpts);
-    return { path: filePath, action: "updated" };
+    if (!inGitHistory) return { path: filePath, action: "updated" };
+    return {
+      path: filePath,
+      action: "updated",
+      notice:
+        `Overwrote ${shownPath}: the ledger records this path, but its bytes are not this engine's ` +
+        `rendering, so they could not be proven its own. Git tracks the file with no uncommitted ` +
+        `change, so its previous content is in git history and the change shows in git status; ` +
+        `no .bak was taken.`,
+    };
   }
   const bakPath = await backupBeforeOverwrite(
     filePath,
@@ -1229,7 +1337,7 @@ async function safeWriteFileLocked(
     path: filePath,
     action: "updated",
     warning: unproven
-      ? `Overwrote ${displayPath(filePath, options.boundaryDir)}: the ledger records this path, but ` +
+      ? `Overwrote ${shownPath}: the ledger records this path, but ` +
         `its bytes do not show the engine wrote them, so they may be yours. This output is written ` +
         `whole, so the file was regenerated in full. Your previous file is at ${bakPath}.`
       : drifted

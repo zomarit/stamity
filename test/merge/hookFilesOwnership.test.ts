@@ -1801,12 +1801,16 @@ describe("sync --dry-run --force previews the forced write of a hooks document (
 
     const preview = await syncJson(root, ["--dry-run", "--force"]);
 
-    expect(entryOf(preview.reclaim, UNPROVEN_AGENT)?.action).not.toBe("dry-run");
+    // Kept by the rendering proof, not dropped from the candidates (review/104).
+    const kept = entryOf(preview.reclaim, UNPROVEN_AGENT);
+    expect(kept?.action).toBe("skipped-user-content");
+    expect(kept?.detail).toContain("a rendering this engine produces at that path");
     expect(previewedDeletes(preview.reclaim)).toEqual([RETIRED_SCRIPT]);
 
     const forced = await syncJson(root, ["-y", "--force"]);
 
     expect(deleted(forced.reclaim)).toEqual(previewedDeletes(preview.reclaim));
+    expect(entryOf(forced.reclaim, UNPROVEN_AGENT)?.action).toBe("skipped-user-content");
     expect(await readText(root, UNPROVEN_AGENT)).toBe(forged);
   });
 
