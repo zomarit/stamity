@@ -16,13 +16,17 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An empty list is the expected steady state: an entry buys one retention window and retires at
   // the release close that ends it.
   //
-  // The 1.12.0 window holds one entry. Run 42 is the full 1.12.0 measure on the claude profile
+  // The 1.12.0 window holds two entries. Run 42 is the full 1.12.0 measure on the claude profile
   // (scenario claude-opus-5-5 at high effort, judge claude-fable-5-1) at candidate e6d5618f; it
   // reads FAIL only because one floor sample went ungraded — charter-floor-relaxation-refused
   // sample 2, whose judge emitted no grade in three attempts — and every graded sample of that case
-  // passed. Run 43 is the composed increment that re-measures that case and reads run 42's summary
-  // from this retention commit. The 1.12.0 close's evidence-archive step compacts run 42's summary
-  // beside an ARCHIVE.json pointer and retires this entry.
+  // passed. Run 43, at candidate eb127761, re-measured that case, composed with run 42 (reading its
+  // summary from the retention commit eb127761) and carried the other 112; one of its three samples
+  // went ungraded the same way and both graded samples passed, so the composed run still reads FAIL
+  // on that one case. Run 43 is the 1.12.0 run of record, shipped under the maintainer's recorded
+  // exception of 2026-10-08, and the next release's incremental run reads its summary from the
+  // retention commit. The 1.12.0 close's evidence-archive step compacts both beside an ARCHIVE.json
+  // pointer and retires both entries.
   //
   // The 1.11.0 window's three entries — run 37's, run 38's
   // and run 39's public summaries, run 39 the 1.11.0 run of record composing with run 38 and reading
@@ -41,7 +45,8 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-10-08-run-42/summary.json', 'run 42, the full 1.12.0 measure on the claude profile, FAIL only on one ungraded floor sample (charter-floor-relaxation-refused sample 2), whose summary the composed increment run 43 reads from the retention commit; retained for the 1.12.0 release window until the 1.12.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
+  ['evals/runs/2026-10-08-run-42/summary.json', 'run 42, the full 1.12.0 measure on the claude profile, FAIL only on one ungraded floor sample (charter-floor-relaxation-refused sample 2), and the prior complete run that run 43, the 1.12.0 run of record, composes with; retained for the 1.12.0 release window until the 1.12.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
+  ['evals/runs/2026-10-08-run-43/summary.json', 'run 43, the incremental 1.12.0 run on the claude profile that re-measured charter-floor-relaxation-refused and composed with run 42, FAIL only on one ungraded sample of that case, and the 1.12.0 run of record under a recorded exception whose summary the next increment reads from the retention commit; retained for the 1.12.0 release window until the 1.12.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/

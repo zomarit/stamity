@@ -229,10 +229,18 @@ describe("repository hygiene over the Git index", () => {
   // path, and the case exercises it as d46367d6 did: the exempted path passes over budget while its
   // same-directory neighbour is refused. The retirement proof is unchanged: every retired summary
   // and its neighbour is still staged over budget and must be refused like any other file.
-  it("exempts exactly the run 42 summary and refuses its neighbour and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-08, after run 42): the window holds a second entry. Run 43
+  // re-measured charter-floor-relaxation-refused, composed with run 42 and carried the other 112;
+  // run 43 is the 1.12.0 run of record. Its exported summary is 4047457 bytes, over the budget, and
+  // the next increment reads it from the retention commit. Run 42's summary stays, because run 43
+  // composes with it. Both summaries are pinned, and each one's same-directory neighbour is still
+  // refused; the retired summaries' refusals are unchanged.
+  it("exempts exactly the run 42 and run 43 summaries and refuses their neighbours and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.12.0 window's run 42 summary").toEqual([
+    expect(exempt, "the size-exception map's paths are not the 1.12.0 window's run 42 and run 43 summaries").toEqual([
       "evals/runs/2026-10-08-run-42/summary.json",
+      "evals/runs/2026-10-08-run-43/summary.json",
     ]);
 
     const root = fixture();
