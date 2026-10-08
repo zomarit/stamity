@@ -36,8 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Upgrading from 1.11.0
 
 Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
-read what it will write and remove.
+read what it will write and remove. A repository with the ops pack installed re-installs it first,
+as its item below says.
 
+- **A repository that installed the ops pack with 1.11.0 re-installs it.** ops's two procedure
+  skills are renamed, so the first `sync` after the upgrade refuses, on every client, Claude-only
+  and Copilot-only repositories included. Run `stamity clean --pack ops`, then `stamity sync`
+  (which reclaims the old copies), then `stamity add ops`, then `stamity sync`; never a `sync`
+  before the `clean`. Move an ops file you edited out of the pack's directory first: `clean --pack`
+  keeps an edited pack file, and `add` would then refuse it as a file the pack does not own.
 - **Cursor's two guards change names.** The first `sync` writes
   `.cursor/hooks/stamity-subagent-guard.mjs` and `.cursor/hooks/stamity-mcp-guard.mjs`, points
   `.cursor/hooks.json` at them, and deletes `subagent-guard.mjs` and `mcp-guard.mjs` where their
@@ -78,9 +85,42 @@ read what it will write and remove.
   shell character) and refuses anything else before writing, without echoing it. A fork whose
   `publishConfig.registry` was set outside that rule by hand renders every call as `npx --no`
   instead of `npx -y`, so it runs an installed copy and never fetches one.
+- **A path or key a committed file supplies can no longer hide or reorder what the CLI prints.**
+  `check` prints the control, bidi, zero-width and tag characters in drift paths and reclaim reasons
+  as escape text, and the names quoted from `.claude/settings.json`, the hooks files and
+  `.codex/config.toml`, like the labels of interactive prompts, drop every default-ignorable code
+  point. `--json` output is unchanged.
+- **The docs site's build tooling and the development tooling take nine advisory fixes.**
+  proxy-addr 2.0.8, compression 1.8.2 and source-map-js 1.2.2 in the docs site (Dependabot #83, #81,
+  #80); tinypool 2.2.0, postcss-selector-parser 7.1.6 and katex 0.18.10 there through overrides
+  (#84); smol-toml 1.9.0 and source-map-js 1.2.2 in the development tooling (#79, #82). Together they
+  close Dependabot alerts #24, #25 and #28–#34. None of these packages ships in the published
+  package.
+
+### Added
+
+- **`check` has a `pack-reach` row.** It fails for an installed pack none of whose artifacts reaches
+  any client — a command-only pack on a client whose plugin carries commands, or a hooks-only pack —
+  naming the pack, each artifact and the plugin that dropped it.
+- **The end-of-init panel shows the hosting platform** `init` detected from the origin remote, with
+  a fallback line when it detects none.
 
 ### Fixed
 
+- **`add ops`, then `sync`, works again on Cursor and on Codex,** which 1.11.0 broke.
+- **`add` refuses a pack whose command or skill would install under a name another artifact of the
+  other class already takes,** naming both owners, with a remedy for each. `sync`, `check`, `init`
+  and `plugin setup` refuse such a pack an earlier version installed with a remedy that works,
+  instead of the generic two-planner collision.
+- **The Codex skills list counts only the rows Codex shows its model,** so the touchpoints and pack
+  commands no longer count against its cap. The refusal names each installed pack's share.
+- **Pack skills reach plugin-backed clients.**
+- **An overlay on a pack skill is refused by `sync` and `validate`,** where it was silently dropped.
+  A fork overlay on one is skipped and reported, and a fork skill that collides with an installed
+  pack's skill is told to ship under another id rather than to patch the pack skill. The creator
+  agent no longer says an override or overlay of a pack skill emits as it would without packs.
+- **`sync` and `workspace sync` no longer offer `--force` for a refusal it cannot clear.** A refused
+  import decision, and a row refused at its source, each name their own remedy.
 - **Your deny rules, allow rows and hooks in `.claude/settings.json` survive setup, `sync` and
   `clean`.** The engine owned all of `permissions` and `hooks`: an owner's key made `init` skip
   the file, `--force` replaced it (deny rules included), and a deny rule added after setup was
@@ -141,6 +181,19 @@ read what it will write and remove.
 - **`check`'s `plugin-duplicates` remedy names `clean` too.** For a `hooks` key in
   `.claude/settings.json` under a plugin install, it said only `sync` removes a stale
   repository-mode hook entry; `clean` removes it as well.
+- **ops's two procedure skills are renamed:** `st-release` → `st-release-runbook` and
+  `st-incident-response` → `st-incident-runbook`, so neither shares its name with an ops command. A
+  repository that installed ops with 1.11.0 re-installs it, as "Upgrading from 1.11.0" says.
+- **`add` refuses a re-add whose new version would leave files of the installed copy behind.** The
+  remedy is the same four steps: `clean --pack`, `sync`, `add`, `sync`.
+- **The `pack-integrity` remedy is `clean --pack`, then `sync`, then `add`, then `sync`,** still never
+  a `sync` before the `clean`.
+- **The check for a command and a skill sharing a name ignores case,** as macOS and Windows compare
+  folder names.
+- **`docs/migration.md` says what a full migration carries and shows:** the tools, tier,
+  communication style and MCP server ids are carried over, and a `--tools` or `--maturity` flag, or a
+  tools answer at a terminal, wins.
+- **The capability matrix's Codex core figure is 5,570 of 8,000 characters.**
 
 ## [1.11.0] - 2026-10-01
 
