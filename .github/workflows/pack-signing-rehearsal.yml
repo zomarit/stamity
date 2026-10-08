@@ -7,6 +7,8 @@ on:
     paths:
       - .github/workflows/pack-signing-rehearsal.yml
       - scripts/pack-signing-rehearsal.mjs
+      - scripts/sign-pack.mjs
+      - scripts/native-typescript.mjs
       - test/ci/packSigningRehearsal.test.ts
       - src/pack/**
       - src/merge/**

@@ -221,6 +221,9 @@ describe("the rehearsal signs the code that ships", () => {
       "src/merge/atomicWrite.ts",
       "package-lock.json",
       "scripts/pack-signing-rehearsal.mjs",
+      // The archive step ships these two as signing inputs, so a change to either moves the proof.
+      "scripts/sign-pack.mjs",
+      "scripts/native-typescript.mjs",
       ".github/workflows/pack-signing-rehearsal.yml",
       "test/ci/packSigningRehearsal.test.ts",
     ]) {
