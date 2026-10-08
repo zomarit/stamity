@@ -1335,6 +1335,112 @@ const CURSOR_REFUSAL =
 /** One measured discovery run took 56.59s (`/usr/bin/time -p`, 2026-09-20); 4x for a loaded worker. */
 const CURSOR_PROMPT_MS = 240_000;
 
+/** One Cursor discovery run's text as the refusal check reads it: stdout, then stderr. */
+const cursorTranscript = (seen: SpawnSyncReturns<string>): string => `${seen.stdout}\n${seen.stderr}`;
+/** The skill ids a discovery run listed: its stdout, one trimmed line each. */
+const listedIds = (seen: SpawnSyncReturns<string>): string[] => seen.stdout.split("\n").map((line) => line.trim());
+/** The first line of a discovery run's transcript, the part a failure message quotes. */
+const transcriptHead = (seen: SpawnSyncReturns<string>): string => cursorTranscript(seen).trim().split("\n")[0] ?? "";
+
+/** What {@link discoverListing} hands the walk: the listing it judges, and every transcript's first line. */
+interface CursorListing {
+  seen: SpawnSyncReturns<string>;
+  attempts: 1 | 2;
+  heads: string[];
+}
+
+/**
+ * One Cursor discovery of `root`, run a second time when the first listing drops `st-work`.
+ *
+ * Cursor has no listing command that works without a model call, so the walk reads a model's
+ * free-text list of skill ids, and that list dropped `st-work` three times on 2026-10-02 and
+ * 2026-10-03 and once more under a load average near 200 on 2026-10-07, each time passing on a
+ * re-run. One more discovery is the retry. A refusal is not retried, because it is a fact about the
+ * machine's session that the walk records and skips on; a listing that carries `st-work` is not
+ * retried either, so a wrong `fixture-marker` answer, the walk's load-bearing id, is never retried
+ * into a pass.
+ */
+function discoverListing(discover: (root: string) => SpawnSyncReturns<string>, root: string): CursorListing {
+  const first = discover(root);
+  if (CURSOR_REFUSAL.test(cursorTranscript(first)) || listedIds(first).includes("st-work")) {
+    return { seen: first, attempts: 1, heads: [transcriptHead(first)] };
+  }
+  const second = discover(root);
+  return { seen: second, attempts: 2, heads: [transcriptHead(first), transcriptHead(second)] };
+}
+
+/** The walk's `st-work` check, its message naming each discovery's first line when it fails. */
+function expectListsWorkSkill(listed: CursorListing): void {
+  expect(
+    listedIds(listed.seen),
+    `st-work missing from ${String(listed.attempts)} discovery listing(s); first lines: ${listed.heads.join(" | ")}`,
+  ).toContain("st-work");
+}
+
+/**
+ * The retry above, proven without the client. The stubbed `discover` stands in for `agent -p`
+ * because the real client needs a signed-in Cursor account and calls a model, which is why the walk
+ * itself is armed only on the maintainer's machine; the retry is pure logic over its answers.
+ */
+describe("the Cursor walk's listing retry", () => {
+  const answer = (stdout: string, stderr = "", status = 0): SpawnSyncReturns<string> => ({
+    pid: 0,
+    output: [null, stdout, stderr],
+    stdout,
+    stderr,
+    status,
+    signal: null,
+  });
+  const scripted = (...answers: SpawnSyncReturns<string>[]) => {
+    const roots: string[] = [];
+    const discover = (root: string): SpawnSyncReturns<string> => {
+      roots.push(root);
+      const next = answers[roots.length - 1];
+      if (next === undefined) throw new Error(`discover called ${String(roots.length)} times`);
+      return next;
+    };
+    return { discover, roots };
+  };
+
+  it("discovers a second time when the first listing drops st-work, and judges the second", () => {
+    const second = answer("st-plan\nst-work\nfixture-marker\n");
+    const { discover, roots } = scripted(answer("st-plan\nfixture-marker\n"), second);
+    const listed = discoverListing(discover, "/root/a");
+    expect(listed.attempts).toBe(2);
+    expect(listed.seen).toBe(second);
+    expect(roots).toEqual(["/root/a", "/root/a"]);
+    expect(() => expectListsWorkSkill(listed)).not.toThrow();
+  });
+
+  it("fails the st-work check when both listings drop it, quoting both first lines", () => {
+    const { discover, roots } = scripted(answer("first-listing-head\nst-plan\n"), answer("second-listing-head\nst-plan\n"));
+    const listed = discoverListing(discover, "/root/b");
+    expect(roots).toHaveLength(2);
+    expect(() => expectListsWorkSkill(listed)).toThrow(/first-listing-head[\s\S]*second-listing-head/);
+  });
+
+  it("does not discover again when st-work is listed, even with the wrong fixture-marker answer", () => {
+    const first = answer("st-work\nfixture-marker\n");
+    const { discover, roots } = scripted(first, answer("st-work\n"));
+    const listed = discoverListing(discover, "/root/c");
+    expect(roots).toHaveLength(1);
+    expect(listed.attempts).toBe(1);
+    expect(listed.seen).toBe(first);
+    // The walk's state at V1 expects fixture-marker ABSENT; this listing carries it, and that
+    // mismatch is the walk's to fail on, never a reason to ask the model again.
+    expect(listedIds(listed.seen).includes("fixture-marker")).toBe(true);
+  });
+
+  it("does not discover again after a refusal, so the walk's skip path reads it", () => {
+    const refusal = answer("", "Error: Authentication required. Please run 'agent login' first.", 1);
+    const { discover, roots } = scripted(refusal, answer("st-work\n"));
+    const listed = discoverListing(discover, "/root/d");
+    expect(roots).toHaveLength(1);
+    expect(listed.attempts).toBe(1);
+    expect(CURSOR_REFUSAL.test(cursorTranscript(listed.seen))).toBe(true);
+  });
+});
+
 /** The operator's own Cursor state directory, and one sorted listing of a directory inside it. */
 const cursorHome = (): string => join(process.env["HOME"] ?? "", ".cursor");
 const listing = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir).toSorted() : []);
@@ -1464,10 +1570,13 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         // The client's own discovery of the tree it was just handed. A refusal is a fact about the
         // machine's Cursor session, not about this root: it is recorded and the case skips, so no
         // row ever claims a route no client ran.
-        const seen = discover(root);
-        const transcript = `${seen.stdout}\n${seen.stderr}`;
+        // A second discovery runs only when the first drops `st-work` (discoverListing above), and a
+        // second answer that refuses takes the same skip path as a first one.
+        const listed = discoverListing(discover, root);
+        const { seen } = listed;
+        const transcript = cursorTranscript(seen);
         if (CURSOR_REFUSAL.test(transcript)) {
-          const first = transcript.trim().split("\n")[0] ?? "";
+          const first = transcriptHead(seen);
           row("cursor", state, "SKIPPED", `needs an account: ${first}`);
           // The per-client completion row every consumer folds on, closed before the skip: a client
           // whose walk stopped has to say so on that line, not go quiet.
@@ -1478,13 +1587,14 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         expect(seen.status, transcript).toBe(0);
         // The marker's id, as the corpus projects it into a Cursor root, from the client's own
         // listing — and absent at the first version, which is what makes the id load-bearing.
-        expect(seen.stdout.split("\n").map((line) => line.trim())).toContain("st-work");
-        expect(seen.stdout.split("\n").map((line) => line.trim()).includes("fixture-marker")).toBe(marker);
+        expectListsWorkSkill(listed);
+        expect(listedIds(seen).includes("fixture-marker")).toBe(marker);
         row(
           "cursor",
           state,
           "PASS",
-          `agent --plugin-dir at ${target}, discovery ${marker ? "lists" : "omits"} fixture-marker`,
+          `agent --plugin-dir at ${target}, discovery ${marker ? "lists" : "omits"} fixture-marker` +
+            (listed.attempts === 2 ? ", listed on the second discovery" : ""),
         );
         assertCompatible("cursor", root, walk.project, target, state);
       }
