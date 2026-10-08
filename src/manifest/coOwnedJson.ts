@@ -123,10 +123,13 @@ export interface ElementSpec {
    * object at `/<key>` (the events of a `hooks` object).
    */
   pointer: string;
-  /** True for an element the engine recognises as its own by content, whatever the record says. */
-  recognise(element: unknown): boolean;
-  /** True for an element the engine can prove it wrote by path or by re-rendering (S11). */
-  inBound(element: unknown): boolean;
+  /**
+   * True for an element the engine recognises as its own by content, whatever the record says. `pointer` is
+   * the concrete array the element sits in (`/hooks/<event>` under a `/<key>/*` spec); the judge always passes it.
+   */
+  recognise(element: unknown, pointer?: MemberPointer): boolean;
+  /** True for an element the engine can prove it wrote by path or by re-rendering (S11), in the array `pointer` names. */
+  inBound(element: unknown, pointer?: MemberPointer): boolean;
   /**
    * What a RECORDED element outside the bound is: the engine's, removed only
    * behind a backup (`backup`), or the owner's whatever the record says
@@ -700,12 +703,12 @@ function judge(
   const { spec } = slot.owner;
   return array.map((element, index) => {
     const hash = memberHash(element);
-    const recognised = spec.recognise(element);
+    const recognised = spec.recognise(element, slot.pointer);
     // In bound by path (the spec), or by re-rendering: equal to an element the
     // engine renders there now (S11) — what proves a user-hook entry whose
     // definition is still present (review/44) — or to what an earlier release
     // rendered there for the same definition (`CoOwnedJsonSpec.earlier`).
-    const inBound = spec.inBound(element) || renderedHashes.has(hash) || earlierHashes.has(hash);
+    const inBound = spec.inBound(element, slot.pointer) || renderedHashes.has(hash) || earlierHashes.has(hash);
     const recorded = recordedHashes.has(hash);
     let engine = recognised;
     if (!engine && state === "legacy") engine = inBound || renderedHashes.has(hash);
@@ -893,7 +896,7 @@ function preexistingOf(parsed: ParsedSpec, doc: Record<string, unknown>, state: 
     .filter((container) =>
       container.slots.every((slot) => {
         const array = readAt(doc, slot.segments);
-        return !Array.isArray(array) || !array.some((element) => slot.owner.spec.recognise(element));
+        return !Array.isArray(array) || !array.some((element) => slot.owner.spec.recognise(element, slot.pointer));
       }),
     )
     .map((container) => container.pointer)
@@ -1535,6 +1538,18 @@ function reduceDocument(
   }
 
   if (removed.length === 0) {
+    // A document the engine created holding nothing at all — a plugin-backed
+    // setup renders `{}` into the file it creates (review/57) — is nobody
+    // else's, so it goes as an engine-only one would. Nothing here is proven
+    // per entry, so the sweep's recorded-hash check decides whether the
+    // previous bytes are backed up first.
+    if (opts.deleteWhenEngineOnly && record?.createdFile === true && Object.keys(doc).length === 0) {
+      return {
+        kind: "engine-only",
+        proven: false,
+        detail: `Co-owned ${spec.noun} that the engine created and that holds nothing: no entry of the client's or the operator's is in it.`,
+      };
+    }
     return {
       kind: "untouched",
       refused: false,

@@ -1154,6 +1154,20 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
     expect(check.code, check.stdout + check.stderr).toBe(0);
   });
 
+  // build/55: 1.11.0 rendered each guard's entry under one hook event, so an
+  // entry deep-equal to the pin under any other event is an owner's copy.
+  it("a 1.11.0 setup with the old MCP guard's entry copied under another event: sync -y keeps that entry as the owner's", async () => {
+    const root = await setUpByReleaseOneEleven();
+    const copied = { command: `node ${OLD_MCP_GUARD}`, failClosed: true };
+    await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", copied);
+
+    await sync(root);
+
+    const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>;
+    expect(hooks["afterFileEdit"]).toEqual([copied]);
+    expect(hooks["beforeMCPExecution"]).toEqual([{ command: `node ${MCP_GUARD_PATH}`, failClosed: true }]);
+  });
+
   it("a 1.11.0 setup whose old MCP guard was edited by hand: sync -y keeps it byte for byte and the sync report names it", async () => {
     const root = await setUpByReleaseOneEleven();
     const edited = `${await readText(root, OLD_MCP_GUARD)}// the team's own tweak\n`;

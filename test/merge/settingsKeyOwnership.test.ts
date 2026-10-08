@@ -605,6 +605,21 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
+  // review/57: a plugin-backed setup with no file before it creates `{}`, and
+  // REQ-FLOW-036's round trip removes a file the engine created.
+  it("clean removes the empty file a plugin-backed setup created, with no backup while the bytes are the engine's", async () => {
+    const root = await freshRepo();
+    await pluginSetup(root);
+    expect(await settingsDoc(root)).toEqual({});
+
+    const result = await clean(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`deleted  ${CLAUDE_SETTINGS_PATH}`);
+    expect(existsSync(SETTINGS_ABS(root))).toBe(false);
+    expect(existsSync(BAK_ABS(root))).toBe(false);
+  });
+
   it("the sync sweep (claude deselected) reduces the file the same way", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
@@ -713,7 +728,8 @@ describe("collisions the lane keeps", () => {
 
   // Since 2026-10-08 (inbox row 324) the three rows are no longer the rendering:
   // with no ledger row they read as the owner's, and the file is still no collision.
-  it("a hand-written engine key that already equals the rendering is adopted without a collision", async () => {
+  // Retitled 2026-10-08 (build/32): it called the three rows the rendering, which no longer carries them.
+  it("a hand-written permissions key holding the rows earlier releases rendered is kept as the owner's, with no collision", async () => {
     const root = await freshRepo();
     await seedSettings(root, `${JSON.stringify({ permissions: PERMISSIONS, model: "opus" }, null, 2)}\n`);
 

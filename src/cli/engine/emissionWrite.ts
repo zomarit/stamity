@@ -44,7 +44,7 @@ import {
   directHookRendering,
   hookScriptReader,
 } from "../../manifest/hookDocuments.ts";
-import { memberHash } from "../../manifest/jsonMembers.ts";
+import { memberHash, memberPointer, type MemberPointer } from "../../manifest/jsonMembers.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
@@ -477,8 +477,12 @@ const CURSOR_AGENT_ROW_DIR = ".cursor/agents/";
 /**
  * The two guards 1.11.0 rendered for this setup, by old name
  * (`../../adapters/cursorLegacyGuards.ts`): the ten agents 1.11.0 shipped plus
- * every Cursor agent `ledger` records — the agents 1.11.0 actually emitted,
- * packs and overrides included — under `identity`. The current corpus and
+ * every Cursor agent `ledger` records — the agents 1.11.0 emitted, packs and
+ * overrides included — under `identity`. Two setups read another roster and
+ * keep the spawn guard, the safe side (review/99): one whose plugin carried the
+ * agent class but not hooks, where 1.11.0 put pack and override agents in the
+ * guard but recorded no Cursor agent row for them, and a sync after a refused
+ * first sync, which reads the ledger the running engine rewrote. The current corpus and
  * packs are not read, since they can differ from 1.11.0's. A forged agent row
  * only widens the roster, so the only file it can prove is one whose bytes are
  * exactly a 1.11.0 guard for that roster. Empty when the identity cannot be
@@ -551,18 +555,24 @@ const RELEASE_ONE_ELEVEN_ENTRY_HASHES: ReadonlySet<string> = new Set([...CURSOR_
  * `.cursor/hooks.json`'s spec with the 1.11.0 guard entries pinned (row 585):
  * an entry whose command names a 1.11.0 guard name is the engine's only when it
  * deep-equals the entry 1.11.0 rendered for that name
- * (`CURSOR_1_11_0_GUARD_ENTRIES`), and only while that name is among
- * `guardPaths` ({@link cursorGuardPathsFor}); any other is the owner's.
+ * (`CURSOR_1_11_0_GUARD_ENTRIES`) under the hook event 1.11.0 rendered it
+ * under (build/55), and only while that name is among `guardPaths`
+ * ({@link cursorGuardPathsFor}); any other is the owner's.
  */
 function withReleaseOneElevenGuardPins(spec: CoOwnedJsonSpec): CoOwnedJsonSpec {
-  const pinned = (claims: (element: unknown) => boolean) => (element: unknown): boolean => {
+  const pinned = (claims: (element: unknown, pointer?: MemberPointer) => boolean) => (element: unknown, pointer?: MemberPointer): boolean => {
     const command = cursorEntryCommand(element);
     const pin = command === null ? undefined : [...CURSOR_1_11_0_GUARD_ENTRIES].find(([path]) => command.includes(path))?.[1];
-    return (pin === undefined || isDeepStrictEqual(element, pin.entry)) && claims(element);
+    const pinHolds = pin === undefined || (pointer === memberPointer(["hooks", pin.event]) && isDeepStrictEqual(element, pin.entry));
+    return pinHolds && claims(element, pointer);
   };
   return {
     ...spec,
-    elements: spec.elements.map((element) => ({ ...element, recognise: pinned((e) => element.recognise(e)), inBound: pinned((e) => element.inBound(e)) })),
+    elements: spec.elements.map((element) => ({
+      ...element,
+      recognise: pinned((e, pointer) => element.recognise(e, pointer)),
+      inBound: pinned((e, pointer) => element.inBound(e, pointer)),
+    })),
   };
 }
 

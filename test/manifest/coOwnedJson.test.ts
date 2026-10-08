@@ -953,6 +953,25 @@ describe("reduceCoOwnedJson", () => {
     expect(out).not.toHaveProperty("mustBackUp");
   });
 
+  // review/57: a plugin-backed setup renders `{}` into a settings file it
+  // creates, so the file holds none of the engine's entries; the record still
+  // says the engine created it, and an empty document is nobody else's.
+  it("answers engine-only for an empty document the engine created and wrote no entry into, the recorded hash deciding the backup", () => {
+    const created = plan(null, noRow(), "{}\n");
+    expect(created.record).toEqual({ createdFile: true });
+
+    const out = reduce(created.content as string, created.record, { deleteWhenEngineOnly: true });
+
+    expect(out).toMatchObject({ kind: "engine-only", proven: false });
+  });
+
+  it("keeps an empty document the engine did not create, and one holding an owner's key", () => {
+    expect(reduce("{}\n", { elements: {} }, { deleteWhenEngineOnly: true })).toMatchObject({ kind: "untouched" });
+    expect(reduce("{}\n", { createdFile: true }, { deleteWhenEngineOnly: false })).toMatchObject({ kind: "untouched" });
+    expect(reduce("{}\n", { createdFile: true }, { legacy: true, deleteWhenEngineOnly: true })).toMatchObject({ kind: "untouched" });
+    expect(reduce(doc({ model: "opus" }), { createdFile: true }, { deleteWhenEngineOnly: true })).toMatchObject({ kind: "untouched" });
+  });
+
   it("answers engine-only when nothing foreign remains and the engine created the file", () => {
     const out = reduce(EMITTED, { elements: ENGINE_ELEMENTS, createdFile: true }, { deleteWhenEngineOnly: true });
     expect(out).toEqual({
