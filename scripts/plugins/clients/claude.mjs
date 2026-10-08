@@ -82,9 +82,9 @@ export function place(row) {
   // Glob-scoped rules: repository-owned, see RULE_REASON.
   if (path.startsWith('.claude/rules/')) return null
   if (path === '.claude/settings.json') {
-    // The settings file is two halves with two owners. The `hooks` half is the plugin's, and it
-    // is re-emitted alone as the plugin hooks document; the `permissions` half describes what an
-    // operator lets THEIR agent do in THEIR repository and travels with no plugin.
+    // The engine renders only a `hooks` member into this file (it writes no permission rows), and
+    // that member is re-emitted alone as the plugin hooks document. A rendering with no hooks is
+    // the empty document `{}`, so it yields no plugin row.
     const settings = JSON.parse(row.content)
     if (settings.hooks === undefined) return null
     return { path: `${HOOKS_DIR}/hooks.json`, class: 'hooks', content: `${JSON.stringify({ hooks: settings.hooks }, null, 2)}\n` }

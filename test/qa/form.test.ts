@@ -199,7 +199,8 @@ describe("renderForm", () => {
   });
 
   it("claims no carry for a performed row a person walked this run", () => {
-    // The row `recordHumanAnswers` writes for a walk: performed, dated, named, and not marked carried.
+    // A performed, dated, named row explicitly marked `carried: false`. The row `recordHumanAnswers`
+    // writes for a walk drops the key instead; that absent-key shape is pinned on `humanCell` below.
     const markdown = renderForm({
       ...evidence,
       rows: evidence.rows.map((row) => (row.row === "H1c" ? { ...row, carried: false } : row)),
@@ -321,8 +322,10 @@ describe("humanCell", () => {
 
   it("appends the carry suffix only to a row marked carried, so a fresh walk reads as one", () => {
     const signed = { automated: false, status: "performed", performedAt: "2026-09-13", performedBy: "the maintainer" };
+    // No `carried` key (an evidence file written before the mark existed, or a row
+    // `recordHumanAnswers` answered): no carry is claimed for it.
     expect(humanCell(signed)).toBe("PERFORMED 2026-09-13 by the maintainer");
-    // An evidence file written before the mark existed carries no key: no carry is claimed for it.
+    // An explicit `carried: false` claims none either.
     expect(humanCell({ ...signed, carried: false })).toBe("PERFORMED 2026-09-13 by the maintainer");
     expect(humanCell({ ...signed, carried: true })).toBe(
       "PERFORMED 2026-09-13 by the maintainer (carried forward: inputs unchanged)",

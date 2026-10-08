@@ -137,8 +137,8 @@ function withoutReopenedReason(reason) {
  * with a reason naming the acceptance it had — and, when the hash moved, both hashes as well. The
  * exception keys on the STATUS, never on the row id's letter.
  *
- * The row the performed branch restores is the one row marked `carried: true`, and the form prints
- * its carry suffix beside that mark only: a row a person walked this run is not a carry, and a
+ * Every row the performed branch restores is marked `carried: true`, and the form prints the carry
+ * suffix beside that mark only: a row a person walked this run is not a carry, and a
  * reopened or measured row carries no signature at all. {@link recordHumanAnswers} drops the mark
  * from every row it answers.
  *

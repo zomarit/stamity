@@ -502,6 +502,9 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(await exists(corpusSkill), "corpus skill present").toBe(true);
 
       // Ledger-driven uninstall: files gone, rows gone, everything else intact.
+      // `clean --pack` also removes the copies `sync` projected from the pack
+      // into the clients' folders, the skill below included (REQ-PLUGIN-046);
+      // this case checks that copy only after the next sync, not here.
       const clean = await fixture.run(["clean", "--pack", "ops", "-y"]);
       expect(clean.code, clean.stderr).toBe(0);
       expect(clean.stdout).toContain('Pack "ops" removed');
@@ -514,7 +517,8 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect((await readLedgerRows(fixture, "pack:scaffold")).length).toBeGreaterThan(0);
       expect(await exists(repoPath(fixture, "AGENTS.md")), "adapter files survive").toBe(true);
 
-      // Removal + sync reclaims the projection; corpus content stays.
+      // After the scoped clean, sync renders no copy of the removed pack and
+      // leaves the corpus content in place.
       const syncAfterClean = await fixture.run(["sync"]);
       expect(syncAfterClean.code, syncAfterClean.stderr).toBe(0);
       expect(await exists(projectedSkill), "pack projection reclaimed after clean+sync").toBe(
