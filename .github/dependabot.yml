@@ -20,7 +20,11 @@ updates:
     # only what gates it, and the two deserve different scrutiny even when the diff looks alike.
     # Those two groups apply to version updates only (the default when `applies-to` is unset).
     # `security` is the third: `applies-to: security-updates` scopes it to the PRs an advisory
-    # opens, which would otherwise arrive one per package, and `*` gathers them into one PR.
+    # opens, and `*` gathers the manifest's advisory bumps, production and development alike, into
+    # one PR. Joining the two sides there is on purpose: every security PR gets a whole-lockfile
+    # read before it merges, the stricter of the two scrutinies, so the split adds nothing to it.
+    # Without this group, security PRs arrive one per package only while the repository's grouped
+    # security updates setting is off; with it on, GitHub groups them by its own rule.
     groups:
       production:
         dependency-type: production

@@ -4701,11 +4701,20 @@ describe("dependabot.yml — the update policy behind the pins", () => {
     for (const npm of npmEntries) {
       expect(npm.groups?.["production"]?.["dependency-type"], npm.directory).toBe("production");
       expect(npm.groups?.["development"]?.["dependency-type"], npm.directory).toBe("development");
+      // The two split groups carry no `applies-to`, so they stay version-update groups (the
+      // default). Setting `applies-to: security-updates` on either would end that side's weekly
+      // version-update grouping while every assertion above still held. TEST CHANGE, justified
+      // (2026-10-08, row 2026-10-08_maintainer-tooling/review/42): two assertions added, none
+      // re-expected; red on a planted `applies-to` under `production`.
+      expect(npm.groups?.["production"]?.["applies-to"], npm.directory).toBeUndefined();
+      expect(npm.groups?.["development"]?.["applies-to"], npm.directory).toBeUndefined();
       // Extended in place (the version-update split above is unchanged): security updates are a
-      // third group, because without one GitHub opens one security PR per package even where the
-      // version updates are grouped. `applies-to: security-updates` scopes it to security PRs
-      // only, so it never takes a dependency from the two version-update groups, and `*` gathers
-      // every advisory bump of the manifest into one PR.
+      // third group. Without one, GitHub opens one security PR per package while the repository's
+      // grouped security updates setting is off, even where the version updates are grouped.
+      // `applies-to: security-updates` scopes it to security PRs only, so it never takes a
+      // dependency from the two version-update groups, and `*` gathers every advisory bump of the
+      // manifest, production and development alike, into one PR: on purpose, since each security
+      // PR gets a whole-lockfile read.
       const security = npm.groups?.["security"];
       expect(security?.["applies-to"], npm.directory).toBe("security-updates");
       expect(security?.patterns, npm.directory).toEqual(["*"]);
