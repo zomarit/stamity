@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-// The records-only CI lane's detector. Importing it performs no I/O.
+// The CI lane classifier: records, specs, learnings and website (`LANE_PATHS`). The file keeps the
+// name it had when records were its only lane, so no reference moves. Importing it performs no I/O.
 //
 //   node scripts/ci/records-only.mjs --base <sha>
 //
-// Prints exactly one line, `records_only=true` or `records_only=false`, and appends the same line
-// to `$GITHUB_OUTPUT` when the runner provides one. The reason goes to stderr, so the job log says
-// WHY a push got the short lane or the full one.
+// Prints six `key=value` lines — `full`, `lanes` (a JSON array), `suites` (space-joined),
+// `site_build`, `cli_check` and `records_only` — and appends the same lines to `$GITHUB_OUTPUT`
+// when the runner provides one. The reason goes to stderr, so the job log says WHY a change got
+// the lanes job or the full matrix.
 //
-// It fails closed. `true` needs all of: a push or pull_request event (read from
+// It fails closed. `full=false` needs all of: a push or pull_request event (read from
 // `GITHUB_EVENT_NAME`), a base that is a non-zero hex commit id git can resolve, a non-empty diff,
-// and EVERY path in `git diff --name-only --no-renames <base> HEAD` inside `RECORDS_PATHS`. Any
-// other answer — a schedule, a dispatch, a new branch's all-zero base, a base git cannot find, a
-// learnings change, one code path — is `false`, which is full CI. Exit 2 is reserved for an
-// argument this script does not know, so a typo in the workflow is red rather than quietly full.
+// and EVERY path in `git diff --name-only --no-renames <base> HEAD` inside some lane. Any other
+// answer — a schedule, a dispatch, a new branch's all-zero base, a base git cannot find, one path
+// in no lane — is `full=true`, which is full CI. `records_only=true` still means every path is a
+// record; it is derived from the lanes and kept for one release for any reader of the old output.
+// Exit 2 is reserved for an argument this script does not know, so a typo in the workflow is red
+// rather than quietly full.
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -23,7 +27,7 @@ import { pathToFileURL } from 'node:url'
  * that no build, no emitted file and no published byte reads them; the suites that DO read the
  * committed copies are `RECORDS_SUITES`, which the records lane runs instead of the full matrix.
  * `.stamity/learnings/` is deliberately absent: it feeds the session hook and the troubleshooting
- * count, so a learnings change runs full CI.
+ * count, so it is its own lane, which also builds the CLI and runs its `check`.
  */
 export const RECORDS_PATHS = Object.freeze([
   '.stamity/runs/**',
@@ -48,7 +52,53 @@ export const RECORDS_SUITES = Object.freeze([
   'test/ci/leakGate.test.ts',
 ])
 
-/** The events whose diff can be records-only. Everything else is full CI. */
+/**
+ * Each lane's paths. A path takes the first lane whose pattern holds it, in this key order, so a
+ * `docs/` path under `plans/` is a record, under `specs/` a spec, and anywhere else website. A
+ * `/**` pattern holds the paths strictly beneath its folder; any other pattern is one exact path.
+ * `README.md` is in no lane: it ships in the npm tarball.
+ */
+export const LANE_PATHS = Object.freeze({
+  records: RECORDS_PATHS,
+  specs: Object.freeze(['docs/specs/**']),
+  learnings: Object.freeze(['.stamity/learnings/**']),
+  website: Object.freeze(['website/**', 'docs/**']),
+})
+
+/**
+ * The suites each lane runs: those that read that lane's REAL repository-root copies, confirmed on
+ * 2026-10-08 by reading every test that opens such a path. Specs: every records suite (a plan
+ * naming a new spec lands in both), the spec-status walk, the plan-coverage check and the site
+ * roster's exclusion of `docs/specs/`. Learnings: the learnings suite and the whole-tree leak gate;
+ * the session hook's read of them is what the lane's `check` step proves. Website: the site, roster
+ * and table-header suites over `website/`, every suite reading a `docs/` page or regenerating one,
+ * and the leak gate.
+ */
+export const LANE_SUITES = Object.freeze({
+  records: RECORDS_SUITES,
+  specs: Object.freeze([...RECORDS_SUITES, 'test/records/specStatus.test.ts', 'test/ci/docsRoster.test.ts']),
+  learnings: Object.freeze(['test/learnings/repoLearnings.test.ts', 'test/ci/leakGate.test.ts']),
+  website: Object.freeze([
+    'test/ci/docsSite.test.ts',
+    'test/ci/docsRoster.test.ts',
+    'test/ci/tableHeaderScope.test.ts',
+    'test/docsPages.test.ts',
+    'test/ci/workflow.test.ts',
+    'test/ci/leakGate.test.ts',
+    'test/cli/docs/cliReference.test.ts',
+    'test/cli/docs/configReference.test.ts',
+    'test/cli/docs/measurements.test.ts',
+    'test/cli/docs/referencePages.test.ts',
+    'test/cli/docs/llmsIndex.test.ts',
+    'test/cli/commands/check.test.ts',
+    'test/content/invariantsVersion.test.ts',
+    'test/emit/capabilityMatrix.test.ts',
+    'test/corpus/invariants.test.ts',
+    'test/ci/packSigningRehearsal.test.ts',
+  ]),
+})
+
+/** The events whose diff can take a lane. Everything else is full CI. */
 const DIFF_EVENTS = new Set(['push', 'pull_request'])
 
 /**
@@ -57,30 +107,76 @@ const DIFF_EVENTS = new Set(['push', 'pull_request'])
  */
 const KEEP_FILE = '.gitkeep'
 
-/** True when `path` (repository-relative, `/`-separated, as git prints it) is a record. */
-export function isRecordsPath(path) {
-  const segments = path.split('/')
-  if (segments.includes('..') || segments.includes('.') || segments.at(-1) === KEEP_FILE) return false
-  return RECORDS_PATHS.some(pattern => {
-    if (!pattern.endsWith('/**')) return path === pattern
-    const folder = pattern.slice(0, -2)
-    return path.startsWith(folder) && path.length > folder.length
-  })
+/** True when a `/**` pattern holds `path` strictly beneath its folder, or an exact one names it. */
+function holds(pattern, path) {
+  if (!pattern.endsWith('/**')) return path === pattern
+  const folder = pattern.slice(0, -2)
+  return path.startsWith(folder) && path.length > folder.length
 }
 
-/** The classification, with no I/O: `{ recordsOnly, reason }`. */
+/** A `..` or `.` segment, or the engine's keep file: outside every lane, whatever the prefix. */
+function outsideEveryLane(path) {
+  const segments = path.split('/')
+  return segments.includes('..') || segments.includes('.') || segments.at(-1) === KEEP_FILE
+}
+
+/** True when `path` (repository-relative, `/`-separated, as git prints it) is a record. */
+export function isRecordsPath(path) {
+  return !outsideEveryLane(path) && RECORDS_PATHS.some(pattern => holds(pattern, path))
+}
+
+/** The lane `path` falls in, or null when it falls in none (full CI). */
+export function laneOf(path) {
+  if (outsideEveryLane(path)) return null
+  for (const [lane, patterns] of Object.entries(LANE_PATHS)) {
+    if (patterns.some(pattern => holds(pattern, path))) return lane
+  }
+  return null
+}
+
+/** The answer that runs the full matrix and no lane. */
+function fullCi(reason) {
+  return { full: true, lanes: [], suites: [], siteBuild: false, cliCheck: false, recordsOnly: false, reason }
+}
+
+/**
+ * The classification, with no I/O: `{ full, lanes, suites, siteBuild, cliCheck, recordsOnly,
+ * reason }`. `lanes` is sorted; `suites` is the union in `LANE_SUITES` order, each suite once.
+ */
 export function decide({ event, base, paths }) {
-  if (!DIFF_EVENTS.has(event ?? '')) {
-    return { recordsOnly: false, reason: `event "${event ?? ''}" always runs full CI` }
-  }
+  if (!DIFF_EVENTS.has(event ?? '')) return fullCi(`event "${event ?? ''}" always runs full CI`)
   const verdict = baseProblem(base)
-  if (verdict !== null) return { recordsOnly: false, reason: verdict }
-  if (paths.length === 0) return { recordsOnly: false, reason: 'the diff lists no path' }
-  const other = paths.find(path => !isRecordsPath(path))
-  if (other !== undefined) {
-    return { recordsOnly: false, reason: `${other} is not a record` }
+  if (verdict !== null) return fullCi(verdict)
+  if (paths.length === 0) return fullCi('the diff lists no path')
+  const hit = new Set()
+  for (const path of paths) {
+    const lane = laneOf(path)
+    if (lane === null) return fullCi(`${path} is in no lane`)
+    hit.add(lane)
   }
-  return { recordsOnly: true, reason: `all ${paths.length} changed path(s) are records` }
+  const lanes = [...hit].toSorted()
+  const suites = [...new Set(Object.keys(LANE_SUITES).filter(lane => hit.has(lane)).flatMap(lane => LANE_SUITES[lane]))]
+  return {
+    full: false,
+    lanes,
+    suites,
+    siteBuild: hit.has('website'),
+    cliCheck: hit.has('learnings'),
+    recordsOnly: lanes.length === 1 && lanes[0] === 'records',
+    reason: `all ${paths.length} changed path(s) fall in the lanes ${lanes.join(', ')}`,
+  }
+}
+
+/** The six output lines, in the order the workflow maps them. */
+function outputLines(decision) {
+  return [
+    `full=${decision.full}`,
+    `lanes=${JSON.stringify(decision.lanes)}`,
+    `suites=${decision.suites.join(' ')}`,
+    `site_build=${decision.siteBuild}`,
+    `cli_check=${decision.cliCheck}`,
+    `records_only=${decision.recordsOnly}`,
+  ].join('\n') + '\n'
 }
 
 function baseProblem(base) {
@@ -128,17 +224,17 @@ function main(argv) {
   }
   const event = process.env.GITHUB_EVENT_NAME
   let decision = decide({ event, base: args.base, paths: [] })
-  // Only ask git when the event and the base could still allow a records-only answer.
+  // Only ask git when the event and the base could still allow a lane.
   if (DIFF_EVENTS.has(event ?? '') && baseProblem(args.base) === null) {
     const paths = changedPaths(args.base, process.cwd())
     decision = Array.isArray(paths)
       ? decide({ event, base: args.base, paths })
-      : { recordsOnly: false, reason: `git could not diff against the base: ${paths.failure}` }
+      : fullCi(`git could not diff against the base: ${paths.failure}`)
   }
-  const line = `records_only=${decision.recordsOnly}`
-  process.stdout.write(`${line}\n`)
+  const lines = outputLines(decision)
+  process.stdout.write(lines)
   process.stderr.write(`records-only: ${decision.reason}\n`)
-  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${line}\n`)
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, lines)
   return 0
 }
 
