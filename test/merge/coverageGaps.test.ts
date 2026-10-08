@@ -498,6 +498,18 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
  * to close. Refusing here is the point — the alternative is unlinking whatever
  * object the path names by the time the syscall runs.
  */
+/**
+ * The running engine's rendering at {@link RULE}: the bytes these cases seed.
+ *
+ * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+ * an engine-named file in a content folder is now deleted only when its bytes
+ * are a rendering the running engine produces at the path, not on a recorded
+ * hash alone. The race cases below target the gates after that proof (the pin
+ * re-check, the unlink), so each is handed the rendering a real sweep would
+ * read; their assertions are unchanged.
+ */
+const RULE_RENDERED: ReadonlyMap<string, ReadonlySet<string>> = new Map([[RULE, new Set([CONTENT_HASH])]]);
+
 describe("reclaim: the target changing between the gates and the unlink", () => {
   beforeEach(async () => {
     await tempDir().seedFiles({ [RULE]: CONTENT });
@@ -514,6 +526,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     expect(report.deletedCount).toBe(0);
@@ -531,6 +544,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     expect(report.deletedCount).toBe(0);
@@ -551,6 +565,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     expect(report.deletedCount).toBe(0);
@@ -564,6 +579,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     // ENOENT is not a refusal: the re-check hands the path to the unlink, which
@@ -577,6 +593,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     expect(report.deletedCount).toBe(0);
@@ -594,6 +611,7 @@ describe("reclaim: the mutation step losing to another process", () => {
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     expect(report.entries[0]?.action).toBe("skipped-missing");
@@ -607,6 +625,7 @@ describe("reclaim: the mutation step losing to another process", () => {
     const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
+      renderings: RULE_RENDERED,
     });
 
     expect(report.entries[0]?.action).toBe("skipped-unsafe-path");

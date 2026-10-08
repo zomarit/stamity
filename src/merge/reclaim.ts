@@ -6,8 +6,10 @@ import {
   bytesShowEngineOutput,
   carriesEngineMintedPrefix,
   hasEngineMintedName,
+  needsRenderingProof,
   ownedFolderOf,
   ownedPathKind,
+  provenByRendering,
   type OwnedPathKind,
 } from "../manifest/ownedPaths.ts";
 import type { CoOwnedReducer } from "../types/content.ts";
@@ -65,8 +67,11 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  *    (b) holds — plus, at an `AGENTS.md` in any folder, `AGENTS.override.md`,
  *    `CLAUDE.md` and the Copilot setup workflow, bytes that show the engine
  *    wrote them (`../manifest/ownedPaths.ts::bytesShowEngineOutput`,
- *    REQ-PLUGIN-046) — the engine's name AND a matching recorded hash in a
- *    content folder, or a managed block that spans the file. A row with no recorded
+ *    REQ-PLUGIN-046) — the engine's name AND a matching recorded hash AND bytes
+ *    that hash to a rendering the running engine produces at the path in a
+ *    content folder (`ReclaimOptions.renderings`,
+ *    `../manifest/ownedPaths.ts::needsRenderingProof`), or a managed block that
+ *    spans the file. A row with no recorded
  *    hash proves nothing: no release ever wrote one, so it is a hand edit.
  * 3. **Containment (physical).** The parent directory's realpath still resolves
  *    under the root's realpath — and under the realpath of the bound folder the
@@ -274,6 +279,16 @@ export interface ReclaimOptions {
    * None for a live sweep, which reads what was written.
    */
   hookDocumentsAfterWrite?: ReadonlyMap<string, string>;
+  /**
+   * Repo-relative POSIX path → the SHA-256 of each rendering the running engine
+   * produces there (`../cli/engine/emissionWrite.ts::engineRenderingsFor`). At a
+   * path `../manifest/ownedPaths.ts::needsRenderingProof` names, a whole-file
+   * delete needs the bytes to hash into this set (or a managed block spanning
+   * the file): a recorded hash a hand edit of the manifest can forge no longer
+   * proves it there. A path with no entry has no rendering, so the file is kept;
+   * none at all when absent.
+   */
+  renderings?: ReadonlyMap<string, ReadonlySet<string>>;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -431,6 +446,18 @@ function matchesRecordedHash(recorded: ReadonlySet<string>, bytes: Buffer, conte
   return folded !== content && recorded.has(sha256(folded));
 }
 
+/**
+ * True when the bytes are a rendering the running engine produces at the path
+ * — the raw compare, then the CRLF fold, for the reason
+ * {@link matchesRecordedHash} gives: every rendering is hashed over the LF text
+ * the engine composes, and a `core.autocrlf` checkout of it is still its bytes.
+ */
+function matchesRendering(renderings: ReadonlySet<string> | undefined, bytes: Buffer, content: string): boolean {
+  if (provenByRendering(sha256(bytes), renderings)) return true;
+  const folded = content.replaceAll("\r\n", "\n");
+  return folded !== content && provenByRendering(sha256(folded), renderings);
+}
+
 /** True when `candidate` is `root` or sits underneath it. */
 function isWithin(candidate: string, root: string): boolean {
   return candidate === root || candidate.startsWith(root + sep);
@@ -549,6 +576,8 @@ interface SweepContext {
   stateDir: string;
   trusted: ReadonlySet<string>;
   coOwned: ReadonlyMap<string, CoOwnedReducer>;
+  /** {@link ReclaimOptions.renderings}; empty when none were handed in. */
+  renderings: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 /**
@@ -880,12 +909,27 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
           "The row records no content hash, so the bytes cannot be proved the engine's; every stamity release records one — remove the row, or delete the file by hand if it is yours to remove.",
         );
       }
+      // In a content folder the name and the hash are not enough either (row
+      // 560): an owner keeps files under engine-style names there, and a
+      // hand-added row records the hash of the owner's bytes as easily as the
+      // engine records its own. The bytes have to be a rendering the running
+      // engine produces at this path; a copy no rendering proves — an owner's
+      // file, or an earlier release's rendering this engine no longer produces —
+      // is kept and named.
+      const renderingProof = needsRenderingProof(path);
+      if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
+        return skip(
+          "skipped-user-content",
+          "The bytes still hash to what the ledger records, but a file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and these are not (an owner's file, or a copy an earlier release rendered) — the file is kept; delete it by hand if it is yours to remove.",
+        );
+      }
       return {
         kind: "delete",
         target,
         pin,
-        detail:
-          "Whole-file engine output: the name is engine-minted, the bytes still hash to what the ledger recorded writing here, and there is no managed block whose surroundings could be user-authored.",
+        detail: renderingProof
+          ? "Whole-file engine output: the name is engine-minted, the bytes still hash to what the ledger recorded writing here and are a rendering this engine produces at that path, and there is no managed block whose surroundings could be user-authored."
+          : "Whole-file engine output: the name is engine-minted, the bytes still hash to what the ledger recorded writing here, and there is no managed block whose surroundings could be user-authored.",
         proof: "hash",
       };
     }
@@ -1125,6 +1169,7 @@ export async function sweepReclaimCandidates(
     stateDir: resolve(root, STATE_DIR),
     trusted: opts.trustedExactPaths ?? new Set<string>(),
     coOwned: opts.coOwnedPaths ?? new Map<string, CoOwnedReducer>(),
+    renderings: opts.renderings ?? new Map<string, ReadonlySet<string>>(),
   };
   const stamp = (opts.now ?? new Date()).toISOString();
 

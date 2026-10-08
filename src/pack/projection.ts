@@ -198,7 +198,8 @@ export interface InstalledPackDiscovery {
 
 /**
  * {@link discoverInstalledPacks} with the denied set kept rather than dropped,
- * for the surfaces that report why a pack stopped contributing.
+ * for the surfaces that report why a pack stopped contributing. Inside
+ * {@link ignoringPolicyDenialForProof} it reads no policy and denies nothing.
  */
 export async function discoverInstalledPacksWithPolicy(
   rootDir: string,
@@ -212,7 +213,8 @@ export async function discoverInstalledPacksWithPolicy(
   }
   // Read once for the whole discovery: a malformed policy fail-closes here
   // exactly as it does at install, and a repo with none pays one ENOENT.
-  const policy = rowsByPack.size === 0 ? null : await loadOrgPolicy(rootDir);
+  const policy =
+    rowsByPack.size === 0 || policyDenialSetAside.getStore() === true ? null : await loadOrgPolicy(rootDir);
 
   const packs: InstalledPack[] = [];
   const denied: { id: string; matchedRule?: string }[] = [];
@@ -460,6 +462,26 @@ export interface ResolvedPackContent {
  * `corpusRoot` pins the corpus half of the merged walk; production callers
  * leave it absent and get the bundled corpus.
  */
+/** Set inside {@link ignoringPolicyDenialForProof}; read by {@link discoverInstalledPacksWithPolicy}. */
+const policyDenialSetAside = new AsyncLocalStorage<true>();
+
+/**
+ * Run `plan` with every installed pack admitted whatever the org policy says —
+ * for the reclaim sweep's rendering proof alone
+ * (`../cli/engine/emissionWrite.ts::engineRenderingsFor`, REQ-PLUGIN-046), never
+ * for a plan whose outputs are written. A pack the policy denies after it was
+ * installed stops projecting, and the copies `sync` wrote while it was allowed
+ * are still the engine's renderings: the proof has to render them to remove
+ * them, or a pack the organisation denied would stay active in every client.
+ * The opt-out only widens what can prove a delete, the direction the policy
+ * already asks for, and the plan built under it is hashed and discarded. Scoped
+ * by async context, as {@link withoutPolicyWarningPrint} is, so a plan running
+ * concurrently in the same process still honours the policy.
+ */
+export function ignoringPolicyDenialForProof<T>(plan: () => Promise<T>): Promise<T> {
+  return policyDenialSetAside.run(true, plan);
+}
+
 /** Set inside {@link withoutPolicyWarningPrint}; read by {@link resolveInstalledPackContent}. */
 const policyWarningPrintMuted = new AsyncLocalStorage<true>();
 

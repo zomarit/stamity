@@ -25,7 +25,10 @@ import {
   renderSyncReport,
   syncJsonPayload,
 } from "../../../src/cli/commands/sync/report.ts";
-import type { CoOwnedDocumentLane } from "../../../src/cli/engine/emissionWrite.ts";
+import { getEmissionPlanner } from "../../../src/cli/engine/emission.ts";
+import { fullCorpusSelection, type CoOwnedDocumentLane } from "../../../src/cli/engine/emissionWrite.ts";
+import { hasNpmChannel, packageName, registryOption } from "../../../src/cli/kit/packageName.ts";
+import { buildContentIndex } from "../../../src/content/catalog.ts";
 import { makePalette } from "../../../src/cli/kit/terminal.ts";
 import type { CoOwnedOwnership } from "../../../src/manifest/coOwnedJson.ts";
 import { ledgerHashIndex } from "../../../src/merge/safeWrite.ts";
@@ -148,6 +151,51 @@ async function seedRepo(
   };
   await writeManifest(root, manifest, { now: T0 });
   return root;
+}
+
+/**
+ * The bytes the running engine renders at `path` for `tool`, in repository
+ * mode, over the fixture corpus with `files` seeded into it — the context
+ * `sync` plans with.
+ *
+ * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+ * an engine-named file in a content folder is now deleted only when its bytes
+ * are a rendering the running engine produces at the path for the clients the
+ * setup wrote for, not on a recorded hash alone. The reclaim cases whose
+ * subject is such a delete seed the artifact in the corpus and write these
+ * bytes, the way production reaches one; their assertions are unchanged.
+ */
+async function renderedAt(
+  handle: TempDirHandle,
+  files: Readonly<Record<string, string>>,
+  tool: Tool,
+  path: string,
+): Promise<string> {
+  await seedCorpus(handle);
+  await handle.seedFiles(files);
+  const manifest = createManifest({
+    tools: [tool],
+    selection: fullCorpusSelection(await buildContentIndex()),
+    generatorVersion: ENGINE_VERSION,
+    now: T0,
+  });
+  const outputs = await getEmissionPlanner().plan({
+    rootDir: handle.path("repo"),
+    manifest,
+    engineVersion: ENGINE_VERSION,
+    packageName: packageName(),
+    npmChannel: hasNpmChannel(),
+    ...registryOption({}),
+    facts: { monorepoPackages: [] },
+  });
+  const rendered = outputs.find((candidate) => candidate.path === path);
+  if (rendered === undefined) throw new Error(`the fixture corpus renders nothing at ${path} for ${tool}`);
+  return rendered.content;
+}
+
+/** A glob-scoped fixture rule, which every client writes as a rule file of its own. */
+function ruleFixture(id: string): string {
+  return `---\nid: ${id}\ntype: rule\ndescription: fixture rule\ntags: [maintenance]\nload: on-demand\nobsolete_when: fixture trigger\nscope: conditional\nglobs: ["src/**"]\n---\n\n# Rule ${id}\n\nRule body.\n`;
 }
 
 function output(path: string, content: string, artifactId: string): AdapterOutput {
@@ -683,14 +731,21 @@ describe("reclaim", () => {
     // which the manifest now refuses; they moved into the bound, the swept row
     // records the hash its delete now needs, and the pack row is `infra` in its
     // own folder as every release records one.
+    //
+    // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+    // the orphaned rule's made-up bytes are now kept as a retired artifact, so
+    // the orphan is the engine's own rule a plugin now carries for Claude: its
+    // bytes are the running engine's rendering there (`renderedAt`), and the
+    // plugin record leaves the path unplanned, still `deselected`.
     const oldPath = ".claude/rules/stamity-old.md";
     const packPath = ".stamity/packs/demo/thing.md";
+    const oldBytes = await renderedAt(handle, { "corpus/rules/stamity-old.md": ruleFixture("old") }, "claude", oldPath);
     const oldRow: LedgerEntry = {
       path: oldPath,
       adapter: "claude",
       artifactId: "old",
       artifactType: "rule",
-      contentHash: sha256("engine output\n"),
+      contentHash: sha256(oldBytes),
     };
     const packRow: LedgerEntry = {
       path: packPath,
@@ -698,9 +753,12 @@ describe("reclaim", () => {
       artifactId: "thing",
       artifactType: "infra",
     };
-    const root = await seedRepo(handle, { ledger: [oldRow, packRow] });
+    const root = await seedRepo(handle, {
+      ledger: [oldRow, packRow],
+      plugin: { mode: "plugin-backed", clients: { claude: { version: ENGINE_VERSION, classes: ["rule"] } } },
+    });
     await handle.seedFiles({
-      [`repo/${oldPath}`]: "engine output\n",
+      [`repo/${oldPath}`]: oldBytes,
       [`repo/${packPath}`]: "pack content\n",
     });
 
@@ -744,15 +802,23 @@ describe("reclaim", () => {
     // TEST CHANGE, justified: REQ-PLUGIN-045 — the row records the hash of
     // the block-less file's bytes, as every release does; a hashless row no
     // longer proves the delete this case is about.
+    //
+    // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+    // the removed tool's rule is the engine's own rendering for Cursor
+    // (`renderedAt`), where made-up bytes at a name Cursor no longer writes
+    // stood; those are now kept as a retired artifact. The path is the one the
+    // running engine writes the rule at, and the assertions read it off the row.
+    const style = ".cursor/rules/stamity-style.mdc";
+    const styleBytes = await renderedAt(handle, { "corpus/rules/stamity-style.md": ruleFixture("style") }, "cursor", style);
     const cursorRow: LedgerEntry = {
-      path: ".cursor/rules/30-stamity-style.mdc",
+      path: style,
       adapter: "cursor",
       artifactId: "style",
       artifactType: "rule",
-      contentHash: sha256("rule body\n"),
+      contentHash: sha256(styleBytes),
     };
     const root = await seedRepo(handle, { tools: ["claude"], ledger: [cursorRow] });
-    await handle.seedFiles({ "repo/.cursor/rules/30-stamity-style.mdc": "rule body\n" });
+    await handle.seedFiles({ [`repo/${style}`]: styleBytes });
 
     const plan = await planSync(root, ENGINE_VERSION);
     expect(plan.reclaim).toEqual([{ entry: cursorRow, reason: "adapter-removed" }]);
@@ -764,7 +830,7 @@ describe("reclaim", () => {
       now: T1,
     });
     expect(report.reclaimed?.deletedCount).toBe(1);
-    expect(existsSync(join(root, ".cursor/rules/30-stamity-style.mdc"))).toBe(false);
+    expect(existsSync(join(root, cursorRow.path))).toBe(false);
     // Was `toEqual([])` — only reachable while emission was empty. Asserting
     // that NO cursor-owned row survives keeps the original strength (the tool
     // is gone from the ledger entirely), now that claude's rows are real.
@@ -805,8 +871,18 @@ describe("reclaim", () => {
       dryRun: false,
       now: T1,
     });
-    expect(report.reclaimed?.deletedCount).toBe(1);
-    expect(existsSync(join(root, oldTouchpoint.path))).toBe(false);
+    // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core;
+    // the maintainer's answer that a retired layout is kept, REQ-FLOW-026 as
+    // amended): the running engine renders nothing under `.cursor/skills/`, so
+    // no rendering proves the 1.10.0 copy and the sweep keeps it and names it,
+    // where it used to delete it on the recorded hash. Kept for any reason but a
+    // refused co-owned document or a held hook script, a file's row is not
+    // carried (`rowsCarriedThroughSweep`): the copy is the owner's from here.
+    expect(report.reclaimed?.deletedCount).toBe(0);
+    const kept = report.reclaimed?.entries.find((entry) => entry.path === oldTouchpoint.path);
+    expect(kept?.action).toBe("skipped-user-content");
+    expect(kept?.detail).toContain("delete it by hand");
+    expect(await readFile(join(root, oldTouchpoint.path), "utf8")).toBe("---\nname: st-work\n---\n# /st-work\n");
     expect(await readFile(join(root, ".agents/skills/st-work/SKILL.md"), "utf8")).toContain("Work body.");
     expect(await readFile(join(root, ".cursor/notes.md"), "utf8")).toBe("the operator's own file\n");
     const ledger = (await readManifest(root))?.ledger ?? [];
@@ -1337,16 +1413,29 @@ describe("a hashless ledger row in the write lane", () => {
 
   it("previews the reclaim a dry run would take with the same actions and proofs check names", async () => {
     const handle = tempDir();
+    // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+    // the deselected agent is the engine's own rendering for Claude, which a
+    // plugin now carries (`renderedAt`), where made-up bytes no corpus renders
+    // stood; those are now kept as a retired artifact.
     const gone = ".claude/agents/stamity-gone.md";
+    const goneBytes = await renderedAt(
+      handle,
+      { "corpus/agents/stamity-gone.md": "---\nid: gone\ntype: agent\ndescription: fixture agent\n---\n\n# Gone\n\nAgent body.\n" },
+      "claude",
+      gone,
+    );
     const row: LedgerEntry = {
       path: gone,
       adapter: "claude",
       artifactId: "gone",
       artifactType: "agent",
-      contentHash: sha256("engine agent\n"),
+      contentHash: sha256(goneBytes),
     };
-    const root = await seedRepo(handle, { ledger: [row] });
-    await handle.seedFiles({ [`repo/${gone}`]: "engine agent\n" });
+    const root = await seedRepo(handle, {
+      ledger: [row],
+      plugin: { mode: "plugin-backed", clients: { claude: { version: ENGINE_VERSION, classes: ["agent"] } } },
+    });
+    await handle.seedFiles({ [`repo/${gone}`]: goneBytes });
 
     const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
     const dry = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: true, now: T1 });

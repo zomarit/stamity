@@ -36,6 +36,14 @@ import { useTempDir } from "../support/tempDir.ts";
  * unprefixed file in a content folder, and engine-looking paths outside the
  * bound — so both invariants are quantified over the new rule's whole space.
  *
+ * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+ * in a content folder an engine-minted name and a matching recorded hash no
+ * longer prove a whole-file delete on their own: the bytes have to be a
+ * rendering the running engine produces at the path. Every sweep is handed the
+ * renderings the model says the engine produces ({@link renderingsFor}), the
+ * predicate restates the rule with them, and the adversarial kind
+ * `engine-named-forged` — the forged row row 560 names — joins the space.
+ *
  * Real-filesystem lane, for the same reason `reclaim.test.ts` uses it: the
  * subject's contract is `lstat` file-type discrimination, `realpath`
  * containment and an atomic rewrite, none of which a virtual volume expresses
@@ -52,8 +60,12 @@ import { useTempDir } from "../support/tempDir.ts";
 // Fixed seed: the suite must be deterministic run-to-run (CI contract). A
 // counterexample replays with `fc.assert(..., { seed: 20260813, path: "<printed path>" })`.
 // numRuns is lower than the pure-property house value of 200 because every run
-// materialises a tree on disk; 30 runs x <=5 files keeps the file near a second.
-const FC_PARAMS = { seed: 20260813, numRuns: 30 } as const;
+// materialises a tree on disk; 40 runs x <=5 files keeps the file near a second.
+// TEST CHANGE, justified (2026-10-08, unit d1a-rendering-proof-core): 30 -> 40.
+// The twelfth fixture kind (`engine-named-forged`) re-draws the seeded sample,
+// and at 30 runs it no longer reached `.codex/agents/`, which the generator
+// coverage guard requires; more runs widen the space, the guard is unchanged.
+const FC_PARAMS = { seed: 20260813, numRuns: 40 } as const;
 
 /** Fixed so every `detail` string is a function of the fixture alone. */
 const FIXED_NOW = new Date("2026-08-15T12:00:00.000Z");
@@ -71,17 +83,22 @@ let runCounter = 0;
  *
  * Owned (the sweep must delete):
  * - `engine-named-hashed`    — engine-minted basename in a content folder, no
- *                              block, recorded hash MATCHES.
+ *                              block, recorded hash MATCHES, and the bytes are
+ *                              the engine's rendering at the path.
  * - `engine-named-block`     — engine-minted basename wrapped whole in a block.
  * - `engine-ancestor-block`  — unprefixed file inside an engine-minted SKILL
  *                              folder (`skills/<prefix>…/`), wrapped whole.
- * - `engine-ancestor-hashed` — the same layout, no block, recorded hash MATCHES.
+ * - `engine-ancestor-hashed` — the same layout, no block, recorded hash MATCHES,
+ *                              and the bytes are the engine's rendering.
  * - `state-hashed`           — unprefixed name in a state folder, hash MATCHES.
  *
  * Not provable (the sweep must leave the bytes):
  * - `engine-named-hashless`  — engine-minted basename, no block, NO hash: a
  *                              name alone proves nothing.
  * - `engine-named-edited`    — engine-minted basename, hash MISMATCHES.
+ * - `engine-named-forged`    — engine-minted basename in a content folder, hash
+ *                              MATCHES, but the engine renders other bytes
+ *                              there: a hand-added row hashing an owner's file.
  * - `user-plain`             — unprefixed name in a content folder, no hash.
  * - `user-hashed-content`    — unprefixed name in a content folder whose hash
  *                              MATCHES: a hash alone proves nothing there.
@@ -103,6 +120,7 @@ const FIXTURE_KINDS = [
   "user-hashed-content",
   "user-edited-hash",
   "outside-bound",
+  "engine-named-forged",
 ] as const;
 
 type FixtureKind = (typeof FIXTURE_KINDS)[number];
@@ -254,6 +272,14 @@ function materialize(spec: FixtureSpec, index: number): FixtureFile {
         contentHash: sha256(`${plain}edited by hand\n`),
         outcome: "skipped-user-content",
       };
+    case "engine-named-forged":
+      return {
+        ...content,
+        path: `${inContent}/${CONTENT_PREFIX}${stem}.md`,
+        content: plain,
+        contentHash: sha256(plain),
+        outcome: "skipped-user-content",
+      };
     case "user-plain":
       return { ...content, path: `${inContent}/${stem}.md`, content: plain, outcome: "skipped-unsafe-path" };
     case "user-hashed-content":
@@ -344,6 +370,24 @@ function candidatesFor(files: readonly FixtureFile[]): ReclaimCandidate[] {
   return [...primary, ...duplicates];
 }
 
+/** The kinds whose bytes are the running engine's rendering at their path. */
+const RENDERED_KINDS: ReadonlySet<FixtureKind> = new Set(["engine-named-hashed", "engine-ancestor-hashed"]);
+
+/**
+ * The running engine's renderings for a tree (`ReclaimOptions.renderings`): a
+ * rendered kind's own bytes, and for the forged kind the engine's OTHER bytes at
+ * that path, so the forgery is refused because the rendering differs rather
+ * than because none was handed in.
+ */
+function renderingsFor(files: readonly FixtureFile[]): Map<string, Set<string>> {
+  const renderings = new Map<string, Set<string>>();
+  for (const file of files) {
+    if (RENDERED_KINDS.has(file.kind)) renderings.set(file.path, new Set([sha256(file.content)]));
+    if (file.kind === "engine-named-forged") renderings.set(file.path, new Set([sha256(`${file.content}the engine's own\n`)]));
+  }
+  return renderings;
+}
+
 function entryFor(report: ReclaimReport, path: string): ReclaimActionEntry {
   const entry = report.entries.find((candidate) => candidate.path === path);
   expect(entry, `no report entry for ${path}`).toBeDefined();
@@ -373,7 +417,9 @@ async function exists(path: string): Promise<boolean> {
  * a recorded hash, when there is one, still equals the bytes; and then either
  * the name is engine-minted — its basename, or a skill folder directly under
  * `skills/` — beside a matching hash or a block spanning the file, or the path
- * is in a state folder beside a matching hash. The property below quantifies
+ * is in a state folder beside a matching hash. A matching hash beside an
+ * engine-minted name in a content folder also needs the bytes to be in the
+ * tree's `renderings` at that path (row 560). The property below quantifies
  * over its complement, so no declaration of ours can excuse a file from the
  * never-delete guarantee.
  *
@@ -381,7 +427,7 @@ async function exists(path: string): Promise<boolean> {
  * rule (an engine-minted segment anywhere, or any `.stamity/` path with a
  * matching hash); it now restates the bounded one.
  */
-function isProvablyEngineOwned(file: FixtureFile): boolean {
+function isProvablyEngineOwned(file: FixtureFile, renderings: ReadonlyMap<string, ReadonlySet<string>>): boolean {
   const segments = file.path.split("/");
   const inContentFolder =
     file.artifactType !== "infra" && CONTENT_ROOTS.some((root) => file.path.startsWith(root));
@@ -394,7 +440,8 @@ function isProvablyEngineOwned(file: FixtureFile): boolean {
   const engineNamed =
     (segments.at(-1) ?? "").startsWith(CONTENT_PREFIX) ||
     segments.some((segment, index) => segments[index - 1] === "skills" && segment.startsWith(CONTENT_PREFIX));
-  return (inContentFolder && engineNamed && (hashMatches || blockSpans)) || (inStateFolder && hashMatches);
+  const rendered = renderings.get(file.path)?.has(sha256(file.content)) ?? false;
+  return (inContentFolder && engineNamed && ((hashMatches && rendered) || blockSpans)) || (inStateFolder && hashMatches);
 }
 
 // ── Properties ─────────────────────────────────────────────────────────────
@@ -430,7 +477,8 @@ describe("reclaim — generator coverage", () => {
     // with the expectation table on every generated file, so neither can drift
     // from the rule without the other noticing, and the space reaches every
     // part of the bound the generator draws from.
-    for (const file of files) expect(isProvablyEngineOwned(file), file.path).toBe(file.outcome === "deleted");
+    const renderings = renderingsFor(files);
+    for (const file of files) expect(isProvablyEngineOwned(file, renderings), file.path).toBe(file.outcome === "deleted");
     for (const root of CONTENT_ROOTS) expect(files.some((file) => file.path.startsWith(root)), root).toBe(true);
     for (const root of OWNED_PATHS.stateRoots) expect(files.some((file) => file.path.startsWith(root)), root).toBe(true);
   });
@@ -448,6 +496,7 @@ describe("reclaim — user files are never deleted", () => {
           rootDir: root,
           consent: true,
           now: FIXED_NOW,
+          renderings: renderingsFor(files),
         });
 
         for (const file of files.filter((candidate) => candidate.outcome !== "deleted")) {
@@ -472,11 +521,13 @@ describe("reclaim — user files are never deleted", () => {
           rootDir: root,
           consent: true,
           now: FIXED_NOW,
+          renderings: renderingsFor(files),
         });
 
         // Quantified over the complement of `isProvablyEngineOwned`, so this
         // property cannot be narrowed by an `outcome` label being wrong.
-        for (const file of files.filter((candidate) => !isProvablyEngineOwned(candidate))) {
+        const renderings = renderingsFor(files);
+        for (const file of files.filter((candidate) => !isProvablyEngineOwned(candidate, renderings))) {
           expect(entryFor(report, file.path).action, file.path).not.toBe("deleted");
           expect(await readFile(absolute(root, file.path), "utf8")).toBe(file.content);
         }
@@ -496,6 +547,7 @@ describe("reclaim — user files are never deleted", () => {
           rootDir: root,
           consent: false,
           now: FIXED_NOW,
+          renderings: renderingsFor(files),
         });
 
         // Nothing was written, so both mutation tallies are zero. `skippedCount`
@@ -544,6 +596,7 @@ describe("reclaim — provably owned candidates are always acted on", () => {
           rootDir: root,
           consent: true,
           now: FIXED_NOW,
+          renderings: renderingsFor(files),
         });
 
         const owned = files.filter((file) => file.outcome === "deleted");
@@ -569,6 +622,7 @@ describe("reclaim — provably owned candidates are always acted on", () => {
           rootDir: root,
           consent: true,
           now: FIXED_NOW,
+          renderings: renderingsFor(files),
         });
 
         // Rows sharing a path collapse to one action, and the surviving order is
@@ -591,7 +645,7 @@ describe("reclaim — determinism", () => {
     await fc.assert(
       fc.asyncProperty(treeArb, async (files) => {
         const candidates = candidatesFor(files);
-        const options = { consent: true, now: FIXED_NOW } as const;
+        const options = { consent: true, now: FIXED_NOW, renderings: renderingsFor(files) } as const;
 
         const rootA = await nextRoot(temp.dir);
         await writeTree(rootA, files);

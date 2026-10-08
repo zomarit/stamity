@@ -22,9 +22,15 @@ import {
 } from "../../types/manifest.ts";
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import { coOwnedReclaimReducers, coOwnedReclaimRenderings, hookScriptRetention } from "../engine/emissionWrite.ts";
+import {
+  coOwnedReclaimReducers,
+  coOwnedReclaimRenderings,
+  engineRenderingsFor,
+  hookScriptRetention,
+} from "../engine/emissionWrite.ts";
+import { getEmissionPlanner } from "../engine/emission.ts";
 import { CliFailure } from "../kit/output.ts";
-import { packageCommand, packageName } from "../kit/packageName.ts";
+import { hasNpmChannel, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { confirm, promptGate } from "../kit/prompts.ts";
 
@@ -94,6 +100,37 @@ function cloneEntry(entry: LedgerEntry): LedgerEntry {
  */
 export function planCleanCandidates(manifest: SetupManifest): ReclaimCandidate[] {
   return manifest.ledger.map((entry) => ({ entry: cloneEntry(entry), reason: "adapter-removed" }));
+}
+
+/**
+ * The running engine's renderings at the candidates' paths, for the sweep's
+ * rendering proof (REQ-PLUGIN-046): the clients this setup wrote for, planned
+ * the way `sync` plans
+ * (`./sync/engine.ts`'s `renderingPlanner`, which the layering keeps this verb
+ * from importing), with this engine's version and package identity. Read before
+ * the sweep, while the packs and overrides they are rendered from are on disk.
+ */
+function cleanRenderings(
+  rootDir: string,
+  manifest: SetupManifest,
+  candidates: readonly ReclaimCandidate[],
+  engineVersion: string,
+): Promise<Map<string, Set<string>>> {
+  return engineRenderingsFor(
+    rootDir,
+    manifest,
+    candidates.map((candidate) => candidate.entry.path),
+    (setupClients, facts) =>
+      getEmissionPlanner().plan({
+        rootDir,
+        manifest: setupClients,
+        engineVersion,
+        packageName: packageName(),
+        npmChannel: hasNpmChannel(),
+        ...registryOption({}),
+        facts,
+      }),
+  );
 }
 
 /** Distinct installed pack ids the ledger records, for the unknown-id refusal. */
@@ -537,6 +574,9 @@ async function runScopedClean(
     trustedExactPaths: trustedInfraPaths(manifest.ledger),
     coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
     ...hookScriptRetention(manifest, packSupply),
+    // Rendered while the pack is still installed, so the pack's own content
+    // still proves itself (REQ-PLUGIN-046).
+    renderings: await cleanRenderings(rootDir, manifest, candidates, ctx.app.version),
   });
   ctx.spinner.stop();
 
@@ -679,6 +719,7 @@ export const cleanCommand: CommandModule = {
       // selection goes with the state directory a few lines below.
       coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
       ...hookScriptRetention(manifest, packSupply),
+      renderings: await cleanRenderings(rootDir, manifest, candidates, ctx.app.version),
     });
     ctx.spinner.stop();
 

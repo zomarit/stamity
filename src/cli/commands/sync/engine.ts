@@ -1,7 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import { buildContentIndex, type ContentIndex } from "../../../content/catalog.ts";
+import { buildContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
   assertLedgerContainment,
@@ -29,13 +29,7 @@ import {
   safeWriteFile,
   type MergeAction,
 } from "../../../merge/safeWrite.ts";
-import {
-  outputOwners,
-  type AdapterOutput,
-  type ContentClass,
-  type ContentSelection,
-  type MergeResult,
-} from "../../../types/content.ts";
+import { outputOwners, type AdapterOutput, type MergeResult } from "../../../types/content.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import type { DetectedSummary } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
@@ -56,8 +50,11 @@ import {
   hookScriptRetention,
   coOwnedReclaimReducers,
   coOwnedReclaimRenderings,
+  engineRenderingsFor,
+  fullCorpusSelection,
   installedPackServers,
   type CoOwnedDocumentLane,
+  type EmissionPlanFor,
   ledgerRowsForOutput,
   outputWriteOptions,
   predictMcpDocumentMerge,
@@ -228,6 +225,15 @@ export interface SyncPlan {
    * reaches the report without the channel.
    */
   warnings?: readonly string[];
+  /**
+   * The running engine's version the plan was built with — what
+   * {@link previewReclaim} renders the engine's output with for the reclaim
+   * sweep's rendering proof (REQ-PLUGIN-046). Optional in the TYPE only, for
+   * the same hand-built fixtures as {@link warnings}; {@link planSync} always
+   * sets it. A plan without it previews no rendering, so a file that needs one
+   * previews as kept.
+   */
+  engineVersion?: string;
 }
 
 /** Concurrent per-output prediction reads; mirrors the catalog's read bound. */
@@ -254,17 +260,6 @@ async function readOnDiskManifestVersion(rootDir: string): Promise<string | null
   } catch {
     return null;
   }
-}
-
-/**
- * v1 selection semantics: the full corpus, derived fresh each sync. The
- * manifest's selection field is refreshed from this — it is the future
- * narrowing hook, not yet a filter.
- */
-function fullCorpusSelection(index: ContentIndex): ContentSelection {
-  const items: Record<ContentClass, string[]> = { agent: [], skill: [], rule: [], command: [] };
-  for (const item of index.items) items[item.type].push(item.id);
-  return { items };
 }
 
 /**
@@ -610,6 +605,7 @@ export async function planSync(
     plannerId: planner.id,
     outputs,
     warnings,
+    engineVersion,
   };
 }
 
@@ -668,11 +664,16 @@ function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"
  * the plan writes as the write will leave it ({@link hookDocumentsAfterWrite},
  * review/68). A script the write stops naming — a guard renamed by a release —
  * then previews as the delete `sync -y` makes, not as "Kept".
+ *
+ * The rendering proof reads the same renderings the live sweep does
+ * ({@link reclaimRenderings}), built with `engineVersion` — the plan's own
+ * unless the caller names one.
  */
 export async function previewReclaim(
   rootDir: string,
   plan: SyncPlan,
   now?: Date,
+  engineVersion: string | undefined = plan.engineVersion,
 ): Promise<ReclaimReport | null> {
   if (plan.reclaim.length === 0) return null;
   const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
@@ -684,8 +685,48 @@ export async function previewReclaim(
     coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest)),
     ...retention,
     hookDocumentsAfterWrite: await hookDocumentsAfterWrite(rootDir, plan, retention.hookDocuments, coOwnedDocumentLanes(plan.manifest, packMcpSupply)),
+    renderings: await reclaimRenderings(rootDir, plan, engineVersion),
     ...(now === undefined ? {} : { now }),
   });
+}
+
+/**
+ * The renderings the sweep's rendering proof reads for `plan`'s candidates
+ * (`../../engine/emissionWrite.ts::engineRenderingsFor`), off the run's
+ * pre-rebuild manifest; none without an engine version, so a file that needs
+ * one is kept.
+ */
+async function reclaimRenderings(
+  rootDir: string,
+  plan: SyncPlan,
+  engineVersion: string | undefined,
+): Promise<Map<string, Set<string>>> {
+  if (engineVersion === undefined) return new Map();
+  return engineRenderingsFor(
+    rootDir,
+    plan.manifest,
+    plan.reclaim.map((candidate) => candidate.entry.path),
+    renderingPlanner(rootDir, engineVersion),
+  );
+}
+
+/**
+ * The planner call the rendering proof plans the setup's clients with: the context
+ * {@link planSync} builds its own plan with, this installation's package
+ * identity included. `clean` (`../clean.ts`) builds the same call; the layering
+ * keeps the two verbs from sharing one (`test/architecture`).
+ */
+function renderingPlanner(rootDir: string, engineVersion: string): EmissionPlanFor {
+  return (manifest, facts) =>
+    getEmissionPlanner().plan({
+      rootDir,
+      manifest,
+      engineVersion,
+      packageName: packageName(),
+      npmChannel: hasNpmChannel(),
+      ...registryOption({}),
+      facts,
+    });
 }
 
 /**
@@ -937,7 +978,7 @@ export async function applySync(
       // "would refuse" marker the report reads.
       refused: [],
       gitignoreAdded: [],
-      reclaimed: await previewReclaim(rootDir, plan, now),
+      reclaimed: await previewReclaim(rootDir, plan, now, engineVersion),
       manifestPath: statePath,
       dryRun: true,
       manifest: null,
@@ -1152,6 +1193,7 @@ export async function applySync(
           trustedExactPaths: trustedPaths,
           coOwnedPaths,
           ...hookScriptRetention(plan.manifest, packMcpSupply),
+          renderings: await reclaimRenderings(rootDir, plan, engineVersion),
           now,
         })
       : null;

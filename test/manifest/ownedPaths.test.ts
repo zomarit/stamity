@@ -19,7 +19,9 @@ import {
   ownedFolderOf,
   ownedPathDefect,
   ownedPathKind,
+  needsRenderingProof,
   packDirName,
+  provenByRendering,
   type OwnedPathRow,
 } from "../../src/manifest/ownedPaths.ts";
 import { packDirRelPath } from "../../src/pack/receipt.ts";
@@ -319,6 +321,33 @@ const GITHUB_TEMPLATE_WORKFLOW = [
 ].join("\n");
 
 const BOM = String.fromCharCode(0xfe_ff);
+
+/**
+ * Row 560: in a content folder an owner may keep a file under an engine-style
+ * name, and a hand-added row can record the hash of its bytes, so the delete
+ * proof there is a rendering the running engine produces, not the recorded hash.
+ */
+describe("the rendering proof", () => {
+  it("governs an engine-minted name under a content folder, and nothing else", () => {
+    expect(needsRenderingProof(".claude/skills/st-local/SKILL.md")).toBe(true);
+    expect(needsRenderingProof(".agents/skills/stamity-x/SKILL.md")).toBe(true);
+    expect(needsRenderingProof(".claude/rules/30-stamity-style.md")).toBe(true);
+    expect(needsRenderingProof(".claude/skills/my-notes/SKILL.md")).toBe(false);
+    expect(needsRenderingProof("README.md")).toBe(false);
+    // An engine-style name outside every content folder is another proof's.
+    expect(needsRenderingProof(".stamity/generated/stamity-x.md")).toBe(false);
+    expect(needsRenderingProof("notes/st-owner.md")).toBe(false);
+  });
+
+  it("proves only a hash the engine's renderings at the path hold", () => {
+    const hash = "a".repeat(64);
+    expect(provenByRendering(hash, new Set([hash]))).toBe(true);
+    expect(provenByRendering(hash, new Set(["b".repeat(64), hash]))).toBe(true);
+    expect(provenByRendering(hash, undefined)).toBe(false);
+    expect(provenByRendering(hash, new Set())).toBe(false);
+    expect(provenByRendering(hash, new Set(["b".repeat(64)]))).toBe(false);
+  });
+});
 
 describe("needsByteProof", () => {
   it("names AGENTS.md at any depth, AGENTS.override.md, CLAUDE.md and the Copilot setup workflow", () => {

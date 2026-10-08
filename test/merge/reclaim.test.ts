@@ -87,6 +87,21 @@ function recorded(row: ReclaimCandidate, content: string): ReclaimCandidate {
   return { ...row, entry: { ...row.entry, contentHash: sha256Of(content) } };
 }
 
+/**
+ * The running engine's renderings the sweep reads (`ReclaimOptions.renderings`):
+ * path → the hash of the one rendering the case says the engine produces there.
+ *
+ * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+ * in a content folder an engine-named block-less file is deleted only when its
+ * bytes are a rendering the running engine produces at the path, so the cases
+ * whose subject is such a delete (the dry-run preview, pruning, a nested skill
+ * reference, the renamed spelling) hand the sweep that rendering; their
+ * assertions are unchanged.
+ */
+function renderingsOf(files: Readonly<Record<string, string>>): Map<string, Set<string>> {
+  return new Map(Object.entries(files).map(([path, content]) => [path, new Set([sha256Of(content)])]));
+}
+
 const PACK_FILE = ".stamity/packs/acme__ops/agents/reviewer.md";
 const PACK_BODY = "---\nid: reviewer\n---\nReview the change.\n";
 
@@ -181,7 +196,11 @@ describe("sweepReclaimCandidates — consent gate", () => {
         ),
         recorded(candidate(".stamity/mcp/stamity-servers.json"), "{}\n"),
       ],
-      { rootDir: root, consent: false },
+      {
+        rootDir: root,
+        consent: false,
+        renderings: renderingsOf({ ".claude/agents/stamity-implementer.md": "whole-file engine output\n" }),
+      },
     );
 
     expect(report.entries.map((entry) => entry.action)).toEqual(["dry-run", "dry-run", "dry-run"]);
@@ -715,7 +734,11 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
     // records the hash of its bytes; the name proof needs one beside it.
     const report = await sweepReclaimCandidates(
       [recorded(candidate(".agents/skills/stamity-verify/references/ui.md"), "# UI\n\nengine reference body\n")],
-      { rootDir: root, consent: true },
+      {
+        rootDir: root,
+        consent: true,
+        renderings: renderingsOf({ ".agents/skills/stamity-verify/references/ui.md": "# UI\n\nengine reference body\n" }),
+      },
     );
 
     expect(onlyEntry(report).action).toBe("deleted");
@@ -771,7 +794,11 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
           "# UI\n\nengine reference body\n",
         ),
       ],
-      { rootDir: root, consent: true },
+      {
+        rootDir: root,
+        consent: true,
+        renderings: renderingsOf({ ".agents/skills/stamity-verify/references/ui.md": "# UI\n\nengine reference body\n" }),
+      },
     );
 
     expect(report).toMatchObject({ deletedCount: 3, strippedCount: 0, skippedCount: 0 });
@@ -792,7 +819,11 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
     // records the hash of its bytes; the name proof needs one beside it.
     const report = await sweepReclaimCandidates(
       [recorded(candidate(".agents/skills/st-verify/references/ui.md"), "# UI\n\nengine reference body\n")],
-      { rootDir: root, consent: true },
+      {
+        rootDir: root,
+        consent: true,
+        renderings: renderingsOf({ ".agents/skills/st-verify/references/ui.md": "# UI\n\nengine reference body\n" }),
+      },
     );
 
     expect(onlyEntry(report).action).toBe("deleted");
@@ -1175,7 +1206,7 @@ describe("sweepReclaimCandidates — recorded-hash ownership", () => {
 
     const report = await sweepReclaimCandidates(
       [hashedCandidate(".cursor/rules/50-stamity-testing.mdc", EMITTED_RULE_BODY)],
-      { rootDir: root, consent: true },
+      { rootDir: root, consent: true, renderings: renderingsOf({ ".cursor/rules/50-stamity-testing.mdc": EMITTED_RULE_BODY }) },
     );
 
     expect(onlyEntry(report).action).toBe("deleted");
@@ -1279,6 +1310,7 @@ describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", ()
     const report = await sweepReclaimCandidates([recorded(candidate(GONE, "deselected", "claude"), GONE_BYTES)], {
       rootDir: root,
       consent: true,
+      renderings: renderingsOf({ [GONE]: GONE_BYTES }),
     });
 
     expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "hash" });
@@ -1367,6 +1399,154 @@ describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", ()
  * MCP reducer's own judgement is proved in `test/manifest/mcpFilter.test.ts`, and
  * the two meeting in a shipped verb in `test/cli/commands/syncMcpOwnership.test.ts`.
  */
+/**
+ * Row 560: in a content folder the recorded hash no longer proves a delete on
+ * its own, since a hand-added row can hash an owner's file under an
+ * engine-style name. The bytes have to be a rendering the running engine
+ * produces at the path (`ReclaimOptions.renderings`), or a managed block has to
+ * span the file.
+ */
+describe("sweepReclaimCandidates — a content-folder delete needs the engine's rendering", () => {
+  const SKILL = ".claude/skills/st-local/SKILL.md";
+  const SKILL_BYTES = "---\nname: st-local\n---\n\nThe owner's checklist.\n";
+
+  it("keeps a file whose recorded hash matches when no rendering is handed in, and names the remedy", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SKILL}`]: SKILL_BYTES });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), SKILL_BYTES)], {
+      rootDir: root,
+      consent: true,
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-user-content");
+    expect(entry.detail).toContain("delete it by hand");
+    expect(entry).not.toHaveProperty("proof");
+    expect(report.deletedCount).toBe(0);
+    expect(await readFile(join(root, SKILL), "utf-8")).toBe(SKILL_BYTES);
+  });
+
+  it("keeps it when the renderings at the path are other bytes, or name only another path", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SKILL}`]: SKILL_BYTES });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), SKILL_BYTES)], {
+      rootDir: root,
+      consent: true,
+      renderings: new Map([
+        [SKILL, new Set([sha256Of("the engine's own skill\n")])],
+        [".claude/skills/st-other/SKILL.md", new Set([sha256Of(SKILL_BYTES)])],
+      ]),
+    });
+
+    expect(onlyEntry(report).action).toBe("skipped-user-content");
+    expect(await readFile(join(root, SKILL), "utf-8")).toBe(SKILL_BYTES);
+  });
+
+  it("deletes it when its bytes are a rendering the engine produces there, naming the proof", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SKILL}`]: SKILL_BYTES });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), SKILL_BYTES)], {
+      rootDir: root,
+      consent: true,
+      renderings: new Map([[SKILL, new Set([sha256Of("another rendering\n"), sha256Of(SKILL_BYTES)])]]),
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "hash" });
+    expect(onlyEntry(report).detail).toContain("rendering");
+    expect(await snapshot(root)).toEqual({});
+  });
+
+  it("deletes a CRLF checkout of a rendering taken over LF", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const crlf = SKILL_BYTES.replaceAll("\n", "\r\n");
+    await temp.seedFiles({ [`repo/${SKILL}`]: crlf });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), SKILL_BYTES)], {
+      rootDir: root,
+      consent: true,
+      renderings: new Map([[SKILL, new Set([sha256Of(SKILL_BYTES)])]]),
+    });
+
+    expect(onlyEntry(report).action).toBe("deleted");
+  });
+
+  it("still keeps a rendering whose recorded hash disagrees with the bytes, and one whose row records no hash", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const other = ".claude/rules/stamity-style.md";
+    await temp.seedFiles({ [`repo/${SKILL}`]: SKILL_BYTES, [`repo/${other}`]: "rule\n" });
+
+    const report = await sweepReclaimCandidates(
+      [recorded(candidate(SKILL, "deselected", "claude"), "what the engine wrote\n"), candidate(other, "deselected", "claude")],
+      {
+        rootDir: root,
+        consent: true,
+        renderings: new Map([
+          [SKILL, new Set([sha256Of(SKILL_BYTES)])],
+          [other, new Set([sha256Of("rule\n")])],
+        ]),
+      },
+    );
+
+    expect(report.entries.map((entry) => entry.action)).toEqual(["skipped-user-content", "skipped-unsafe-path"]);
+    expect(await readFile(join(root, SKILL), "utf-8")).toBe(SKILL_BYTES);
+    expect(await readFile(join(root, other), "utf-8")).toBe("rule\n");
+  });
+
+  it("still deletes a content file a managed block spans with no rendering handed in", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const whole = managedWhole("engine rule body");
+    await temp.seedFiles({ [`repo/${SKILL}`]: whole });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), whole)], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "block" });
+  });
+
+  // The proof governs content folders only in this unit (d1b and d1c widen
+  // it): an engine-named platform file still leaves on its name and hash.
+  it("does not ask an engine-named file outside every content folder for a rendering", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const guard = ".cursor/hooks/stamity-subagent-guard.mjs";
+    await temp.seedFiles({ [`repo/${guard}`]: "// engine guard\n" });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(guard), "// engine guard\n")], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "hash" });
+    expect(onlyEntry(report).detail).not.toContain("rendering");
+  });
+
+  it("previews the keep on a dry run, nothing written and nothing previewed as deleted", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${SKILL}`]: SKILL_BYTES });
+
+    const report = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), SKILL_BYTES)], {
+      rootDir: root,
+      consent: false,
+      renderings: new Map(),
+    });
+
+    expect(onlyEntry(report).action).toBe("skipped-user-content");
+    expect(await readFile(join(root, SKILL), "utf-8")).toBe(SKILL_BYTES);
+  });
+});
+
 describe("sweepReclaimCandidates — an instruction file leaves only on its own bytes", () => {
   // REQ-PLUGIN-046: at `AGENTS.md` in any folder, `AGENTS.override.md`,
   // `CLAUDE.md` and the Copilot setup workflow, a matching recorded hash is not

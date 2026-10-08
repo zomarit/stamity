@@ -10,6 +10,8 @@ import {
   MCP_GUARD_PATH,
   SUBAGENT_GUARD_PATH,
 } from "../../adapters/cursor.ts";
+import { buildContentIndex, type ContentIndex } from "../../content/catalog.ts";
+import { analyzeRepo, summarizeDetection } from "../../detect/repoAnalyzer.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { readHookDefinitions, type UserHookDefinition } from "../../hooks/userHooks.ts";
 import {
@@ -36,19 +38,28 @@ import {
   hookScriptReader,
 } from "../../manifest/hookDocuments.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
+import { needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
 import type { HookScriptReader, ReclaimActionEntry, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
-import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
+import {
+  discoverInstalledPacks,
+  ignoringPolicyDenialForProof,
+  packMcpServers,
+  withoutPolicyWarningPrint,
+} from "../../pack/projection.ts";
 import {
   outputOwners,
   type AdapterOutput,
   type CoOwnedReducer,
+  type ContentClass,
+  type ContentSelection,
   type MergeResult,
 } from "../../types/content.ts";
-import { VALID_TOOLS, type Tool } from "../../types/core.ts";
+import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
+import type { PackageEntry } from "../../types/detect.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { CoOwnership, LedgerEntry, SetupManifest } from "../../types/manifest.ts";
 
@@ -733,4 +744,96 @@ export async function coOwnedReclaimRenderings(
   // renderer reads the interchange fields alone, as the emission does.
   const rows = read.hooks;
   return rows.length === 0 ? new Map() : new Map(rendered.map(([, path, render]) => [path, render(rows)]));
+}
+
+/**
+ * v1 selection semantics: the full corpus, derived fresh each run. The
+ * manifest's selection field is refreshed from this — it is the future
+ * narrowing hook, not yet a filter. `sync`'s plan (`../commands/sync/engine.ts`)
+ * and {@link engineRenderingsFor} select through it, so the rendering that
+ * proves a delete is the emission `sync` would write.
+ */
+export function fullCorpusSelection(index: ContentIndex): ContentSelection {
+  const items: Record<ContentClass, string[]> = { agent: [], skill: [], rule: [], command: [] };
+  for (const item of index.items) items[item.type].push(item.id);
+  return { items };
+}
+
+/**
+ * Plans the emission for `manifest` the way the calling verb plans its own —
+ * the emission seam (`./emission.ts::getEmissionPlanner`) with the running
+ * engine's version and this installation's package identity, and `facts` as
+ * detected. The caller supplies it because this module sits beside that seam
+ * in the layering and may not import it (`test/architecture`): `sync` and
+ * `clean` sit above both.
+ */
+export type EmissionPlanFor = (
+  manifest: SetupManifest,
+  facts: { monorepoPackages: readonly PackageEntry[] },
+) => Promise<readonly AdapterOutput[]>;
+
+/**
+ * The SHA-256 of each rendering the running engine produces at `paths`, for the
+ * reclaim sweep's rendering proof (`../../merge/reclaim.ts`
+ * `ReclaimOptions.renderings`, REQ-PLUGIN-046): the emission plan for the
+ * clients this setup wrote for, over the bundled corpus, the override tree and
+ * the installed packs `manifest` records, hashed at the requested paths that
+ * `../../manifest/ownedPaths.ts::needsRenderingProof` names, and only those.
+ *
+ * The clients this setup wrote for are the manifest's `tools` plus every client
+ * a ledger row names (a `pack:` owner is not a client), each in repository
+ * mode: a client deselected since setup, or one whose classes a plugin now
+ * carries (`plugin setup`), is the common reason a content file becomes a
+ * candidate, and its unedited files are still what the engine renders for it
+ * there. Not every client in `TOOLS`: a rule-skill records the selected clients
+ * in its own bytes (`metadata.stamity.tools`), so a render for every client is
+ * not what a narrower setup wrote. The manifest handed to `planFor` is built
+ * the way `sync` builds its own (`../commands/sync/engine.ts::planSync`):
+ * full-corpus selection and fresh detection, with those clients selected and
+ * no plugin record, and with every installed pack rendered whatever the org
+ * policy says (`../../pack/projection.ts::ignoringPolicyDenialForProof`): the
+ * copies a pack projected before the policy denied it are still the engine's,
+ * and keeping them would leave the denied pack active in every client. The
+ * plan is hashed and discarded, never written. The calling verb prints its own
+ * plan's pack-policy lines, so this second plan prints none
+ * (`../../pack/projection.ts::withoutPolicyWarningPrint`).
+ *
+ * Plans nothing when no path needs the proof. A plan that cannot be built — a
+ * corpus or pack read that fails — yields no rendering, so every file that
+ * needs one is kept rather than deleted: the proof fails closed.
+ */
+export async function engineRenderingsFor(
+  rootDir: string,
+  manifest: SetupManifest,
+  paths: Iterable<string>,
+  planFor: EmissionPlanFor,
+): Promise<Map<string, Set<string>>> {
+  const renderings = new Map<string, Set<string>>();
+  const wanted = new Set([...paths].filter(needsRenderingProof));
+  if (wanted.size === 0) return renderings;
+  let outputs: readonly AdapterOutput[];
+  try {
+    const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
+    const setupClients = structuredClone(manifest);
+    setupClients.tools = TOOLS.filter(
+      (tool) => manifest.tools.includes(tool) || manifest.ledger.some((row) => row.adapter === tool),
+    );
+    setupClients.selection = fullCorpusSelection(index);
+    setupClients.detected = summarizeDetection(repoInfo);
+    delete setupClients.plugin;
+    outputs = await withoutPolicyWarningPrint(() =>
+      ignoringPolicyDenialForProof(() => planFor(setupClients, { monorepoPackages: repoInfo.monorepoPackages })),
+    );
+    // reason: not silent — with no rendering nothing is proved, and the sweep
+    // keeps each file that needed one and names it in its report.
+  } catch {
+    return renderings;
+  }
+  for (const output of outputs) {
+    if (!wanted.has(output.path)) continue;
+    const hashes = renderings.get(output.path) ?? new Set<string>();
+    hashes.add(sha256(output.content));
+    renderings.set(output.path, hashes);
+  }
+  return renderings;
 }

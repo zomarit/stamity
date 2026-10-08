@@ -10,9 +10,13 @@ import { cleanCommand } from "../../src/cli/commands/clean.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncCommand } from "../../src/cli/commands/sync.ts";
+import { planSync, previewReclaim } from "../../src/cli/commands/sync/engine.ts";
+import { engineRenderingsFor } from "../../src/cli/engine/emissionWrite.ts";
 import { createApp } from "../../src/index.ts";
+import { ORG_POLICY_REL_PATH } from "../../src/pack/orgPolicy.ts";
+import { discoverInstalledPacksWithPolicy, ignoringPolicyDenialForProof } from "../../src/pack/projection.ts";
 import type { Tool } from "../../src/types/core.ts";
-import type { LedgerEntry } from "../../src/types/manifest.ts";
+import type { LedgerEntry, SetupManifest } from "../../src/types/manifest.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -226,7 +230,13 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
     expect(await readFile(join(root, GONE), "utf8")).toBe(GONE_BYTES);
   });
 
-  it("deletes the same file when its row records the hash of its bytes", async () => {
+  // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+  // this case asserted the delete a hand-added row earned by recording the hash
+  // of bytes no engine rendering produces — the forgery row 560 closes. In a
+  // content folder the delete now needs a rendering the running engine produces
+  // at the path, so the same row keeps the file and names why; the delete it
+  // used to assert is held below on the engine's own rendering.
+  it("keeps the same file when its row records the hash of its bytes, since no engine rendering is those bytes", async () => {
     const root = await initialisedRepo();
     await seed(root, { [GONE]: GONE_BYTES });
     await forgeRows(root, [
@@ -237,12 +247,13 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
 
     expect(sync.code).toBe(0);
     const doc = JSON.parse(sync.stdout.trim()) as {
-      reclaim: { entries: { path: string; action: string; proof?: string }[] };
+      reclaim: { entries: { path: string; action: string; detail: string; proof?: string }[] };
     };
-    expect(doc.reclaim.entries.find((candidate) => candidate.path === GONE)).toMatchObject({
-      action: "deleted",
-      proof: "hash",
-    });
+    const entry = doc.reclaim.entries.find((candidate) => candidate.path === GONE);
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry?.detail).toContain("delete it by hand");
+    expect(entry).not.toHaveProperty("proof");
+    expect(await readFile(join(root, GONE), "utf8")).toBe(GONE_BYTES);
   });
 
   // The co-owned lane: `.claude/settings.json` sits in the bound by its exact
@@ -370,6 +381,280 @@ interface CheckDoc extends JsonDoc {
   drift?: { changes: { path: string; action: string; collisionKind?: string; detail?: string }[] } | null;
   error?: { code?: string; message?: string; why?: string; next?: string };
 }
+
+/**
+ * Row 560: an owner's file under an engine-style name in a content folder,
+ * with a hand-added row recording the hash of the owner's own bytes. The hash
+ * was the delete proof there; the proof is now a rendering the running engine
+ * produces at the path, which these bytes are not.
+ */
+describe("a content-folder file leaves only as a rendering the engine produces", () => {
+  const LOCAL = ".claude/skills/st-local/SKILL.md";
+  const LOCAL_BYTES = "---\nname: st-local\ndescription: the owner's own skill\n---\n\nOur release checklist.\n";
+  const localRow: LedgerEntry = {
+    path: LOCAL,
+    adapter: "claude",
+    artifactId: "st-local",
+    artifactType: "skill",
+    contentHash: sha256(LOCAL_BYTES),
+  };
+
+  type SweepDoc = { entries: { path: string; action: string; detail: string; proof?: string }[] };
+
+  it("sync -y keeps an owner's skill a forged row hashes, and names it skipped-user-content", async () => {
+    const root = await initialisedRepo();
+    await seed(root, { [LOCAL]: LOCAL_BYTES });
+    await forgeRows(root, [localRow]);
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const entry = (JSON.parse(sync.stdout.trim()) as { reclaim: SweepDoc }).reclaim.entries.find(
+      (candidate) => candidate.path === LOCAL,
+    );
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry?.detail).toContain("delete it by hand");
+    expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
+  });
+
+  it("clean -y keeps the same skill, and names it skipped-user-content", async () => {
+    const root = await initialisedRepo();
+    await seed(root, { [LOCAL]: LOCAL_BYTES });
+    await forgeRows(root, [localRow]);
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+
+    expect(clean.code, clean.stderr).toBe(0);
+    const entry = (JSON.parse(clean.stdout.trim()) as SweepDoc).entries.find((candidate) => candidate.path === LOCAL);
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry?.detail).toContain("delete it by hand");
+    expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
+  });
+
+  // The control: the engine's own unedited skill is a rendering, so `clean`
+  // still removes it, and an engine skill the owner edited is still kept.
+  it("clean -y still deletes the engine's unedited skill and keeps one its owner edited", async () => {
+    const root = await initialisedRepo(["claude"]);
+    const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] })
+      .ledger;
+    const skills = ledger.filter((row) => row.path.startsWith(".claude/skills/st-") && row.path.endsWith("/SKILL.md"));
+    expect(skills.length).toBeGreaterThan(1);
+    const [edited, untouched] = skills as [LedgerEntry, LedgerEntry];
+    const editedBytes = `${await readFile(join(root, edited.path), "utf8")}\nOur own note.\n`;
+    await writeFile(join(root, edited.path), editedBytes, "utf8");
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+
+    expect(clean.code, clean.stderr).toBe(0);
+    const entries = (JSON.parse(clean.stdout.trim()) as SweepDoc).entries;
+    expect(entries.find((entry) => entry.path === untouched.path)).toMatchObject({ action: "deleted", proof: "hash" });
+    expect(existsSync(join(root, untouched.path))).toBe(false);
+    expect(entries.find((entry) => entry.path === edited.path)?.action).toBe("skipped-user-content");
+    expect(await readFile(join(root, edited.path), "utf8")).toBe(editedBytes);
+  });
+
+  // The control for a client deselected after setup: its unedited content
+  // files are renderings the running engine still produces for that client.
+  it("sync -y still deletes a deselected client's unedited content files", async () => {
+    const root = await initialisedRepo(["claude", "cursor"]);
+    const manifestFile = join(root, ".stamity", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as { tools: Tool[]; ledger: LedgerEntry[] };
+    const cursorContent = manifest.ledger.filter(
+      (row) => row.adapter === "cursor" && (row.path.startsWith(".cursor/rules/") || row.path.startsWith(".cursor/agents/")),
+    );
+    expect(cursorContent.length).toBeGreaterThan(0);
+    manifest.tools = ["claude"];
+    await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const entries = (JSON.parse(sync.stdout.trim()) as { reclaim: SweepDoc }).reclaim.entries;
+    for (const row of cursorContent) {
+      expect(entries.find((entry) => entry.path === row.path)?.action, row.path).toBe("deleted");
+      expect(existsSync(join(root, row.path)), row.path).toBe(false);
+    }
+  });
+});
+
+/**
+ * The rendering that proves a content-folder delete is the one the engine
+ * produced for the clients this setup wrote for (the maintainer's answer, F1):
+ * a rule-skill records the selected clients in its own bytes, so a render for
+ * every client is not what a narrower setup wrote. And a plan that carries no
+ * engine version renders nothing, so it keeps every file that needs the proof.
+ */
+describe("the renderings are the setup's own", () => {
+  it("plans the manifest's clients plus every client a ledger row names, in repository mode, and nothing more", async () => {
+    const root = await initialisedRepo(["claude"]);
+    const onDisk = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
+    const manifest: SetupManifest = {
+      ...onDisk,
+      tools: ["claude"],
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.11.0", classes: ["skill"] } } },
+      ledger: [
+        ...onDisk.ledger,
+        { path: ".cursor/rules/30-stamity-style.mdc", adapter: "cursor", artifactId: "style", artifactType: "rule", contentHash: "a".repeat(64) },
+        { path: ".stamity/packs/demo/x.md", adapter: "pack:demo", artifactId: "x", artifactType: "infra" },
+      ],
+    } as SetupManifest;
+    const seen: SetupManifest[] = [];
+    const rendered = `rendered body\n`;
+
+    const renderings = await engineRenderingsFor(
+      root,
+      manifest,
+      [".cursor/rules/30-stamity-style.mdc", "README.md"],
+      async (setupClients) => {
+        seen.push(setupClients);
+        return [
+          { path: ".cursor/rules/30-stamity-style.mdc", content: rendered, owner: { adapter: "cursor", artifactId: "style", artifactType: "rule" } },
+          { path: ".cursor/rules/30-stamity-other.mdc", content: "other\n", owner: { adapter: "cursor", artifactId: "other", artifactType: "rule" } },
+        ];
+      },
+    );
+
+    expect(seen).toHaveLength(1);
+    expect([...(seen[0] as SetupManifest).tools].toSorted()).toEqual(["claude", "cursor"]);
+    expect(seen[0]).not.toHaveProperty("plugin");
+    // The caller's manifest is not the one planned: it keeps its own clients and plugin record.
+    expect(manifest.tools).toEqual(["claude"]);
+    expect(manifest.plugin).toBeDefined();
+    expect([...renderings.keys()]).toEqual([".cursor/rules/30-stamity-style.mdc"]);
+    expect(renderings.get(".cursor/rules/30-stamity-style.mdc")).toEqual(new Set([sha256(rendered)]));
+  });
+
+  it("plans nothing when no path needs the proof, and fails closed when the plan throws", async () => {
+    const root = await initialisedRepo(["claude"]);
+    const manifest = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
+    let calls = 0;
+    const none = await engineRenderingsFor(root, manifest, ["README.md", ".claude/skills/my-notes/SKILL.md"], async () => {
+      calls++;
+      return [];
+    });
+    expect(none.size).toBe(0);
+    expect(calls).toBe(0);
+
+    const failed = await engineRenderingsFor(root, manifest, [".claude/skills/st-qa/SKILL.md"], () =>
+      Promise.reject(new Error("a corpus read failed")),
+    );
+    expect(failed.size).toBe(0);
+  });
+
+  it("previews a deselected client's unedited file as a delete, and keeps it under a plan with no engine version", async () => {
+    const root = await initialisedRepo(["claude", "cursor"]);
+    const manifestFile = join(root, ".stamity", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as { tools: Tool[]; ledger: LedgerEntry[] };
+    const rule = manifest.ledger.find((row) => row.adapter === "cursor" && row.path.startsWith(".cursor/rules/"));
+    expect(rule).toBeDefined();
+    manifest.tools = ["claude"];
+    await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    expect(plan.engineVersion).toBe(ENGINE_VERSION);
+    const path = (rule as LedgerEntry).path;
+
+    const proved = await previewReclaim(root, plan, T0);
+    expect(proved?.entries.find((entry) => entry.path === path)).toMatchObject({ action: "dry-run", wouldBe: "deleted", proof: "hash" });
+
+    const handBuilt = { ...plan };
+    delete handBuilt.engineVersion;
+    const unproved = await previewReclaim(root, handBuilt, T0);
+    expect(unproved?.entries.find((entry) => entry.path === path)?.action).toBe("skipped-user-content");
+    expect(existsSync(join(root, path))).toBe(true);
+  });
+});
+
+/**
+ * A pack the organisation's trust policy denies after it was installed stops
+ * projecting (REQ-PLUGIN-046 as amended for d1a's W-1): the projection honours
+ * the policy, while the rendering proof renders installed packs whatever the
+ * policy says, so the next `sync` can prove the copies it wrote while the pack
+ * was allowed and remove them. Keeping them would leave a denied pack active in
+ * every client.
+ */
+describe("a pack the org policy denies leaves the clients' folders", () => {
+  type SyncDoc = {
+    wrote: { path: string }[];
+    reclaim: { entries: { path: string; action: string; detail: string; proof?: string }[] };
+  };
+
+  /** A Claude setup with `ops` installed and synced; its copies are the claude rows the install added. */
+  async function opsProjected(): Promise<{ root: string; copies: string[] }> {
+    const root = await initialisedRepo(["claude"]);
+    const rowsOf = async (): Promise<LedgerEntry[]> =>
+      (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] }).ledger;
+    const before = new Set((await rowsOf()).map((row) => row.path));
+    const added = await runInProcess([addCommand], ["add", "ops", "-y"], { cwd: root });
+    expect(added.code, added.stderr).toBe(0);
+    const synced = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+    expect(synced.code, synced.stderr).toBe(0);
+    const copies = (await rowsOf())
+      .filter((row) => row.adapter === "claude" && !before.has(row.path) && row.path.startsWith(".claude/"))
+      .map((row) => row.path);
+    expect(copies).toContain(".claude/skills/st-release-runbook/SKILL.md");
+    return { root, copies };
+  }
+
+  async function denyEveryPack(root: string): Promise<void> {
+    await writeFile(join(root, ORG_POLICY_REL_PATH), `${JSON.stringify({ version: 1, packs: { deny: ["*"] } }, null, 2)}\n`, "utf8");
+  }
+
+  it("sync -y proves and removes the denied pack's copies, and writes none of them", async () => {
+    const { root, copies } = await opsProjected();
+    await denyEveryPack(root);
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const doc = JSON.parse(sync.stdout.trim()) as SyncDoc;
+    for (const copy of copies) {
+      expect(doc.reclaim.entries.find((entry) => entry.path === copy), copy).toMatchObject({ action: "deleted", proof: "hash" });
+      expect(existsSync(join(root, copy)), copy).toBe(false);
+      // The projection honours the policy: nothing of the denied pack is written.
+      expect(doc.wrote.map((row) => row.path), copy).not.toContain(copy);
+    }
+    const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] }).ledger;
+    expect(ledger.some((row) => row.adapter === "pack:ops")).toBe(true);
+    for (const copy of copies) expect(ledger.map((row) => row.path), copy).not.toContain(copy);
+  });
+
+  it("keeps an owner's own file at one of those names under a forged row hashing it", async () => {
+    const { root } = await opsProjected();
+    const copy = ".claude/skills/st-release-runbook/SKILL.md";
+    const ownerBytes = "---\nname: st-release-runbook\ndescription: our own runbook\n---\n\nOur release steps.\n";
+    await writeFile(join(root, copy), ownerBytes, "utf8");
+    const manifestFile = join(root, ".stamity", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as { ledger: LedgerEntry[] };
+    for (const row of manifest.ledger) if (row.path === copy) row.contentHash = sha256(ownerBytes);
+    await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await denyEveryPack(root);
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const entry = (JSON.parse(sync.stdout.trim()) as SyncDoc).reclaim.entries.find((candidate) => candidate.path === copy);
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(await readFile(join(root, copy), "utf8")).toBe(ownerBytes);
+  });
+
+  it("admits a denied pack to discovery only inside the proof's opt-out", async () => {
+    const { root } = await opsProjected();
+    await denyEveryPack(root);
+    const manifest = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
+
+    const honoured = await discoverInstalledPacksWithPolicy(root, manifest);
+    expect(honoured.packs.map((pack) => pack.id)).not.toContain("ops");
+    expect(honoured.denied.map((pack) => pack.id)).toEqual(["ops"]);
+
+    const forProof = await ignoringPolicyDenialForProof(() => discoverInstalledPacksWithPolicy(root, manifest));
+    expect(forProof.packs.map((pack) => pack.id)).toContain("ops");
+    expect(forProof.denied).toEqual([]);
+
+    // Scoped to the call: the next discovery honours the policy again.
+    expect((await discoverInstalledPacksWithPolicy(root, manifest)).denied.map((pack) => pack.id)).toEqual(["ops"]);
+  });
+});
 
 describe("an import decision binds only as init records it", () => {
   it("refuses a skip decision for a file init never imports, naming each decision", async () => {

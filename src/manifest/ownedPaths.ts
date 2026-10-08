@@ -247,7 +247,9 @@ export function carriesEngineMintedPrefix(name: string): boolean {
  * the engine (`stamity-tools/user.md`) says nothing about the files under it.
  *
  * A name is never a proof on its own: the reclaim sweep needs it together with
- * a recorded hash that matches the bytes, or a managed block spanning the file.
+ * a recorded hash that matches the bytes and a rendering the running engine
+ * produces at the path ({@link needsRenderingProof}), or a managed block
+ * spanning the file.
  */
 export function hasEngineMintedName(path: string): boolean {
   if (carriesEngineMintedPrefix(path.slice(path.lastIndexOf("/") + 1))) return true;
@@ -260,6 +262,33 @@ export function hasEngineMintedName(path: string): boolean {
       (segment, index) =>
         segments[index - 1] === SKILL_CONTAINER_SEGMENT && carriesEngineMintedPrefix(segment),
     );
+}
+
+// ── The rendering proof (REQ-PLUGIN-046) ───────────────────────────────────
+
+/**
+ * True when a whole-file delete at `path` needs bytes that hash to a rendering
+ * the running engine produces there ({@link provenByRendering}): a file under a
+ * content folder whose name {@link hasEngineMintedName} reads as the engine's.
+ *
+ * An owner may keep a file under an engine-style name in those folders, and a
+ * hand-added row can record the hash of its bytes as easily as the engine
+ * records the hash of its own, so at these paths the recorded hash says only
+ * that nobody edited the file since the row was written, not who wrote it. The
+ * running engine's own rendering is the one record a hand edit of the manifest
+ * cannot forge.
+ */
+export function needsRenderingProof(path: string): boolean {
+  return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) && hasEngineMintedName(path);
+}
+
+/**
+ * True when `sha256OfBytes` is one of `renderings`, the SHA-256 of each
+ * rendering the running engine produces at the path. No renderings — none
+ * handed in, or none at the path — prove nothing, so the file is kept.
+ */
+export function provenByRendering(sha256OfBytes: string, renderings: ReadonlySet<string> | undefined): boolean {
+  return renderings?.has(sha256OfBytes) ?? false;
 }
 
 // ── The byte proof at instruction files (REQ-PLUGIN-046) ───────────────────

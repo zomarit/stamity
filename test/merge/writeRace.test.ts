@@ -83,6 +83,19 @@ function candidate(path: string): ReclaimCandidate {
   };
 }
 
+/**
+ * The running engine's rendering at `path`: the bytes `seed` writes there.
+ *
+ * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
+ * an engine-named file in a content folder is now deleted only when its bytes
+ * are a rendering the running engine produces at the path, not on a recorded
+ * hash alone. The races below open after that proof, so each sweep is handed
+ * the rendering a real sweep would read; the assertions are unchanged.
+ */
+function renderedAt(path: string): Map<string, Set<string>> {
+  return new Map([[path, new Set([createHash("sha256").update(ENGINE_BYTES).digest("hex")])]]);
+}
+
 describe("reclaim sweep — the tree moves between the gate and the unlink", () => {
   it("refuses the delete instead of unlinking whatever the new symlink points at", async () => {
     const name = "stamity-orphan.md";
@@ -111,6 +124,7 @@ describe("reclaim sweep — the tree moves between the gate and the unlink", () 
       const report = await mod.sweepReclaimCandidates([candidate(`${PARENT}/${name}`)], {
         rootDir: fixture.root,
         consent: true,
+        renderings: renderedAt(`${PARENT}/${name}`),
       });
 
       expect(swapped).toBe(true);
@@ -154,6 +168,7 @@ describe("reclaim sweep — the tree moves between the gate and the unlink", () 
       const report = await mod.sweepReclaimCandidates([candidate(`${PARENT}/${name}`)], {
         rootDir: fixture.root,
         consent: true,
+        renderings: renderedAt(`${PARENT}/${name}`),
       });
 
       expect(report.deletedCount).toBe(0);
@@ -173,6 +188,7 @@ describe("reclaim sweep — the tree moves between the gate and the unlink", () 
     const report = await sweepReclaimCandidates([candidate(`${PARENT}/${name}`)], {
       rootDir: fixture.root,
       consent: true,
+      renderings: renderedAt(`${PARENT}/${name}`),
     });
 
     expect(report.deletedCount).toBe(1);
