@@ -5,9 +5,10 @@
  * The client's own `plugin install … --scope project` records the install in
  * this file as an `enabledPlugins` key (measured on Claude Code 2.1.278,
  * 2026-09-22). An operator sets `model`, `env`, `permissions.deny`, `ask`, rows
- * and hook entries of their own. The engine renders `permissions.allow` rows,
- * and hook entries (one element of a `hooks.<Event>` array) while the
- * repository owns hooks. No comment syntax can carry a marker, so ownership is
+ * and hook entries of their own. The engine renders hook entries (one element
+ * of a `hooks.<Event>` array) while the repository owns hooks, and no
+ * `permissions.allow` row; releases up to 1.12.0 rendered three, which leave
+ * through the bound below. No comment syntax can carry a marker, so ownership is
  * decided per ENTRY by the shared core (`./coOwnedJson.ts`, whose rules this
  * module only parameterises): **the engine owns each allow row and each hook
  * entry it wrote, recorded on the ledger row by the hash of its canonical JSON
@@ -18,7 +19,7 @@
  *
  * The bound ({@link claudeSettingsSpec}). An engine entry leaves silently only
  * when it lies inside what the engine can prove it wrote by path: an allow row
- * the engine renders ({@link ENGINE_PERMISSION_ROWS}), or a hook entry whose
+ * a release rendered ({@link ENGINE_PERMISSION_ROWS}), or a hook entry whose
  * every command executes one of the engine's own scripts — under
  * `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`,
  * never the user's `.stamity/hooks/` (`./coOwnedJson.ts::commandRunsStateScript`).
@@ -70,9 +71,12 @@ import {
 const DOCUMENT = "settings document";
 
 /**
- * The allow rows the engine renders. Every release from v1.1.0 on rendered the
- * same three; `test/adapters/claude.test.ts` holds the adapter's derived rows
- * to a subset of this list, so a new row lands here in the same change.
+ * The allow rows a release rendered. Every release from v1.1.0 to 1.12.0
+ * rendered these three; the engine renders none now, because a bare `Read`
+ * matches every file read anywhere and only took the client's prompt off
+ * reads outside the project. The names stay as the bound, so a row the ledger
+ * records leaves silently on the next sync, and an equal row it does not
+ * record stays the owner's. `test/adapters/claude.test.ts` pins the list.
  */
 export const ENGINE_PERMISSION_ROWS: readonly string[] = ["Read", "Grep", "Glob"];
 
@@ -106,8 +110,9 @@ function hookGroupInBound(element: unknown): boolean {
 }
 
 /**
- * What the engine writes into `.claude/settings.json`: each allow row and each
- * hook entry. `extraMembers` is the extension point for whole members a later
+ * What the engine owns in `.claude/settings.json`: each hook entry it writes,
+ * and each allow row an earlier release wrote (the slot stays declared so a
+ * recorded row can leave; the rendering carries none). `extraMembers` is the extension point for whole members a later
  * requirement declares (passed as `{ pointer, foreign: "yield" }`).
  */
 export function claudeSettingsSpec(extraMembers: readonly MemberSpec[] = []): CoOwnedJsonSpec {

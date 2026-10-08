@@ -51,7 +51,7 @@ import { useTempDir } from "../support/tempDir.ts";
  * The claude residue planner: the CLAUDE.md bridge, the NATIVE `.claude/skills`
  * copy, the `.claude/rules` / `.claude/agents` / `.claude/commands` dialects,
  * the settings document (hook transform + the three Claude-only extension
- * wirings + the read-only permissions chain), the work-scoped review gate, and
+ * wirings, and no permissions member), the work-scoped review gate, and
  * verbatim MCP placement. The main suite runs over the REAL bundled corpus so
  * the plan-fixed counts (12 rules, 10 agents, 9 commands) are asserted against
  * what actually ships; a seeded fixture corpus covers the shapes the real
@@ -197,7 +197,9 @@ const EMPTY_SELECTION: ContentSelection = {
 };
 
 interface SettingsShape {
-  permissions: { allow: string[] };
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the engine renders no
+  // `permissions` member on either route, so the shape types it as absent.
+  permissions?: never;
   hooks: Record<
     string,
     { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] }[]
@@ -649,13 +651,17 @@ describe("claude residue over the real corpus", () => {
     expect(work!.content).toContain("npm run test");
   });
 
-  it("emits settings.json with the hook transform, all three extensions, and the 3-row chain", async () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the case pinned the
+  // three read rows `Read`, `Grep`, `Glob`. A bare `Read` row matches every file
+  // read anywhere, and reads inside the project need no rule, so the rows only
+  // took the prompt off reads outside it; the document now renders hooks alone.
+  it("emits settings.json with the hook transform, all three extensions, and no permissions member", async () => {
     const { rows } = await planned();
     const settings = settingsOf(rows);
 
-    // Whole-file JSON: permissions and hooks, nothing else — no teammate
-    // modes, no experimental flags.
-    expect(Object.keys(settings)).toEqual(["permissions", "hooks"]);
+    // Whole-file JSON: hooks, nothing else — no permissions member, no
+    // teammate modes, no experimental flags.
+    expect(Object.keys(settings)).toEqual(["hooks"]);
     const raw = byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content;
     // CHANGED: `TaskCompleted` used to be asserted ABSENT as one of the
     // predecessor's Agent-Teams echo gates. It is now a deliberate carrier for
@@ -687,32 +693,11 @@ describe("claude residue over the real corpus", () => {
     expect(configChange).toHaveLength(1);
     expect(configChange?.[0]?.hooks[0]?.command).toBe(HOOK_COMMANDS.tamper);
 
-    // Read-only permission rows, in canonical category order, re-derived here
-    // from the roster union INTERSECTED with the session-pre-approvable
-    // categories, through the translator table, minus the two guard-map-only
-    // names (Task: spawn alias; Skill: procedure ingestion).
-    const union = [...new Set(AGENT_POLICY_ROSTER.flatMap((row) => row.allow))];
-    const derived = toClaudeToolsFrontmatter(union.filter((category) => category === "read"))
-      .split(", ")
-      .filter((name) => name !== "Task" && name !== "Skill");
-    expect(settings.permissions.allow).toEqual(derived);
-    // A command surface and a skills surface must not widen the chain: the
-    // rows are still the three read-class names.
-    expect(settings.permissions.allow).toEqual(["Read", "Grep", "Glob"]);
-
-    // The point of the row set: an allow row is session-global and covers the
-    // main thread the PreToolUse guard exempts, so shell, network, and write
-    // tools must stay on the client's own approval path.
-    for (const withheld of [
-      "Edit",
-      "Write",
-      "NotebookEdit",
-      "Bash",
-      "PowerShell",
-      "WebFetch",
-      "WebSearch",
-    ]) {
-      expect(settings.permissions.allow).not.toContain(withheld);
+    // No tool is pre-approved for the session: not the read class, and not the
+    // shell, network or write tools an allow row would take off the client's
+    // own approval path for the main thread the guard exempts.
+    for (const name of ["Read", "Grep", "Glob", "Edit", "Write", "Bash", "WebFetch"]) {
+      expect(raw).not.toContain(`"${name}"`);
     }
 
     const row = byPath(rows).get(CLAUDE_SETTINGS_PATH)!;
@@ -774,7 +759,9 @@ describe("claude residue over the real corpus", () => {
     expect(settings.hooks["SessionStart"]).toHaveLength(2);
     expect(settings.hooks["PreToolUse"]).toHaveLength(1);
     expect(settings.hooks["ConfigChange"]).toHaveLength(1);
-    expect(settings.permissions.allow).toHaveLength(3);
+    // TEST CHANGE, justified (2026-10-08, inbox row 324): pinned three allow
+    // rows; the document now carries no permissions member.
+    expect(settings).not.toHaveProperty("permissions");
   });
 
   it("emits only claude-owned residue paths, never a core-owned one", async () => {
@@ -829,7 +816,9 @@ describe("claude residue over the real corpus", () => {
       expect(cap("review-gate"), event).toContain(event);
     }
     expect(cap("review-gate")).toContain("fail-closed");
-    expect(cap("permission-rows")).toBe("3");
+    // TEST CHANGE, justified (2026-10-08, inbox row 324): the cap counted the
+    // three allow rows; with none rendered, the cap is gone from the matrix.
+    expect(CLAUDE_DIALECT_FACTS.caps.map((row) => row.name)).not.toContain("permission-rows");
 
     // CHANGED: the row claimed description-only rules "load on model
     // pull". They do not on this client — a `.claude/rules/` file with no
@@ -2013,20 +2002,18 @@ describe("claude residue under plugin ownership", () => {
     expect(paths).toContain(CLAUDE_MD_PATH);
   });
 
-  it("emits the settings document with its permissions half and no hooks key", async () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the case pinned the
+  // permissions half as the one member a plugin-backed setup writes. No allow
+  // row is rendered now, so the plugin route writes an empty document.
+  it("emits the settings document with no member at all under a plugin that carries hooks", async () => {
     const { rows } = await planned({ plugin: CARRIED });
     const row = byPath(rows).get(CLAUDE_SETTINGS_PATH);
+    // Still planned: the row is what lets the per-entry merge remove a recorded
+    // row or a left-behind repository-mode hook entry on this route.
     expect(row).toBeDefined();
-
-    const settings = JSON.parse(row!.content) as Record<string, unknown>;
-    // Exactly one key: an empty `hooks: {}` would be a claim that this client
-    // has no hooks, and what is true is that its hooks live in the plugin.
-    expect(Object.keys(settings)).toEqual(["permissions"]);
-    const permissions = settings["permissions"] as { allow: string[] };
-    expect(permissions.allow.length).toBeGreaterThan(0);
-    // Byte-identical to the permissions the generated emission writes: the
-    // split moves the hooks object and nothing else.
-    expect(permissions).toEqual(settingsOf((await planned()).rows).permissions);
+    // No `hooks: {}` — that would claim this client has no hooks, and what is
+    // true is that its hooks live in the plugin — and no `permissions`.
+    expect(row!.content).toBe("{}\n");
   });
 
   it("keeps the whole residue when the record names only hooks", async () => {
@@ -2043,9 +2030,9 @@ describe("claude residue under plugin ownership", () => {
       0,
     );
     expect(paths).not.toContain(CLAUDE_REVIEW_GATE_PATH);
-    expect(Object.keys(JSON.parse(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content))).toEqual([
-      "permissions",
-    ]);
+    // TEST CHANGE, justified (2026-10-08, inbox row 324): expected `["permissions"]`;
+    // no allow row is rendered now, so the plugin-mode document has no member.
+    expect(Object.keys(JSON.parse(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content))).toEqual([]);
   });
 
   it("copies an installed pack's skill into the native tree even when skills are plugin-owned", async () => {
@@ -2079,16 +2066,17 @@ describe("claude residue under plugin ownership", () => {
 // sweep and the planner need from the rendering now is that every allow row it
 // emits lies inside the bound `ENGINE_PERMISSION_ROWS` declares, so a row
 // leaves silently only when the engine can prove it by name.
+// TEST CHANGE, justified (2026-10-08, inbox row 324): the case pinned a
+// non-empty allow list on both routes. The engine renders none now; the bound
+// keeps the three names an earlier release rendered, so a recorded row leaves
+// silently on the next sync and an unrecorded equal row stays the owner's.
 describe("the settings document's allow rows and the per-entry bound", () => {
-  it("renders only allow rows inside ENGINE_PERMISSION_ROWS, under either install mode, and hooks only while the repository owns them", async () => {
+  it("renders no allow row under either install mode, keeps the earlier releases' rows as the bound, and hooks only while the repository owns them", async () => {
     const generated = await planned();
-    const repoDoc = JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content) as {
-      permissions: { allow: string[] };
-      hooks?: unknown;
-    };
-    expect(repoDoc.permissions.allow.length).toBeGreaterThan(0);
-    for (const row of repoDoc.permissions.allow) expect(ENGINE_PERMISSION_ROWS).toContain(row);
+    const repoDoc = JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content) as Record<string, unknown>;
+    expect(repoDoc).not.toHaveProperty("permissions");
     expect(repoDoc).toHaveProperty("hooks");
+    expect(ENGINE_PERMISSION_ROWS).toEqual(["Read", "Grep", "Glob"]);
 
     const pluginBacked = await planned({
       plugin: {
@@ -2096,11 +2084,8 @@ describe("the settings document's allow rows and the per-entry bound", () => {
         clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
       },
     });
-    const pluginDoc = JSON.parse(byPath(pluginBacked.rows).get(CLAUDE_SETTINGS_PATH)!.content) as {
-      permissions: { allow: string[] };
-    };
-    expect(pluginDoc.permissions.allow).toEqual(repoDoc.permissions.allow);
-    expect(pluginDoc).not.toHaveProperty("hooks");
+    const pluginDoc = JSON.parse(byPath(pluginBacked.rows).get(CLAUDE_SETTINGS_PATH)!.content) as Record<string, unknown>;
+    expect(pluginDoc).toEqual({});
   });
 });
 
@@ -2175,10 +2160,11 @@ describe("the verdict roles' path-scoped report write", () => {
   it("does not pre-approve Write for the session", async () => {
     const { rows } = await planned();
 
-    // The permissions chain is read-class only; a verdict role's `Write` stays
-    // prompt-on-use and reaches the file system only through the guard's scope.
-    expect(settingsOf(rows).permissions.allow).not.toContain(CLAUDE_REPORT_WRITE_TOOL);
-    expect(cap("permission-rows")).toBe("3");
+    // A verdict role's `Write` stays prompt-on-use and reaches the file system
+    // only through the guard's scope. TEST CHANGE, justified (2026-10-08, inbox
+    // row 324): read `permissions.allow`; no permissions member is rendered now.
+    expect(settingsOf(rows)).not.toHaveProperty("permissions");
+    expect(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content).not.toContain(`"${CLAUDE_REPORT_WRITE_TOOL}"`);
   });
 
   it("renders no Write for the verdict roles under a plugin hook root (the container layout)", async () => {
@@ -2341,8 +2327,10 @@ describe("read-only git on the Claude tools line (sw05-read-only-git-grants)", (
   it("does not pre-approve Bash for the session", async () => {
     const { rows } = await planned();
 
-    // Ask mode: each git call prompts unless the user allows it, because the
-    // permission rows cover `read` only.
-    expect(settingsOf(rows).permissions.allow).not.toContain("Bash");
+    // Ask mode: each git call prompts unless the user allows it. TEST CHANGE,
+    // justified (2026-10-08, inbox row 324): read `permissions.allow`; no
+    // permissions member is rendered now, so no tool is pre-approved.
+    expect(settingsOf(rows)).not.toHaveProperty("permissions");
+    expect(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content).not.toContain('"Bash');
   });
 });

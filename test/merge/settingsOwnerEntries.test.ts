@@ -24,8 +24,9 @@ import { useTempDir } from "../support/tempDir.ts";
 /**
  * REQ-FLOW-036 at the shipped verbs: `.claude/settings.json` is merged entry by
  * entry, so an owner's deny rules, allow rows and hook entries survive `init`,
- * `sync` (forced or not) and `clean`, and the engine owns only the allow rows
- * and hook entries it wrote, recorded by hash on the ledger row (`coOwned`).
+ * `sync` (forced or not) and `clean`, and the engine owns only the hook entries
+ * it wrote (and the allow rows a release before this one wrote, until they
+ * leave), recorded by hash on the ledger row (`coOwned`).
  *
  * Real temp repositories through the real verbs, the posture
  * `./settingsKeyOwnership.test.ts` takes: a co-owned document's defects live in
@@ -152,7 +153,10 @@ const isEngineGroup = (group: unknown): boolean =>
 // ── The first fixture: merge, never a collision ─────────────────
 
 describe("an owner's permissions and hooks before setup", () => {
-  it("init merges beside them: the row is updated, every owner member stays byte for byte, and the record holds exactly the engine's rows and groups", async () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the engine's three allow rows were pinned beside the
+  // owner's row and on the record. The engine renders no allow row now, so the
+  // owner's `allow` is untouched and the record holds the hook groups alone.
+  it("init merges beside them: the row is updated, every owner member stays byte for byte, and the record holds exactly the engine's groups", async () => {
     const root = await freshRepo();
     await seedSettings(root, FIRST);
 
@@ -163,7 +167,7 @@ describe("an owner's permissions and hooks before setup", () => {
     const doc = await settingsDoc(root);
     const permissions = doc["permissions"] as { allow: string[]; deny: string[] };
     expect(permissions.deny).toEqual([DENY_RULE]);
-    expect(permissions.allow).toEqual([OWNER_ROW, "Read", "Grep", "Glob"]);
+    expect(permissions.allow).toEqual([OWNER_ROW]);
     expect(doc["model"]).toBe("opus");
     const hooks = doc["hooks"] as Record<string, unknown[]>;
     expect(hooks["PreToolUse"]?.[0]).toEqual(OWNER_GROUP);
@@ -174,7 +178,7 @@ describe("an owner's permissions and hooks before setup", () => {
     // own spelling, at its own depth, is in the file.
     const raw = await readSettings(root);
     expect(raw).toContain(`"deny": [\n      "${DENY_RULE}"\n    ]`);
-    expect(raw).toContain(`"allow": [\n      "${OWNER_ROW}",`);
+    expect(raw).toContain(`"allow": [\n      "${OWNER_ROW}"\n    ]`);
     expect(raw).toContain(`"model": "opus"`);
     const ownerGroupBytes = JSON.stringify(OWNER_GROUP, null, 2).split("\n").join("\n      ");
     expect(raw).toContain(`"PreToolUse": [\n      ${ownerGroupBytes},`);
@@ -182,8 +186,8 @@ describe("an owner's permissions and hooks before setup", () => {
     const rows = await settingsLedgerRows(root);
     expect(rows).toHaveLength(1);
     const elements = rows[0]?.coOwned?.elements ?? {};
-    expect(elements["/permissions/allow"]).toEqual(["Read", "Grep", "Glob"].map(memberHash));
-    const expected: Record<string, string[]> = { "/permissions/allow": ["Read", "Grep", "Glob"].map(memberHash) };
+    expect(elements).not.toHaveProperty("/permissions/allow");
+    const expected: Record<string, string[]> = {};
     for (const [event, groups] of Object.entries(hooks)) {
       expected[`/hooks/${event}`] = groups.filter(isEngineGroup).map(memberHash);
     }
@@ -215,11 +219,15 @@ describe("an owner's permissions and hooks before setup", () => {
     await expectOwnerContentKept();
   });
 
-  it("init --force judges the file against the previous ledger, never as an adoption: the engine's rows stay recorded, the notice claims none of them, and clean restores the bytes (review/39)", async () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the engine's recorded allow rows were the
+  // carried-forward record this case read; no allow row is rendered now, so it
+  // reads the engine's recorded hook groups instead.
+  it("init --force judges the file against the previous ledger, never as an adoption: the engine's groups stay recorded, the notice claims none of them, and clean restores the bytes (review/39)", async () => {
     const root = await freshRepo();
     await seedSettings(root, FIRST);
     await init(root);
-    const engineRows = ["Read", "Grep", "Glob"].map(memberHash);
+    const engineGroups = (await settingsLedgerRows(root))[0]?.coOwned?.elements;
+    expect(Object.keys(engineGroups ?? {}).length).toBeGreaterThan(0);
 
     const report = await init(root, true);
 
@@ -227,7 +235,7 @@ describe("an owner's permissions and hooks before setup", () => {
     expect(row.notice ?? "").not.toContain("permissions.allow");
     expect(row.notice ?? "").not.toContain("Merged into");
     const rows = await settingsLedgerRows(root);
-    expect(rows[0]?.coOwned?.elements?.["/permissions/allow"]).toEqual(engineRows);
+    expect(rows[0]?.coOwned?.elements).toEqual(engineGroups);
     expect(rows[0]?.coOwned?.createdFile).toBeUndefined();
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
@@ -243,7 +251,9 @@ describe("an owner's permissions and hooks before setup", () => {
     await init(root, true);
 
     expect((await settingsLedgerRows(root))[0]?.coOwned?.createdFile).toBe(true);
-    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/permissions/allow"]).toEqual(["Read", "Grep", "Glob"].map(memberHash));
+    // TEST CHANGE, justified (2026-10-08, inbox row 324): read the recorded allow rows; the record
+    // carries the engine's hook groups alone now.
+    expect(Object.keys((await settingsLedgerRows(root))[0]?.coOwned?.elements ?? {}).every((pointer) => pointer.startsWith("/hooks/"))).toBe(true);
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
     expect(existsSync(SETTINGS_ABS(root))).toBe(false);
@@ -325,9 +335,11 @@ describe("a ledger record that claims an owner's members", () => {
     }));
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
-    // The sweep names the engine's three rows it removed (indexes 1 to 3), never the owner's row at 0 or the deny rule.
-    expect(cleaned.stdout).toContain("permissions.allow[1]");
-    expect(cleaned.stdout).not.toContain("permissions.allow[0]");
+    // The sweep names no allow row and not the deny rule: the forged claim on
+    // the owner's row proves nothing. TEST CHANGE, justified (2026-10-08, inbox row 324): the sweep
+    // named the engine's three rows at indexes 1 to 3; the engine writes none now.
+    expect(cleaned.stdout).toContain("co-owned-reduced  .claude/settings.json");
+    expect(cleaned.stdout).not.toContain("permissions.allow");
     expect(cleaned.stdout).not.toContain("permissions.deny");
     expect(await backups(root)).toEqual([]);
     doc = await settingsDoc(root);
@@ -377,11 +389,13 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     expect(kept[0]?.coOwned).toEqual(recordBefore?.coOwned);
     expect(kept[0]?.contentHash).toBe(recordBefore?.contentHash);
 
-    // The owner fixes the member; the engine's allow rows are still recorded as its own.
+    // The owner fixes the member; the engine's other hook groups are still
+    // recorded as its own. TEST CHANGE, justified (2026-10-08, inbox row 324): read the recorded
+    // allow rows, which the engine no longer renders.
     (doc["hooks"] as Record<string, unknown>)["PreToolUse"] = [OWNER_GROUP];
     await writeFile(SETTINGS_ABS(root), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
     await sync(root);
-    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/permissions/allow"]).toEqual(["Read", "Grep", "Glob"].map(memberHash));
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/hooks/SessionStart"]).toEqual(recordBefore?.coOwned?.elements?.["/hooks/SessionStart"]);
 
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
@@ -433,7 +447,10 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     await seedSettings(root, FIRST);
     await init(root);
     const [recordBefore] = await settingsLedgerRows(root);
-    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ permissions: "allow-all" }, null, 2)}\n`, "utf8");
+    // TEST CHANGE, justified (2026-10-08, inbox row 324): the collision was `permissions` as a
+    // string. The engine writes nothing into `permissions` now, so that shape no
+    // longer collides; `hooks` as a string is the member it still writes into.
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ hooks: "all" }, null, 2)}\n`, "utf8");
 
     const report = await init(root, true);
 
@@ -553,20 +570,36 @@ describe("an owner's hook entry that runs their own .stamity/hooks/ script (revi
 // ── A shape the engine cannot merge beside ─────────────────────
 
 describe("a member the engine writes into, of another type", () => {
-  it("init skips a file whose permissions is a string, naming the member and the type, and records no row", async () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the case seeded `permissions` as a
+  // string. The engine writes nothing into `permissions` now, so the collision
+  // moves to `hooks`, the member it still writes into, and the old shape is
+  // pinned as merged beside.
+  it("init skips a file whose hooks is a string, naming the member and the type, and records no row", async () => {
     const root = await freshRepo();
-    const raw = `{"permissions":"allow-all"}\n`;
+    const raw = `{"hooks":"all"}\n`;
     await seedSettings(root, raw);
 
     const report = await init(root);
 
     const row = settingsRow(report.wrote);
     expect(row.action).toBe("skipped");
-    expect(row.warning).toContain("permissions");
+    expect(row.warning).toContain("hooks");
     expect(row.warning).toContain("an object");
     expect(row.warning).not.toContain("force");
     expect(await readSettings(root)).toBe(raw);
     expect(await settingsLedgerRows(root)).toEqual([]);
+  });
+
+  it("init merges beside a file whose permissions is a string, which the engine no longer writes into, and keeps it", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, `{"permissions":"allow-all"}\n`);
+
+    const report = await init(root);
+
+    expect(settingsRow(report.wrote).action).toBe("updated");
+    const doc = await settingsDoc(root);
+    expect(doc["permissions"]).toBe("allow-all");
+    expect(Object.keys(doc["hooks"] as Record<string, unknown>).length).toBeGreaterThan(0);
   });
 });
 
@@ -588,7 +621,10 @@ describe("the file's own style", () => {
       await init(root);
 
       const merged = await readSettings(root);
-      expect(JSON.parse(merged)).toMatchObject({ model: "opus", permissions: { allow: ["Read", "Grep", "Glob"] } });
+      // TEST CHANGE, justified (2026-10-08, inbox row 324): matched the three allow rows; the
+      // engine writes hook entries alone now.
+      expect(JSON.parse(merged)).toMatchObject({ model: "opus", hooks: { PreToolUse: [{}] } });
+      expect(JSON.parse(merged)).not.toHaveProperty("permissions");
       if (name === "one line") expect(merged).toBe(`${JSON.stringify(JSON.parse(merged))}\n`);
       if (name === "a tab") expect(merged).toContain('\n\t"model": "opus",\n');
       if (name === "CRLF") expect(merged).not.toMatch(/[^\r]\n/);
@@ -653,9 +689,9 @@ describe("a settings row with no coOwned record (a 1.11.0 ledger)", () => {
     expect(await backups(root)).toEqual([]);
     const elements = (await settingsLedgerRows(root))[0]?.coOwned?.elements ?? {};
     const hooks = (await settingsDoc(root))["hooks"] as Record<string, unknown>;
-    expect(Object.keys(elements).toSorted()).toEqual(
-      ["/permissions/allow", ...Object.keys(hooks).map((event) => `/hooks/${event}`)].toSorted(),
-    );
+    // TEST CHANGE, justified (2026-10-08, inbox row 324): listed `/permissions/allow` beside the
+    // hook events; the engine renders no allow row now.
+    expect(Object.keys(elements).toSorted()).toEqual(Object.keys(hooks).map((event) => `/hooks/${event}`).toSorted());
   });
 
   it("with a foreign key added, clean before any sync removes the engine's rows and groups behind a verified .bak and keeps the key", async () => {
@@ -696,5 +732,77 @@ describe("an engine hook entry the owner edited", () => {
     expect(await readSettings(root)).toBe(rendered);
     expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(edited);
     expect(existsSync(`${SETTINGS_ABS(root)}.bak`)).toBe(true);
+  });
+});
+
+// ── The allow rows an earlier release rendered (inbox row 324) ──
+
+describe("the Read, Grep and Glob allow rows an earlier release rendered (inbox row 324)", () => {
+  /** The three rows every release from v1.1.0 to 1.12.0 rendered and recorded. */
+  const RELEASED_ROWS = ["Read", "Grep", "Glob"];
+
+  /**
+   * A 1.12.0 setup over an owner's deny rule: the file carries the three rows
+   * beside the deny rule and the ledger records them under `/permissions/allow`,
+   * as 1.12.0's init left them. Built from this engine's init plus the two
+   * members 1.12.0 added, because this engine no longer renders them.
+   */
+  async function releasedSetup(root: string): Promise<string> {
+    await seedSettings(root, `${JSON.stringify({ permissions: { deny: [DENY_RULE] } }, null, 2)}\n`);
+    await init(root);
+    const afterInit = await readSettings(root);
+    const doc = await settingsDoc(root);
+    const permissions = doc["permissions"] as Record<string, unknown>;
+    await writeFile(
+      SETTINGS_ABS(root),
+      `${JSON.stringify({ ...doc, permissions: { ...permissions, allow: RELEASED_ROWS } }, null, 2)}\n`,
+      "utf8",
+    );
+    await editSettingsRecord(root, (record) => ({
+      ...record,
+      elements: { ...record?.elements, "/permissions/allow": RELEASED_ROWS.map(memberHash) },
+    }));
+    return afterInit;
+  }
+
+  it("init -y --tools claude writes no permissions member", async () => {
+    const root = await freshRepo();
+
+    await init(root);
+
+    const doc = await settingsDoc(root);
+    expect(doc).not.toHaveProperty("permissions");
+    // The hooks member is unchanged by the removal: the engine still wires them.
+    expect(Object.keys(doc["hooks"] as Record<string, unknown>).length).toBeGreaterThan(0);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
+  });
+
+  it("sync -y removes the three recorded rows with no .bak, and the owner's deny rule stays byte for byte", async () => {
+    const root = await freshRepo();
+    const afterInit = await releasedSetup(root);
+    expect((await settingsDoc(root))["permissions"]).toEqual({ deny: [DENY_RULE], allow: RELEASED_ROWS });
+
+    const report = await sync(root);
+
+    expect(settingsRow(report.wrote).action).toBe("updated");
+    expect(settingsRow(report.wrote).warning).toBeUndefined();
+    expect((await settingsDoc(root))["permissions"]).toEqual({ deny: [DENY_RULE] });
+    // Bytes, not values: the file is what this engine's init wrote over the deny rule.
+    expect(await readSettings(root)).toBe(afterInit);
+    expect(await backups(root)).toEqual([]);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
+  });
+
+  it("an owner's own Read row the ledger does not record stays through init and sync", async () => {
+    const root = await freshRepo();
+    const raw = `${JSON.stringify({ permissions: { allow: ["Read"] } }, null, 2)}\n`;
+    await seedSettings(root, raw);
+
+    await init(root);
+    await sync(root);
+
+    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: ["Read"] });
+    expect(await backups(root)).toEqual([]);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
   });
 });

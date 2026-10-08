@@ -19,6 +19,7 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { createApp } from "../../../src/index.ts";
+import { memberHash } from "../../../src/manifest/jsonMembers.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { CAPABILITY_FILE, CARRIABLE_CLASSES } from "../../../src/plugins/capabilityFile.ts";
 import type { Tool } from "../../../src/types/core.ts";
@@ -1042,11 +1043,19 @@ describe("plugin setup prints what the merge engine said about each file", () =>
     // "Adopted …" and listed top-level keys.
     expect(adoption.stdout).toContain("Merged into .claude/settings.json");
     expect(adoption.stdout).toContain("(enabledPlugins ×1)");
+    // Inbox row 324: under a plugin that carries hooks the setup writes no
+    // member of its own, so the client's key is the whole document.
+    expect(JSON.parse(await readFile(join(adopted, ".claude", "settings.json"), "utf8"))).toEqual({
+      enabledPlugins: { "stamity@stamity": true },
+    });
 
     const stale = `${JSON.stringify(
       {
-        // The engine's own permissions rendering: a left-behind file carries it
-        // unchanged, and only the hooks half is the stale part.
+        // An earlier release's permissions rendering: with no ledger to record
+        // it, the rows read as the owner's and stay; only the hooks half is the
+        // stale part. TEST CHANGE, justified (2026-10-08, inbox row 324): the
+        // comment called these rows the engine's own rendering, which they no
+        // longer are; the fixture bytes are unchanged.
         permissions: { allow: ["Read", "Grep", "Glob"] },
         hooks: { SessionStart: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"' }] }] },
       },
@@ -1062,5 +1071,41 @@ describe("plugin setup prints what the merge engine said about each file", () =>
     // (`hooks.SessionStart[0]`), not the whole key.
     expect(removal.stdout).toContain("Removed the repository-mode hooks wiring (hooks.SessionStart[0]) from .claude/settings.json");
     expect(JSON.parse(await readFile(join(leftBehind, ".claude", "settings.json"), "utf8"))).not.toHaveProperty("hooks");
+  });
+});
+
+describe("a plugin-backed setup whose ledger records the Read, Grep and Glob rows (inbox row 324)", () => {
+  it("sync -y removes the three rows with no .bak, and the client's enabledPlugins key stays", async () => {
+    // `plugin setup` refuses a repository that already carries a setup, so the
+    // verb that meets these rows on a plugin-backed repository is `sync`, over
+    // the same planner call (`hooks: false`) the setup made.
+    const client = { enabledPlugins: { "stamity@stamity": true } };
+    const root = await makeRepo("released", { ".claude/settings.json": `${JSON.stringify(client, null, 2)}\n` });
+    const installed = await pluginRoot("claude-root");
+    expect((await plugin(root, ["setup", "--client", "claude", "--plugin-root", installed, "-y"])).code).toBe(0);
+    const afterSetup = await readFile(join(root, ".claude", "settings.json"), "utf8");
+
+    // What 1.12.0's setup left: the three rows in the file and on the ledger.
+    const rows = ["Read", "Grep", "Glob"];
+    await writeFile(
+      join(root, ".claude", "settings.json"),
+      `${JSON.stringify({ ...client, permissions: { allow: rows } }, null, 2)}\n`,
+      "utf8",
+    );
+    const manifest = (await readManifest(root)) as SetupManifest;
+    const ledger = manifest.ledger.map((row) =>
+      row.path === ".claude/settings.json"
+        ? { ...row, coOwned: { ...row.coOwned, elements: { ...row.coOwned?.elements, "/permissions/allow": rows.map(memberHash) } } }
+        : row,
+    );
+    await writeManifest(root, { ...manifest, ledger }, { now: T0 });
+
+    const engineVersion = createApp().version;
+    const plan = await planSync(root, engineVersion);
+    await applySync(root, plan, { engineVersion, force: false, dryRun: false, now: T0 });
+
+    expect(await readFile(join(root, ".claude", "settings.json"), "utf8")).toBe(afterSetup);
+    expect(JSON.parse(afterSetup)).toEqual(client);
+    expect((await walk(root)).filter((path) => path.includes(".bak"))).toEqual([]);
   });
 });

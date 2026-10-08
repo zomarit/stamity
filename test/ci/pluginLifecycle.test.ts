@@ -986,23 +986,21 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       expect(setup.status, setup.stderr).toBe(0);
       surface = projectSurface(walk.project);
       expect(surface.files.length).toBeGreaterThan(5);
-      // `.claude/settings.json` under KEY-LEVEL ownership. `enabledPlugins` is the client's own
+      // `.claude/settings.json` under PER-ENTRY ownership. `enabledPlugins` is the client's own
       // install write, and the ONLY project-side change the install made: the marketplace record
-      // went to the scratch configuration directory, not here. `permissions.allow` is the SETUP's
-      // write — the engine's own key in plugin mode, landed beside the client's with every foreign
-      // key preserved in place — so the file carries exactly these two owners' keys after the
-      // setup step. Both asserted here and re-asserted after every later step through `unchanged`
-      // below, which is what proves neither the update nor the rollback touches the file.
-      const settings = surface.clientSettings as { enabledPlugins?: unknown; permissions?: { allow?: unknown } } | null;
+      // went to the scratch configuration directory, not here. In plugin mode the setup writes no
+      // member of its own into this file — the hooks live in the plugin, and no allow row is
+      // rendered — so the file carries the client's key alone after the setup step. Asserted here
+      // and re-asserted after every later step through `unchanged` below, which is what proves
+      // neither the update nor the rollback touches the file.
+      // TEST CHANGE, justified (2026-10-08, inbox row 324): the step asserted that the setup
+      // wrote `permissions.allow` = `["Read", "Grep", "Glob"]` beside `enabledPlugins`. A bare
+      // `Read` row matches every file read anywhere and reads inside the project need no rule,
+      // so the engine renders no allow row on either route now, and this asserts the absence.
+      const settings = surface.clientSettings as { enabledPlugins?: unknown; permissions?: unknown } | null;
       expect(settings).not.toBeNull();
       expect(settings?.enabledPlugins).toEqual({ "stamity@stamity": true });
-      // The three names are `CLAUDE_PERMISSION_ROWS` (`src/adapters/claude.ts:374`): the
-      // `AGENT_POLICY_ROSTER` rows' allow categories kept to `SESSION_PREAPPROVED_CATEGORIES`
-      // (read), rendered through the Claude tool-name table minus the guard-only names — "for the
-      // shipped roster that is three rows". The constant is module-private, so the derivation is
-      // cited beside the literal rather than imported; when the roster moves, this walk goes red
-      // here and the citation says where the new value comes from.
-      expect(settings?.permissions?.allow).toEqual(["Read", "Grep", "Glob"]);
+      expect(settings?.permissions).toBeUndefined();
       row("claude", "setup", "PASS", `${String(surface.files.length)} repository-owned files`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "installed");
 

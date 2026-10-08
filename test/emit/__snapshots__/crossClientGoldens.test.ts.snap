@@ -3,13 +3,6 @@
 exports[`emitted tree for all-four > matches the residue-document golden byte for byte > all-four residue documents 1`] = `
 {
   ".claude/settings.json": "{
-  "permissions": {
-    "allow": [
-      "Read",
-      "Grep",
-      "Glob"
-    ]
-  },
   "hooks": {
     "SessionStart": [
       {
@@ -1383,7 +1376,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "a04f897f653a3b3970519dec33d71dc6ed9759c97fce4439952513058c0c5771 2070 bytes",
+  ".claude/settings.json": "4c761f607b3d10d68c7dd852645518a35e75ff21ef6bc915375e935fc6bcfee8 1984 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "eec8b04ca6e68a50ddb64ee0d3d9ac3dc55a7c415ca40628705420bf7389fc90 6757 bytes",
@@ -1506,7 +1499,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "1252851f08a94db1753d691108f9c8d80a096c8281331ec9a6224e1dde0746c7 81060 bytes",
+  ".stamity/manifest.json": "6572f2037b07fb2529d6bbe961dec037eea8bcc8be711c3370a58d2bea056282 80774 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
@@ -1530,13 +1523,6 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
 exports[`emitted tree for claude > matches the residue-document golden byte for byte > claude residue documents 1`] = `
 {
   ".claude/settings.json": "{
-  "permissions": {
-    "allow": [
-      "Read",
-      "Grep",
-      "Glob"
-    ]
-  },
   "hooks": {
     "SessionStart": [
       {
@@ -1755,7 +1741,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "a04f897f653a3b3970519dec33d71dc6ed9759c97fce4439952513058c0c5771 2070 bytes",
+  ".claude/settings.json": "4c761f607b3d10d68c7dd852645518a35e75ff21ef6bc915375e935fc6bcfee8 1984 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "eec8b04ca6e68a50ddb64ee0d3d9ac3dc55a7c415ca40628705420bf7389fc90 6757 bytes",
@@ -1797,7 +1783,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "c139791291d44b7083185b1ef82ce0416031affc351a6edc9f5b0908c1e6ad52 19572 bytes",
+  ".stamity/manifest.json": "2ab2a859e52a7420a38cb50447a23cd4a1b0083e60acf1e7948e5a49b5fc1855 19286 bytes",
   "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",

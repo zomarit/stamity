@@ -146,10 +146,9 @@ Declared caps:
 | Cap | Declared value |
 |---|---|
 | `entry-file-budget` | ~200-line CLAUDE.md working target; the bridge emits one managed import block, leaving the budget to the user |
-| `permission-rows` | 3 |
 | `hook-enforcement` | fail-closed — blocking exit code: 2 |
 | `skills-access` | native — the projection is copied to `.claude/skills/<skill>/SKILL.md`, this client's project-level skills location, so the client loads a skill when it is relevant and `/<skill>` invokes one directly |
-| `command-surface` | native — one file per touchpoint command at `.claude/commands/<id>.md`, invoked as `/<id>`; description-only frontmatter, so nothing is pre-approved that the permissions chain does not already grant |
+| `command-surface` | native — one file per touchpoint command at `.claude/commands/<id>.md`, invoked as `/<id>`; description-only frontmatter, so no command pre-approves a tool |
 | `review-gate` | work-scoped gate on `TaskCompleted` + `SubagentStop` — Claude-only extensions, non-portable. fail-closed: a completion with an open review round is refused, and the gate opens at the round cap so it can never wedge a run |
 | `config-change-event` | `ConfigChange` tamper wiring — Claude-only extension, non-portable |
 | `effort-scale` | low, medium, high, xhigh, max — the levels this client's `effort:` key accepts; available levels depend on the model, so a level the chosen model does not offer falls back to that model's own default (code.claude.com/docs/en/sub-agents, accessed 2026-09-17). A level below this scale is raised to `low` rather than dropped, and the emission discloses it |

@@ -1,11 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Read",
-      "Grep",
-      "Glob"
-    ]
-  },
   "hooks": {
     "SessionStart": [
       {

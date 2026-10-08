@@ -53,35 +53,28 @@
  * 6. **`.claude/settings.json`** — JSON owned per TOP-LEVEL KEY (plain `.json`
  *    takes no managed block per `src/types/markers.ts`, and the client and the
  *    operator write this file too): the engine owns exactly the keys it renders
- *    — the read-only permissions chain, and the `hooks` object (the core hook
- *    interchange transformed to the client shape, the `ConfigChange` tamper
- *    wiring, the review-gate wiring below) when the repository owns hooks —
- *    and every other key (`enabledPlugins`, `model`, …) is kept as it is
- *    (`../manifest/claudeSettings.ts`).
+ *    — the `hooks` object (the core hook interchange transformed to the
+ *    client shape, the `ConfigChange` tamper wiring, the review-gate wiring
+ *    below) when the repository owns hooks, and nothing at all under a plugin
+ *    that carries them — and every other key (`enabledPlugins`, `model`,
+ *    `permissions`, …) is kept as it is (`../manifest/claudeSettings.ts`).
  * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) beside
  *    the three core hook scripts. Adapter-owned rather than core, because it
  *    rides two events only this client fires ({@link REVIEW_GATE_EVENTS}).
  * 8. **The MCP documents the core planned for this client**, placed verbatim.
  *
- * **The permissions chain is read-only.** Permission rules outrank hooks on
- * this client, so the allowlist is emitted as permission rules and the
- * generated pre-tool-use guard stays the per-agent backstop. The rows derive
- * from the shipped roster, not from a hand-kept list: union the categories any
- * `AGENT_POLICY_ROSTER` row grants (`read`, `edit`, `execute`, `network` — no
- * row grants `spawn` or `planning`), keep only the categories safe to
- * pre-approve for a whole session ({@link SESSION_PREAPPROVED_CATEGORIES} —
- * `read`), render that through the Claude tool-name table, and drop the two
- * names that sit in the table only so the guard can categorize them per-agent
- * (`Task`, the spawn alias; `Skill`, procedure ingestion). For the shipped
- * roster that is three rows: `Read`, `Grep`, `Glob`.
- *
- * Shell (`Bash`, `PowerShell`), network (`WebFetch`, `WebSearch`), and write
- * (`Edit`, `Write`, `NotebookEdit`) tools are deliberately ABSENT. An allow row
- * is session-global and covers the main thread, which the guard exempts by
- * design — pre-approving those categories would take the client's own approval
- * prompt off shell execution and network egress for the whole session. The
- * roster still grants them to the agents that need them; the human keeps the
- * first-use prompt.
+ * **No tool is pre-approved.** The settings document carries no
+ * `permissions` member. A `permissions.allow` row is session-wide standing
+ * consent that also covers the MAIN thread, which the generated pre-tool-use
+ * guard exempts by design. Releases v1.1.0 to 1.12.0 rendered three read rows
+ * (`Read`, `Grep`, `Glob`); a bare `Read` matches every file read anywhere,
+ * and reads inside the project need no rule, so those rows only took the
+ * client's prompt off reads OUTSIDE the project (code.claude.com/docs/en/permissions,
+ * read 2026-10-08). They are gone; the bound in `../manifest/claudeSettings.ts`
+ * still names them, so a recorded row leaves on the next sync and an
+ * unrecorded equal row stays the owner's. The roster still grants each agent
+ * its categories through the agent files; on the main thread the client's own
+ * approval rules decide every tool.
  *
  * **Dropped, deliberately, from the predecessor's surface:** the Agent-Teams
  * echo gates — prompt hooks that asked the model to grade its own work — every
@@ -144,14 +137,12 @@ import {
   resolveAgentGrant,
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
-import { AGENT_POLICY_ROSTER } from "../roster/agentPolicies.ts";
 import {
   CLIENT_MODEL_PROJECTION,
   resolveEffortValue,
   resolveModelValue,
 } from "../roster/modelLadder.ts";
 import { cliCallHint } from "../shared/cliCall.ts";
-import type { ToolCategory } from "../tools/categories.ts";
 import {
   substituteCanonicalPlatformMarker,
   toClaudeToolsFrontmatter,
@@ -199,9 +190,10 @@ export const CLAUDE_SKILLS_DIR: string = NATIVE_SKILL_DIRS[TOOL] ?? "";
 export const CLAUDE_COMMANDS_DIR = ".claude/commands";
 
 /**
- * Project settings: hooks wiring plus the permissions chain. JSON merged entry
- * by entry (`../manifest/claudeSettings.ts`, REQ-FLOW-036): the engine owns
- * each allow row and hook entry it wrote, never the file.
+ * Project settings: the hooks wiring. JSON merged entry by entry
+ * (`../manifest/claudeSettings.ts`, REQ-FLOW-036): the engine owns each hook
+ * entry it wrote (and an allow row an earlier release wrote, until it leaves),
+ * never the file.
  */
 export const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 
@@ -364,55 +356,6 @@ function guardFailClosedTail(cli: CliCallContext): string {
  */
 const ACCESS_DATE = "2026-09-30";
 
-// ── Permissions chain ────────────────────────────────────────────
-
-/**
- * Names present in the Claude tool-name table ONLY so the generated
- * pre-tool-use guard can put a category verdict on them per-agent (the category
- * resolution in `src/tools/translator.ts`): `Task` is the accepted
- * alias of the `spawn` delegation tool, `Skill` is procedure ingestion under
- * `read`. Neither belongs in the session-global permissions chain — a
- * pre-approval there would cover the MAIN thread too, taking delegation and
- * skill ingestion off the client's own approval path.
- */
-const GUARD_MAP_ONLY_NAMES: ReadonlySet<string> = new Set(["Task", "Skill"]);
-
-/**
- * Categories this file pre-approves session-globally: `read` alone.
- *
- * A `permissions.allow` row is not a sub-agent grant. It is a session-wide
- * standing consent that also covers the MAIN thread — the one thread the
- * generated `PreToolUse` guard deliberately exempts, because the guard reasons
- * per `stamity-*` agent and the main thread is not one. So every category
- * outside `read` that lands here silently retires the client's own approval
- * prompt for shell execution, network egress, and file writes across the whole
- * session, in exchange for saving a keystroke.
- *
- * The roster still grants `edit`, `execute`, and `network` where an agent needs
- * them; withholding them here does not withhold them from the agent. It only
- * keeps the human in the loop the first time each is used, which is the
- * difference between "the setup declares what its agents may do" and "the setup
- * turned off your prompts". A privilege that widens blast radius stays
- * prompt-on-use.
- */
-const SESSION_PREAPPROVED_CATEGORIES: ReadonlySet<ToolCategory> = new Set<ToolCategory>(["read"]);
-
-/**
- * The permissions allowlist, derived — not hand-kept — from the intersection of
- * the roster's category union with {@link SESSION_PREAPPROVED_CATEGORIES},
- * rendered through the Claude tool-name table and minus
- * {@link GUARD_MAP_ONLY_NAMES}. `toClaudeToolsFrontmatter` already normalizes
- * to canonical category order with duplicates collapsed, so the row order is
- * deterministic by construction.
- */
-const CLAUDE_PERMISSION_ROWS: readonly string[] = toClaudeToolsFrontmatter(
-  AGENT_POLICY_ROSTER.flatMap((row) => row.allow).filter((category) =>
-    SESSION_PREAPPROVED_CATEGORIES.has(category),
-  ),
-)
-  .split(", ")
-  .filter((name) => name !== "" && !GUARD_MAP_ONLY_NAMES.has(name));
-
 // ── Dialect facts ────────────────────────────────────────────────
 
 /** This client's honest hook guarantee, read from the shared table rather than restated. */
@@ -453,7 +396,6 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
       value:
         "~200-line CLAUDE.md working target; the bridge emits one managed import block, leaving the budget to the user",
     },
-    { name: "permission-rows", value: String(CLAUDE_PERMISSION_ROWS.length) },
     {
       name: "hook-enforcement",
       value:
@@ -470,7 +412,7 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
     },
     {
       name: "command-surface",
-      value: `native — one file per touchpoint command at \`${CLAUDE_COMMANDS_DIR}/<id>.md\`, invoked as \`/<id>\`; description-only frontmatter, so nothing is pre-approved that the permissions chain does not already grant`,
+      value: `native — one file per touchpoint command at \`${CLAUDE_COMMANDS_DIR}/<id>.md\`, invoked as \`/<id>\`; description-only frontmatter, so no command pre-approves a tool`,
     },
     {
       name: "review-gate",
@@ -497,9 +439,9 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
  *
  * The review gate is the whole list: it is a script this adapter both places
  * and wires, on two events only this client fires. The settings document is
- * NOT here — it is split rather than skipped, because its `permissions` half
- * is repository configuration no plugin owns — and neither are the bridge, the
- * MCP placement or anything else an `infra` row can be.
+ * NOT here — it is planned in both modes, with no member under a plugin that
+ * carries hooks, so the per-entry merge still runs over the file — and neither
+ * are the bridge, the MCP placement or anything else an `infra` row can be.
  */
 const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set(["claude-review-gate"]);
 
@@ -584,10 +526,11 @@ export const claudeResiduePlanner: ResiduePlanner = {
     }
     rows.push({
       path: CLAUDE_SETTINGS_PATH,
-      // Split rather than skipped: `permissions` is repository configuration
-      // this engine owns under either install mode, and only the `hooks` object
-      // moves to the plugin — so the document is always written and the key is
-      // absent when a plugin carries the wiring (REQ-PLUGIN-016).
+      // Planned in both modes: in repository mode the document carries the
+      // hook entries, and under a plugin that carries hooks it carries no
+      // member at all (REQ-PLUGIN-016). The row stays planned so the per-entry
+      // merge still runs over the file: it removes a recorded allow row an
+      // earlier release wrote, or a left-behind repository-mode hook entry.
       content: buildSettingsJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, {
         hooks: !isPluginOwned(ctx.manifest, TOOL, "hooks"),
       }),
@@ -849,12 +792,13 @@ interface ClaudeHookEntry {
 }
 
 /**
- * `.claude/settings.json`: the permissions chain plus the hook wiring, as one
- * JSON document (plain `.json` takes no managed block — it has no comment
- * syntax to carry markers, per `src/types/markers.ts`). The writers merge it
- * entry by entry: each allow row and hook entry this rendering carries is the
- * engine's, and every other member, row or entry the client or the operator
- * put there survives every write (`../manifest/claudeSettings.ts`).
+ * `.claude/settings.json`: the hook wiring, as one JSON document (plain `.json`
+ * takes no managed block — it has no comment syntax to carry markers, per
+ * `src/types/markers.ts`). No `permissions` member: the engine pre-approves no
+ * tool (the module header). The writers merge it entry by entry: each hook
+ * entry this rendering carries is the engine's, and every other member, row or
+ * entry the client or the operator put there survives every write
+ * (`../manifest/claudeSettings.ts`).
  *
  * The hook transform is mechanical over the portable interchange: PascalCase
  * event names from `CLAUDE_EVENT_NAMES`, one entry per row in declaration
@@ -884,10 +828,8 @@ function buildSettingsJson(
   // The `hooks` key is omitted entirely, not emitted empty: an empty object is
   // a claim that this client has no hooks, and what is true under a
   // plugin-backed setup is that its hooks live in the plugin's own
-  // configuration. `permissions` is unaffected — see the call site.
-  if (!emit.hooks) {
-    return `${JSON.stringify({ permissions: { allow: CLAUDE_PERMISSION_ROWS } }, null, 2)}\n`;
-  }
+  // configuration. With no other member to render, the document is empty.
+  if (!emit.hooks) return "{}\n";
   const rows = core.hooks.interchangeFor(TOOL);
   // The core's rows already carry the client's view of their own scripts
   // (`../emit/hooksInfra.ts`). This one does not: the review gate rides two
@@ -926,7 +868,7 @@ function buildSettingsJson(
     hooks[event] = [{ hooks: [commandHook(["node", reviewGate])] }];
   }
 
-  return `${JSON.stringify({ permissions: { allow: CLAUDE_PERMISSION_ROWS }, hooks }, null, 2)}\n`;
+  return `${JSON.stringify({ hooks }, null, 2)}\n`;
 }
 
 /**

@@ -2,7 +2,7 @@
 slug: /migration-from-hatch3r
 title: Migrating from hatch3r
 ---
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0ee31417. Re-attested 2026-10-08 for the Claude allow rows. -->
 <!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
      strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
      `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
@@ -379,9 +379,15 @@ it out of the tree. Or skip the sweep and remove the leftovers by hand with `git
 ### The previous setup's hooks stay beside this one's
 
 If hatch3r's `.claude/settings.json` was already there at init, stamity merged into it: its own
-allow rows and hook entries were added beside hatch3r's, and every entry hatch3r wrote was kept
-— the engine owns only the entries it wrote. The init notice counts the entries it kept, member by
-member, and hatch3r's hook entries keep firing beside this setup's. Remove the ones you no longer
+hook entries were added beside hatch3r's, it added no allow row, and every entry hatch3r wrote was
+kept — the engine owns only the entries it wrote. The init notice counts the entries it kept,
+member by member; for a file holding one allow row and one `PreToolUse` hook entry it reads:
+
+```text
+  Merged into .claude/settings.json: kept your 2 entries (permissions.allow ×1, hooks.PreToolUse ×1) beside the engine's; the engine owns only the entries it wrote.
+```
+
+hatch3r's hook entries keep firing beside this setup's. Remove the ones you no longer
 want by hand, then run `sync`; there is no `--force` for this file, and none is needed.
 
 ### In a monorepo, handle each package

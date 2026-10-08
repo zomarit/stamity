@@ -699,7 +699,10 @@ describe("reduceClaudeSettingsToForeignContent", () => {
 });
 
 describe("claudeSettingsSpec", () => {
-  it("owns the allow rows the engine renders and the hook entries, and passes declared members through", () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the title said the
+  // engine renders these rows; it renders none now and keeps them as the bound
+  // of rows a release rendered. The assertions are unchanged.
+  it("owns the allow rows a release rendered and the hook entries, and passes declared members through", () => {
     expect(ENGINE_PERMISSION_ROWS).toEqual(["Read", "Grep", "Glob"]);
     const spec = claudeSettingsSpec([{ pointer: "/a/b", foreign: "yield" }]);
     expect(spec.members).toEqual([{ pointer: "/a/b", foreign: "yield" }]);

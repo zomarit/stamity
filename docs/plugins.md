@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0ee31417. Re-attested 2026-10-08 for the Claude allow rows. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-30. `test/docsPages.test.ts` holds this
@@ -151,10 +151,17 @@ settings of your Claude configuration directory (`extraKnownMarketplaces` there)
 }
 ```
 
-`stamity plugin setup` keeps that key beside its own `permissions` rows, in either order, and says
-so: the engine owns only the allow rows and hook entries it wrote in this file, so the client's
-enablement — and the marketplace declaration below, if you add it — survive setup, `sync`, `check`
-and `clean` (the rule is under [Set the repository up](#set-the-repository-up)).
+`stamity plugin setup` keeps that key, in either order, and says so. Under a plugin that carries
+hooks the setup writes no member of its own into this file, so a file holding only the enablement
+is left byte for byte:
+
+```text
+  Merged into .claude/settings.json: kept your 1 entry (enabledPlugins ×1) beside the engine's; the engine owns only the entries it wrote.
+```
+
+The engine owns only the hook entries it wrote in this file, so the client's enablement — and the
+marketplace declaration below, if you add it — survive setup, `sync`, `check` and `clean` (the
+rule is under [Set the repository up](#set-the-repository-up)).
 
 What makes the decision reviewable is a declaration you write into the project settings yourself —
 the same `extraKnownMarketplaces` block beside the enablement, so the committed file names the
@@ -342,15 +349,17 @@ Each of those runs `stamity plugin setup` through the plugin's own runtime. What
 
 - `AGENTS.md`, and the managed block in `CLAUDE.md`
 - `.claude/rules/` and the other repository-owned classes from the table above
-- `.claude/settings.json` **without** hook entries, when the plugin owns hooks. The file is
-  merged entry by entry: setup adds its `permissions.allow` rows (and its hook entries only when
-  the repository owns hooks) beside everything already there, and records each one on the ledger.
-  Your `deny`, `ask`, your own allow rows and hook entries, and every other key — including the
-  `enabledPlugins` that `plugin install --scope project` wrote — stay in place, in the file's own
-  indentation and line endings. The file collides only when it is not a JSON object or a member
-  the engine writes into has another type (`permissions` not an object, `allow` not an array,
-  `hooks` not an object, an event not an array); the message names the member and the fix, and
-  `--force` does not clear it. A repository-mode hook entry an earlier setup left behind — its
+- `.claude/settings.json` with **no member of its own** when the plugin owns hooks — `{}` when
+  there was no file before. The file is merged entry by entry:
+  setup adds hook entries only when the repository owns hooks, and pre-approves no tool — it
+  writes no `permissions` rows. Your `deny`, `ask`, your own allow rows and hook entries, and
+  every other key — including the `enabledPlugins` that `plugin install --scope project` wrote —
+  stay in place, in the file's own indentation and line endings. The `Read`, `Grep` and `Glob`
+  allow rows a release up to 1.12.0 wrote leave on the next `sync` with no backup where the ledger
+  records them; an equal row it does not record is yours and stays. The file collides only when it
+  is not a JSON object or a member the engine writes into has another type (`hooks` not an object,
+  an event not an array, where it writes hook entries); the message names the member and the fix,
+  and `--force` does not clear it. A repository-mode hook entry an earlier setup left behind — its
   command runs a script under `.stamity/generated/hooks/` — is removed and reported, behind a
   `.bak` whenever the ledger does not prove it (a lost setup left no ledger row, so it cannot);
   `sync` and `clean` both remove it. `clean` takes back exactly the engine's entries: an entry it

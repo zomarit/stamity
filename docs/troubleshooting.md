@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0ee31417. Re-attested 2026-10-08 for the Claude allow rows. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -264,12 +264,14 @@ npx @zomarit/stamity sync --force
 depends on whose content matters, and `sync` cannot know that.
 
 `.claude/settings.json` is different: it is merged entry by entry, never overwritten, and
-`--force` does not apply to it. The engine owns only the `permissions.allow` rows and hook entries
-it wrote there; your `deny` and `ask` rules, your own rows and hook entries, the client's
-`enabledPlugins` and your `model` or `env` stay whatever you run. The file collides only when it
-is not a JSON object, or a member the engine writes into has another type — `permissions` not an
-object, `allow` not an array, `hooks` not an object, an event not an array. The message names the
-member: make it the type it names (or remove it), or fix or delete the file, and re-run `sync`.
+`--force` does not apply to it. The engine owns only the hook entries it wrote there, and it
+pre-approves no tool: it writes no `permissions` rows. Your `deny` and `ask` rules, your own rows
+and hook entries, the client's `enabledPlugins` and your `model` or `env` stay whatever you run.
+The `Read`, `Grep` and `Glob` allow rows a release up to 1.12.0 wrote leave on the next `sync`,
+with no backup, where the ledger records them; an equal row it does not record is yours and stays.
+The file collides only when it is not a JSON object, or a member the engine writes into has
+another type — `hooks` not an object, an event not an array. The message names the member: make
+it the type it names (or remove it), or fix or delete the file, and re-run `sync`.
 An engine hook entry you edited by hand is put back on the next `sync` behind a verified `.bak`
 holding your edit, with a warning naming the entry. Keep a hook of your own in an entry of its
 own, and personal rows in `.claude/settings.local.json`, which this engine never writes.
