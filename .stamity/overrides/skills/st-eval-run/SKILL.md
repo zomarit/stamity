@@ -97,9 +97,17 @@ and everything under it, the fixtures and their `Expected verdict` lines
 included, is never handed to the judge in any call, at calibration or at
 scoring. The labels are the answer key; a rubric handed in whole is an open
 book, and a 5/5 read off it measures reading rather than grading. Per fixture,
-the judge receives that excised rubric, the fixture's transcript, and the
-fixture case's `## Brief` and `## Expected` block — and nothing else in the
-dispatched task. The session-native exception records additional ambient inputs.
+the judge receives four blocks and nothing else in the dispatched task,
+assembled exactly as `judgeBlocks` in `scripts/eval/instrument.mjs` builds them
+and in this order, a blank line between them: that excised rubric, unchanged;
+`## Brief`, a blank line, then the fixture case's Brief verbatim; `## Expected`,
+a blank line, then that case's Expected block; and `Transcript under grading:`,
+a blank line, then the fixture's transcript verbatim in a `text` fence one
+backtick longer than the longest backtick run inside it, never fewer than
+three. Unlabelled, a bare `Not done:` answer read as a draft after the Brief's
+"Respond exactly as you would", and the judge answered the Brief instead of
+grading it; a bare `Not done:` answer is graded, never answered. The
+session-native exception records additional ambient inputs.
 
 Every fixture's returned label matches its expected label, or the run stops
 here. A partial match is a miss: report the fixture, the label expected, and
@@ -165,10 +173,16 @@ produces no scenario output, and no transcript is graded by the agent that
 wrote it. Use a fresh judge context for each transcript and calibration fixture,
 with the selected judge model/effort; do not inherit the harness conversation.
 
-Per transcript, hand the judge four things: the same excised rubric step 2
-handed in — the selected rubric above the `## Calibration protocol` heading —
-that case's `## Brief` verbatim, that case's `## Expected` block, and the
-transcript verbatim. The excision is not a calibration-only measure: the
+Per transcript, hand the judge four blocks, assembled exactly as `judgeBlocks`
+in `scripts/eval/instrument.mjs` builds them and in step 2's order, a blank line
+between them: the same excised rubric step 2 handed in — the selected rubric
+above the `## Calibration protocol` heading — unchanged; `## Brief`, a blank
+line, then that case's Brief verbatim; `## Expected`, a blank line, then that
+case's Expected block; and `Transcript under grading:`, a blank line, then the
+transcript verbatim in a `text` fence one backtick longer than the longest
+backtick run inside it, never fewer than three. A bare `Not done:` answer is
+graded, never answered: it is the transcript under grading, not a draft for the
+judge to finish. The excision is not a calibration-only measure: the
 fixtures are live cases in the set, so a judge holding that section grades some
 transcripts with a labelled near-duplicate and its deciding criteria in
 context. The Brief is the scenario's facts, not a second source of

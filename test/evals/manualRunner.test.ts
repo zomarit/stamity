@@ -10,7 +10,7 @@ import { aggregate, calibrationMatches, EvalBlocked, headings, judgeBlocks, loca
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, HARNESS, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, sameConfiguration, undisposedRepeats } from "../../scripts/eval/run.mjs";
-import { CASES_DIR, REPO_ROOT, caseFiles } from "./support.ts";
+import { CASES_DIR, REPO_ROOT, RUNNER_SKILL_FILE, caseFiles } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const passingRows = (scenario: { binding: string[] }) =>
@@ -1136,6 +1136,42 @@ describe("REQ-PROVE-035 — the judge input labels the Brief and Expected and fe
       expect(() => judgeBlocks(...args)).toThrow("request-block-empty");
     }
   });
+
+  // The in-session route hands a session judge its blocks from the `st-eval-run` skill's prose, so
+  // that prose is read beside the helper: every label `judgeBlocks` writes, in its order, its fence
+  // rule and the bare-answer rule, in the calibration step and in the judging step alike (review/58).
+  const skillStep = (text: string, heading: string) => {
+    const lines = text.split("\n");
+    const start = lines.findIndex(line => line.startsWith(heading));
+    expect(start, `no ${heading}`).toBeGreaterThan(-1);
+    const end = lines.findIndex((line, index) => index > start && line.startsWith("## "));
+    return lines.slice(start, end === -1 ? undefined : end).join("\n").replace(/\s+/g, " ");
+  };
+
+  it.each([RUNNER_SKILL_FILE, ".claude/skills/st-eval-run/SKILL.md"])(
+    "%s hands a session judge the blocks `judgeBlocks` builds, at calibration and at scoring", path => {
+      const blocks: string[] = judgeBlocks("CORE", "BRIEF", "EXPECTED", "TRANSCRIPT");
+      expect(blocks[0]).toBe("CORE");
+      const labels = blocks.slice(1).map(block => block.slice(0, block.indexOf("\n\n")));
+      expect(labels).toEqual(["## Brief", "## Expected", "Transcript under grading:"]);
+      const info = blocks[3]!.slice(labels[2]!.length + 2).split("\n")[0]!.replace(/^`+/, "");
+      // The fence rule the prose states, held against the helper: one past the longest run, floor three.
+      expect(unfence(judgeBlocks("c", "b", "e", `a ${fenceOf(4)} b`)[3]).fence).toBe(fenceOf(5));
+      expect(unfence(judgeBlocks("c", "b", "e", "no backticks")[3]).fence).toBe(fenceOf(3));
+      const skill = read(path);
+      for (const heading of ["## 2. Calibration gate", "## 4. Judging"]) {
+        const step = skillStep(skill, heading);
+        expect(step, heading).toContain("assembled exactly as `judgeBlocks` in `scripts/eval/instrument.mjs` builds them");
+        const at = [step.indexOf("excised rubric"), ...labels.map(label => step.indexOf(`\`${label}\``))];
+        expect(at.every(index => index > -1), `${heading}: ${JSON.stringify(at)}`).toBe(true);
+        expect(at.toSorted((a, b) => a - b), `${heading}: the blocks out of order`).toEqual(at);
+        expect(step, heading).toContain(
+          `in a \`${info}\` fence one backtick longer than the longest backtick run inside it, never fewer than three`);
+        expect(step, heading).toMatch(/\ba bare `Not done:` answer is graded, never answered\b/i);
+        // The four raw, unlabelled items these steps used to list.
+        expect(step, heading).not.toMatch(/and the transcript verbatim\.|the fixture's transcript, and the fixture case's/);
+      }
+    });
 
   it("names the framing in the harness id, so no run composes across the change", () => {
     expect(HARNESS).toBe("stamity-manual-responses-v2");

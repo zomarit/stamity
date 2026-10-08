@@ -54,8 +54,9 @@ design. New artifacts still need a case or an explicit reviewed exemption.
   form and the same calibration protocol, fixtures and keys.
 - Scenario input: exactly the sealed Brief. No Expected, rubric, repository
   context, previous sample, provider-injected project text or scenario tools.
-- Judge input: exactly rubric core, Brief, Expected and verbatim transcript.
-  Labels and prior context are withheld; actual exposed tools and traces are recorded.
+- Judge input: exactly rubric core, Brief, Expected and verbatim transcript, each
+  block labelled and the transcript fenced as `judgeBlocks` builds them (since 2026-10-08).
+  Calibration labels and prior context are withheld; actual exposed tools and traces are recorded.
 - Calibration: use every fixture and its original case inputs from `cases-v4/`
   as referenced by the retained rubric; preserve labels and grading rules exactly.
   Live isolation/model/effort admission and all-fixture calibration precede scores.
