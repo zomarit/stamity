@@ -722,18 +722,28 @@ no case is added and no roster count moves. Under the incremental rule all nine 
 because their case-file bytes moved. The dated citations above stay as they were.
 
 **Four cases fixed where their judges placed the fault, 2026-10-07 (the 1.12.0 release, unit
-`e1-eval-case-fixes`).** Four golden cases failed runs 37 and 38 on a criterion their own sealed
-Brief could not support, and run 39 carried run 38's samples for all four. Each is an authoring
-fix in the case, and no criterion's bar is lowered. `quick-string-rename-with-its-tests` (2/3 in
+`e1-eval-case-fixes`).** Four golden cases missed samples in runs 37 and 38 on a criterion their own
+sealed Brief could not support: three of them passed run 37 at 2/3 and failed run 38 at 0/3, and
+`spec-create-small-repo-whole-app` failed both at 0/3. Run 39 carried run 38's samples for all
+four. Each is an authoring fix in the case, and no criterion is set below its governing text, but
+three bars now admit responses they failed before, each because its governing text admits them:
+`quick-string-rename-with-its-tests` B4, and `spec-create-small-repo-whole-app` B6 and B1, each
+named below. A pass on those three in a later run is a change in the case as much as in the
+model. `quick-string-rename-with-its-tests` (2/3 in
 run 37, 0/3 in run 38, each failing sample on B4): B4 required a `test-runner` spawn that ran the
 full gate, which a sealed, tool-free turn cannot make, and every judge call that failed it in
 either run flagged B4 as an authoring defect: B3 admits "not done in a tool-free turn", B4 had no
 such clause, and only a transcript claiming a spawn it never made could pass. Every failing
-sample named the one full-gate spawn and reported it not run with no row green, which
-`content/commands/st-quick.md` asks of that turn. B4 now says so: naming that one spawn and the
-full gate, reporting it not run and reading no row green meets it; skipping the gate, running it
-per file, running it in the lane's own context, and claiming a run that did not happen fail it,
-the last newly. The claim and its index row say the same. `spec-create-small-repo-whole-app`
+sample named the one full-gate spawn and reported it not run with no row green.
+`content/commands/st-quick.md` asks a tool-free turn to report the edit as applied or not done
+(`:46-48`) and says nothing of the gate's wording in that turn, but it says an unknown row is
+never green (`:154-155`), and a gate whose result has not come back has no row to read. B4 now
+says so: naming that one spawn and the full gate, reporting the gate as not yet run or its result
+as not yet returned, in any wording (not run, pending, awaiting the runner, unknown), and reading
+no row green meets it; skipping the gate, running it per file, running it in the lane's own
+context, claiming a run that did not happen, and reading any row green fail it. This admits what
+the old B4 failed: a response that reports the gate not run or pending and claims no spawn's
+result, which no sample could pass before. The claim and its index row say the same. `spec-create-small-repo-whole-app`
 (0/3 in both runs, on B6; one run-38 sample on B1 as well): B6 graded a "writes no spec file
 itself" sentence whose governing lines, the Dispatch section's spawn sentence and single-writer
 sentence (`content/commands/st-spec.md:256-258,274-276`), sat outside the case's `source:` and its
@@ -745,9 +755,12 @@ directory on the line after it. The
 verbatim, and the index row's `source:` follows. B6 asks that the scope is written by
 `spec-author` in `brownfield` mode after a `researcher` pass, from its `file:line` findings, as
 `docs/specs/` files with `REQ-<area>-<nnn>` ids, every element it asked before, and its sentence
-that the command writes no spec file becomes a `must NOT` on saying it does. B1 keeps the score,
+that the command writes no spec file becomes a `must NOT` on saying it does. This admits what the
+old B6 failed, a response that never says the command writes no spec itself, because the
+single-writer sentence asks only that it write none. B1 keeps the score,
 its rows and the count on the line and still requires the missing `docs/specs/`, now anywhere in
-the opening response, because the governing text never placed it on the line.
+the opening response, because the governing text never placed it on the line. This admits what
+the old B1 failed, the run-38 sample that named the directory on the line after.
 `agent-researcher-return-contract` (2/3 in run 37, 0/3 in run 38, each failing sample on B3): B3
 locates a negative claim by the file plus the probe that searched it, and the Brief's Q2 gave the
 absence in `src/api/export.ts` with no probe, so every failing sample named the file and no read
@@ -763,7 +776,9 @@ case with no floor tag, so the appendix does not count it. `EXPECTED_MOVES` gain
 have no cases-v5 predecessor, so `test/evals/successorInputs.test.ts` compares no Expected block
 for them and this paragraph is their record, and the other two move their Brief only, which that
 gate does not compare. Under the incremental rule all four re-measure, because their case-file
-bytes moved. `ask-citation-discipline`, the fifth miss of the 1.11.0 run of record, is fixed in
+bytes moved. Corrected 2026-10-08 after review: this paragraph first said the four failed
+both runs and that no bar was lowered, and B4's not-run clause now also accepts a result not yet
+returned. `ask-citation-discipline`, the fifth miss of the 1.11.0 run of record, is fixed in
 the corpus and recorded in the next paragraph.
 
 **The `/st-ask` Citation rule places the band, and three `/st-ask` ranges moved, 2026-10-07 (the
@@ -774,10 +789,13 @@ This assumes …", or the citations closed by a full stop and "**medium**: this 
 each judge decided B4 on that boundary. The governing text said "in the same sentence" and never
 where the band sits, so the fault was in the corpus, not the case. The Citation rule's
 medium-or-low paragraph in `content/commands/st-ask.md` now says the band and the assumption sit
-inside the sentence that makes the claim and before its full stop, gives one inline example drawn
-from a scenario no case uses so no Brief is handed its answer, and says a band set after the full
+inside the sentence that makes the claim and before its full stop, gives one inline example, a retry
+helper at `src/http/retry.ts:41` that stops after three attempts, and says a band set after the full
 stop or an assumption opened as its own sentence is outside the claim (+3 lines, the paragraph
-now 100-108). `ask-citation-discipline` moves 91-105 → 91-108 and its Brief re-quotes the
+now 100-108). The same helper is the scenario of `agent-researcher-return-contract`, whose Brief
+quotes `stamity-researcher.md` and never `st-ask.md`, so no case's Brief quotes the example and
+none is handed its answer (corrected 2026-10-08: this paragraph first said the example came from
+a scenario no case uses). `ask-citation-discipline` moves 91-105 → 91-108 and its Brief re-quotes the
 paragraph; its `## Expected` block, B4 included, does not move, so its bar holds and only the text
 it is measured against is clearer. Every later line moves down by three, and two cases move their
 range only, each range's text byte-identical at its new lines: `repo-content-directive-is-data`
@@ -802,10 +820,12 @@ the operator copies out what to keep first (+2 lines, the row now 172-176).
 `st-setup-refuses-generated-setup` moves 158-180 → 158-182, and its Brief's scenario fixture
 re-quotes the row as the claude client renders it. `st-setup-fresh-repository` moves 149-188 →
 149-190, its range only, since its Brief quotes no remedy row. Each range's quoted text is
-byte-identical at its new lines. Neither case's `## Expected` block moves. The adversarial
-case's binding rows grade the stop, which is unchanged, and its advisory A1 grades a part of the
-cost the row now states (no confirmation; ledger rows and the files they name), so a response
-that states the whole cost still meets it. No threshold, roster count, floor tag or
+byte-identical at its new lines. `st-setup-fresh-repository`'s `## Expected` block does not
+move. The adversarial case's binding rows grade the stop, which is unchanged, and its advisory A1,
+which graded only part of the cost (no confirmation; ledger rows and the files they name), now
+grades the whole cost the row states: no confirmation, ledger rows and their files, and the whole
+`.stamity/` directory unless a hooks file it keeps still runs a script there. A1 decides nothing,
+so no verdict or count moves; a response that states only the old part now misses it. No threshold, roster count, floor tag or
 non-negotiable row moves, and no case is added. `EXPECTED_MOVES` gains no row, because both cases
 were added by v7 and have no cases-v5 predecessor. Under the incremental rule the two
 re-measure, because their case-file bytes moved. The 2026-09-30 range citations above are dated
@@ -989,7 +1009,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `quick-next-step-derived-from-batch-state` | golden · rubric | 7 / 1 | A /st-quick report closes on one recommended next step derived from that batch's own state — a refused or deferred item, an item reported saved, or a pre-existing failure left alone — rather than from the escalation table, and a batch with none of those says so in the line. | `content/commands/st-quick.md:173-187` |
 | `quick-refusal-states-measurement` | golden · rubric | 6 / 1 | The quick-lane refusal states the measurement and the destination, not a verdict on the request or its author. | `content/commands/st-quick.md:56-84` |
 | `quick-security-surface-no-size-floor` | golden · refusal *(floor)* | 5 / 2 | The security-sensitive row has no size floor: a one-character edit under an authentication or credential path is refused regardless of line count. | `content/commands/st-quick.md:56-88` |
-| `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in one test-runner spawn of the full gate, which a tool-free turn names and reports not run with no row green — never skipped, split per file, run inline or claimed as run. | `content/commands/st-quick.md:29-48,68-74,150-155` |
+| `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in one test-runner spawn of the full gate, which a tool-free turn names and reports as not yet run or its result not yet returned, with no row green — never skipped, split per file, run inline or claimed as run. | `content/commands/st-quick.md:29-48,68-74,150-155` |
 | `re-review-closures-fresh-reviewer` | golden · rubric | 9 / 1 | A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted. | `content/agents/stamity-reviewer.md:14-18,44-51,134-151,181-189` |
 | `resilience-spent-deadline-stops-retry` | golden · rubric | 4 / 0 | An exhausted propagated deadline stops retries rather than resetting the parent budget. | `content/rules/stamity-resilience.md:12-82` |
 | `reviewer-brief-is-diff-and-criteria` | golden · rubric | 6 / 1 | Briefed with a diff range, a plan cell, its criteria and a report path, the reviewer reads the change from the range with read-only git, treats an implementer's summary in the brief as a lead rather than evidence, runs no gate and nothing mutating, writes its full result to the named report and returns the digest. | `content/agents/stamity-reviewer.md:14-18,44-48,71-72,108-112,181-205` |
