@@ -94,7 +94,7 @@ const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 
 /** A recorded exception, keyed to the one run of record it was recorded for. */
 export interface RunOfRecordException {
-  /** The results file of the run the exception excuses, as {@link RUN_OF_RECORD_PATH} spells it. */
+  /** The results file of the run the exception excuses, as {@link RunOfRecord.path} spells it. */
   readonly run: string;
   /** The paragraph the page states after that run's FAIL status. */
   readonly text: string;
@@ -106,7 +106,16 @@ export interface RunOfRecord {
   readonly path: string;
   /** The release the run of record measured. */
   readonly release: string;
-  /** The recorded exception a FAIL run of record shipped under, or `null` for a PASS. */
+  /**
+   * The recorded exception a FAIL run of record shipped under, or `null` for a PASS.
+   *
+   * Its `run` is recorded too, not read off {@link RunOfRecord.path}: it names the run the decision
+   * was made about, and {@link runOfRecordVerdict} refuses it beside any other run of record, so a
+   * release that moves the path cannot leave this text standing beside a run it does not describe.
+   * The verdict renders it only beside a FAIL, refuses a FAIL with none, and refuses a PASS with one,
+   * so a release cannot ship a red run of record silently and the next release whose run of record
+   * passes sets it back to `null`.
+   */
   readonly exception: RunOfRecordException | null;
 }
 
@@ -159,49 +168,22 @@ export function readRunOfRecord(root: string): RunOfRecord {
   return { path, release, exception: { run: recorded.run, text: recorded.text } };
 }
 
-/**
- * This checkout's run of record, read once at module load from {@link RUN_OF_RECORD_FILE} under the
- * root this module resolves its other inputs from.
+/*
+ * Which run is of record is read from {@link RUN_OF_RECORD_FILE} by each reader that needs it — the
+ * page's render and the verdict's default run — and never when this module loads. The module is
+ * imported for its path constants by `llmsIndex.ts` and by `scripts/merge-ready-rate.mjs` before its
+ * `try`, so a read at load turned a malformed file into a failed import of every page and a stack
+ * trace from a script that never asks for the run of record. Read where it is needed, a malformed
+ * file fails only those readers, with the one-line message naming it.
  *
- * Since 2026-10-08 that is the composed 1.12.0 run: run 42 measured every case in full and one
- * sample of one floor case went ungraded, and run 43 re-measured that case, carrying the other 112
- * with provenance under SET-v7's incremental rule. Run 43 reads FAIL on that one case, and 1.12.0
- * ships on it under the maintainer's recorded exception, which the file carries. The page restates
- * the run's own status and figures because a composed run scores the whole set under the unchanged
- * rule and thresholds.
+ * The path is the page's single source of truth for WHICH run is of record: the prose reads the
+ * run's number back off it through {@link runOfRecordNumber}, and the four figures, the floor
+ * clause and each threshold miss off its results file, rather than spelling any of them beside the
+ * link, because the spellings that used to sit there were left describing an older run by the
+ * release that moved the path. Since 2026-10-08 it names the composed 1.12.0 run, run 43, which
+ * reads FAIL on one ungraded floor sample, and 1.12.0 ships on it under the maintainer's recorded
+ * exception, which the file carries.
  */
-const TREE_RUN_OF_RECORD = readRunOfRecord(repoRoot());
-
-/**
- * The eval run of record, linked from the page relative to `docs/`, as {@link RUN_OF_RECORD_FILE}
- * names it.
- *
- * This path is the page's single source of truth for WHICH run is of record: the prose reads the
- * run's number back off it through {@link runOfRecordNumber} rather than spelling it beside the
- * link, because the two spellings that used to sit there were left saying "run 30" by the release
- * that moved this path. Exported, with the release and the exception, so `test/docsPages.test.ts`
- * holds README and the doctrine, which type the same run and release by hand, to the file.
- */
-export const RUN_OF_RECORD_PATH = TREE_RUN_OF_RECORD.path;
-
-/**
- * The release the run of record measured, as {@link RUN_OF_RECORD_FILE} names it. Verify it against
- * the `Candidate:` line of {@link RUN_OF_RECORD_PATH} and the release that shipped that commit.
- */
-export const RUN_OF_RECORD_RELEASE = TREE_RUN_OF_RECORD.release;
-
-/**
- * The recorded exception a release shipped a FAIL run of record under, as the page states it, or
- * `null` when the run of record passed, as {@link RUN_OF_RECORD_FILE} names it.
- *
- * Its `run` is recorded too, not read off {@link RUN_OF_RECORD_PATH}: it names the run the decision
- * was made about, and {@link runOfRecordVerdict} refuses it beside any other run of record, so a
- * release that moves the path cannot leave this text standing beside a run it does not describe.
- * The verdict renders it only beside a FAIL, refuses a FAIL with none, and refuses a PASS with one,
- * so a release cannot ship a red run of record silently and the next release whose run of record
- * passes sets it back to `null`.
- */
-export const RUN_OF_RECORD_EXCEPTION: RunOfRecordException | null = TREE_RUN_OF_RECORD.exception;
 
 /**
  * The page's verdict on its run of record, read off the results file's own `Status:` line: the
@@ -217,7 +199,7 @@ export const RUN_OF_RECORD_EXCEPTION: RunOfRecordException | null = TREE_RUN_OF_
 export function runOfRecordVerdict(
   results: string,
   exception: RunOfRecordException | null,
-  run: string = RUN_OF_RECORD_PATH,
+  run: string = readRunOfRecord(repoRoot()).path,
 ): readonly string[] {
   if (exception !== null && exception.run !== run) {
     fail(
@@ -543,20 +525,51 @@ export function unmetMetrics(results: string): readonly string[] {
  * no threshold cell: a verdict the page cannot read is one it cannot state.
  */
 export function thresholdMiss(results: string, metric: string): string {
-  const section = resultsSection(results, SCORES_HEADING) ?? "";
-  const cells = section
-    .split("\n")
-    .map((line) => line.split("|").map((cell) => cell.trim()))
-    .find((row) => row[1] === metric);
-  if (cells === undefined) {
-    fail(`The results file's \`${SCORES_HEADING}\` table has no "${metric}" row; the page cannot state its verdict.`);
-  }
+  const cells = scoreRow(results, metric, "verdict");
   if (!NOT_MET.test(cells.at(-2) ?? "")) return "";
   const threshold = cells.length >= 6 ? (cells[3] ?? "") : "";
   if (threshold === "") {
     fail(`The results file's "${metric}" row reads "NOT met" but states no threshold; the page cannot word the miss.`);
   }
   return `; NOT met (threshold ${threshold})`;
+}
+
+/**
+ * The score cell of the § 5 row of `metric`, `**<score>** (<passed>/<total>)`, as the page restates
+ * it after the metric's name.
+ *
+ * Read off the results file the page renders, never typed: the page restates whichever run is of
+ * record, and four typed figures stated the run they were typed for beside any other.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the table has no row for `metric`, or its score cell
+ * is not that shape: a score the page cannot read is one it cannot state.
+ */
+function metricScore(results: string, metric: string): string {
+  const score = scoreRow(results, metric, "score")[2] ?? "";
+  if (!SCORE_CELL.test(score)) {
+    fail(`The results file's "${metric}" row states its score as "${score}", not **<score>** (<passed>/<total>).`);
+  }
+  return score;
+}
+
+/** A § 5 score cell: the bolded score to three places and its count. */
+const SCORE_CELL = /^\*\*[01]\.\d{3}\*\* \(\d+\/\d+\)$/;
+
+/**
+ * The trimmed cells of the § 5 row of `metric`, split on `|` so index 1 is the metric's name and
+ * index 2 its score. Throws `EngineError` (`VALIDATION_ERROR`) naming `what` the page cannot state
+ * when the table has no such row.
+ */
+function scoreRow(results: string, metric: string, what: string): readonly string[] {
+  const section = resultsSection(results, SCORES_HEADING) ?? "";
+  const cells = section
+    .split("\n")
+    .map((line) => line.split("|").map((cell) => cell.trim()))
+    .find((row) => row[1] === metric);
+  if (cells === undefined) {
+    fail(`The results file's \`${SCORES_HEADING}\` table has no "${metric}" row; the page cannot state its ${what}.`);
+  }
+  return cells;
 }
 
 /** The workflow whose lanes are the first-run proof. */
@@ -1324,8 +1337,8 @@ function runTable(
  *
  * Deterministic over one tree: every number comes from
  * {@link computeMergeReadyRate} or from the committed reach snapshot, and the
- * four corpus figures are restated from the retained run artifact with the
- * suite holding each one to that file.
+ * four corpus figures are read off the run of record's results file through
+ * {@link metricScore}, with the suite holding each one to that file.
  *
  * Which run is of record, and its release, are read from {@link RUN_OF_RECORD_FILE} under `root`,
  * so a fixture root carries its own file. `exception` defaults to that file's; the suite passes its
@@ -1472,10 +1485,10 @@ export function renderMeasurements(
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",
-    `- Golden rubric pass rate **0.967** (59/61); ${floorClause(results)}${thresholdMiss(results, "Golden rubric pass rate")}.`,
-    `- Adversarial guardrail hold rate **0.944** (17/18)${thresholdMiss(results, "Adversarial guardrail hold rate")}.`,
-    `- Benign-twin false-refusal rate **0.000** (0/4)${thresholdMiss(results, "Benign-twin false-refusal rate")}.`,
-    `- Trigger-probe accuracy **1.000** (30/30)${thresholdMiss(results, "Trigger-probe accuracy")}.`,
+    `- Golden rubric pass rate ${metricScore(results, "Golden rubric pass rate")}; ${floorClause(results)}${thresholdMiss(results, "Golden rubric pass rate")}.`,
+    `- Adversarial guardrail hold rate ${metricScore(results, "Adversarial guardrail hold rate")}${thresholdMiss(results, "Adversarial guardrail hold rate")}.`,
+    `- Benign-twin false-refusal rate ${metricScore(results, "Benign-twin false-refusal rate")}${thresholdMiss(results, "Benign-twin false-refusal rate")}.`,
+    `- Trigger-probe accuracy ${metricScore(results, "Trigger-probe accuracy")}${thresholdMiss(results, "Trigger-probe accuracy")}.`,
     "",
     "Each figure is the retained artifact's own, and the suite holds these lines to that file. The",
     "run is a retained baseline: it is never re-run to produce a better number, and a set version",

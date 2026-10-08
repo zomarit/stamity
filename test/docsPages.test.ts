@@ -3,11 +3,10 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  RUN_OF_RECORD_PATH,
-  RUN_OF_RECORD_RELEASE,
   compositionOf,
   failingCases,
   priorCompleteRun,
+  readRunOfRecord,
   runStatus,
   unmetMetrics,
 } from "../src/cli/docs/measurements.ts";
@@ -87,6 +86,16 @@ import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+
+/**
+ * The run of record and its release, as `evals/run-of-record.json` names them.
+ *
+ * TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record, review round 1 (M-1). These were
+ * imported as module constants the generator read when it loaded; it now reads the file only when
+ * a reader needs it, so a malformed file no longer breaks every importer. The suite reads it here
+ * under the same names, and every case holds the pages to the same values.
+ */
+const { path: RUN_OF_RECORD_PATH, release: RUN_OF_RECORD_RELEASE } = readRunOfRecord(REPO_ROOT);
 
 const README = "README.md";
 const SECURITY = "SECURITY.md";

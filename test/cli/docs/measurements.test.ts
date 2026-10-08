@@ -30,9 +30,6 @@ import {
   REACH_SNAPSHOT_PATH,
   RUNS_DIR,
   RUN_OF_RECORD_FILE,
-  RUN_OF_RECORD_PATH,
-  RUN_OF_RECORD_EXCEPTION,
-  RUN_OF_RECORD_RELEASE,
   SNAPSHOT_DIR,
   SNAPSHOT_REFRESH_COMMAND,
   compositionOf,
@@ -58,6 +55,7 @@ import {
   type VerifiedRun,
 } from "../../../src/cli/docs/measurements.ts";
 import { LLMS_INDEX_SECTIONS } from "../../../src/cli/docs/llmsIndex.ts";
+import type * as SharedPaths from "../../../src/shared/paths.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 
 /**
@@ -84,6 +82,22 @@ import { EngineError } from "../../../src/types/errors.ts";
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+
+/**
+ * The tree's run of record, its release and its exception, read from `evals/run-of-record.json`
+ * the way the generator reads them.
+ *
+ * TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record, review round 1 (M-1). These were
+ * imported as three module constants the generator read when it loaded, so a malformed file broke
+ * every importer, the docs index and the merge-ready script among them, before any of them asked
+ * for the run of record. The generator now reads the file only when a page or a verdict needs it,
+ * and the suite reads it here under the same names, so every case below asserts what it did.
+ */
+const {
+  path: RUN_OF_RECORD_PATH,
+  release: RUN_OF_RECORD_RELEASE,
+  exception: RUN_OF_RECORD_EXCEPTION,
+} = readRunOfRecord(REPO_ROOT);
 const MODULE_SOURCE_PATH = join(REPO_ROOT, "src/cli/docs/measurements.ts");
 const SCRIPT_PATH = join(REPO_ROOT, "scripts/generate-docs.mjs");
 const RATE_SCRIPT_PATH = join(REPO_ROOT, "scripts/merge-ready-rate.mjs");
@@ -696,9 +710,14 @@ describe("the restated figures are held to the artifacts they come from", () => 
       "- Golden rubric pass rate **0.967** (59/61); floors 22/23, failing: `charter-floor-relaxation-refused`.",
     );
 
+    // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record, review round 1 (W-1). This pinned
+    // "**0.944** (17/18)" for run 39, whose own § 5 reads "**1.000** (18/18)": the generator typed
+    // run 43's four figures whatever results file it rendered, and the pin recorded that output. The
+    // figures are now read off the rendered file's § 5 rows, so the pin states run 39's own figure.
+    // The assertion it makes, a met row's line carries no "NOT met", is unchanged.
     const passPage = render(readResults("2026-10-01-run-39"));
     expect(metricLine(passPage, "Adversarial guardrail hold rate")).toBe(
-      "- Adversarial guardrail hold rate **0.944** (17/18).",
+      "- Adversarial guardrail hold rate **1.000** (18/18).",
     );
     expect(passPage).not.toContain("NOT met");
 
@@ -987,12 +1006,48 @@ describe("evals/run-of-record.json names the run of record", () => {
     return root;
   };
 
-  it("is what the module's three constants read", () => {
+  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record, review round 1 (M-1). The case held
+  // three module constants to the file; the constants are gone, because reading the file when the
+  // module loaded broke every importer on a malformed file. What it proved, that the generator
+  // reads the tree's file as written, is asserted on `readRunOfRecord` under the tree's root.
+  it("is what the generator reads under the tree's root", () => {
     const file = JSON.parse(readFileSync(join(REPO_ROOT, RUN_OF_RECORD_FILE), "utf-8")) as RunOfRecord;
     expect(readRunOfRecord(REPO_ROOT)).toEqual(file);
-    expect(RUN_OF_RECORD_PATH).toBe(file.path);
-    expect(RUN_OF_RECORD_RELEASE).toBe(file.release);
-    expect(RUN_OF_RECORD_EXCEPTION).toEqual(file.exception);
+  });
+
+  // ADDED 2026-10-08, unit c2-run-of-record, review round 1 (M-1). The module read the file when it
+  // loaded, so a malformed file failed every import of it: `generate-docs.mjs` could write no page,
+  // the docs index included, and `merge-ready-rate.mjs`, which imports the module before its `try`,
+  // exited on a stack trace. The import must succeed, and the first reader that needs the run of
+  // record gets the one-line message naming the file. The module resolves its root through
+  // `findPackageRoot`, so a fresh module graph whose `findPackageRoot` names a scratch root is the
+  // seam: the tree's own file is never touched.
+  it("is read when a reader needs it, not when the module loads", async () => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-run-of-record-"));
+    placeRunOfRecord(root, "{ path: evals/runs }\n");
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => ({
+      ...(await importOriginal<typeof SharedPaths>()),
+      findPackageRoot: () => root,
+    }));
+    try {
+      const fresh = await import("../../../src/cli/docs/measurements.ts");
+      const index = await import("../../../src/cli/docs/llmsIndex.ts");
+      expect(fresh.MEASUREMENTS_DOC_PATH).toBe(MEASUREMENTS_DOC_PATH);
+      expect(index.LLMS_INDEX_SECTIONS).toEqual(LLMS_INDEX_SECTIONS);
+      let message = "";
+      try {
+        fresh.runOfRecordVerdict(readResults(PASS_RUN), null);
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      expect(message).toMatch(/^evals\/run-of-record\.json is not JSON: /);
+      expect(message.split("\n")).toHaveLength(1);
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("renders the run and release a scratch root's own file names", () => {
@@ -1003,8 +1058,33 @@ describe("evals/run-of-record.json names the run of record", () => {
       expect(page).toContain(`[run 39](../${PASS_PATH}) — the 1.11.0 release run —`);
       expect(page).toContain("PASS, three samples per case.");
       expect(page).toContain("The scoring rule is SET-v6, which is what run 39's own score table");
+      // ADDED 2026-10-08, review round 1 (W-1): the four figures are run 39's own § 5 scores, not
+      // the tree's run of record's. The generator typed run 43's, so this render stated run 39 as
+      // PASS beside run 43's golden and guardrail figures.
+      expect(page).toContain("- Golden rubric pass rate **0.918** (56/61); every floor case passed, 23/23.\n");
+      expect(page).toContain("- Adversarial guardrail hold rate **1.000** (18/18).\n");
+      expect(page).toContain("- Benign-twin false-refusal rate **0.000** (0/4).\n");
+      expect(page).toContain("- Trigger-probe accuracy **1.000** (30/30).\n");
+      expect(page).not.toContain("**0.967** (59/61)");
+      expect(page).not.toContain("**0.944** (17/18)");
       expect(page, "the scratch render still names the tree's run of record").not.toContain(RUN_OF_RECORD_PATH);
       expect(page).not.toContain(`the ${RUN_OF_RECORD_RELEASE} release run`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // ADDED 2026-10-08, review round 1 (W-1): a score the page reads off § 5 and cannot parse is
+  // refused, naming the metric, rather than restated as whatever the cell holds.
+  it("refuses a results file whose score cell is not a score and a count", () => {
+    const root = scratch();
+    try {
+      const results = readResults(PASS_RUN).replace("| **0.918** (56/61) |", "| 0.918 |");
+      placeRenderInputs(root, results, { path: PASS_PATH, release: "1.11.0", exception: null });
+      expect(() => renderMeasurements(root)).toThrow(EngineError);
+      expect(() => renderMeasurements(root)).toThrow(
+        /"Golden rubric pass rate" row states its score as "0\.918"/,
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
