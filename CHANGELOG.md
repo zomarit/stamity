@@ -106,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The QA form marks only a carried-forward row as carried forward.** It printed
   "(carried forward: inputs unchanged)" beside every performed row, the walk's first recording
   included.
+- **`sync --dry-run --force` previews what `sync -y --force` deletes.** When `--force` would
+  overwrite a hooks file the engine cannot prove it wrote, such as an edited
+  `.github/hooks/stamity.json`, the preview now reads that file as the forced write leaves it. A
+  hook script the new file stops running shows as deleted, not kept. A hooks file the forced write
+  cannot replace, such as a link, is still read from disk.
 
 ## [1.12.0] - 2026-10-08
 

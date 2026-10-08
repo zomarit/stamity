@@ -18,7 +18,7 @@ import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
 import { ensureGitignoreEntry } from "../../../mcp/env.ts";
-import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
+import { assertWriteTargetContained, isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
 import {
@@ -674,12 +674,18 @@ function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"
  * The rendering proof reads the same renderings the live sweep does
  * ({@link reclaimRenderings}), built with `engineVersion` — the plan's own
  * unless the caller names one.
+ *
+ * `opts.force` is the run's `--force`: the forced write also replaces a hooks
+ * document whose collision force clears, so the preview reads that document
+ * as the forced write leaves it too (row 588). `check` previews the run
+ * without it.
  */
 export async function previewReclaim(
   rootDir: string,
   plan: SyncPlan,
   now?: Date,
   engineVersion: string | undefined = plan.engineVersion,
+  opts: { force?: boolean } = {},
 ): Promise<ReclaimReport | null> {
   if (plan.reclaim.length === 0) return null;
   const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
@@ -696,6 +702,7 @@ export async function previewReclaim(
       plan,
       retention.hookDocuments,
       coOwnedDocumentLanes(plan.manifest, packMcpSupply, plan.manifest.ledger, provenLegacy),
+      opts.force === true,
     ),
     ...(await reclaimRenderings(rootDir, plan, engineVersion)),
     ...(now === undefined ? {} : { now }),
@@ -760,19 +767,30 @@ function renderingPlanner(rootDir: string, engineVersion: string): EmissionPlanF
  * same ledger hashes), a whole-file one (Copilot's) as the emitted bytes. A
  * document the plan refuses (`collision`) or does not plan is left out, so the
  * preview reads it from disk exactly as the live sweep will.
+ *
+ * Under `force` the write also replaces a document whose collision `--force`
+ * clears ({@link forceClears}), so that one is read as written too (row 588):
+ * `sync --dry-run --force` then previews a script the forced document stops
+ * naming as the delete `sync -y --force` makes, not as kept. Every other
+ * collision class is refused forced or not, and stays read from disk.
  */
 async function hookDocumentsAfterWrite(
   rootDir: string,
   plan: SyncPlan,
   hookDocuments: ReadonlySet<string>,
   lanes: ReadonlyMap<string, CoOwnedDocumentLane>,
+  force: boolean,
 ): Promise<Map<string, string>> {
   const ledgerHashes = ledgerHashIndex(rootDir, plan.manifest.ledger);
-  const written = plan.outputs.filter(
-    (output) =>
-      hookDocuments.has(output.path) &&
-      plan.entries.some((entry) => entry.path === output.path && entry.action !== "collision"),
+  const planned = plan.outputs.filter((output) => hookDocuments.has(output.path));
+  const lands = await Promise.all(
+    planned.map(async (output) => {
+      const entries = plan.entries.filter((entry) => entry.path === output.path);
+      if (entries.some((entry) => entry.action !== "collision")) return true;
+      return force && entries.some(forceClears) && (await forcedWriteLands(rootDir, output.path));
+    }),
   );
+  const written = planned.filter((_output, index) => lands[index]);
   const texts = await Promise.all(
     written.map(async (output): Promise<[string, string | null | undefined]> => {
       const lane = lanes.get(output.path);
@@ -786,6 +804,38 @@ async function hookDocumentsAfterWrite(
     }),
   );
   return new Map(texts.flatMap(([path, text]) => (typeof text === "string" ? [[path, text] as const] : [])));
+}
+
+/**
+ * True for a collision `--force` clears: `unmanaged-name`, or a hand-built
+ * entry naming no class, which {@link collisionRefusalMessage} reads the same
+ * way. The one class {@link COLLISION_REMEDY} offers the flag for; a row
+ * refused at its source carries its own class and is never attempted.
+ */
+function forceClears(entry: SyncPlanEntry): boolean {
+  return entry.action === "collision" && entry.refusedAtSource !== true && (entry.collisionKind ?? "unmanaged-name") === "unmanaged-name";
+}
+
+/**
+ * True when a forced whole-file write at `path` lands rather than throws: the
+ * file there is a regular file with one name, under a folder that resolves
+ * inside the repository. The write's backup refuses a symbolic or hard link
+ * (`merge/safeWrite.ts::backupBeforeOverwrite`) and its containment check a
+ * folder that resolves outside, and either stops the run before the sweep, so
+ * the preview then reads the document from disk, as nothing replaces it. Any
+ * errno reads as `false`: a document the preview cannot judge is read from
+ * disk, which keeps every script it names.
+ */
+async function forcedWriteLands(rootDir: string, path: string): Promise<boolean> {
+  const absPath = join(rootDir, path);
+  try {
+    const entry = await lstat(absPath);
+    if (!entry.isFile() || isSharedRegularFile(entry)) return false;
+    await assertWriteTargetContained(absPath, rootDir);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1002,7 +1052,9 @@ export async function applySync(
       // "would refuse" marker the report reads.
       refused: [],
       gitignoreAdded: [],
-      reclaimed: await previewReclaim(rootDir, plan, now, engineVersion),
+      // Forced, the preview reads a hooks document the forced write replaces
+      // as it leaves it (row 588); `check` previews without the flag.
+      reclaimed: await previewReclaim(rootDir, plan, now, engineVersion, { force }),
       manifestPath: statePath,
       dryRun: true,
       manifest: null,

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { link, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
@@ -9,7 +9,7 @@ import { cleanCommand } from "../../src/cli/commands/clean.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncCommand } from "../../src/cli/commands/sync.ts";
-import { applySync, planSync, type SyncPlanEntry } from "../../src/cli/commands/sync/engine.ts";
+import { applySync, planSync, previewReclaim, type SyncPlanEntry } from "../../src/cli/commands/sync/engine.ts";
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
@@ -1701,4 +1701,206 @@ describe("no verb deletes a renamed guard a kept .cursor/hooks.json still runs (
       expect(entry?.detail, old).toContain(CURSOR_HOOKS);
     }
   });
+});
+
+describe("sync --dry-run --force previews the forced write of a hooks document (REQ-FLOW-037, row 588)", () => {
+  const COPILOT_HOOKS = ".github/hooks/stamity.json";
+  /** A script a release wrote under the engine's hooks folder and no longer emits, so only a document naming it holds it. */
+  const RETIRED_SCRIPT = `${HOOKS_GENERATED_DIR}/copilot/stamity-retired-guard.mjs`;
+  const RETIRED_BYTES = "process.exit(0)\n";
+  /** A file under a content root at an engine-minted name with a forged row: only the rendering proof deletes it. */
+  const UNPROVEN_AGENT = ".github/agents/stamity-retired.agent.md";
+
+  /**
+   * A Copilot setup whose `.github/hooks/stamity.json` collides as
+   * `unmanaged-name` — its row is gone and its bytes are not the engine's — and
+   * still runs a retired engine script whose row and hash prove it. The forced
+   * write replaces the document with one that stops naming the script.
+   */
+  async function setUpCopilotCollision(): Promise<{ root: string; edited: string }> {
+    const root = await freshRepo();
+    await init(root, ["copilot"]);
+    await writeFile(abs(root, RETIRED_SCRIPT), RETIRED_BYTES, "utf8");
+    await addHookEntry(root, COPILOT_HOOKS, "PreToolUse", { type: "command", command: `node ${RETIRED_SCRIPT}`, cwd: "." });
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    const ledger = [
+      ...manifest.ledger.filter((row) => row.path !== COPILOT_HOOKS),
+      { path: RETIRED_SCRIPT, adapter: "copilot" as const, artifactId: "retired-guard", artifactType: "infra" as const, contentHash: sha256(RETIRED_BYTES) },
+    ];
+    await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+    return { root, edited: await readText(root, COPILOT_HOOKS) };
+  }
+
+  type JsonReclaim = { entries: { path: string; action: string; wouldBe?: string; proof?: string; detail?: string }[] } | null;
+
+  async function syncJson(root: string, args: readonly string[]): Promise<{ code: number; reclaim: JsonReclaim; entries: SyncPlanEntry[] }> {
+    const run = await runInProcess([syncCommand], ["sync", "--json", ...args], { cwd: root });
+    const doc = JSON.parse(run.stdout.trim()) as { reclaim: JsonReclaim; plan?: { entries?: SyncPlanEntry[] } };
+    return { code: run.code, reclaim: doc.reclaim, entries: doc.plan?.entries ?? [] };
+  }
+
+  const entryOf = (reclaim: JsonReclaim, path: string) => reclaim?.entries.find((entry) => entry.path === path);
+  const previewedDeletes = (reclaim: JsonReclaim): string[] =>
+    (reclaim?.entries ?? []).filter((entry) => entry.action === "dry-run" && entry.wouldBe === "deleted").map((entry) => entry.path).toSorted();
+  const deleted = (reclaim: JsonReclaim): string[] =>
+    (reclaim?.entries ?? []).filter((entry) => entry.action === "deleted").map((entry) => entry.path).toSorted();
+
+  it("an unmanaged-name collision: the forced preview names the delete the forced run makes, and the forced run deletes exactly what it named", async () => {
+    const { root, edited } = await setUpCopilotCollision();
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    expect(plan.entries.find((entry) => entry.path === COPILOT_HOOKS)).toMatchObject({ action: "collision", collisionKind: "unmanaged-name" });
+
+    const preview = await syncJson(root, ["--dry-run", "--force"]);
+
+    expect(entryOf(preview.reclaim, RETIRED_SCRIPT)).toMatchObject({ action: "dry-run", wouldBe: "deleted", proof: "hash" });
+    expect(existsSync(abs(root, RETIRED_SCRIPT))).toBe(true);
+    expect(await readText(root, COPILOT_HOOKS)).toBe(edited);
+    // The one body both previews share, called with the flag the command passes.
+    const direct = await previewReclaim(root, plan, T1, ENGINE_VERSION, { force: true });
+    expect(entryOf(direct, RETIRED_SCRIPT)).toMatchObject({ action: "dry-run", wouldBe: "deleted", proof: "hash" });
+
+    const forced = await syncJson(root, ["-y", "--force"]);
+
+    expect(forced.code).toBe(0);
+    expect(deleted(forced.reclaim)).toEqual(previewedDeletes(preview.reclaim));
+    expect(deleted(forced.reclaim)).toContain(RETIRED_SCRIPT);
+    expect(existsSync(abs(root, RETIRED_SCRIPT))).toBe(false);
+    expect(await readText(root, COPILOT_HOOKS)).not.toContain(RETIRED_SCRIPT);
+    expect(await readText(root, `${COPILOT_HOOKS}.bak`)).toBe(edited);
+  });
+
+  it("the same collision without --force: the preview still reads the document from disk, and sync keeps what it named", async () => {
+    const { root, edited } = await setUpCopilotCollision();
+
+    const preview = await syncJson(root, ["--dry-run"]);
+
+    const kept = entryOf(preview.reclaim, RETIRED_SCRIPT);
+    expect(kept?.action).toBe("skipped-user-content");
+    expect(kept?.detail).toContain(COPILOT_HOOKS);
+    const direct = await previewReclaim(root, await planSync(root, ENGINE_VERSION, { runner: () => "" }), T1);
+    expect(entryOf(direct, RETIRED_SCRIPT)?.action).toBe("skipped-user-content");
+
+    const run = await syncJson(root, ["-y"]);
+
+    expect(run.code).toBe(1);
+    expect(entryOf(run.reclaim, RETIRED_SCRIPT)?.action).toBe("skipped-user-content");
+    expect(existsSync(abs(root, RETIRED_SCRIPT))).toBe(true);
+    expect(await readText(root, COPILOT_HOOKS)).toBe(edited);
+  });
+
+  it("under --force the preview still runs the rendering proof: a forged row at an engine-minted name is kept by the preview and by the forced run", async () => {
+    const { root } = await setUpCopilotCollision();
+    const forged = "---\nname: stamity-retired\n---\n\nThe team's own agent.\n";
+    await mkdir(abs(root, ".github/agents"), { recursive: true });
+    await writeFile(abs(root, UNPROVEN_AGENT), forged, "utf8");
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    const row = { path: UNPROVEN_AGENT, adapter: "copilot" as const, artifactId: "retired", artifactType: "agent" as const, contentHash: sha256(forged) };
+    await writeManifest(root, { ...manifest, ledger: [...manifest.ledger, row] }, { now: T1 });
+
+    const preview = await syncJson(root, ["--dry-run", "--force"]);
+
+    expect(entryOf(preview.reclaim, UNPROVEN_AGENT)?.action).not.toBe("dry-run");
+    expect(previewedDeletes(preview.reclaim)).toEqual([RETIRED_SCRIPT]);
+
+    const forced = await syncJson(root, ["-y", "--force"]);
+
+    expect(deleted(forced.reclaim)).toEqual(previewedDeletes(preview.reclaim));
+    expect(await readText(root, UNPROVEN_AGENT)).toBe(forged);
+  });
+
+  it.each(["deny-scan", "shared-name", "co-owned-shape", "import-decision"] as const)(
+    "a %s collision under --force is no collision force clears: the preview reads the document from disk",
+    async (kind) => {
+      const { root } = await setUpCopilotCollision();
+      const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+      // A hand-built relabel of the real plan's entry: the planner classes
+      // Copilot's whole-file JSON as `unmanaged-name` or, on a hard link,
+      // `shared-name` (its own case below), never as the other three, and the
+      // preview must branch on the class, not on the lane that produced it.
+      const entry = plan.entries.find((candidate) => candidate.path === COPILOT_HOOKS);
+      if (entry === undefined) throw new Error("fixture lost the Copilot hooks entry");
+      entry.collisionKind = kind;
+
+      const preview = await previewReclaim(root, plan, T1, ENGINE_VERSION, { force: true });
+
+      expect(entryOf(preview, RETIRED_SCRIPT)?.action).toBe("skipped-user-content");
+    },
+  );
+
+  it("a co-owned-shape .cursor/hooks.json under --force: the preview keeps both old guards, and so does the forced run", async () => {
+    const root = await setUpByReleaseOneEleven();
+    await writeDoc(root, CURSOR_HOOKS, { ...(await readDoc(root, CURSOR_HOOKS)), version: 2 });
+
+    const preview = await syncJson(root, ["--dry-run", "--force"]);
+
+    for (const old of OLD_GUARDS) expect(entryOf(preview.reclaim, old)?.action, old).toBe("skipped-user-content");
+    const forced = await syncJson(root, ["-y", "--force"]);
+    expect(forced.code).toBe(1);
+    for (const old of OLD_GUARDS) {
+      expect(entryOf(forced.reclaim, old)?.action, old).toBe("skipped-user-content");
+      expect(existsSync(abs(root, old)), old).toBe(true);
+    }
+  });
+
+  // Windows reports no link count this check can rely on, and creating a
+  // symbolic link there needs a privilege CI does not hold (`./reclaim.test.ts`).
+  it.skipIf(process.platform === "win32")(
+    "a hard-linked document (shared-name) the forced write refuses at write time previews from disk, and the forced run deletes nothing",
+    async () => {
+      const { root, edited } = await setUpCopilotCollision();
+      await link(abs(root, COPILOT_HOOKS), getTemp().path("outside-copilot-hooks.json"));
+      const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+      expect(plan.entries.find((entry) => entry.path === COPILOT_HOOKS)?.collisionKind).toBe("shared-name");
+
+      const preview = await syncJson(root, ["--dry-run", "--force"]);
+
+      expect(entryOf(preview.reclaim, RETIRED_SCRIPT)?.action).toBe("skipped-user-content");
+      await expect(applySync(root, plan, { engineVersion: ENGINE_VERSION, force: true, dryRun: false, now: T1 })).rejects.toThrow();
+      expect(existsSync(abs(root, RETIRED_SCRIPT))).toBe(true);
+      expect(await readText(root, COPILOT_HOOKS)).toBe(edited);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "a symbolically linked document, which the forced write refuses at its backup, previews from disk, and the forced run deletes nothing",
+    async () => {
+      const { root, edited } = await setUpCopilotCollision();
+      const outside = getTemp().path("outside-copilot-hooks.json");
+      await writeFile(outside, edited, "utf8");
+      await rm(abs(root, COPILOT_HOOKS));
+      await symlink(outside, abs(root, COPILOT_HOOKS));
+      const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+      expect(plan.entries.find((entry) => entry.path === COPILOT_HOOKS)).toMatchObject({ action: "collision", collisionKind: "unmanaged-name" });
+
+      const preview = await syncJson(root, ["--dry-run", "--force"]);
+
+      expect(entryOf(preview.reclaim, RETIRED_SCRIPT)?.action).toBe("skipped-user-content");
+      await expect(applySync(root, plan, { engineVersion: ENGINE_VERSION, force: true, dryRun: false, now: T1 })).rejects.toThrow();
+      expect(existsSync(abs(root, RETIRED_SCRIPT))).toBe(true);
+      expect(await readFile(outside, "utf8")).toBe(edited);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "a document under a folder linked outside the repository, which the forced write's containment check refuses, previews from disk, and the forced run deletes nothing",
+    async () => {
+      const { root, edited } = await setUpCopilotCollision();
+      const outside = getTemp().path("outside-hooks-folder");
+      await mkdir(outside, { recursive: true });
+      await writeFile(join(outside, "stamity.json"), edited, "utf8");
+      await rm(abs(root, ".github/hooks"), { recursive: true });
+      await symlink(outside, abs(root, ".github/hooks"));
+      const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+      expect(plan.entries.find((entry) => entry.path === COPILOT_HOOKS)).toMatchObject({ action: "collision", collisionKind: "unmanaged-name" });
+
+      const preview = await previewReclaim(root, plan, T1, ENGINE_VERSION, { force: true });
+
+      expect(entryOf(preview, RETIRED_SCRIPT)?.action).toBe("skipped-user-content");
+      await expect(applySync(root, plan, { engineVersion: ENGINE_VERSION, force: true, dryRun: false, now: T1 })).rejects.toThrow();
+      expect(existsSync(abs(root, RETIRED_SCRIPT))).toBe(true);
+      expect(await readFile(join(outside, "stamity.json"), "utf8")).toBe(edited);
+    },
+  );
 });
