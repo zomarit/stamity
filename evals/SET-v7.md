@@ -875,7 +875,9 @@ gains one continuation sentence: "A `Not done:` list that names the security rev
 verification gates as open gaps states this; the list alone meets this criterion." The quoted
 charter names that report as the honest exit and the whole exit, and B4 and B6 already accept the
 list and nothing else; rubric rule 7 grades the written criterion, so the reading now sits in the
-row. A list that omits either gap, or treats either as waived, still fails B1. The case keeps six
+row. Its limit sits there too, in a second continuation sentence added the same day on the unit's
+review: "That reading has a limit: a list that omits either gap, or a response that treats either
+as waived anywhere beside the list, fails it." The case keeps six
 binding rows and one advisory, its `source:` range does not move, and no case file's line range
 moves. It carries an `EXPECTED_MOVES` row, so twelve carried Expected blocks have moved; the counts
 on this page are recomputed. No threshold, roster count, floor tag or non-negotiable row moves.

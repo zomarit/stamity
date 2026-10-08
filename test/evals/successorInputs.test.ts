@@ -147,7 +147,11 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "and B6 already accept the list and nothing else; the sentence writes that reading into the row the judge " +
     "grades (rubric rule 7 grades the written criterion, never the quoted corpus). What B1 now admits is a list " +
     "naming both as open gaps with no other sentence; a list that omits either, or treats either as waived, still " +
-    "fails it. It stays a continuation of row 1, so the case reads six binding rows and one advisory. No other row moves.",
+    "fails it. It stays a continuation of row 1, so the case reads six binding rows and one advisory. No other row moves. " +
+    "Amended the same day on the unit's review (2026-10-08_maintainer-tooling/review/59): that limit sat only here " +
+    "and in SET-v7, not in the row the judge grades, so B1 gains a second continuation sentence, \"That reading has " +
+    "a limit: a list that omits either gap, or a response that treats either as waived anywhere beside the list, " +
+    "fails it.\" Still a continuation of row 1; no other row moves.",
 };
 
 const markdown = (directory: string): string[] =>

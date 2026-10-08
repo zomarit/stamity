@@ -39,7 +39,10 @@ Expected block, rubric or answer labels. Native Codex agents use `fork_turns: "n
 profile's explicit `model` and `reasoning_effort`; a follow-up is not fresh context. Native
 dispatch additionally needs inspectable evidence that no ambient messages were injected.
 The manual `scripts/eval-run.mjs` harness can instead use stateless Responses API calls
-with the same selected pair and effort: one exact Brief or four exact judge content blocks,
+with the same selected pair and effort: one exact Brief, or the four judge content blocks
+`judgeBlocks` in `scripts/eval/instrument.mjs` builds (the rubric core, the Brief under
+`## Brief`, the Expected block under `## Expected`, and the transcript under
+`Transcript under grading:` in a `text` fence one backtick longer than its longest backtick run);
 no instructions, conversation or previous response, and tools removed. This transport is a
 new harness/isolation baseline; its results never inherit native calibration or scores.
 The scenario prompt contains only the sealed Brief. The manual script appends no attestation
