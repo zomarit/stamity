@@ -27,6 +27,8 @@ import { buildCatalogIdentity } from "../scripts/plugins/catalogs.mjs";
 import { resolveDistributionIdentity } from "../scripts/distribution-identity.mjs";
 // @ts-expect-error — see above.
 import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings.mjs";
+// @ts-expect-error — the manual eval harness is import-safe native ESM, outside the product package.
+import { RUNNER_FILES } from "../scripts/eval/run.mjs";
 
 /**
  * The gate on the fifteen hand-written pages: three at the root, twelve guides
@@ -1303,8 +1305,14 @@ const RUN_OF_RECORD_CLAIM =
 
 const collapsed = (text: string): string => text.replace(/\s+/g, " ");
 
-/** The retired carried-to clause, refused on the run-of-record pages (REQ-PROVE-020). */
-const CARRIED_TO_REFUSAL = /release run,? carried to \d+\.\d+\.\d+/;
+/**
+ * The retired carried-to clause in any wording, and a "carried forward from run N" without the
+ * rule's own suffix, refused on the run-of-record pages (REQ-PROVE-020, REQ-PROVE-033). The one
+ * carried form admitted is "carried forward from run N: no model-facing change"; `(?!\d|…)` keeps
+ * the run number whole, so "run 43" cannot backtrack to "run 4" and slip past the lookahead.
+ */
+const CARRIED_TO_REFUSAL =
+  /carried (?:forward |over )?to \d+\.\d+\.\d+|carried forward from run \d+(?!\d|: no model-facing change)/;
 
 // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut (review M-1). A local `priorCompleteRun` stood
 // here and matched "prior complete run is `…`" anywhere in RESULTS.md, while the measurements chain
@@ -1344,12 +1352,22 @@ describe("the eval run of record on the hand pages", () => {
   // ADDED 2026-10-08 (REQ-PROVE-020's amendment, unit c3-release-rules): a release the change-aware
   // rule carries forward says "carried forward from run N: no model-facing change", the one carried
   // form re-admitted; the retired "release run, carried to X.Y.Z" still fails.
+  //
+  // TEST CHANGE, justified: 2026-10-08 (review/27). The refusal admitted every carried wording but
+  // "carried to", so "carried forward to 1.14.0" and a bare "carried forward from run 43" passed it.
+  // It now refuses the carried-to family and the suffix-less form, one fixture per shape.
   it("admits the carried-forward form and still refuses the carried-to clause", () => {
     expect("carried forward from run 43: no model-facing change").not.toMatch(CARRIED_TO_REFUSAL);
-    expect("[run 43](evals/runs/x/RESULTS.md), the 1.12.0 release run, carried to 1.12.1").toMatch(
-      CARRIED_TO_REFUSAL,
-    );
-    expect("release run, carried to 1.12.1").toMatch(CARRIED_TO_REFUSAL);
+    for (const refused of [
+      "[run 43](evals/runs/x/RESULTS.md), the 1.12.0 release run, carried to 1.12.1",
+      "release run, carried to 1.12.1",
+      "the 1.12.0 release run, carried forward to 1.14.0",
+      "the 1.12.0 release run, carried over to 1.14.0",
+      "carried forward from run 43",
+      "carried forward from run 43 (no model-facing change)",
+    ]) {
+      expect(refused, `the refusal admits "${refused}"`).toMatch(CARRIED_TO_REFUSAL);
+    }
   });
 
   // ADDED for review/200: the run of record composes with a prior full run, and when that run
@@ -1534,25 +1552,82 @@ const releaseRuleTexts = (): ReadonlyArray<readonly [string, string]> => {
   ];
 };
 
+// TEST CHANGE, justified: 2026-10-08 (review/25, review/29). The `scripts/eval/**` row reads it
+// inside "the eval scripts (…)" now that the eval scripts name two entry points beside it; three
+// rows join: the case sets, the eval skill and a FAIL run of record.
 const RELEASE_TRIGGERS: ReadonlyArray<readonly [string, readonly RegExp[]]> = [
   ["`content/**`", [/`content\/\*\*`/]],
   ["the emitted client files", [/the emitted client files \(the cross-client goldens\)/]],
   [
     "the eval set's files",
-    [
-      /the eval set's files \(`evals\/SET-v7\.md`, `evals\/cases-v6\/\*\*`/,
-      /the selected rubric/,
-      /the model profiles/,
-    ],
+    [/the eval set's files \(`evals\/SET-v7\.md`/, /the selected rubric/, /the model profiles/],
   ],
-  ["the eval harness `scripts/eval/**` (inbox row 576)", [/`scripts\/eval\/\*\*`/]],
+  ["the case sets old and new (review/25)", [/the case sets old and new \(`evals\/cases-v6\/\*\*`/]],
+  ["the eval skill and its copies (review/25)", [/the eval skill and its copies \(/]],
+  ["the eval harness `scripts/eval/**` (inbox row 576)", [/the eval scripts \(`scripts\/eval\/\*\*`/]],
   ["the scenario model and the judge model", [/the scenario model(?:,| or| and) the judge model/]],
   ["the pinned client version (inbox row 275)", [/the harness, which carries the pinned client version/]],
+  [
+    "a FAIL run of record (review/29)",
+    [/the run of record is FAIL/, /A FAIL run of record is never carried forward; the release runs the full set\./],
+  ],
   [
     "the periodic rule",
     [/the third release since the last full run/, /30 days after the last full run/, /whichever comes first/],
   ],
 ];
+
+// ADDED 2026-10-08 (review/25, signed off in the run record): the file triggers are a derived list,
+// not a hand list. Every file the run of record hashes as an input (its `inputs.json`
+// `configuration.inputs`), every file the public runner hashes (`RUNNER_FILES`) and every file a
+// case's `source:` names must be covered by a path both texts name, so a patch that moves any of
+// them runs the full set rather than carrying a false "no model-facing change".
+const EVAL_SKILL_COPIES: readonly string[] = [
+  ".stamity/overrides/skills/st-eval-run/SKILL.md",
+  ".claude/skills/st-eval-run/SKILL.md",
+];
+
+interface RecordedConfiguration {
+  readonly inputs: Readonly<Record<string, string>>;
+  readonly models: Readonly<Record<string, string>>;
+  readonly harness?: string;
+}
+
+/** The run of record's recorded configuration, read off the `inputs.json` beside its results. */
+const recordedConfiguration = (): RecordedConfiguration =>
+  (
+    JSON.parse(read(join(dirname(RUN_OF_RECORD_PATH), "inputs.json"))) as {
+      readonly configuration: RecordedConfiguration;
+    }
+  ).configuration;
+
+/** The backticked repository paths a text names. */
+const namedPaths = (text: string): string[] =>
+  [...text.matchAll(/`(\.?[\w-]+(?:\/[\w.*-]+)+)`/g)].map((match) => match[1] ?? "");
+
+/** The paths no named path covers; a named `dir/**` covers everything under `dir/`. */
+const uncovered = (paths: Iterable<string>, named: readonly string[]): string[] =>
+  [...paths].filter(
+    (path) =>
+      !named.some((pattern) =>
+        pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : pattern === path,
+      ),
+  );
+
+/** The files the run of record's own cases name in `source:`, line ranges dropped. */
+const recordedCaseSources = (): Set<string> => {
+  const sources = new Set<string>();
+  for (const path of Object.keys(recordedConfiguration().inputs)) {
+    if (!/^evals\/cases-v\d+\//.test(path) || !existsSync(join(REPO_ROOT, path))) continue;
+    const source = /^source: *([^\s:]+)/m.exec(read(path))?.[1];
+    if (source !== undefined) sources.add(source);
+  }
+  return sources;
+};
+
+/** The rule's span in SET-v7, from its trigger clause to its FAIL sentence, whitespace-collapsed. */
+const RULE_SPAN_START = "when its diff since the run of record touches";
+const RULE_SPAN_END = "A FAIL run of record is never carried forward; the release runs the full set.";
 
 describe("the release eval follows what changed", () => {
   it.each(RELEASE_TRIGGERS)("names %s as a trigger in the checklist and in SET-v7", (trigger, patterns) => {
@@ -1561,6 +1636,73 @@ describe("the release eval follows what changed", () => {
         expect(text, `${where} does not name ${trigger} (${String(pattern)})`).toMatch(pattern);
       }
     }
+  });
+
+  it("names every file the run of record hashes as an input, in the checklist and in SET-v7", () => {
+    const recorded = Object.keys(recordedConfiguration().inputs);
+    expect(recorded.length, `${RUN_OF_RECORD_PATH}'s inputs.json records no input`).toBeGreaterThan(0);
+    for (const [where, text] of releaseRuleTexts()) {
+      expect(uncovered(recorded, namedPaths(text)), `${where} misses files the run of record hashes`).toEqual([]);
+    }
+  });
+
+  it("names every file the public runner hashes, in the checklist and in SET-v7", () => {
+    const runnerFiles = RUNNER_FILES as readonly string[];
+    expect(runnerFiles.length, "scripts/eval/run.mjs hashes no runner file").toBeGreaterThan(0);
+    for (const [where, text] of releaseRuleTexts()) {
+      expect(uncovered(runnerFiles, namedPaths(text)), `${where} misses files the public runner hashes`).toEqual([]);
+    }
+  });
+
+  it("names every file a case's `source:` names, in the checklist and in SET-v7", () => {
+    const sources = recordedCaseSources();
+    expect(sources.size, "the run of record's cases name no source").toBeGreaterThan(0);
+    for (const [where, text] of releaseRuleTexts()) {
+      expect(uncovered(sources, namedPaths(text)), `${where} misses case sources`).toEqual([]);
+    }
+  });
+
+  it("names every model role and the client the run of record records", () => {
+    const { models, harness } = recordedConfiguration();
+    const roles = Object.keys(models);
+    expect(roles.length, `${RUN_OF_RECORD_PATH}'s inputs.json records no model`).toBeGreaterThan(0);
+    expect(harness, `${RUN_OF_RECORD_PATH}'s inputs.json records no harness`).toBeTruthy();
+    for (const [where, text] of releaseRuleTexts()) {
+      for (const role of roles) {
+        expect(text, `${where} does not name the ${role} model as a trigger`).toContain(`the ${role} model`);
+      }
+      expect(text, `${where} does not name the pinned client version`).toContain(
+        "the harness, which carries the pinned client version",
+      );
+    }
+  });
+
+  // ADDED 2026-10-08 (review/26): the eval skill is the route the checklist's eval line runs
+  // through, so it states the rule in SET-v7's own words, in the override and in its emitted copy,
+  // and never the retired "every release runs the full set".
+  it.each(EVAL_SKILL_COPIES)("%s states the release rule in SET-v7's words", (skill) => {
+    const set = collapsed(fileSection(EVAL_SET, "## Incremental runs — declared 2026-09-15"));
+    const start = set.indexOf(RULE_SPAN_START);
+    const end = set.indexOf(RULE_SPAN_END, start);
+    expect(start, `${EVAL_SET} has no "${RULE_SPAN_START}"`).toBeGreaterThan(-1);
+    expect(end, `${EVAL_SET} has no "${RULE_SPAN_END}" after it`).toBeGreaterThan(start);
+    const text = collapsed(read(skill));
+    expect(text, `${skill} does not state SET-v7's release rule`).toContain(
+      set.slice(start, end + RULE_SPAN_END.length),
+    );
+    expect(text, `${skill} still states the retired rule`).not.toMatch(/every release runs the full set/i);
+  });
+
+  // ADDED 2026-10-08 (review/28, signed off in the run record): who holds admin and registry
+  // publish rights is console state no diff shows, so the roster review takes no patch-lane trigger
+  // and no window; it runs on every release, a patch included.
+  it("reviews the admin roster on every release, a patch included", () => {
+    const line = perReleaseLines().find((text) => text.startsWith("A third line"));
+    expect(line, `${RELEASE_CHECKLIST} has no "A third line" (the roster review)`).toBeDefined();
+    const text = collapsed(line ?? "");
+    const runsWhen = text.slice(text.indexOf("Runs when:"));
+    expect(runsWhen).toMatch(/^Runs when: every release, a patch included, for the admin roster review/);
+    expect(runsWhen, "the roster review still waits on a window").not.toMatch(/\d+ days/);
   });
 
   it("states the one carried form in the checklist and in SET-v7", () => {

@@ -405,10 +405,11 @@ re-measures the cases whose inputs moved and carries the rest from a prior compl
 route of record's driver is what implements the composition. The manual runner documented on this
 page runs the full set, every case, every time. Which releases run the set at all is a rule of the
 set, declared in the same section under "Which releases run the set — amended 2026-10-08": a
-release whose diff touches no model-facing input — `content/**`, the emitted client files, the eval
-set's files, `scripts/eval/**` — on the same scenario model, judge model and harness (the harness
-carries the pinned client version) carries the run of record forward as `carried forward from run
-N: no model-facing change`, until the third release or 30 days since the last full run.
+release whose diff touches no model-facing input — no file the run of record or the public runner
+hashes, no file a case's `source:` names, no emitted client file — on the same scenario model, judge
+model and harness (the harness carries the pinned client version), and whose run of record is not
+FAIL, carries the run of record forward as `carried forward from run N: no model-facing change`,
+until the third release or 30 days since the last full run. That section lists the files.
 
 The three gates above are the exception that proves the rule: they are deterministic checks
 over the case files, they run in `npm run test` with everything else, and they score nothing.

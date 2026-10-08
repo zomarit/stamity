@@ -248,5 +248,8 @@ describe("hook-latency: the release checklist", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/exits 0/);
     expect(lines[0]).toMatch(/release record/);
+    // ADDED 2026-10-08 (review/30): the line runs when the bytes it times moved, and the guard is
+    // generated from more modules than `src/hooks/**`, so its trigger names the generated file.
+    expect(lines[0]).toContain("`.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`");
   });
 });

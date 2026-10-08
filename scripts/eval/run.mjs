@@ -6,7 +6,8 @@ import { boundedMap, callWithRetries, CONTROLS, HARNESS, makeRequest, responsesT
 
 const PROFILE_PATH = 'evals/model-profiles-v1.json'
 const CURRENT_SET = 'evals/SET-v7.md'
-const RUNNER_FILES = ['scripts/eval-run.mjs', 'scripts/eval/instrument.mjs', 'scripts/eval/transport.mjs',
+// Exported so the docs tests hold the release rule's trigger list to the files this runner hashes.
+export const RUNNER_FILES = ['scripts/eval-run.mjs', 'scripts/eval/instrument.mjs', 'scripts/eval/transport.mjs',
   'scripts/eval/run.mjs', 'scripts/native-typescript.mjs', '.stamity/overrides/skills/st-eval-run/SKILL.md']
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 

@@ -198,17 +198,26 @@ patch included.
 
 A second line rides the same cut and lands *before* the tag rather than after it: the eval set is
 measured per the change-aware release rule of `evals/SET-v7.md` (REQ-PROVE-033). Runs when: the
-release's diff since the run of record touches `content/**`, the emitted client files (the
-cross-client goldens), the eval set's files (`evals/SET-v7.md`, `evals/cases-v6/**`, the selected
-rubric, the model profiles) or the eval harness `scripts/eval/**`; or the scenario model or the
-judge model moved; or the harness, which carries the pinned client version, moved; or the release
-is the third release since the last full run, or is cut 30 days after the last full run or later,
-whichever comes first. When it runs, the full set is measured — by the release's baseline run, or
+release's diff since the run of record touches `content/**` or another file a case's `source:`
+names (`scripts/plugins/setupCommand.mjs`); the emitted client files (the cross-client goldens);
+the eval set's files (`evals/SET-v7.md`, `evals/README.md`, `evals/coverage-exemptions-v6.md`, the
+selected rubric `evals/rubric-v7.md`, the model profiles `evals/model-profiles-v1.json` and
+`evals/MODEL-PROFILES-v1.md`); the case sets old and new (`evals/cases-v6/**`,
+`evals/cases-v4/**`); the eval skill and its copies (`.stamity/overrides/skills/st-eval-run/SKILL.md`,
+`.claude/skills/st-eval-run/SKILL.md`); or the eval scripts (`scripts/eval/**`,
+`scripts/eval-run.mjs`, `scripts/native-typescript.mjs`); or the scenario model or the judge model
+moved; or the harness, which carries the pinned client version, moved; or the run of record is
+FAIL; or the release is the third release since the last full run, or is cut 30 days after the
+last full run or later, whichever comes first. The file list is derived, not chosen: it is every
+file the run of record's `inputs.json` hashes as an input, every file the public runner hashes and
+every file a case's `source:` names, and the docs tests read those and refuse a list that misses
+one. When it runs, the full set is measured — by the release's baseline run, or
 by an incremental run composed with it under that file's incremental rule — and the release
 carries the composed artifact under `evals/runs/`. When none of those holds, the release carries
 the run of record forward and its notes say `carried forward from run N: no model-facing change`,
 N being the run of record's number: the one carried form this checklist admits. A FAIL run of
-record is never carried forward, because its exception covered its own release alone. The corpus
+record is never carried forward; the release runs the full set. Its exception covered its own
+release alone. The corpus
 is model-executed prose, so a version cut that moved a trigger with no run behind it ships
 behaviour nobody measured — no artifact, no tag, and a release without one is blocked by this
 checklist rather than by anyone's memory. (Added 2026-09-01, with the set; repointed to
@@ -263,8 +272,9 @@ release ships — and review the admin roster, so the set of accounts holding ad
 and publish rights on the registry is a set someone looked at this release rather than one that
 accumulated. Both are console state that no file in this tree can assert, which is why they sit in
 this checklist beside the three platform controls rather than in a test. (Added 2026-09-02.)
-Runs when: a minor or a major release; on a patch, when `package.json`'s `description` or
-`keywords` moved since the last release, or 30 days have passed since the roster was last reviewed.
+Runs when: every release, a patch included, for the admin roster review — no trigger and no
+window, because who holds admin or publish rights is console state no diff shows; the metadata
+half, on a patch, when `package.json`'s `description` or `keywords` moved since the last release.
 
 A fourth line rides the same cut, before the tag: every hand page — the whole hand bucket
 `test/docsPages.test.ts` declares, plus `GOVERNANCE.md` — is re-attested claim by claim against
@@ -283,4 +293,4 @@ written after the snapshot is not on the page until the next refresh, which is t
 (Added 2026-09-15, with the page.) Runs when: a run record under `.stamity/runs/` or
 `evals/run-of-record.json` changed since the last snapshot.
 
-A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the diff since the last release touches the guard's source (`src/hooks/**`) or `scripts/hook-latency.mjs`, or the Node version the release is cut on moved.
+A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the generated guard the script times (`.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`, built from `src/hooks/scripts.ts` and every module it imports) or `scripts/hook-latency.mjs` moved since the last release, or the Node version the release is cut on moved.

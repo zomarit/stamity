@@ -108,8 +108,14 @@ const STALE_MESSAGE =
   `rendered from committed artifacts, so a new run record makes it stale the same way a code ` +
   `change makes the CLI reference stale.`;
 
-/** The retired carried-to clause, refused on the rendered page (REQ-PROVE-020). */
-const CARRIED_TO_REFUSAL = /carried to \d+\.\d+\.\d+/;
+/**
+ * The retired carried-to clause in any wording, and a "carried forward from run N" without the
+ * rule's own suffix, refused on the rendered page (REQ-PROVE-020, REQ-PROVE-033). The one carried
+ * form admitted is "carried forward from run N: no model-facing change"; `(?!\d|…)` keeps the run
+ * number whole, so "run 43" cannot backtrack to "run 4" and slip past the lookahead.
+ */
+const CARRIED_TO_REFUSAL =
+  /carried (?:forward |over )?to \d+\.\d+\.\d+|carried forward from run \d+(?!\d|: no model-facing change)/;
 
 const committedPage = (): string => readFileSync(join(REPO_ROOT, MEASUREMENTS_DOC_PATH), "utf-8");
 
@@ -872,9 +878,21 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // ADDED 2026-10-08 (REQ-PROVE-020's amendment, unit c3-release-rules): the change-aware release
   // rule re-admits one carried form, "carried forward from run N: no model-facing change", and the
   // retired "release run, carried to X.Y.Z" still fails the page.
+  //
+  // TEST CHANGE, justified: 2026-10-08 (review/27). The refusal admitted every carried wording but
+  // "carried to", so "carried forward to 1.14.0" and a bare "carried forward from run 43" passed it.
+  // It now refuses the carried-to family and the suffix-less form, one fixture per shape.
   it("admits the carried-forward form and still refuses the carried-to clause", () => {
     expect("carried forward from run 43: no model-facing change").not.toMatch(CARRIED_TO_REFUSAL);
-    expect("release run, carried to 1.12.1").toMatch(CARRIED_TO_REFUSAL);
+    for (const refused of [
+      "release run, carried to 1.12.1",
+      "the 1.12.0 release run, carried forward to 1.14.0",
+      "the 1.12.0 release run, carried over to 1.14.0",
+      "carried forward from run 43",
+      "carried forward from run 43 (no model-facing change)",
+    ]) {
+      expect(refused, `the refusal admits "${refused}"`).toMatch(CARRIED_TO_REFUSAL);
+    }
   });
 });
 

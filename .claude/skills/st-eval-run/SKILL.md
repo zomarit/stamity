@@ -272,7 +272,32 @@ A clean run reports the artifact path and one line per metric.
   by model, effort, rubric, harness, isolation controls and versioned inputs.
 - A content edit re-runs the affected cases, found by the `source` field each
   case declares, and carries their result.
-- Every release runs the full set rather than the affected slice.
+- A release runs the full set — a baseline run, or an incremental run composed
+  with one under the incremental rule of `evals/SET-v7.md` ("Which releases run
+  the set — amended 2026-10-08") — when its diff since the run of record touches
+  `content/**` or another file a case's `source:` names
+  (`scripts/plugins/setupCommand.mjs`); the emitted client files (the
+  cross-client goldens); the eval set's files (`evals/SET-v7.md`,
+  `evals/README.md`, `evals/coverage-exemptions-v6.md`, the selected rubric
+  `evals/rubric-v7.md`, the model profiles `evals/model-profiles-v1.json` and
+  `evals/MODEL-PROFILES-v1.md`); the case sets old and new (`evals/cases-v6/**`,
+  `evals/cases-v4/**`); the eval skill and its copies
+  (`.stamity/overrides/skills/st-eval-run/SKILL.md`,
+  `.claude/skills/st-eval-run/SKILL.md`); or the eval scripts
+  (`scripts/eval/**`, `scripts/eval-run.mjs`, `scripts/native-typescript.mjs`);
+  when the scenario model or the judge model moved; when the harness, which
+  carries the pinned client version, moved; when the run of record is FAIL; or
+  when the release is the third release since the last full run, or is cut 30
+  days after the last full run or later, whichever comes first. The file list is
+  derived, not chosen: it is every file the run of record's `inputs.json` hashes
+  as an input, every file the public runner hashes and every file a case's
+  `source:` names, and the docs tests read those and refuse a list that misses
+  one. Otherwise the release carries the run of record forward, and its notes
+  say `carried forward from run N: no model-facing change`, N being the run of
+  record's number: the one carried form admitted, while "carried to X.Y.Z" in
+  any wording, and "carried forward from run N" without that suffix, stay
+  retired. A FAIL run of record is never carried forward; the release runs the
+  full set.
 - A model change re-runs the adversarial cases in full, at the zero-break bar.
   Guardrail behaviour is a property of the prompt and the model together, so a
   swap rewrites every adversarial expectation at once.

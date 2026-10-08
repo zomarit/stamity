@@ -2,7 +2,9 @@
 
 v7 changes inputs, not the rule. The scoring rule, the four metric names and their
 numbers, the run-artifact contract, the hard triggers and the non-negotiable appendix are
-SET-v6's, carried over unchanged and not rescored. Two inputs move. The case directory is
+SET-v6's, carried over unchanged and not rescored, except where a dated amendment below says
+otherwise: on 2026-10-08 hard trigger 2 and § 8's comparator sentence moved with the change-aware
+release rule (REQ-PROVE-033). Two inputs move. The case directory is
 now `evals/cases-v6/**`; every carried case's frontmatter id, class, metric and floor tag are
 identical to `cases-v5`'s, and its `## Expected` block too unless a reviewed disposition or
 amendment moved it (eleven cases, each with an `EXPECTED_MOVES` row), enforced by
@@ -210,17 +212,26 @@ re-measured cases only from the next run on.)
 **Which releases run the set — amended 2026-10-08.** A maintainer decision of 2026-10-08
 (REQ-PROVE-033), declared before any release uses it, replaces "every release runs the full set".
 A release runs the full set — a baseline run, or an incremental run composed with one under the
-rule above — when its diff since the run of record touches `content/**`, the emitted client files
-(the cross-client goldens), the eval set's files (`evals/SET-v7.md`, `evals/cases-v6/**`, the
-selected rubric, the model profiles) or the eval harness `scripts/eval/**`; when the scenario model
-or the judge model moved; when the harness, which carries the pinned client version, moved; or when
-the release is the third release since the last full run, or is cut 30 days after the last full run
-or later, whichever comes first. Otherwise the release carries the run of record forward, and its
-notes say `carried forward from run N: no model-facing change`, N being the run of record's number:
-the one carried form admitted, while "release run, carried to X.Y.Z" stays retired. A FAIL run of
-record is never carried forward, because its exception covered its own release alone. Editing this
-file is itself an eval-set change, so the release that ships this paragraph runs the full set. No
-count, threshold, scoring rule, case or `## Expected` block moves with it.
+incremental rule above — when its diff since the run of record touches `content/**` or another
+file a case's `source:` names (`scripts/plugins/setupCommand.mjs`); the emitted client files (the
+cross-client goldens); the eval set's files (`evals/SET-v7.md`, `evals/README.md`,
+`evals/coverage-exemptions-v6.md`, the selected rubric `evals/rubric-v7.md`, the model profiles
+`evals/model-profiles-v1.json` and `evals/MODEL-PROFILES-v1.md`); the case sets old and new
+(`evals/cases-v6/**`, `evals/cases-v4/**`); the eval skill and its copies
+(`.stamity/overrides/skills/st-eval-run/SKILL.md`, `.claude/skills/st-eval-run/SKILL.md`); or the
+eval scripts (`scripts/eval/**`, `scripts/eval-run.mjs`, `scripts/native-typescript.mjs`); when
+the scenario model or the judge model moved; when the harness, which carries the pinned client
+version, moved; when the run of record is FAIL; or when the release is the third release since the
+last full run, or is cut 30 days after the last full run or later, whichever comes first. The file
+list is derived, not chosen: it is every file the run of record's `inputs.json` hashes as an input,
+every file the public runner hashes and every file a case's `source:` names, and the docs tests read
+those and refuse a list that misses one. Otherwise the release carries the run of record forward,
+and its notes say `carried forward from run N: no model-facing change`, N being the run of record's
+number: the one carried form admitted, while "carried to X.Y.Z" in any wording, and "carried forward
+from run N" without that suffix, stay retired. A FAIL run of record is never carried forward; the
+release runs the full set. Its exception covered its own release alone. Editing this file is itself
+an eval-set change, so the release that ships this paragraph runs the full set. No count, threshold,
+scoring rule, case or `## Expected` block moves with it.
 
 ## What v7 adds
 
@@ -930,7 +941,8 @@ run. Results are artifacts, not chat. The file records, at minimum:
 
 ## Hard triggers
 
-Unchanged in substance; the paths point at cases-v6 and at this file. The set runs manually,
+Unchanged in substance except trigger 2, amended 2026-10-08; the paths point at cases-v6 and at
+this file. The set runs manually,
 in a harness session, on the operator's word. Nothing schedules it and no lane fires it
 automatically. The three triggers below are process obligations written where the person
 doing the work reads them — text, not automation — and two deterministic gates sit under the
@@ -947,10 +959,10 @@ first of them.
    newly added artifact with no case into one.
 2. **A release runs the full set when a model-facing input moved.** Before the tag is cut, the
    whole set runs and the release carries the run artifact when the change-aware rule under
-   "Incremental runs" names a trigger — `content/**`, the emitted client files, the eval set's
-   files, `scripts/eval/**`, the scenario or judge model, the harness and its pinned client
-   version — or the third release or 30 days since the last full run comes due; otherwise the
-   release carries the run of record forward. This is wired into
+   "Incremental runs" names a trigger — a file the run of record or the public runner hashes, a
+   file a case's `source:` names, the emitted client files, the scenario or judge model, the
+   harness and its pinned client version, a FAIL run of record — or the third release or 30 days
+   since the last full run comes due; otherwise the release carries the run of record forward. This is wired into
    `.github/release-controls-checklist.md`, so a release with neither the artifact nor the
    carried-forward note is blocked by its own checklist rather than by anyone's memory. (Amended
    2026-10-08; until then every release ran the full set.)
