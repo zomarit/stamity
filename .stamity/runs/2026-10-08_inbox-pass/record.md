@@ -1,11 +1,11 @@
 # Run 2026-10-08_inbox-pass — the inbox pass: every row of the deferral inbox decided and left with its exit
 
-Status: part 1 done 2026-10-08 (396 rows left the inbox); part 2 pending — the five rows that wait on lane D (inbox rows 519, 560, 585, 586, 588), driven by run 2026-10-08_maintainer-tooling
+Status: closed 2026-10-08 — part 1 removed 396 rows and part 2 the five that waited on lane D (inbox rows 519, 560, 585, 586, 588), 401 in all; 15 rows stay with their places and 3 re-filed remainders carry theirs; nothing of this pass is pending (two items its rows touch belong to run 2026-10-08_maintainer-tooling's close, named under "Part 2")
 Plan: docs/plans/019-lean-flows-01.md
 Invocation: /st-work docs/plans/019-lean-flows-01.md — unit t10-inbox-pass (S11–S13), its walk in the session's start and its mechanics as unit i3-inbox-mechanics of run 2026-10-08_maintainer-tooling
 Opened: 2026-10-08
 Input: `.stamity/inbox.md` at `077e8a78` (byte-identical to `aa79bcc6`), 416 bullet rows; the decisions file's `line` field indexes that state
-Outputs: `inbox-retirements.md` (one line per removed row), `ledger.jsonl` (re-filed remainders only), the `retired` values of the run ledgers the rows named, the widened learning `vitest-update-flag-takes-an-optional-value`
+Outputs: `inbox-retirements.md` (one line per removed row, 401), `ledger.jsonl` (re-filed remainders only, `pass/1` to `pass/3`), the `retired` values of the run ledgers the rows named, the widened learning `vitest-update-flag-takes-an-optional-value`
 
 ## What the pass did
 
@@ -58,8 +58,9 @@ Outputs: `inbox-retirements.md` (one line per removed row), `ledger.jsonl` (re-f
 | scheduled | 48 | 20 | 28 |
 | scheduled-fold | 53 | 14 | 39 |
 | **removed in part 1** | **396** | **224** | **172** |
+| fix-in-session, part 2 (lane D) | 5 | 3 | 2 |
+| **removed in all** | **401** | **227** | **174** |
 | stays | 15 | — | — |
-| waiting on lane D (part 2) | 5 | — | — |
 | **decided** | **416** | | |
 
 The fix-in-session rows and their commits on `lean-flows-01`: 31 `a58f4d98`; 212 `c021bb4c`, `14ee4fe6`; 274 and 275
@@ -100,7 +101,11 @@ other remainder is re-filed with its place (the maintainer's sign-off on the rev
   closed `deferred` to `u1-import-config-round-trip`, `docs/plans/016-fork-distribution-01.md`), with a new inbox
   bullet whose `Ref:` names it.
 - Row 601's remainder (a PASS beside an exception keyed to the same run) is fixed this session by `4dcedb41`.
-- Row 519's residual (3), the `.codex/config.toml` tables, is part 2's: it is re-filed with row 519.
+- Row 519's residual (3), the `.codex/config.toml` tables, was part 2's: lane D's fixes leave it open, so it is
+  re-filed as `2026-10-08_inbox-pass/pass/3` (this run's `ledger.jsonl`, closed `deferred` to its own trigger: an
+  owner's report of a server key lost to a refresh, or the next change to `classify` in
+  `src/manifest/codexConfigToml.ts`; files `src/manifest/codexConfigToml.ts`), with a new inbox bullet whose `Ref:`
+  names it.
 
 ## Rows that stay, with their places
 
@@ -124,7 +129,7 @@ other remainder is re-filed with its place (the maintainer's sign-off on the rev
 
 Each bullet stays verbatim; its ledger row stays `deferred`, accounted for by the inbox `Ref:`.
 
-## Part 2 — the five rows waiting on lane D
+## Part 2 — the five rows that waited on lane D
 
 | Row | Ref | Unit |
 |---|---|---|
@@ -134,13 +139,38 @@ Each bullet stays verbatim; its ledger row stays `deferred`, accounted for by th
 | 586 | `2026-10-07_security-fixes/review/17` | d1c |
 | 588 | `2026-10-07_security-fixes/build/62` | d2 |
 
-Their bullets and ledger rows are untouched by part 1.
+Their bullets and ledger rows were untouched by part 1. Part 2 ran 2026-10-08 on branch `lean-flows-01` at
+`dbd54fc7`, after all six lanes of run `2026-10-08_maintainer-tooling` were integrated, as that run's unit i3 part 2:
 
-## After part 1
+1. **Retire first.** For the three ledger-ref rows, `npx --no stamity ledger close --run 2026-10-07_security-fixes --id
+   <id> --retired "<disposition>"` ran once each and exited 0; none was already retired: `review/82` (row 585),
+   `review/17` (row 586) and `build/62` (row 588). Rows 519 (plan-ref) and 560 (no ref) take no `ledger close`.
+2. **Re-file the remainder.** Row 519's residual (3) was appended with `ledger append --stdin` as `pass/3` and closed
+   `deferred` with its trigger (see "Remainders"); its bullet joined the pass's own dated paragraph.
+3. **Remove the bullets.** The five bullets left `.stamity/inbox.md`, none rewritten in place. Two dated paragraphs
+   left with no bullet went with them (PR #85's review, row 560's; the close of plan 016 file 0, rows 585, 586 and
+   588's), and plan 016's amendment paragraph, which keeps one bullet, now counts thirty-six rows gone.
+4. **One line each** in `inbox-retirements.md`, in row order, all exit `fix-in-session`:
 
-The inbox holds 21 bullets: the 15 that stay, the 5 waiting on part 2, and the re-filed remainder of row 524. After
-the review's correction it holds 22: row 306's re-filed remainder joins them. Each dated paragraph that kept a bullet
-now says how many of its rows left in this pass.
+| Row | Ref | Settled by |
+|---|---|---|
+| 519 | `docs/plans/016-fork-distribution-00.md` | `f50f5ce3`, `6dfed840`, `b8ecdff3`, `0889d018` (the delete and overwrite halves); residual (3) re-filed as `pass/3` |
+| 560 | — | `f50f5ce3`, `f1c8724b`, `9bef8a0e` |
+| 585 | `2026-10-07_security-fixes/review/82` | `144eb659`, `c94a771c`, `25f6a49e` |
+| 586 | `2026-10-07_security-fixes/review/17` | `6dfed840`, `b8ecdff3`, `0889d018` |
+| 588 | `2026-10-07_security-fixes/build/62` | `66a62737` |
+
+Two items these rows touch belong to run `2026-10-08_maintainer-tooling`'s close, not to this pass: the declared
+default for the overwrite half of rows 519 and 586 (no `.bak` for a tracked, clean file; that run's ledger rows
+`build/62` and `review/109`, on its close list against a `.bak` always or a machine-local hash record), and the push of
+the private eval driver's companion change that rows 274, 275 and 597 rest on (`review/92` below).
+
+## After the pass
+
+After part 1 the inbox held 21 bullets: the 15 that stay, the 5 waiting on part 2, and the re-filed remainder of row
+524. After the review's correction it held 22: row 306's re-filed remainder joined them. After part 2 it holds 18: the
+15 that stay and the three re-filed remainders (`pass/1`, `pass/2`, `pass/3`). Each dated paragraph that kept a bullet
+says how many of its rows left in this pass.
 
 ## Corrections after review
 

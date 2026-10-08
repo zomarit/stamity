@@ -9,9 +9,10 @@ to `main` the same day); **cut** — no work is owed, and the reason says why; *
 it; **scheduled-fold** — the pass folded it into the named unit or place (`357c5cb3`, `2dbd7e19`). Row 389's line is
 last: it names the learning commit this pass made.
 
-Rows: 416 decided · removed here: 396 · staying: 15 (named with their places in `record.md`) · waiting on part 2: 5
-(rows 519, 560, 585, 586, 588) · re-filed remainders: 2 (row 524's, as `2026-10-08_inbox-pass/pass/1`, and row
-306's, as `2026-10-08_inbox-pass/pass/2`).
+Rows: 416 decided · removed here: 401 (396 in part 1, and in part 2 the five that waited on lane D: rows 519, 560,
+585, 586, 588) · staying: 15 (named with their places in `record.md`) · re-filed remainders: 3 (row 524's, as
+`2026-10-08_inbox-pass/pass/1`, row 306's, as `2026-10-08_inbox-pass/pass/2`, and row 519's residual (3), as
+`2026-10-08_inbox-pass/pass/3`).
 
 The review of the pass's mechanics corrected some lines; `record.md`'s "Corrections after review" section carries
 each correction. A ledger-ref row's line below stays as its ledger row's `retired` field carries it, since a retired
@@ -353,6 +354,7 @@ value is written once; row 306's line, which no ledger row carries, is corrected
 | 505 | `docs/plans/017-docs-overhaul-03.md` | scheduled-fold | scheduled to c4-publish-close (docs/plans/017-docs-overhaul-03.md); inbox pass 2026-10-08 |
 | 511 | `2026-10-06_security-alerts/build/1` | cut | cut: no patched http-cache-semantics exists (alerts #23 and #27 open, first patched none on 2026-10-08); Dependabot raises the refresh once one is named; inbox pass 2026-10-08 |
 | 512 | `2026-10-06_security-alerts/review/3` | cut | cut: the overrides hold fixed versions today; retiring them later is housekeeping, and a future ^8 consumer would fail loudly at install; inbox pass 2026-10-08 |
+| 519 | `docs/plans/016-fork-distribution-00.md` | fix-in-session | fixed in f50f5ce3, 6dfed840, b8ecdff3, 0889d018 (delete and overwrite halves); its residual (3), the `.codex/config.toml` tables, re-filed as 2026-10-08_inbox-pass/pass/3; inbox pass 2026-10-08 |
 | 520 | `docs/plans/016-fork-distribution-00.md` | cut | cut: only a fork consuming through a mirror is affected, no such fork exists, and the call fails closed at the publish registry rather than reaching the public one; inbox pass 2026-10-08 |
 | 521 | `docs/plans/016-fork-distribution-02.md` | scheduled | scheduled to u2-main-catalogs (docs/plans/016-fork-distribution-02.md); inbox pass 2026-10-08 |
 | 522 | `docs/plans/016-fork-distribution-00.md` | scheduled-fold | scheduled to Package 20 file 1 intake, beside u1-clean-keeps-state (docs/plans/016-fork-distribution-01.md, its inbox fold table); inbox pass 2026-10-08 |
@@ -388,6 +390,7 @@ value is written once; row 306's line, which no ledger row carries, is corrected
 | 553 | `docs/plans/016-fork-distribution-01.md` | scheduled-fold | scheduled to f1-import-recipe (docs/plans/014-lean-repository-01.md); inbox pass 2026-10-08 |
 | 554 | `docs/plans/016-fork-distribution-01.md` | cut | cut: the maintainer chose on 2026-10-06 not to build them; a fork releases by hand meanwhile; inbox pass 2026-10-08 |
 | 555 | `docs/plans/016-fork-distribution-01.md` | cut | cut: Terraform detection is on plan 016's drop list (016-01:125); no fleet has asked; inbox pass 2026-10-08 |
+| 560 | — | fix-in-session | fixed in f50f5ce3, f1c8724b, 9bef8a0e (a content-folder delete needs the engine's own rendering; unproven keeps its row; clean --pack proves a pack's copies); inbox pass 2026-10-08 |
 | 561 | — | cut | cut: the reviewer missed the lane rule: publish never pushes a workflow change and opens an issue for a person instead, so Workflows write is never needed; the Warning was overstated; inbox pass 2026-10-08 |
 | 562 | — | scheduled-fold | scheduled to u1-fork-attestations (docs/plans/016-fork-distribution-01.md); inbox pass 2026-10-08 |
 | 563 | — | scheduled-fold | scheduled to u3-reset-guide (docs/plans/016-fork-distribution-03.md); inbox pass 2026-10-08 |
@@ -401,7 +404,10 @@ value is written once; row 306's line, which no ledger row carries, is corrected
 | 577 | `docs/plans/019-lean-flows-02.md` | scheduled-fold | scheduled to p4-loop-rules (docs/plans/019-lean-flows-02.md); inbox pass 2026-10-08 |
 | 578 | `docs/plans/019-lean-flows-03.md` | scheduled-fold | scheduled to q2-qa-rows (docs/plans/019-lean-flows-03.md); inbox pass 2026-10-08 |
 | 579 | `docs/plans/019-lean-flows-03.md` | scheduled-fold | scheduled to q1-inbox-scoped (docs/plans/019-lean-flows-03.md); inbox pass 2026-10-08 |
+| 585 | `2026-10-07_security-fixes/review/82` | fix-in-session | fixed in 144eb659, c94a771c, 25f6a49e (the 1.11.0 Cursor guards are the engine's only as 1.11.0 rendered them for the setup, on sync, clean and init --force); inbox pass 2026-10-08 |
+| 586 | `2026-10-07_security-fixes/review/17` | fix-in-session | fixed in 6dfed840, b8ecdff3, 0889d018 (a charter-shaped file is proven by rendering; an unproven overwrite stays recoverable from git or a .bak); inbox pass 2026-10-08 |
 | 587 | `2026-10-07_security-fixes/build/46` | cut | cut: the owner's own server table is kept and runs, the correct result; only the notice first adoption gives is missing (fix: warn in the recorded state too, S); inbox pass 2026-10-08 |
+| 588 | `2026-10-07_security-fixes/build/62` | fix-in-session | fixed in 66a62737 (sync --dry-run --force previews the forced write); inbox pass 2026-10-08 |
 | 589 | `2026-10-07_security-fixes/review/67` | cut | cut: the preview overstates a delete the real sweep keeps, so the error is on the safe side; no file is lost; inbox pass 2026-10-08 |
 | 590 | `2026-10-07_security-fixes/review/85` | cut | cut: init --force leaves two unrecorded old guard scripts that nothing runs, and sync, the upgrade path, reclaims them; clutter only; inbox pass 2026-10-08 |
 | 591 | `2026-10-07_security-fixes/build/28` | cut | cut: a forged record can only bloat the committed manifest with repeated lines; u1-gitignore-lines bounds each line to the engine's set (016-01:1460-1462), so no extra removal follows; inbox pass 2026-10-08 |

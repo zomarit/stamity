@@ -79,32 +79,18 @@ pass, each with one line in `.stamity/runs/2026-10-08_inbox-pass/inbox-retiremen
 Rows appended 2026-10-06 by `/st-plan` for plan 016's amendment (the enterprise's updated brief: file 0,
 `docs/plans/016-fork-distribution-00.md`, runs before Package 19 with the security fixes, and files `-01.md` to `-03.md`
 are amended): the follow-ups the drafters found, the items the amendment leaves out with their revisit triggers, and one
-row for Package 18's import recipe. Thirty-five of them, the import-recipe row among them, left this inbox on 2026-10-08
+row for Package 18's import recipe. Thirty-six of them, the import-recipe row among them, left this inbox on 2026-10-08
 in the inbox pass, each with one line in `.stamity/runs/2026-10-08_inbox-pass/inbox-retirements.md`.
 
-- Minor · src/manifest/ownedPaths.ts · inside the owned-path bound, a forged ledger row whose `contentHash` equals an owner's file at `.github/hooks/stamity.json` or a Cursor guard script still licenses a whole-file delete or a backup-free overwrite there (engine-specific names an owner rarely holds); add a byte proof per file when an owner reports one · source: /st-plan · Ref: docs/plans/016-fork-distribution-00.md
 - Minor · package.json · the `st` alias prints a deprecation line from the release that carries plan 016 file 2's `u2-shrinkwrap`; remove the `st` bin, `src/st.ts` and its tsdown entry at 2.0.0, with a CHANGELOG line · source: /st-plan · Ref: docs/plans/016-fork-distribution-02.md
-
-Rows appended 2026-10-06 from PR #85's review (the review bot's first pass on plan 016's amendment), read once and
-not yet evaluated further, for the intake of the file each names. Five of them left this inbox on 2026-10-08 in the
-inbox pass, each with one line in `.stamity/runs/2026-10-08_inbox-pass/inbox-retirements.md`.
-
-- Warning · docs/plans/016-fork-distribution-00.md:204 · inside the owned-path bound's content folders, a hand-authored file with an engine-style name (for example `.claude/skills/st-local/SKILL.md`) plus a forged ledger row carrying its easily computed hash still satisfies `u0-ledger-bound`'s path and hash proofs, so the reclaim would delete it; the committed manifest cannot prove authorship — keep such files unless their bytes match an engine rendering or carry a managed marker (comment 4200150189, reviewer P1, first read: valid; settle at file 0's intake) · source: pr-resolve #85
-
-Rows appended 2026-10-08 at the close of plan 016 file 0 (runs `2026-10-07_security-fixes` and
-`2026-10-07_release-1-12-0`); each is the maintainer's accepted "schedule" answer to the close question, with its
-place and trigger. Fourteen of them left this inbox on 2026-10-08 in the inbox pass, each with one line in
-`.stamity/runs/2026-10-08_inbox-pass/inbox-retirements.md`.
-
-- Warning · src/cli/engine/emissionWrite.ts:432-435 · known residual in 1.12.0: a forged ledger row at a Cursor guard name 1.11.0 wrote, plus a forged `coOwned` hash, removes an owner's hooks entry and script at that name with no `.bak`; place: decided with the in-bound byte-proof row above at plan 019 file 1's `t10-inbox-pass` (trigger: that session's opening question batch); files `src/manifest/ownedPaths.ts`, `src/cli/engine/emissionWrite.ts` · source: /st-work · Ref: .stamity/runs/2026-10-07_security-fixes/ledger.jsonl#2026-10-07_security-fixes/review/82
-- Minor · src/manifest/ownedPaths.ts · known residual in 1.12.0: an owner file that copies the charter's four headings passes the structural proof, so a forged row with its hash licenses a delete there; place: with the in-bound byte-proof row at plan 019 file 1's `t10-inbox-pass`; files `src/manifest/ownedPaths.ts` · source: /st-work · Ref: .stamity/runs/2026-10-07_security-fixes/ledger.jsonl#2026-10-07_security-fixes/review/17
-- Minor · src/cli/commands/sync/engine.ts:699-710 · `sync --dry-run --force` reads a forceable Copilot collision from disk, so its preview can say Kept where the forced run deletes; place: plan 019 file 1's `t10-inbox-pass`; files `src/cli/commands/sync/engine.ts` · source: /st-work · Ref: .stamity/runs/2026-10-07_security-fixes/ledger.jsonl#2026-10-07_security-fixes/build/62
 
 Rows appended 2026-10-08 by the inbox pass (run `2026-10-08_inbox-pass`, plan 019 file 1's `t10-inbox-pass`): the
 remainders of rows the pass otherwise settled, each re-filed as a `deferred` row of
 `.stamity/runs/2026-10-08_inbox-pass/ledger.jsonl`; the row id after `#` names it. Every row the pass removed has
 its one line in `.stamity/runs/2026-10-08_inbox-pass/inbox-retirements.md`. Row 306's remainder was re-filed after
-the review of the pass's mechanics, since its decision kept the salvage mode's trigger alive.
+the review of the pass's mechanics, since its decision kept the salvage mode's trigger alive. Row 519's residual (3)
+was re-filed when row 519 left in the pass's part 2, since the fixes that settled the row leave it open.
 
 - Minor · src/cli/commands/clean.ts:533-540 · after `clean --pack <id>` the hooks documents still name the removed pack's hooks until the next `sync` (the scripts are kept since `249f3fa7`, so no guard fails closed); re-render them in the same run, in `u1-import-config-round-trip`'s `clean --pack` re-plan (docs/plans/016-fork-distribution-01.md) · source: /st-work · Ref: .stamity/runs/2026-10-08_inbox-pass/ledger.jsonl#2026-10-08_inbox-pass/pass/1
 - Minor · src/runs/blocks.ts:17-18 · the ledger CLI refuses a whole findings block for one bad line and a whole closures block for one bad closure, so a run re-files the good rows by hand (inbox row 306's remainder; the rest fixed in `c419eab1`); place: its own trigger, the next run that re-files ledger rows by hand after a refused block, which takes a salvage mode keeping the good lines and naming the bad ones; files `src/runs/blocks.ts`, `src/cli/commands/ledger.ts` · source: /st-work · Ref: .stamity/runs/2026-10-08_inbox-pass/ledger.jsonl#2026-10-08_inbox-pass/pass/2
+- Minor · src/manifest/codexConfigToml.ts:233-247 · a selected `[mcp_servers.<id>]` table and the bare `[mcp_servers]` table are proved by their `coOwned` record alone, so a forged record hashing an owner's bare `[mcp_servers]` lets `sync` refresh away the owner's servers written under it as dotted keys, with no `.bak` (inbox row 519's residual (3), named in `SECURITY.md`; the rest of the row fixed in `f50f5ce3`, `6dfed840`, `b8ecdff3`, `0889d018`); place: its own trigger, an owner's report of a server key lost to a refresh or the next change to `classify` there, whichever comes first, which takes a byte proof for those tables; files `src/manifest/codexConfigToml.ts` · source: /st-work · Ref: .stamity/runs/2026-10-08_inbox-pass/ledger.jsonl#2026-10-08_inbox-pass/pass/3
