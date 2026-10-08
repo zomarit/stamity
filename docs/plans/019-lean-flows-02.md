@@ -163,6 +163,8 @@ green digest do not change.
 | `depends_on` | none |
 | `verify` | `node -e 'const t=require("fs").readFileSync("content/commands/st-work.md","utf8");console.log(t.indexOf("\n### Specialist pass\n"))' && npx vitest run test/corpus/commands/work.test.ts test/evals` |
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`p0-make-room` compacts `/st-work`'s inbox-retirement text" at 077e8a78`` — keeps a compact retire protocol in `st-work.md` or adds `st-board.md`.
+
 ### p1-classify — the change classifier and the `gate` verb
 
 | Field | Content |
@@ -176,6 +178,8 @@ green digest do not change.
 | `depends_on` | p0-make-room (shared file order only) |
 | `verify` | `npx vitest run test/change test/cli/commands/gate.test.ts test/cli/surface.e2e.test.ts test/architecture test/roster` |
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`p1-classify` puts a whole change in the `product` class when `--base` is missing" at 077e8a78`` — classifies known paths by the built-in rules with no base.
+
 ### p2-test-inputs — declared reads, the default scan, and the guard
 
 | Field | Content |
@@ -188,6 +192,8 @@ green digest do not change.
 | `edgeCases` | Tests that spawn the CLI read the corpus outside the import graph → `content/**` maps to `full`. A glob in a test (`**/*.md`) counts as naming every matching file |
 | `depends_on` | p1-classify |
 | `verify` | `npx vitest run test/change test/ci/testInputsGuard.test.ts test/cli/commands/check.test.ts` |
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`p2-test-inputs` adds `src/change/testInputs.ts` and `q1-inbox-scoped`" at 077e8a78`` — the `PLAN_MAP` row and `test/architecture` in this cell and in `q1-inbox-scoped`'s (file 3).
 
 ### p3-gates-by-class — `/st-quick`, `/st-work` and the charter run the class's gates
 
@@ -215,6 +221,8 @@ green digest do not change.
 | `depends_on` | p0-make-room |
 | `verify` | `npx vitest run test/roster test/corpus test/hooks test/manifest test/cli/commands/config.test.ts test/evals` |
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`p4-loop-rules`' "fresh fixer at a higher effort" has no mechanism" at 077e8a78`` — settles the mechanism against file 3's `q4`.
+
 ### p5-security-trigger — the class list, the audit first, the scan, the threat note
 
 | Field | Content |
@@ -227,6 +235,8 @@ green digest do not change.
 | `edgeCases` | A repository whose CLI paths fire the new rules on every change keeps the lens: the class file can add rules, never remove or weaken a built-in security rule, and a test pins that a file trying to does not narrow the class; the lens is never gated by hit rate |
 | `depends_on` | p1-classify |
 | `verify` | `npx vitest run test/change test/cli/commands/gate.test.ts test/corpus test/roster` |
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"REQ-FLOW-065 skips the security lens for a lockfile-only bump of a package that already has an install hook" at 077e8a78`` — keeps the lens for a `hasInstallScript` bump.
 
 ### p8-capture-by-consequence — a finding names its consequence; one severity scale
 
@@ -241,6 +251,9 @@ green digest do not change.
 | `depends_on` | p4-loop-rules, p5-security-trigger |
 | `verify` | `npx vitest run test/corpus test/evals` |
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): `2026-10-01_pr73-review-round-1/prove/1` — `stamity-spec-author.md` spells the findings fence's grammar, with the next fold line.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"the implementer's return contract names the `stamity-findings` fence but not its grammar" at 077e8a78`` — `stamity-implementer.md` spells the grammar, with the fold line above.
+
 ### p6-eval-cases-core — the risky case still gets its check
 
 | Field | Content |
@@ -253,6 +266,12 @@ green digest do not change.
 | `edgeCases` | Plan 015's `b4` or plan 016's file 0 lands first and moves the counts → re-base on them (contract census); set source ranges from the landed text only |
 | `depends_on` | p3-gates-by-class, p4-loop-rules, p5-security-trigger, p8-capture-by-consequence |
 | `verify` | `npx vitest run test/evals` |
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"no golden case for a verdict role's digest when a report path is named" at 077e8a78`` — one more case: the verdict digest with a report path named.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"no golden case for the capacity rung" at 077e8a78`` — one more case: the capacity rung.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"no golden case for a fixer handed a decision_needed id without sign-off" at 077e8a78`` — cases for the five uncovered behaviours the row names.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): `2026-09-23_orchestrator-context/build/49` — checks a probe case's `source:` range when it quotes no block, with the next fold line.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): `2026-09-23_orchestrator-context/build/350` — a range-exists-and-matches-heading guard in `test/evals/locators.test.ts`, with the fold line above.
 
 ### p7-dogfood-sync — every emitted copy regenerated
 

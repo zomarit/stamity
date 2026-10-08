@@ -183,6 +183,9 @@ appended to the inbox.
 | `depends_on` | none |
 | `verify` | `npx vitest run test/runs test/cli/commands/ledger.test.ts test/records test/corpus/commands/work.test.ts test/corpus/commands/board.test.ts` |
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`q1-inbox-scoped`: a `/st-work` started from a bare intent queries the inbox at Frame" at 077e8a78`` — a second query after the in-flow plan names files.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`p2-test-inputs` adds `src/change/testInputs.ts` and `q1-inbox-scoped`" at 077e8a78`` — the `PLAN_MAP` row and `test/architecture` in this cell and in `p2-test-inputs`' (file 2).
+
 ### q2-qa-rows — person rows only where a person adds something
 
 | Field | Content |
@@ -195,6 +198,8 @@ appended to the inbox.
 | `edgeCases` | A security setting a person must see in a third-party console counts as "a live third-party account" |
 | `depends_on` | none |
 | `verify` | `npx vitest run test/corpus/skills/flow.test.ts test/corpus/commands/work.test.ts test/evals` |
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"`q2-qa-rows`' blanket docs-class QA exemption drops the person row for a rendered site page" at 077e8a78`` — asks at file 3's start.
 
 ### q3-plan-size — plan-lint L5
 

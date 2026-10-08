@@ -688,6 +688,8 @@ jobs:
         run: node scripts/generate-docs.mjs --page measurements && git diff --exit-code docs/measurements.md
 ```
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"Dependabot and Renovate do not watch the `records` branch" at 077e8a78`` — a Dependabot `github-actions` entry with `target-branch: records`.
+
 ### r5-ci-records-job — CI restores the records, and the records-only lane retires
 
 | Field | Content |
@@ -817,6 +819,8 @@ jobs:
    > each release and APM installs stop vendoring them. Read them at `https://github.com/zomarit/stamity/tree/records`;
    > history is unchanged. A fork's next integrate deletes upstream's records from its tree, and a fork that edited one
    > of them keeps its copy by resolving the modify/delete conflict in favour of its own file.
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"the marker check's pattern also matches QA-table text in two closed run records" at 077e8a78`` — removes both hits, or else a `:!.stamity/runs` pathspec.
 
 ### r8-after-measure — prove the invariants and measure what a fork and an APM install now get
 

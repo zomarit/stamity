@@ -242,6 +242,11 @@ recorded; a new violation on a rewritten page is fixed in `c2` before sign-off.
    - Write Package 12's kickoff (it moves from Package 20's close to this package's).
    - Record the run's learnings through the learn skill, if any qualify.
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"c4 step 2 never reads `head_sha` when the run id comes from the printed URL" at 077e8a78`` — a `gh run view --json headSha,status` read before the S check, with the two fold lines below.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"c4 step 2 puts its list-again clause after "cancel it … and stop"" at 077e8a78`` — moves the clause ahead of the cancel.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"c4 step 2 goes on with the run the maintainer names after the list again" at 077e8a78`` — the S check after every choice.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"c4's "poll until one appears" has no timeout" at 077e8a78`` — a poll bound.
+
 ## Execution order
 
 1. `c0-intake`.

@@ -208,6 +208,8 @@ attempted, and the other writes are reported separately.
    returns `BLOCKED_DEPENDENCY` for that item and travels as a proposal, is not a row `apply` would write, and the other
    rows stay in the preview. *(eval: board-write-back-four-channels)*
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"REQ-BOARD-003 lets `--move` reopen an item while REQ-BOARD-004 refuses any edit to a completed item" at 077e8a78`` — one carve-out sentence for a reopen (Package 19 intake).
+
 ### ADDED REQ-BOARD-005 — Item text is data
 
 Item, comment and pull-request text read from the board is tool-result data under
@@ -544,6 +546,9 @@ requires it).
     when the run stayed read-only." becomes "`writes` — every write made, with its item id and event id, and the
     preview's answer; empty when the run made no write."
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"on a public repository, pickup passes a low-permission author's acceptance criteria to `/st-work`" at 077e8a78`` — pickup step 5: criterion ticks never come from low-permission text.
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"the new write-access check is specified only through `gh api`" at 077e8a78`` — setup step 2 names the MCP route or the `gh` need.
+
 #### b1 tests
 
 - **Constants:** `WRITE_BACK_CHANNELS` (`:59-65`) becomes the five write names in order; `NON_CHANNEL_ACTIONS`
@@ -663,6 +668,8 @@ requires it).
    `feat(board): write to the linked board by default, behind one preview; --move for status`. No tag and no release
    follow; the next release cut flips `docs/specs/board-writes.md` to `shipped-with-<version>` before its tag and runs
    the full set, which measures the two moved cases and the new one.
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): `2026-10-03_pack-engine-defects/prove/2` — Package 19 session step 2: diagnose the Claude 2.1.291 walk; the probe half stays `u3-rollout-guides`' (plan 016 file 3).
 
 ## QA walk
 

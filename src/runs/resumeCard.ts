@@ -359,7 +359,8 @@ function readLedger(path: string): LedgerRead {
     return { ...read, failed: (error as NodeJS.ErrnoException).code !== "ENOENT" };
   }
   if (!isFile) return { ...read, failed: true };
-  // Too large to read whole, and no part of it can stand for the rest: not read at all (inbox row 229).
+  // Too large to read whole, and no part of it can stand for the rest: not read at all
+  // (ledger row 2026-09-23_orchestrator-context/build/180).
   if (size > LEDGER_READ_MAX_BYTES) return { ...read, failed: true, tooLarge: true };
   let raw: string;
   try {

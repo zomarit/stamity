@@ -248,6 +248,8 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
 | `depends_on` | none |
 | `verify` | `npx vitest run test/upstream/importRecipe.test.ts test/docsPages.test.ts` |
 
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"plan 014's import recipe still pushes plain upstream `v*` tags" at 077e8a78`` — pushes `main` only.
+
 ### f2-lane-release-tags-only — the lane fetches only the tags its pattern can select, and sweeps the rest once
 
 | Field | Content |
@@ -260,6 +262,8 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
 | `edgeCases` | A multi-`*` pattern (`v*-*-final`) → one `*` refspec covering the same set `parseReleaseTag` accepts. A tag inside the glob that fails `VERSION_SHAPE` stays in the namespace and is reported "ignored". An update branch whose release tag a later pattern change no longer covers → `continue`, `validate` and `abort` read `releaseFromTag` (`:1472-1480`) and report "not among the fetched upstream tags"; a pattern change mid-update is the operator's act. `prepare --offline` counts namespace refs (`:1928`); after a sweep at least one remains whenever a release exists. A remote unreachable during `ls-remote` → the same `LaneError` as a failed fetch. |
 | `depends_on` | f1-import-recipe |
 | `verify` | `npx vitest run test/upstream && npm run lint && npm run typecheck` |
+
+- Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): `2026-09-23_orchestrator-context/build/368` — finds why an unrelated fork's history once read `update-available`, with a deterministic test.
 
 ### f3-nightly-canonical-guard — the nightly runs only in `zomarit/stamity`
 
