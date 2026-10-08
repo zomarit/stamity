@@ -1,6 +1,6 @@
 # Run 2026-10-07_release-1-12-0 — the 1.12.0 release: its preparation fixes and the cut
 
-Status: in progress
+Status: closed 2026-10-08
 Plan: .stamity/runs/2026-10-07_release-1-12-0/plan.md
 Invocation: /st-work Prepare and cut 1.12.0 after plan 016 file 0 merges: fix the generated setup text's incomplete `clean -y` line and the five 1.11.0 eval misses before the release's full eval run, then run `.github/release-controls-checklist.md` with the publish held for the maintainer's yes.
 Intensity: standard — eval cases, one command's prose and one generated body; the release checklist's own gates
@@ -288,7 +288,105 @@ and a persisted manifest field, and a patch adds no behaviour (the rule chosen a
   record). The orchestrator read the regenerated page; `review/21`–`review/23` and `build/22` closed `fixed`.
 - The run records committed in the release lane before the tag (both runs' records and ledgers, the inbox): the 1.11.0
   cut's pattern, so every `Ref:` in the inbox and every ledger path SECURITY.md names resolves in the tagged tree.
+  Records gate, `test/learnings` and the leak gate green with them staged → `23444f4e`.
+- The private driver's SET-v7 pin moved to the file the tag ships (`9ba08faf…`: runs 40–43's admitted `ba74fd49…`
+  plus only the dated exception paragraph) — a second option the builder raised and the orchestrator chose, since
+  `ba74fd49…` sits on no branch tip; canary-plan revision 21, K3am 15/15 and K4am 29/29 with no model call; the driver
+  tests 73/73 with `STAMITY_REPO` pointed at the release worktree until the release reaches `main`.
+- Final gate on `23444f4e` (test-runner, the lane, alone; load 25 → 141 as another project's work resumed): build,
+  lint, typecheck, the dogfood round trip and the tag-time records check (a local `v1.12.0`, deleted at once) pass;
+  `npm run test` exit 1 (790 s): 11,635 passed, one red — the Cursor walk's child killed by the test's own time limit
+  (exit 143) after 443 s, the Copilot and Codex walks PASS; the coverage run exit 1 (612 s): one 20 s timeout
+  (`ledgerForgery`), no floor table printed; knip exit 1: `floorClause` exported and unused since `e6151605`. The knip
+  finding is a defect of this cut (fixer dispatched); the two reds are the load-sensitive pair seen on `51c6bf2a`, read
+  the same way: CI on #90 is the evidence for the full suite, coverage and Windows, and the Cursor walk re-runs alone.
+- `8236fa2c` (fixer): `floorClause` used only inside its file, so no longer exported (no ignore rule); build, lint,
+  typecheck, knip and the docs suites exit 0. Pushed to #90 (knip first).
+- The Cursor walk alone at `8236fa2c` (test-runner, Cursor armed; load 99 falling to 64): exit 0, 18 passed, every step
+  PASS through `cursor walk PASS`, the file in 449.7 s — close to the 443 s at which the gate's run was killed, so the
+  walk's margin under this load is thin (the inbox row filed at the close already places its fix).
+- CI on #90 at `8236fa2c` (run 37752273949, PR checks 37752274702, docs site 37752274117): every job green — `check` on
+  the floor, LTS and both Windows legs (the coverage floors), the three APM routes, the plugin route, supply-chain
+  currency, dependency review, `all-ci-checks`. This is the full-suite and coverage evidence of record for the final
+  tree, beside the local gates above.
+
+## The release
+
+- 2026-10-08T08:59:20Z: `main` fast-forwarded from `51c6bf2a` to `8236fa2c` under the admin bypass, on the
+  maintainer's approval; PR #90 reads MERGED at that second, every recorded sha kept.
+- The annotated tag `v1.12.0` on `8236fa2c`, pushed; the release workflow run 37753547782 started at 08:59:34Z. The
+  publish job waits on the `npm-publish` environment's required reviewer; the maintainer's approval (the release and
+  its publish) is given.
 - The release branch pushed as `release-1-12-0` (knip exit 0 first) and opened as draft PR #90, stacked on #89
   (`fix/plan-016-file-0`), so CI reads the release changes while the eval runs; it is retargeted to `main` after #89
   merges. No workflow fired: CI and the PR checks run only for pull requests that target `main`, so #90's CI comes
   with its retarget after #89 merges.
+
+## The publish (2026-10-08)
+
+- The release workflow run 37753547782: `gates and pack` and `apm route smoke` passed; `publish` waited on the
+  `npm-publish` environment and was approved at 09:07:12Z on the maintainer's word (the approval API, the comment
+  naming it); `publish` passed. npm: `+ @zomarit/stamity@1.12.0` at 09:08:14Z with a signed provenance statement
+  (Sigstore log index 3145013165); the registry lists 1.12.0 as `latest` (its time 09:12:25Z) with attestations. The
+  plugin distribution: `plugins/v1.12.0` at `8bbba30c`.
+- `main`'s push runs on `8236fa2c`: CI 37753523370, the Pack signing rehearsal 37753523367 and the docs site
+  37753523405 green.
+- After the merge Dependabot opened #91 (`shell-quote` in `/website`); it is placed beside #86 at plan 019 file 1's
+  start. The evidence-archive step the two size exceptions name (compact runs 42 and 43's summaries behind an archive
+  pointer and retire both exceptions, the 1.11.0 close's pattern) is scheduled to the same session's start (an inbox
+  row with its files), not run at this close.
+
+## Close (2026-10-08)
+
+- Status: closed. The release ledger holds no `open` row: every row `fixed`, `rejected` with a reason, or `deferred`
+  with an inbox `Ref:` (`build/17`, the Codex trusted text; `build/21`, the exception constant's reset).
+- The maintainer's answers this run rests on: "Ship with exception" (the eval) and the blanket approval of 2026-10-08
+  for the merge, the tag and the publish; the close question's "Accept all" (the security-fixes run's record).
+
+## Proof block (2026-10-08 — released as 1.12.0)
+
+- **Candidate and release.** `8236fa2c` (PR #90) over `main` `51c6bf2a`: the eval-case and setup fixes, the
+  spec-status rule, the version and its regenerations, the re-attested and restamped pages, the run of record with its
+  exception, and the run records. `main` was fast-forwarded to it at 08:59:20Z; the tag `v1.12.0` sits on it; npm
+  1.12.0 and `plugins/v1.12.0` were published from it by run 37753547782.
+- **Build isolation.** Manual worktree lanes outside the checkout: `rel-evals` for the release branch (rebased onto
+  each final head of PR #89 while it moved, never after), and a detached `rel-eval-run` pinned at each eval candidate
+  so the eval's repository never moved under a run.
+- **Gates.** The final tree's local gate on `23444f4e` ran alone: build, lint, typecheck, the dogfood round trip and
+  the tag-time records check passed; knip named one unused export, fixed in `8236fa2c` with build, lint, typecheck,
+  knip and the docs suites passing; the armed suite's one red (the Cursor walk's child stopped by the test's own time
+  limit as the load rose from 25 to 141) and the coverage run's one 20 s timeout are the load-sensitive pair, read by
+  the solo walk and CI below.
+
+  Gate results (the final tree `8236fa2c`, CI run 37752273949 and the solo walk):
+
+  | Gate | Command | Result |
+  |---|---|---|
+  | check, floor | CI `check (floor, node 22.22.2)` | pass |
+  | check, lts | CI `check (lts, node 24)` | pass |
+  | check, Windows | CI `check (windows-1, node 24)`, `check (windows-2, node 24)` | pass |
+  | plugin route | CI `plugin route (structure and credential-free install)` | pass |
+  | APM routes | CI `apm route` (current, minimum, regression-witness) | pass |
+  | aggregator | CI `all-ci-checks` | pass |
+  | knip | `npm run knip` in the lane | pass |
+  | Cursor walk | `npx vitest run test/ci/pluginLifecycle.test.ts`, Cursor armed, alone | pass: 18 passed, `cursor walk PASS` |
+  | release gates | release run 37753547782 `gates and pack` | pass |
+
+- **The eval.** The run of record is run 43 composed with run 42, FAIL on one floor case through one ungraded sample,
+  released on the maintainer's recorded exception (the section above and every page that names the run of record).
+  Runs 40 and 41 ended terminal on client stream breaks and are unpublished; the private driver's retry rule for those
+  two recoveries was reviewed before run 42.
+- **Review verdicts.** The record declares `Confidence gate: medium`; every approval meets it. The reviewers state
+  confidence in words, not numbers, so the measurements page counts this run in its denominator only.
+
+  Review verdicts, per round (each round a fresh spawn):
+
+  | Pass | Round | Model | Verdict | Confidence | Where |
+  |---|---|---|---|---|---|
+  | e1 + e2 | 1 | Opus 5.5 | approve | high | the Build section |
+  | e3 + fix round 1 | 2 | Opus 5.5 | approve | high | the Build section |
+  | the hand pages (four groups) | 1 | Opus 5.5 | request-changes | high, medium | The cut |
+  | the documents | 1 | Opus 5.5 | request-changes | medium | The cut |
+  | the documents | 2 | Opus 5.5 | request-changes, one row | medium | The cut |
+  | the driver change | 1 | Opus 5.5 | request-changes, one Warning | high | The release eval run |
+  | the run of record | 1 | Opus 5.5 | request-changes | high | The release eval run |
