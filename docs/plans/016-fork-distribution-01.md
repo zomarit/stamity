@@ -1828,6 +1828,17 @@ plan 016 file 1, unit `u1-lane-issues-freshness`.)
 - **edgeCases, added:** `.stamity/upstream.json` in the copy arms nothing there: no gate step runs the lane, and the lane tests build their own fixtures.
 - **Replaces:** "`lockfileExtraDiffs(before, after) → string[]`, every `packages` key whose entry differs, ignoring the root identity (`name`, `version`, `packages[""].name`, `packages[""].version`);" → "`lockChangesBeyondRoot(before, after)` imported from `scripts/identity-files.mjs` (`u1-lane-package-files`): every `packages` key whose entry differs, the root identity ignored;", and "`lockfileExtraDiffs` returns `[]` for a root-only change and names the package for a dropped `libc` field" → "`lockChangesBeyondRoot` returns `[]` for a root-only change and names the package for a dropped `libc` field".
 - Inbox fold (2026-10-08, run 2026-10-08_inbox-pass): ``"nothing proves PowerShell's `npx.ps1` passes `--@<scope>:registry=<url>` intact" at 077e8a78`` — one `pwsh -c` argv check on the Windows leg.
+- **Amended 2026-10-08 (plan 019 file 1).** `ci.yml` moved under this unit; re-read it at intake. Cited at plan 019
+  file 1's head of `ci.yml`: `changes` (`:162-194`) prints six outputs (`:168-176`: `full`, `lanes`, `suites`,
+  `site_build`, `cli_check`, and `records_only`, kept one release and read by nothing). The `lanes` job (`:773-776`;
+  lane map `:19-53`) replaced the `records` lane and covers records, specs, learnings and website changes. `prove-pr`
+  (`:206-236`) lets a proven push to `main` skip both sides. So `fork-probe` is a full-side job: it takes the heavy
+  jobs' `needs: [changes, prove-pr]` and their `if:` (`check` `:240-241`, `apm-install` `:477-478`, `plugin-route`
+  `:587-588`) with `github.repository == 'zomarit/stamity' &&` added, never `records_only`, so a lanes-only change
+  (a website-only one included) and a proven push skip it. In `all-ci-checks` (`:973-1005`; `needs` `:979`) it reads
+  `skipped` beside the heavy three in the proven-push and lanes shapes, and on the full side `success` in
+  `zomarit/stamity` and `skipped` elsewhere. Where this unit says `records`, `needs: changes` or the records-only
+  branch, read `lanes`, `needs: [changes, prove-pr]` and the lanes shape.
 
 ### u1-lane-package-files — the lane derives `package.json` and `package-lock.json` from the release and the fork's identity, and sets the next `-<suffix>.N`
 
@@ -2196,6 +2207,7 @@ units and five engine units. It now runs as **two sessions, one pull request eac
 | (``"`stamity config` cannot return a key other than `gates.*` to its default" at 077e8a78``) | intake — no unit yet (Package 20 file 1): an unset path for every config key |
 | (``"`hooks.userHooksDir` resolves to `none` in `config list`" at 077e8a78``) | intake — no unit yet (Package 20 file 1): one exported default for the user hooks folder |
 | (``"an override-added skill is emitted under its own unprefixed folder" at 077e8a78``) | intake — beside `u1-clean-keeps-state` (:584): prefixes user skills, or proves them another way |
+| (`2026-10-08_inbox-pass/pass/4`, folded 2026-10-08 by run 2026-10-08_maintainer-tooling) "a delete at the current `stamity-` Cursor guard scripts still rests on the recorded hash alone" | intake — no unit yet (Package 20 file 1): a machine-local record of the hashes this checkout's engine wrote, which closes this delete and the backup-free overwrite residual of `SECURITY.md` together |
 
 ## Open questions
 

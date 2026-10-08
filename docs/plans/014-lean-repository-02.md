@@ -759,6 +759,22 @@ jobs:
   - records live on the `records` branch and never land on `main`;
   - CI's `records` job, merge-blocking in this repository, restores them and runs `npm run test:records`, the leak gate
     over them, the measurements drift check and `node scripts/records.mjs guard`.
+- **Amended 2026-10-08 (plan 019 file 1).** The "current" section above describes `ci.yml` before plan 019 file 1;
+  re-derive this unit's "new" section from today's shape at intake. Cited at plan 019 file 1's head of `ci.yml`:
+  - `changes` (`:162-194`) still runs `node scripts/ci/records-only.mjs --base "$BASE_SHA"` (`:194`), which now
+    prints six outputs (`:168-176`): `full`, `lanes`, `suites`, `site_build`, `cli_check`, and `records_only`, kept one
+    release and read by nothing in the file.
+  - The `lanes` job (`:773-776`; lane map `:19-53`) replaced the `records` lane. It covers four lanes (records,
+    specs, learnings and website) and runs only when `changes` says `full=false` and no push was proven.
+  - `prove-pr` (`:206-236`) runs on a push to `main` only, and a proven push skips both sides: `check` (`:238-241`),
+    `apm-install` (`:475-478`), `plugin-route` (`:585-588`) and `lanes` each carry `needs: [changes, prove-pr]` and
+    an `if:` requiring `proven != 'true'`; the three heavy jobs also require `full != 'false'`, `lanes`
+    `full == 'false'`.
+  - `all-ci-checks` (`:973-1005`) has `needs: [changes, prove-pr, check, lanes, supply-chain, apm-install,
+    plugin-route]` (`:979`) and asserts three shapes: a proven push (all four skipped), the lanes side and the full
+    side.
+  - A new full-side job takes the heavy jobs' `needs` and `if:` (`:240-241`), so a lanes-only change and a proven
+    push skip it.
 
 ### r6-records-branch — create the branch, protect it, and see its first check green
 
