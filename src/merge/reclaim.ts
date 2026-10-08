@@ -304,6 +304,13 @@ export interface ReclaimOptions {
    * detail naming this reason — rather than kept as bytes no rendering is.
    */
   renderingsUnbuilt?: string;
+  /**
+   * Set by the full `clean`, which removes the setup after the sweep, ledger
+   * included: no row and no later `sync` outlive it, so a content-folder file
+   * kept unjudged under {@link renderingsUnbuilt} is named for a delete by
+   * hand, unless it is the operator's, instead of promised a retry (review/87).
+   */
+  setupRemoved?: boolean;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -597,6 +604,8 @@ interface SweepContext {
   renderings: ReadonlyMap<string, ReadonlySet<string>>;
   /** {@link ReclaimOptions.renderingsUnbuilt}. */
   renderingsUnbuilt: string | undefined;
+  /** {@link ReclaimOptions.setupRemoved}. */
+  setupRemoved: boolean;
 }
 
 /**
@@ -959,12 +968,16 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       const renderingProof = needsRenderingProof(path);
       if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
         // Unproven is not disproven (review/61): with no rendering built, the
-        // bytes were never judged, so the claim stands for the next sync.
+        // bytes were never judged, so the claim stands for the next sync —
+        // unless the run removes the setup, and no sync follows (review/87).
         if (ctx.renderingsUnbuilt !== undefined) {
+          const kept = ctx.setupRemoved
+            ? "the file is kept, and the setup is being removed with its ledger, so no sync tries the proof again: delete it by hand unless it is yours."
+            : "the file is kept with its ledger row, and the next sync tries the proof again.";
           return {
             kind: "skip",
             action: "skipped-user-content",
-            detail: `A file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and that rendering could not be built (${ctx.renderingsUnbuilt}) — the file is kept with its ledger row, and the next sync tries the proof again.`,
+            detail: `A file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and that rendering could not be built (${ctx.renderingsUnbuilt}) — ${kept}`,
             unproven: true,
           };
         }
@@ -1221,6 +1234,7 @@ export async function sweepReclaimCandidates(
     coOwned: opts.coOwnedPaths ?? new Map<string, CoOwnedReducer>(),
     renderings: opts.renderings ?? new Map<string, ReadonlySet<string>>(),
     renderingsUnbuilt: opts.renderingsUnbuilt,
+    setupRemoved: opts.setupRemoved === true,
   };
   const stamp = (opts.now ?? new Date()).toISOString();
 

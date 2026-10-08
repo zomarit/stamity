@@ -75,12 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `clean --pack <id>` also removes the copies `sync` projected from that pack into each client's
   folders, while the pack is still installed. A copy you edited is kept and named. A pack whose
   command and skill share a name cannot be planned, so none of its copies can be proven: each copy
-  of one of the pack's own artifacts is kept with its ledger row and named, and nothing else is
-  touched. The remedies `sync`, `add` and `check` print for a pack gain a step by hand after
-  `clean --pack`: delete each client copy it keeps and names, unless it is yours.
-- A content-folder file that `sync` or `clean` cannot prove the engine's, because the engine's
-  rendering could not be built, keeps its ledger row so the next `sync` tries again, and the
-  report names why the rendering could not be built.
+  of one of the pack's own artifacts is kept and named, and nothing else is touched. A copy
+  unedited since its recorded hash keeps its ledger row; a copy you edited, or one whose row
+  records no content hash, loses its row. The remedies `sync`, `add` and `check` print for a pack
+  gain a step by hand after `clean --pack`: delete each client copy it keeps and names, unless it
+  is yours.
+- A content-folder file that `sync` or `clean --pack` cannot prove the engine's, because the
+  engine's rendering could not be built, keeps its ledger row so the next `sync` tries again. The
+  full `clean` keeps such a file too, but it removes the setup, ledger included, so its report
+  says to delete the file by hand unless it is yours. Either report names why the rendering could
+  not be built.
 
 ### Fixed
 

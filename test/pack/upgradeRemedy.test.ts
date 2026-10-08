@@ -497,6 +497,7 @@ async function integrityRemedyRuns(
   addStep: string,
   before?: (repo: string) => Promise<void>,
   syncAfterEdit = false,
+  packId = "ops",
 ): Promise<void> {
   const repo = await claudeRepo(name);
   await before?.(repo);
@@ -505,7 +506,7 @@ async function integrityRemedyRuns(
   const synced = await cli(repo, ["sync"]);
   expect(synced.code, `fixture: sync — ${said(synced)}`).toBe(0);
 
-  const edited = ".stamity/packs/ops/agents/stamity-devops.md";
+  const edited = `${packDirRelPath(packId)}/agents/stamity-devops.md`;
   const editedAbs = join(repo, ...edited.split("/"));
   const body = `${await readFile(editedAbs, "utf8")}\nA local edit.\n`;
   await writeFile(editedAbs, body, "utf8");
@@ -524,7 +525,7 @@ async function integrityRemedyRuns(
   expect(detail).toContain("move this file out of the pack's directory or delete it first");
   const steps = quotedVerbs(detail.slice(detail.indexOf("re-install the pack:")));
   expect(steps, `the finding line's order — ${detail}`).toEqual([
-    "clean --pack ops",
+    `clean --pack ${packId}`,
     "sync",
     addStep,
     "sync",
@@ -589,6 +590,28 @@ describe("an edited pack file, by the remedy check's pack-integrity row prints",
     "an edit a sync already carried into the client copy: the printed order, its step by hand included, runs to a green check (review/71)",
     async () => {
       await integrityRemedyRuns("integrity-synced-edit", ["add", "ops"], "add ops", undefined, true);
+    },
+    CASE_TIMEOUT,
+  );
+
+  // review/86: a scoped pack's ledger rows carry `@acme/ops/<path>`, so the moved file's copy is
+  // the pack's by its row only when the row is read past the whole id, not past its first `/`.
+  it(
+    "a scoped pack, with an edit a sync already carried: the printed order, its step by hand included, runs to a green check (review/86)",
+    async () => {
+      await integrityRemedyRuns(
+        "integrity-scoped",
+        ["add", "./vendor/acme-ops", "--allow-untrusted"],
+        "add ./vendor/acme-ops --allow-untrusted",
+        async (repo) => {
+          const vendored = join(repo, "vendor", "acme-ops");
+          await cp(OPS_ROOT, vendored, { recursive: true });
+          const manifest = JSON.parse(await readFile(join(vendored, "pack.json"), "utf8")) as { name: string };
+          await writeFile(join(vendored, "pack.json"), JSON.stringify({ ...manifest, name: "@acme/ops" }, null, 2), "utf8");
+        },
+        true,
+        "@acme/ops",
+      );
     },
     CASE_TIMEOUT,
   );

@@ -1322,6 +1322,34 @@ describe("the first sync recognises a 1.11.0 guard by the bytes 1.11.0 rendered 
     expect(await backups(cleaned)).toEqual([]);
   });
 
+  // review/96: `init --force` judges the Cursor document against the previous ledger, and it
+  // holds the same proof `sync` and `clean` hold — an entry running an old name is the engine's
+  // only while the file it runs is absent or is the guard 1.11.0 rendered for the setup.
+  it("the same forged rows under init --force: the owner's pinned entry and both scripts stay", async () => {
+    const root = await ownersScriptsWithForgedRows("reinit");
+    const decisions = await buildInitDecisions(root, { tools: ["cursor"] });
+
+    await applyInit({ rootDir: root, decisions, engineVersion: ENGINE_VERSION, dryRun: false, force: true, now: T1 });
+
+    const scripts = new Map(await Promise.all([...OWNER_SCRIPTS.keys()].map(async (path) => [path, await readText(root, path)] as const)));
+    expect(scripts).toEqual(OWNER_SCRIPTS);
+    expect(((await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeMCPExecution"]).toContainEqual(PINNED_MCP_ENTRY);
+  });
+
+  // review/97: a 1.11.0 setup whose owner edited the old MCP guard. `sync` keeps the edited
+  // guard and the entry running it; `init --force` keeps the entry too, so the guard still runs.
+  it("a 1.11.0 setup whose old MCP guard was edited by hand: init --force keeps the entry that runs it", async () => {
+    const root = await setUpByReleaseOneEleven("reinit-edited");
+    const edited = `${await readText(root, OLD_MCP_GUARD)}// the team's own tweak\n`;
+    await writeFile(abs(root, OLD_MCP_GUARD), edited, "utf8");
+    const decisions = await buildInitDecisions(root, { tools: ["cursor"] });
+
+    await applyInit({ rootDir: root, decisions, engineVersion: ENGINE_VERSION, dryRun: false, force: true, now: T1 });
+
+    expect(await readText(root, OLD_MCP_GUARD)).toBe(edited);
+    expect((await guardCommands(root))["beforeMCPExecution"]).toContain(`node ${OLD_MCP_GUARD}`);
+  });
+
   it("a fork's 1.11.0 setup: the re-render under the fork's own package and channel proves both old guards, and the canonical identity proves neither", async () => {
     const FORK_IDENTITY = { packageName: "@acme/stamity", npmChannel: false };
     const forkGuards = render1110CursorGuards({ agentIds: CURSOR_1_11_0_RUNTIME_AGENT_IDS, ...FORK_IDENTITY });

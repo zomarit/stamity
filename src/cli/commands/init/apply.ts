@@ -57,6 +57,7 @@ import {
   type CoOwnedDocumentLane,
   outputWriteOptions,
   predictMcpDocumentMerge,
+  provenLegacyCursorGuards,
   readIfExists,
 } from "../../engine/emissionWrite.ts";
 import { fullCoreSelection, type InitDecisions } from "./plan.ts";
@@ -334,8 +335,15 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // ledger rows below (REQ-FLOW-036).
   const writtenRecordByPath = new Map<string, CoOwnership>();
   const previousLedger = previous?.ledger ?? [];
-  // Judged off the previous ledger, as each co-owned document's ownership is below.
-  const coOwnedLanes = coOwnedDocumentLanes(manifest, packServers, previousLedger);
+  // Judged off the previous ledger, as each co-owned document's ownership is below,
+  // and with the proof `sync` and `clean` pass (review/96): an entry running a
+  // 1.11.0 guard name is the engine's only while the file it runs is absent or
+  // is the guard 1.11.0 rendered for the setup, never on a ledger row alone.
+  const provenLegacy = await provenLegacyCursorGuards(rootDir, previousLedger, {
+    packageName: opts.packageName ?? packageName(),
+    npmChannel: opts.npmChannel ?? hasNpmChannel(),
+  });
+  const coOwnedLanes = coOwnedDocumentLanes(manifest, packServers, previousLedger, provenLegacy);
   const previousHashes = ledgerHashIndex(rootDir, previousLedger);
   for (const output of outputs) {
     const coOwnedLane = coOwnedLanes.get(output.path);

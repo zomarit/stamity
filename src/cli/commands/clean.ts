@@ -201,15 +201,17 @@ function packArtifactOf(relPath: string): string | null {
 /**
  * Every artifact pack `packId` ships, read from the pack itself and never from
  * a plan, so it holds when the pack cannot be planned: the artifacts its own
- * ledger rows name (`artifactId` is `<pack id>/<pack-relative path>`), and
+ * ledger rows name (`artifactId` is `<pack id>/<pack-relative path>`, read
+ * past the whole id, whose scope holds a `/` of its own: review/86), and
  * those its folder holds now. The rows keep an artifact whose file was moved
  * out of the folder (`check`'s pack-integrity remedy, review/71).
  */
 async function packArtifacts(rootDir: string, manifest: SetupManifest, packId: string): Promise<Set<string>> {
   const owner = packOwner(packId);
+  const prefix = `${packId}/`;
   const rels = manifest.ledger
-    .filter((row) => row.adapter === owner)
-    .map((row) => row.artifactId.slice(row.artifactId.indexOf("/") + 1));
+    .filter((row) => row.adapter === owner && row.artifactId.startsWith(prefix))
+    .map((row) => row.artifactId.slice(prefix.length));
   const dir = join(rootDir, ...packDirRelPath(packId).split("/"));
   for (const classDir of Object.keys(PACK_CLASS_DIRS)) {
     try {
@@ -880,10 +882,13 @@ async function runScopedClean(
       );
     }
     if (copies.unplanned !== null && copies.rows.size > 0) {
+      // Only an unjudged copy keeps its row; a judged one (edited, or hashless) is salvage above.
+      const unjudged = [...copies.rows].filter((row) => unproven.has(row.path)).length;
       ctx.io.out(
         `Pack "${packId}" could not be planned as installed (${copies.unplanned}), so none of its ` +
-          `${copies.rows.size} client copy(ies) can be proven the engine's: each is kept with its ledger row ` +
-          `and named above.\n`,
+          `${copies.rows.size} client copy(ies) can be proven the engine's: each is kept and named above. ` +
+          `${unjudged} of them, unedited since their recorded hash, keep their ledger rows; a copy you ` +
+          `edited, or one whose row records no content hash, loses its row and is yours now.\n`,
       );
     }
     if (copies.unexamined !== null) {
@@ -977,6 +982,9 @@ export const cleanCommand: CommandModule = {
       ),
       ...hookScriptRetention(manifest, packSupply),
       ...(await cleanRenderings(rootDir, manifest, candidates, ctx.app.version)),
+      // The state directory goes below, ledger and all: a file the proof could
+      // not judge is named for a delete by hand, never promised a retry (review/87).
+      setupRemoved: true,
     });
     ctx.spinner.stop();
 

@@ -704,6 +704,34 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     }
   });
 
+  // review/87 (declared default): the full `clean` removes the setup, ledger and all, so no
+  // row and no later sync outlive it. A copy the proof could not judge is kept, and its entry
+  // says so and asks for the delete by hand, unless the file is the operator's.
+  it("clean -y keeps the copies when the proof cannot be built, and promises no retry it removes", async () => {
+    const { root, copies } = await opsProjected();
+    await denyEveryPack(root);
+    await rm(join(root, ".stamity", "packs", "ops"), { recursive: true, force: true });
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+
+    expect(clean.code, clean.stderr).toBe(0);
+    const doc = JSON.parse(clean.stdout.trim()) as {
+      stateDirRemoved: boolean;
+      entries: { path: string; action: string; detail: string; unproven?: boolean }[];
+    };
+    expect(doc.stateDirRemoved).toBe(true);
+    for (const copy of copies) {
+      const entry = doc.entries.find((candidate) => candidate.path === copy);
+      expect(entry, copy).toMatchObject({ action: "skipped-user-content", unproven: true });
+      expect(entry?.detail, copy).toContain("could not be built (");
+      expect(entry?.detail, copy).toContain("the setup is being removed");
+      expect(entry?.detail, copy).toContain("delete it by hand unless it is yours");
+      expect(entry?.detail, copy).not.toContain("next sync");
+      expect(entry?.detail, copy).not.toContain("kept with its ledger row");
+      expect(existsSync(join(root, copy)), copy).toBe(true);
+    }
+  });
+
   it("admits a denied pack to discovery only inside the proof's opt-out", async () => {
     const { root } = await opsProjected();
     await denyEveryPack(root);

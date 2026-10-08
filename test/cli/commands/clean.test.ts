@@ -1166,6 +1166,81 @@ describe("clean --pack — the pack's projected copies", () => {
     },
     60_000,
   );
+
+  // The security lens on review/61's fix: with the pack unplannable, only a copy whose bytes
+  // were never judged keeps its row. A copy the sweep did judge, as one its owner edited, loses
+  // it, and the run's sentence says which keep theirs rather than that every copy does.
+  it(
+    "says which of an unplannable pack's copies keep their rows: an edited copy loses its row",
+    async () => {
+      const root = await copyOf(opsSynced);
+      const clashRel = "commands/st-ci-pipeline.md";
+      const clashBytes = "---\ndescription: Run the CI pipeline.\n---\n\nRun the pipeline.\n";
+      await writeFile(join(root, STATE_DIR, "packs", "ops", ...clashRel.split("/")), clashBytes, "utf-8");
+      const manifestFile = join(root, STATE_DIR, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
+      manifest.ledger.push({
+        path: `${STATE_DIR}/packs/ops/${clashRel}`,
+        adapter: "pack:ops",
+        artifactId: `ops/${clashRel}`,
+        artifactType: "infra",
+        contentHash: sha256(clashBytes),
+      });
+      await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+      const edited = `${await readFile(join(root, EDITED_COPY), "utf-8")}\nOur own step.\n`;
+      await writeFile(join(root, EDITED_COPY), edited, "utf-8");
+
+      const result = await runClean(root, ["--pack", "ops", "-y"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      const after = await readLedgerOnDisk(root);
+      expect(await readFile(join(root, EDITED_COPY), "utf-8")).toBe(edited);
+      expect(after.map((row) => row.path)).not.toContain(EDITED_COPY);
+      for (const copy of opsCopies.filter((path) => path !== EDITED_COPY)) {
+        expect(after.some((row) => row.path === copy && row.adapter === "claude"), `the row of ${copy} stays`).toBe(true);
+      }
+      expect(result.stdout).not.toContain("each is kept with its ledger row");
+      expect(result.stdout).toContain(
+        `${opsCopies.length - 1} of them, unedited since their recorded hash, keep their ledger rows`,
+      );
+      expect(result.stdout).toContain("a copy you edited, or one whose row records no content hash, loses its row");
+    },
+    60_000,
+  );
+
+  // review/74: an overlay patching the pack's own agent applies while the pack is installed,
+  // so the plan with the pack builds; with the pack's rows removed its slug names no artifact
+  // in any layer and is refused, so the plan without the pack throws. No copy can be told
+  // from a shared path then: none is taken, each copy and its row stay, and the run says so.
+  it(
+    "takes no copy when the setup cannot be planned without the pack, keeps their rows, and says why",
+    async () => {
+      const root = await copyOf(opsSynced);
+      await mkdir(join(root, STATE_DIR, "overrides", "agents"), { recursive: true });
+      await writeFile(join(root, STATE_DIR, "overrides", "agents", "devops.customize.md"), "Our own closing step.\n", "utf-8");
+      const before = await readLedgerOnDisk(root);
+      const copyBytes = Object.fromEntries(
+        await Promise.all(opsCopies.map(async (copy) => [copy, await readFile(join(root, copy), "utf-8")] as const)),
+      );
+
+      const result = await runClean(root, ["--pack", "ops", "-y"]);
+
+      expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain('The setup could not be planned without pack "ops" (');
+      expect(result.stdout).toContain("so its client copies were not looked for: their rows stay.");
+      expect(result.stdout).not.toContain("delete by hand each client copy kept above");
+      const after = await readLedgerOnDisk(root);
+      expect(rowsOwnedBy(after, "pack:ops")).toEqual([]);
+      for (const copy of opsCopies) {
+        expect(await readFile(join(root, copy), "utf-8"), copy).toBe(copyBytes[copy]);
+        expect(after.find((row) => row.path === copy), `the row of ${copy} stays`).toEqual(
+          before.find((row) => row.path === copy),
+        );
+        expect(result.stdout, copy).not.toContain(copy);
+      }
+    },
+    60_000,
+  );
 });
 
 describe("clean — consent is separate from output format", () => {
