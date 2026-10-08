@@ -1,7 +1,7 @@
 ---
 id: plugin-lifecycle
 # A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, and excluded from the site build.
-status: shipped-with-1.9.0
+status: shipped-with-1.12.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
 # Plugin lifecycle
@@ -11,21 +11,21 @@ Cursor, the GitHub Copilot CLI, Codex) from one resolved corpus, with a bundled 
 versioned release and update contract an organization's catalog and Renovate can consume, a
 plugin-backed project setup mode, and a demonstrated consumer lifecycle. Requirement paragraphs
 are the plan files' own delta sections, assembled here so the two cannot disagree; `/st-work`
-moves `status` to `shipped-with-1.9.0` at the close. `REQ-PLUGIN-018` is not allocated: the
+moved `status` to `shipped-with-1.9.0` at that close. `REQ-PLUGIN-018` is not allocated: the
 CLI-to-plugin migration it would have carried was cut on 2026-09-17 because the consuming
 enterprise re-creates its private fork and sets its repositories up fresh.
 
 REQ-PLUGIN-027 to REQ-PLUGIN-030, and every paragraph headed "Amended 2026-09-26", come from the
 spec delta of `docs/plans/010-enterprise-release-01.md` (the enterprise work of Package 16) and
-from the deltas its units' reports declared. They are merged on the package branch and are not in
-a release yet: `status` still names 1.9.0, the release that shipped REQ-PLUGIN-001 to 026. Their
+from the deltas its units' reports declared. They shipped with 1.10.0, while `status` still named
+1.9.0, the release that shipped REQ-PLUGIN-001 to 026. Their
 `path:line` citations are to the tree at `e995fe02`, re-pointed to the package head `0a251039`
 where the cited file changed since.
 
 The paragraphs headed "Amended 2026-10-06" under REQ-PLUGIN-016 and REQ-PLUGIN-019 come from the
 spec deltas the units `u4a-pack-skill-origin` and `u4b-pack-reach-row` declared in run
 `2026-10-03_pack-engine-defects`, merged at its close, measured against the code where a report and
-the code differ. They cite the tree at `eb4f0727` and are not in a release yet.
+the code differ. They cite the tree at `eb4f0727` and shipped with 1.12.0.
 
 REQ-PLUGIN-045 to REQ-PLUGIN-048, and the paragraphs headed "Amended 2026-10-07" under REQ-PLUGIN-015 and
 REQ-PLUGIN-016, come from the spec delta of `docs/plans/016-fork-distribution-00.md` — file 0 of plan 016, the five
@@ -35,8 +35,7 @@ REQ-PLUGIN-031 to 044 belong to files 1 to 3 of the same plan, which merge later
 (build)" say what the build settled and name the code by path and symbol on the run's integration branch
 (`fix/plan-016-file-0` at `fa8163a3`; the registry unit and the hook-file unit's JSON half, integrated after the merge,
 at their integration commits, `u0-registry-bound-calls` at `6d2fb2e7` and the JSON half at `8d4b932e`). All five units
-are integrated. They are not in a release yet: `status` still names 1.9.0, and the release that ships them, 1.12.0, sets
-it.
+are integrated. They shipped with 1.12.0, which set `status` to `shipped-with-1.12.0`.
 
 ## Intent
 

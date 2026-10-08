@@ -1,15 +1,16 @@
 ---
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, and excluded from the site build.
-status: shipped-with-1.11.0
+status: shipped-with-1.12.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
 
 What the nine commands and the setup that serves them do for a user day to day: calls resolve, gates run and report
 honestly, records say what happened, and the person is asked only what needs the person. The area code is `FLOW`.
-The requirements ship with 1.11.0, and `status: shipped-with-1.11.0` records that. REQ-FLOW-025's allowlist sentence
-did not ship with them; `## Concerns` says so, and an inbox row follows it up.
+REQ-FLOW-001 to REQ-FLOW-026 shipped with 1.11.0, and REQ-FLOW-036 to REQ-FLOW-038 with 1.12.0, which set
+`status: shipped-with-1.12.0`. REQ-FLOW-025's allowlist sentence did not ship with them; `## Concerns` says so, and
+an inbox row follows it up.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -22,7 +23,7 @@ run's second spec-merge pass, the same day. REQ-FLOW-022 cites the package head 
 REQ-FLOW-005 and REQ-FLOW-024 were re-read on the release branch after that edit. The paragraphs headed "Amended
 2026-10-06" in REQ-FLOW-022 and REQ-FLOW-026, and the criteria marked "added 2026-10-06", come from the spec deltas the
 units `u6-init-fixes` and `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at its close.
-They cite `eb4f0727` and are not in a release yet.
+They cite `eb4f0727` and shipped with 1.12.0.
 
 REQ-FLOW-036 to REQ-FLOW-038 come from the spec delta of `docs/plans/016-fork-distribution-00.md` (file 0 of plan 016,
 the five security fixes of the released 1.11.0), merged on 2026-10-07 at the Prove phase of the run
@@ -31,7 +32,7 @@ merge later. Each requirement's "Evidence (before)" cites `d10db029`, the tree t
 "Amended 2026-10-07 (build)" bullet says what the build settled and names the code by path and symbol on the run's
 integration branch (`fix/plan-016-file-0` at `fa8163a3`; the hook-file unit's JSON half, integrated after the merge,
 at its integration commit `8d4b932e`). All five units are integrated, the last, `u0-registry-bound-calls`, at
-`6d2fb2e7`. They are not in a release yet: `status` still names 1.11.0, and the release that ships them, 1.12.0, sets it.
+`6d2fb2e7`. They shipped with 1.12.0, which set `status` to `shipped-with-1.12.0`.
 
 ## Intent
 
