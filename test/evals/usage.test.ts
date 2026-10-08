@@ -131,7 +131,8 @@ describe("usageFromCalls", () => {
   });
 
   it("prices a Sonnet 5.5 call and a Haiku 4.5 call from the committed price list under the ids call records carry", () => {
-    // Call records carry the API response's model id: the bare id for Sonnet 5.5, the dated snapshot for Haiku 4.5.
+    // Keys follow the API response's model id. Haiku 4.5 records carry the dated snapshot; no record carries a
+    // Sonnet 5.5 id yet, and the bare id is the form one would carry, since the vendor publishes no dated snapshot.
     const calls = [
       attempt("scenario", "claude-sonnet-5-5", usage(1000, 2000, 1000, 2000, 4000)),
       attempt("judge", "claude-haiku-4-5-20251001", usage(500, 100, 200, 400, 10000)),
