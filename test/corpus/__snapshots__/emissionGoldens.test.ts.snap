@@ -7240,10 +7240,10 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
 - The reviewer returns verdict, confidence and graded, located findings, as
   its agent file states. Critical and Warning findings route to a fixer; the
   fix re-enters review. The confidence gate is the one the run record
-  declares (\`Confidence gate: <value>\`). An approval below it re-reviews once
-  on a stronger class before it counts. With no gate declared, an approval
-  counts as given and no extra round runs; the review-gate hook still refuses
-  an approval the reviewer rated \`low\`.
+  declares (\`Confidence gate: <value>\`). An approval below it counts and the
+  proof block's review line names it below the gate; confidence alone starts
+  no round. The re-review after an escalation runs once on a stronger class.
+  The review-gate hook still refuses an approval the reviewer rated \`low\`.
 - Iteration cap: 3 rounds by default (2 at light), operator-configurable
   within 1..10 — the engine clamps to that band, and this text stays
   lockstepped with its default.

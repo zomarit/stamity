@@ -947,12 +947,21 @@ describe("/st-work — Prove", () => {
     expect(loop).toContain("no fixer claim");
 
     // The gate is the one the run record declares; the measurements page reads a
-    // decimal gate only (a word gate such as `high` falls to its 0.8 default). With
-    // none declared an approval counts and starts no round, while the hook's
-    // refusal of a `low` approval still holds.
+    // decimal gate only (a word gate such as `high` falls to its 0.8 default). The
+    // hook's refusal of a `low` approval still holds.
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4c-confidence-no-round): the
+    // pins read "An approval below it re-reviews once on a stronger class before it counts" and
+    // "With no gate declared, an approval counts as given and no extra round runs". Self-rated
+    // confidence no longer starts a round (REQ-CTX-018, REQ-FLOW-064): an approval below the
+    // declared gate counts and the proof block names it below the gate, so the no-gate case is
+    // no longer a special case and its sentence went. The stronger-class re-review now runs once,
+    // only on the closure re-review after an escalation. The old sentence is asserted absent.
     expect(loop).toContain("the one the run record declares (`Confidence gate: <value>`)");
-    expect(loop).toContain("An approval below it re-reviews once on a stronger class before it counts");
-    expect(loop).toContain("With no gate declared, an approval counts as given and no extra round runs");
+    expect(loop).toContain("An approval below it counts and the proof block's review line names it below the gate");
+    expect(loop).toContain("confidence alone starts no round");
+    expect(loop).toContain("The re-review after an escalation runs once on a stronger class");
+    expect(loop).not.toContain("An approval below it re-reviews once on a stronger class before it counts");
+    expect(loop).not.toContain("before it counts");
     expect(loop).toContain("still refuses an approval the reviewer rated `low`");
     expect(loop).not.toContain("below the declared confidence gate");
   });

@@ -44,8 +44,8 @@ Governing text — the same file, "Evidence and posting gates" (verdict and conf
 - **Verdict and confidence.** The verdict is one of `approve`, `request-changes`,
   `blocked`; confidence is high, medium, or low with its basis stated — direct evidence,
   inference, or unverified reading. An approval below the confidence gate the run record
-  declares is re-reviewed on a stronger class before it counts; with none declared, an
-  approval counts.
+  declares counts and is named below it; a re-review after an escalation runs on a
+  stronger class; confidence alone starts no round.
 
 [...]
 

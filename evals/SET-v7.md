@@ -923,6 +923,19 @@ byte-identical at its new lines, so no Brief is re-quoted, no `## Expected` bloc
 cases-v5 copy). Under the incremental rule the five re-measure, because their case-file bytes moved.
 The dated range citations above stay as they were.
 
+**No range moved and two reviewer Briefs re-quoted, 2026-10-09 (plan 019 file 2, unit
+`p4c-confidence-no-round`).** Self-rated confidence no longer starts a round: an approval below the
+declared confidence gate counts and is named below it, and the stronger-class re-review runs once,
+only after an escalation. In `content/commands/st-work.md` the Review loop's first bullet is
+rewritten in its own seven lines (0 lines), and in `content/agents/stamity-reviewer.md` the
+"Verdict and confidence" bullet's last three lines (110-112) are rewritten in place (0 lines), so
+no `source:` range moves in either file. `reviewer-brief-is-diff-and-criteria` (108-112 inside
+14-18,44-48,71-72,108-112,181-205 → unchanged) and `agent-reviewer-return-contract` (93-189 inside
+14-24,93-189 → unchanged) re-quote those three lines byte-identical from the landed file.
+No `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no roster count moves. Under the
+incremental rule the two re-measure, because their case-file bytes moved. The dated citations
+above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
