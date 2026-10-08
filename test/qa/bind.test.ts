@@ -40,6 +40,7 @@ interface Row {
   performedBy?: string;
   acceptedAt?: string;
   acceptedBy?: string;
+  carried?: boolean;
 }
 
 const inputs: Input[] = [
@@ -178,6 +179,105 @@ describe("carryForward", () => {
     expect(previous.rows[0]!.status).toBe("performed");
     expect(current[0]!.status).toBe("not-run");
     expect(current[0]!.performedAt).toBeUndefined();
+  });
+});
+
+/**
+ * The carry mark (plan run 2026-10-08_maintainer-tooling, unit b3-qa-carry-suffix, inbox row 315):
+ * the form printed "carried forward: inputs unchanged" beside EVERY performed row, the run that first
+ * recorded the walk included. `carryForward` now marks the one row its performed branch restores with
+ * `carried: true`, and a fresh answer drops the mark, so the form can tell a carry from a walk.
+ */
+describe("the carried mark", () => {
+  const performed: Row = {
+    row: "H1c",
+    automated: false,
+    status: "performed",
+    reason: "walked by hand against the 1.7.0 tree",
+    inputHashes: inputHashMap(inputs),
+    rowHash: rowHash(inputs),
+    performedAt: "2026-09-13",
+    performedBy: "the maintainer",
+  };
+
+  const openRow = (overrides: Partial<Row> = {}): Row => ({
+    row: "H1c",
+    automated: false,
+    status: "not-run",
+    reason: "no headless CLI on this machine",
+    inputHashes: inputHashMap(inputs),
+    rowHash: rowHash(inputs),
+    ...overrides,
+  });
+
+  it("marks the row the performed branch restores on an equal hash, and no other row", () => {
+    const moved = [...inputs.slice(0, 2), { path: inputs[2]!.path, sha256: "d".repeat(64) }];
+    const accepted: Row = { ...performed, row: "H1d", status: "accepted-unwalked", acceptedAt: "2026-09-13" };
+    const [restored, reopenedMoved, reopenedAccepted, measured, fresh] = carryForward(
+      {
+        rows: [
+          performed,
+          { ...performed, row: "H1b" },
+          accepted,
+          { ...performed, row: "H3a" },
+        ],
+      },
+      [
+        openRow(),
+        openRow({ row: "H1b", inputHashes: inputHashMap(moved), rowHash: rowHash(moved) }),
+        openRow({ row: "H1d" }),
+        openRow({ row: "H3a", automated: true, status: "passed", reason: "18 stops" }),
+        openRow({ row: "H2" }),
+      ],
+    ) as Row[];
+
+    expect(restored).toMatchObject({ status: "performed", performedAt: "2026-09-13", carried: true });
+    // The reopenings, the measurement and the new row are not carries, and say nothing about one.
+    expect(reopenedMoved!.status).toBe("unperformed");
+    expect(reopenedMoved!).not.toHaveProperty("carried");
+    expect(reopenedAccepted!.status).toBe("unperformed");
+    expect(reopenedAccepted!).not.toHaveProperty("carried");
+    expect(measured!.status).toBe("passed");
+    expect(measured!).not.toHaveProperty("carried");
+    expect(fresh!.status).toBe("not-run");
+    expect(fresh!).not.toHaveProperty("carried");
+  });
+
+  it("drops the mark from every row a fresh answer records, walked or accepted, and keeps it elsewhere", () => {
+    const [carried, alsoCarried, untouched] = carryForward(
+      { rows: [performed, { ...performed, row: "H1d" }, { ...performed, row: "H4b" }] },
+      [openRow(), openRow({ row: "H1d" }), openRow({ row: "H4b" })],
+    ) as Row[];
+    expect([carried!.carried, alsoCarried!.carried, untouched!.carried]).toEqual([true, true, true]);
+
+    const [walked, acceptedAgain, left] = recordHumanAnswers([carried, alsoCarried, untouched], {
+      walked: ["H1c"],
+      accepted: ["H1d"],
+      by: "the maintainer",
+      on: "2026-10-08",
+    }) as Row[];
+
+    expect(walked).toMatchObject({ status: "performed", performedAt: "2026-10-08" });
+    expect(walked!).not.toHaveProperty("carried");
+    expect(acceptedAgain!.status).toBe("accepted-unwalked");
+    expect(acceptedAgain!).not.toHaveProperty("carried");
+    // A row nobody answered this run is still the carry it was.
+    expect(left).toMatchObject({ status: "performed", performedAt: "2026-09-13", carried: true });
+    // The caller's rows are not mutated by the drop.
+    expect(carried!.carried).toBe(true);
+  });
+
+  it("marks a row walked last run once the next run carries it", () => {
+    const [walked] = recordHumanAnswers([openRow({ status: "unperformed" })], {
+      walked: ["H1c"],
+      by: "the maintainer",
+      on: "2026-10-08",
+    }) as Row[];
+    expect(walked!).not.toHaveProperty("carried");
+
+    const [next] = carryForward({ rows: [walked] }, [openRow()]) as Row[];
+
+    expect(next).toMatchObject({ status: "performed", performedAt: "2026-10-08", carried: true });
   });
 });
 

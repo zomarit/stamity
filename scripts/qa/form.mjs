@@ -168,12 +168,16 @@ function cell(text) {
  * — the one word the form has always used for "nobody did this" — unless a person signed it and
  * `carryForward` found the row's inputs unchanged, in which case the signature reads with its
  * ORIGINAL date. A signature re-dated to tonight would claim a walk-through that did not happen.
+ * The carry suffix is printed only beside a row `carryForward` marked `carried: true`: a row a
+ * person walked this run reads as the walk it is, and an evidence file written before the mark
+ * existed claims no carry it cannot show.
  */
 export function humanCell(row) {
   if (row.status === 'performed') {
     const by = row.performedBy === undefined ? '' : ` by ${row.performedBy}`
     const at = row.performedAt === undefined ? 'date not recorded' : row.performedAt
-    return `PERFORMED ${at}${by} (carried forward: inputs unchanged)`
+    const carry = row.carried === true ? ' (carried forward: inputs unchanged)' : ''
+    return `PERFORMED ${at}${by}${carry}`
   }
   // Signed off WITHOUT a walk. It never reads as PERFORMED and never as a carry: `carryForward`
   // reopens an acceptance on the next run whatever its hash, so the cell says so.

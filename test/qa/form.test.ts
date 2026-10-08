@@ -60,6 +60,11 @@ const evidence = {
       rowHash: "c1".repeat(32),
       performedAt: "2026-09-13",
       performedBy: "the maintainer",
+      // TEST CHANGE, justified (2026-10-08, unit b3-qa-carry-suffix, inbox row 315): the form now
+      // prints the carry suffix only beside a row `carryForward` marked `carried: true`, so this
+      // fixture, which stands for a carried row, gains the mark the real carry writes. The case
+      // "shows a carried-forward performed row" keeps every assertion it had.
+      carried: true,
     },
     {
       row: "H1d",
@@ -193,6 +198,18 @@ describe("renderForm", () => {
     expect(row).not.toContain("2026-09-15");
   });
 
+  it("claims no carry for a performed row a person walked this run", () => {
+    // The row `recordHumanAnswers` writes for a walk: performed, dated, named, and not marked carried.
+    const markdown = renderForm({
+      ...evidence,
+      rows: evidence.rows.map((row) => (row.row === "H1c" ? { ...row, carried: false } : row)),
+    }) as string;
+
+    const row = markdown.split("\n").find((line) => line.startsWith("| **H1c**")) ?? "";
+    expect(row).toContain("| PERFORMED 2026-09-13 by the maintainer |");
+    expect(row).not.toContain("carried forward");
+  });
+
   it("never renders a measured failure as anything but a failure", () => {
     const markdown = renderForm(evidence) as string;
 
@@ -300,6 +317,16 @@ describe("humanCell", () => {
 
   it("reports a signature with no recorded date as undated rather than inventing one", () => {
     expect(humanCell({ automated: false, status: "performed" })).toContain("date not recorded");
+  });
+
+  it("appends the carry suffix only to a row marked carried, so a fresh walk reads as one", () => {
+    const signed = { automated: false, status: "performed", performedAt: "2026-09-13", performedBy: "the maintainer" };
+    expect(humanCell(signed)).toBe("PERFORMED 2026-09-13 by the maintainer");
+    // An evidence file written before the mark existed carries no key: no carry is claimed for it.
+    expect(humanCell({ ...signed, carried: false })).toBe("PERFORMED 2026-09-13 by the maintainer");
+    expect(humanCell({ ...signed, carried: true })).toBe(
+      "PERFORMED 2026-09-13 by the maintainer (carried forward: inputs unchanged)",
+    );
   });
 });
 

@@ -137,6 +137,11 @@ function withoutReopenedReason(reason) {
  * with a reason naming the acceptance it had — and, when the hash moved, both hashes as well. The
  * exception keys on the STATUS, never on the row id's letter.
  *
+ * The row the performed branch restores is the one row marked `carried: true`, and the form prints
+ * its carry suffix beside that mark only: a row a person walked this run is not a carry, and a
+ * reopened or measured row carries no signature at all. {@link recordHumanAnswers} drops the mark
+ * from every row it answers.
+ *
  * Everything else is left exactly as the caller computed it. A row that was `unperformed` before
  * stays whatever this run made it, and a row the previous run did not carry at all is new and
  * passes through untouched.
@@ -163,6 +168,7 @@ export function carryForward(previous, current) {
         reason: prior.reason ?? row.reason,
         ...(prior.performedAt === undefined ? {} : { performedAt: prior.performedAt }),
         ...(prior.performedBy === undefined ? {} : { performedBy: prior.performedBy }),
+        carried: true,
       })
       continue
     }
@@ -233,7 +239,11 @@ export function recordHumanAnswers(rows, { walked = [], accepted = [], by, on } 
     // A new answer replaces the old one whole: a walk drops a stale acceptance's date and name, and
     // an acceptance drops a stale walk's, so no row carries two signatures that disagree. It also
     // answers a reopen, so the reopen text leaves the reason and only the harness's own reason stays.
-    if (walkedIds.has(row.row) || acceptedIds.has(row.row)) copy.reason = withoutReopenedReason(copy.reason)
+    // A fresh answer is this run's, not a carry, so the `carried` mark leaves with the old signature.
+    if (walkedIds.has(row.row) || acceptedIds.has(row.row)) {
+      copy.reason = withoutReopenedReason(copy.reason)
+      delete copy.carried
+    }
     if (walkedIds.has(row.row)) {
       delete copy.acceptedAt
       delete copy.acceptedBy
