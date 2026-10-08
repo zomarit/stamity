@@ -267,11 +267,18 @@ depends on whose content matters, and `sync` cannot know that.
 `--force` does not apply to it. The engine owns only the hook entries it wrote there, and it
 pre-approves no tool: it writes no `permissions` rows. Your `deny` and `ask` rules, your own rows
 and hook entries, the client's `enabledPlugins` and your `model` or `env` stay whatever you run.
-The `Read`, `Grep` and `Glob` allow rows a release up to 1.12.0 wrote leave on the next `sync`,
-with no backup, where the ledger records them; an equal row it does not record is yours and stays.
-The file collides only when it is not a JSON object, or a member the engine writes into has
-another type — `hooks` not an object, an event not an array. The message names the member: make
-it the type it names (or remove it), or fix or delete the file, and re-run `sync`.
+The `Read`, `Grep` and `Glob` allow rows a release up to 1.12.0 wrote leave on the next `sync`.
+Where the ledger records each row (a 1.12.0 setup), they leave with no backup, and an equal row it
+does not record is yours and stays. A ledger from 1.11.0 or older records no row, so every bare
+`Read`, `Grep` or `Glob` row counts as the engine's: they leave with no backup when the file is as
+the engine last wrote it, and behind a verified `.bak`, with a warning naming them, when it has
+changed since. A scoped row such as `Read(./src/**)` is never the engine's and stays. A bare row
+the engine does not take — one kept after a lost ledger, for example — pre-approves reads outside
+the project; the engine leaves it alone, so delete it yourself if you did not add it on purpose.
+The file collides only when it is not a JSON object, or a member the engine writes into, or a
+release up to 1.12.0 wrote into, has another type — `permissions` not an object, `allow` not an
+array, `hooks` not an object, an event not an array. The message names the member: make it the
+type it names (or remove it), or fix or delete the file, and re-run `sync`.
 An engine hook entry you edited by hand is put back on the next `sync` behind a verified `.bak`
 holding your edit, with a warning naming the entry. Keep a hook of your own in an entry of its
 own, and personal rows in `.claude/settings.local.json`, which this engine never writes.

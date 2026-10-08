@@ -355,11 +355,16 @@ Each of those runs `stamity plugin setup` through the plugin's own runtime. What
   writes no `permissions` rows. Your `deny`, `ask`, your own allow rows and hook entries, and
   every other key — including the `enabledPlugins` that `plugin install --scope project` wrote —
   stay in place, in the file's own indentation and line endings. The `Read`, `Grep` and `Glob`
-  allow rows a release up to 1.12.0 wrote leave on the next `sync` with no backup where the ledger
-  records them; an equal row it does not record is yours and stays. The file collides only when it
-  is not a JSON object or a member the engine writes into has another type (`hooks` not an object,
-  an event not an array, where it writes hook entries); the message names the member and the fix,
-  and `--force` does not clear it. A repository-mode hook entry an earlier setup left behind — its
+  allow rows a release up to 1.12.0 wrote leave on the next `sync`: with no backup where the ledger
+  records them, and an equal row it does not record is yours and stays; under a ledger from 1.11.0
+  or older, which records no row, every bare `Read`, `Grep` or `Glob` row counts as the engine's and
+  leaves with no backup when the file is as the engine last wrote it, behind a verified `.bak` with
+  a warning when it has changed since. A scoped row such as `Read(./src/**)` stays. A bare row the
+  engine does not take — one kept after a lost ledger, for example — pre-approves reads outside the
+  project; it is yours to delete. The file collides only when it is not a JSON object or a member
+  the engine writes into, or a release up to 1.12.0 wrote into, has another type (`permissions` not
+  an object, `allow` not an array, `hooks` not an object or an event not an array where it writes
+  hook entries); the message names the member and the fix, and `--force` does not clear it. A repository-mode hook entry an earlier setup left behind — its
   command runs a script under `.stamity/generated/hooks/` — is removed and reported, behind a
   `.bak` whenever the ledger does not prove it (a lost setup left no ledger row, so it cannot);
   `sync` and `clean` both remove it. `clean` takes back exactly the engine's entries: an entry it

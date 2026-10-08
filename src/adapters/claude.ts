@@ -50,14 +50,18 @@
  * 5. **Commands → `.claude/commands/<id>.md`** ({@link CLAUDE_COMMANDS_DIR}),
  *    the touchpoint commands as native slash commands, with the same
  *    description-only frontmatter discipline the sibling adapters use.
- * 6. **`.claude/settings.json`** — JSON owned per TOP-LEVEL KEY (plain `.json`
- *    takes no managed block per `src/types/markers.ts`, and the client and the
- *    operator write this file too): the engine owns exactly the keys it renders
- *    — the `hooks` object (the core hook interchange transformed to the
- *    client shape, the `ConfigChange` tamper wiring, the review-gate wiring
- *    below) when the repository owns hooks, and nothing at all under a plugin
- *    that carries them — and every other key (`enabledPlugins`, `model`,
- *    `permissions`, …) is kept as it is (`../manifest/claudeSettings.ts`).
+ * 6. **`.claude/settings.json`** — JSON owned per ENTRY (plain `.json` takes
+ *    no managed block per `src/types/markers.ts`, and the client and the
+ *    operator write this file too): the engine owns exactly the entries it
+ *    wrote and recorded by hash — the hook entries of the `hooks` object (the
+ *    core hook interchange transformed to the client shape, the `ConfigChange`
+ *    tamper wiring, the review-gate wiring below) when the repository owns
+ *    hooks, and none under a plugin that carries them — plus, until they leave,
+ *    the `permissions.allow` rows a release up to 1.12.0 wrote and recorded.
+ *    Every other entry and key (`enabledPlugins`, `model`, the owner's own
+ *    `permissions` rows, …) is kept as it is. A `permissions` that is not an
+ *    object, or an `allow` that is not an array, still collides on both routes
+ *    (`../manifest/claudeSettings.ts`).
  * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) beside
  *    the three core hook scripts. Adapter-owned rather than core, because it
  *    rides two events only this client fires ({@link REVIEW_GATE_EVENTS}).

@@ -387,8 +387,10 @@ member by member; for a file holding one allow row and one `PreToolUse` hook ent
   Merged into .claude/settings.json: kept your 2 entries (permissions.allow ×1, hooks.PreToolUse ×1) beside the engine's; the engine owns only the entries it wrote.
 ```
 
-hatch3r's hook entries keep firing beside this setup's. Remove the ones you no longer
-want by hand, then run `sync`; there is no `--force` for this file, and none is needed.
+hatch3r's hook entries keep firing beside this setup's, and its allow rows stay too. A bare
+`Read`, `Grep` or `Glob` row among them pre-approves reads outside the project, and the engine
+leaves it alone. Remove the entries and rows you no longer want by hand, then run `sync`; there
+is no `--force` for this file, and none is needed.
 
 ### In a monorepo, handle each package
 

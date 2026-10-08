@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -447,10 +448,7 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     await seedSettings(root, FIRST);
     await init(root);
     const [recordBefore] = await settingsLedgerRows(root);
-    // TEST CHANGE, justified (2026-10-08, inbox row 324): the collision was `permissions` as a
-    // string. The engine writes nothing into `permissions` now, so that shape no
-    // longer collides; `hooks` as a string is the member it still writes into.
-    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ hooks: "all" }, null, 2)}\n`, "utf8");
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ permissions: "allow-all" }, null, 2)}\n`, "utf8");
 
     const report = await init(root, true);
 
@@ -570,36 +568,20 @@ describe("an owner's hook entry that runs their own .stamity/hooks/ script (revi
 // ── A shape the engine cannot merge beside ─────────────────────
 
 describe("a member the engine writes into, of another type", () => {
-  // TEST CHANGE, justified (2026-10-08, inbox row 324): the case seeded `permissions` as a
-  // string. The engine writes nothing into `permissions` now, so the collision
-  // moves to `hooks`, the member it still writes into, and the old shape is
-  // pinned as merged beside.
-  it("init skips a file whose hooks is a string, naming the member and the type, and records no row", async () => {
+  it("init skips a file whose permissions is a string, naming the member and the type, and records no row", async () => {
     const root = await freshRepo();
-    const raw = `{"hooks":"all"}\n`;
+    const raw = `{"permissions":"allow-all"}\n`;
     await seedSettings(root, raw);
 
     const report = await init(root);
 
     const row = settingsRow(report.wrote);
     expect(row.action).toBe("skipped");
-    expect(row.warning).toContain("hooks");
+    expect(row.warning).toContain("permissions");
     expect(row.warning).toContain("an object");
     expect(row.warning).not.toContain("force");
     expect(await readSettings(root)).toBe(raw);
     expect(await settingsLedgerRows(root)).toEqual([]);
-  });
-
-  it("init merges beside a file whose permissions is a string, which the engine no longer writes into, and keeps it", async () => {
-    const root = await freshRepo();
-    await seedSettings(root, `{"permissions":"allow-all"}\n`);
-
-    const report = await init(root);
-
-    expect(settingsRow(report.wrote).action).toBe("updated");
-    const doc = await settingsDoc(root);
-    expect(doc["permissions"]).toBe("allow-all");
-    expect(Object.keys(doc["hooks"] as Record<string, unknown>).length).toBeGreaterThan(0);
   });
 });
 
@@ -803,6 +785,63 @@ describe("the Read, Grep and Glob allow rows an earlier release rendered (inbox 
 
     expect((await settingsDoc(root))["permissions"]).toEqual({ allow: ["Read"] });
     expect(await backups(root)).toEqual([]);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
+  });
+
+  // ── A 1.11.0 setup: the whole-file hash on the row, no per-entry record (review/53) ──
+
+  /** An owner's path-scoped read row: never one a release rendered, so never in the bound. */
+  const OWNER_READ_ROW = "Read(./src/**)";
+
+  /**
+   * A 1.11.0 setup: the file holds the three rows ahead of the engine's hooks,
+   * as every release up to 1.12.0 rendered them, and the ledger row carries
+   * that file's whole-file hash and no `coOwned` record, as 1.11.0 wrote it.
+   */
+  async function legacyReleasedSetup(root: string): Promise<{ afterInit: string; released: string }> {
+    await init(root);
+    const afterInit = await readSettings(root);
+    const released = `${JSON.stringify({ permissions: { allow: RELEASED_ROWS }, ...(await settingsDoc(root)) }, null, 2)}\n`;
+    await writeFile(SETTINGS_ABS(root), released, "utf8");
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    const ledger = manifest.ledger.map((row) => {
+      if (row.path !== CLAUDE_SETTINGS_PATH) return row;
+      const { coOwned: _record, ...rest } = row;
+      return { ...rest, contentHash: createHash("sha256").update(released).digest("hex") };
+    });
+    await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+    expect((await settingsLedgerRows(root))[0]?.coOwned).toBeUndefined();
+    return { afterInit, released };
+  }
+
+  it("a 1.11.0 setup left unedited: sync -y removes the three rows with no .bak and no warning", async () => {
+    const root = await freshRepo();
+    const { afterInit } = await legacyReleasedSetup(root);
+
+    const report = await sync(root);
+
+    expect(settingsRow(report.wrote).action).toBe("updated");
+    expect(settingsRow(report.wrote).warning).toBeUndefined();
+    expect(await readSettings(root)).toBe(afterInit);
+    expect(await backups(root)).toEqual([]);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
+  });
+
+  it("a 1.11.0 setup the owner edited: sync -y removes the three rows behind a verified .bak, warns, and keeps the owner's Read(...) row", async () => {
+    const root = await freshRepo();
+    await legacyReleasedSetup(root);
+    const doc = await settingsDoc(root);
+    const edited = `${JSON.stringify({ ...doc, permissions: { allow: [...RELEASED_ROWS, OWNER_READ_ROW] } }, null, 2)}\n`;
+    await writeFile(SETTINGS_ABS(root), edited, "utf8");
+
+    const report = await sync(root);
+
+    const row = settingsRow(report.wrote);
+    expect(row.action).toBe("updated");
+    expect(row.warning).toContain("permissions.allow");
+    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: [OWNER_READ_ROW] });
+    expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(edited);
     expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
   });
 });

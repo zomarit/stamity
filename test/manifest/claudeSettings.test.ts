@@ -72,9 +72,13 @@ const MIXED_HOOKS = {
 /** An operator's own hooks: no command under the engine's generated directory. */
 const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] };
 
-/** The repository-mode rendering: both engine keys. */
+/**
+ * The repository-mode rendering of releases up to 1.12.0: both engine keys.
+ * The current rendering carries no `permissions` member (inbox row 324); these
+ * fixtures drive the core through a rendering that still writes allow rows.
+ */
 const EMITTED_FULL = doc({ permissions: PERMISSIONS, hooks: ENGINE_HOOKS });
-/** The plugin-mode rendering: the permissions half alone. */
+/** The plugin-mode rendering of releases up to 1.12.0: the permissions half alone. */
 const EMITTED_PLUGIN = doc({ permissions: PERMISSIONS });
 /** The client's own project-scope install write, as measured. */
 const CLIENT = doc({ enabledPlugins: { "stamity@stamity": true } });
@@ -440,6 +444,41 @@ describe("planClaudeSettings — an owner's permissions member", () => {
       expect(refused.result.warning, raw).not.toContain("force");
       expect(refused.collision, raw).toBe(refused.result.warning);
       expect(refused.record, raw).toBeNull();
+    }
+  });
+
+  it("refuses a permissions or allow of another type under the current renderings too, on both routes (REQ-FLOW-036, inbox row 324)", () => {
+    // The current renderings write no allow row: repository mode renders the
+    // hooks alone and plugin mode renders no member. The member a release up
+    // to 1.12.0 wrote into still bounds the file's type, so `check` keeps its
+    // signal on a settings file the client may not load.
+    const renderings: [string, string][] = [
+      ["repository mode", doc({ hooks: ENGINE_HOOKS })],
+      ["plugin mode", "{}\n"],
+    ];
+    const cases: [string, string][] = [
+      [doc({ permissions: "allow-all" }), "permissions is a string, not an object"],
+      [doc({ permissions: ["Read"] }), "permissions is an array, not an object"],
+      [doc({ permissions: null }), "permissions is null, not an object"],
+      [doc({ permissions: { allow: "Read" } }), "permissions.allow is a string, not an array"],
+      [doc({ permissions: { deny: ["Bash"], allow: { Read: true } } }), "permissions.allow is an object, not an array"],
+    ];
+    for (const [mode, emitted] of renderings) {
+      for (const ownership of [own(), own(LEGACY)]) {
+        for (const [raw, named] of cases) {
+          const refused = planClaudeSettings("x", emitted, raw, ownership);
+          expect(refused.result.action, `${mode} ${raw}`).toBe("skipped");
+          expect(refused.result.warning, `${mode} ${raw}`).toContain(named);
+          expect(refused.result.warning, `${mode} ${raw}`).not.toContain("force");
+          expect(refused.collision, `${mode} ${raw}`).toBe(refused.result.warning);
+          expect(refused.content, `${mode} ${raw}`).toBeNull();
+          expect(refused.record, `${mode} ${raw}`).toBeNull();
+        }
+      }
+      // An owner's well-typed permissions member, or none, is no collision.
+      for (const raw of [doc({ permissions: { deny: ["Bash"] } }), doc({ permissions: { allow: [] } }), doc({ model: "opus" })]) {
+        expect(planClaudeSettings("x", emitted, raw, own()).collision, `${mode} ${raw}`).toBeNull();
+      }
     }
   });
 

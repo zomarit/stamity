@@ -36,11 +36,14 @@
  * the client's per-user project settings, where personal rows belong.
  *
  * The file collides (`co-owned-shape`) only when it is not a JSON object,
- * cannot be serialised back, or a member the engine writes into has another
- * type: `permissions` not an object, `allow` not an array, `hooks` not an
- * object, an event not an array. Nothing in that collision is the engine's to
- * replace, so `--force` does not clear it and no message offers it. A symbolic
- * or hard link at the path is refused before any read (`shared-name`).
+ * cannot be serialised back, or a member the engine writes into, or wrote into
+ * up to 1.12.0, has another type: `permissions` not an object or `allow` not an
+ * array (on both routes, though the rendering carries no allow row now; see
+ * {@link planClaudeSettings}), `hooks` not an object or an event not an array
+ * (where the rendering carries hooks). Nothing in that collision is the
+ * engine's to replace, so `--force` does not clear it and no message offers
+ * it. A symbolic or hard link at the path is refused before any read
+ * (`shared-name`).
  *
  * Pure planning, then a write under the path's lock: {@link planClaudeSettings}
  * decides from bytes alone, so the sync plan and `check`'s drift gate preview
@@ -141,14 +144,43 @@ export type SettingsMergePrediction = CoOwnedPrediction;
 /** A merge outcome plus the bytes and the record the file holds afterwards. */
 export type SettingsMergeResult = CoOwnedMergeResult;
 
-/** Decide the write for `filePath` from the bytes alone, by the core's rules. */
+/**
+ * Decide the write for `filePath` from the bytes alone, by the core's rules.
+ *
+ * The core checks the type of only the containers the rendering writes into,
+ * and the rendering carries no allow row now. A `permissions` that is not an
+ * object, or an `allow` that is not an array, still collides as it did while
+ * releases up to 1.12.0 rendered the rows (REQ-FLOW-036): such a file is one
+ * the client may not load, hooks included, and `check` exiting 1 is the
+ * owner's one signal. The refusal is the core's own, planned over the rendering
+ * with {@link ENGINE_PERMISSION_ROWS} put back, so its class and text are the
+ * ones those releases printed; that plan is returned only when it refuses, so
+ * the rows are never written.
+ */
 export function planClaudeSettings(
   filePath: string,
   emitted: string,
   existingRaw: string | null,
   ownership: SettingsOwnership,
 ): SettingsPlan {
-  return planCoOwnedJson(filePath, emitted, existingRaw, claudeSettingsSpec(), ownership);
+  const plan = planCoOwnedJson(filePath, emitted, existingRaw, claudeSettingsSpec(), ownership);
+  if (plan.collision !== null || existingRaw === null || !allowContainerMistyped(existingRaw)) return plan;
+  const withRows = `${JSON.stringify({ permissions: { allow: ENGINE_PERMISSION_ROWS }, ...(JSON.parse(emitted) as object) })}\n`;
+  const refused = planCoOwnedJson(filePath, withRows, existingRaw, claudeSettingsSpec(), ownership);
+  return refused.collision !== null ? refused : plan;
+}
+
+/**
+ * True when the document's own `permissions` member is present and not an
+ * object, or its `allow` is present and not an array. Read only after the core
+ * parsed the same bytes as a JSON object, so the parse cannot fail here.
+ */
+function allowContainerMistyped(existingRaw: string): boolean {
+  const doc: unknown = JSON.parse(existingRaw.charCodeAt(0) === 0xfeff ? existingRaw.slice(1) : existingRaw);
+  if (!isPlainObject(doc) || !Object.hasOwn(doc, "permissions")) return false;
+  const permissions = doc["permissions"];
+  if (!isPlainObject(permissions)) return true;
+  return Object.hasOwn(permissions, "allow") && !Array.isArray(permissions["allow"]);
 }
 
 /**
