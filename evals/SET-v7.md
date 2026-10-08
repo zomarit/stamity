@@ -207,6 +207,21 @@ re-measured cases only from the next run on.)
 
 **Implemented by the route of record.** A runner without composition runs the full set.
 
+**Which releases run the set — amended 2026-10-08.** A maintainer decision of 2026-10-08
+(REQ-PROVE-033), declared before any release uses it, replaces "every release runs the full set".
+A release runs the full set — a baseline run, or an incremental run composed with one under the
+rule above — when its diff since the run of record touches `content/**`, the emitted client files
+(the cross-client goldens), the eval set's files (`evals/SET-v7.md`, `evals/cases-v6/**`, the
+selected rubric, the model profiles) or the eval harness `scripts/eval/**`; when the scenario model
+or the judge model moved; when the harness, which carries the pinned client version, moved; or when
+the release is the third release since the last full run, or is cut 30 days after the last full run
+or later, whichever comes first. Otherwise the release carries the run of record forward, and its
+notes say `carried forward from run N: no model-facing change`, N being the run of record's number:
+the one carried form admitted, while "release run, carried to X.Y.Z" stays retired. A FAIL run of
+record is never carried forward, because its exception covered its own release alone. Editing this
+file is itself an eval-set change, so the release that ships this paragraph runs the full set. No
+count, threshold, scoring rule, case or `## Expected` block moves with it.
+
 ## What v7 adds
 
 Thirty-five cases, in four groups, and one change to how a probe's recall row is labelled.
@@ -895,7 +910,10 @@ run. Results are artifacts, not chat. The file records, at minimum:
    summary, each id compared without a trailing `[1m]` context-window suffix — and never on the candidate or the case and content bytes: a rule that tracks one
    criterion across candidates cannot key on what every candidate moves. (A summary written
    before that field existed is keyed from its own `inputs.json`, and a field neither file
-   recorded is not compared; a run that recorded none of the fields matches no key.)
+   recorded is not compared; a run that recorded none of the fields matches no key.) On the
+   driver route `harness` names the client and its version (`claude-code-cli <version>`), so two
+   runs on two client versions are never one configuration; on the public route it names the
+   harness id (REQ-PROVE-036, 2026-10-08).
    `configurationHash` stays the exact-input receipt of one run; it is evidence, not the
    comparison key.
 9. **Judge calibration result** — one verdict line per fixture, for **every fixture the rubric
@@ -927,10 +945,15 @@ first of them.
    `test/evals/coverage.test.ts` both read `evals/cases-v6/**` from this version on:
    the first turns the second half of that obligation into a red test, and the second turns a
    newly added artifact with no case into one.
-2. **Every release runs the full set.** Before the tag is cut, the whole set runs and the
-   release carries the run artifact. This is wired into
-   `.github/release-controls-checklist.md`, so a release without the artifact is blocked by its
-   own checklist rather than by anyone's memory.
+2. **A release runs the full set when a model-facing input moved.** Before the tag is cut, the
+   whole set runs and the release carries the run artifact when the change-aware rule under
+   "Incremental runs" names a trigger — `content/**`, the emitted client files, the eval set's
+   files, `scripts/eval/**`, the scenario or judge model, the harness and its pinned client
+   version — or the third release or 30 days since the last full run comes due; otherwise the
+   release carries the run of record forward. This is wired into
+   `.github/release-controls-checklist.md`, so a release with neither the artifact nor the
+   carried-forward note is blocked by its own checklist rather than by anyone's memory. (Amended
+   2026-10-08; until then every release ran the full set.)
 3. **A model change re-runs every adversarial case, at a zero-break bar.** Guardrail behaviour
    is a property of the model-and-prose pair, not of the prose, so a swap of the model under
    test rewrites every case at once. Adversarial cases re-run on a model change even when no
@@ -1078,8 +1101,10 @@ by a `content/` artifact — and no exemption row was added for either.
 
 Use the manual runner and selected whole profile. Commit and review final inputs,
 prove actual input isolation and provider controls, calibrate all fixtures, then
-run the affected cases plus all adversarial cases on a model change. Every release
-requires a fresh full run. Historical release exceptions grant no waiver here.
+run the affected cases plus all adversarial cases on a model change. A release runs the
+full set when the change-aware rule under "Incremental runs" names a trigger, and otherwise
+carries the run of record forward (amended 2026-10-08; until then every release required a
+fresh full run). Historical release exceptions grant no waiver here.
 A blocked live capability yields exact Not done evidence; mock admission tests
 and written prohibitions do not prove isolation of an actual provider call.
 

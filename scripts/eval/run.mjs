@@ -133,9 +133,11 @@ function recordedKey(directory, summary) {
 
 /**
  * Whether a recorded key admits the current one. A run that recorded none of the fields matches
- * no key: saying nothing about its configuration is not evidence of the same one.
+ * no key: saying nothing about its configuration is not evidence of the same one. On the driver
+ * route `harness` carries the client and its version (`claude-code-cli 2.1.286`), so two client
+ * versions are two configurations (REQ-PROVE-036); exported so a test pins that.
  */
-function sameConfiguration(recorded, key) {
+export function sameConfiguration(recorded, key) {
   if (COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null)) return false
   return COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null || comparedField(recorded, field) === comparedField(key, field))
 }

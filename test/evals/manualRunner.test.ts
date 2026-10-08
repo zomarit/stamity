@@ -9,7 +9,7 @@ import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiab
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
-import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
+import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, sameConfiguration, undisposedRepeats } from "../../scripts/eval/run.mjs";
 import { CASES_DIR, REPO_ROOT, caseFiles } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
@@ -1602,6 +1602,23 @@ describe("full run admission and strict aggregation", () => {
     // One recorded field is enough to be compared on it.
     writeRun(root, "2026-09-13-run-3", { profile: "codex-astra" });
     expect(previousRun(root, FIXTURE_KEY)?.runId).toBe("2026-09-13-run-3");
+  });
+  // ADDED 2026-10-08 (REQ-PROVE-036, unit c3-release-rules, inbox rows 274 and 275): a pin of what
+  // the comparator already does, so a later change that drops `harness` from the key fails here. On
+  // the driver route `harness` carries the client and its version — read off run 43's own committed
+  // `inputs.json` rather than typed — so two client versions are two configurations.
+  it("keys two client versions apart through the harness, and reads an unrecorded harness as not compared", () => {
+    const run43 = JSON.parse(read("evals/runs/2026-10-08-run-43/inputs.json")) as { configuration: object };
+    const older = comparatorKey(run43.configuration);
+    expect(older.harness).toBe("claude-code-cli 2.1.286");
+    expect(older.models).toEqual(OPUS_5_5);
+    const newer = { ...older, harness: "claude-code-cli 2.1.291" };
+    expect(sameConfiguration(older, newer)).toBe(false);
+    expect(sameConfiguration(older, { ...older })).toBe(true);
+    // The older run recorded no harness: the other fields decide, both ways.
+    const unrecorded = { ...older, harness: null };
+    expect(sameConfiguration(unrecorded, newer)).toBe(true);
+    expect(sameConfiguration(unrecorded, { ...newer, models: OPUS_5 })).toBe(false);
   });
 });
 

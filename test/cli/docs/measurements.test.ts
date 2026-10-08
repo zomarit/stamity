@@ -94,6 +94,9 @@ const STALE_MESSAGE =
   `rendered from committed artifacts, so a new run record makes it stale the same way a code ` +
   `change makes the CLI reference stale.`;
 
+/** The retired carried-to clause, refused on the rendered page (REQ-PROVE-020). */
+const CARRIED_TO_REFUSAL = /carried to \d+\.\d+\.\d+/;
+
 const committedPage = (): string => readFileSync(join(REPO_ROOT, MEASUREMENTS_DOC_PATH), "utf-8");
 
 /** A record body with every clause satisfied, parameterised where a case needs it. */
@@ -831,6 +834,10 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // added: the run of record is the release's own run, and the page says so with nothing carried.
   // The clause is refused by its shape rather than by the old constants' names, so a clause typed
   // back into the template by hand fails here too.
+  //
+  // TEST CHANGE, justified: 2026-10-08 (unit c3-release-rules). The refusal's pattern moved, byte
+  // for byte, into CARRIED_TO_REFUSAL so the case below runs fixture strings through the pattern
+  // this case applies; nothing it refuses or admits moved.
   it("links the run of record as its release's own run, and carries it to no later release", () => {
     const page = renderMeasurements();
     const run = runNumber(runId(RUN_OF_RECORD_PATH));
@@ -839,8 +846,16 @@ describe("the restated figures are held to the artifacts they come from", () => 
       `[run ${run}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run`,
     );
     expect(page, "the page still carries the run of record to a later release").not.toMatch(
-      /carried to \d+\.\d+\.\d+/,
+      CARRIED_TO_REFUSAL,
     );
+  });
+
+  // ADDED 2026-10-08 (REQ-PROVE-020's amendment, unit c3-release-rules): the change-aware release
+  // rule re-admits one carried form, "carried forward from run N: no model-facing change", and the
+  // retired "release run, carried to X.Y.Z" still fails the page.
+  it("admits the carried-forward form and still refuses the carried-to clause", () => {
+    expect("carried forward from run 43: no model-facing change").not.toMatch(CARRIED_TO_REFUSAL);
+    expect("release run, carried to 1.12.1").toMatch(CARRIED_TO_REFUSAL);
   });
 });
 

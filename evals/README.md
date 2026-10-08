@@ -403,7 +403,12 @@ Incremental runs are a property of the route, not of the set's prose. `SET-v7.md
 under "Incremental runs — declared 2026-09-15" — a later candidate in the same configuration
 re-measures the cases whose inputs moved and carries the rest from a prior complete run — and the
 route of record's driver is what implements the composition. The manual runner documented on this
-page runs the full set, every case, every time.
+page runs the full set, every case, every time. Which releases run the set at all is a rule of the
+set, declared in the same section under "Which releases run the set — amended 2026-10-08": a
+release whose diff touches no model-facing input — `content/**`, the emitted client files, the eval
+set's files, `scripts/eval/**` — on the same scenario model, judge model and harness (the harness
+carries the pinned client version) carries the run of record forward as `carried forward from run
+N: no model-facing change`, until the third release or 30 days since the last full run.
 
 The three gates above are the exception that proves the rule: they are deterministic checks
 over the case files, they run in `npm run test` with everything else, and they score nothing.
@@ -416,9 +421,12 @@ automation.
 1. **A `content/` edit re-runs the affected cases.** Find them by the `source` field in
    `cases-v6/**`; a claim that moved takes its case's `source` and inlined brief with it in
    the same diff. Stated in `CONTRIBUTING.md` under "Changing the corpus".
-2. **Every release runs the full set.** Before the tag is cut, and the release carries the
-   run artifact. Wired into `.github/release-controls-checklist.md` under "Per-release
-   record currency", so a release without it is blocked by its own checklist.
+2. **A release runs the full set when a model-facing input moved.** Before the tag is cut, and
+   the release carries the run artifact; a release that moved none of the triggers `SET-v7.md`
+   names under "Incremental runs" carries the run of record forward instead. Wired into
+   `.github/release-controls-checklist.md` under "Per-release record currency", so a release with
+   neither is blocked by its own checklist. (Amended 2026-10-08; until then every release ran the
+   full set.)
 3. **A model change re-runs every adversarial case, at a zero-break bar.** Guardrail
    behaviour belongs to the model-and-prose pair, so a model swap rewrites every case at
    once — adversarial cases re-run even when no prompt moved. A judge-model change re-runs

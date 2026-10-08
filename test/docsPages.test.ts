@@ -1294,6 +1294,9 @@ const RUN_OF_RECORD_CLAIM =
 
 const collapsed = (text: string): string => text.replace(/\s+/g, " ");
 
+/** The retired carried-to clause, refused on the run-of-record pages (REQ-PROVE-020). */
+const CARRIED_TO_REFUSAL = /release run,? carried to \d+\.\d+\.\d+/;
+
 // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut (review M-1). A local `priorCompleteRun` stood
 // here and matched "prior complete run is `…`" anywhere in RESULTS.md, while the measurements chain
 // walk read it only inside `## 0. Composition` — so a full run whose text named a prior run in
@@ -1319,10 +1322,25 @@ describe("the eval run of record on the hand pages", () => {
 
   // ADDED at the 1.10.0 cut, which runs the set and retires the carried clause the 1.9.1 cut
   // typed on both pages: the generator carries its run to no later release, so neither page may.
+  //
+  // TEST CHANGE, justified: 2026-10-08 (unit c3-release-rules). The refusal's pattern moved, byte
+  // for byte, into CARRIED_TO_REFUSAL so the case below can run fixture strings through the same
+  // pattern this case applies; nothing it refuses or admits moved.
   it.each(RUN_OF_RECORD_PAGES)("%s carries the run of record to no later release", (page) => {
     expect(collapsed(read(page)), `${page} still carries the run to a later release`).not.toMatch(
-      /release run,? carried to \d+\.\d+\.\d+/,
+      CARRIED_TO_REFUSAL,
     );
+  });
+
+  // ADDED 2026-10-08 (REQ-PROVE-020's amendment, unit c3-release-rules): a release the change-aware
+  // rule carries forward says "carried forward from run N: no model-facing change", the one carried
+  // form re-admitted; the retired "release run, carried to X.Y.Z" still fails.
+  it("admits the carried-forward form and still refuses the carried-to clause", () => {
+    expect("carried forward from run 43: no model-facing change").not.toMatch(CARRIED_TO_REFUSAL);
+    expect("[run 43](evals/runs/x/RESULTS.md), the 1.12.0 release run, carried to 1.12.1").toMatch(
+      CARRIED_TO_REFUSAL,
+    );
+    expect("release run, carried to 1.12.1").toMatch(CARRIED_TO_REFUSAL);
   });
 
   // ADDED for review/200: the run of record composes with a prior full run, and when that run
@@ -1460,6 +1478,100 @@ describe("the eval run of record on the hand pages", () => {
     expect(priorCompleteRun(read("evals/runs/2026-09-27-run-34/RESULTS.md"))).toBeNull();
     expect(priorCompleteRun(read("evals/runs/2026-09-27-run-35/RESULTS.md"))).toBe(
       "2026-09-27-run-34",
+    );
+  });
+});
+
+// ADDED 2026-10-08 (unit c3-release-rules). REQ-PROVE-033: a release runs the eval set when a
+// model-facing input moved and carries the run of record forward otherwise, and the trigger list is
+// stated in two places a person reads — the release checklist's eval line and SET-v7's incremental
+// section. Each trigger is its own case and reads both texts, so a trigger dropped from either one
+// fails by name. REQ-PROVE-034: every per-release line of the checklist names the trigger it runs on.
+const RELEASE_CHECKLIST = ".github/release-controls-checklist.md";
+const EVAL_SET = "evals/SET-v7.md";
+/** A per-release line opens "One line …" or "A <ordinal> line …" in the checklist's section. */
+const PER_RELEASE_LEAD = /^(?:One|A [a-z]+) line\b/;
+
+/** A section of a file read through the shared `sectionOf`, refused when the heading is absent. */
+const fileSection = (path: string, heading: string): string => {
+  const section = sectionOf(read(path), heading);
+  expect(section, `${path} has no "${heading}" section`).not.toBe("");
+  return section;
+};
+
+/** Each per-release line with the paragraphs that follow it up to the next line. */
+const perReleaseLines = (): string[] => {
+  const found: string[] = [];
+  for (const paragraph of fileSection(RELEASE_CHECKLIST, "## Per-release record currency").split(
+    /\n\s*\n/,
+  )) {
+    const text = paragraph.trim();
+    if (PER_RELEASE_LEAD.test(text)) found.push(text);
+    else if (found.length > 0) found[found.length - 1] = `${found.at(-1) ?? ""}\n\n${text}`;
+  }
+  return found;
+};
+
+/** The two texts that state the release rule, whitespace-collapsed. */
+const releaseRuleTexts = (): ReadonlyArray<readonly [string, string]> => {
+  const evalLine = perReleaseLines().find((line) => line.startsWith("A second line"));
+  expect(evalLine, `${RELEASE_CHECKLIST} has no "A second line" (the eval line)`).toBeDefined();
+  return [
+    [`${RELEASE_CHECKLIST}'s eval line`, collapsed(evalLine ?? "")],
+    [
+      `${EVAL_SET}'s incremental section`,
+      collapsed(fileSection(EVAL_SET, "## Incremental runs — declared 2026-09-15")),
+    ],
+  ];
+};
+
+const RELEASE_TRIGGERS: ReadonlyArray<readonly [string, readonly RegExp[]]> = [
+  ["`content/**`", [/`content\/\*\*`/]],
+  ["the emitted client files", [/the emitted client files \(the cross-client goldens\)/]],
+  [
+    "the eval set's files",
+    [
+      /the eval set's files \(`evals\/SET-v7\.md`, `evals\/cases-v6\/\*\*`/,
+      /the selected rubric/,
+      /the model profiles/,
+    ],
+  ],
+  ["the eval harness `scripts/eval/**` (inbox row 576)", [/`scripts\/eval\/\*\*`/]],
+  ["the scenario model and the judge model", [/the scenario model(?:,| or| and) the judge model/]],
+  ["the pinned client version (inbox row 275)", [/the harness, which carries the pinned client version/]],
+  [
+    "the periodic rule",
+    [/the third release since the last full run/, /30 days after the last full run/, /whichever comes first/],
+  ],
+];
+
+describe("the release eval follows what changed", () => {
+  it.each(RELEASE_TRIGGERS)("names %s as a trigger in the checklist and in SET-v7", (trigger, patterns) => {
+    for (const [where, text] of releaseRuleTexts()) {
+      for (const pattern of patterns) {
+        expect(text, `${where} does not name ${trigger} (${String(pattern)})`).toMatch(pattern);
+      }
+    }
+  });
+
+  it("states the one carried form in the checklist and in SET-v7", () => {
+    for (const [where, text] of releaseRuleTexts()) {
+      expect(text, `${where} does not state the carried-forward form`).toContain(
+        "carried forward from run N: no model-facing change",
+      );
+    }
+  });
+
+  it("gives every per-release line of the checklist its trigger, and states the patch lane", () => {
+    const releaseLines = perReleaseLines();
+    // Six lines at 2026-10-08 (`grep -cE '^(One|A [a-z]+) line' .github/release-controls-checklist.md`);
+    // a floor rather than a count, so a seventh line is checked rather than refused.
+    expect(releaseLines.length, `${RELEASE_CHECKLIST} lists fewer per-release lines than it did`).toBeGreaterThanOrEqual(6);
+    for (const line of releaseLines) {
+      expect(line, `a per-release line names no trigger: "${line.slice(0, 60)}…"`).toContain("Runs when:");
+    }
+    expect(collapsed(fileSection(RELEASE_CHECKLIST, "## Per-release record currency"))).toMatch(
+      /a patch release runs a line only when its `Runs when:` trigger/i,
     );
   });
 });
