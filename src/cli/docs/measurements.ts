@@ -123,10 +123,13 @@ export interface RunOfRecord {
  * Read {@link RUN_OF_RECORD_FILE} under `root`: which run is of record, the release it measured, and
  * the recorded exception a FAIL shipped under.
  *
- * One file, so moving the run of record is a one-file change (REQ-PROVE-032). The release and the
- * exception are in it rather than in the results file because neither is in the artifact: a run
- * states the candidate commit it measured, never the version that candidate ships as, and the
- * results file states a FAIL, never the maintainer's answer to it.
+ * One file, so no code or test types the run of record (REQ-PROVE-032). Moving it is still more
+ * than a one-file change: the two hand pages that repeat it, `README.md` and `docs/doctrine.md`, are
+ * held to this file by the docs tests, so they move with it, and `docs/measurements.md` is
+ * regenerated from it. The release and the exception are in it rather than in the results file
+ * because neither is in the artifact: a run states the candidate commit it measured, never the
+ * version that candidate ships as, and the results file states a FAIL, never the maintainer's
+ * answer to it.
  *
  * Throws `EngineError` (`VALIDATION_ERROR`) naming the file when it is absent, is not JSON, or holds
  * a `path` other than an eval run's `RESULTS.md`, a `release` other than `major.minor.patch`, or an

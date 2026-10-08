@@ -17,6 +17,7 @@ import {
   SKILL_FILE,
 } from "../src/content/userContent.ts";
 import { TRUST_TIERS } from "../src/pack/trust.ts";
+import { packReinstallSteps } from "../src/pack/verifyInstalled.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 import { GATE_RUN_TIMEOUT_MS, leakGateFailureDetail, runLeakGateOnce } from "./support/leakGateRun.ts";
@@ -3096,6 +3097,21 @@ describe("the guides", () => {
       (match) => match[1] ?? "",
     );
     expect(documented.toSorted()).toEqual([...probes].toSorted());
+  });
+
+  it("troubleshooting's pack-integrity row re-installs in the order the finding line prints", () => {
+    // The row repeats `check`'s finding line in prose, so nothing moved it when
+    // the line gained its delete-by-hand step: `clean --pack` now removes the
+    // pack's client copies itself and keeps and names one it cannot prove, and
+    // a kept copy left on disk collides with the re-added pack's. The order is
+    // read out of the function that prints it, with the page's placeholders.
+    const page = read(TROUBLESHOOTING);
+    const row = /^\| `pack-integrity` \|.*$/m.exec(page)?.[0] ?? "";
+    expect(row, "the troubleshooting guide has no pack-integrity row").not.toBe("");
+    expect(row).toContain(packReinstallSteps("<id>", null, "<source>"));
+    expect(row, "the row still says sync removes the copies clean --pack now removes").not.toMatch(
+      /`sync` only removes the pack's client copies/,
+    );
   });
 
   it("troubleshooting's list of the codes it names is the codes it names", () => {
