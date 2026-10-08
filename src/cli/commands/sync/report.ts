@@ -7,6 +7,7 @@ import {
   type LedgerEntry,
   type SetupManifest,
 } from "../../../types/manifest.ts";
+import { coOwnedReclaimReducers, rowsCarriedThroughSweep } from "../../engine/emissionWrite.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { SyncApplyReport, SyncPlan, SyncPlanEntry } from "./engine.ts";
 
@@ -154,22 +155,50 @@ function salvagedEntries(report: SyncApplyReport): string[] {
 }
 
 /**
- * The salvage disclosure, owed for the same reason scoped `clean` prints one
- * (`../clean.ts`): a path the sweep kept has just lost the ledger rows that
- * made it reclaimable, so no future sync or clean will ever look at it again.
- * Saying nothing would leave behaviour-bearing files behind silently.
+ * The kept paths whose ledger rows this run carries (review/98): a co-owned
+ * document the sweep refused, and each script a kept hooks document still
+ * runs. Read through the engine's own carry
+ * (`../../engine/emissionWrite.ts::rowsCarriedThroughSweep`) over the plan's
+ * pre-run ledger and the same co-owned paths the sweep was handed, so the
+ * report names exactly the rows the persisted ledger keeps — and, on a dry
+ * run, the rows a live run would keep.
  */
-function salvageLines(report: SyncApplyReport, palette: Palette): string[] {
+function carriedPaths(plan: SyncPlan, report: SyncApplyReport): ReadonlySet<string> {
+  const rows = rowsCarriedThroughSweep(plan.manifest.ledger, report.reclaimed, coOwnedReclaimReducers(plan.manifest));
+  return new Set(rows.map((row) => row.path));
+}
+
+/**
+ * The salvage disclosure, owed for the same reason scoped `clean` prints one
+ * (`../clean.ts`): saying nothing would leave behaviour-bearing files behind
+ * silently. Two groups, because they end differently (review/98). A file whose
+ * row this run carries ({@link carriedPaths}) is still the engine's: once the
+ * owner fixes what its line names — a document the sweep could not read, or
+ * wiring that still runs a script — the next sync finishes the reclaim. Every
+ * other kept path has just lost the ledger rows that made it reclaimable, so
+ * no future sync or clean will look at it again.
+ */
+function salvageLines(plan: SyncPlan, report: SyncApplyReport, palette: Palette): string[] {
   const kept = salvagedEntries(report);
   if (kept.length === 0) return [];
-  const named = fileLines(kept.map((path) => `    ${path}`));
+  const carried = carriedPaths(plan, report);
+  const stays = kept.filter((path) => carried.has(path));
+  const yours = kept.filter((path) => !carried.has(path));
+  const group = (paths: readonly string[], heading: string): string[] =>
+    paths.length === 0 ? [] : [palette.yellow(heading), ...fileLines(paths.map((path) => `    ${path}`))];
   return [
-    palette.yellow(
+    ...group(
+      stays,
       report.dryRun
-        ? `  ${kept.length} path(s) would stay on disk with their ledger rows dropped — nothing would reclaim them later:`
-        : `  ${kept.length} kept file(s) are yours now — their ledger rows are dropped, so no sync or clean will touch them again:`,
+        ? `  ${stays.length} path(s) would stay on disk with their ledger rows kept — once you fix what each line above names, the next sync finishes the reclaim:`
+        : `  ${stays.length} kept file(s) are still the engine's — their ledger rows stay, so once you fix what each line above names, the next sync finishes the reclaim:`,
     ),
-    ...named,
+    ...group(
+      yours,
+      report.dryRun
+        ? `  ${yours.length} path(s) would stay on disk with their ledger rows dropped — nothing would reclaim them later:`
+        : `  ${yours.length} kept file(s) are yours now — their ledger rows are dropped, so no sync or clean will touch them again:`,
+    ),
   ];
 }
 
@@ -298,7 +327,7 @@ export function renderSyncReport(
   if (report.reclaimed !== null) {
     const reclaimText = formatReclaimReport(report.reclaimed);
     if (reclaimText !== "") lines.push(reclaimText);
-    lines.push(...salvageLines(report, palette));
+    lines.push(...salvageLines(plan, report, palette));
   }
 
   lines.push(...pluginOwnedLines(provenanceSource(plan, report), palette));

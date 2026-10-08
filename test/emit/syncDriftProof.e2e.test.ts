@@ -497,11 +497,15 @@ describe("deselection reclaim", () => {
   // it still runs. The operator's `//` line leaves the file unparseable, so it is
   // kept whole as salvage, and the four Codex scripts its encoded rows name are
   // kept with it rather than deleted out from under it: five salvaged paths, not one.
+  // TEST CHANGE, justified: review/98 — since review/91 and review/97 the sweep's
+  // refusal of the unparseable `.codex/hooks.json` and the four scripts it still
+  // runs keep their ledger rows, so the report says they stay the engine's and
+  // the next sync finishes the reclaim, not that their rows are dropped.
   it("keeps an edited infra file and discloses it as salvage", async () => {
     // The allowlist exempts a path from the ownership-marker gate ONLY. Bytes
-    // that no longer hash to what the engine recorded are the user's, so the
-    // sweep keeps them — and because their rows are dropped anyway, the report
-    // has to say so or the file is silently orphaned.
+    // the sweep cannot read back are kept, and the report has to say so or the
+    // file is left behind silently. This document and the scripts it runs keep
+    // their rows, so the report names the repair that lets the next sync finish.
     await apply(await plan());
     const edited = join(repo.rootDir, CODEX_HOOKS_FILE);
     const original = await readFile(edited, "utf8");
@@ -525,8 +529,13 @@ describe("deselection reclaim", () => {
     expect(held.every((text) => text.length > 0)).toBe(true);
 
     const rendered = renderSyncReport(await plan(), report, plainPalette);
-    expect(rendered).toContain("their ledger rows are dropped");
-    expect(rendered).toContain(CODEX_HOOKS_FILE);
+    expect(rendered).toContain(
+      `  5 kept file(s) are still the engine's — their ledger rows stay, so once you fix what each line above names, ` +
+        `the next sync finishes the reclaim:\n    ${CODEX_HOOKS_FILE}\n`,
+    );
+    expect(rendered).not.toContain("their ledger rows are dropped");
+    const carried = (report.manifest?.ledger ?? []).map((row) => row.path);
+    for (const path of [CODEX_HOOKS_FILE, ...heldScripts]) expect(carried).toContain(path);
     expect(syncJsonPayload(await plan(), report).counts).toMatchObject({ reclaimSalvaged: 1 + heldScripts.length });
   });
 

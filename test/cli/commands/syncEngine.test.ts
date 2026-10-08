@@ -13,8 +13,12 @@ import {
   planSync,
   previewReclaim,
   refusalRemedyLines,
+  type SyncApplyReport,
   type SyncPlan,
 } from "../../../src/cli/commands/sync/engine.ts";
+import { CODEX_HOOKS_FILE } from "../../../src/adapters/codex.ts";
+import type { ReclaimActionEntry, ReclaimReport } from "../../../src/merge/reclaim.ts";
+import { HOOKS_GENERATED_DIR } from "../../../src/types/markers.ts";
 import { syncCommand } from "../../../src/cli/commands/sync.ts";
 import {
   provenanceFromManifest,
@@ -1077,6 +1081,94 @@ describe("report payload", () => {
     expect((payload.provenance as { perAdapter: unknown[] }).perAdapter).toEqual([
       { adapter: "claude", files: 1, stampedVersion: ENGINE_VERSION },
     ]);
+  });
+});
+
+/**
+ * review/98: the salvage disclosure names which kept files lost their ledger
+ * rows and which kept them. A co-owned document the sweep refused and each
+ * script a kept hooks document still runs keep their rows
+ * (`../../../src/cli/engine/emissionWrite.ts::rowsCarriedThroughSweep`), so the
+ * next sync finishes the reclaim once the owner repairs the file; only the
+ * other kept files are the owner's from then on.
+ */
+describe("the salvage disclosure", () => {
+  const SCRIPT = `${HOOKS_GENERATED_DIR}/codex/stamity-session-start.mjs`;
+  const AGENT = ".claude/agents/stamity-old.md";
+
+  function row(path: string, adapter: Tool): LedgerEntry {
+    return { path, adapter, artifactId: path, artifactType: "infra", contentHash: sha256(path) };
+  }
+
+  function kept(path: string, refused = false): ReclaimActionEntry {
+    return {
+      path,
+      candidateReason: "adapter-removed",
+      action: "skipped-user-content",
+      detail: `Kept ${path}.`,
+      ...(refused ? { refused: true as const } : {}),
+    };
+  }
+
+  async function fixture(dryRun: boolean): Promise<{ plan: SyncPlan; report: SyncApplyReport }> {
+    const base = await planSync(await seedRepo(tempDir()), ENGINE_VERSION);
+    const ledger = [row(CODEX_HOOKS_FILE, "codex"), row(SCRIPT, "codex"), row(AGENT, "claude")];
+    const plan: SyncPlan = { ...base, manifest: { ...base.manifest, ledger } };
+    const reclaimed: ReclaimReport = {
+      entries: [kept(CODEX_HOOKS_FILE, true), kept(SCRIPT), kept(AGENT)],
+      wiringKept: [{ path: CODEX_HOOKS_FILE, scripts: [SCRIPT] }],
+      consent: !dryRun,
+      deletedCount: 0,
+      strippedCount: 0,
+      skippedCount: 3,
+    };
+    const report: SyncApplyReport = {
+      wrote: [],
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+      skipped: 0,
+      refused: [],
+      reclaimed,
+      manifestPath: "",
+      dryRun,
+      manifest: null,
+    };
+    return { plan, report };
+  }
+
+  it("says the refused document and the held script keep their rows, and the plain kept file lost its", async () => {
+    const { plan, report } = await fixture(false);
+    const text = renderSyncReport(plan, report, plainPalette);
+
+    expect(text).toContain(
+      "  2 kept file(s) are still the engine's — their ledger rows stay, so once you fix what each line above " +
+        "names, the next sync finishes the reclaim:\n" +
+        `    ${CODEX_HOOKS_FILE}\n` +
+        `    ${SCRIPT}`,
+    );
+    expect(text).toContain(
+      "  1 kept file(s) are yours now — their ledger rows are dropped, so no sync or clean will touch them again:\n" +
+        `    ${AGENT}`,
+    );
+    // The machine count stays the sum of both groups: every file the sweep kept.
+    expect(syncJsonPayload(plan, report).counts).toMatchObject({ reclaimSalvaged: 3 });
+  });
+
+  it("says the same split on a dry run", async () => {
+    const { plan, report } = await fixture(true);
+    const text = renderSyncReport(plan, report, plainPalette);
+
+    expect(text).toContain(
+      "  2 path(s) would stay on disk with their ledger rows kept — once you fix what each line above names, " +
+        "the next sync finishes the reclaim:\n" +
+        `    ${CODEX_HOOKS_FILE}\n` +
+        `    ${SCRIPT}`,
+    );
+    expect(text).toContain(
+      "  1 path(s) would stay on disk with their ledger rows dropped — nothing would reclaim them later:\n" +
+        `    ${AGENT}`,
+    );
   });
 });
 
