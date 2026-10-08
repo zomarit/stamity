@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
 <!-- Re-open when: a `file::symbol` address below stops resolving, a control in the table loses its
      last caller under `src/`, a new install route or execution surface ships, a control named under
      "Publishing this package" changes in `.github/workflows/release.yml`, or the crosswalk in

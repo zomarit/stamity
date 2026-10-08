@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->

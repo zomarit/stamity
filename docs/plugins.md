@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 239eb3a9. Re-attested 2026-10-07 for the entry-by-entry ownership of .claude/settings.json. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-30. `test/docsPages.test.ts` holds this

@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`

@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b229f3ba. Re-attested 2026-10-07 for the entry-by-entry ownership of .claude/settings.json and of Cursor's and Codex's hook files. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
