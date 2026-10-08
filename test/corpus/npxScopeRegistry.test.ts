@@ -44,8 +44,10 @@ const FORK_TEXT = "ACME-FORK-BUILD-RAN";
 const LOOK_ALIKE_TEXT = "ACME-LOOK-ALIKE-RAN";
 /** The https placeholder the call is rendered with; swapped for the fork stub's http address. */
 const RENDERED_REGISTRY = "https://fork.registry.invalid/";
-const SPAWN_BUDGET_MS = 45_000;
-const TEST_TIMEOUT_MS = 60_000;
+// 2026-10-08: on Windows the npx run takes 2.5-2.8 s on a quiet leg; CI run 37840621578 (windows-1,
+// attempts 1-2) killed it at 45 s on a starved runner. POSIX keeps 45 s and 60 s.
+const SPAWN_BUDGET_MS = process.platform === "win32" ? 120_000 : 45_000;
+const TEST_TIMEOUT_MS = process.platform === "win32" ? 150_000 : 60_000;
 
 /** `npx-cli.js` beside the `npm-cli.js` that launched this process, else beside the interpreter. */
 function locateNpxCli(): { npxCli: string; version: string } {

@@ -77,8 +77,12 @@ describe("Windows fixture scheduling", () => {
       expect(parallel?.config.sequence.groupOrder).toBe(0);
       expect(heavy?.config.maxWorkers).toBe(1);
       expect(heavy?.config.sequence.groupOrder).toBe(1);
+      // TEST CHANGE, 2026-10-08 (run 2026-10-08_maintainer-tooling, winbudget fixer round 1): the
+      // win32 parallel project's case budget is 120 s, not 20 s, because CI run 37840621578 starved
+      // CLI-spawning cases on windows-1; the serialized group, every hook and the root keep 20 s.
+      expect(parallel?.config.testTimeout).toBe(120_000);
+      expect(heavy?.config.testTimeout).toBe(20_000);
       for (const project of runner.projects) {
-        expect(project.config.testTimeout).toBe(20_000);
         expect(project.config.hookTimeout).toBe(20_000);
         expect(project.config.isolate).toBe(true);
         expect(project.config.retry ?? 0).toBe(0);

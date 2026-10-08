@@ -87,6 +87,11 @@ export class WindowsFixtureSequencer extends BaseSequencer {
   }
 }
 
+// 2026-10-08: the Windows parallel group's per-case budget. Quiet Windows runs `init -y` in
+// test/cli/surface.e2e.test.ts in 2.8-7.6 s; CI run 37840621578 (attempts 1-2, windows-1) ran it
+// past the 20 s default on a starved runner. 120 s covers 10x the slowest quiet run with margin.
+const WINDOWS_PARALLEL_TEST_TIMEOUT_MS = 120_000;
+
 /**
  * 2026-09-11: Windows CI first showed overlapping stalls in three real-disk
  * suites. CI 34588320202 later timed out the all-four fresh-directory golden
@@ -124,6 +129,7 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
           name: "parallel",
           include: ["test/**/*.test.ts"],
           exclude: [...configDefaults.exclude, ...heavy],
+          testTimeout: WINDOWS_PARALLEL_TEST_TIMEOUT_MS,
           sequence: { groupOrder: 0 },
         },
       },
@@ -151,7 +157,8 @@ export default defineConfig({
     ),
     environment: "node",
     // Child-process cases shell out to the CLI entry; 20s is generous for a cold start
-    // and still fails fast if a spawn hangs.
+    // and still fails fast if a spawn hangs. On win32 the parallel project raises it (see
+    // WINDOWS_PARALLEL_TEST_TIMEOUT_MS); the serialized group and every POSIX run keep 20s.
     testTimeout: 20_000,
     hookTimeout: 20_000,
     // Coverage is opt-in (`--coverage`), so plain `npm test` keeps its wall time.

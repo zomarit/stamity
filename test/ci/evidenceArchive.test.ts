@@ -9,10 +9,15 @@ const python = process.platform === "win32" ? "python" : "python3";
 const script = resolve("scripts/evidence-archive.py");
 const work = mkdtempSync(join(tmpdir(), "stamity-evidence-archive-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
+// 2026-10-08: Windows budgets. The Windows-stat capture case runs in 5.1-7.0 s on a quiet Windows
+// leg; CI run 37840621578 (windows-1, attempts 1-2) ran out of these on a starved runner.
+// POSIX keeps 30 s per spawn and 60 s for that case.
+const SPAWN_TIMEOUT_MS = process.platform === "win32" ? 60_000 : 30_000;
+const WINDOWS_STAT_CAPTURE_TIMEOUT_MS = process.platform === "win32" ? 180_000 : 60_000;
 
 function command(executable: string, args: string[], cwd?: string) {
   return spawnSync(executable, args, {
-    cwd, encoding: "utf8", timeout: 30_000, env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
+    cwd, encoding: "utf8", timeout: SPAWN_TIMEOUT_MS, env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
   });
 }
 function git(repo: string, ...args: string[]): string {
@@ -157,7 +162,7 @@ describe("retained evidence archives", () => {
     ok(runWithWindowsStat("stable", "restore", "--archive", f.archive, "--manifest", f.manifest, "--destination", destination));
     expect(readFileSync(join(destination, "runs/closed/input.txt"), "utf8")).toBe("Original prompt.\n");
     expect(readFileSync(join(destination, "runs/closed/nested/output.bin"))).toEqual(Buffer.from([0, 255, 4, 128, 10]));
-  }, 60_000); // 23.7 s on the same Windows leg; pre-existing
+  }, WINDOWS_STAT_CAPTURE_TIMEOUT_MS); // 23.7 s on the same Windows leg; pre-existing
 
   it.each(["different-file", "ctime-change"])("still rejects %s with Windows stat API differences", (behavior) => {
     const f = fixture();
