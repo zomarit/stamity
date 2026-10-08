@@ -123,8 +123,56 @@ describe("classifyChange: the built-in rules", () => {
   it("leaves AGENTS.md and CLAUDE.md out of docs: they steer every session (D10)", () => {
     expect(given(["AGENTS.md"]).class).toBe("product");
     expect(given(["CLAUDE.md"]).class).toBe("product");
-    // The exception is the top-level pair only.
-    expect(given(["docs/AGENTS.md"]).class).toBe("docs");
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, fix round 1 for p1a
+     * (review/6, review/7, signed off by the orchestrator). This pinned `docs/AGENTS.md` to `docs`
+     * ("the exception is the top-level pair only"). Clients load nested instruction files too, so
+     * D10 now reaches them at any depth: the pin moves from `docs` to `product`, a stronger class.
+     */
+    expect(given(["docs/AGENTS.md"]).class).toBe("product");
+  });
+
+  it("places an agent instruction file at any depth, in any case, at least in product", () => {
+    const paths = [
+      "docs/AGENTS.md",
+      "docs/guide/CLAUDE.md",
+      "AGENTS.override.md",
+      "CLAUDE.local.md",
+      "docs/a/AGENTS.override.md",
+      ".stamity/runs/2026-10-08_x/CLAUDE.md",
+      ".stamity/handoffs/CLAUDE.local.md",
+      "claude.md",
+      "Agents.md",
+      "docs/Claude.Local.md",
+      "packages/a/agents.OVERRIDE.md",
+    ];
+    for (const path of paths) {
+      const result = given([path]);
+      expect(result.class, path).toBe("product");
+      expect(result.byPath[0]?.rule, path).not.toBe("unplaced");
+    }
+    // A stronger rule still wins over the instruction-file placement.
+    expect(given([".stamity/overrides/CLAUDE.md"]).class).toBe("security-sensitive");
+  });
+
+  it("matches the instruction-file names whole, not as a suffix or a prefix", () => {
+    for (const path of ["docs/MYCLAUDE.md", "docs/CLAUDE.md.txt", "docs/AGENTS.md.d/x.md", "docs/xAGENTS.override.md"]) {
+      expect(given([path]).class, path).toBe("docs");
+    }
+  });
+
+  it("matches the built-in security rules without case, as the trigger table does (build/5)", () => {
+    for (const path of [".Stamity/manifest.json", ".STAMITY/MANIFEST.JSON", ".stamity/Overrides/rules/x.md"]) {
+      const result = given([path]);
+      expect(result.class, path).toBe("security-sensitive");
+      expect(result.lenses, path).toEqual(["stamity-security"]);
+    }
+  });
+
+  it("keeps the weaker built-in rules case-sensitive, so a case variant never lowers a path", () => {
+    // `DOCS/` is not `docs/` to a case-sensitive checkout, so it stays unplaced: product.
+    expect(given(["DOCS/x.md"]).class).toBe("product");
+    expect(given([".Stamity/runs/x/record.md"]).class).toBe("product");
   });
 
   it("never places the engine's state in records", () => {
@@ -165,6 +213,23 @@ describe("classifyChange: the code-path floor", () => {
 
   it("reads the extension case-insensitively, so an upper-case script is still code", () => {
     expect(given(["docs/BUILD.SH"]).class).toBe("product");
+  });
+
+  it("keeps an extensionless file out of docs and records: it may be an executable (build/7)", () => {
+    for (const path of ["docs/Makefile", "docs/bin/run", "docs/.envrc", ".stamity/runs/2026-10-08_x/hook"]) {
+      const result = given([path]);
+      expect(result.class, path).toBe("product");
+      expect(result.byPath[0]?.rule, path).toContain("floor");
+    }
+    expect(given(["notes/deploy"], [{ class: "records", paths: ["notes/**"], rationale: "fixture" }]).class).toBe(
+      "product",
+    );
+  });
+
+  it("still places the extensionless doc names in docs, in any case", () => {
+    for (const name of ["LICENSE", "NOTICE", "AUTHORS", "CHANGELOG", "COPYING", "README", "readme", "License"]) {
+      expect(given([`docs/${name}`]).class, name).toBe("docs");
+    }
   });
 });
 
@@ -301,5 +366,36 @@ describe("classifyChange: path normalisation", () => {
     expect(given(["docs/./x.md"]).byPath[0]?.path).toBe("docs/x.md");
     // A path that climbs out of the repository matches no rule.
     expect(given(["../docs/x.md"]).class).toBe("product");
+  });
+});
+
+describe("classifyChange: a backslash read both ways (review/5, review/9)", () => {
+  // On POSIX a backslash is a filename character: this is one file in `.stamity/overrides/`,
+  // which a separator reading would resolve to `docs/x.md`.
+  const literal = ".stamity/overrides/a\\..\\..\\..\\docs\\x.md";
+
+  it("keeps the POSIX reading when it is the stronger one", () => {
+    const result = given([literal]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.byPath).toEqual([{ path: literal, class: "security-sensitive", rule: ".stamity/overrides/**" }]);
+  });
+
+  it("does not fold the literal name into the path its separator reading names", () => {
+    const result = given(["docs/x.md", literal]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.byPath.map((entry) => entry.class)).toEqual(["docs", "security-sensitive"]);
+  });
+
+  it("keeps the stronger reading on a rename's side too", () => {
+    const result = classifyChange({ paths: ["docs/x.md"], renames: [{ from: literal, to: "docs/x.md" }], base: "given" });
+    expect(result.class).toBe("security-sensitive");
+  });
+
+  it("keeps the Windows reading when it is the stronger one", () => {
+    expect(given(["docs\\..\\.stamity\\manifest.json"]).class).toBe("security-sensitive");
+    expect(given([".stamity\\overrides\\x.md"]).class).toBe("security-sensitive");
+    expect(given(["src\\auth\\login.ts"], FIXTURE_RULES).class).toBe("security-sensitive");
+    expect(given(["src\\auth\\login.ts"], FIXTURE_RULES).byPath[0]?.path).toBe("src/auth/login.ts");
   });
 });

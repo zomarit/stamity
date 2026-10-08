@@ -11,13 +11,19 @@
  * narrows the gates a flow runs and the safe direction is always the full set.
  *
  * **The code-path floor.** No rule, built-in or a caller's, places a code file
- * (by {@link CODE_EXTENSIONS}) in `records` or `docs`: those two classes skip
- * lint, typecheck and the full suite, so a script under `docs/` or a run folder
- * would otherwise ship unchecked. Such a file is `tests` when a test glob
- * covers it, else keeps its next placement, else is `product`.
+ * (by {@link CODE_EXTENSIONS}) or an extensionless file (a Makefile, a shebang
+ * script) in `records` or `docs`: those two classes skip lint, typecheck and
+ * the full suite, so a script under `docs/` or a run folder would otherwise
+ * ship unchecked. The extensionless doc names ({@link DOC_NAMES}) are exempt.
+ * Such a file is `tests` when a test glob covers it, else keeps its next
+ * placement, else is `product`.
  *
  * **The built-in rules are generic.** They name only the engine's own state
- * paths, `docs/**` and top-level Markdown. A repository's own lists live in its
+ * paths, `docs/**`, top-level Markdown and the agent instruction files. The
+ * instruction-file and security rules match without case, as the trigger table
+ * does, because a case-insensitive checkout opens `claude.md` as `CLAUDE.md`;
+ * the weaker rules stay case-sensitive, so a case variant never lowers a path.
+ * A repository's own lists live in its
  * `.stamity/change-classes.json`, read from the base commit by the caller, never
  * from the head, so a change cannot lower its own checks.
  *
@@ -104,6 +110,8 @@ export interface ClassRule {
   class: ChangeClass;
   paths: readonly string[];
   rationale: string;
+  /** Match `paths` without case. Only for a rule that raises a path: folding a weaker rule's case could lower one. */
+  foldCase?: boolean;
 }
 
 /** The generic rules every repository gets, before its own class file. */
@@ -119,11 +127,12 @@ export const BUILT_IN_RULES: readonly ClassRule[] = [
     rationale: "documentation, plans and specs included",
   },
   {
-    // Not docs, though they are top-level Markdown: they steer every agent
-    // session, so one review pass is too little (D10).
+    // Not docs or records, though they are Markdown: clients load them as
+    // instructions at any depth, so one review pass is too little (D10).
     class: "product",
-    paths: ["AGENTS.md", "CLAUDE.md"],
-    rationale: "the always-on agent instructions",
+    paths: ["**/AGENTS.md", "**/AGENTS.override.md", "**/CLAUDE.md", "**/CLAUDE.local.md"],
+    rationale: "the agent instruction files, at any depth",
+    foldCase: true,
   },
   {
     class: "config",
@@ -134,21 +143,29 @@ export const BUILT_IN_RULES: readonly ClassRule[] = [
     class: "security-sensitive",
     paths: [".stamity/manifest.json", ".stamity/overrides/**"],
     rationale: "the engine's own state, read back as gate configuration",
+    foldCase: true,
   },
 ];
 
 /** Classes no code file may take. */
 const NOT_FOR_CODE: ReadonlySet<ChangeClass> = new Set(["records", "docs"]);
 
+/** The extensionless names that are documentation, compared lower-cased; any other extensionless file is held as code. */
+const DOC_NAMES: ReadonlySet<string> = new Set(["license", "notice", "authors", "changelog", "copying", "readme"]);
+
 /**
  * POSIX separators, with `.` and `..` segments and doubled separators resolved:
- * the form every glob is matched against, so no spelling of a path escapes the
- * rule its plain form meets. A path that climbs out of the repository keeps its
- * leading `../` and matches no rule.
+ * the Windows reading of a path, which every glob is matched against. A path
+ * that climbs out of the repository keeps its leading `../` and matches no rule.
  */
 function normalizePath(path: string): string {
+  return resolveDots(path.replaceAll("\\", "/"));
+}
+
+/** `.` and `..` segments and doubled separators resolved; `.` reads as empty. */
+function resolveDots(path: string): string {
   if (path === "") return "";
-  const normalized = posix.normalize(path.replaceAll("\\", "/"));
+  const normalized = posix.normalize(path);
   return normalized === "." ? "" : normalized;
 }
 
@@ -156,8 +173,9 @@ const REGEXP_SPECIAL = /[.*+?^${}()|[\]\\]/g;
 const globCache = new Map<string, RegExp>();
 
 /** `**` spans segments (`**` followed by `/` spans none too), `*` stays in one, the rest is literal. */
-function globRegExp(glob: string): RegExp {
-  const cached = globCache.get(glob);
+function globRegExp(glob: string, foldCase = false): RegExp {
+  const key = `${foldCase ? "i" : "-"}${glob}`;
+  const cached = globCache.get(key);
   if (cached !== undefined) return cached;
   const source = normalizePath(glob);
   let pattern = "";
@@ -177,8 +195,8 @@ function globRegExp(glob: string): RegExp {
       index += 1;
     }
   }
-  const compiled = new RegExp(`^${pattern}$`);
-  globCache.set(glob, compiled);
+  const compiled = new RegExp(`^${pattern}$`, foldCase ? "i" : "");
+  globCache.set(key, compiled);
   return compiled;
 }
 
@@ -187,10 +205,17 @@ export function matchGlob(path: string, glob: string): boolean {
   return globRegExp(glob).test(normalizePath(path));
 }
 
+/** Whether an already-read `path` matches `glob`: no second separator rewrite, so a literal backslash stays one. */
+function matchRead(path: string, glob: string, foldCase = false): boolean {
+  return globRegExp(glob, foldCase).test(path);
+}
+
+/** A code file by extension, or an extensionless file that is not a doc name: either may be run. */
 function isCodePath(path: string): boolean {
   const basename = path.slice(path.lastIndexOf("/") + 1);
-  const dot = basename.lastIndexOf(".");
-  return dot !== -1 && CODE_EXTENSIONS.includes(basename.slice(dot).toLowerCase());
+  const extension = posix.extname(basename).toLowerCase();
+  if (extension === "") return !DOC_NAMES.has(basename.toLowerCase());
+  return CODE_EXTENSIONS.includes(extension);
 }
 
 function rank(cls: ChangeClass): number {
@@ -217,7 +242,7 @@ function classifyPath(path: string, rules: readonly ClassRule[]): PathClass & { 
   let best: { class: ChangeClass; rule: string } | undefined;
   let floored = false;
   for (const rule of rules) {
-    const glob = rule.paths.find((candidate) => matchGlob(path, candidate));
+    const glob = rule.paths.find((candidate) => matchRead(path, candidate, rule.foldCase === true));
     if (glob === undefined) continue;
     if (code && NOT_FOR_CODE.has(rule.class)) {
       floored = true;
@@ -226,17 +251,37 @@ function classifyPath(path: string, rules: readonly ClassRule[]): PathClass & { 
     if (best === undefined || rank(rule.class) < rank(best.class)) best = { class: rule.class, rule: glob };
   }
   if (floored) {
-    const testGlob = BUILT_IN_TEST_GLOBS.find((glob) => matchGlob(path, glob));
+    const testGlob = BUILT_IN_TEST_GLOBS.find((glob) => matchRead(path, glob));
     if (testGlob !== undefined && (best === undefined || rank("tests") < rank(best.class))) {
       best = { class: "tests", rule: `floor: a code file under ${testGlob} is tests` };
     }
   }
   if (best === undefined) {
     best = floored
-      ? { class: "product", rule: "floor: a code file is never records or docs" }
+      ? { class: "product", rule: "floor: a code or extensionless file is never records or docs" }
       : { class: "product", rule: UNPLACED };
   }
   return { path, class: best.class, rule: best.rule, floored };
+}
+
+/**
+ * One raw path, read both ways: with backslashes as separators (Windows) and as
+ * filename characters (POSIX, where git tracks such names). The stronger
+ * reading is kept, the Windows one on a tie, so no spelling lowers a path: a
+ * POSIX file named `a\..\docs\x.md` under `.stamity/overrides/` stays
+ * there, and `docs\..\.stamity\manifest.json` still meets the manifest rule.
+ * `undefined` when both readings are empty.
+ */
+function readPath(raw: string, rules: readonly ClassRule[]): (PathClass & { floored: boolean }) | undefined {
+  const windows = normalizePath(raw);
+  const literal = resolveDots(raw);
+  const read = (path: string) => (path === "" ? undefined : classifyPath(path, rules));
+  const first = read(windows);
+  if (literal === windows) return first;
+  const second = read(literal);
+  if (first === undefined) return second;
+  if (second === undefined) return first;
+  return rank(second.class) < rank(first.class) ? second : first;
 }
 
 /** What the caller knows about the base: given and resolved, never given, or given and unresolvable. */
@@ -273,10 +318,11 @@ export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[]
   const byPath: PathClass[] = [];
   const floored: string[] = [];
   const index = new Map<string, ChangeClass>();
+  // The kept reading names the path, so two raw spellings dedupe only when they read as one file.
   const add = (raw: string): void => {
-    const path = normalizePath(raw);
-    if (path === "" || index.has(path)) return;
-    const placed = classifyPath(path, rules);
+    const placed = readPath(raw, rules);
+    if (placed === undefined || index.has(placed.path)) return;
+    const { path } = placed;
     index.set(path, placed.class);
     if (placed.floored) floored.push(path);
     byPath.push({ path, class: placed.class, rule: placed.rule });
@@ -301,8 +347,8 @@ export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[]
     atLeastProduct.push("product");
   }
   for (const rename of input.renames ?? []) {
-    const from = normalizePath(rename.from);
-    const to = normalizePath(rename.to);
+    const from = readPath(rename.from, rules)?.path ?? "";
+    const to = readPath(rename.to, rules)?.path ?? "";
     const fromClass = index.get(from);
     const toClass = index.get(to);
     if (fromClass === undefined || toClass === undefined || fromClass === toClass) continue;
@@ -311,7 +357,9 @@ export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[]
   }
   const unplaced = byPath.filter((entry) => entry.rule === UNPLACED).map((entry) => entry.path);
   if (unplaced.length > 0) reasons.push(`no rule places ${namePaths(unplaced)}, so it is product`);
-  if (floored.length > 0) reasons.push(`kept out of records and docs as code: ${namePaths(floored)}`);
+  if (floored.length > 0) {
+    reasons.push(`kept out of records and docs as code or an extensionless file: ${namePaths(floored)}`);
+  }
 
   const pathClass = strongest(byPath.map((entry) => entry.class));
   const cls = strongest([...(pathClass === undefined ? [] : [pathClass]), ...atLeastProduct]) ?? "product";
