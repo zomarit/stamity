@@ -62,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pack or override planted beside the forged row can still prove the delete of a file it renders
   byte for byte, through `sync`, `clean` and `clean --pack`; and at the other paths the engine
   writes, a forged row hashing your file still lets `sync` overwrite it without a `.bak`.
+  Because the proof reads only the running version's renderings, `clean` and `clean --pack`
+  refuse with `CLEAN_ERROR`, before touching anything, while a file they would keep is one a
+  `sync` with this version rewrites (after an upgrade, or after the detected stack or the gates
+  moved since the last `sync`): run `sync`, then `clean -y`.
 
 ### Changed
 

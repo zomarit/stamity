@@ -1769,6 +1769,21 @@ them: the charter (…), the Codex rule appendix (…), the Copilot workflow's e
 spanning the file." A delete there still needs that matching recorded hash; the hash and the fingerprint together no
 longer prove it, nor a backup-free overwrite.
 
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, the branch pass's fix round 2, `review/128` and `build/65`,
+the maintainer's sign-off on the whole-branch review's W-1). The proof reads only the running engine's renderings, so
+a full `clean` run by another version than the last `sync`, or after detection or the gates moved since it, would keep
+every unedited engine file and then remove the ledger with `.stamity/`. A full `clean`, and `clean --pack <id>` for
+that pack's copies, therefore refuses before touching anything — no file, no row, nothing under `.stamity/` — when a
+file it would keep is one a `sync` with this version rewrites: its bytes still hash to the recorded hash, and the
+plan `sync` runs for this setup (the manifest's clients and plugin record, the org policy applied) writes other bytes
+at that path. It exits with `CLEAN_ERROR`, names a few of the files and then a count, names the version in
+`generatedBy` when it differs from the running one, and says to run `sync` with this version first, moving aside
+first any of the files that is the owner's; `--dry-run` refuses the same way. A file `sync` writes at no path (a
+retired artifact, a 1.11.0 Cursor guard name, a departed package's charter copy) or writes with these very bytes, an
+edited file, and a file the proof could not judge are not counted. The sweep marks such an entry `staleRendering` on
+a preview run before the confirmation (`refuseStaleRenderings`, `src/cli/commands/clean.ts`; `syncRenderingsFor`,
+`src/cli/engine/emissionWrite.ts`; gate 4's `renderingRefusal`, `src/merge/reclaim.ts`).
+
 `SECURITY.md`'s manifest-forgery row names three known residuals inside the bound. (1) At an instruction file and at
 `.github/hooks/stamity.json`, an overwrite of a file git tracks with no uncommitted change takes no `.bak`, under a
 forged row hashing an owner's file too: the owner's previous content is in git history, and the overwrite shows in
@@ -1809,10 +1824,16 @@ refreshed away with no `.bak`. It is tracked as the deferred row `2026-10-08_inb
   repository THEN it takes the `.bak`; GIVEN a committed bare-repository-shaped folder beside the hooks file whose config
   names a file-system monitor, or a clean filter on a stat-dirty tracked file, THEN neither command runs, and every git
   call the check makes carries `safe.bareRepository=explicit` and `core.fsmonitor=false` (added 2026-10-08).
+- GIVEN a setup whose root charter and one skill carry an earlier release's rendering, their recorded hashes matching
+  and `generatedBy` naming that release, WHEN `clean -y`, `clean -y --json` or `clean --dry-run` runs THEN it exits 1
+  with `CLEAN_ERROR`, names both files and the release, and every file and `.stamity/` are byte-identical; WHEN `sync -y`
+  runs and then `clean -y` THEN every file the ledger named is gone and so is `.stamity/`; GIVEN an owner's file at a
+  pack copy's name under a forged row hashing it WHEN `clean --pack <id> -y` runs THEN it refuses the same way and the
+  file and the manifest are unchanged (added 2026-10-08, `review/128`).
 
-Tests for the criteria added 2026-10-08: `test/cli/ledgerForgery.test.ts`, `test/merge/reclaim.test.ts`,
-`test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`, `test/manifest/ownedPaths.test.ts`,
-`test/merge/safeWrite.test.ts`, `test/cli/flows.e2e.test.ts`.
+Tests for the criteria added 2026-10-08: `test/cli/commands/clean.test.ts`, `test/cli/ledgerForgery.test.ts`,
+`test/merge/reclaim.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`,
+`test/manifest/ownedPaths.test.ts`, `test/merge/safeWrite.test.ts`, `test/cli/flows.e2e.test.ts`.
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `d1a2-clean-pack-copies`, with lane D's fixer rounds 1
 and 2). `clean --pack <id>` also removes the copies `sync` projected from that pack into the clients' folders, while the

@@ -544,6 +544,10 @@ manifest included, and names that file. Remove that wiring and run `stamity clea
 `plugin setup`, which otherwise refuses on the manifest still there. **Save first** whatever of
 that you want to keep:
 copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setup`.
+If a file `clean` would keep is one a `sync` with the running version rewrites — after an upgrade,
+or after the detected stack or the gates changed since the last `sync` — `clean` refuses with
+`CLEAN_ERROR` before touching anything and names the files: run `stamity sync` first, then
+`stamity clean -y`.
 `stamity clean --dry-run` writes nothing and names what a real run removes. `clean` also prints
 one uninstall command line per client the manifest recorded, so the plugin side can be removed
 the same way it was added.
