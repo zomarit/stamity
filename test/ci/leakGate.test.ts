@@ -7,6 +7,7 @@ import {
   GATE_RUN_TIMEOUT_MS,
   type LeakGateResult,
   leakGateFailureDetail,
+  leakGateResultOf,
   leakGateSpawnCount,
   runLeakGateOnce,
   setLeakGateResultForTest,
@@ -133,6 +134,17 @@ describe("leak-gate against the repository as it stands", () => {
     } finally {
       setLeakGateResultForTest(real);
     }
+  });
+
+  // ADDED 2026-10-08, unit c1-leak-gate-once, review round 1 (M-2). A gate run killed by a signal
+  // (an out-of-memory kill, a cancelled step) has no exit status and no spawn error, only the
+  // signal, so the shared result read "exit -1" with no reason. The signal now rides in stderr.
+  it("names the signal that killed a gate run", () => {
+    const killed = leakGateResultOf({ status: null, signal: "SIGKILL", stdout: "", stderr: "" });
+    expect(killed.status).toBe(-1);
+    expect(leakGateFailureDetail(killed)).toBe("exit -1\nkilled by SIGKILL");
+    const exited = leakGateResultOf({ status: 0, signal: null, stdout: "PASS\n", stderr: "" });
+    expect(exited).toEqual({ status: 0, stdout: "PASS\n", stderr: "" });
   });
 
   it("scans its own file by its own rules, with no self-exemption", () => {

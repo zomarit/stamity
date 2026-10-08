@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -66,15 +66,26 @@ let spawns = 0;
 export function runLeakGateOnce(): LeakGateResult {
   if (memo !== undefined) return memo;
   spawns += 1;
-  const result = spawnSync(process.execPath, [GATE], { cwd: REPO_ROOT, encoding: "utf-8" });
-  memo = Object.freeze({
+  memo = leakGateResultOf(spawnSync(process.execPath, [GATE], { cwd: REPO_ROOT, encoding: "utf-8" }));
+  return memo;
+}
+
+/**
+ * One spawn's outcome as the frozen shared result. A spawn that never ran (or overflowed its
+ * buffer) has no exit status, and one killed by a signal (an out-of-memory kill, a cancelled step)
+ * has neither a status nor an error: the error or the signal is the only account of why, so it
+ * rides in stderr rather than vanishing behind `exit -1`.
+ */
+export function leakGateResultOf(
+  result: Pick<SpawnSyncReturns<string>, "status" | "signal" | "stdout" | "stderr"> & { readonly error?: Error },
+): LeakGateResult {
+  const error = result.error === undefined ? "" : String(result.error);
+  const signal = result.signal === null ? "" : `killed by ${result.signal}`;
+  return Object.freeze({
     status: result.status ?? -1,
     stdout: result.stdout ?? "",
-    // A spawn that never ran (or overflowed its buffer) has no exit status; its error is the
-    // only account of why, so it rides in stderr rather than vanishing.
-    stderr: `${result.stderr ?? ""}${result.error === undefined ? "" : String(result.error)}`,
+    stderr: `${result.stderr ?? ""}${error}${signal}`,
   });
-  return memo;
 }
 
 /** How many times this process has spawned the gate — the memo's own proof. */
