@@ -13,7 +13,7 @@ REQ-FLOW-001 to REQ-FLOW-026 shipped with 1.11.0, and REQ-FLOW-036 to REQ-FLOW-0
 an inbox row follows it up. It landed on 2026-10-08 in run `2026-10-08_maintainer-tooling` (REQ-FLOW-025, amended),
 unreleased at that merge, so `status` does not move. The text dated 2026-10-08 that names that run comes from its spec
 deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
-integration head `47acb16e`.
+integration head `47acb16e`; lane D's, under REQ-FLOW-026, REQ-FLOW-037 and REQ-FLOW-038, against `dbd54fc7`.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -640,6 +640,14 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
   over 17 shown skills against the 8,000 cap (`codexSkillsListChars`, `src/emit/capabilityMatrix.ts:379-387`; the
   count at `src/adapters/codex.ts:417-430`; REQ-PROVE-004, amended 2026-10-06). Whether a plain ask that names no
   touchpoint can start one on Codex is still unmeasured: those checks cover the listing only.
+- **Amended 2026-10-08** (run `2026-10-08_maintainer-tooling`, unit `d1a-rendering-proof-core`; the maintainer's answer
+  that a retired layout is kept). A `.cursor/skills/st-<id>/` copy a 1.10.0 install wrote is no longer removed by the
+  sweep. The running engine renders nothing at that path, so its bytes cannot prove the delete (REQ-PLUGIN-046, amended
+  2026-10-08): the sweep keeps it as `skipped-user-content`, the sync report names it with the step to delete it by hand,
+  and its row leaves the ledger with that sync, so later syncs and `check` do not report it again. The bullet "the
+  reclaim sweep removes those files and nothing else under `.cursor/`" and the Expand/contract sentence "the
+  `.cursor/skills/st-<id>/` rows reclaimed in the same sync" describe the releases before this amendment; the 1.10.0
+  case the Proof bullet names now pins the keep.
 - **Proof:** `test/emit/touchpointSkills.test.ts`, `test/emit/skillsProjection.test.ts`,
   `test/adapters/codex.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`,
   `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts` (the 1.10.0 reclaim case),
@@ -751,7 +759,14 @@ when such a script lives there.
   - **Scripts kept.** The sweep reads every hooks document still on disk, candidate or not (`hookDocumentsLeftInPlace`,
     `src/merge/reclaim.ts`, fed by `hookScriptRetention` in `src/cli/engine/emissionWrite.ts`), and a preview (`check`,
     `sync --dry-run`) reads a document the write rewrites as the write leaves it. `clean --json` names the scripts that
-    kept `.stamity/` as `stateDirKept`.
+    kept `.stamity/` as `stateDirKept`. Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit
+    `d2-forced-preview`, inbox row 588): under `--force` a preview also reads, as the forced write leaves it, a hooks
+    document whose collision `--force` clears (`unmanaged-name`), so `sync --dry-run --force` never shows Kept for a
+    script the forced run deletes. A document the forced write refuses at write time (a hard link, a symbolic link, or
+    one under a folder that resolves outside the repository) is still read from disk, as the forced run stops before its
+    sweep, and so is a document of any other collision class, which `--force` does not clear; `check` previews without
+    the flag (`forceClears` and `forcedWriteLands`, `src/cli/commands/sync/engine.ts`). It read that a preview reads
+    every collided document from disk.
   - **Cursor's rejected entries.** A `.cursor/hooks.json` holding an entry Cursor rejects fails `check`, whoever wrote
     it; `sync` and `init` keep the entry and warn naming it. The check reads the event key against the 21 events
     cursor.com/docs/hooks lists (read 2026-10-07, Cursor 3.23.23; `CURSOR_HOOK_EVENTS`) and each entry by type: `type`
@@ -792,12 +807,34 @@ bytes still hash to what the ledger recorded, inside the engine's bound; an edit
   `sync --dry-run`) reads the rewired document as the write leaves it, so it shows the old guards as the deletes the
   write then makes. A `.cursor/hooks.json` refused as `co-owned-shape` carries the old guards' ledger rows through each
   `sync` until the owner fixes it, so the old names stay the engine's to reclaim once it is.
+- **Amended 2026-10-08** (run `2026-10-08_maintainer-tooling`, unit `d1b-cursor-guard-pins`, inbox row 585, with lane
+  D's fixer rounds 2 and 3). The first `sync` after an upgrade from 1.11.0 recognises an old guard, and the
+  `.cursor/hooks.json` entry that runs it, by the bytes a frozen copy of the 1.11.0 guard builder
+  (`src/adapters/cursorLegacyGuards.ts`) renders for that setup, together with the ledger row it already required, not
+  by a recorded hash. The copy renders with the setup's agent roster — the ten agents 1.11.0 shipped plus every Cursor
+  agent row the ledger records, pack and override agents included — and the package name and npm channel the running
+  installation has, at version 1.11.0. So a core setup, a setup with a local pack's agents, one with an override agent,
+  and a fork's setup under the fork's package name are each recognised; 1.11.0's own `sync` refused the curated `ops`
+  pack on Cursor, so no 1.11.0 Cursor setup holds it. An entry running an old name is the engine's only when it is
+  exactly the entry 1.11.0 rendered for that name and its script is absent or that re-render, and a co-owned record
+  cannot claim one: the pins' hashes are dropped from the record the lane reads (`provenLegacyCursorGuards`,
+  `src/cli/engine/emissionWrite.ts`). An entry whose script is absent is still rewired. A guard whose bytes are not that
+  re-render (an owner's own file at an old name, or a hand-edited guard) stays with the entry that runs it, and the sync
+  report names both; `clean` and `init --force` read the same proof. Two 1.11.0 setups keep their old spawn guard and
+  its entry, named, on the safe side: one whose ledger lost a Cursor agent row, and one whose plugin carried the `agent`
+  class but not the hooks, where 1.11.0 rendered its pack and override agents into the guard's roster but recorded no
+  Cursor agent row for them (`review/99`). After a first `sync` that refused `.cursor/hooks.json`, a later `sync` reads
+  the roster from the ledger the running engine rewrote, which matches 1.11.0's only while no agent has been added to or
+  removed from the corpus since 1.11.0, as holds today; after such a change that guard would be kept the same way
+  (`review/99`). The requirement's sentence "It removes each old name only when its bytes still hash to what the ledger
+  recorded" describes 1.12.0.
 - **Units:** `u0-hook-files-ownership`.
 - **Evidence (before):** `src/adapters/cursor.ts:110-116` at `d10db029`. Of the 201 paths a four-client `init` records
   on 1.11.0, 11 carry no prefixed segment: the six fixed client files, the three charters and the two guards.
 - **Expand/contract:** the old names are reclaimed by proof; the plugin roots ship the new names under `hooks/`, and a
   client on an older root keeps the old names inside its own root, which `sync` never touches.
-- **Proof:** `test/emit/namePrefix.test.ts`, `test/adapters/cursor.test.ts`, `test/merge/hookFilesOwnership.test.ts`.
+- **Proof:** `test/emit/namePrefix.test.ts`, `test/adapters/cursor.test.ts`, `test/merge/hookFilesOwnership.test.ts`;
+  `test/adapters/cursorLegacyGuards.test.ts` with its four fixtures (added 2026-10-08).
 
 ## Acceptance criteria
 
@@ -1068,8 +1105,10 @@ exists, it is the normative record for that requirement.
   `agents/openai.yaml` that turns implicit invocation off, and Codex's skills-list total stays under 8,000.
 - GIVEN tools `[claude, cursor]` THEN no `.cursor/skills/st-<id>/` and no `.claude/skills/st-<id>/` exists, and
   `.claude/commands/st-<id>.md` does.
-- GIVEN sync on a tree whose ledger carries 1.10.0's `.cursor/skills/st-<id>/` files THEN they are removed, and every
-  other file under `.cursor/` is byte-identical.
+- GIVEN sync on a tree whose ledger carries 1.10.0's `.cursor/skills/st-<id>/` files THEN they stay byte for byte, the
+  sweep names each `skipped-user-content`, their rows leave the ledger, `.agents/skills/st-<id>/SKILL.md` is written,
+  and every other file under `.cursor/` is byte-identical (amended 2026-10-08, unit `d1a-rendering-proof-core`; it
+  read "THEN they are removed, and every other file under `.cursor/` is byte-identical").
 - GIVEN Copilot selected beside Codex or Cursor THEN its capability disclosure declares the double listing.
 - GIVEN a Codex plugin build THEN no touchpoint ships in the plugin, and the content skills still map under `skills/`.
 - GIVEN tools `[codex]` WHEN init prints its next steps THEN they name `$st-onboard` and `$st-<id>`, and never
@@ -1158,6 +1197,14 @@ exists, it is the normative record for that requirement.
 - GIVEN a hooks document the sweep leaves in place — reduced to the owner's entries, refused, linked, or no reclaim
   candidate at all — WHEN `clean -y` or a client's removal sweeps THEN every engine hook script it names remains (added
   2026-10-07 from the build).
+- GIVEN Copilot set up and a `.github/hooks/stamity.json` its ledger does not record, running a retired engine script
+  under `.stamity/generated/hooks/copilot/` WHEN `sync --json --dry-run --force` runs THEN the preview names the script
+  as a delete, and `sync -y --force` deletes exactly the previewed set; WHEN `sync --dry-run` runs without `--force`
+  THEN the preview keeps the script, and `sync -y` exits 1 with both files unchanged; GIVEN a forged row and hash at an
+  engine-named agent path THEN the forced preview and the forced run keep it; GIVEN that document hard-linked,
+  symbolically linked, or under a `.github/hooks` folder linked outside the repository, or a `deny-scan`,
+  `shared-name`, `co-owned-shape` or `import-decision` collision THEN the forced preview keeps the script (added
+  2026-10-08, unit `d2-forced-preview`; `test/merge/hookFilesOwnership.test.ts`, the row 588 describe).
 
 **REQ-FLOW-038**
 
@@ -1173,6 +1220,17 @@ exists, it is the normative record for that requirement.
   guards stay; GIVEN `check` before that `sync` THEN its reclaim lines name the old guards with the action the write
   takes; GIVEN a repository whose ledger never recorded the old names and an owner entry running
   `node .cursor/hooks/mcp-guard.mjs` THEN that entry stays the owner's (added 2026-10-07 from the build).
+- GIVEN a 1.11.0 setup's unedited guards and entries — core, with a local pack's agents, or with an override agent —
+  WHEN the first `sync -y` runs THEN both guards are deleted, both entries name the `stamity-` guards, and no `.bak`
+  exists; GIVEN a fork's setup THEN the fork's identity proves both guards and the canonical identity keeps both. GIVEN
+  an owner's own scripts at both old names under forged rows, a pinned entry, a forged co-owned hash and a re-pointed
+  document hash WHEN `sync -y` or `clean -y` runs THEN both scripts and the entry stay byte for byte and no `.bak`
+  exists; WHEN `init --force` runs THEN both scripts and the entry stay. GIVEN the old MCP guard edited by hand WHEN `sync -y` or `init --force` runs THEN the guard and the
+  entry that runs it stay. GIVEN a setup whose ledger lost one Cursor agent row THEN the spawn guard and its entry stay
+  and are named, and the MCP guard moves. GIVEN an old guard the owner deleted THEN its entry is still rewired. GIVEN the
+  four fixtures THEN each hashes to its pinned SHA-256 and the frozen builder renders it byte for byte (added
+  2026-10-08, unit `d1b-cursor-guard-pins`; `test/merge/hookFilesOwnership.test.ts`,
+  `test/adapters/cursorLegacyGuards.test.ts`).
 
 ## References
 
@@ -1185,6 +1243,8 @@ exists, it is the normative record for that requirement.
   `u0-hook-files-ownership`, and the declared defaults S10–S19 with their dated build amendments.
 - `.stamity/runs/2026-10-07_security-fixes/record.md` and its `ledger.jsonl` — the build, the review rounds and the
   sign-offs the "Amended 2026-10-07 (build)" bullets record.
+- `.stamity/runs/2026-10-08_maintainer-tooling/plan.md`, its `record.md` and its `ledger.jsonl` — the in-flow plan's
+  spec deltas, the maintainer's answers and the ledger rows the text dated 2026-10-08 cites.
 - `test`: each requirement names its suites above; once a test exists it is the normative record.
 - `source`: `src/shared/cliCall.ts`, `src/emit/substitution.ts`, `src/cli/kit/packageName.ts`,
   `scripts/plugins/tokens.mjs`, `src/types/markers.ts`, `src/detect/repoAnalyzer.ts`, `src/detect/verificationGates.ts`,
@@ -1230,6 +1290,10 @@ exists, it is the normative record for that requirement.
   live and was not measured.
 - REQ-FLOW-026: a command restricted with `tools:` to one client would still reach every client that reads the shared
   tree. No shipped command uses `tools:` (the unit's deferral M-1).
+- REQ-FLOW-026 and REQ-FLOW-038, as amended 2026-10-08: a copy an earlier release rendered that the running engine no
+  longer produces is kept on upgrade and named for a delete by hand, not reclaimed; the run's plan leaves it to a
+  release that retires an artifact to say so in its CHANGELOG. The two 1.11.0 Cursor guards are the one exception, recognised by the frozen 1.11.0
+  builder, and the two setups REQ-FLOW-038's amendment names (`review/99`) keep their spawn guard.
 - REQ-FLOW-036 and REQ-FLOW-037: the residues the plan records as follow-up rows stay open — a user-hook entry edited in
   `.claude/settings.json` instead of its definition stays beside the engine's rendering; after a lost manifest the
   three allow rows a release rendered read as the owner's; a key an owner adds inside an engine Codex table makes the whole table

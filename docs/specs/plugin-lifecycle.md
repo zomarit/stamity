@@ -39,7 +39,8 @@ are integrated. They shipped with 1.12.0, which set `status` to `shipped-with-1.
 
 The paragraphs headed "Amended 2026-10-08" that name run `2026-10-08_maintainer-tooling` come from that run's spec
 deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
-integration head `47acb16e`. They are unreleased, and `status` does not move.
+integration head `47acb16e`; lane D's, under REQ-PLUGIN-045 and REQ-PLUGIN-046, against `dbd54fc7`. They are
+unreleased, and `status` does not move.
 
 ## Intent
 
@@ -1652,6 +1653,16 @@ inside the bound with the artifact-type split above. The bound is `OWNED_PATHS`,
 `test/cli/commands/check.test.ts`. Plan 016 file 2's `u2-release-integrity` publishes the bound in `release.json` as
 `ownedPaths`.
 
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `d1a-rendering-proof-core` to
+`d1c-charter-and-exact-paths` and lane D's fixer rounds): inside the bound, the delete proof at the paths
+REQ-PLUGIN-046 names is a rendering — the running engine's, or at the two 1.11.0 Cursor guard names the frozen 1.11.0 builder's
+rendering for the setup — not a recorded hash, and a backup-free overwrite at a charter or instruction file and at
+`.github/hooks/stamity.json` needs the incoming rendering or a managed block spanning the file, or it keeps the
+previous content recoverable (REQ-PLUGIN-046, amended 2026-10-08; `needsRenderingProof` and `renderingProofClass`,
+`src/manifest/ownedPaths.ts`). Elsewhere inside the bound the recorded hash still proves what the paragraph above
+says: a delete at the state and pack folders and at the `stamity-` Cursor guards, and a backup-free overwrite at any
+other path the engine writes. `SECURITY.md` names both among its known residuals.
+
 ### REQ-PLUGIN-046 An import decision binds only as `init` records it, and an instruction file leaves only on its own bytes
 
 Added 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). `init` records one decision per pre-existing instruction
@@ -1698,6 +1709,134 @@ release's charter carries the four headings; 1.0.0 to 1.7.0 carry no `Invariants
 `needsByteProof`, `isEngineCharterDocument` and `bytesShowEngineOutput` in `src/manifest/ownedPaths.ts`; the collision
 kind is `import-decision` in `src/cli/commands/sync/engine.ts`. Tests: `test/cli/ledgerForgery.test.ts`,
 `test/manifest/manifest.test.ts`, `test/manifest/ownedPaths.test.ts` (with `test/manifest/fixtures/charter-1.0.0.md`).
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `d1a-rendering-proof-core`, `d1b-cursor-guard-pins` and
+`d1c-charter-and-exact-paths`, with lane D's fixer rounds 1, 3 and 4; inbox rows 519, 560, 585 and 586). A whole-file
+delete at an engine-named file in a content folder, an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md` and
+the Copilot setup workflow at the repository root, `.github/hooks/stamity.json`, or one of Cursor's two 1.11.0 guard
+names needs one of two proofs. The first is bytes that hash, raw or with `\r\n` read as `\n`, to a rendering the
+running engine produces at that path, planned for the clients the setup wrote for (the manifest's clients and every
+client a ledger row names, each in repository mode) over the bundled corpus, the override tree and the installed packs.
+Every installed pack is rendered whatever the organisation's trust policy says, so the first `sync` after the policy
+denies a pack proves and removes that pack's copies, while the projection itself still writes nothing of a denied pack;
+the plan is hashed and discarded, never written. The second is a managed block spanning the file. At an `AGENTS.md`
+below the root, when a client of the setup reads per-folder files, the renderings also include the root charter as the
+engine renders it before an import decision on the root, so the engine's unedited copy whose package has left is still
+proven and removed. At the two 1.11.0 Cursor guard names only, the rendering is the guard a frozen copy of the 1.11.0
+builder (`src/adapters/cursorLegacyGuards.ts`) renders for the setup: the ten agents 1.11.0 shipped plus every Cursor
+agent the ledger records, the running installation's package name and npm channel, at version 1.11.0. A test holds the
+copy to four fixtures captured from the published 1.11.0 package, each pinned by its SHA-256 (REQ-FLOW-038, amended
+2026-10-08). A recorded hash that matches, and the structural fingerprint, no longer prove a delete there. The
+fingerprint still decides which instruction files may reach the proof: a file it does not read as the engine's falls to
+the managed-block rules, so `CLAUDE.md` is proven only by a block that spans it.
+
+A file whose bytes no built rendering matches — an owner's file, or a copy an earlier release rendered that the running
+engine no longer produces — is kept as `skipped-user-content`, its report entry names the path's class and the step to
+delete it by hand, and its row leaves the ledger. A file the proof could not judge, because the plan could not be
+built, is kept unjudged: its entry carries `unproven: true` and names why, and its row stays, so the next `sync` tries
+again. Under the full `clean`, which removes the setup with its ledger, that entry instead says no sync will try again
+and to delete the file by hand unless it is the owner's. A rendering built for the path judges the file whatever else
+failed to build, so the 1.11.0 re-render decides at the old guard names even when the running engine's plan threw. A
+proven delete keeps `proof: "hash"` and names the rendering in its detail (`engineRenderingsFor` and
+`provenLegacyCursorGuards`, `src/cli/engine/emissionWrite.ts`; gate 4's `renderingRefusal`, `src/merge/reclaim.ts`;
+`ignoringPolicyDenialForProof`, `src/pack/projection.ts`).
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, lane D's fixer rounds 4 to 6, under the declared default of
+the ledger rows `build/62` and `review/109`; a `.bak` on every such overwrite, or a machine-local record of the hashes
+this checkout's engine wrote, are the alternatives the run's record leaves to the maintainer). At a charter or instruction file and at `.github/hooks/stamity.json`, a
+whole-file overwrite the ledger records keeps the bytes it replaces recoverable unless the incoming rendering proves
+them (they equal it once `\r\n` reads as `\n`) or a managed block spans the file. The previous content is then kept in
+git history, with no `.bak` and a notice naming it, when the file is tracked and clean in the repository whose top level
+is the setup root. Otherwise it is kept behind a verified `.bak` and a warning: for an uncommitted or untracked file, a
+setup in a monorepo subfolder, a charter inside a submodule, and whenever git is absent or a git check fails or outlives
+its 5-second timeout. The checks run git from the setup root, never the file's own folder, with every `GIT_*` variable
+stripped and `safe.bareRepository=explicit` and `core.fsmonitor=false` on every call. They require one ordinary,
+merged, regular-file index entry that agrees with `HEAD`, and the bytes read under the write lock must hash in process to
+that entry's blob, raw or with `\r\n` read as `\n`; no call reads work-tree content, so no filter command runs
+(`overwriteNeedsRecovery` and `isTrackedAndClean`, `src/merge/safeWrite.ts`). A file whose fingerprint fails, or whose
+bytes drifted from the recorded hash, takes the `.bak` as before. So the structural fingerprint no longer proves a
+backup-free overwrite on its own there. The notice also prints for the engine's own committed, unedited `AGENTS.md` on a
+release that changes the charter, and an uncommitted setup, or one in a monorepo subfolder, gets an `AGENTS.md.bak`.
+For the delete and the overwrite alike, the paragraph above read: "a recorded hash proves a whole-file delete or a
+backup-free overwrite only when the bytes show the engine wrote them: the charter (…), the Codex rule appendix (…), the
+Copilot workflow's engine header line, or a managed block spanning the file."
+
+`SECURITY.md`'s manifest-forgery row names three known residuals inside the bound. (1) At an instruction file and at
+`.github/hooks/stamity.json`, an overwrite of a file git tracks with no uncommitted change takes no `.bak`, under a forged
+row hashing an owner's file too: the owner's previous content is in git history, and the overwrite shows in `git status`
+and in the notice. Git before 2.38 ignores `safe.bareRepository`, and the engine does not check git's version, so there a
+setup root with no `.git` of its own that holds committed bare-repository files can answer the check from its own index.
+Elsewhere inside the bound a backup-free overwrite still rests on the recorded hash alone, and so does a delete at the
+state and pack folders and at the `stamity-` Cursor guards. (2) A planted pack or override whose rendering copies an
+owner's file byte for byte, beside a forged row hashing it, still proves that delete through `sync`, `clean` and
+`clean --pack`, and a planted pack folder widens what the proof renders even under a policy that denies every pack
+(ledger rows `review/63`, `review/65` and `review/69` of run `2026-10-08_maintainer-tooling`). (3) A selected `[mcp_servers.<id>]` table in
+`.codex/config.toml`, and the bare `[mcp_servers]` table the engine renders when no server is selected, are proved by
+their record alone (REQ-FLOW-037).
+
+- GIVEN an owner's `.claude/skills/st-local/SKILL.md`, an owner's `.cursor/hooks/mcp-guard.mjs` whose bytes are not the
+  setup's 1.11.0 re-render, an owner `AGENTS.md` copying the charter's title and four headings at the root, an owner
+  nested `AGENTS.md` opening with the Codex appendix title, an owner `AGENTS.override.md` with the appendix heading on a
+  line, an owner Copilot workflow with the engine's header line, and an owner `.github/hooks/stamity.json`, each under a
+  forged row hashing it, WHEN `sync -y` or `clean -y` sweeps THEN each stays (added 2026-10-08).
+- GIVEN a 1.11.0 setup's unedited guards, core, with a local pack's agents or with an override agent, THEN the first
+  `sync` deletes both; GIVEN a client deselected after setup THEN its unedited files are still deleted, a deselected
+  Copilot's workflow and hooks file included; GIVEN a Claude-only setup's unedited files WHEN `clean -y` runs THEN each
+  is deleted; GIVEN the engine's unedited per-package charter whose package left, under a `supplement` or `skip` decision
+  on the root, WHEN `sync -y` runs THEN it is deleted (added 2026-10-08).
+- GIVEN a deny-all policy over an installed, projected pack WHEN `sync -y` runs THEN every copy is deleted and none is
+  written, and an owner's file at a copy's name under a forged row is kept (added 2026-10-08).
+- GIVEN a proof plan that cannot be built WHEN `sync -y` sweeps THEN each file that needs the proof is kept with
+  `unproven: true`, its row stays and the entry names why; WHEN the full `clean -y` sweeps THEN the entry says the setup
+  is being removed and to delete the file by hand unless it is yours; GIVEN a file whose bytes match no built rendering
+  THEN it is kept with no mark and its row leaves (added 2026-10-08).
+- GIVEN Copilot selected and forged rows hashing an owner's untracked root `AGENTS.md` and `.github/hooks/stamity.json`
+  WHEN `sync -y` runs THEN a verified `.bak` holds each owner file; GIVEN the same repository committed THEN no `.bak`
+  exists and the notice names git history (added 2026-10-08).
+- GIVEN such an overwrite of a tracked file with an uncommitted or staged edit, an `assume-unchanged` or unmerged entry, a
+  setup root that is not the repository's top level, no setup root, git missing, or `GIT_DIR` aimed at another
+  repository THEN it takes the `.bak`; GIVEN a committed bare-repository-shaped folder beside the hooks file whose config
+  names a file-system monitor, or a clean filter on a stat-dirty tracked file, THEN neither command runs, and every git
+  call the check makes carries `safe.bareRepository=explicit` and `core.fsmonitor=false` (added 2026-10-08). Test
+  evidence: `test/cli/ledgerForgery.test.ts`, `test/merge/reclaim.test.ts`, `test/merge/hookFilesOwnership.test.ts`,
+  `test/adapters/cursorLegacyGuards.test.ts`, `test/manifest/ownedPaths.test.ts`, `test/merge/safeWrite.test.ts`,
+  `test/cli/flows.e2e.test.ts`.
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `d1a2-clean-pack-copies`, with lane D's fixer rounds 1
+and 2). `clean --pack <id>` also removes the copies `sync` projected from that pack into the clients' folders, while the
+pack is still installed. Only a client row at a path that needs the rendering proof can be a copy. It plans the emission
+twice, both times for the clients the setup wrote for and with every installed pack rendered whatever the trust policy
+says: once as the manifest stands, and once with the pack's `pack:<id>` rows removed. A copy is a client row whose path
+the first plan renders and the second does not, or a row of one of the pack's own artifacts at a path the second plan
+does not render. The pack's artifacts are read off its own rows and its folder, and a row matches one by class, catalog
+id and the name its path projects under, so an artifact whose file was moved out of the pack folder is still the
+pack's, and a forged row naming an artifact at another path is not. Each copy joins the sweep and leaves only as bytes
+the first plan renders; an edited copy, or an owner's file at a copy's name under a forged row, is kept and named, and a
+judged copy's row leaves with the pack's rows, kept or not. When the first plan cannot be built (a pack whose own command
+and skill share a name, which the planner refuses), the copies are only the rows of the pack's own artifacts. None can
+be proven, so each is kept and named: one unedited since its recorded hash keeps its row, one edited or hashless loses
+it, and the run never falls back to the recorded hash. When the second plan cannot be built, no copy is looked for,
+their rows stay, and the run says so. `--dry-run` lists each copy and writes nothing; the confirmation names the copy
+count; the next steps name each kept copy for a delete by hand "unless it is yours", then the pinned `sync`. The pack
+remedies the CLI prints — the name-clash refusal's, `add`'s replace steps and `check`'s pack-integrity one — gain the
+same step by hand after `clean --pack`: "delete by hand each client copy it keeps and names, unless it is yours". `add`'s
+remedy for a pack no longer installed reads `sync`, that step, `add`, `sync` (`findPackCopies`,
+`src/cli/commands/clean.ts`; `remedyOf`, `src/emit/planner.ts`; `replaceSteps`, `src/cli/commands/add.ts`;
+`packReinstallSteps`, `src/pack/verifyInstalled.ts`). Before, `clean --pack` removed only `.stamity/packs/<id>/` and
+left the copies to the next `sync`, which no rendering can prove once the pack is gone.
+
+- GIVEN a Claude setup with `ops` added and synced WHEN `clean --pack ops -y` runs THEN every `.claude/` copy projected
+  from `ops` is deleted with `proof: "hash"`, its row is gone, and no other row moved; GIVEN one copy edited, or an
+  owner's file at a copy's name under a forged row, THEN it stays and is named; GIVEN `--dry-run` THEN each copy is listed
+  and nothing is written; GIVEN two packs THEN the other pack's copies and rows are untouched; GIVEN a deny-all policy
+  THEN the copies are still found and deleted (added 2026-10-08).
+- GIVEN the 1.11.0 `ops` clash WHEN `clean --pack ops -y` runs THEN it keeps and names the copies of the pack's own
+  artifacts and nothing else (a retired engine row and owner files under forged rows stay untouched), the unedited ones
+  keep their rows, and the printed remedy with its step by hand runs to a green `check`; GIVEN a setup that cannot be
+  planned without the pack THEN no copy is taken and every copy keeps its bytes and its row; GIVEN a scoped pack whose
+  edited file was moved out of its folder as `check`'s integrity remedy says THEN the printed steps run to a green
+  `check` (added 2026-10-08). Test evidence: `test/cli/commands/clean.test.ts`, `test/pack/upgradeRemedy.test.ts`,
+  `test/pack/installSmoke.e2e.test.ts`.
 
 ### REQ-PLUGIN-047 `check` takes the expected release, client set and install mode from its caller
 
@@ -1796,6 +1935,8 @@ rendering.
   016, with their units, declared defaults S1–S19 and their dated build amendments.
 - `.stamity/runs/2026-10-07_security-fixes/record.md` and its `ledger.jsonl` — the build, the review rounds and the
   sign-offs the "Amended 2026-10-07 (build)" sentences record.
+- `.stamity/runs/2026-10-08_maintainer-tooling/plan.md`, its `record.md` and its `ledger.jsonl` — the in-flow plan's
+  spec deltas, the declared defaults, the sign-offs and the ledger rows the paragraphs headed "Amended 2026-10-08" cite.
 - `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` (its Codex section) and
   `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md` — the two walks of
   2026-09-24 and 2026-09-26 the amendments cite.
