@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -1221,6 +1221,160 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
       vi.unstubAllEnvs();
     }
     expect(await backupsOf(target, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
+  /** The file a planted command would create, in the test's folder, spelled for git's shell. */
+  function markerPath(): string {
+    return join(tempDir().dir, "ran").replaceAll("\\", "/");
+  }
+
+  async function exists(path: string): Promise<boolean> {
+    try {
+      await stat(path);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // A repository writer can commit a folder shaped like a bare repository
+  // (`HEAD`, `objects/`, `refs/`, `config`) beside the file. Git run from the
+  // file's own folder discovers it before the root `.git`, runs its committed
+  // `core.fsmonitor`, and answers "tracked and clean" from its own index.
+  it("never runs a planted bare repository's core.fsmonitor beside .github/hooks/stamity.json, and takes the .bak", async () => {
+    const root = tempDir().dir;
+    const hooks = join(root, ".github", "hooks");
+    const marker = markerPath();
+    gitRepo(root);
+    await put(root, ".github/hooks/stamity.json", OWNER_HOOKS);
+    git(hooks, "init", "-q", "--bare", ".");
+    git(hooks, "--git-dir=.", "--work-tree=.", "add", "--", "stamity.json");
+    git(hooks, "--git-dir=.", "--work-tree=.", "commit", "-q", "-m", "planted");
+    git(hooks, "config", "--file", "config", "core.bare", "false");
+    git(hooks, "config", "--file", "config", "core.worktree", ".");
+    git(hooks, "config", "--file", "config", "core.fsmonitor", `touch '${marker}'; false`);
+    git(root, "add", "--", ".github/hooks/HEAD", ".github/hooks/config", ".github/hooks/index", ".github/hooks/objects", ".github/hooks/refs");
+    git(root, "commit", "-q", "-m", "plant a bare repository beside the hooks file");
+
+    const result = await safeWriteFile(join(hooks, "stamity.json"), ENGINE_HOOKS, rowFor(root, ".github/hooks/stamity.json", OWNER_HOOKS));
+
+    expect(await exists(marker)).toBe(false);
+    expect(result.warning).toContain("may be yours");
+    expect(result.notice).toBeUndefined();
+    expect(await backupsOf(root, ".github/hooks/stamity.json")).toEqual([OWNER_HOOKS]);
+  });
+
+  it("takes the .bak where the repository's top level is not the setup root", async () => {
+    const outer = tempDir().dir;
+    const root = join(outer, "app");
+    gitRepo(outer);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(outer, "app/AGENTS.md");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(result.warning).toContain("may be yours");
+    expect(result.notice).toBeUndefined();
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
+  it("takes the .bak with no setup root to run git from", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    const { boundaryDir: _root, ...noRoot } = rowFor(root, "AGENTS.md", OWNER_CHARTER);
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), noRoot);
+
+    expect(result.warning).toContain("may be yours");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
+  it("runs no clean filter on a stat-dirty tracked file, and still overwrites it with the notice", async () => {
+    const root = tempDir().dir;
+    const marker = markerPath();
+    gitRepo(root);
+    await put(root, ".gitattributes", "AGENTS.md filter=probe\n");
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, ".gitattributes");
+    commit(root, "AGENTS.md");
+    git(root, "config", "filter.probe.clean", `touch '${marker}'; cat`);
+    const later = new Date(Date.now() + 60_000);
+    await utimes(join(root, "AGENTS.md"), later, later);
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(await exists(marker)).toBe(false);
+    expect(result.warning).toBeUndefined();
+    expect(result.notice).toContain("its previous content is in git history");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+
+  it("reads a CRLF checkout of a tracked LF blob as tracked and clean, as a line-ending translation", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    const crlf = OWNER_CHARTER.replaceAll("\n", "\r\n");
+    await writeFile(join(root, "AGENTS.md"), crlf, "utf8");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", crlf));
+
+    expect(result.warning).toBeUndefined();
+    expect(result.notice).toContain("its previous content is in git history");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+
+  it("takes the .bak where the index stages bytes HEAD does not hold", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    const staged = `${OWNER_CHARTER}\nStaged.\n`;
+    await writeFile(join(root, "AGENTS.md"), staged, "utf8");
+    git(root, "add", "--", "AGENTS.md");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", staged));
+
+    expect(result.warning).toContain("may be yours");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([staged]);
+  });
+
+  it("takes the .bak where the file is unmerged, with three index entries", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    git(root, "checkout", "-q", "-b", "side");
+    await writeFile(join(root, "AGENTS.md"), `${OWNER_CHARTER}\nSide.\n`, "utf8");
+    commit(root, "AGENTS.md");
+    git(root, "checkout", "-q", "-");
+    await writeFile(join(root, "AGENTS.md"), `${OWNER_CHARTER}\nMain.\n`, "utf8");
+    commit(root, "AGENTS.md");
+    // A conflicted merge exits 1, which `git` would throw on.
+    spawnSync("git", ["-c", "user.name=Test", "-c", "user.email=test", "merge", "-q", "side"], { cwd: root, env: fixtureEnv() });
+    const conflicted = await readFile(join(root, "AGENTS.md"), "utf8");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", conflicted));
+
+    expect(conflicted).toContain("<<<<<<<");
+    expect(result.warning).toContain("may be yours");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([conflicted]);
+  });
+
+  it("overwrites a tracked, clean file in a SHA-256 repository with the notice", async () => {
+    const root = tempDir().dir;
+    git(root, "init", "-q", "--object-format=sha256");
+    git(root, "commit", "-q", "--allow-empty", "-m", "base");
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(result.warning).toBeUndefined();
+    expect(result.notice).toContain("its previous content is in git history");
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
   });
 
   // The controls: the engine's own files keep updating with no `.bak`.

@@ -4,8 +4,8 @@ import { constants as FS } from "node:fs";
 import type { Stats } from "node:fs";
 // `open` is aliased: `readPrefixFrontmatterField` already binds that name to its
 // frontmatter-fence cursor, and the local reads better than the import would.
-import { lstat, mkdir, open as openFile, readFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstat, mkdir, open as openFile, readFile, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   INJECTION_PATTERNS,
   INVISIBLE_SMUGGLING_CHARS,
@@ -987,12 +987,19 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-/** One git command by argument array, no shell, in `cwd`; rejects on any non-zero exit. */
+/**
+ * One read-only git command by argument array, no shell, run in the setup root;
+ * rejects on any non-zero exit. The leading options hold for every call:
+ * `--literal-pathspecs` reads the path as a name, `safe.bareRepository=explicit`
+ * (protected configuration, so honoured from the command line) refuses a
+ * committed folder shaped like a bare repository, and `core.fsmonitor=false`
+ * runs no file-system monitor command, whatever any config says.
+ */
 function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
   return new Promise((resolvePromise, rejectPromise) => {
     execFile(
       "git",
-      ["--literal-pathspecs", ...args],
+      ["--literal-pathspecs", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args],
       { cwd, env: gitCheckEnv(), encoding: "utf8", timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error === null) resolvePromise(stdout);
@@ -1002,32 +1009,59 @@ function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
   });
 }
 
+/** Git's blob id for `bytes`, in the object format the id length names (40 hex: SHA-1, 64: SHA-256). */
+function gitBlobId(bytes: Buffer, idLength: number): string {
+  const hash = createHash(idLength === 64 ? "sha256" : "sha1");
+  hash.update(`blob ${String(bytes.length)}\0`);
+  hash.update(bytes);
+  return hash.digest("hex");
+}
+
 /**
- * True when git tracks `filePath` and it has no uncommitted change, so the
- * bytes an overwrite replaces are in git history and the overwrite shows in
- * `git status`. Two checks, run in the file's own folder:
+ * True when git tracks `filePath` and the bytes this lane read there are the
+ * committed blob, so the bytes an overwrite replaces are in git history and the
+ * overwrite shows in `git status`. Every git call runs from `rootDir`, the
+ * setup root, with the file as a root-relative pathspec: run from the file's
+ * own folder, git would first discover whatever a repository writer committed
+ * there. No call reads work-tree content, so no clean filter or other
+ * attribute-assigned command runs:
  *
- * 1. `git ls-files -v --error-unmatch` — the index has the path, as an
- *    ordinary entry (tag `H`). An `assume-unchanged` (`h`) or `skip-worktree`
- *    (`S`) entry is not enough: `git diff` does not look at its work-tree
- *    bytes, which an owner may have edited on purpose.
- * 2. `git diff --quiet HEAD --` — the work tree and the index agree with
- *    `HEAD` at the path (a staged, uncommitted file differs from `HEAD`).
+ * 1. `git rev-parse --show-toplevel` — the repository git finds is the one
+ *    whose top level is the setup root. A setup inside a larger repository, or
+ *    in none, takes the `.bak`.
+ * 2. `git ls-files -s -v -z --error-unmatch` — the index holds the path as one
+ *    ordinary, merged regular-file entry (tag `H`, stage 0, mode `100644` or
+ *    `100755`), and names its blob. An `assume-unchanged` (`h`) or
+ *    `skip-worktree` (`S`) entry is refused, as before.
+ * 3. `git diff-index --cached --quiet HEAD` — the index agrees with `HEAD` at
+ *    the path (a staged, uncommitted file differs). `--cached` compares trees
+ *    and the index only and never opens the file.
+ * 4. In process, the blob id of `existingContent` equals the index's, read raw
+ *    or with `\r\n` read as `\n` (a checkout's line-ending translation, the
+ *    same equivalence {@link overwriteNeedsRecovery} applies).
  *
- * `false` when git is absent, the folder is outside a work tree, `HEAD` names
- * no commit, either check exits non-zero, or a check outlives its timeout:
- * the caller then takes the verified `.bak`.
+ * `false` when there is no setup root, git is absent, the root is outside a
+ * work tree or not its top level, `HEAD` names no commit, any call exits
+ * non-zero or outlives its timeout, or the bytes differ: the caller then takes
+ * the verified `.bak`.
  */
-async function isTrackedAndClean(filePath: string): Promise<boolean> {
-  const cwd = dirname(filePath);
-  const name = basename(filePath);
+async function isTrackedAndClean(filePath: string, existingContent: string, rootDir: string | undefined): Promise<boolean> {
+  if (rootDir === undefined) return false;
+  // `safeWriteFile` asserted the path inside `rootDir` before taking its lock,
+  // and git refuses a pathspec outside the repository besides.
+  const root = resolve(rootDir);
+  const pathspec = relative(root, filePath).split(sep).join("/");
   try {
-    const listed = (await runGitCheck(["ls-files", "-v", "--error-unmatch", "--", name], cwd))
-      .split("\n")
-      .filter((line) => line !== "");
-    if (listed.length === 0 || !listed.every((line) => line.startsWith("H "))) return false;
-    await runGitCheck(["diff", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", "--", name], cwd);
-    return true;
+    const topLevel = (await runGitCheck(["rev-parse", "--show-toplevel"], root)).replace(/\r?\n$/, "");
+    if ((await realpath(topLevel)) !== (await realpath(root))) return false;
+    // Anchored over the whole `-z` output, so it matches exactly one entry.
+    const listed = await runGitCheck(["ls-files", "-s", "-v", "-z", "--error-unmatch", "--", pathspec], root);
+    const entry = /^H (?:100644|100755) ([0-9a-f]{40}|[0-9a-f]{64}) 0\t([^\0]*)\0$/.exec(listed);
+    if (entry?.[2] !== pathspec) return false;
+    await runGitCheck(["diff-index", "--cached", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", "--", pathspec], root);
+    const blobId = String(entry[1]);
+    const folded = existingContent.replaceAll("\r\n", "\n");
+    return [existingContent, folded].some((text) => gitBlobId(Buffer.from(text, "utf8"), blobId.length) === blobId);
   } catch {
     return false;
   }
@@ -1310,7 +1344,7 @@ async function safeWriteFileLocked(
   // otherwise, and from a `.bak` whenever git cannot answer.
   const needsRecovery =
     managed && !fingerprintFails && !hashDrifted && overwriteNeedsRecovery(shownPath, existingContent, content);
-  const inGitHistory = needsRecovery && options.backup !== false && (await isTrackedAndClean(filePath));
+  const inGitHistory = needsRecovery && options.backup !== false && (await isTrackedAndClean(filePath, existingContent, options.boundaryDir));
   const unproven = fingerprintFails || (needsRecovery && !inGitHistory);
   const drifted = unproven || hashDrifted;
   if ((managed && !drifted) || options.backup === false) {
