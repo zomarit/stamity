@@ -330,7 +330,9 @@ describe("plugin-backed setup and the client's project-scope install write", () 
 // ── Repository mode: an operator's own keys ─────────────────────
 
 describe("repository mode and an operator's own keys", () => {
-  it("keys first, then init: model and enabledPlugins survive beside permissions and hooks, and check is clean", async () => {
+  // TEST CHANGE, justified (2026-10-08, inbox row 324): the title read "beside
+  // permissions and hooks"; the engine renders `hooks` alone in repository mode.
+  it("keys first, then init: model and enabledPlugins survive beside hooks, and check is clean", async () => {
     const root = await freshRepo();
     await seedSettings(root, `${JSON.stringify({ model: "opus", enabledPlugins: { "x@y": true } }, null, 2)}\n`);
 
