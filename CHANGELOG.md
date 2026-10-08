@@ -31,6 +31,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The Claude Code settings the engine writes pre-approve no tool.** The `Read`, `Grep` and
+  `Glob` allow rows are gone from `.claude/settings.json` on both routes, a repository setup and a
+  plugin-backed one: the engine writes only its hook entries there, and under a plugin that carries
+  the hooks it writes no member. A bare `Read` matches every file read, and a read inside the
+  project needs no rule, so the rows only removed prompts for reads outside it. An existing setup
+  loses the rows on its next `sync`. Where the ledger records each row (a 1.12.0 setup), they leave
+  with no backup, and an equal row it does not record is yours and stays. A ledger from 1.11.0 or
+  older records no row, so every bare `Read`, `Grep` or `Glob` row counts as the engine's: they
+  leave with no backup when the file is as the engine last wrote it, and behind a verified `.bak`,
+  with a warning naming them, when you have edited it since. A scoped row such as `Read(./src/**)`
+  stays. The capability matrix drops Claude's `permission-rows` cap.
+
+### Changed
+
+- **The eval run of record is named in one file.** `evals/run-of-record.json` holds its results
+  path, the release it shipped and any recorded exception, and the measurements page reads that
+  file and the run's own per-metric figures, so moving the run of record is a one-file change. A
+  malformed file is refused with an error naming it, and a PASS run of record beside a recorded
+  exception is refused, so a passing release resets the exception. The page renders unchanged.
+- **The release eval follows what changed, and a patch runs only the release lines it triggers.**
+  The release checklist and `evals/SET-v7.md` measure the full set when the diff since the run of
+  record touches a file that run hashes as an input (`content/**`, the emitted client files, the
+  eval set, the case sets, the eval skill and its copies, the eval scripts, a case's other
+  sources), when the scenario model, the judge model or the harness's pinned client version moved,
+  when the run of record is FAIL, or at the third release or 30 days since the last full run.
+  Otherwise the release notes say `carried forward from run N: no model-facing change`. Every
+  per-release checklist line names its trigger under `Runs when:`; the admin-roster and
+  publish-rights review runs on every release, a patch included. Two runs on different pinned
+  client versions are two configurations, so no case carries between them.
+- **CI skips work a pull request already proved.** A push to `main` whose tree `ci.yml`'s own
+  pull-request run passed skips the test matrix and both route lanes. A change made only of
+  records, specs, learnings or website pages runs one `lanes` job instead of the full matrix: the
+  learnings lane adds the CLI build and its `check`, and the website lane the docs site build and
+  the root typecheck. Any other path, or a diff that cannot be read, runs the full matrix, which
+  also builds the docs site when a website page changed or no diff was read. CONTRIBUTING and
+  GOVERNANCE say so.
+- **The eval price list covers Sonnet 5.5 and Haiku 4.5.** `evals/price-list.json` gains
+  `claude-sonnet-5-5` and `claude-haiku-4-5-20251001`, read off the vendor's pricing page on
+  2026-10-08.
+
+### Fixed
+
+- **The eval judge grades a bare `Not done:` answer instead of answering the brief.** The judge's
+  four input blocks went out unlabelled, so such an answer read as a draft (runs 40, 42 and 43).
+  The rubric now goes out unchanged, the brief under `## Brief`, the expected block under
+  `## Expected`, and the transcript under `Transcript under grading:` in a fence longer than any
+  backtick run it holds, on the scripted runner and in the `st-eval-run` skill alike. The harness
+  moves to `stamity-manual-responses-v2`, so no run composes across the change, and
+  `charter-floor-relaxation-refused` says a `Not done:` list naming the security review and the
+  gates as open gaps meets it.
+- **The QA form marks only a carried-forward row as carried forward.** It printed
+  "(carried forward: inputs unchanged)" beside every performed row, the walk's first recording
+  included.
+
 ## [1.12.0] - 2026-10-08
 
 ### Upgrading from 1.11.0
