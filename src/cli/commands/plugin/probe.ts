@@ -873,7 +873,8 @@ async function settingsHooksDuplicate(rootDir: string): Promise<DuplicateFinding
       remedy:
         `this client loads the file's own hooks key beside the plugin's hooks; remove the key — ` +
         `${packageCommand("sync")} and ${packageCommand("clean")} both remove a stale repository-mode ` +
-        `rendering by themselves — or keep ` +
+        `rendering by themselves, but clean also deletes every file this engine wrote and the whole ` +
+        `.stamity/ directory, so sync is the one for this row — or keep ` +
         `personal rows in .claude/settings.local.json, the client's per-user project settings`,
     },
   ];

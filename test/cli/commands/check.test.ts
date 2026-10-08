@@ -2962,6 +2962,10 @@ describe("check — plugin-duplicates", () => {
     // hook entry as well as `sync` (src/manifest/claudeSettings.ts::reduceClaudeSettingsToForeignContent),
     // so the remedy names both verbs rather than `sync` alone.
     expect(duplicates.detail).toMatch(/ sync and \S+(?: \S+)* clean both remove a stale repository-mode rendering/);
+    // `clean` is offered beside `sync`, so the remedy says what else it deletes (review/12).
+    expect(duplicates.detail).toContain(
+      "clean also deletes every file this engine wrote and the whole .stamity/ directory, so sync is the one for this row",
+    );
   });
 
   it("passes when a client records a plugin and nothing duplicates it", async () => {
