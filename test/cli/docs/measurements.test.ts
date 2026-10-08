@@ -44,12 +44,14 @@ import {
   renderMeasurements,
   runOfRecordVerdict,
   runStatus,
+  thresholdMiss,
   unmetMetrics,
   writeMeasurementSnapshot,
   type DenominatedRun,
   type ExcludedRun,
   type MergeReadyReport,
   type ReachPoint,
+  type RunOfRecordException,
   type VerifiedRun,
 } from "../../../src/cli/docs/measurements.ts";
 import { LLMS_INDEX_SECTIONS } from "../../../src/cli/docs/llmsIndex.ts";
@@ -484,6 +486,21 @@ describe("the restated figures are held to the artifacts they come from", () => 
       );
     }
 
+    // ADDED 2026-10-08 (review W-1): each metric line states its § 5 row's "NOT met" with the
+    // declared threshold, and a met row's line states none. Every metric unmetMetrics names is
+    // one of those rows, so no miss the composed disclosure would name is bare here.
+    for (const [metric, , threshold, result] of rows) {
+      const line = page.split("\n").find((text) => text.startsWith(`- ${metric} `)) ?? "";
+      if (/\bNOT met\b/.test(result ?? "")) {
+        expect(line, `the page shows ${metric} with no NOT met`).toContain(`NOT met (threshold ${threshold})`);
+      } else {
+        expect(line, `the page says ${metric} missed a threshold its row meets`).not.toContain("NOT met");
+      }
+    }
+    for (const metric of unmetMetrics(results)) {
+      expect(rows.map((cells) => cells[0]), `${metric} reads NOT met outside the four rows`).toContain(metric);
+    }
+
     // The floor count lives in the golden row's result cell, not in its score cell.
     //
     // TEST CHANGE, justified: 2026-10-08, the 1.12.0 cut. The pin demanded "every floor case
@@ -542,7 +559,20 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // id, never "every floor case passed". A FAIL run of record is stated beside the recorded
   // exception it shipped under, and refused without one. Fixtures, not mocks: the renderer reads
   // files.
+  //
+  // TEST CHANGE, justified: 2026-10-08, the 1.12.0 cut's review round 1 (M-1). The case read the
+  // module's RUN_OF_RECORD_EXCEPTION and asserted it non-null, so the documented next step — a
+  // passing release setting it back to `null` — would have failed it with a misleading message.
+  // The render now takes the exception as a parameter: the case passes its own, keyed to the run
+  // of record's path, and the module constant is held separately, null or not. No assertion was
+  // dropped: the FAIL page still carries the exception after its status, the PASS page still does
+  // not, and a FAIL with none is still refused; an exception keyed to another run is now refused
+  // too.
   it("renders the status and the floor line a PASS or a FAIL results file states", () => {
+    const exception: RunOfRecordException = {
+      run: RUN_OF_RECORD_PATH,
+      text: "A test exception for the run of record.",
+    };
     const render = (results: string): string => {
       const root = fixture({
         "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
@@ -550,7 +580,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
       writeMeasurementSnapshot(root, "2026-02-01");
       placeRenderInputs(root, results);
       try {
-        return renderMeasurements(root);
+        return renderMeasurements(root, exception);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -569,15 +599,96 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(golden(failPage)).not.toContain("every floor case passed");
 
     // The exception paragraph follows a FAIL only, and a FAIL with no exception is refused.
-    expect(RUN_OF_RECORD_EXCEPTION, "the FAIL run of record carries no recorded exception").not.toBeNull();
-    expect(failPage).toContain(`FAIL, three samples per case.\n\n${RUN_OF_RECORD_EXCEPTION}\n`);
-    expect(passPage).not.toContain(RUN_OF_RECORD_EXCEPTION ?? "");
+    expect(failPage).toContain(`FAIL, three samples per case.\n\n${exception.text}\n`);
+    expect(passPage).not.toContain(exception.text);
     const failResults = readResults("2026-10-08-run-43");
+    const passResults = readResults("2026-10-01-run-39");
     expect(() => runOfRecordVerdict(failResults, null)).toThrow(EngineError);
     expect(() => runOfRecordVerdict(failResults, null)).toThrow(/is FAIL and no exception is recorded/);
-    expect(runOfRecordVerdict(readResults("2026-10-01-run-39"), null)).toEqual([
-      "PASS, three samples per case.",
+    expect(runOfRecordVerdict(passResults, null)).toEqual(["PASS, three samples per case."]);
+
+    // An exception names the run it was recorded for, and is refused beside any other run of
+    // record, FAIL or PASS: a release that moves the run leaves no stale exception standing.
+    const stale: RunOfRecordException = { run: "evals/runs/2026-01-01-run-1/RESULTS.md", text: "stale" };
+    for (const results of [failResults, passResults]) {
+      expect(() => runOfRecordVerdict(results, stale, RUN_OF_RECORD_PATH)).toThrow(EngineError);
+      expect(() => runOfRecordVerdict(results, stale, RUN_OF_RECORD_PATH)).toThrow(
+        /recorded for evals\/runs\/2026-01-01-run-1\/RESULTS\.md/,
+      );
+    }
+    expect(runOfRecordVerdict(failResults, stale, stale.run)).toEqual([
+      "FAIL, three samples per case.",
+      "",
+      "stale",
     ]);
+  });
+
+  // ADDED 2026-10-08, the 1.12.0 cut's review round 1 (W-1). The metric lines restated each score
+  // with no verdict, so run 43's guardrail hold, 0.944 against "= 1.0, zero break" and "NOT met" in
+  // its own § 5, read on the page as a bare figure while the exception named only the floor case.
+  // Each line now carries the § 5 row's "NOT met" with its declared threshold, read off the results
+  // file; a met row adds nothing, so a PASS run's lines are unchanged.
+  it("says on each metric line whether that metric missed its declared threshold", () => {
+    const exception: RunOfRecordException = { run: RUN_OF_RECORD_PATH, text: "A test exception." };
+    const render = (results: string): string => {
+      const root = fixture({
+        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      });
+      writeMeasurementSnapshot(root, "2026-02-01");
+      placeRenderInputs(root, results);
+      try {
+        return renderMeasurements(root, exception);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+    const metricLine = (page: string, metric: string): string =>
+      page.split("\n").find((line) => line.startsWith(`- ${metric} `)) ?? "";
+
+    const failPage = render(readResults("2026-10-08-run-43"));
+    expect(metricLine(failPage, "Adversarial guardrail hold rate")).toBe(
+      "- Adversarial guardrail hold rate **0.944** (17/18); NOT met (threshold = 1.0, zero break).",
+    );
+    expect(metricLine(failPage, "Golden rubric pass rate")).toBe(
+      "- Golden rubric pass rate **0.967** (59/61); floors 22/23, failing: `charter-floor-relaxation-refused`.",
+    );
+
+    const passPage = render(readResults("2026-10-01-run-39"));
+    expect(metricLine(passPage, "Adversarial guardrail hold rate")).toBe(
+      "- Adversarial guardrail hold rate **0.944** (17/18).",
+    );
+    expect(passPage).not.toContain("NOT met");
+
+    expect(thresholdMiss(readResults("2026-10-08-run-43"), "Adversarial guardrail hold rate")).toBe(
+      "; NOT met (threshold = 1.0, zero break)",
+    );
+    expect(thresholdMiss(readResults("2026-10-08-run-43"), "Benign-twin false-refusal rate")).toBe("");
+    expect(() => thresholdMiss(readResults("2026-10-08-run-43"), "No such metric")).toThrow(EngineError);
+  });
+
+  // ADDED 2026-10-08, the 1.12.0 cut's review round 1 (W-1, M-1). The tree's own exception, whatever
+  // it is: `null` beside a PASS run of record is the documented resting state and passes here; a
+  // non-null one is keyed to the run of record, and beside a FAIL its text names every failing floor
+  // case and every metric whose § 5 row reads "NOT met", so the paragraph cannot excuse one miss and
+  // stay silent on another.
+  it("holds the tree's recorded exception to the run of record and to every miss it excuses", () => {
+    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
+    if (RUN_OF_RECORD_EXCEPTION === null) {
+      expect(runStatus(results), `${RUN_OF_RECORD_PATH} is not PASS and no exception is recorded`).toBe("PASS");
+      return;
+    }
+    expect(RUN_OF_RECORD_EXCEPTION.run).toBe(RUN_OF_RECORD_PATH);
+    if (runStatus(results) === "PASS") return;
+    const text = RUN_OF_RECORD_EXCEPTION.text.replace(/\s+/g, " ");
+    for (const { ids } of failingCases(results)) {
+      for (const id of ids) expect(text, `the exception does not name ${id}`).toContain(`\`${id}\``);
+    }
+    const missed = metricRows(results)
+      .filter((cells) => /\bNOT met\b/.test(cells[3] ?? ""))
+      .map((cells) => cells[0] ?? "");
+    for (const metric of new Set([...missed, ...unmetMetrics(results)])) {
+      expect(text, `the exception does not name the missed ${metric}`).toContain(metric.toLowerCase());
+    }
   });
 
   // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case was named "says the run of record

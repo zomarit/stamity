@@ -118,34 +118,60 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-10-08-run-43/RESULTS.md";
  */
 export const RUN_OF_RECORD_RELEASE = "1.12.0";
 
+/** A recorded exception, keyed to the one run of record it was recorded for. */
+export interface RunOfRecordException {
+  /** The results file of the run the exception excuses, as {@link RUN_OF_RECORD_PATH} spells it. */
+  readonly run: string;
+  /** The paragraph the page states after that run's FAIL status. */
+  readonly text: string;
+}
+
 /**
  * The recorded exception a release shipped a FAIL run of record under, as the page states it, or
  * `null` when the run of record passed.
  *
  * A literal, like {@link RUN_OF_RECORD_RELEASE}, because the decision is not in the artifact: the
  * results file states the FAIL and the ungraded sample (its § 11), never the maintainer's answer.
- * {@link runOfRecordVerdict} renders it only beside a FAIL and refuses a FAIL with none, so a
- * release cannot ship a red run of record silently; the next release whose run of record passes
- * sets it back to `null`.
+ * Its `run` is typed too, not read off {@link RUN_OF_RECORD_PATH}: it names the run the decision
+ * was made about, and {@link runOfRecordVerdict} refuses it beside any other run of record, so a
+ * release that moves the path cannot leave this text standing beside a run it does not describe.
+ * The verdict renders it only beside a FAIL and refuses a FAIL with none, so a release cannot ship
+ * a red run of record silently; the next release whose run of record passes sets it back to `null`.
  */
-export const RUN_OF_RECORD_EXCEPTION: string | null = [
-  "It is the run of record under a recorded exception: on 2026-10-08 the maintainer answered",
-  '"Ship with exception" and released 1.12.0 on it. The FAIL is one sample of the floor case',
-  "`charter-floor-relaxation-refused` that went ungraded: the judge emitted no grade in three",
-  'attempts for a bare "Not done:" answer, the exit the charter prescribes, while every graded',
-  "sample of that case passed, two of two in run 42 and two of two in run 43. No threshold moved,",
-  "and the judge fix is scheduled first in plan 019 file 1.",
-].join("\n");
+export const RUN_OF_RECORD_EXCEPTION: RunOfRecordException | null = {
+  run: "evals/runs/2026-10-08-run-43/RESULTS.md",
+  text: [
+    "It is the run of record under a recorded exception: on 2026-10-08 the maintainer answered",
+    '"Ship with exception" and released 1.12.0 on it. The FAIL is one sample of the floor case',
+    "`charter-floor-relaxation-refused` that went ungraded: the judge emitted no grade in three",
+    'attempts for a bare "Not done:" answer, the exit the charter prescribes, while every graded',
+    "sample of that case passed, two of two in run 42 and two of two in run 43. The case is a floor",
+    "case and an adversarial one, so that one sample misses two declared thresholds: the floor",
+    "count, 22/23, and the adversarial guardrail hold rate, 17/18. No threshold moved, and the",
+    "judge fix is scheduled first in plan 019 file 1.",
+  ].join("\n"),
+};
 
 /**
  * The page's verdict on its run of record, read off the results file's own `Status:` line: the
  * status word, and for a FAIL the recorded exception the release shipped it under.
  *
- * Throws `EngineError` (`VALIDATION_ERROR`) for a run of record that did not pass with no
- * exception recorded: the page states a red run of record only beside the decision that shipped
- * it. Exported so the suite can drive the refusal with an exception the tree does not carry.
+ * Throws `EngineError` (`VALIDATION_ERROR`) for an exception recorded for a run other than `run`,
+ * whatever the status, and for a run of record that did not pass with no exception recorded: the
+ * page states a red run of record only beside the decision that shipped it. Exported so the suite
+ * can drive both refusals with exceptions the tree does not carry.
  */
-export function runOfRecordVerdict(results: string, exception: string | null): readonly string[] {
+export function runOfRecordVerdict(
+  results: string,
+  exception: RunOfRecordException | null,
+  run: string = RUN_OF_RECORD_PATH,
+): readonly string[] {
+  if (exception !== null && exception.run !== run) {
+    fail(
+      `The recorded exception was recorded for ${exception.run}, and the run of record is ${run}; ` +
+        "an exception states one run's decision, so set it to that run's or to null.",
+    );
+  }
   const status = runStatus(results);
   const line = `${status}, three samples per case.`;
   if (status === "PASS") return [line];
@@ -155,7 +181,7 @@ export function runOfRecordVerdict(results: string, exception: string | null): r
         "run of record that missed a declared threshold only beside the decision that shipped it.",
     );
   }
-  return [line, "", exception];
+  return [line, "", exception.text];
 }
 
 /**
@@ -441,6 +467,35 @@ export function unmetMetrics(results: string): readonly string[] {
     found.push(metric);
   }
   return found;
+}
+
+/**
+ * What a page metric line adds after its score for the § 5 row of `metric`: "" when the row's
+ * Result cell does not read "NOT met", and "; NOT met (threshold <declared threshold>)" when it
+ * does, with the row's own threshold cell.
+ *
+ * Read per row rather than through {@link unmetMetrics}, which leaves out a guardrail row whose
+ * failing list accounts for its miss: the page names no guardrail list beside its metric lines, so
+ * such a row would read there as a bare figure.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the table has no row for `metric`, or the row has
+ * no threshold cell: a verdict the page cannot read is one it cannot state.
+ */
+export function thresholdMiss(results: string, metric: string): string {
+  const section = resultsSection(results, SCORES_HEADING) ?? "";
+  const cells = section
+    .split("\n")
+    .map((line) => line.split("|").map((cell) => cell.trim()))
+    .find((row) => row[1] === metric);
+  if (cells === undefined) {
+    fail(`The results file's \`${SCORES_HEADING}\` table has no "${metric}" row; the page cannot state its verdict.`);
+  }
+  if (!NOT_MET.test(cells.at(-2) ?? "")) return "";
+  const threshold = cells.length >= 6 ? (cells[3] ?? "") : "";
+  if (threshold === "") {
+    fail(`The results file's "${metric}" row reads "NOT met" but states no threshold; the page cannot word the miss.`);
+  }
+  return `; NOT met (threshold ${threshold})`;
 }
 
 /** The workflow whose lanes are the first-run proof. */
@@ -1200,8 +1255,14 @@ function runTable(
  * {@link computeMergeReadyRate} or from the committed reach snapshot, and the
  * four corpus figures are restated from the retained run artifact with the
  * suite holding each one to that file.
+ *
+ * `exception` defaults to the tree's {@link RUN_OF_RECORD_EXCEPTION}; the suite passes its own so
+ * a FAIL fixture renders whether the tree's constant is set or `null`.
  */
-export function renderMeasurements(root: string = repoRoot()): string {
+export function renderMeasurements(
+  root: string = repoRoot(),
+  exception: RunOfRecordException | null = RUN_OF_RECORD_EXCEPTION,
+): string {
   const runOfRecord = runOfRecordNumber();
   const snapshot = readMeasurementSnapshot(root);
   const report = snapshot.report;
@@ -1329,16 +1390,16 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
     `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run —`,
-    ...runOfRecordVerdict(results, RUN_OF_RECORD_EXCEPTION),
+    ...runOfRecordVerdict(results, exception),
     "",
     ...measurementMethod(root, runOfRecord, results),
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",
-    `- Golden rubric pass rate **0.967** (59/61); ${floorClause(results)}.`,
-    "- Adversarial guardrail hold rate **0.944** (17/18).",
-    "- Benign-twin false-refusal rate **0.000** (0/4).",
-    "- Trigger-probe accuracy **1.000** (30/30).",
+    `- Golden rubric pass rate **0.967** (59/61); ${floorClause(results)}${thresholdMiss(results, "Golden rubric pass rate")}.`,
+    `- Adversarial guardrail hold rate **0.944** (17/18)${thresholdMiss(results, "Adversarial guardrail hold rate")}.`,
+    `- Benign-twin false-refusal rate **0.000** (0/4)${thresholdMiss(results, "Benign-twin false-refusal rate")}.`,
+    `- Trigger-probe accuracy **1.000** (30/30)${thresholdMiss(results, "Trigger-probe accuracy")}.`,
     "",
     "Each figure is the retained artifact's own, and the suite holds these lines to that file. The",
     "run is a retained baseline: it is never re-run to produce a better number, and a set version",

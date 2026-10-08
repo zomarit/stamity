@@ -631,25 +631,37 @@ For 1.12.0 this supersedes the 2026-10-01 criterion that README, the doctrine an
 state its FAIL, the cause and the exception.
 
 - **The verdict is read, not typed.** The page's status word is the run of record's own `Status:`
-  line, through `runOfRecordVerdict` (`src/cli/docs/measurements.ts:148`, called at `:1332`), and
-  the golden line's floor clause is `floorClause` (`:387`, called at `:1338`): "every floor case
+  line, through `runOfRecordVerdict` (`src/cli/docs/measurements.ts:164`, called at `:1393`), and
+  the golden line's floor clause is `floorClause` (`:413`, called at `:1399`): "every floor case
   passed, N/N" when the § 5 golden row's floor count is complete, else "floors N/M, failing:" and
   every failing floor id that row lists; a count that disagrees with the list throws
-  `VALIDATION_ERROR`.
-- **A FAIL run of record is stated beside its exception.** `RUN_OF_RECORD_EXCEPTION` (`:131`) is a
-  literal, like the release, because the decision is in neither results file. It renders after a
-  FAIL status only, and a FAIL run of record with none recorded makes the render throw. The next
-  release whose run of record passes sets it back to `null`.
+  `VALIDATION_ERROR`. Each metric line then carries its § 5 row's own verdict through
+  `thresholdMiss` (`:484`, called at `:1399-1402`): nothing when the row's Result cell is met, and
+  "; NOT met (threshold <the row's declared threshold>)" when it reads "NOT met", so run 43's
+  guardrail line reads "**0.944** (17/18); NOT met (threshold = 1.0, zero break)." and a PASS
+  run's lines are unchanged. Added 2026-10-08 on the cut's review (W-1): the line was a bare
+  figure, and the exception named only the floor case.
+- **A FAIL run of record is stated beside its exception.** `RUN_OF_RECORD_EXCEPTION` (`:141`) is a
+  literal, like the release, because the decision is in neither results file. It is keyed to the
+  results file of the run it was recorded for, and the render refuses an exception keyed to any
+  other run of record, FAIL or PASS, so a release that moves the run leaves no stale exception
+  standing. It renders after a FAIL status only, and a FAIL run of record with none recorded makes
+  the render throw. Its text names both misses of run 43's one ungraded sample: the floor case and
+  the guardrail hold. The next release whose run of record passes sets it back to `null`.
 
 - GIVEN a run of record whose results file reads `Status: **PASS**` with floors N/N WHEN the page
   renders THEN it states "PASS, three samples per case." and "every floor case passed, N/N."; GIVEN
   one reading `Status: **FAIL**` with a failing floor case THEN it states "FAIL, three samples per
   case.", then the recorded exception, and a golden line naming the floor count and every failing
-  floor id, never "every floor case passed"; GIVEN a FAIL with no exception THEN the render throws.
-  Test evidence by name: in `test/cli/docs/measurements.test.ts`, the case "renders the status and
-  the floor line a PASS or a FAIL results file states" (run 39's and run 43's real results files)
-  and the status-aware floor pin in "quotes the run of record's four metric scores as that run's
-  results file states them".
+  floor id, never "every floor case passed"; GIVEN a FAIL with no exception, or an exception keyed
+  to another run, THEN the render throws; GIVEN a § 5 row reading "NOT met" THEN that metric's line
+  states "NOT met" with the row's threshold, and a met row's line states none. Test evidence by
+  name: in `test/cli/docs/measurements.test.ts`, the cases "renders the status and the floor line a
+  PASS or a FAIL results file states" (run 39's and run 43's real results files), "says on each
+  metric line whether that metric missed its declared threshold" and "holds the tree's recorded
+  exception to the run of record and to every miss it excuses", the status-aware floor pin and the
+  per-row verdict pin in "quotes the run of record's four metric scores as that run's results file
+  states them".
 
 ### REQ-PROVE-021 — QA automation and binding
 
