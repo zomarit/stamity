@@ -71,11 +71,11 @@ archived); 389 `e03a48d1`.
 
 ## Remainders
 
-Nine rows settled only in part. Each remainder is cut, covered or re-filed. The walk decided rows, not remainders, so
-each remainder takes the walk's own rule by its reader's verdict (`remainderVerdict` in the final verdicts, the second
-read agreeing where one ran): a remainder judged below the floor is cut, as the walk cut below-floor rows, and any
-other remainder is re-filed with its place (the maintainer's sign-off on the review's finding, run
-`2026-10-08_maintainer-tooling`, `review/88`).
+Eleven rows settled only in part, row 519 with two remainders, so twelve entries below. Each remainder is cut, covered
+or re-filed. The walk decided rows, not remainders, so each remainder takes the walk's own rule by its reader's
+verdict (`remainderVerdict` in the final verdicts, the second read agreeing where one ran): a remainder judged below
+the floor is cut, as the walk cut below-floor rows, and any other remainder is re-filed with its place (the
+maintainer's sign-off on the review's finding, run `2026-10-08_maintainer-tooling`, `review/88`).
 
 - Row 43: the remainder (a rate limit hitting only the compare calls still reads the generic note) is cut as below the
   floor, as the walk cut below-floor rows; the check fails closed either way.

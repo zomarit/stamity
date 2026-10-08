@@ -186,13 +186,15 @@ describe("collectManifestErrors", () => {
   // mismatch text verbatim, so a committed manifest must not carry anything but a
   // version there — a terminal control sequence least of all.
   it("refuses a generatedBy that is not a semantic version, and accepts a prerelease one", () => {
-    for (const generatedBy of ["1.12.0\u001b[2J", "dev", "1.12", " 1.12.0", "v1.12.0"]) {
+    for (const generatedBy of ["1.12.0\u001b[2J", "dev", "1.12", " 1.12.0", "v1.12.0", "1.12.0\n", "01.12.0", "1.12.0+"]) {
       const errors = collectManifestErrors({ ...fullManifest(), generatedBy });
       expect(errors, JSON.stringify(generatedBy)).toEqual([
         '`generatedBy` must be a semantic version string (e.g. "1.2.3")',
       ]);
     }
-    for (const generatedBy of ["1.12.0", "1.12.0-acme.1", "0.0.0-test"]) {
+    // review/134: build metadata too, as the pinned CLI call accepts a version
+    // (`src/shared/cliCall.ts`) and `init` stamps the engine's version verbatim.
+    for (const generatedBy of ["1.12.0", "1.12.0-acme.1", "0.0.0-test", "1.12.0+build.5", "1.12.0-acme.1+build.5"]) {
       expect(collectManifestErrors({ ...fullManifest(), generatedBy }), generatedBy).toEqual([]);
     }
   });

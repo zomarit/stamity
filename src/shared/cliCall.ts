@@ -51,6 +51,16 @@ const SEMVER =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 /**
+ * True when `version` has {@link SEMVER}'s shape exactly as written: no
+ * leading `v`, no whitespace, no character outside the grammar. The manifest
+ * reader holds `generatedBy` to it (`../manifest/manifest.ts`, review/134), so
+ * every version a pinned call accepts is one a manifest may record.
+ */
+export function isSemverShaped(version: string): boolean {
+  return SEMVER.test(version);
+}
+
+/**
  * How the pinned call may obtain the package. Optional everywhere, and its
  * absence is the canonical case, so every caller that names none renders the
  * `npx -y` call it always did.

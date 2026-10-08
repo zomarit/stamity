@@ -29,6 +29,7 @@ import {
   type Tool,
 } from "../types/core.ts";
 import type { DetectedSummary } from "../types/detect.ts";
+import { isSemverShaped } from "../shared/cliCall.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   INSTALL_MODES,
@@ -961,11 +962,12 @@ export function collectManifestErrors(data: unknown): string[] {
   if (typeof data.version !== "string" || semver.valid(data.version) === null) {
     errors.push(`\`version\` must be a semantic version string (e.g. "${MANIFEST_VERSION}")`);
   }
-  // Semver too, and exactly as written (no `v`, no padding): `clean`'s refusal
-  // and `check --expect-version` print it verbatim, so a hand-edited manifest
-  // must not carry anything else there, a terminal control sequence least of
-  // all (review/133). Every writer stamps the engine's own version.
-  if (typeof data.generatedBy !== "string" || semver.valid(data.generatedBy) !== data.generatedBy) {
+  // Semver too, exactly as written (no `v`, no whitespace, no control
+  // character): `clean`'s refusal and `check --expect-version` print it
+  // verbatim (review/133). The grammar is the pinned CLI call's, build metadata
+  // included, since `init` stamps the engine's own version as the call accepts
+  // it (review/134); `semver.valid` drops the `+build` part.
+  if (typeof data.generatedBy !== "string" || !isSemverShaped(data.generatedBy)) {
     errors.push('`generatedBy` must be a semantic version string (e.g. "1.2.3")');
   }
   for (const field of ["createdAt", "updatedAt"] as const) {
