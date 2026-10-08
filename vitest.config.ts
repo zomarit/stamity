@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig, type TestUserConfig } from "vitest/config";
+import { BaseSequencer, type TestSpecification } from "vitest/node";
 
 /**
  * A private temp root per run, `<os temp>/stamity-vitest-<pid>`, handed to every worker and every
@@ -22,6 +23,54 @@ export function privateTempRoot(setupFile: string, base: string, pid: number): P
 }
 
 /**
+ * The Windows shard each serialized file runs on, so the serial group is split across both
+ * shards by weight instead of by vitest's path hash, which put four of the five on shard 2 in
+ * every one of the twelve full pull-request runs below and made that shard the run's critical
+ * path (median Test step 8.62 min against 6.68 min).
+ *
+ * Weights: the per-file median duration in the Windows `Test` step logs (vitest's per-file line
+ * in the `windows-fixtures` group) of the full pull-request CI runs 37753891122, 37753727570,
+ * 37752273949, 37711737961, 37697142531, 37689274319, 37685980044, 37671784749, 37652601608,
+ * 37648263478, 37566717697 and 37470450928 (2026-10-06 to 10-08, read 2026-10-08):
+ *
+ *   test/upstream/lane.test.ts                   117.7s
+ *   test/ci/pluginLifecycle.test.ts               64.2s
+ *   test/pack/installSmoke.e2e.test.ts            63.4s
+ *   test/emit/crossClientGoldens.test.ts          25.0s
+ *   test/cli/commands/syncMcpOwnership.test.ts    18.9s
+ *
+ * Assigned greedily, heaviest first, each to the shard with the smaller serialized total:
+ * 142.7s against 146.5s, the closest split the five admit. The lighter set goes to shard 1,
+ * which also runs the dogfood check and the leak gate step after its tests.
+ */
+export const WINDOWS_SHARD_OF: Readonly<Record<string, 1 | 2>> = {
+  "test/upstream/lane.test.ts": 1,
+  "test/emit/crossClientGoldens.test.ts": 1,
+  "test/ci/pluginLifecycle.test.ts": 2,
+  "test/pack/installSmoke.e2e.test.ts": 2,
+  "test/cli/commands/syncMcpOwnership.test.ts": 2,
+};
+
+/**
+ * Vitest's own sequencer with one change to `shard`: on a two-way split, a file named in
+ * `WINDOWS_SHARD_OF` runs on the shard the table gives it, and every other file is split by
+ * vitest's hash as before. Any other shard count is vitest's split, unchanged. Vitest constructs
+ * the sequencer from the root config's `sequence.sequencer`, and only `fixtureScheduling("win32")`
+ * installs it.
+ */
+export class WindowsFixtureSequencer extends BaseSequencer {
+  override async shard(files: TestSpecification[]): Promise<TestSpecification[]> {
+    const { shard, root } = this.ctx.config;
+    if (shard?.count !== 2) return super.shard(files);
+    const placed = (spec: TestSpecification): 1 | 2 | undefined =>
+      WINDOWS_SHARD_OF[relative(root, spec.moduleId).replaceAll("\\", "/")];
+    const pinned = files.filter((spec) => placed(spec) === shard.index);
+    const rest = await super.shard(files.filter((spec) => placed(spec) === undefined));
+    return [...pinned, ...rest];
+  }
+}
+
+/**
  * 2026-09-11: Windows CI first showed overlapping stalls in three real-disk
  * suites. CI 34588320202 later timed out the all-four fresh-directory golden
  * while it ran in the ordinary parallel group. Isolate these four fixtures,
@@ -33,8 +82,10 @@ export function privateTempRoot(setupFile: string, base: string, pid: number): P
  * The host-level cause remains unproved; an actual Windows run must verify this.
  * Vitest groups execute in order; one worker serializes only the second group:
  * https://vitest.dev/config/sequence.html#sequence-grouporder
+ * 2026-10-08: the serialized group is split across the two Windows shards by
+ * `WINDOWS_SHARD_OF`; every file in `heavy` needs a row there.
  */
-export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfig, "include" | "projects"> {
+export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfig, "include" | "projects" | "sequence"> {
   if (platform !== "win32") return {};
   const heavy = [
     "test/upstream/lane.test.ts",
@@ -47,6 +98,8 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
     // Inline projects inherit arrays by concatenation. An empty root include
     // lets each project select its own files; the root still owns coverage.
     include: [],
+    // Read from the root config only: the pool builds one sequencer for the run.
+    sequence: { sequencer: WindowsFixtureSequencer },
     projects: [
       {
         extends: true,

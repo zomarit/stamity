@@ -4,8 +4,13 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { createVitest } from "vitest/node";
-import config, { fixtureScheduling, privateTempRoot } from "../../vitest.config.ts";
+import { BaseSequencer, createVitest } from "vitest/node";
+import config, {
+  fixtureScheduling,
+  privateTempRoot,
+  WINDOWS_SHARD_OF,
+  WindowsFixtureSequencer,
+} from "../../vitest.config.ts";
 import setup, {
   PRIVATE_TMP_PREFIX,
   prepareTempRoot,
@@ -57,6 +62,14 @@ describe("Windows fixture scheduling", () => {
         .map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
       const parallelFiles = specs.filter((spec) => spec.project === parallel)
         .map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
+      // TEST CHANGE, additive (unit b1-shard-balance): a serialized file with no shard in the
+      // table would fall back to the hash split, so the table is checked against the group first
+      // and the failure names the place to add it. The win32 config also installs the sequencer.
+      expect(
+        Object.keys(WINDOWS_SHARD_OF).toSorted(),
+        "every file fixtureScheduling serializes needs a shard in WINDOWS_SHARD_OF (vitest.config.ts)",
+      ).toEqual(fixtureFiles.toSorted());
+      expect(runner.config.sequence.sequencer).toBe(WindowsFixtureSequencer);
       expect(fixtureFiles.toSorted()).toEqual(HEAVY);
       expect(parallelFiles.toSorted()).toEqual(files.filter((file) => !HEAVY.includes(file)).toSorted());
       expect(parallelFiles.filter((file) => fixtureFiles.includes(file))).toEqual([]);
@@ -80,6 +93,54 @@ describe("Windows fixture scheduling", () => {
         .toEqual([join(ROOT, "test/support/globalSetup.ts").replaceAll("\\", "/")]);
       // Coverage/reporting remain root-level and aggregate both projects.
       expect(runner.config.coverage.thresholds).toEqual(config.test?.coverage?.thresholds);
+    } finally {
+      await runner.close();
+    }
+  });
+
+  // ADDED 2026-10-08 (run 2026-10-08_maintainer-tooling, unit b1-shard-balance): vitest's hash
+  // split put four of the five serial files on the second Windows shard in every one of twelve
+  // full pull-request runs, so that shard set the run's critical path. The sharding is driven
+  // through the sequencer the win32 config installs, the one vitest's pool constructs.
+  it("splits the serial files across both Windows shards, every test file in exactly one", async () => {
+    const shardFiles = async (index: number): Promise<string[]> => {
+      const runner = await createVitest(
+        { watch: false, run: true, config: false, root: ROOT, shard: `${index}/2` },
+        { test: { ...config.test, ...fixtureScheduling("win32") } },
+      );
+      try {
+        const specs = await runner.globTestSpecifications();
+        const Sequencer = runner.config.sequence.sequencer;
+        const picked = await new Sequencer(runner).shard(specs);
+        return picked.map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
+      } finally {
+        await runner.close();
+      }
+    };
+    const [first, second] = await Promise.all([shardFiles(1), shardFiles(2)]);
+    const files = (await readdir(new URL("../../test/", import.meta.url), { recursive: true }))
+      .filter((file) => file.endsWith(".test.ts"))
+      .map((file) => `test/${file.replaceAll("\\", "/")}`);
+    expect([...first, ...second].toSorted()).toEqual(files.toSorted());
+    expect(first.filter((file) => second.includes(file))).toEqual([]);
+    expect(new Set(first).size).toBe(first.length);
+    expect(new Set(second).size).toBe(second.length);
+    expect(first.filter((file) => HEAVY.includes(file)).length, `shard 1/2: ${first.filter((file) => HEAVY.includes(file)).join(", ")}`)
+      .toBeGreaterThanOrEqual(2);
+    expect(second.filter((file) => HEAVY.includes(file)).length, `shard 2/2: ${second.filter((file) => HEAVY.includes(file)).join(", ")}`)
+      .toBeGreaterThanOrEqual(2);
+  });
+
+  it("leaves a shard count other than two to vitest's own hash split", async () => {
+    const runner = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT, shard: "1/3" },
+      { test: { ...config.test, ...fixtureScheduling("win32") } },
+    );
+    try {
+      const specs = await runner.globTestSpecifications();
+      const names = (picked: readonly { moduleId: string }[]): string[] => picked.map((spec) => spec.moduleId);
+      expect(names(await new WindowsFixtureSequencer(runner).shard(specs)))
+        .toEqual(names(await new BaseSequencer(runner).shard(specs)));
     } finally {
       await runner.close();
     }

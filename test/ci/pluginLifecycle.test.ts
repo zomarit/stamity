@@ -143,6 +143,16 @@ import { document } from "./downstreamFixture.js";
  * 3-in-13 red rate, ten greens in a row happen by chance only about 7% of the time (0.77^10) — and
  * if a red recurs inside the serialized group the next lever is a win32 STUB_BUILD_MS derived from
  * the measured 17.0s to 24.8s base, not a wider MARGIN.
+ *
+ * THE LEVER FIRED, 2026-10-08 (inbox row 212). A red recurred inside the serialized group: on CI
+ * 35929524900 (check (windows, node 24)) "rebuilds the same bytes and the same two commit shas" ran
+ * its build past the 48s budget ("exited null"), where main's green leg 35865569535 took 17.7s for
+ * the same case. So on win32 STUB_BUILD_MS is WIN32_STUB_BASE_MS (25s, the measured 17.0s to 24.8s
+ * rounded up) times 4, the margin REAL_BUILD_MS takes over a measured base: 100s. Every other
+ * platform keeps 6s times MARGIN. A hook or case that wraps a stub build gets STUB_CASE_MS, one
+ * STEP_MS above the build's own budget, so the build's spawn timeout, which reports the child's
+ * output, fires before vitest's bare timeout does. Like the scheduling, this counts as verified
+ * only on CI's Windows legs (QA row 5 of run 2026-10-08_maintainer-tooling).
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -161,8 +171,16 @@ const V2 = "1.9.0-fixture.2";
 const VERSIONS = [V1, V2] as const;
 
 const MARGIN = 8;
-/** One `--runtime <stub>` build of both versions and all four roots: 4.95s measured. */
-const STUB_BUILD_MS = 6_000 * MARGIN;
+/** The win32 stub build, measured: 17.0s to 24.8s in ten passing Windows legs, rounded up. */
+const WIN32_STUB_BASE_MS = 25_000;
+/**
+ * One `--runtime <stub>` build of both versions and all four roots: 4.95s measured on darwin, its
+ * base times MARGIN; on win32 the measured Windows base times 4 (the header's lever, row 212).
+ */
+function stubBuildBudget(platform: NodeJS.Platform): number {
+  return platform === "win32" ? WIN32_STUB_BASE_MS * 4 : 6_000 * MARGIN;
+}
+const STUB_BUILD_MS = stubBuildBudget(process.platform);
 /**
  * One build that packs this checkout and installs a production graph: 67.60s measured. The margin
  * is 4 rather than 8 because the dominant term is `npm ci` against a registry, whose own budget
@@ -173,6 +191,11 @@ const REAL_BUILD_MS = 70_000 * 4;
 const STEP_MS = 120_000;
 /** A whole three-state walk: an install, a setup, three status reads, an update, a rollback. */
 const WALK_MS = 600_000;
+/** A hook or case around one stub build: the build's budget plus one step for its other work. */
+function stubCaseBudget(platform: NodeJS.Platform): number {
+  return stubBuildBudget(platform) + STEP_MS;
+}
+const STUB_CASE_MS = stubCaseBudget(process.platform);
 
 /** The repository must be built for a real runtime to exist — `test/ci/pluginRuntime.test.ts`'s rule. */
 const BUILT = existsSync(join(REPO_ROOT, "dist", "cli.js"));
@@ -337,6 +360,28 @@ function withoutArchiveDigests(manifest: ReleaseManifest): unknown {
   return { ...manifest, packages: manifest.packages.map((entry) => ({ ...entry, sha256: null, bytes: null })) };
 }
 
+// ── the stub-build budget per platform (inbox row 212) ───────────────────────────────────
+
+describe("plugin-lifecycle-fixture, the stub-build budget", () => {
+  it("gives win32 four times its measured base and every other platform the darwin budget", () => {
+    expect(stubBuildBudget("win32")).toBe(100_000);
+    expect(stubBuildBudget("darwin")).toBe(48_000);
+    expect(stubBuildBudget("linux")).toBe(48_000);
+  });
+
+  it.each(["win32", "darwin", "linux"] as const)(
+    "keeps every hook or case that wraps a %s stub build above the build's own budget",
+    (platform) => {
+      expect(stubCaseBudget(platform)).toBeGreaterThan(stubBuildBudget(platform));
+    },
+  );
+
+  it("runs this host on its own platform's budgets", () => {
+    expect(STUB_BUILD_MS).toBe(stubBuildBudget(process.platform));
+    expect(STUB_CASE_MS).toBe(stubCaseBudget(process.platform));
+  });
+});
+
 // ── group one: the fixture the walks run on ──────────────────────────────────────────────
 
 describe("plugin-lifecycle-fixture, the two trees", () => {
@@ -355,7 +400,8 @@ describe("plugin-lifecycle-fixture, the two trees", () => {
     first = join(out, V1);
     second = join(out, V2);
     release = JSON.parse(readFileSync(join(first, "release.json"), "utf8")) as typeof release;
-  }, STUB_BUILD_MS);
+  // TEST CHANGE, timeout only (b1-shard-balance, row 212): one STEP_MS over the build budget.
+  }, STUB_CASE_MS);
 
   /** `<version 2>`'s text with every mention of its version rewritten to `<version 1>`'s. */
   const asFirstVersion = (path: string): string => readFileSync(join(second, path), "utf8").replaceAll(V2, V1);
@@ -484,7 +530,8 @@ describe("plugin-lifecycle-fixture, the two trees", () => {
       // re-run its own publish step idempotently.
       expect(gitOut(["show-ref"], join(again, "remote.git"))).toBe(gitOut(["show-ref"], join(out, "remote.git")));
     },
-    STUB_BUILD_MS,
+    // TEST CHANGE, timeout only (b1-shard-balance, row 212): one STEP_MS over the build budget.
+    STUB_CASE_MS,
   );
 });
 
@@ -649,7 +696,8 @@ describe("plugin-lifecycle-fixture, the checkout copy and the push", () => {
       expect(existsSync(join(out, V1, "claude", "skills", "fixture-marker", "SKILL.md"))).toBe(false);
       expect(existsSync(join(out, V2, "claude", "skills", "fixture-marker", "SKILL.md"))).toBe(true);
     },
-    STUB_BUILD_MS,
+    // TEST CHANGE, timeout only (b1-shard-balance, row 212): one STEP_MS over the build budget.
+    STUB_CASE_MS,
   );
 
   it(
@@ -688,7 +736,8 @@ describe("plugin-lifecycle-fixture, the checkout copy and the push", () => {
       expect(result.stderr).toContain("plugin-lifecycle-fixture: FAIL - git");
       expect(result.stderr).toContain("push https://127.0.0.1:9/o/r.git refs/tags/");
     },
-    STUB_BUILD_MS,
+    // TEST CHANGE, timeout only (b1-shard-balance, row 212): one STEP_MS over the build budget.
+    STUB_CASE_MS,
   );
 });
 
