@@ -1,4 +1,4 @@
-<!-- STAMITY:BEGIN v1.11.0 -->
+<!-- STAMITY:BEGIN v1.12.0 -->
 # Charter
 
 The always-on context for agents working in this repository. Everything else loads on demand:
@@ -12,7 +12,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint, oxlint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: solo — seeded from git history at init; change via `npx -y @zomarit/stamity@1.11.0 config`.
+- Maturity tier: solo — seeded from git history at init; change via `npx -y @zomarit/stamity@1.12.0 config`.
 
 ### Verification gates
 

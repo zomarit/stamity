@@ -21,7 +21,7 @@ Two targets. Detect before step 1 and state the detected target in the first res
 There is no separate doctor verb: `stamity check` is the install probe and its exit code is
 the signal — any failing probe or unclean drift exits non-zero, warnings alone exit 0.
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.11.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell. A `not-runnable` result on both names the install as the unresolved input.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.12.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell. A `not-runnable` result on both names the install as the unresolved input.
 
 Every repo gate named here — the probe above, and the failing-test gate at step 6 — runs in a
 `test-runner` spawn, never in this command's own context. The runner returns a gate-by-gate

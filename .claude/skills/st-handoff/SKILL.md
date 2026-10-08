@@ -23,18 +23,18 @@ expiry screen, the transition table, the archive and the sweep. What is left
 here is the judgment it has no opinion about — when a boundary is worth a
 handoff, what the eight sections say, and how a drift report is read.
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.11.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.12.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, no handoff file is written by hand; the eight sections go into the closing message under `Not done: handoff not written — CLI unavailable`, with the exact `prepare` command to run once the CLI resolves.
 
 ## Quick Start
 
 | Mode | Use when | Run |
 |---|---|---|
-| `prepare` | work is in flight and the session or tool is about to change | `npx -y @zomarit/stamity@1.11.0 handoff prepare --title … --summary … --from-tool <client>` |
-| `resume` | picking up work someone (or some other tool) left | `npx -y @zomarit/stamity@1.11.0 handoff resume <id>` |
-| `list` | deciding what is resumable, and why something is not | `npx -y @zomarit/stamity@1.11.0 handoff list` |
-| `complete` | the work a handoff described is finished | `npx -y @zomarit/stamity@1.11.0 handoff complete <id>` |
-| `prune` | stale entries have accumulated | `npx -y @zomarit/stamity@1.11.0 handoff prune` |
+| `prepare` | work is in flight and the session or tool is about to change | `npx -y @zomarit/stamity@1.12.0 handoff prepare --title … --summary … --from-tool <client>` |
+| `resume` | picking up work someone (or some other tool) left | `npx -y @zomarit/stamity@1.12.0 handoff resume <id>` |
+| `list` | deciding what is resumable, and why something is not | `npx -y @zomarit/stamity@1.12.0 handoff list` |
+| `complete` | the work a handoff described is finished | `npx -y @zomarit/stamity@1.12.0 handoff complete <id>` |
+| `prune` | stale entries have accumulated | `npx -y @zomarit/stamity@1.12.0 handoff prune` |
 
 Every mode takes `--json` for one machine-readable document and `--dry-run` to
 run the gates without writing. A refusal names the rule it applied: fix that,
@@ -85,7 +85,7 @@ session-start index lists what verifies and silently omits the rest.
 3. **Write it through the verb**, with the body on stdin or in a file:
 
 ```bash
-npx -y @zomarit/stamity@1.11.0 handoff prepare --title "cache warmup path" --from-tool claude \
+npx -y @zomarit/stamity@1.12.0 handoff prepare --title "cache warmup path" --from-tool claude \
   --to-tool cursor --summary "<one line the next session reads first>" \
   --body-file <path>          # or pipe the body on stdin
 ```

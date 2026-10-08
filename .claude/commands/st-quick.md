@@ -115,7 +115,7 @@ product code changed as well as an artifact authored is not Tier 1 — it leaves
    location, retires it after the gate is green. A row whose `Ref:` names a ledger row is
    retired there first, through
    `npx --no stamity ledger close --run <its run> --id <row id> --retired "fixed by /st-quick"`
-   (`npx -y @zomarit/stamity@1.11.0` in place of `npx --no stamity` where npm refuses); then its bullet leaves
+   (`npx -y @zomarit/stamity@1.12.0` in place of `npx --no stamity` where npm refuses); then its bullet leaves
    `.stamity/inbox.md`. When neither form runs, the bullet stays. The batch report names each
    row retired — quick keeps no run record, so the report is the record — and each named row
    left in place, with why.
