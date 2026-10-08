@@ -29,6 +29,7 @@ import {
   MERGE_READY_RULE,
   REACH_SNAPSHOT_PATH,
   RUNS_DIR,
+  RUN_OF_RECORD_FILE,
   RUN_OF_RECORD_PATH,
   RUN_OF_RECORD_EXCEPTION,
   RUN_OF_RECORD_RELEASE,
@@ -41,6 +42,7 @@ import {
   priorCompleteRun,
   readMeasurementSnapshot,
   readReachSnapshot,
+  readRunOfRecord,
   renderMeasurements,
   runOfRecordVerdict,
   runStatus,
@@ -51,6 +53,7 @@ import {
   type ExcludedRun,
   type MergeReadyReport,
   type ReachPoint,
+  type RunOfRecord,
   type RunOfRecordException,
   type VerifiedRun,
 } from "../../../src/cli/docs/measurements.ts";
@@ -413,17 +416,41 @@ function expectFullRunOfRecord(results: string, page: string, chain: readonly st
  * prior complete run's results file as well (its status and failing cases), read under the same
  * root, so a composed fixture also carries the prior run its composition section names — the real
  * one from this tree. Fixture setup only: no assertion of a caller moved.
+ *
+ * TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record. The renderer reads which run is of
+ * record, its release and its exception from `evals/run-of-record.json` under the root it renders,
+ * so the fixture writes that file too and places the results file at the path it names: the tree's
+ * run of record by default, or the run a case names. The exception defaults to `null` beside a PASS
+ * and to a test exception keyed to the path beside any other status, the one shape the renderer
+ * accepts for each. Fixture setup only: no assertion of a caller moved.
  */
-function placeRenderInputs(root: string, results: string): void {
+function placeRenderInputs(root: string, results: string, ofRecord: Partial<RunOfRecord> = {}): void {
   mkdirSync(dirname(join(root, REACH_SNAPSHOT_PATH)), { recursive: true });
   writeFileSync(
     join(root, REACH_SNAPSHOT_PATH),
     readFileSync(join(REPO_ROOT, REACH_SNAPSHOT_PATH), "utf-8"),
   );
-  mkdirSync(dirname(join(root, RUN_OF_RECORD_PATH)), { recursive: true });
-  writeFileSync(join(root, RUN_OF_RECORD_PATH), results);
+  const path = ofRecord.path ?? RUN_OF_RECORD_PATH;
+  const exception =
+    ofRecord.exception !== undefined
+      ? ofRecord.exception
+      : runStatus(results) === "PASS"
+        ? null
+        : { run: path, text: "A test exception for the fixture's run of record." };
+  placeRunOfRecord(root, { path, release: ofRecord.release ?? RUN_OF_RECORD_RELEASE, exception });
+  mkdirSync(dirname(join(root, path)), { recursive: true });
+  writeFileSync(join(root, path), results);
   const prior = priorCompleteRun(results);
   if (prior !== null) placeResults(root, prior, readResults(prior));
+}
+
+/** Write `evals/run-of-record.json` under a fixture root, as the tree's file is laid out. */
+function placeRunOfRecord(root: string, body: unknown): void {
+  mkdirSync(dirname(join(root, RUN_OF_RECORD_FILE)), { recursive: true });
+  writeFileSync(
+    join(root, RUN_OF_RECORD_FILE),
+    typeof body === "string" ? body : `${JSON.stringify(body, null, 2)}\n`,
+  );
 }
 
 /** Write a results file at `evals/runs/<id>/RESULTS.md` under a fixture root. */
@@ -568,19 +595,25 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // dropped: the FAIL page still carries the exception after its status, the PASS page still does
   // not, and a FAIL with none is still refused; an exception keyed to another run is now refused
   // too.
+  //
+  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record (inbox row 601's remainder). The PASS
+  // render passed the same exception as the FAIL one and asserted the page ignored it; a PASS beside
+  // a recorded exception is now refused, so the next passing release must reset the exception or the
+  // page does not render. The PASS page is rendered with `null`, the one shape a PASS accepts, and
+  // the refusal of a PASS beside the exception is asserted below. Every other assertion is unchanged.
   it("renders the status and the floor line a PASS or a FAIL results file states", () => {
     const exception: RunOfRecordException = {
       run: RUN_OF_RECORD_PATH,
       text: "A test exception for the run of record.",
     };
-    const render = (results: string): string => {
+    const render = (results: string, recorded: RunOfRecordException | null = exception): string => {
       const root = fixture({
         "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       });
       writeMeasurementSnapshot(root, "2026-02-01");
       placeRenderInputs(root, results);
       try {
-        return renderMeasurements(root, exception);
+        return renderMeasurements(root, recorded);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -588,7 +621,10 @@ describe("the restated figures are held to the artifacts they come from", () => 
     const golden = (page: string): string =>
       page.split("\n").find((line) => line.startsWith("- Golden rubric pass rate")) ?? "";
 
-    const passPage = render(readResults("2026-10-01-run-39"));
+    expect(() => render(readResults("2026-10-01-run-39"))).toThrow(
+      /PASS and an exception is still recorded/,
+    );
+    const passPage = render(readResults("2026-10-01-run-39"), null);
     expect(passPage).toContain("PASS, three samples per case.");
     expect(golden(passPage)).toContain("; every floor case passed, 23/23.");
 
@@ -628,6 +664,10 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // its own § 5, read on the page as a bare figure while the exception named only the floor case.
   // Each line now carries the § 5 row's "NOT met" with its declared threshold, read off the results
   // file; a met row adds nothing, so a PASS run's lines are unchanged.
+  //
+  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record. A PASS beside a recorded exception is
+  // now refused (the case above), so the render passes the exception beside the FAIL file only and
+  // `null` beside the PASS one. Every assertion is unchanged.
   it("says on each metric line whether that metric missed its declared threshold", () => {
     const exception: RunOfRecordException = { run: RUN_OF_RECORD_PATH, text: "A test exception." };
     const render = (results: string): string => {
@@ -637,7 +677,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
       writeMeasurementSnapshot(root, "2026-02-01");
       placeRenderInputs(root, results);
       try {
-        return renderMeasurements(root, exception);
+        return renderMeasurements(root, runStatus(results) === "PASS" ? null : exception);
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -671,6 +711,12 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // non-null one is keyed to the run of record, and beside a FAIL its text names every failing floor
   // case and every metric whose § 5 row reads "NOT met", so the paragraph cannot excuse one miss and
   // stay silent on another.
+  //
+  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record (inbox row 601's remainder). A PASS
+  // run of record beside a non-null exception returned early here and passed; the generator now
+  // refuses that pair, so the early return became the assertion that a run of record carrying an
+  // exception is not PASS. Strictly stronger: every pair this case passed before that is still legal
+  // passes, and the one it let through now fails.
   it("holds the tree's recorded exception to the run of record and to every miss it excuses", () => {
     const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
     if (RUN_OF_RECORD_EXCEPTION === null) {
@@ -678,7 +724,10 @@ describe("the restated figures are held to the artifacts they come from", () => 
       return;
     }
     expect(RUN_OF_RECORD_EXCEPTION.run).toBe(RUN_OF_RECORD_PATH);
-    if (runStatus(results) === "PASS") return;
+    expect(
+      runStatus(results),
+      `${RUN_OF_RECORD_PATH} is PASS and ${RUN_OF_RECORD_FILE} still records an exception for it`,
+    ).not.toBe("PASS");
     const text = RUN_OF_RECORD_EXCEPTION.text.replace(/\s+/g, " ");
     for (const { ids } of failingCases(results)) {
       for (const id of ids) expect(text, `the exception does not name ${id}`).toContain(`\`${id}\``);
@@ -902,6 +951,142 @@ describe("a full run of record", () => {
     expect(fullPage.slice(0, fullPage.indexOf("## Corpus behaviour"))).toBe(
       composedPage.slice(0, composedPage.indexOf("## Corpus behaviour")),
     );
+  });
+});
+
+// ADDED 2026-10-08, unit c2-run-of-record (REQ-PROVE-032; inbox rows 337 and 601's remainder). The
+// run of record, its release and its exception were three TypeScript literals, so moving the run of
+// record was a two-file change at best. They are read from `evals/run-of-record.json` now, under the
+// root the page renders, so a scratch root carrying its own file renders its own run. Fixtures, not
+// mocks: the renderer reads files, and a temporary directory holding them is that dependency.
+describe("evals/run-of-record.json names the run of record", () => {
+  const PASS_RUN = "2026-10-01-run-39";
+  const PASS_PATH = `evals/runs/${PASS_RUN}/RESULTS.md`;
+
+  /** A scratch root holding a snapshot and one release run, which every render reads. */
+  const scratch = (): string => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    writeMeasurementSnapshot(root, "2026-02-01");
+    return root;
+  };
+
+  it("is what the module's three constants read", () => {
+    const file = JSON.parse(readFileSync(join(REPO_ROOT, RUN_OF_RECORD_FILE), "utf-8")) as RunOfRecord;
+    expect(readRunOfRecord(REPO_ROOT)).toEqual(file);
+    expect(RUN_OF_RECORD_PATH).toBe(file.path);
+    expect(RUN_OF_RECORD_RELEASE).toBe(file.release);
+    expect(RUN_OF_RECORD_EXCEPTION).toEqual(file.exception);
+  });
+
+  it("renders the run and release a scratch root's own file names", () => {
+    const root = scratch();
+    try {
+      placeRenderInputs(root, readResults(PASS_RUN), { path: PASS_PATH, release: "1.11.0", exception: null });
+      const page = renderMeasurements(root);
+      expect(page).toContain(`[run 39](../${PASS_PATH}) — the 1.11.0 release run —`);
+      expect(page).toContain("PASS, three samples per case.");
+      expect(page).toContain("The scoring rule is SET-v6, which is what run 39's own score table");
+      expect(page, "the scratch render still names the tree's run of record").not.toContain(RUN_OF_RECORD_PATH);
+      expect(page).not.toContain(`the ${RUN_OF_RECORD_RELEASE} release run`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a file naming a results file that is absent", () => {
+    const root = scratch();
+    try {
+      placeRenderInputs(root, readResults(PASS_RUN), { path: PASS_PATH, release: "1.11.0", exception: null });
+      const absent = "evals/runs/2026-12-31-run-99/RESULTS.md";
+      placeRunOfRecord(root, { path: absent, release: "1.99.0", exception: null });
+      expect(() => renderMeasurements(root)).toThrow(EngineError);
+      expect(() => renderMeasurements(root)).toThrow(
+        /No results file at evals\/runs\/2026-12-31-run-99\/RESULTS\.md/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a malformed file, naming it", () => {
+    const valid = { path: PASS_PATH, release: "1.11.0", exception: null };
+    const malformed: readonly [string, unknown][] = [
+      ["a path outside evals/runs/", { ...valid, path: "docs/RESULTS.md" }],
+      ["a path that climbs out", { ...valid, path: "evals/runs/../../etc/RESULTS.md" }],
+      ["a path to another file of the run", { ...valid, path: `evals/runs/${PASS_RUN}/summary.json` }],
+      ["a two-part release", { ...valid, release: "1.12" }],
+      ["a release that is not a string", { ...valid, release: 1.12 }],
+      ["no path", { release: "1.11.0", exception: null }],
+      ["no exception key", { path: PASS_PATH, release: "1.11.0" }],
+      ["an exception with no text", { ...valid, exception: { run: PASS_PATH } }],
+      ["an exception that is a string", { ...valid, exception: "shipped anyway" }],
+      ["an array", [valid]],
+      ["not JSON", "{ path: evals/runs }\n"],
+    ];
+    for (const [label, body] of malformed) {
+      const root = mkdtempSync(join(tmpdir(), "stamity-run-of-record-"));
+      try {
+        placeRunOfRecord(root, body);
+        expect(() => readRunOfRecord(root), label).toThrow(EngineError);
+        expect(() => readRunOfRecord(root), label).toThrow(/evals\/run-of-record\.json/);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+
+    // An absent file is refused the same way, and the valid shapes still read.
+    const empty = mkdtempSync(join(tmpdir(), "stamity-run-of-record-"));
+    try {
+      expect(() => readRunOfRecord(empty)).toThrow(/No evals\/run-of-record\.json/);
+      placeRunOfRecord(empty, valid);
+      expect(readRunOfRecord(empty)).toEqual(valid);
+      const excepted = { ...valid, exception: { run: PASS_PATH, text: "Shipped on a decision." } };
+      placeRunOfRecord(empty, excepted);
+      expect(readRunOfRecord(empty)).toEqual(excepted);
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a PASS run of record beside a recorded exception", () => {
+    const passResults = readResults(PASS_RUN);
+    const text = "An exception the passing release forgot to reset.";
+    expect(() => runOfRecordVerdict(passResults, { run: RUN_OF_RECORD_PATH, text })).toThrow(EngineError);
+    expect(() => runOfRecordVerdict(passResults, { run: RUN_OF_RECORD_PATH, text })).toThrow(
+      /PASS and an exception is still recorded/,
+    );
+    expect(() => runOfRecordVerdict(passResults, { run: RUN_OF_RECORD_PATH, text })).toThrow(
+      /set exception to null in evals\/run-of-record\.json/,
+    );
+
+    // Through the page: the file a passing release left with the old exception does not render.
+    const root = scratch();
+    try {
+      placeRenderInputs(root, passResults, {
+        path: PASS_PATH,
+        release: "1.11.0",
+        exception: { run: PASS_PATH, text },
+      });
+      expect(() => renderMeasurements(root)).toThrow(/PASS and an exception is still recorded/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("is the one place src/ and scripts/ learn the run of record's path from", () => {
+    const spelled: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(join(REPO_ROOT, dir), { withFileTypes: true })) {
+        const path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) walk(path);
+        else if (readFileSync(join(REPO_ROOT, path), "utf-8").includes(RUN_OF_RECORD_PATH)) spelled.push(path);
+      }
+    };
+    walk("src");
+    walk("scripts");
+    expect(spelled, `these files spell ${RUN_OF_RECORD_PATH}; read it from ${RUN_OF_RECORD_FILE}`).toEqual([]);
   });
 });
 
@@ -1174,6 +1359,34 @@ describe("the rule, exercised against fixture trees", () => {
     );
     expect(report.rate).toEqual({ n: 2, d: 2, value: 1 });
     expect(report.generated).toBe("2026-01-03");
+  });
+
+  // ADDED 2026-10-08, unit c2-run-of-record (inbox row 344). A run id is a date and a lower-case
+  // slug with no dot (`src/runs/layout.ts`), so the 1.11.0 and 1.12.0 release runs are named
+  // `_release-1-11-0` and `_release-1-12-0`, and the dotted-only pattern read no version off them.
+  // Both spellings yield the dotted version; a mixed one is no release run.
+  it("reads a release run's version off a dashed folder name as well as a dotted one", () => {
+    const root = fixture({
+      "2026-09-30_release-1-11-0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-10-01_release-1.12.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-10-02_release-1.13-0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    writeFileSync(
+      join(root, "CHANGELOG.md"),
+      ["# Changelog", "", "## [1.13.0] - 2026-10-02", "", "## [1.12.0] - 2026-10-01", "", "## [1.11.0] - 2026-09-30", ""].join(
+        "\n",
+      ),
+    );
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(evidenceFor(report.numerator, "2026-09-30_release-1-11-0")).toBe(
+      "released version 1.11.0 in CHANGELOG",
+    );
+    expect(evidenceFor(report.numerator, "2026-10-01_release-1.12.0")).toBe(
+      "released version 1.12.0 in CHANGELOG",
+    );
+    expect(evidenceFor(report.numerator, "2026-10-02_release-1.13-0")).toBe(MERGE_EVIDENCE_NONE);
   });
 
   it("holds a run back on each clause it misses, one reason each", () => {

@@ -83,40 +83,14 @@ export const SNAPSHOT_REFRESH_COMMAND = "node scripts/merge-ready-rate.mjs --wri
 /** Repo-relative path of the committed reach fetch artifact. */
 export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 
-/**
- * The eval run of record, linked from the page relative to `docs/`.
- *
- * The release run of record, which since 2026-10-08 is the composed 1.12.0 run:
- * run 42 measured every case in full and one sample of one floor case went
- * ungraded (its judge emitted no grade in three attempts), and run 43 re-measured
- * that case, carrying the other 112 with provenance under SET-v7's incremental
- * rule. Run 43 reads FAIL on that one case — one of its samples went ungraded the
- * same way while both graded samples passed — and 1.12.0 ships on it under the
- * maintainer's recorded exception of 2026-10-08. The page restates this run's own
- * status and figures because a composed run scores the whole set under the
- * unchanged rule and thresholds — it is the artifact that states the set's score,
- * not a partial one.
- *
- * This path is the page's single source of truth for WHICH run is of record:
- * the prose reads the run's number back off it through
- * {@link runOfRecordNumber} rather than spelling it beside the link, because
- * the two spellings that used to sit there were left saying "run 30" by the
- * release that moved this path.
- */
-export const RUN_OF_RECORD_PATH = "evals/runs/2026-10-08-run-43/RESULTS.md";
+/** Repo-relative path of the file that names the eval run of record, its release and its exception. */
+export const RUN_OF_RECORD_FILE = "evals/run-of-record.json";
 
-/**
- * The release the run of record measured, as the page names it.
- *
- * A literal, and the only one in this block, because it is not in the artifact:
- * a run states the candidate commit it measured, never the version that
- * candidate ships as — the version is decided at the release, after the run.
- * Verify it against the `Candidate:` line of {@link RUN_OF_RECORD_PATH} and the
- * release that shipped that commit. Exported so `test/docsPages.test.ts` holds
- * README and the doctrine, which type the same run and release by hand, to this
- * one.
- */
-export const RUN_OF_RECORD_RELEASE = "1.12.0";
+/** A run of record's results file: `evals/runs/<date>-run-<n>/RESULTS.md`, and nothing else. */
+const RUN_OF_RECORD_RESULTS = /^evals\/runs\/\d{4}-\d{2}-\d{2}-run-\d+\/RESULTS\.md$/;
+
+/** A released version, `major.minor.patch`. */
+const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 
 /** A recorded exception, keyed to the one run of record it was recorded for. */
 export interface RunOfRecordException {
@@ -126,40 +100,119 @@ export interface RunOfRecordException {
   readonly text: string;
 }
 
+/** What {@link RUN_OF_RECORD_FILE} holds. */
+export interface RunOfRecord {
+  /** The run of record's results file, repo-relative. */
+  readonly path: string;
+  /** The release the run of record measured. */
+  readonly release: string;
+  /** The recorded exception a FAIL run of record shipped under, or `null` for a PASS. */
+  readonly exception: RunOfRecordException | null;
+}
+
+/**
+ * Read {@link RUN_OF_RECORD_FILE} under `root`: which run is of record, the release it measured, and
+ * the recorded exception a FAIL shipped under.
+ *
+ * One file, so moving the run of record is a one-file change (REQ-PROVE-032). The release and the
+ * exception are in it rather than in the results file because neither is in the artifact: a run
+ * states the candidate commit it measured, never the version that candidate ships as, and the
+ * results file states a FAIL, never the maintainer's answer to it.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) naming the file when it is absent, is not JSON, or holds
+ * a `path` other than an eval run's `RESULTS.md`, a `release` other than `major.minor.patch`, or an
+ * `exception` other than `null` or `{run, text}` strings. The path is checked by shape because the
+ * page links it and reads it under the root; whether the file is there is the render's check.
+ */
+export function readRunOfRecord(root: string): RunOfRecord {
+  const target = join(root, RUN_OF_RECORD_FILE);
+  if (!existsSync(target)) {
+    fail(`No ${RUN_OF_RECORD_FILE} under ${root}; the page cannot state which eval run is of record.`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(target, "utf-8"));
+  } catch (error) {
+    fail(`${RUN_OF_RECORD_FILE} is not JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const shape = `{"path": "evals/runs/<date>-run-<n>/RESULTS.md", "release": "<major>.<minor>.<patch>", "exception": null or {"run", "text"}}`;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    fail(`${RUN_OF_RECORD_FILE} holds no object; it holds ${shape}.`);
+  }
+  const { path, release, exception } = parsed as Record<string, unknown>;
+  if (typeof path !== "string" || !RUN_OF_RECORD_RESULTS.test(path)) {
+    fail(`${RUN_OF_RECORD_FILE} names path ${JSON.stringify(path)}, which is not an eval run's RESULTS.md; it holds ${shape}.`);
+  }
+  if (typeof release !== "string" || !RELEASE_VERSION.test(release)) {
+    fail(`${RUN_OF_RECORD_FILE} names release ${JSON.stringify(release)}, which is not <major>.<minor>.<patch>.`);
+  }
+  if (exception === null) return { path, release, exception: null };
+  const recorded = exception as Record<string, unknown> | undefined;
+  if (
+    typeof recorded !== "object" ||
+    Array.isArray(recorded) ||
+    typeof recorded.run !== "string" ||
+    typeof recorded.text !== "string"
+  ) {
+    fail(`${RUN_OF_RECORD_FILE} holds an exception that is neither null nor {"run", "text"} strings.`);
+  }
+  return { path, release, exception: { run: recorded.run, text: recorded.text } };
+}
+
+/**
+ * This checkout's run of record, read once at module load from {@link RUN_OF_RECORD_FILE} under the
+ * root this module resolves its other inputs from.
+ *
+ * Since 2026-10-08 that is the composed 1.12.0 run: run 42 measured every case in full and one
+ * sample of one floor case went ungraded, and run 43 re-measured that case, carrying the other 112
+ * with provenance under SET-v7's incremental rule. Run 43 reads FAIL on that one case, and 1.12.0
+ * ships on it under the maintainer's recorded exception, which the file carries. The page restates
+ * the run's own status and figures because a composed run scores the whole set under the unchanged
+ * rule and thresholds.
+ */
+const TREE_RUN_OF_RECORD = readRunOfRecord(repoRoot());
+
+/**
+ * The eval run of record, linked from the page relative to `docs/`, as {@link RUN_OF_RECORD_FILE}
+ * names it.
+ *
+ * This path is the page's single source of truth for WHICH run is of record: the prose reads the
+ * run's number back off it through {@link runOfRecordNumber} rather than spelling it beside the
+ * link, because the two spellings that used to sit there were left saying "run 30" by the release
+ * that moved this path. Exported, with the release and the exception, so `test/docsPages.test.ts`
+ * holds README and the doctrine, which type the same run and release by hand, to the file.
+ */
+export const RUN_OF_RECORD_PATH = TREE_RUN_OF_RECORD.path;
+
+/**
+ * The release the run of record measured, as {@link RUN_OF_RECORD_FILE} names it. Verify it against
+ * the `Candidate:` line of {@link RUN_OF_RECORD_PATH} and the release that shipped that commit.
+ */
+export const RUN_OF_RECORD_RELEASE = TREE_RUN_OF_RECORD.release;
+
 /**
  * The recorded exception a release shipped a FAIL run of record under, as the page states it, or
- * `null` when the run of record passed.
+ * `null` when the run of record passed, as {@link RUN_OF_RECORD_FILE} names it.
  *
- * A literal, like {@link RUN_OF_RECORD_RELEASE}, because the decision is not in the artifact: the
- * results file states the FAIL and the ungraded sample (its § 11), never the maintainer's answer.
- * Its `run` is typed too, not read off {@link RUN_OF_RECORD_PATH}: it names the run the decision
+ * Its `run` is recorded too, not read off {@link RUN_OF_RECORD_PATH}: it names the run the decision
  * was made about, and {@link runOfRecordVerdict} refuses it beside any other run of record, so a
  * release that moves the path cannot leave this text standing beside a run it does not describe.
- * The verdict renders it only beside a FAIL and refuses a FAIL with none, so a release cannot ship
- * a red run of record silently; the next release whose run of record passes sets it back to `null`.
+ * The verdict renders it only beside a FAIL, refuses a FAIL with none, and refuses a PASS with one,
+ * so a release cannot ship a red run of record silently and the next release whose run of record
+ * passes sets it back to `null`.
  */
-export const RUN_OF_RECORD_EXCEPTION: RunOfRecordException | null = {
-  run: "evals/runs/2026-10-08-run-43/RESULTS.md",
-  text: [
-    "It is the run of record under a recorded exception: on 2026-10-08 the maintainer answered",
-    '"Ship with exception" and released 1.12.0 on it. The FAIL is one sample of the floor case',
-    "`charter-floor-relaxation-refused` that went ungraded: the judge emitted no grade in three",
-    'attempts for a bare "Not done:" answer, the exit the charter prescribes, while every graded',
-    "sample of that case passed, two of two in run 42 and two of two in run 43. The case is a floor",
-    "case and an adversarial one, so that one sample misses two declared thresholds: the floor",
-    "count, 22/23, and the adversarial guardrail hold rate, 17/18. No threshold moved, and the",
-    "judge fix is scheduled first in plan 019 file 1.",
-  ].join("\n"),
-};
+export const RUN_OF_RECORD_EXCEPTION: RunOfRecordException | null = TREE_RUN_OF_RECORD.exception;
 
 /**
  * The page's verdict on its run of record, read off the results file's own `Status:` line: the
  * status word, and for a FAIL the recorded exception the release shipped it under.
  *
  * Throws `EngineError` (`VALIDATION_ERROR`) for an exception recorded for a run other than `run`,
- * whatever the status, and for a run of record that did not pass with no exception recorded: the
- * page states a red run of record only beside the decision that shipped it. Exported so the suite
- * can drive both refusals with exceptions the tree does not carry.
+ * whatever the status; for a run of record that did not pass with no exception recorded, because
+ * the page states a red run of record only beside the decision that shipped it; and for a PASS with
+ * an exception still recorded, because a decision about a FAIL left standing beside a pass describes
+ * a run the page no longer has. Exported so the suite can drive the refusals with exceptions the
+ * tree does not carry.
  */
 export function runOfRecordVerdict(
   results: string,
@@ -174,7 +227,15 @@ export function runOfRecordVerdict(
   }
   const status = runStatus(results);
   const line = `${status}, three samples per case.`;
-  if (status === "PASS") return [line];
+  if (status === "PASS") {
+    if (exception !== null) {
+      fail(
+        "The run of record is PASS and an exception is still recorded for it; set exception to null " +
+          `in ${RUN_OF_RECORD_FILE}.`,
+      );
+    }
+    return [line];
+  }
   if (exception === null) {
     fail(
       `The run of record is ${status} and no exception is recorded for it; the page states a ` +
@@ -185,15 +246,15 @@ export function runOfRecordVerdict(
 }
 
 /**
- * The run of record's own number, read off {@link RUN_OF_RECORD_PATH}.
+ * The run of record's own number, read off the results path it is given.
  *
  * Derived rather than typed: the number and the path are one fact, and a second
  * spelling of it is a pin that drifts the next time a release moves the run.
  */
-function runOfRecordNumber(): string {
-  const number = /-run-(\d+)\/[^/]+$/.exec(RUN_OF_RECORD_PATH)?.[1];
+function runOfRecordNumber(path: string): string {
+  const number = /-run-(\d+)\/[^/]+$/.exec(path)?.[1];
   if (number === undefined) {
-    fail(`${RUN_OF_RECORD_PATH} names no run number; the page cannot state which run is of record.`);
+    fail(`${path} names no run number; the page cannot state which run is of record.`);
   }
   return number;
 }
@@ -592,8 +653,18 @@ const PULL_REQUEST = /#(\d+)\b/g;
 /** A released version heading in the changelog. */
 const RELEASE_HEADING = /^## \[(\d+\.\d+\.\d+)]/gm;
 
-/** A release run's own version, read off its directory name. */
-const RELEASE_RUN = /_release-(\d+\.\d+\.\d+)$/;
+/**
+ * A release run's own version, read off its directory name, in either spelling: `_release-1.11.0`,
+ * and `_release-1-11-0`, which is what the run-id grammar (`src/runs/layout.ts`, no dot in a slug)
+ * makes of it. The two separators must agree; {@link releaseRunVersion} joins the parts with dots.
+ */
+const RELEASE_RUN = /_release-(\d+)([.-])(\d+)\2(\d+)$/;
+
+/** The dotted version a release run's directory name carries, or `undefined` for any other run. */
+function releaseRunVersion(run: string): string | undefined {
+  const match = RELEASE_RUN.exec(run);
+  return match === null ? undefined : `${match[1] ?? ""}.${match[3] ?? ""}.${match[4] ?? ""}`;
+}
 
 /** A run directory's date prefix. */
 const RUN_DATE = /^(\d{4}-\d{2}-\d{2})_/;
@@ -846,7 +917,7 @@ function mergeEvidence(
   versions: ReadonlySet<string>,
   pullRequests: ReadonlySet<string>,
 ): string {
-  const released = RELEASE_RUN.exec(run)?.[1];
+  const released = releaseRunVersion(run);
   if (released !== undefined && versions.has(released)) {
     return `released version ${released} in CHANGELOG`;
   }
@@ -1094,12 +1165,12 @@ export function readReachSnapshot(root: string = repoRoot()): ReachSnapshot {
  * Read so the page can say how the run was measured: {@link priorCompleteRun} over this text is
  * what chooses between the composed paragraph and the full baseline's.
  */
-function readRunOfRecordResults(root: string): string {
-  const path = join(root, RUN_OF_RECORD_PATH);
-  if (!existsSync(path)) {
-    fail(`No results file at ${RUN_OF_RECORD_PATH}; the page cannot state how its run of record was measured.`);
+function readRunOfRecordResults(root: string, path: string): string {
+  const target = join(root, path);
+  if (!existsSync(target)) {
+    fail(`No results file at ${path}; the page cannot state how its run of record was measured.`);
   }
-  return readFileSync(path, "utf-8");
+  return readFileSync(target, "utf-8");
 }
 
 /** An eval run's directory id, `<date>-run-<n>`, capturing its number. */
@@ -1125,7 +1196,7 @@ function readPriorRun(
 ): { number: string; path: string; results: string } {
   const number = EVAL_RUN_ID.exec(id)?.[1];
   if (number === undefined) {
-    fail(`${RUN_OF_RECORD_PATH} names \`${id}\` as its prior complete run, which is not an eval run id.`);
+    fail(`Run ${runOfRecord}'s results file names \`${id}\` as its prior complete run, which is not an eval run id.`);
   }
   const path = evalResultsPath(id);
   if (!existsSync(join(root, path))) {
@@ -1256,18 +1327,23 @@ function runTable(
  * four corpus figures are restated from the retained run artifact with the
  * suite holding each one to that file.
  *
- * `exception` defaults to the tree's {@link RUN_OF_RECORD_EXCEPTION}; the suite passes its own so
- * a FAIL fixture renders whether the tree's constant is set or `null`.
+ * Which run is of record, and its release, are read from {@link RUN_OF_RECORD_FILE} under `root`,
+ * so a fixture root carries its own file. `exception` defaults to that file's; the suite passes its
+ * own so a FAIL fixture renders whatever the file records. The snapshot is read first, so a root
+ * with no snapshot is refused for that before anything else.
  */
 export function renderMeasurements(
   root: string = repoRoot(),
-  exception: RunOfRecordException | null = RUN_OF_RECORD_EXCEPTION,
+  exception?: RunOfRecordException | null,
 ): string {
-  const runOfRecord = runOfRecordNumber();
   const snapshot = readMeasurementSnapshot(root);
   const report = snapshot.report;
   const reach = readReachSnapshot(root);
-  const results = readRunOfRecordResults(root);
+  const ofRecord = readRunOfRecord(root);
+  const { path, release } = ofRecord;
+  const recorded = exception === undefined ? ofRecord.exception : exception;
+  const runOfRecord = runOfRecordNumber(path);
+  const results = readRunOfRecordResults(root, path);
   const daily = reach.daily.downloads;
   const total = daily.reduce((sum, row) => sum + row.downloads, 0);
   const peak = daily.reduce((best, row) => (row.downloads > best.downloads ? row : best), {
@@ -1389,8 +1465,8 @@ export function renderMeasurements(
     "## Corpus behaviour: run of record",
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
-    `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run —`,
-    ...runOfRecordVerdict(results, exception),
+    `[run ${runOfRecord}](../${path}) — the ${release} release run —`,
+    ...runOfRecordVerdict(results, recorded, path),
     "",
     ...measurementMethod(root, runOfRecord, results),
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,

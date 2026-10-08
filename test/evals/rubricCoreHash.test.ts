@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { REPO_ROOT, RUBRIC_FILE } from "./support.ts";
 
 /**
- * The grading core of the rubric is pinned to the run of record.
+ * The grading core of the rubric is pinned to the newest committed run.
  *
  * Every byte of `evals/rubric-v7.md` ABOVE the `## Calibration protocol` heading is the excised
  * rubric each judge call receives, and its sha-256 is the `rubricCoreHash` the incremental rule of
@@ -32,8 +32,16 @@ import { REPO_ROOT, RUBRIC_FILE } from "./support.ts";
 
 const CALIBRATION_BOUNDARY = "## Calibration protocol\n";
 
-/** The run directory with the highest run number — the run of record for this pin. */
-function newestRun(): string {
+/**
+ * The run directory with the highest run number: the newest committed run, which is what this pin
+ * reads, whether or not it is the run of record `evals/run-of-record.json` names.
+ *
+ * TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record. Named `newestRun` and described as
+ * "the run of record for this pin", which read as the page's run of record; the two are separate
+ * facts since the run of record moved to `evals/run-of-record.json`. Renamed with its describe, its
+ * case and its message to say what it pins. No assertion moved.
+ */
+function newestCommittedRun(): string {
   const runs = readdirSync(join(REPO_ROOT, "evals", "runs"))
     .map((id) => ({ id, n: Number(/-run-(\d+)$/.exec(id)?.[1] ?? Number.NaN) }))
     .filter((entry) => Number.isFinite(entry.n))
@@ -43,14 +51,14 @@ function newestRun(): string {
   return newest?.id ?? "";
 }
 
-describe("the rubric's grading core is pinned to the run of record", () => {
-  it("hashes the bytes above the calibration boundary to the newest run's rubricCoreHash", () => {
+describe("the rubric's grading core is pinned to the newest committed run", () => {
+  it("hashes the bytes above the calibration boundary to the newest committed run's rubricCoreHash", () => {
     const rubric = readFileSync(join(REPO_ROOT, RUBRIC_FILE), "utf8");
     const parts = rubric.split(CALIBRATION_BOUNDARY);
     expect(parts, `${RUBRIC_FILE} must carry exactly one \`${CALIBRATION_BOUNDARY.trim()}\` heading`).toHaveLength(2);
     const core = parts[0] ?? "";
 
-    const run = newestRun();
+    const run = newestCommittedRun();
     const inputs = JSON.parse(readFileSync(join(REPO_ROOT, "evals", "runs", run, "inputs.json"), "utf8")) as {
       configuration?: { rubricCoreHash?: string; rubricCoreBytes?: number };
     };
@@ -62,7 +70,7 @@ describe("the rubric's grading core is pinned to the run of record", () => {
     const actual = createHash("sha256").update(core).digest("hex");
     const rule =
       `the grading core of ${RUBRIC_FILE} — every byte above \`${CALIBRATION_BOUNDARY.trim()}\` — hashes to ` +
-      `${actual} (${String(Buffer.byteLength(core))} bytes), but the run of record ${run} was scored against ` +
+      `${actual} (${String(Buffer.byteLength(core))} bytes), but the newest committed run ${run} was scored against ` +
       `${recorded ?? "?"} (${String(recordedBytes)} bytes). The incremental rule of evals/SET-v7.md composes a ` +
       "release's run with the prior complete run only when the core hash is unchanged, so this edit means the " +
       "next increment cannot compose: either restore the bytes above the boundary (carry the change below it, " +
