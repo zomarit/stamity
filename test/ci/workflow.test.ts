@@ -243,7 +243,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   const jobs = ci.workflow.jobs;
   const check = stepsOf(ci, "check");
 
-  it("keeps the eight lanes: the classifier, three gates, the records lane, two advisory probes, and one stable aggregator", () => {
+  // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a1-proven-push):
+  // the title's count moves from eight to nine because `prove-pr` joins; every lane the old title
+  // named is still pinned below.
+  it("keeps the nine lanes: the classifier, the proven-push reader, three gates, the records lane, two advisory probes, and one stable aggregator", () => {
     // CHANGED by plan 008 file 3, unit V1w: `plugin-route` joins the merge-blocking set, so this
     // list and the aggregator's `needs` below both move. It sits beside `apm-install` because the
     // two answer the same KIND of question — what a real consumer's tooling does with a published
@@ -251,8 +254,12 @@ describe("ci.yml — the merge-blocking gate", () => {
     // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): two lanes join.
     // `changes` classifies the push or pull request first, and `records` runs in place of the
     // three heavy lanes when every changed path is a record. The title's count moves with them.
+    // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): `prove-pr` joins after `changes`.
+    // On a push to `main` it reads whether a pull request already proved the pushed tree, and the
+    // heavy lanes and the records lane skip when it did; on every other trigger it is skipped.
     expect(Object.keys(jobs)).toEqual([
       "changes",
+      "prove-pr",
       "check",
       "apm-install",
       "plugin-route",
@@ -500,8 +507,12 @@ describe("ci.yml — the merge-blocking gate", () => {
     // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): `changes` and
     // `records` join `needs`, because the aggregator now asserts which side of the records-only
     // split ran, and it can only read the result of a job it needs.
+    // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): `prove-pr` joins `needs`, because
+    // the aggregator now asserts a third legal shape (a proven push, every heavy lane and the
+    // records lane skipped) and must read `prove-pr`'s result and its `proven` output to do so.
     expect(aggregator.needs).toEqual([
       "changes",
+      "prove-pr",
       "check",
       "records",
       "supply-chain",
@@ -569,10 +580,20 @@ describe("ci.yml — the merge-blocking gate", () => {
       // `changes` answered `true` — and then the aggregator requires it to read `skipped` and
       // `records` to have passed. So the property is asserted by evaluation instead: the condition
       // holds for every answer but `true`, on every trigger.
-      expect(job.needs).toBe("changes");
+      // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): `prove-pr` joins `needs`, and the
+      // condition gains `!cancelled()`, `needs.changes.result == 'success'` and the proven-push
+      // clause, because a job whose need was skipped is itself skipped unless its `if` calls a
+      // status function. The property is the same: on every trigger, with `changes` green and no
+      // proven push, the lane runs for every records answer but `true`. The context now carries
+      // the two results the condition reads; the proven side is pinned in "the proven-push skip".
+      expect(job.needs).toEqual(["changes", "prove-pr"]);
       for (const event_name of ["pull_request", "push", "schedule", "workflow_dispatch"]) {
+        const prove = event_name === "push" ? { result: "success", outputs: { proven: "false" } } : { result: "skipped", outputs: {} };
         for (const records_only of ["false", ""]) {
-          const context = { github: { event_name }, needs: { changes: { outputs: { records_only } } } };
+          const context = {
+            github: { event_name },
+            needs: { changes: { result: "success", outputs: { records_only } }, "prove-pr": prove },
+          };
           expect(evaluateWorkflowExpression(job.if ?? "false", context), `${event_name}/${records_only}`).toBe(true);
         }
       }
@@ -761,14 +782,24 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
 
     it("runs exactly one side of the split for every answer the classifier can give", () => {
+      // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): the four jobs need `prove-pr`
+      // beside `changes`, and their conditions read its result and its `proven` output. The
+      // property is unchanged where no push is proven — only the literal `true` takes the short
+      // lane — and the context now carries `changes` green and `prove-pr` in the shape each event
+      // gives it (`success` with `proven=false` on a push, `skipped` otherwise). The proven side
+      // and the failed-classifier side are pinned in "the proven-push skip" below.
       const records = jobOf(ci, "records");
-      expect(records.needs).toBe("changes");
+      expect(records.needs).toEqual(["changes", "prove-pr"]);
       for (const heavy of HEAVY) {
-        expect(jobOf(ci, heavy).needs, heavy).toBe("changes");
+        expect(jobOf(ci, heavy).needs, heavy).toEqual(["changes", "prove-pr"]);
       }
       for (const event_name of EVENTS) {
+        const prove = event_name === "push" ? { result: "success", outputs: { proven: "false" } } : { result: "skipped", outputs: {} };
         for (const answer of ANSWERS) {
-          const context = { github: { event_name }, needs: { changes: { outputs: { records_only: answer } } } };
+          const context = {
+            github: { event_name },
+            needs: { changes: { result: "success", outputs: { records_only: answer } }, "prove-pr": prove },
+          };
           const short = evaluateWorkflowExpression(records.if ?? "true", context) === true;
           // Only the literal `true` takes the short lane; `false` and an absent answer are full CI.
           expect(short, `${event_name}/${answer}`).toBe(answer === "true");
@@ -821,6 +852,94 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
   });
 
+  // ADDED by run 2026-10-08_maintainer-tooling, unit a1-proven-push. A push to `main` whose tree a
+  // pull request already proved skips the test matrix. The risk is one direction only — a push
+  // read as proven when it was not — so what is pinned here is that the reader runs on a push to
+  // `main` alone, holds read grants only, takes the sha as data, and that the four lanes it gates
+  // skip exactly when it said `true` and the classifier is green. Which check runs count as
+  // evidence (the GitHub Actions app's alone) is proven in test/ci/prProven.test.ts.
+  describe("the proven-push skip", () => {
+    const GATED = ["check", "apm-install", "plugin-route", "records"] as const;
+    const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"] as const;
+
+    it("reads the pull request's run only on a push to main, with read grants and the sha as data", () => {
+      const job = jobOf(ci, "prove-pr");
+      expect(job["runs-on"]).toBe("ubuntu-latest");
+      expect(job["timeout-minutes"]).toBe(5);
+      // The three reads the script makes: the commits (contents), the pull requests that hold the
+      // pushed commit (pull-requests) and the check runs on each head (checks). Nothing writes.
+      expect(job.permissions).toEqual({ contents: "read", checks: "read", "pull-requests": "read" });
+      // It needs nothing, so it runs beside `changes` rather than after it.
+      expect(job.needs).toBeUndefined();
+      expect(job.outputs).toEqual({ proven: "${{ steps.prove.outputs.proven }}" });
+      for (const event_name of EVENTS) {
+        for (const ref of ["refs/heads/main", "refs/heads/feature", "refs/pull/7/merge", "refs/tags/v1.0.0"]) {
+          const runs = evaluateWorkflowExpression(job.if ?? "true", { github: { event_name, ref } });
+          expect(runs, `${event_name} ${ref}`).toBe(event_name === "push" && ref === "refs/heads/main");
+        }
+      }
+      const steps = stepsOf(ci, "prove-pr");
+      expect(steps.map((step) => step.name)).toEqual(["Checkout", "Set up Node", "Read the pull request's run"]);
+      expect(stepOf(steps, "Checkout").with).toEqual({ "persist-credentials": false, "fetch-depth": 1 });
+      // No cache and no install: the reader is plain ESM over Node built-ins and `gh`.
+      expect(stepOf(steps, "Set up Node").with).toEqual({ "node-version": "24" });
+      const prove = stepOf(steps, "Read the pull request's run");
+      expect(prove.id).toBe("prove");
+      expect(prove.run).toBe('node scripts/ci/pr-proven.mjs --sha "$PUSHED_SHA"');
+      // The sha and the token arrive through `env:`, never interpolated into the script body.
+      expect(prove.env).toEqual({ GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}", PUSHED_SHA: "${{ github.sha }}" });
+      expect(prove.run).not.toContain("${{");
+      expect(prove["continue-on-error"]).toBeUndefined();
+    });
+
+    it("skips the four lanes exactly when a push is proven, and only with the classifier green", () => {
+      // Every combination, including the ones no real run produces, against a rule written here
+      // independently of the file: a lane runs only when `changes` succeeded, `prove-pr` succeeded
+      // or was skipped, `proven` is not `true`, and the records answer picks this lane's side.
+      for (const event_name of EVENTS) {
+        for (const changes of ["success", "failure", "cancelled"]) {
+          for (const prove of ["success", "skipped", "failure", "cancelled"]) {
+            for (const proven of ["true", "false", ""]) {
+              for (const records_only of ["true", "false"]) {
+                const context = {
+                  github: { event_name },
+                  needs: {
+                    changes: { result: changes, outputs: { records_only } },
+                    "prove-pr": { result: prove, outputs: { proven } },
+                  },
+                };
+                const open =
+                  changes === "success" && (prove === "success" || prove === "skipped") && proven !== "true";
+                for (const lane of GATED) {
+                  const side = lane === "records" ? records_only === "true" : records_only !== "true";
+                  const label = `${lane} ${event_name} changes=${changes} prove-pr=${prove} proven=${proven} records_only=${records_only}`;
+                  expect(evaluateWorkflowExpression(jobOf(ci, lane).if ?? "true", context), label).toBe(open && side);
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    it("calls a status function in each gated condition, or a skipped `prove-pr` would skip them all", () => {
+      // GitHub skips a job whose need was skipped unless its `if` calls a status function, and
+      // `prove-pr` is skipped on every event but a push to `main`. `!cancelled()` is that call, and
+      // `needs.changes.result == 'success'` puts back the guard the implicit `success()` gave.
+      for (const lane of GATED) {
+        const condition = jobOf(ci, lane).if ?? "";
+        expect(condition, lane).toMatch(/^!cancelled\(\) && needs\.changes\.result == 'success' && /);
+        expect(condition, lane).toContain(
+          "(needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true'",
+        );
+      }
+      // The aggregator reads both halves of the proven answer.
+      const report = stepsOf(ci, "all-ci-checks").map((step) => step.run ?? "").join("\n");
+      expect(report).toContain("needs.prove-pr.result");
+      expect(report).toContain("needs.prove-pr.outputs.proven");
+    });
+  });
+
   it("keeps the dependency review advisory, and says which of its two failures happened", () => {
     const steps = stepsOf(ci, "dependency-review");
     const review = stepOf(steps, "Dependency review");
@@ -866,6 +985,9 @@ describe("ci.yml — the merge-blocking gate", () => {
       "`changes`",
       "`records`",
       "scripts/ci/records-only.mjs",
+      // ADDED by unit a1-proven-push (2026-10-08): the proven-push reader and its script.
+      "`prove-pr`",
+      "scripts/ci/pr-proven.mjs",
     ]) {
       expect(laneMap, `lane map must name the running lane ${lane}`).toContain(lane);
     }
@@ -902,13 +1024,22 @@ const AGGREGATOR_EXECUTABLE =
 describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's records-only split, executed", () => {
   const BODY = stepsOf(ci, "all-ci-checks").map((step) => step.run ?? "").join("\n");
 
-  type Results = Readonly<Record<"changes" | "check" | "records" | "supply-chain" | "apm-install" | "plugin-route", string>>;
+  // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): `Results` gains `prove-pr`, and the
+  // renderer substitutes its `proven` output beside `changes`' `records_only`, because the
+  // aggregator now reads both to tell its third legal shape (a proven push) from the other two.
+  // The two existing shapes model a pull request (`prove-pr` skipped, no `proven`), which is what
+  // they modelled before; every assertion on them is kept.
+  type Results = Readonly<
+    Record<"changes" | "prove-pr" | "check" | "records" | "supply-chain" | "apm-install" | "plugin-route", string>
+  >;
 
-  function render(results: Results, recordsOnly: string): string {
+  function render(results: Results, recordsOnly: string, proven: string): string {
     const rendered = BODY.replace(
-      /\$\{\{\s*needs\.([\w-]+)\.(result|outputs\.records_only)\s*\}\}/g,
+      /\$\{\{\s*needs\.([\w-]+)\.(result|outputs\.records_only|outputs\.proven)\s*\}\}/g,
       (_match, job: string, field: string) => {
-        if (field !== "result") return recordsOnly;
+        if (field === "outputs.records_only" && job === "changes") return recordsOnly;
+        if (field === "outputs.proven" && job === "prove-pr") return proven;
+        if (field !== "result") throw new Error(`the report reads needs.${job}.${field}, which the test does not model`);
         const value = (results as Record<string, string | undefined>)[job];
         if (value === undefined) throw new Error(`the report reads needs.${job}, which the test does not model`);
         return value;
@@ -918,11 +1049,12 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's records-onl
     return rendered;
   }
 
-  const execute = (results: Results, recordsOnly: string) =>
-    spawnSync("bash", ["-e", "-c", render(results, recordsOnly)], { encoding: "utf8" }).status;
+  const execute = (results: Results, recordsOnly: string, proven = "") =>
+    spawnSync("bash", ["-e", "-c", render(results, recordsOnly, proven)], { encoding: "utf8" }).status;
 
   const FULL: Results = {
     changes: "success",
+    "prove-pr": "skipped",
     check: "success",
     records: "skipped",
     "supply-chain": "failure",
@@ -931,12 +1063,64 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's records-onl
   };
   const SHORT: Results = {
     changes: "success",
+    "prove-pr": "skipped",
     check: "skipped",
     records: "success",
     "supply-chain": "failure",
     "apm-install": "skipped",
     "plugin-route": "skipped",
   };
+  /** A push to `main` whose tree a pull request proved: every gated lane skipped. */
+  const PROVEN: Results = {
+    changes: "success",
+    "prove-pr": "success",
+    check: "skipped",
+    records: "skipped",
+    "supply-chain": "failure",
+    "apm-install": "skipped",
+    "plugin-route": "skipped",
+  };
+  const GATED = ["check", "apm-install", "plugin-route", "records"] as const;
+
+  it("passes a proven push with every gated lane skipped, with the advisory lane red", () => {
+    expect(execute(PROVEN, "false", "true")).toBe(0);
+    // A records-only push that was also proven: the records lane skipped too, as its `if` says.
+    expect(execute(PROVEN, "true", "true")).toBe(0);
+  });
+
+  it("passes the full and records shapes on a push that was not proven", () => {
+    expect(execute({ ...FULL, "prove-pr": "success" }, "false", "false")).toBe(0);
+    expect(execute({ ...SHORT, "prove-pr": "success" }, "true", "false")).toBe(0);
+  });
+
+  it("fails a proven push unless every gated lane skipped and the reader succeeded", () => {
+    for (const lane of GATED) {
+      expect(execute({ ...PROVEN, [lane]: "success" }, "false", "true"), lane).not.toBe(0);
+      expect(execute({ ...PROVEN, [lane]: "failure" }, "false", "true"), lane).not.toBe(0);
+    }
+    // The full lanes' green cannot stand in when the answer was `proven=true`, nor the reverse.
+    expect(execute({ ...FULL, "prove-pr": "success" }, "false", "true")).not.toBe(0);
+    expect(execute({ ...SHORT, "prove-pr": "success" }, "true", "true")).not.toBe(0);
+    for (const prove of ["failure", "cancelled", "skipped"]) {
+      expect(execute({ ...PROVEN, "prove-pr": prove }, "false", "true"), prove).not.toBe(0);
+    }
+    expect(execute({ ...PROVEN, changes: "failure" }, "false", "true")).not.toBe(0);
+  });
+
+  it("fails a proven answer on a pull-request-shaped result set", () => {
+    // `prove-pr` is skipped on a pull request, so a `true` beside it is a mis-wired output.
+    expect(execute({ ...PROVEN, "prove-pr": "skipped" }, "false", "true")).not.toBe(0);
+    expect(execute(FULL, "false", "true")).not.toBe(0);
+    expect(execute(SHORT, "true", "true")).not.toBe(0);
+  });
+
+  it("fails when the proven-push reader itself did not succeed, whatever the other lanes say", () => {
+    for (const prove of ["failure", "cancelled"]) {
+      expect(execute({ ...FULL, "prove-pr": prove }, "false", ""), prove).not.toBe(0);
+      expect(execute({ ...SHORT, "prove-pr": prove }, "true", ""), prove).not.toBe(0);
+      expect(execute({ ...PROVEN, "prove-pr": prove }, "false", ""), prove).not.toBe(0);
+    }
+  });
 
   it("passes the two legal shapes, with the advisory lane red in both", () => {
     expect(execute(FULL, "false")).toBe(0);
@@ -970,8 +1154,11 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's records-onl
   });
 
   it("fails when the classifier itself did not succeed, whatever the other lanes say", () => {
+    // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): the fixture gains `prove-pr`, which
+    // `Results` now requires; `skipped` is what it reads on the pull request this shape models.
     const skippedAll: Results = {
       changes: "failure",
+      "prove-pr": "skipped",
       check: "skipped",
       records: "skipped",
       "supply-chain": "success",
@@ -1591,8 +1778,12 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): `changes` and
     // `records` join the aggregator's `needs`; both run on every event (`records` reports
     // `skipped` when it does not apply), and neither is a pr-checks job.
+    // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): `prove-pr` joins the aggregator's
+    // `needs`. It reports `skipped` on every event but a push to `main`, and it is a ci.yml job,
+    // not a pr-checks one, so this test's property is unchanged.
     expect(jobOf(ci, "all-ci-checks").needs).toEqual([
       "changes",
+      "prove-pr",
       "check",
       "records",
       "supply-chain",
@@ -4270,6 +4461,8 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "scripts/plugin-route-smoke.mjs",
       // ADDED by plan 013 file 3, unit sw06-records-only-ci-lane: the records-only classifier.
       "scripts/ci/records-only.mjs",
+      // ADDED by unit a1-proven-push (2026-10-08): the proven-push reader.
+      "scripts/ci/pr-proven.mjs",
     ]) {
       expect(referenced).toContain(script);
     }

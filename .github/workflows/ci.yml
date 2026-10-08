@@ -23,13 +23,24 @@
 #     `.gitkeep` excepted) or `docs/plans/`, or `.stamity/inbox.md` itself. A learnings change, a
 #     missing or all-zero base, a base git cannot find, the weekly schedule and a manual dispatch
 #     all read `false`, and `false` is full CI.
-#   - `records`, one leg, and ONLY when `changes` said `true`. It stands in for `check`,
+#   - `prove-pr`, one leg, on a push to `main` only (skipped on every other trigger), beside
+#     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
+#     tree equals the head tree of a pull request holding that commit, and that head's
+#     `all-ci-checks` check run, created by the GitHub Actions app (`app.slug` `github-actions`),
+#     concluded `success`. Then `check`, `apm-install`, `plugin-route` and `records` all skip: the
+#     tree they would test is the one the pull request's run already passed. A check run of that
+#     name from any other app or from none, any other conclusion, a tree no head carries, and any
+#     failed or malformed read all print `false`, which is full CI and never a red reader. The
+#     push-only workflows (`pack-signing-rehearsal.yml`, `docs-site.yml`) are untouched and still
+#     run on the push.
+#   - `records`, one leg, and ONLY when `changes` said `true` and no push was proven. It stands in for `check`,
 #     `apm-install` and `plugin-route`, which skip. A record feeds no build and no published byte,
 #     so what it can break is what reads the committed records: the suites that open them (the
 #     list is `RECORDS_SUITES` in the detector), the generate-and-diff step (the measurements page
 #     renders from the committed runs), the leak gate, and on pull requests the hygiene scan. The
 #     aggregator asserts which side ran, so a records-only pass can never stand in for a full one.
-#   - `check`, four legs, on every change that is not records-only. ubuntu on the declared
+#   - `check`, four legs, on every change that is not records-only, unless `prove-pr` proved the
+#     push. ubuntu on the declared
 #     engines floor (22.22.2) and on the LTS canonical (24), plus windows on 24 as two legs that
 #     each run one half of the suite
 #     (`--shard=1/2`, `--shard=2/2`). Every leg installs, builds and runs its tests through
@@ -163,10 +174,49 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: node scripts/ci/records-only.mjs --base "$BASE_SHA"
 
+  # Proven or not: on a push to `main`, whether a pull request already passed the pushed tree. It
+  # runs beside `changes` with no dependency, on a push to `main` only; on every other trigger it is
+  # skipped and reads as not proven. Only a check run the GitHub Actions app created counts as
+  # evidence, because any integration holding `checks: write` can create one under the name
+  # `all-ci-checks`. Every failed or malformed read prints `proven=false` and exits 0, so a rate
+  # limit or a 404 means full CI rather than a red job. The four lanes it gates carry `!cancelled()`
+  # because a job whose need was skipped is itself skipped unless its `if` calls a status function,
+  # and `needs.changes.result == 'success'` puts back the guard the implicit `success()` gave.
+  prove-pr:
+    name: prove-pr (a push whose tree a pull request proved)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+      pull-requests: read
+    outputs:
+      proven: ${{ steps.prove.outputs.proven }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      # No `cache: npm` and no install: the reader is plain ESM over Node built-ins and `gh`.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Read the pull request's run
+        id: prove
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUSHED_SHA: ${{ github.sha }}
+        run: node scripts/ci/pr-proven.mjs --sha "$PUSHED_SHA"
+
   check:
     name: check (${{ matrix.label }}, node ${{ matrix.node }})
-    needs: changes
-    if: needs.changes.outputs.records_only != 'true'
+    needs: [changes, prove-pr]
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only != 'true'"
     runs-on: ${{ matrix.os }}
     # 30, not the 15 this job carried while it was ubuntu-only: a windows leg installs, builds
     # and runs its half of the suite on the slowest runner image in the matrix, a timeout-only
@@ -377,8 +427,8 @@ jobs:
   # stopped being able to fail would read exactly like a smoke that keeps passing.
   apm-install:
     name: apm route (${{ matrix.role }}, apm ${{ matrix.apm }})
-    needs: changes
-    if: needs.changes.outputs.records_only != 'true'
+    needs: [changes, prove-pr]
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only != 'true'"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -487,8 +537,8 @@ jobs:
   # SKIPPED — so the structure claim still gates on every run.
   plugin-route:
     name: plugin route (structure and credential-free install)
-    needs: changes
-    if: needs.changes.outputs.records_only != 'true'
+    needs: [changes, prove-pr]
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only != 'true'"
     runs-on: ubuntu-latest
     # 15, and derived rather than chosen. The three build lines were measured at ~20 s total on
     # 2026-09-20 with `time npm pack --pack-destination "$WORK"` (0.5 s), `time node
@@ -671,8 +721,8 @@ jobs:
   # gate over the whole tree, and on pull requests the same hygiene scan the `check` LTS leg runs.
   records:
     name: records (records-only changes)
-    needs: changes
-    if: needs.changes.outputs.records_only == 'true'
+    needs: [changes, prove-pr]
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only == 'true'"
     runs-on: ubuntu-latest
     # 15, the ceiling of the other one-leg lanes. The records suites measured 85 s on 2026-09-30
     # (`npx vitest run` over the five entries, darwin, no dist/); install and the generators come
@@ -823,27 +873,42 @@ jobs:
   # must have passed AND the three heavy lanes must read `skipped` — so a green here always says
   # which lane proved the change. Otherwise the three must have passed and `records` must read
   # `skipped`, so a mis-wired condition that ran the short lane on a code change goes red.
+  #
+  # The proven push is the third legal shape, asserted first: `prove-pr` succeeded with
+  # `proven=true`, and `check`, `apm-install`, `plugin-route` and `records` all read `skipped`. On
+  # any other answer `prove-pr` must have been skipped (every event but a push to `main`) or have
+  # succeeded with `proven` not `true`, and one of the two shapes above must hold. So a failed or
+  # cancelled reader is red, and a `true` beside a skipped reader is red.
   all-ci-checks:
     name: all-ci-checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [changes, check, records, supply-chain, apm-install, plugin-route]
+    needs: [changes, prove-pr, check, records, supply-chain, apm-install, plugin-route]
     steps:
       - name: Report
         run: |
-          echo "changes=${{ needs.changes.result }} records_only=${{ needs.changes.outputs.records_only }} check=${{ needs.check.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
+          echo "changes=${{ needs.changes.result }} records_only=${{ needs.changes.outputs.records_only }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
           test "${{ needs.changes.result }}" = "success"
-          if [ "${{ needs.changes.outputs.records_only }}" = "true" ]; then
-            test "${{ needs.records.result }}" = "success"
+          if [ "${{ needs.prove-pr.result }}" = "success" ] && [ "${{ needs.prove-pr.outputs.proven }}" = "true" ]; then
             test "${{ needs.check.result }}" = "skipped"
             test "${{ needs.apm-install.result }}" = "skipped"
             test "${{ needs.plugin-route.result }}" = "skipped"
-          else
-            test "${{ needs.check.result }}" = "success"
-            test "${{ needs.apm-install.result }}" = "success"
-            test "${{ needs.plugin-route.result }}" = "success"
             test "${{ needs.records.result }}" = "skipped"
+          else
+            test "${{ needs.prove-pr.result }}" = "skipped" || test "${{ needs.prove-pr.result }}" = "success"
+            test "${{ needs.prove-pr.outputs.proven }}" != "true"
+            if [ "${{ needs.changes.outputs.records_only }}" = "true" ]; then
+              test "${{ needs.records.result }}" = "success"
+              test "${{ needs.check.result }}" = "skipped"
+              test "${{ needs.apm-install.result }}" = "skipped"
+              test "${{ needs.plugin-route.result }}" = "skipped"
+            else
+              test "${{ needs.check.result }}" = "success"
+              test "${{ needs.apm-install.result }}" = "success"
+              test "${{ needs.plugin-route.result }}" = "success"
+              test "${{ needs.records.result }}" = "skipped"
+            fi
           fi
