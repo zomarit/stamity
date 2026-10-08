@@ -39,16 +39,33 @@ export function privateTempRoot(setupFile: string, base: string, pid: number): P
  *   test/emit/crossClientGoldens.test.ts          25.0s
  *   test/cli/commands/syncMcpOwnership.test.ts    18.9s
  *
- * Assigned greedily, heaviest first, each to the shard with the smaller serialized total:
- * 142.7s against 146.5s, the closest split the five admit. The lighter set goes to shard 1,
- * which also runs the dogfood check and the leak gate step after its tests.
+ * Assigned on total shard time, not on the serial files alone. Shard 1's job carries more of
+ * everything else: its job minus its serial files has a median of 424.3s against shard 2's
+ * 291.7s, because it runs more of the parallel group and then the dogfood check and the leak
+ * gate step. Balancing the serial totals alone (lane and crossClientGoldens on shard 1, 142.7s
+ * against 146.5s) only moves the critical path to shard 1. So each split with at least two
+ * serial files per shard was projected per run: a shard's new job time is its measured job time
+ * (`reports/ci-baseline-measure-r1.md` of run 2026-10-08_maintainer-tooling), minus the serial
+ * files it ran, plus the ones the split gives it. The slower shard is that run's critical path:
+ *
+ *   split (shard 1's serial files)          median critical path   slower shard
+ *   pluginLifecycle + syncMcpOwnership      8.64 min               shard 1 in 7 of 12  <- this table
+ *   installSmoke + syncMcpOwnership         8.64 min               shard 1 in 7 of 12
+ *   installSmoke + crossClientGoldens       8.73 min               shard 1 in 7 of 12
+ *   lane + crossClientGoldens               9.30 min               shard 1 in 11 of 12
+ *   the hash split (crossClientGoldens)     9.32 min               shard 2 in 10 of 12
+ *
+ * The two splits tied at 8.64 min are equal within the data, and the first is the one the
+ * review proposed. Whatever split is projected, the hash split of the other files moves by about
+ * one file once these five are taken out, and vitest's per-file times leave out collect time. So
+ * the gain is measured on CI's Windows legs (QA row 5 of that run).
  */
 export const WINDOWS_SHARD_OF: Readonly<Record<string, 1 | 2>> = {
-  "test/upstream/lane.test.ts": 1,
-  "test/emit/crossClientGoldens.test.ts": 1,
-  "test/ci/pluginLifecycle.test.ts": 2,
+  "test/ci/pluginLifecycle.test.ts": 1,
+  "test/cli/commands/syncMcpOwnership.test.ts": 1,
+  "test/upstream/lane.test.ts": 2,
   "test/pack/installSmoke.e2e.test.ts": 2,
-  "test/cli/commands/syncMcpOwnership.test.ts": 2,
+  "test/emit/crossClientGoldens.test.ts": 2,
 };
 
 /**

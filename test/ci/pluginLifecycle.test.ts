@@ -150,9 +150,10 @@ import { document } from "./downstreamFixture.js";
  * the same case. So on win32 STUB_BUILD_MS is WIN32_STUB_BASE_MS (25s, the measured 17.0s to 24.8s
  * rounded up) times 4, the margin REAL_BUILD_MS takes over a measured base: 100s. Every other
  * platform keeps 6s times MARGIN. A hook or case that wraps a stub build gets STUB_CASE_MS, one
- * STEP_MS above the build's own budget, so the build's spawn timeout, which reports the child's
- * output, fires before vitest's bare timeout does. Like the scheduling, this counts as verified
- * only on CI's Windows legs (QA row 5 of run 2026-10-08_maintainer-tooling).
+ * STEP_MS above the build's own budget. The build's spawnSync blocks the event loop, so its own
+ * timeout always fires first, whatever the wrapper; the step is there so a build that succeeds
+ * near its budget is not failed by the work the case does after it. Like the scheduling, this
+ * counts as verified only on CI's Windows legs (QA row 5 of run 2026-10-08_maintainer-tooling).
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -1355,14 +1356,15 @@ interface CursorListing {
  * Cursor has no listing command that works without a model call, so the walk reads a model's
  * free-text list of skill ids, and that list dropped `st-work` three times on 2026-10-02 and
  * 2026-10-03 and once more under a load average near 200 on 2026-10-07, each time passing on a
- * re-run. One more discovery is the retry. A refusal is not retried, because it is a fact about the
- * machine's session that the walk records and skips on; a listing that carries `st-work` is not
- * retried either, so a wrong `fixture-marker` answer, the walk's load-bearing id, is never retried
- * into a pass.
+ * re-run. One more discovery is the retry, and only a clean run (exit 0) whose listing lacks
+ * `st-work` gets it: a run that crashed or was killed at its spawn timeout is judged as it stands,
+ * so the walk's status check fails on it with its transcript. A refusal is not retried, because it
+ * is a fact about the machine's session that the walk records and skips on. A listing that carries
+ * `st-work` is never retried, so a wrong `fixture-marker` answer beside it fails.
  */
 function discoverListing(discover: (root: string) => SpawnSyncReturns<string>, root: string): CursorListing {
   const first = discover(root);
-  if (CURSOR_REFUSAL.test(cursorTranscript(first)) || listedIds(first).includes("st-work")) {
+  if (first.status !== 0 || CURSOR_REFUSAL.test(cursorTranscript(first)) || listedIds(first).includes("st-work")) {
     return { seen: first, attempts: 1, heads: [transcriptHead(first)] };
   }
   const second = discover(root);
@@ -1438,6 +1440,23 @@ describe("the Cursor walk's listing retry", () => {
     expect(roots).toHaveLength(1);
     expect(listed.attempts).toBe(1);
     expect(CURSOR_REFUSAL.test(cursorTranscript(listed.seen))).toBe(true);
+  });
+
+  // ADDED 2026-10-08 (run 2026-10-08_maintainer-tooling, b2 fixer round 1): only a clean run whose
+  // listing dropped a name is retried. A first run that crashed (non-zero) or was killed at its
+  // spawn timeout (null) is judged as it stands, so the walk's status check fails on it.
+  it.each([
+    ["exits non-zero", 1],
+    ["is killed at its timeout", null],
+  ] as const)("does not discover again when the first run %s without st-work", (_, status) => {
+    const crashed = answer("st-plan\n", "agent crashed", 0);
+    crashed.status = status;
+    const { discover, roots } = scripted(crashed, answer("st-work\n"));
+    const listed = discoverListing(discover, "/root/e");
+    expect(roots).toHaveLength(1);
+    expect(listed.attempts).toBe(1);
+    expect(listed.seen).toBe(crashed);
+    expect(listed.seen.status).not.toBe(0);
   });
 });
 
@@ -1576,7 +1595,10 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         const { seen } = listed;
         const transcript = cursorTranscript(seen);
         if (CURSOR_REFUSAL.test(transcript)) {
-          const first = transcriptHead(seen);
+          // A refusal on the second discovery keeps the first listing's miss on the row.
+          const first =
+            transcriptHead(seen) +
+            (listed.attempts === 2 ? ` (after a first listing without st-work: ${listed.heads[0] ?? ""})` : "");
           row("cursor", state, "SKIPPED", `needs an account: ${first}`);
           // The per-client completion row every consumer folds on, closed before the skip: a client
           // whose walk stopped has to say so on that line, not go quiet.

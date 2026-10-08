@@ -125,10 +125,14 @@ describe("Windows fixture scheduling", () => {
     expect(first.filter((file) => second.includes(file))).toEqual([]);
     expect(new Set(first).size).toBe(first.length);
     expect(new Set(second).size).toBe(second.length);
-    expect(first.filter((file) => HEAVY.includes(file)).length, `shard 1/2: ${first.filter((file) => HEAVY.includes(file)).join(", ")}`)
-      .toBeGreaterThanOrEqual(2);
-    expect(second.filter((file) => HEAVY.includes(file)).length, `shard 2/2: ${second.filter((file) => HEAVY.includes(file)).join(", ")}`)
-      .toBeGreaterThanOrEqual(2);
+    // TEST CHANGE, tightened (b1 fixer round 1): each shard's serial files are pinned by name, not
+    // only counted, so a sequencer that inverted the table fails. The placement is the one the
+    // projection beside WINDOWS_SHARD_OF (vitest.config.ts) chose on total shard time: lane on
+    // shard 2, because shard 1 already carries about two minutes more of other work.
+    expect(first.filter((file) => HEAVY.includes(file)).toSorted(), "shard 1/2's serial files")
+      .toEqual(["test/ci/pluginLifecycle.test.ts", "test/cli/commands/syncMcpOwnership.test.ts"]);
+    expect(second.filter((file) => HEAVY.includes(file)).toSorted(), "shard 2/2's serial files")
+      .toEqual(["test/emit/crossClientGoldens.test.ts", "test/pack/installSmoke.e2e.test.ts", "test/upstream/lane.test.ts"]);
   });
 
   it("leaves a shard count other than two to vitest's own hash split", async () => {
