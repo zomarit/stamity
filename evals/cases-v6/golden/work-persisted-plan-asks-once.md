@@ -2,7 +2,7 @@
 id: work-persisted-plan-asks-once
 class: golden
 claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering the unproven QA row, the spec delta merge and the commit, with leave uncommitted as the declared default."
-source: content/commands/st-work.md:27-34,82-86,331-343
+source: content/commands/st-work.md:25-32,79-83,308-315
 metric: rubric
 ---
 
@@ -37,19 +37,41 @@ Plan" (the plan gate):
 Governing text — the same file, "QA checkpoint" (row states and the close):
 
 ```text
-**Row states.** The qa skill closes each row as `walked` (only when the
-person says they walked it), `auto-proven` (with its pointer) or
-`accepted-unwalked` (with the row's input hash); a bare sign-off records
-`accepted-unwalked`, never `walked`. A non-`H` row accepted earlier with the same
-input hash is not asked again, and when every row auto-proved there is no
-ask. An unattended run records `not signed`. An `H` row blocks release
-until it is walked or auto-proven.
+**Row states.** The qa skill closes each row in its own row states, under
+its `## Human sign-off` rules.
 
 **The close asks once.** One question with numbered options covers what is
 left for the person: the rows no evidence proved, the spec delta merge and
 the commit. `Default if no response: leave uncommitted`, with those rows not
 signed and the delta unmerged. A part with nothing to decide drops out; with
 none left, there is no ask.
+```
+
+Governing text — `content/skills/st-qa/SKILL.md`, the row states it closes each row in (the
+walk-through table's Proof column and "Human sign-off"):
+
+```text
+- **Proof** is the row's state: `auto-proven` with its evidence pointer,
+  `walked` (recorded only when the person says they walked that row), or
+  `accepted-unwalked` with its input hash — the sha256 of the sorted lines
+  `<path> <git hash-object of path>` over the files the row derives from. An
+  open row shows an unchecked box.
+
+[...]
+
+Asked only when a row needs a person. When every row auto-proved, the
+checkpoint closes on its pointers with no ask and records "all N rows
+auto-proven". A bare sign-off ("signed off", "ok") records each open row
+`accepted-unwalked` with its input hash, never `walked`, and so does any
+sign-off for each open row it does not name. A reply that withholds sign-off
+records no row as accepted and leaves the checkpoint open. A row is `walked`
+only when the person's reply says so for that row or for all of them, and
+that reply is quoted in the record. A row recorded `accepted-unwalked` in an
+earlier record of this change with the same input hash is carried as
+`accepted-unwalked (carried from <run-id>)`, not asked again — never a row
+whose Risk is now `H`, which is asked at every checkpoint until walked or
+auto-proven; a changed hash reopens it. An unattended run asks nothing and
+records `Shippable: not signed`.
 ```
 
 Scenario state — the run, given to you as fact, in the order it happens:

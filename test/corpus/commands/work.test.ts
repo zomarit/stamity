@@ -123,6 +123,9 @@ const PLAN_PATH = "commands/st-plan.md";
 /** The board command: owner of the deferral-inbox census this command cites. */
 const BOARD_PATH = "commands/st-board.md";
 
+/** The qa skill: owner of the QA row states the checkpoint's pointer names. */
+const QA_SKILL_PATH = "skills/st-qa/SKILL.md";
+
 /** The census rule the Phase 2 → Phase 3 step runs. */
 const CENSUS_RULE_PATH = "rules/stamity-contract-census.md";
 
@@ -661,6 +664,20 @@ describe("/st-work — contract census", () => {
     expect(census).toContain("records the skip");
   });
 
+  it("points at the census rule for the contract kinds, the row grammar and the facade-hold, which the rule carries", async () => {
+    const census = collapse(section(await body(), "### Contract census"));
+    const rule = collapse((await corpusFile(CENSUS_RULE_PATH)).parsed.body);
+
+    // The step names what it no longer restates; the cited rule has to carry each of them, so the
+    // pointer cannot outlive its target (plan 019 file 2, unit p0-make-room).
+    expect(census).toContain("which carries the contract kinds, the row grammar and the facade-hold");
+    expect(rule).toContain("an exported signature");
+    expect(rule).toContain("a configuration key");
+    expect(rule).toContain("| Contract | The identifier as spelled at the seam |");
+    expect(rule).toContain("**Facade-hold when two units need one contract.**");
+    expect(rule).toContain("guessing that the file lists imply independence is not");
+  });
+
   it("re-scopes the census rule to conditional with brownfield globs", async () => {
     const rule = await corpusFile(CENSUS_RULE_PATH);
 
@@ -768,31 +785,42 @@ describe("/st-work — Prove", () => {
     }
   });
 
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p0-make-room): the client-events
+  // paragraph moved out of `### Review loop` to the end of `## Dials` → `### Intensity`, below the
+  // re-attachment cut, to free room above it (REQ-FLOW-063, REQ-FLOW-064); its first sentence now
+  // reads "under the review loop". The contract is unchanged: every phrase is pinned word for word
+  // in its new section, and the negative pin now holds over both sections, so it is not weaker.
   it("frames the mechanical gate as additional and client-dependent", async () => {
     const loop = collapse(section(await body(), "### Review loop"));
+    const events = collapse(section(await body(), "### Intensity"));
     // Guarantee honesty: the hook-expressed gate gets a prose twin that
     // states what holds where, and refuses the uniform-enforcement claim.
-    expect(loop).toContain("an additional check on top of this text, not a replacement for it");
-    expect(loop).toContain("On clients without those events");
-    expect(loop).toContain("prompt-carried only");
-    expect(loop).toContain("The enforcement is uneven by construction");
+    expect(events).toContain("Two client events sit under the review loop");
+    expect(events).toContain("an additional check on top of this text, not a replacement for it");
+    expect(events).toContain("On clients without those events");
+    expect(events).toContain("prompt-carried only");
+    expect(events).toContain("The enforcement is uneven by construction");
     // The honest twin is the ladder, not the mechanism: no counter file, path,
     // or exit code leaks into shipped prose.
-    expect(loop).not.toMatch(/exit\s*(?:code\s*)?2|counter file|\.json\b|SubagentStop/i);
+    for (const text of [loop, events]) {
+      expect(text).not.toMatch(/exit\s*(?:code\s*)?2|counter file|\.json\b|SubagentStop/i);
+    }
   });
 
   it("separates the event that holds the cap from the event that only counts", async () => {
-    const loop = collapse(section(await body(), "### Review loop"));
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p0-make-room): read from
+    // `### Intensity`, where the paragraph moved (see the case above); the phrases are unchanged.
+    const events = collapse(section(await body(), "### Intensity"));
 
     // One sentence credited the sub-agent-completion event with holding
     // the cap. It never blocks — the hold rides task completion — so the two
     // events have to be named apart or the claim is a guarantee nothing keeps.
-    expect(loop).toContain("task-completion event is the one that HOLDS");
-    expect(loop).toContain("refuse the completion");
-    expect(loop).toContain("sub-agent-completion event only COUNTS");
-    expect(loop).toContain("never blocks");
+    expect(events).toContain("task-completion event is the one that HOLDS");
+    expect(events).toContain("refuse the completion");
+    expect(events).toContain("sub-agent-completion event only COUNTS");
+    expect(events).toContain("never blocks");
     // Coverage is one client of four, stated rather than implied by "where".
-    expect(loop).toContain("Exactly one of the four supported clients publishes either event");
+    expect(events).toContain("Exactly one of the four supported clients publishes either event");
   });
 
   it("runs the specialist pass read-only, with an evidence bar and a kill switch", async () => {
@@ -914,18 +942,29 @@ describe("/st-work — Prove", () => {
 
   it("closes each QA row walked, auto-proven or accepted-unwalked, and records them (REQ-FLOW-017, REQ-FLOW-018)", async () => {
     const qa = collapse(section(await body(), "### QA checkpoint"));
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p0-make-room): `/st-work`'s Row
+    // states paragraph became one sentence pointing at the qa skill, which already carried every
+    // state and rule it restated (its table's Proof column, `## Human sign-off`). The states and rules
+    // are now pinned where they live, on the skill; this body pins the pointer and its place.
     expect(qa).toContain("**Row states.**");
-    for (const state of ["`walked`", "`auto-proven`", "`accepted-unwalked`", "`not signed`"]) {
-      expect(qa, `row state missing: ${state}`).toContain(state);
+    expect(qa).toContain("The qa skill closes each row in its own row states, under its `## Human sign-off` rules");
+    const skill = (await corpusFile(QA_SKILL_PATH)).parsed.body;
+    expect(skill).toMatch(/^## Human sign-off$/m);
+    const signOff = collapse(section(skill, "## Human sign-off"));
+    for (const state of ["`walked`", "`auto-proven`", "`accepted-unwalked`", "`Shippable: not signed`"]) {
+      expect(collapse(skill), `row state missing: ${state}`).toContain(state);
     }
     // A bare sign-off is an acceptance, never a walk.
-    expect(qa).toContain("never `walked`");
-    expect(qa).toContain("not asked again");
-    expect(qa).toContain("there is no ask");
+    expect(signOff).toContain("records each open row `accepted-unwalked` with its input hash, never `walked`");
+    expect(signOff).toContain("not asked again");
+    expect(signOff).toContain("with no ask");
+    expect(signOff).toContain("An unattended run asks nothing and records `Shippable: not signed`");
     // The H row exception: release-blocking rows never carry on a hash.
-    expect(qa).toContain("A non-`H` row accepted earlier with the same input hash");
-    expect(qa).toContain("An `H` row blocks release until it is walked or auto-proven");
-    // The paragraph lands after the existing close of the checkpoint, which stays as it was.
+    expect(signOff).toContain(
+      "never a row whose Risk is now `H`, which is asked at every checkpoint until walked or auto-proven",
+    );
+    expect(signOff).toContain("an H row accepted unwalked blocks release");
+    // The pointer sits after the existing close of the checkpoint, which stays as it was.
     expect(qa.indexOf("**Row states.**")).toBeGreaterThan(
       qa.indexOf("The checkpoint covers what automation cannot."),
     );
