@@ -961,8 +961,12 @@ export function collectManifestErrors(data: unknown): string[] {
   if (typeof data.version !== "string" || semver.valid(data.version) === null) {
     errors.push(`\`version\` must be a semantic version string (e.g. "${MANIFEST_VERSION}")`);
   }
-  if (!isNonEmptyString(data.generatedBy)) {
-    errors.push("`generatedBy` must be a non-empty engine version string");
+  // Semver too, and exactly as written (no `v`, no padding): `clean`'s refusal
+  // and `check --expect-version` print it verbatim, so a hand-edited manifest
+  // must not carry anything else there, a terminal control sequence least of
+  // all (review/133). Every writer stamps the engine's own version.
+  if (typeof data.generatedBy !== "string" || semver.valid(data.generatedBy) !== data.generatedBy) {
+    errors.push('`generatedBy` must be a semantic version string (e.g. "1.2.3")');
   }
   for (const field of ["createdAt", "updatedAt"] as const) {
     if (!isTimestamp(data[field])) errors.push(`\`${field}\` must be an ISO-8601 timestamp`);

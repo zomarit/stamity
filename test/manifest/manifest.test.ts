@@ -182,6 +182,21 @@ describe("collectManifestErrors", () => {
     expect(collectManifestErrors(fullManifest())).toEqual([]);
   });
 
+  // review/133: `generatedBy` reaches `clean`'s refusal and `check --expect-version`'s
+  // mismatch text verbatim, so a committed manifest must not carry anything but a
+  // version there — a terminal control sequence least of all.
+  it("refuses a generatedBy that is not a semantic version, and accepts a prerelease one", () => {
+    for (const generatedBy of ["1.12.0\u001b[2J", "dev", "1.12", " 1.12.0", "v1.12.0"]) {
+      const errors = collectManifestErrors({ ...fullManifest(), generatedBy });
+      expect(errors, JSON.stringify(generatedBy)).toEqual([
+        '`generatedBy` must be a semantic version string (e.g. "1.2.3")',
+      ]);
+    }
+    for (const generatedBy of ["1.12.0", "1.12.0-acme.1", "0.0.0-test"]) {
+      expect(collectManifestErrors({ ...fullManifest(), generatedBy }), generatedBy).toEqual([]);
+    }
+  });
+
   it("names every defect in one pass", () => {
     const defective = {
       ...fullManifest(),
@@ -1457,7 +1472,9 @@ describe("properties", () => {
         ciProviders: fc.array(idArb, { maxLength: 3 }),
       }),
       now: fc.date({ min: new Date("2000-01-01T00:00:00.000Z"), noInvalidDate: true }),
-      generatorVersion: fc.stringMatching(/^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$/),
+      // TEST CHANGE, justified (2026-10-08, review/133): allowed a leading zero ("0.0.00"),
+      // which is no semantic version and no engine's; `generatedBy` must now be one.
+      generatorVersion: fc.stringMatching(/^(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$/),
     },
     { requiredKeys: ["tools", "selection", "generatorVersion"] },
   );
