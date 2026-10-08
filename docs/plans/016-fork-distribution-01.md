@@ -589,8 +589,9 @@ removes.
 
 - **Units:** `u1-clean-keeps-state`.
 - **Evidence (before):** `clean -y` deletes the whole state directory (`src/cli/commands/clean.ts:229-244`; the `rm` at
-  `:235`), and no flag keeps state. The `st-setup` body says `clean -y` removes ledger rows without saying it deletes
-  `.stamity/` (`scripts/plugins/setupCommand.mjs:172-174`; an inbox Warning row).
+  `:235`), and no flag keeps state. The `st-setup` body says `clean -y` removes ledger rows and deletes the whole
+  `.stamity/` directory unless a hooks file it keeps still runs a script there
+  (`scripts/plugins/setupCommand.mjs:172-176`; an inbox Warning row).
 - **Expand/contract:** the default narrows; nothing a user owns is deleted that was kept before. A script that relied on
   `clean -y` emptying `.stamity/` adds `--purge`; the CHANGELOG says so. Rollback is the prior version's `clean`.
 - **Proof:** `test/cli/commands/clean.test.ts`; the `st-setup` body pins in `test/ci/`; the adversarial eval case for
@@ -2221,4 +2222,4 @@ residues — are folded into the spec delta.
 - Minor · src/cli/commands/check.ts · a pending reclaim after `config set tools` or `config set importChoice.<path> skip` reads `tamper` (exit 1) by design, so no deletion rides an automated re-sync; revisit if fleets report exit 1 on config-only pull requests · source: /st-plan · Ref: docs/plans/016-fork-distribution-01.md
 - Minor · src/adapters/claude.ts:351 · the guard tail matches the caller's identity as text in the raw payload, so a `\u`-escaped identity passes when Node is missing; Claude Code serialises plain ASCII today · source: /st-plan · Ref: docs/plans/016-fork-distribution-01.md
 - Minor · src/hooks/portableRunner.ts:157 · with Copilot's guard unwired, the runner's Copilot core-guard branch is dead in new emissions; remove it once no supported release emits that guard · source: /st-plan · Ref: docs/plans/016-fork-distribution-01.md
-- Minor · scripts/plugins/setupCommand.mjs:172-174 · the `st-setup` body's list of what `clean -y` keeps omits `.stamity/backups/`; add it with the next change that moves those eval ranges · source: /st-plan · Ref: docs/plans/016-fork-distribution-01.md
+- Minor · scripts/plugins/setupCommand.mjs:172-176 · the `st-setup` body's list of what `clean -y` deletes from `.stamity/` (learnings, handoffs, overrides, run records and packs) omits `.stamity/backups/`; add it with the next change that moves those eval ranges · source: /st-plan · Ref: docs/plans/016-fork-distribution-01.md

@@ -657,7 +657,7 @@ client and version it ran on, or the vendor page, its access date and the proof 
     `:5` to the commit form.
   - `docs/plugins.md:501-523` (`## Move an existing setup`): if it still says `clean` deletes the whole `.stamity/`
     (`:512-516`), rewrite it to the landed `clean` (engine-owned files removed, user state kept unless `--purge`) and
-    link `[Switch routes](choose-a-route.md)`; `:521-523` "No release through 1.11.0 ships a migration engine" stays
+    link `[Switch routes](choose-a-route.md)`; `:521-523` "No release through 1.12.0 ships a migration engine" stays
     true and is kept; `:5` to the commit form.
   - `scripts/qa/run.mjs`: `PAGES` (`:79-88`) gains `{ route: '/docs/choose-a-route', file:
     'docs/choose-a-route/index.html' }`, and the comment (`:68-78`) "Eight, chosen…" → "Nine, chosen…" with the reason
