@@ -229,7 +229,7 @@ a lighter pass. The orchestrator's context stays clean; the fixer receives
 the debugging signal intact. Judgment-only passes (spec review, plan
 review) may run inline — they execute no commands.
 
-Gate commands are the charter's verification gates: `npm run lint && npm run typecheck && npm run test`
+Gate commands are the charter's verification gates: `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`
 for the full pass, the narrow gates in the `test-runner` agent file for re-runs.
 
 ### Review loop

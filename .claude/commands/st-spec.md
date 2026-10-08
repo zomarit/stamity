@@ -210,7 +210,7 @@ machine-checkable — a named test, a gate command, a measurable threshold — o
 carries a `judgment:` tag naming the role that decides. The census reports
 per-file counts and names every criterion that is neither. A criterion whose
 test exists is confirmed through a `test-runner` spawn running the repo's test
-gate, `npm run test`, and returning its per-gate result; a
+gate, `node scripts/ci/test-run.mjs --coverage`, and returning its per-gate result; a
 criterion pointing at a test that does not exist is reported as a gap.
 
 The spawn is part of the census, not a step after it: the census dispatches `test-runner` in the
@@ -258,7 +258,7 @@ the mode to be inferred from the target path:
 | `spec-author` · `brownfield` | `create` on a repo scored brownfield, and every `extract` | researcher findings with their `file:line` evidence, the touched surface, target files, manifest rows |
 | `spec-author` · `architect` | an inferred ADR, and the greenfield interview's resolved clarifications | the decision as observed, its evidence, the alternatives it rules out, the stub path under `docs/adr/` |
 | `spec-author` · `docs` | `docs/codebase-map.md`, on brownfield day one and on every regeneration | the inventory — module boundaries, entry points, integration surfaces, conventions — each claim with its `file:line`, and the map path as the target. The map is documentation about the tree, so docs mode's rule holds it: every claim exists at a cited path |
-| `test-runner` | the `check` mode's testability census, wherever a criterion names a test that exists | `npm run test` and the criteria being confirmed |
+| `test-runner` | the `check` mode's testability census, wherever a criterion names a test that exists | `node scripts/ci/test-run.mjs --coverage` and the criteria being confirmed |
 
 The census reads the runner's structured per-gate result — the gate command,
 pass or fail, and the verbatim failing excerpt — and never runs the gate in this

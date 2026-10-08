@@ -224,7 +224,7 @@ interruption is the re-poll consent below.
   a PR fix weaker verification than the same change made any other way.
 
 Gates run in a `test-runner` spawn, never in this command's own context: the runner runs
-`npm run lint && npm run typecheck && npm run test` and returns a gate-by-gate result — the exact command per gate, and
+`npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` and returns a gate-by-gate result — the exact command per gate, and
 the verbatim failing excerpt where one failed. A bare exit code is not a gate result, and no
 reply is written from one.
 

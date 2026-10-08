@@ -143,7 +143,7 @@ of 5 growing past a threshold stops the batch there:
 
 Gates run on every batch, a one-line typo fix included.
 
-- Spawn `test-runner` with the changed-file list. It runs `npm run lint && npm run typecheck && npm run test` once,
+- Spawn `test-runner` with the changed-file list. It runs `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` once,
   as the charter spells it, and returns a gate-by-gate result: exact commands, verbatim failing
   excerpts, never a bare pass/fail. A row whose exit code the runner could not read is `unknown`,
   and an unknown row is never green.

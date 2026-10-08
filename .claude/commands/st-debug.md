@@ -13,7 +13,7 @@ Two targets. Detect before step 1 and state the detected target in the first res
 
 | Symptom signal | Target | Probe |
 |---|---|---|
-| Failing product test, stack trace in product paths, wrong user-visible behavior | app code | `npm run test` on the failing case; `git log -S` on the suspect symbol for the introduction window |
+| Failing product test, stack trace in product paths, wrong user-visible behavior | app code | `node scripts/ci/test-run.mjs --coverage` on the failing case; `git log -S` on the suspect symbol for the introduction window |
 | Generated agent files absent, stale, or edited outside their managed block | this install | `stamity check` — environment probes plus the drift gate |
 | Frontmatter or structure complaints about repo-authored content | this install | `stamity validate` |
 | Manifest or ownership ledger disagreeing with what is on disk | this install | read `.stamity/manifest.json`, then `stamity check` |

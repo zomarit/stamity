@@ -18,10 +18,10 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 Run before declaring any change done.
 
-- Tests: `npm run test`
+- Tests: `node scripts/ci/test-run.mjs --coverage`
 - Lint: `npm run lint`
 - Typecheck: `npm run typecheck`
-- Full gate: `npm run lint && npm run typecheck && npm run test`
+- Full gate: `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`
 
 ## Invariants
 Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27

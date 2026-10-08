@@ -44,7 +44,7 @@ planned direction instead of quietly overrunning:
 | 6 Note | — | dropped first, always; it is the one optional phase |
 
 **The minimum proven change**: one file, one behavior, one test that fails
-without the edit and passes with it, and `npm run lint && npm run typecheck && npm run test` green.
+without the edit and passes with it, and `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` green.
 Touched tests alone do not prove completion. Anything below that produced an
 incomplete walk, and the handback says
 so rather than calling it a proven change.
@@ -119,9 +119,9 @@ before it is visible in the gate.
 
 ## Phase 5 — Prove it
 
-Run `npm run lint && npm run typecheck && npm run test`. The timer may narrow the change before work
+Run `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`. The timer may narrow the change before work
 starts or stop the walk with `Not done:`; it cannot omit mandatory gates.
-`npm run test` over touched files may supply partial evidence,
+`node scripts/ci/test-run.mjs --coverage` over touched files may supply partial evidence,
 but missing lint, typecheck or tests
 keep the change incomplete. Name every gate not run and the command to resume.
 A single red static gate re-runs on its own, `npm run lint` or

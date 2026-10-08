@@ -21,10 +21,10 @@ the three narrow gates are for a targeted re-run after a fix.
 
 | Gate | Command | Use |
 |---|---|---|
-| test | `npm run test` | full suite, or the file set the brief scopes |
+| test | `node scripts/ci/test-run.mjs --coverage` | full suite, or the file set the brief scopes |
 | lint | `npm run lint` | style and static rules |
 | typecheck | `npm run typecheck` | type errors; on stacks with no separate step this resolves to the lint command |
-| all | `npm run lint && npm run typecheck && npm run test` | the chained pass: lint, then typecheck, then tests |
+| all | `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` | the chained pass: lint, then typecheck, then tests |
 
 `all` is a `&&` chain and stops at the first failing link. A gate the chain
 never reached is reported `not-run`, not `pass` — reporting an unreached gate as

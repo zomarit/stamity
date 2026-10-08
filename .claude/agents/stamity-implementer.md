@@ -72,8 +72,8 @@ as such, with the reason.
 
 Run before returning, over the unit's surface:
 
-- `npm run test`, `npm run lint`, and
-  `npm run typecheck` for the targeted pass, or `npm run lint && npm run typecheck && npm run test`
+- `node scripts/ci/test-run.mjs --coverage`, `npm run lint`, and
+  `npm run typecheck` for the targeted pass, or `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`
   when the unit's blast radius is wider than its own files — each run once, as resolved,
   its exit code read from the tool (Shell).
 - Report each gate as the exact command run plus pass or fail, and reproduce the verbatim
