@@ -1,9 +1,16 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SECRET_PATTERNS } from "../../src/mcp/secretScan.ts";
+import {
+  GATE_RUN_TIMEOUT_MS,
+  type LeakGateResult,
+  leakGateFailureDetail,
+  leakGateSpawnCount,
+  runLeakGateOnce,
+  setLeakGateResultForTest,
+} from "../support/leakGateRun.ts";
 // @ts-expect-error — the gate is a plain .mjs script with no type declarations, and it stays
 // that way on purpose: it must run standalone against an arbitrary `--root`, including an
 // extracted publish tarball with no TypeScript toolchain anywhere near it.
@@ -26,81 +33,59 @@ import { EMAIL_RULE, RULES, decodeCandidates, normalizeWithMap, ruleHits } from 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const GATE = join(REPO_ROOT, "scripts", "leak-gate.mjs");
 
-interface GateResult {
-  status: number;
-  stdout: string;
-  stderr: string;
-}
-
-function runGate(): GateResult {
-  try {
-    return { status: 0, stdout: execFileSync("node", [GATE], { cwd: REPO_ROOT, encoding: "utf8" }), stderr: "" };
-  } catch (error) {
-    const failure = error as { status?: number; stdout?: string; stderr?: string };
-    return { status: failure.status ?? -1, stdout: failure.stdout ?? "", stderr: failure.stderr ?? "" };
-  }
-}
-
 /**
- * Wall-clock budget for one whole-repository gate run, derived rather than inherited.
+ * The four properties below are asserted over ONE gate run (`runLeakGateOnce`, shared with
+ * `test/docsPages.test.ts` per file process), not one run per property. Each check is a named
+ * function so the stub case at the end of this block can prove a failing gate fails every one.
  *
- * Every case below spawns the real gate over the real tree, so what each one is really bounded by
- * is the gate's cost — and the suite-wide default (20s in `vitest.config.ts`, sized for a CLI
- * spawn) is not that number. It read as one until the gate's wall time doubled and the failure
- * that reached CI was a TIMEOUT: a red with no cost in it, on the floor and LTS legs only,
- * saying nothing about what got slower or by how much.
- *
- * The basis, so the next person can re-derive it instead of guessing:
- *   local wall time   16s   — `time node scripts/leak-gate.mjs`, three runs, 15.81-16.13s over
- *                             5,561 files, node start included. It was 3.3s over 852 files when
- *                             this budget was first derived; the tree grew because every run
- *                             export publishes each attempt's output under `evals/runs/<run>/calls/`,
- *                             and the gate reads all of them — by design, so nothing is excluded.
- *   CI ratio          2x    — the runner class is about half this machine's speed
- *   margin            4x    — a shared runner with a cold file cache, not a second budget
- *   = 16 x 2 x 4 ≈ 128s, rounded up to 180s
- *
- * So a CI leg twice as slow as expected still REPORTS the gate's true cost, and only a gate that
- * has become roughly eleven times its local wall time trips this — where a timeout is the
- * finding. The 30s this replaced was derived against a tree six times smaller, and on the floor
- * and Windows legs of 4b2d8d9 it turned the gate's growth into a timeout that named no cost.
+ * TEST CHANGE 2026-10-08, justified — the cost moved, not the criterion: the four cases spawned
+ * the gate four times over the same tree; each now reads the one shared result, and every
+ * assertion it made is carried into the check below unchanged.
  */
-const GATE_RUN_TIMEOUT_MS = 180_000;
+function expectPasses(result: LeakGateResult): void {
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toContain("PASS");
+  // A census of zero would "pass" too. The scan has to have happened.
+  const scanned = Number(/scanned (\d+) file\(s\)/.exec(result.stdout)?.[1] ?? 0);
+  expect(scanned).toBeGreaterThan(100);
+}
+
+function expectNamesEncodings(summary: string): void {
+  // The claim that broke: every file was reported as scanned while UTF-16 was a whole-file
+  // blind spot, so a file rendering as the plain name passed AND was counted as read.
+  expect(summary).toContain("latin1");
+  expect(summary).toContain("utf8");
+  expect(summary).toContain("utf16le/utf16be when detected");
+  expect(summary).toContain("raw and normalized");
+}
+
+function expectPrintsExemptions(summary: string): void {
+  // The one exemption that existed never printed: the census line only filled when ALL rules
+  // were exempt for a file, and no file is exempt from all of them, so the branch was dead.
+  expect(summary).toContain("not scanned (rule predecessor-project allowlisted)");
+  expect(summary).toContain("src/migration/");
+  // Per rule, not per file: the migration module is exempt from the predecessor name and from
+  // nothing else, and the scanner's own corpus is exempt from the credential shapes only.
+  expect(summary).toContain("not scanned (rule github-token allowlisted)");
+  expect(summary).toContain("src/mcp/secretScan.ts");
+  expect(summary).not.toMatch(/rule predecessor-project allowlisted\)[^\n]*secretScan/);
+}
+
+function expectCountsEveryRule(summary: string): void {
+  expect(summary).toContain("PASS - 0 hits for 19 rule(s)");
+}
 
 describe("leak-gate against the repository as it stands", () => {
   it("passes, and says how many files it read", () => {
-    const result = runGate();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("PASS");
-    // A census of zero would "pass" too. The scan has to have happened.
-    const scanned = Number(/scanned (\d+) file\(s\)/.exec(result.stdout)?.[1] ?? 0);
-    expect(scanned).toBeGreaterThan(100);
+    expectPasses(runLeakGateOnce());
   }, GATE_RUN_TIMEOUT_MS);
 
   it("names the encodings it actually read, rather than implying every encoding", () => {
-    // The claim that broke: every file was reported as scanned while UTF-16 was a whole-file
-    // blind spot, so a file rendering as the plain name passed AND was counted as read.
-    const summary = runGate().stdout;
-
-    expect(summary).toContain("latin1");
-    expect(summary).toContain("utf8");
-    expect(summary).toContain("utf16le/utf16be when detected");
-    expect(summary).toContain("raw and normalized");
+    expectNamesEncodings(runLeakGateOnce().stdout);
   }, GATE_RUN_TIMEOUT_MS);
 
   it("prints every path exemption with the rule it was dropped from", () => {
-    // The one exemption that existed never printed: the census line only filled when ALL rules
-    // were exempt for a file, and no file is exempt from all of them, so the branch was dead.
-    const summary = runGate().stdout;
-
-    expect(summary).toContain("not scanned (rule predecessor-project allowlisted)");
-    expect(summary).toContain("src/migration/");
-    // Per rule, not per file: the migration module is exempt from the predecessor name and from
-    // nothing else, and the scanner's own corpus is exempt from the credential shapes only.
-    expect(summary).toContain("not scanned (rule github-token allowlisted)");
-    expect(summary).toContain("src/mcp/secretScan.ts");
-    expect(summary).not.toMatch(/rule predecessor-project allowlisted\)[^\n]*secretScan/);
+    expectPrintsExemptions(runLeakGateOnce().stdout);
   }, GATE_RUN_TIMEOUT_MS);
 
   it("carries the private-layer family, and counts it in the summary", () => {
@@ -116,10 +101,39 @@ describe("leak-gate against the repository as it stands", () => {
     // (`email-address`) joined the gate, so the rule total and the PASS line move from 18 to 19.
     expect(RULES.length).toBe(19);
 
-    const summary = runGate().stdout;
-
-    expect(summary).toContain("PASS - 0 hits for 19 rule(s)");
+    expectCountsEveryRule(runLeakGateOnce().stdout);
   }, GATE_RUN_TIMEOUT_MS);
+
+  it("spawned the gate once for the four cases above", () => {
+    // The memo's own proof. Calling the reader here as well keeps the count at exactly 1 when a
+    // filtered run selects this case alone, and still catches a reader that re-spawns.
+    runLeakGateOnce();
+    expect(leakGateSpawnCount()).toBe(1);
+  }, GATE_RUN_TIMEOUT_MS);
+
+  it("fails every reader of the shared result when the gate fails", () => {
+    // A stub result, injected through the helper's test-only setter rather than by planting a
+    // reserved name in the tree: this file writes nothing into the repository (see its header),
+    // and a real failing run is `test/gate/leakGateEvasion.test.ts`'s, in a throwaway repository.
+    const failing: LeakGateResult = {
+      status: 1,
+      stdout: "FAIL - 1 hit(s) for 19 rule(s)\n",
+      stderr: "leak-gate: reserved name found\n",
+    };
+    const real = setLeakGateResultForTest(failing);
+    try {
+      const shared = runLeakGateOnce();
+      expect(shared).toEqual(failing);
+      expect(() => expectPasses(shared)).toThrow();
+      expect(() => expectNamesEncodings(shared.stdout)).toThrow();
+      expect(() => expectPrintsExemptions(shared.stdout)).toThrow();
+      expect(() => expectCountsEveryRule(shared.stdout)).toThrow();
+      // The docs suite's reader asserts this detail empty, so a non-empty one fails it too.
+      expect(leakGateFailureDetail(shared)).toBe("exit 1\nFAIL - 1 hit(s) for 19 rule(s)\nleak-gate: reserved name found\n");
+    } finally {
+      setLeakGateResultForTest(real);
+    }
+  });
 
   it("scans its own file by its own rules, with no self-exemption", () => {
     // Every reserved token in the gate is assembled from fragments at run time, which is what

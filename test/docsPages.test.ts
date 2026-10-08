@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +20,7 @@ import {
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
+import { GATE_RUN_TIMEOUT_MS, leakGateFailureDetail, runLeakGateOnce } from "./support/leakGateRun.ts";
 // @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
 // they run under bare Node in a release job, with no TypeScript nearby.
 import { buildCatalogIdentity } from "../scripts/plugins/catalogs.mjs";
@@ -1016,25 +1016,14 @@ describe("hand pages", () => {
   it(
     "passes the leak gate",
     () => {
-      const gate = join(REPO_ROOT, "scripts/leak-gate.mjs");
-      const result = spawnSync(process.execPath, [gate], {
-        cwd: REPO_ROOT,
-        encoding: "utf-8",
-      });
-      const detail =
-        result.status === 0 ? "" : `exit ${String(result.status)}\n${result.stdout}${result.stderr}`;
-      expect(detail).toBe("");
+      // TEST CHANGE 2026-10-08, justified — the cost moved, not the criterion: the gate is read
+      // through the shared per-process run that `test/ci/leakGate.test.ts` also reads, and the
+      // detail asserted empty is the same exit status and streams this case printed before.
+      expect(leakGateFailureDetail(runLeakGateOnce())).toBe("");
     },
-    // This case is bounded by the whole-repository gate run it spawns, not by the suite-wide
-    // 20s default in `vitest.config.ts` — which is sized for a CLI spawn, and which turned the
-    // gate's growth into a CI timeout that named no cost. Derived, so it can be re-derived:
-    // 16s local (`time node scripts/leak-gate.mjs`, three runs, 15.81-16.13s over 5,561 files)
-    // x 2 for a runner class about half this machine's speed x 4 for margin on a shared runner
-    // with a cold file cache ≈ 128s, rounded up to 180s. The tree grew because every run export
-    // publishes each attempt's output under `evals/runs/<run>/calls/` and the gate reads all of
-    // them; nothing is excluded from it. Kept in step with `GATE_RUN_TIMEOUT_MS` in
-    // `test/ci/leakGate.test.ts`, which spawns the same gate.
-    180_000,
+    // Bounded by the whole-repository gate run it may spawn, not by the suite-wide 20s default
+    // in `vitest.config.ts`; the derivation lives beside the constant in `test/support/leakGateRun.ts`.
+    GATE_RUN_TIMEOUT_MS,
   );
 });
 
