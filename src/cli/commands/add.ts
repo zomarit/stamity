@@ -525,8 +525,10 @@ interface RefusalPart {
  *   keeps;
  * - not installed (a `clean --pack` already ran): `clean --pack` would refuse,
  *   since the ledger holds no row of the pack, and the claims left are client
- *   copies a `clean --pack` of an earlier release left for `sync` — so `sync`,
- *   then `add`, then `sync`.
+ *   copies a `clean --pack` of an earlier release left for `sync`, or ones it
+ *   could not judge because the pack could not be planned (their rows stay,
+ *   review/61). Once the pack is gone no rendering proves them, so `sync` keeps
+ *   each and drops its row — so `sync`, the step by hand, `add`, `sync`.
  *
  * Either way a file no ledger row owns (a stray, or an edited pack file
  * `clean --pack` kept as salvage) is never removed by a verb: it is the
@@ -541,7 +543,8 @@ function collisionPart(
   const claims = installed
     ? `pack "${packId}" is installed: to replace it, ${replaceSteps(packId, spec)}`
     : `pack "${packId}" is not installed: for a path or id a client copy still claims (left by an ` +
-      `earlier sync), run \`${packageCommand("sync")}\` to remove those copies, then ` +
+      `earlier sync or clean --pack), run \`${packageCommand("sync")}\`, then delete by hand each ` +
+      `client copy it keeps and names, unless it is yours, then ` +
       `\`${packageCommand(`add ${spec}`)}\`, then \`${packageCommand("sync")}\``;
   return {
     message: `${reasons.length} path(s) it would write are not free`,
@@ -645,8 +648,8 @@ function nameClashRemedyOf(
  */
 function replaceSteps(removed: string, spec: string): string {
   return (
-    `run \`${packageCommand(`clean --pack ${removed}`)}\`, then delete by hand any client ` +
-    `copy it keeps and names, then \`${packageCommand("sync")}\`, then ` +
+    `run \`${packageCommand(`clean --pack ${removed}`)}\`, then delete by hand each client ` +
+    `copy it keeps and names, unless it is yours, then \`${packageCommand("sync")}\`, then ` +
     `\`${packageCommand(`add ${spec}`)}\`, then \`${packageCommand("sync")}\``
   );
 }

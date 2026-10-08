@@ -471,7 +471,10 @@ const sweepRefused = (entry: ReclaimActionEntry): boolean =>
  * its row, so the setup stays one that ran a release before the rename
  * ({@link cursorGuardPathsFor}, review/75). A file kept for any other reason —
  * a script edited by hand, a whole-file document its owner edited — is the
- * owner's, and its row is not carried.
+ * owner's, and its row is not carried. A file the rendering proof could not
+ * judge, because the rendering could not be built (the entry's `unproven`,
+ * review/61), keeps its row too: unproven is not disproven, so the next sync
+ * tries the proof again.
  */
 export function rowsCarriedThroughSweep(
   ledger: readonly LedgerEntry[],
@@ -480,7 +483,9 @@ export function rowsCarriedThroughSweep(
 ): LedgerEntry[] {
   if (reclaimed === null) return [];
   const held = new Set(reclaimed.wiringKept?.flatMap((kept) => kept.scripts) ?? []);
-  for (const entry of reclaimed.entries) if (coOwned.has(entry.path) && sweepRefused(entry)) held.add(entry.path);
+  for (const entry of reclaimed.entries) {
+    if ((coOwned.has(entry.path) && sweepRefused(entry)) || entry.unproven === true) held.add(entry.path);
+  }
   return ledger.filter((row) => held.has(row.path) && VALID_TOOLS.has(row.adapter));
 }
 
@@ -773,6 +778,18 @@ export type EmissionPlanFor = (
 ) => Promise<readonly AdapterOutput[]>;
 
 /**
+ * What the rendering proof hands the reclaim sweep, shaped as the sweep's own
+ * options (`../../merge/reclaim.ts` `ReclaimOptions.renderings` and
+ * `renderingsUnbuilt`), so a caller spreads it in.
+ */
+export interface RenderingProof {
+  /** Repo-relative path → the SHA-256 of each rendering the running engine produces there. */
+  renderings: Map<string, Set<string>>;
+  /** The first line of the error that stopped the plan, when it could not be built. */
+  renderingsUnbuilt?: string;
+}
+
+/**
  * The SHA-256 of each rendering the running engine produces at `paths`, for the
  * reclaim sweep's rendering proof (`../../merge/reclaim.ts`
  * `ReclaimOptions.renderings`, REQ-PLUGIN-046): the emission plan for the
@@ -799,18 +816,21 @@ export type EmissionPlanFor = (
  * (`../../pack/projection.ts::withoutPolicyWarningPrint`).
  *
  * Plans nothing when no path needs the proof. A plan that cannot be built — a
- * corpus or pack read that fails — yields no rendering, so every file that
- * needs one is kept rather than deleted: the proof fails closed.
+ * corpus or pack read that fails, a pack the planner refuses — yields no
+ * rendering, so every file that needs one is kept rather than deleted: the
+ * proof fails closed. It then says why (`renderingsUnbuilt`), so the sweep
+ * keeps those files unjudged, with their rows, and names the cause rather
+ * than an owner's file (review/61).
  */
 export async function engineRenderingsFor(
   rootDir: string,
   manifest: SetupManifest,
   paths: Iterable<string>,
   planFor: EmissionPlanFor,
-): Promise<Map<string, Set<string>>> {
+): Promise<RenderingProof> {
   const renderings = new Map<string, Set<string>>();
   const wanted = new Set([...paths].filter(needsRenderingProof));
-  if (wanted.size === 0) return renderings;
+  if (wanted.size === 0) return { renderings };
   let outputs: readonly AdapterOutput[];
   try {
     const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
@@ -825,9 +845,12 @@ export async function engineRenderingsFor(
       ignoringPolicyDenialForProof(() => planFor(setupClients, { monorepoPackages: repoInfo.monorepoPackages })),
     );
     // reason: not silent — with no rendering nothing is proved, and the sweep
-    // keeps each file that needed one and names it in its report.
-  } catch {
-    return renderings;
+    // keeps each file that needed one, with its row, and names this reason.
+  } catch (error) {
+    return {
+      renderings,
+      renderingsUnbuilt: (error instanceof Error ? error.message : String(error)).split("\n")[0] ?? "",
+    };
   }
   for (const output of outputs) {
     if (!wanted.has(output.path)) continue;
@@ -835,5 +858,5 @@ export async function engineRenderingsFor(
     hashes.add(sha256(output.content));
     renderings.set(output.path, hashes);
   }
-  return renderings;
+  return { renderings };
 }

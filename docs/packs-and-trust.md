@@ -110,8 +110,9 @@ longer remove it. `add` lists those files under `left behind by this version` an
 Run `stamity clean --pack <id>` first, while the ledger still names every file of the installed
 copy. It removes the pack's own files and the copies an earlier `sync` wrote into your clients. A
 copy it cannot prove the engine wrote is kept and named: one you edited, or every copy of a pack
-whose plan the engine refuses. Delete each kept copy by hand unless it is yours, then run
-`stamity sync`. Then add the pack again with `stamity add <id>`, and run `stamity sync`.
+whose plan the engine refuses. Delete by hand each client copy it keeps and names, unless it is
+yours, then run `stamity sync`. Then add the pack again with `stamity add <id>`, and run
+`stamity sync`.
 
 ### Packs in a plugin-backed repository
 
@@ -345,17 +346,19 @@ owner:
 - The core or the fork layer: nothing in your repository can move it, so report the clash to the
   incoming pack's maintainers.
 - Another installed pack: keep it. Remove it only to replace it with the incoming pack on
-  purpose, which then takes the name: run `stamity clean --pack <id>`, then `stamity sync`, then
-  add the incoming pack, then `stamity sync`.
+  purpose, which then takes the name: run `stamity clean --pack <id>`, then delete by hand each
+  client copy it keeps and names, unless it is yours, then `stamity sync`, then add the incoming
+  pack, then `stamity sync`.
 
 A clash can also arise after a pack is installed. The pack may come from an earlier version that
 never ran that check, or a later core upgrade, a new override or a fork-layer artifact may take
 one of its names. `sync` refuses any of these, and so do `check`, `init` and `plugin setup`, which
 plan the same way. The refusal lists every clashing name with its owners, then one remedy per
 owner that can move. For a pack, run `stamity clean --pack <id>`. A pack whose names clash cannot
-be planned, so the engine cannot prove its client copies: `clean --pack` keeps each one and names
-it. Delete those by hand, then run `stamity sync`, then `stamity add <id>` once the pack ships
-distinct names, then `stamity sync`. For an override, rename or remove it. Adding the pack again
+be planned, so the engine cannot prove its client copies: `clean --pack` keeps each one with its
+ledger row and names it. Delete by hand each client copy it keeps and names, unless it is yours,
+then run `stamity sync`, then `stamity add <id>` once the pack ships distinct names, then
+`stamity sync`. For an override, rename or remove it. Adding the pack again
 before cleaning is refused when the new version would leave the clashing files behind, as described
 under [Update a pack by adding it again](#update-a-pack-by-adding-it-again).
 
@@ -466,8 +469,10 @@ ordinary regeneration drift that `sync` would then propagate into your emitted a
 The check is read-only and never repairs. What to do about a mismatch is your decision. Re-install
 the pack in the order the row's finding line prints: move an edited file out of
 `.stamity/packs/<id>/` or delete it first (`clean --pack` keeps an edited pack file, and `add` would
-refuse it), then `stamity clean --pack <id>`, `stamity sync`, `stamity add <source>` (the catalog
-id, path or package its install receipt records), and `stamity sync`. Or restore the file, or
+refuse it), then `stamity clean --pack <id>`. Delete by hand each client copy it keeps and names,
+unless it is yours: the moved file's own copy is among them, since nothing renders it once the file
+is out. Then run `stamity sync`, `stamity add <source>` (the catalog id, path or package its install
+receipt records), and `stamity sync`. Or restore the file, or
 accept the edit knowing the row will keep reporting it.
 
 ## Remove one pack
@@ -479,15 +484,17 @@ stamity clean --pack ops
 That removes exactly one pack, meaning its files and its ledger rows. While the pack is still
 installed, it also removes the copies `sync` projected from that pack into each client's folders,
 and their ledger rows. A copy is deleted only when its bytes are what the engine renders there from
-the installed pack. A copy you edited is kept and named. It also takes that pack's
-selected MCP servers out of the merged client config files, and out of the `mcp.servers` selection
-in `.stamity/manifest.json`. This is the last moment they can be proved. An entry you had tuned
+the installed pack. A copy you edited is kept and named. A pack whose plan the engine refuses
+cannot prove any copy: each copy of one of its own artifacts is kept with its ledger row and named,
+and nothing that is not the pack's is touched. It also takes that pack's selected MCP servers out
+of the merged client config files, and out of the `mcp.servers` selection in
+`.stamity/manifest.json`. This is the last moment they can be proved. An entry you had tuned
 yourself is kept and reported as yours.
 
 Every other pack's files, copies and rows are left alone. Outside the pack's own directory, the
 pack's client copies leave, and two more things change. `.stamity/manifest.json` loses exactly this
-pack's ledger rows and its copies' rows, and has its `mcp.servers` selection trimmed. When the pack supplied a selected server, the merged client MCP documents that
-removal edited change too. Their adapter-owned ledger rows are re-hashed to the bytes now on disk,
+pack's ledger rows and its copies' rows, and has its `mcp.servers` selection trimmed. When the pack
+supplied a selected server, the merged client MCP documents that removal edited change too. Their adapter-owned ledger rows are re-hashed to the bytes now on disk,
 so the ledger keeps asserting what is actually there.
 
 Ownership is matched on exact equality, so `@acme/ops` can never match `@acme/ops-extra`. The
@@ -495,7 +502,9 @@ state directory stays, because every other owner is still live. A file the safet
 its row anyway and becomes yours to keep or delete, and the output says so. That covers bytes you
 edited, and an unlink that was refused.
 
-Follow it with `stamity sync`, which regenerates the clients' files without the pack. Plain `stamity clean` with no flag removes the whole setup, packs included.
+Delete by hand each client copy it keeps and names, unless it is yours, then follow it with
+`stamity sync`, which regenerates the clients' files without the pack. Plain `stamity clean` with
+no flag removes the whole setup, packs included.
 
 ## Author your own pack
 

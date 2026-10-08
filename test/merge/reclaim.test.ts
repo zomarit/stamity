@@ -1391,15 +1391,6 @@ describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", ()
 });
 
 /**
- * The co-owned lane, tested against a HAND-WRITTEN reducer rather than the MCP
- * one. The sweep's contract here is "hand the bytes to the reducer, then act on
- * its verdict under the same gates as every other path" — asserting that through
- * `mcp/emit.ts` would make these cases fail whenever an unrelated catalog entry
- * changed, and would leave the sweep's own branch unproven when it did not. The
- * MCP reducer's own judgement is proved in `test/manifest/mcpFilter.test.ts`, and
- * the two meeting in a shipped verb in `test/cli/commands/syncMcpOwnership.test.ts`.
- */
-/**
  * Row 560: in a content folder the recorded hash no longer proves a delete on
  * its own, since a hand-added row can hash an owner's file under an
  * engine-style name. The bytes have to be a rendering the running engine
@@ -1545,6 +1536,43 @@ describe("sweepReclaimCandidates — a content-folder delete needs the engine's 
     expect(onlyEntry(report).action).toBe("skipped-user-content");
     expect(await readFile(join(root, SKILL), "utf-8")).toBe(SKILL_BYTES);
   });
+
+  // review/61 (signed off: unproven is not disproven): when the rendering could
+  // not be built, the bytes were never judged. The file is kept, marked
+  // `unproven` so its ledger row stays for the next sync to try again, and the
+  // entry names why the rendering could not be built rather than blaming an
+  // owner's file. A file judged against a built rendering carries no mark.
+  it("marks a file unproven, naming why, when the rendering could not be built, on a live run and a dry run", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const judged = ".claude/skills/st-judged/SKILL.md";
+    await temp.seedFiles({ [`repo/${SKILL}`]: SKILL_BYTES, [`repo/${judged}`]: SKILL_BYTES });
+    const reason = 'pack "ops" is recorded in the ledger but its folder is missing';
+
+    for (const consent of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- the dry run first, then the live run over the same tree
+      const unbuilt = await sweepReclaimCandidates([recorded(candidate(SKILL, "deselected", "claude"), SKILL_BYTES)], {
+        rootDir: root,
+        consent,
+        renderings: new Map(),
+        renderingsUnbuilt: reason,
+      });
+      const entry = onlyEntry(unbuilt);
+      expect(entry).toMatchObject({ action: "skipped-user-content", unproven: true });
+      expect(entry.detail).toContain(`could not be built (${reason})`);
+      expect(entry.detail).toContain("ledger row");
+      expect(entry.detail).not.toContain("an owner's file");
+      expect(await readFile(join(root, SKILL), "utf-8")).toBe(SKILL_BYTES);
+    }
+
+    const built = await sweepReclaimCandidates([recorded(candidate(judged, "deselected", "claude"), SKILL_BYTES)], {
+      rootDir: root,
+      consent: true,
+      renderings: new Map([[judged, new Set([sha256Of("the engine's own skill\n")])]]),
+    });
+    expect(onlyEntry(built).action).toBe("skipped-user-content");
+    expect(onlyEntry(built)).not.toHaveProperty("unproven");
+  });
 });
 
 describe("sweepReclaimCandidates — an instruction file leaves only on its own bytes", () => {
@@ -1627,6 +1655,15 @@ describe("sweepReclaimCandidates — an instruction file leaves only on its own 
   });
 });
 
+/**
+ * The co-owned lane, tested against a HAND-WRITTEN reducer rather than the MCP
+ * one. The sweep's contract here is "hand the bytes to the reducer, then act on
+ * its verdict under the same gates as every other path" — asserting that through
+ * `mcp/emit.ts` would make these cases fail whenever an unrelated catalog entry
+ * changed, and would leave the sweep's own branch unproven when it did not. The
+ * MCP reducer's own judgement is proved in `test/manifest/mcpFilter.test.ts`, and
+ * the two meeting in a shipped verb in `test/cli/commands/syncMcpOwnership.test.ts`.
+ */
 describe("sweepReclaimCandidates — co-owned documents", () => {
   const CO_OWNED = ".mcp.json";
   const ENGINE_LINE = "ENGINE-OWNED\n";

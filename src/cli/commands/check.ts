@@ -2083,14 +2083,16 @@ function renderNextSteps(
     // Deliberately NOT sync first: for an edited pack body sync copies the
     // current bytes into the generated setup, which propagates the change
     // rather than correcting it. Re-installing is what restores the recorded
-    // content. `clean --pack` removes the pack's projected client copies while
-    // it is still installed, and a sync after it regenerates the clients'
-    // files without the pack, before `add` (prove/6). An edited file is moved out
-    // first, since `clean --pack` keeps it and `add` would refuse it
-    // (review/56). The order is `packReinstallSteps`', the one each finding
-    // line in the row prints too (review/58). `<source>` is the one value
-    // that differs per pack, so each finding line spells it from the pack's
-    // receipt and this block says where to find it (review/59).
+    // content. `clean --pack` removes the pack's projected client copies it
+    // can prove while the pack is still installed, and keeps and names the
+    // rest — the moved file's own copy among them — which are deleted by hand
+    // unless they are the operator's (review/71); a sync after that
+    // regenerates the clients' files without the pack, before `add` (prove/6).
+    // An edited file is moved out first, since `clean --pack` keeps it and
+    // `add` would refuse it (review/56). The order is `packReinstallSteps`',
+    // the one each finding line in the row prints too (review/58). `<source>`
+    // is the one value that differs per pack, so each finding line spells it
+    // from the pack's receipt and this block says where to find it (review/59).
     steps.push(
       `${packReinstallSteps(
         "<id>",

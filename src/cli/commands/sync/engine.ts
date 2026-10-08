@@ -55,6 +55,7 @@ import {
   installedPackServers,
   type CoOwnedDocumentLane,
   type EmissionPlanFor,
+  type RenderingProof,
   ledgerRowsForOutput,
   outputWriteOptions,
   predictMcpDocumentMerge,
@@ -685,7 +686,7 @@ export async function previewReclaim(
     coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest)),
     ...retention,
     hookDocumentsAfterWrite: await hookDocumentsAfterWrite(rootDir, plan, retention.hookDocuments, coOwnedDocumentLanes(plan.manifest, packMcpSupply)),
-    renderings: await reclaimRenderings(rootDir, plan, engineVersion),
+    ...(await reclaimRenderings(rootDir, plan, engineVersion)),
     ...(now === undefined ? {} : { now }),
   });
 }
@@ -700,8 +701,8 @@ async function reclaimRenderings(
   rootDir: string,
   plan: SyncPlan,
   engineVersion: string | undefined,
-): Promise<Map<string, Set<string>>> {
-  if (engineVersion === undefined) return new Map();
+): Promise<RenderingProof> {
+  if (engineVersion === undefined) return { renderings: new Map() };
   return engineRenderingsFor(
     rootDir,
     plan.manifest,
@@ -1193,7 +1194,7 @@ export async function applySync(
           trustedExactPaths: trustedPaths,
           coOwnedPaths,
           ...hookScriptRetention(plan.manifest, packMcpSupply),
-          renderings: await reclaimRenderings(rootDir, plan, engineVersion),
+          ...(await reclaimRenderings(rootDir, plan, engineVersion)),
           now,
         })
       : null;

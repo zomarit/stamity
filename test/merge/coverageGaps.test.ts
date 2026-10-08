@@ -491,14 +491,6 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
 });
 
 /**
- * Gate 3's second half — the re-check that runs after the gates cleared a path
- * and before the unlink acts on it. Every case here faults the SECOND lstat of
- * the target: the first is the inspection that pins the file's identity, so
- * skipping it is what puts the fault precisely in the gap the re-check exists
- * to close. Refusing here is the point — the alternative is unlinking whatever
- * object the path names by the time the syscall runs.
- */
-/**
  * The running engine's rendering at {@link RULE}: the bytes these cases seed.
  *
  * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
@@ -510,6 +502,14 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
  */
 const RULE_RENDERED: ReadonlyMap<string, ReadonlySet<string>> = new Map([[RULE, new Set([CONTENT_HASH])]]);
 
+/**
+ * Gate 3's second half — the re-check that runs after the gates cleared a path
+ * and before the unlink acts on it. Every case here faults the SECOND lstat of
+ * the target: the first is the inspection that pins the file's identity, so
+ * skipping it is what puts the fault precisely in the gap the re-check exists
+ * to close. Refusing here is the point — the alternative is unlinking whatever
+ * object the path names by the time the syscall runs.
+ */
 describe("reclaim: the target changing between the gates and the unlink", () => {
   beforeEach(async () => {
     await tempDir().seedFiles({ [RULE]: CONTENT });

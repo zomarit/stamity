@@ -417,6 +417,28 @@ describe("a content-folder file leaves only as a rendering the engine produces",
     expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
   });
 
+  // review/61's other half: bytes judged against a built rendering and
+  // matching none are not the engine's, so the row leaves with the sweep and
+  // no later sync looks at the file again.
+  it("sync -y drops the row of a file whose bytes match no rendering, and does not mark it unproven", async () => {
+    const root = await initialisedRepo();
+    await seed(root, { [LOCAL]: LOCAL_BYTES });
+    await forgeRows(root, [localRow]);
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const entry = (JSON.parse(sync.stdout.trim()) as { reclaim: SweepDoc }).reclaim.entries.find(
+      (candidate) => candidate.path === LOCAL,
+    );
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry).not.toHaveProperty("unproven");
+    const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] })
+      .ledger;
+    expect(ledger.map((row) => row.path)).not.toContain(LOCAL);
+    expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
+  });
+
   it("clean -y keeps the same skill, and names it skipped-user-content", async () => {
     const root = await initialisedRepo();
     await seed(root, { [LOCAL]: LOCAL_BYTES });
@@ -501,7 +523,7 @@ describe("the renderings are the setup's own", () => {
     const seen: SetupManifest[] = [];
     const rendered = `rendered body\n`;
 
-    const renderings = await engineRenderingsFor(
+    const { renderings, renderingsUnbuilt } = await engineRenderingsFor(
       root,
       manifest,
       [".cursor/rules/30-stamity-style.mdc", "README.md"],
@@ -522,9 +544,15 @@ describe("the renderings are the setup's own", () => {
     expect(manifest.plugin).toBeDefined();
     expect([...renderings.keys()]).toEqual([".cursor/rules/30-stamity-style.mdc"]);
     expect(renderings.get(".cursor/rules/30-stamity-style.mdc")).toEqual(new Set([sha256(rendered)]));
+    expect(renderingsUnbuilt).toBeUndefined();
   });
 
-  it("plans nothing when no path needs the proof, and fails closed when the plan throws", async () => {
+  // TEST CHANGE, justified (2026-10-08, review/61, the lane D fixer): the
+  // proof now says why it could not be built beside its empty renderings, so a
+  // file it could not judge keeps its row and its report entry names the
+  // cause. The two assertions on what is rendered are unchanged; the case adds
+  // the reason, its first line only, and its absence when nothing was planned.
+  it("plans nothing when no path needs the proof, and fails closed when the plan throws, naming why", async () => {
     const root = await initialisedRepo(["claude"]);
     const manifest = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
     let calls = 0;
@@ -532,13 +560,20 @@ describe("the renderings are the setup's own", () => {
       calls++;
       return [];
     });
-    expect(none.size).toBe(0);
+    expect(none.renderings.size).toBe(0);
+    expect(none.renderingsUnbuilt).toBeUndefined();
     expect(calls).toBe(0);
 
     const failed = await engineRenderingsFor(root, manifest, [".claude/skills/st-qa/SKILL.md"], () =>
-      Promise.reject(new Error("a corpus read failed")),
+      Promise.reject(new Error("a corpus read failed\nat its second line")),
     );
-    expect(failed.size).toBe(0);
+    expect(failed.renderings.size).toBe(0);
+    expect(failed.renderingsUnbuilt).toBe("a corpus read failed");
+
+    const thrownValue = await engineRenderingsFor(root, manifest, [".claude/skills/st-qa/SKILL.md"], () =>
+      Promise.reject("not an Error"),
+    );
+    expect(thrownValue.renderingsUnbuilt).toBe("not an Error");
   });
 
   it("previews a deselected client's unedited file as a delete, and keeps it under a plan with no engine version", async () => {
@@ -636,6 +671,37 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     const entry = (JSON.parse(sync.stdout.trim()) as SyncDoc).reclaim.entries.find((candidate) => candidate.path === copy);
     expect(entry?.action).toBe("skipped-user-content");
     expect(await readFile(join(root, copy), "utf8")).toBe(ownerBytes);
+  });
+
+  // review/61 and review/67 (signed off: unproven is not disproven): a denied
+  // pack whose folder was pruned by hand reaches the missing-folder refusal
+  // only inside the proof's opt-out, so the verb's own plan builds and the
+  // proof's throws. Nothing was judged: each copy is kept with its ledger row,
+  // for the next sync to try again, and its entry names why the rendering
+  // could not be built instead of calling it an owner's file.
+  it("keeps the copies and their rows when the proof cannot be built, naming why", async () => {
+    const { root, copies } = await opsProjected();
+    await denyEveryPack(root);
+    await rm(join(root, ".stamity", "packs", "ops"), { recursive: true, force: true });
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const doc = JSON.parse(sync.stdout.trim()) as SyncDoc;
+    for (const copy of copies) {
+      const entry = doc.reclaim.entries.find((candidate) => candidate.path === copy) as
+        | { action: string; detail: string; unproven?: boolean }
+        | undefined;
+      expect(entry, copy).toMatchObject({ action: "skipped-user-content", unproven: true });
+      expect(entry?.detail, copy).toContain("could not be built (");
+      expect(entry?.detail, copy).toContain("ops");
+      expect(entry?.detail, copy).not.toContain("an owner's file");
+      expect(existsSync(join(root, copy)), copy).toBe(true);
+    }
+    const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] }).ledger;
+    for (const copy of copies) {
+      expect(ledger.some((row) => row.path === copy && row.adapter === "claude"), copy).toBe(true);
+    }
   });
 
   it("admits a denied pack to discovery only inside the proof's opt-out", async () => {

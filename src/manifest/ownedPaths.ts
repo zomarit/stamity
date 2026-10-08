@@ -274,9 +274,13 @@ export function hasEngineMintedName(path: string): boolean {
  * An owner may keep a file under an engine-style name in those folders, and a
  * hand-added row can record the hash of its bytes as easily as the engine
  * records the hash of its own, so at these paths the recorded hash says only
- * that nobody edited the file since the row was written, not who wrote it. The
- * running engine's own rendering is the one record a hand edit of the manifest
- * cannot forge.
+ * that nobody edited the file since the row was written, not who wrote it. So
+ * the delete needs the running engine's own rendering at the path: a forged
+ * row and hash alone no longer delete. What the proof does not close: the
+ * rendering is built from the setup's packs and overrides, which a repository
+ * writer can also plant, so a planted pack or override whose rendering copies
+ * an owner's file byte for byte, beside a forged row hashing it, still proves
+ * that delete (a residual `SECURITY.md` names).
  */
 export function needsRenderingProof(path: string): boolean {
   return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) && hasEngineMintedName(path);

@@ -139,9 +139,12 @@ const call = (verb: string): string => `npx -y @zomarit/stamity@${ENGINE_VERSION
 // from the installed pack, and a pack this refusal names cannot be planned, so its
 // copies are kept and named. The remedy gains the step by hand that deletes them
 // before the `sync`; the four commands and their order are unchanged.
+// TEST CHANGE, justified (2026-10-08, review/68, review/72, review/76, the lane D fixer): the step by hand reads
+// the same in every remedy and tells the reader to keep a file that is theirs, since
+// a kept copy is named, not proven the pack's. The commands and their order hold.
 const ACME_REMEDY =
   `pack "acme-demo": run \`${call("clean --pack acme-demo")}\`, then delete by ` +
-  `hand each client copy it keeps and names (a clashing pack cannot prove them), then ` +
+  `hand each client copy it keeps and names, unless it is yours, then ` +
   `\`${call("sync")}\`, then ` +
   `\`${call("add acme-demo")}\` once the pack ships distinct names, then \`${call("sync")}\``;
 

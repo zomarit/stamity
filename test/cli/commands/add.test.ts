@@ -1377,10 +1377,16 @@ describe("add — collisions", () => {
     // one's state. Not installed, the remedy is sync (for claims a client copy
     // left), then add, then sync, and the stray is the operator's to move;
     // the installed branch is pinned in upgradeRemedy.test.ts, which runs it.
+    // TEST CHANGE, justified (2026-10-08, build/47, review/61, the lane D fixer): once the
+    // pack is gone no rendering proves a client copy, so `sync` keeps it and drops its row
+    // rather than removing it, and a `clean --pack` that could not plan the pack leaves the
+    // copies' rows too. The remedy gains the step by hand between `sync` and `add`; the
+    // commands and their order hold (upgradeRemedy.test.ts runs it).
     expect(errorOf(doc).next).toBe(
       `resolve the collisions, then re-run — pack "${PACK_ID}" is not installed: for a path or ` +
-        `id a client copy still claims (left by an earlier sync), run \`${npxCommand("sync")}\` ` +
-        `to remove those copies, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, then ` +
+        `id a client copy still claims (left by an earlier sync or clean --pack), run ` +
+        `\`${npxCommand("sync")}\`, then delete by hand each client copy it keeps and names, ` +
+        `unless it is yours, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, then ` +
         `\`${npxCommand("sync")}\`; for a file no ledger row owns ("a file already exists ` +
         `there"), move it out of the way or delete it, then re-run`,
     );
@@ -1631,11 +1637,13 @@ describe("add — name clashes", () => {
     // removes the pack's client copies itself, but a copy it cannot prove is kept, named
     // and disowned, and would collide with the re-added pack's copy; the remedy gains the
     // step by hand that deletes it before the `sync`. The four commands and their order hold.
+    // TEST CHANGE, justified (2026-10-08, review/68, review/72, review/76, the lane D fixer): the
+    // step by hand reads the same in every remedy, hedged for a file that is the operator's.
     expect(next).toContain(
       `pack "${PACK_ID}" is installed and keeps st-shared: remove it only to replace it with ` +
         `pack "acme-two" on purpose, which then takes the name — ` +
-        `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then delete by hand any client copy it ` +
-        `keeps and names, then \`${npxCommand("sync")}\`, then \`${npxCommand("add ./packs/two")}\`, ` +
+        `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then delete by hand each client copy it ` +
+        `keeps and names, unless it is yours, then \`${npxCommand("sync")}\`, then \`${npxCommand("add ./packs/two")}\`, ` +
         `then \`${npxCommand("sync")}\``,
     );
     expect(next).not.toContain("remove it first");
@@ -1745,9 +1753,11 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     // removes the pack's client copies itself, but a copy it cannot prove is kept, named
     // and disowned, and would collide with the re-added pack's copy; the remedy gains the
     // step by hand that deletes it before the `sync`. The four commands and their order hold.
+    // TEST CHANGE, justified (2026-10-08, review/68, review/72, review/76, the lane D fixer): the
+    // step by hand reads the same in every remedy, hedged for a file that is the operator's.
     expect(human.stderr).toContain(
-      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then delete by hand any client copy it ` +
-        `keeps and names, then \`${npxCommand("sync")}\`, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, ` +
+      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then delete by hand each client copy it ` +
+        `keeps and names, unless it is yours, then \`${npxCommand("sync")}\`, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, ` +
         `then \`${npxCommand("sync")}\``,
     );
     // Nothing written: the ledger, the receipt and the dropped file are as they were.
@@ -1847,9 +1857,11 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     // removes the pack's client copies itself, but a copy it cannot prove is kept, named
     // and disowned, and would collide with the re-added pack's copy; the remedy gains the
     // step by hand that deletes it before the `sync`. The four commands and their order hold.
+    // TEST CHANGE, justified (2026-10-08, review/68, review/72, review/76, the lane D fixer): the
+    // step by hand reads the same in every remedy, hedged for a file that is the operator's.
     expect(refused.stderr).toContain(
-      `run \`${npxCommand("clean --pack ops")}\`, then delete by hand any client copy it keeps ` +
-        `and names, then \`${npxCommand("sync")}\`, then \`${npxCommand("add ops")}\`, ` +
+      `run \`${npxCommand("clean --pack ops")}\`, then delete by hand each client copy it keeps ` +
+        `and names, unless it is yours, then \`${npxCommand("sync")}\`, then \`${npxCommand("add ops")}\`, ` +
         `then \`${npxCommand("sync")}\``,
     );
     expect(await readProjectManifest()).toEqual(before);

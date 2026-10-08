@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, rm, stat } from "node:fs/promises";
+import { readFile, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { readManifest, writeManifest } from "../../manifest/manifest.ts";
 import {
@@ -10,7 +10,9 @@ import {
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { MERGED_MCP_JSON_PATHS, engineOwnedServerIds } from "../../mcp/emit.ts";
 import { formatReclaimReport, sweepReclaimCandidates } from "../../merge/reclaim.ts";
+import { applyCommandPrefix, slugOf } from "../../content/catalog.ts";
 import { planPackRemoval } from "../../pack/install.ts";
+import { packDirRelPath } from "../../pack/receipt.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
 import { trustedInfraPaths, type ReclaimCandidate } from "../../manifest/ledger.ts";
 import { needsRenderingProof } from "../../manifest/ownedPaths.ts";
@@ -21,6 +23,7 @@ import {
   type LedgerEntry,
   type SetupManifest,
 } from "../../types/manifest.ts";
+import { CONTENT_CLASSES, type ContentClass } from "../../types/content.ts";
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import {
@@ -29,6 +32,7 @@ import {
   engineRenderingsFor,
   hookScriptRetention,
   type EmissionPlanFor,
+  type RenderingProof,
 } from "../engine/emissionWrite.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { CliFailure } from "../kit/output.ts";
@@ -71,9 +75,11 @@ import { confirm, promptGate } from "../kit/prompts.ts";
  * the output says so. While the pack is still installed, the sweep also takes
  * the copies `sync` projected from it into the clients' folders, each deleted
  * only as bytes the running engine renders there from the pack
- * ({@link findPackCopies}); afterwards no rendering could prove them. The
- * closing next-step is the pinned `sync`, which regenerates the clients' files
- * without the pack; the reinit offer stays full-clean-only.
+ * ({@link findPackCopies}); afterwards no rendering could prove them. A copy
+ * the proof could not judge, because the pack could not be planned, keeps its
+ * row (review/61). The closing next-step is the pinned `sync`, which
+ * regenerates the clients' files without the pack; the reinit offer stays
+ * full-clean-only.
  *
  * Order of operations: sweep first, state directory last. The plan is read into
  * memory before either, so the ordering costs nothing — but removing the state
@@ -120,7 +126,7 @@ function cleanRenderings(
   manifest: SetupManifest,
   candidates: readonly ReclaimCandidate[],
   engineVersion: string,
-): Promise<Map<string, Set<string>>> {
+): Promise<RenderingProof> {
   return engineRenderingsFor(
     rootDir,
     manifest,
@@ -129,39 +135,106 @@ function cleanRenderings(
   );
 }
 
-/** What one planner run showed: every path it renders, or why it could not be built. */
+/** What one planner run showed: every path it renders, or `null` when it could not be built. */
 interface PlanSeen {
   paths: Set<string> | null;
-  failure: string | null;
 }
 
 /**
  * The planner call the rendering proof injects, built as `sync` builds its
- * own. With `seen`, the run also records every path it rendered, or the first
- * line of the error that stopped it, so `clean --pack` can tell which paths the
- * pack's presence adds ({@link findPackCopies}).
+ * own. With `seen`, the run also records every path it rendered, so
+ * `clean --pack` can tell which paths the pack's presence adds
+ * ({@link findPackCopies}); why a plan could not be built is the proof's own
+ * `renderingsUnbuilt`.
  */
 function cleanPlanner(rootDir: string, engineVersion: string, seen?: PlanSeen): EmissionPlanFor {
   return async (setupClients, facts) => {
-    try {
-      const outputs = await getEmissionPlanner().plan({
-        rootDir,
-        manifest: setupClients,
-        engineVersion,
-        packageName: packageName(),
-        npmChannel: hasNpmChannel(),
-        ...registryOption({}),
-        facts,
-      });
-      if (seen !== undefined) seen.paths = new Set(outputs.map((output) => output.path));
-      return outputs;
-    } catch (error) {
-      if (seen !== undefined) {
-        seen.failure = (error instanceof Error ? error.message : String(error)).split("\n")[0] ?? "";
-      }
-      throw error;
-    }
+    const outputs = await getEmissionPlanner().plan({
+      rootDir,
+      manifest: setupClients,
+      engineVersion,
+      packageName: packageName(),
+      npmChannel: hasNpmChannel(),
+      ...registryOption({}),
+      facts,
+    });
+    if (seen !== undefined) seen.paths = new Set(outputs.map((output) => output.path));
+    return outputs;
   };
+}
+
+/** The pack folders whose files project into the clients, by the content class each holds. */
+const PACK_CLASS_DIRS: Readonly<Record<string, ContentClass>> = {
+  agents: "agent",
+  skills: "skill",
+  rules: "rule",
+  commands: "command",
+};
+
+/**
+ * The artifact a pack-relative path names, as `<class>:<slug>` — a skill by
+ * its folder, any other class by its `.md` file's stem, the engine prefix
+ * taken off as the catalog takes it (`../../content/catalog.ts::slugOf`) — or
+ * `null` for a file that is no artifact (the receipt, hooks, MCP servers).
+ */
+function packArtifactOf(relPath: string): string | null {
+  const segments = relPath.split("/");
+  const type = PACK_CLASS_DIRS[segments[0] ?? ""];
+  const name = segments[1];
+  if (type === undefined || name === undefined) return null;
+  if (type === "skill") return segments.length >= 3 ? `${type}:${slugOf(name)}` : null;
+  return segments.length === 2 && name.endsWith(".md") ? `${type}:${slugOf(name.slice(0, -".md".length))}` : null;
+}
+
+/**
+ * Every artifact pack `packId` ships, read from the pack itself and never from
+ * a plan, so it holds when the pack cannot be planned: the artifacts its own
+ * ledger rows name (`artifactId` is `<pack id>/<pack-relative path>`), and
+ * those its folder holds now. The rows keep an artifact whose file was moved
+ * out of the folder (`check`'s pack-integrity remedy, review/71).
+ */
+async function packArtifacts(rootDir: string, manifest: SetupManifest, packId: string): Promise<Set<string>> {
+  const owner = packOwner(packId);
+  const rels = manifest.ledger
+    .filter((row) => row.adapter === owner)
+    .map((row) => row.artifactId.slice(row.artifactId.indexOf("/") + 1));
+  const dir = join(rootDir, ...packDirRelPath(packId).split("/"));
+  for (const classDir of Object.keys(PACK_CLASS_DIRS)) {
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- four fixed folders, read in order
+      const entries = await readdir(join(dir, classDir), { withFileTypes: true });
+      for (const entry of entries) {
+        rels.push(entry.isDirectory() ? `${classDir}/${entry.name}/SKILL.md` : `${classDir}/${entry.name}`);
+      }
+    } catch {
+      // reason: a class folder the pack does not ship, or a pack folder that
+      // is gone, adds no artifact; the ledger rows above still name its own.
+    }
+  }
+  return new Set(rels.map(packArtifactOf).filter((key): key is string => key !== null));
+}
+
+/**
+ * True when client row `row` is one of `artifacts` by both its record and its
+ * path: its class and catalog id name the artifact, and the name its path
+ * projects under — the folder after `skills/`, else the file name up to its
+ * first dot — slugs to that id. A forged row can name a pack artifact, but at
+ * any other path than the one that artifact projects to it is not taken
+ * (review/68).
+ */
+function isPackArtifactRow(row: LedgerEntry, artifacts: ReadonlySet<string>): boolean {
+  if (!(CONTENT_CLASSES as readonly string[]).includes(row.artifactType)) return false;
+  const type = row.artifactType as ContentClass;
+  const slug = slugOf(projectedNameOf(row.path));
+  return applyCommandPrefix(slug, type) === row.artifactId && artifacts.has(`${type}:${slug}`);
+}
+
+/** The artifact name a client path projects under: the folder after `skills/`, else the file name up to its first dot. */
+function projectedNameOf(path: string): string {
+  const segments = path.split("/");
+  const skillsAt = segments.indexOf("skills");
+  const name = skillsAt >= 0 && skillsAt < segments.length - 1 ? segments[skillsAt + 1] : segments.at(-1);
+  return (name ?? "").split(".")[0] ?? "";
 }
 
 /** The client copies `clean --pack` sweeps beside the pack's own files. */
@@ -170,10 +243,12 @@ interface PackCopies {
   rows: ReadonlySet<LedgerEntry>;
   /** The copies as sweep candidates. */
   candidates: ReclaimCandidate[];
-  /** The renderings, planned with the pack installed, at the pack's paths and its copies'. */
-  renderings: Map<string, Set<string>>;
+  /** The proof, planned with the pack installed, at the pack's paths and its copies'. */
+  proof: RenderingProof;
   /** Why the plan with the pack installed could not be built, or `null` when it was. */
   unplanned: string | null;
+  /** Why the plan without the pack could not be built, so no copy was looked for, or `null`. */
+  unexamined: string | null;
 }
 
 /**
@@ -186,15 +261,23 @@ interface PackCopies {
  * a copy. A path both render is not one, even where the bytes differ (a shared
  * policy document): the next `sync` rewrites it.
  *
+ * A client row of one of the pack's own artifacts ({@link packArtifacts},
+ * {@link isPackArtifactRow}) at a path the second plan does not render is a
+ * copy too, rendered or not: an artifact whose file was moved out of the pack
+ * folder is still the pack's by its row (review/71).
+ *
  * Only a path that needs the rendering proof can be a copy: elsewhere no
  * rendering proves a delete, and the row is left for `sync` as before.
  *
  * When the first plan cannot be built (a pack whose own command and skill
- * share a name, which the planner refuses), no rendering proves anything, so
- * every client row the second plan does not render is taken as a copy and kept
- * by the sweep, named, its row dropped. It never falls back to the recorded
- * hash, which a forged row could match. When the second plan cannot be built,
- * no copy can be told from a shared path, and none is taken.
+ * share a name, which the planner refuses), the copies are only the rows of
+ * the pack's own artifacts, read from the pack and not from a plan, so a
+ * retired engine file, a removed override or a forged row elsewhere is left
+ * alone (review/68, review/70). No rendering proves any of them: the sweep
+ * keeps each unjudged, with its row, and names it (review/61). It never falls
+ * back to the recorded hash, which a forged row could match. When the second
+ * plan cannot be built, no copy can be told from a shared path, none is
+ * taken, and the run says so.
  */
 async function findPackCopies(
   rootDir: string,
@@ -207,34 +290,39 @@ async function findPackCopies(
   const clientRows = manifest.ledger.filter(
     (row) => (TOOLS as readonly string[]).includes(row.adapter) && needsRenderingProof(row.path),
   );
-  const installed: PlanSeen = { paths: null, failure: null };
-  const renderings = await engineRenderingsFor(
+  const installed: PlanSeen = { paths: null };
+  const proof = await engineRenderingsFor(
     rootDir,
     manifest,
     [...packRows.map((candidate) => candidate.entry.path), ...clientRows.map((row) => row.path)],
     cleanPlanner(rootDir, engineVersion, installed),
   );
-  const none = { rows: new Set<LedgerEntry>(), candidates: [], renderings, unplanned: null };
+  const none = { rows: new Set<LedgerEntry>(), candidates: [], proof, unplanned: null, unexamined: null };
   if (clientRows.length === 0) return none;
-  const removed: PlanSeen = { paths: null, failure: null };
-  await engineRenderingsFor(
+  const removed: PlanSeen = { paths: null };
+  const withoutProof = await engineRenderingsFor(
     rootDir,
     { ...manifest, ledger: manifest.ledger.filter((row) => row.adapter !== owner) },
     clientRows.map((row) => row.path),
     cleanPlanner(rootDir, engineVersion, removed),
   );
   const withoutPack = removed.paths;
-  if (withoutPack === null) return none;
+  if (withoutPack === null) return { ...none, unexamined: withoutProof.renderingsUnbuilt ?? "the plan could not be built" };
   const withPack = installed.paths;
+  const artifacts = await packArtifacts(rootDir, manifest, packId);
   const rows = new Set(
-    clientRows.filter((row) => !withoutPack.has(row.path) && (withPack === null || withPack.has(row.path))),
+    clientRows.filter(
+      (row) =>
+        !withoutPack.has(row.path) && (withPack?.has(row.path) === true || isPackArtifactRow(row, artifacts)),
+    ),
   );
   return {
     rows,
     // "deselected": the client is still a target, and no plan without the pack produces the artifact.
     candidates: [...rows].map((row) => ({ entry: cloneEntry(row), reason: "deselected" })),
-    renderings,
-    unplanned: withPack === null ? (installed.failure ?? "the plan could not be built") : null,
+    proof,
+    unplanned: withPack === null ? (proof.renderingsUnbuilt ?? "the plan could not be built") : null,
+    unexamined: null,
   };
 }
 
@@ -614,7 +702,8 @@ function mcpSentence(mcp: McpUninstallReport): string {
  * A dry run drops nothing and prompts for nothing.
  *
  * The pack's projected copies leave with it ({@link findPackCopies}), and so do
- * their rows, a kept copy's included.
+ * their rows, a kept copy's included — except a copy the proof could not judge
+ * because the pack could not be planned, which keeps its row (review/61).
  *
  * Two things leave the repo besides the pack's own files, and both leave HERE
  * because this is the last moment they can (see {@link removePackMcpEntries}):
@@ -690,17 +779,24 @@ async function runScopedClean(
     ...hookScriptRetention(manifest, packSupply),
     // Rendered while the pack is still installed, so the pack's own content
     // still proves itself and its copies (REQ-PLUGIN-046).
-    renderings: copies.renderings,
+    ...copies.proof,
   });
   ctx.spinner.stop();
+
+  // Copies the proof could not judge (the pack could not be planned): unproven
+  // is not disproven, so each keeps its row for the next sync (review/61).
+  const unproven = new Set(report.entries.filter((entry) => entry.unproven === true).map((entry) => entry.path));
+  const droppedCopies = [...copies.rows].filter((row) => !unproven.has(row.path));
 
   let removedRows = 0;
   if (!ctx.dryRun) {
     const owner = packOwner(packId);
-    // A copy's row leaves with the pack's rows, kept file or not: no rendering
-    // will prove it once the pack is gone, so the kept file is the owner's.
+    // A judged copy's row leaves with the pack's rows, kept file or not: no
+    // rendering will prove it once the pack is gone, so the kept file is the
+    // owner's.
+    const dropped = new Set(droppedCopies);
     const ledger = manifest.ledger
-      .filter((entry) => entry.adapter !== owner && !copies.rows.has(entry))
+      .filter((entry) => entry.adapter !== owner && !dropped.has(entry))
       .map((entry) => rehashRewritten(entry, mcp.rewritten));
     removedRows = manifest.ledger.length - ledger.length;
     // The selection lets go of every id this pack supplied — including one whose
@@ -725,9 +821,11 @@ async function runScopedClean(
   if (formatted !== "") ctx.io.out(`${formatted}\n`);
 
   // Files still on disk after the sweep (edited bytes, a refused unlink) are
-  // salvage: their rows are gone, so nothing will ever reclaim them.
+  // salvage: their rows are gone, so nothing will ever reclaim them. An
+  // unproven copy is not: its row stays.
   const salvaged = report.entries.filter(
-    (entry) => entry.action === "skipped-user-content" || entry.action === "skipped-unsafe-path",
+    (entry) =>
+      (entry.action === "skipped-user-content" || entry.action === "skipped-unsafe-path") && entry.unproven !== true,
   ).length;
   const copyPaths = new Set(copies.candidates.map((candidate) => candidate.entry.path));
   const keptCopies = report.entries
@@ -736,7 +834,8 @@ async function runScopedClean(
 
   if (ctx.dryRun) {
     const copySentence =
-      copies.rows.size === 0 ? "" : ` and the rows of its ${copies.rows.size} client copy(ies)`;
+      (droppedCopies.length === 0 ? "" : ` and the rows of its ${droppedCopies.length} client copy(ies)`) +
+      (unproven.size === 0 ? "" : `, keeping the rows of the ${unproven.size} copy(ies) it could not judge`);
     ctx.io.out(
       `Dry run: nothing was written and the manifest still records the pack. ` +
         `A real run also drops its ${candidates.length} ledger row(s)${copySentence}` +
@@ -771,7 +870,14 @@ async function runScopedClean(
     if (copies.unplanned !== null && copies.rows.size > 0) {
       ctx.io.out(
         `Pack "${packId}" could not be planned as installed (${copies.unplanned}), so none of its ` +
-          `${copies.rows.size} client copy(ies) can be proven the engine's: each is kept and named above.\n`,
+          `${copies.rows.size} client copy(ies) can be proven the engine's: each is kept with its ledger row ` +
+          `and named above.\n`,
+      );
+    }
+    if (copies.unexamined !== null) {
+      ctx.io.out(
+        `The setup could not be planned without pack "${packId}" (${copies.unexamined}), so its client ` +
+          `copies were not looked for: their rows stay.\n`,
       );
     }
     nextSteps(ctx, [
@@ -852,7 +958,7 @@ export const cleanCommand: CommandModule = {
       // selection goes with the state directory a few lines below.
       coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
       ...hookScriptRetention(manifest, packSupply),
-      renderings: await cleanRenderings(rootDir, manifest, candidates, ctx.app.version),
+      ...(await cleanRenderings(rootDir, manifest, candidates, ctx.app.version)),
     });
     ctx.spinner.stop();
 

@@ -407,13 +407,16 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
   // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies; the declared default
   // recorded in the run's record): the case was "add straight after clean --pack is refused
   // on the copies, and its printed remedy runs to exit 0 (prove/5)". `clean --pack` now
-  // takes the copies' rows with the pack's, so `add` right after it no longer finds their
-  // paths owned and installs. This pack cannot be planned (its command and skill clash), so
-  // the copies themselves are kept and named, and left on disk they collide with the
-  // re-added pack's `sync`. What prove/5 pins holds: the steps `clean --pack` prints, run in
-  // order, reach a `check` that exits 0.
+  // removes a pack's client copies itself, but this pack cannot be planned (its command and
+  // skill clash), so the copies are kept and named.
+  // TEST CHANGE, justified (2026-10-08, review/61 and build/43, the lane D fixer): a copy the
+  // proof could not judge keeps its ledger row (unproven is not disproven), so `add` right
+  // after `clean --pack` is refused on the copies again, as the case first read. Its printed
+  // not-installed remedy gains the step by hand: once the pack is gone `sync` keeps each copy
+  // and drops its row, and left on disk it collides with the re-added pack's. What prove/5
+  // pins holds: the printed steps, run in order, reach a `check` that exits 0.
   it(
-    "add straight after clean --pack installs, and the kept copies, deleted as clean --pack names them, let sync run to a green check (prove/5)",
+    "add straight after clean --pack is refused on the copies whose rows it kept, and its printed remedy runs to a green check (prove/5)",
     async () => {
       const repo = await syncedAt1110("collision");
 
@@ -423,21 +426,20 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
       const kept = keptCopies(cleaned.output);
       for (const path of UNPROVABLE) expect(kept, `kept and named: ${path}`).toContain(path);
       const rows = new Set((await readManifest(repo))?.ledger.map((row) => row.path));
-      for (const path of kept) expect(rows.has(path), `the row of ${path} leaves`).toBe(false);
+      for (const path of kept) expect(rows.has(path), `the row of ${path} stays`).toBe(true);
 
-      // No row claims the copies' paths any more, so add installs straight away.
-      const added = await cli(repo, ["add", "ops", "-y"]);
-      expect(added.code, `add right after clean --pack must install — ${said(added)}`).toBe(0);
+      const refused = await cli(repo, ["add", "ops", "-y"]);
+      expect(refused.code, `add right after clean --pack must refuse the claimed copies — ${said(refused)}`).toBe(1);
+      expect(refused.output).toContain('pack "ops" is not installed');
+      expect(collisionVerbs(refused.output, "ops")).toEqual(["sync", "add ops", "sync"]);
+      expect(refused.output).toContain("then delete by hand each client copy it keeps and names, unless it is yours");
 
-      // Left on disk, the kept copies collide with what the re-added pack projects.
-      const collided = await cli(repo, ["sync"]);
-      expect(collided.code, `sync over the kept copies must refuse them — ${said(collided)}`).toBe(1);
-      expect(collided.output).toContain(".claude/agents/stamity-devops.md");
-
-      // The step by hand `clean --pack` printed, then the sync.
-      expect(cleaned.output).toContain("delete by hand each client copy kept above, unless it is yours");
+      // The printed steps: `sync`, the step by hand over what it keeps and names, `add`, `sync`.
+      const synced = await cli(repo, ["sync"]);
+      expect(synced.code, `remedy step \`sync\` must exit 0 — ${said(synced)}`).toBe(0);
+      for (const path of kept) expect(synced.output, `sync names ${path}`).toContain(path);
       await Promise.all(kept.map((path) => rm(join(repo, ...path.split("/")))));
-      await runSteps(repo, ["sync"]);
+      await runSteps(repo, ["add ops", "sync"]);
 
       const checked = await cli(repo, ["check"]);
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
@@ -467,7 +469,10 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
       // by hand that deletes each client copy `clean --pack` keeps and names. This pack's
       // command and skill clash, so the planner refuses it and none of its copies can be
       // proven. The four commands, their order and the green `check` are unchanged.
-      expect(refused.output).toContain("then delete by hand any client copy it keeps and names");
+      // TEST CHANGE, justified (2026-10-08, review/68, review/72, review/76, the lane D
+      // fixer): the step by hand reads the same in every remedy, hedged for a file that is
+      // the operator's. The commands, their order and the green `check` hold.
+      expect(refused.output).toContain("then delete by hand each client copy it keeps and names, unless it is yours");
       const deleted = await runStepsDeletingKept(repo, steps);
       for (const path of UNPROVABLE) expect(deleted, `kept and named: ${path}`).toContain(path);
 
@@ -491,6 +496,7 @@ async function integrityRemedyRuns(
   install: readonly string[],
   addStep: string,
   before?: (repo: string) => Promise<void>,
+  syncAfterEdit = false,
 ): Promise<void> {
   const repo = await claudeRepo(name);
   await before?.(repo);
@@ -503,6 +509,12 @@ async function integrityRemedyRuns(
   const editedAbs = join(repo, ...edited.split("/"));
   const body = `${await readFile(editedAbs, "utf8")}\nA local edit.\n`;
   await writeFile(editedAbs, body, "utf8");
+  if (syncAfterEdit) {
+    // The usual case: a `sync` ran before `check` and carried the edit into the client copy.
+    const carried = await cli(repo, ["sync"]);
+    expect(carried.code, `fixture: sync over the edit — ${said(carried)}`).toBe(0);
+    expect(await readFile(join(repo, ".claude", "agents", "stamity-devops.md"), "utf8")).toContain("A local edit.");
+  }
 
   const json = await cli(repo, ["check", "--json"]);
   expect(json.code, `check must fail the edited pack — ${said(json)}`).toBe(1);
@@ -524,15 +536,21 @@ async function integrityRemedyRuns(
   expect(next).toContain(
     "move any edited file the pack-integrity row names out of the pack's directory or delete it first",
   );
+  // TEST CHANGE, justified (2026-10-08, review/71, the lane D fixer): the moved file's client
+  // copy is the pack's by its row, but no rendering proves it once the file is out, so
+  // `clean --pack` keeps and names it; the order gains the step by hand that deletes it
+  // before the `sync`, as `add`'s and `sync`'s remedies print. The commands hold.
   expect(next).toContain(
-    `${npxCommand("clean --pack <id>")}, then ${npxCommand("sync")}, then ` +
+    `${npxCommand("clean --pack <id>")}, then delete by hand each client copy it keeps and names, ` +
+      `unless it is yours, then ${npxCommand("sync")}, then ` +
       `${npxCommand("add <source>")}, then ${npxCommand("sync")}`,
   );
 
   // The printed first step, by hand: move the edited file out of the pack.
   const keep = join(repo, "kept-devops.md");
   await rename(editedAbs, keep);
-  await runSteps(repo, steps);
+  const deleted = await runStepsDeletingKept(repo, steps);
+  expect(deleted, "clean --pack names the moved file's client copy").toContain(".claude/agents/stamity-devops.md");
 
   const checked = await cli(repo, ["check"]);
   expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
@@ -560,6 +578,17 @@ describe("an edited pack file, by the remedy check's pack-integrity row prints",
           await cp(OPS_ROOT, join(repo, "vendor", "ops"), { recursive: true });
         },
       );
+    },
+    CASE_TIMEOUT,
+  );
+
+  // review/71: after a `sync` carried the edit into the client copy, the copy is not the
+  // re-added pack's rendering, so left on disk it refuses the final `sync`. The order's step
+  // by hand deletes it, and the whole order reaches a clean final `sync` and a green `check`.
+  it(
+    "an edit a sync already carried into the client copy: the printed order, its step by hand included, runs to a green check (review/71)",
+    async () => {
+      await integrityRemedyRuns("integrity-synced-edit", ["add", "ops"], "add ops", undefined, true);
     },
     CASE_TIMEOUT,
   );

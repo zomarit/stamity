@@ -438,30 +438,6 @@ export interface ResolvedPackContent {
   policyWarnings?: string[];
 }
 
-/**
- * Resolve the installed pack set into emission inputs: discover packs from
- * the ledger, run the merged corpus+packs walk (which refuses any id clash
- * with existing content), and project pack skills into the shared
- * `.agents/skills/` tree.
- *
- * Pack skill BODIES are projected VERBATIM — no token substitution: the prose
- * the operator previewed and installed is the prose that emits. Emission-time
- * substitution is a corpus affordance (the corpus is authored against this
- * engine's token grammar); pack content is third-party supply whose bodies
- * passed the deny scan as written, and rewriting them post-gate would emit
- * text nobody scanned. The `SKILL.md` HEAD is the one exception, and it is a
- * conformance requirement rather than an affordance — see
- * {@link projectOnePackSkill}.
- *
- * MCP server definitions resolve in the same pass ({@link packMcpServers}) and
- * arrive on `mcpServers`. They are a SEPARATE lane from the catalog walk — no
- * corpus half, no id merge — so the two run concurrently rather than in
- * sequence, and a pack shipping only `mcp_servers/` still resolves even though
- * it contributes no walk root.
- *
- * `corpusRoot` pins the corpus half of the merged walk; production callers
- * leave it absent and get the bundled corpus.
- */
 /** Set inside {@link ignoringPolicyDenialForProof}; read by {@link discoverInstalledPacksWithPolicy}. */
 const policyDenialSetAside = new AsyncLocalStorage<true>();
 
@@ -499,6 +475,30 @@ export function withoutPolicyWarningPrint<T>(plan: () => Promise<T>): Promise<T>
   return policyWarningPrintMuted.run(true, plan);
 }
 
+/**
+ * Resolve the installed pack set into emission inputs: discover packs from
+ * the ledger, run the merged corpus+packs walk (which refuses any id clash
+ * with existing content), and project pack skills into the shared
+ * `.agents/skills/` tree.
+ *
+ * Pack skill BODIES are projected VERBATIM — no token substitution: the prose
+ * the operator previewed and installed is the prose that emits. Emission-time
+ * substitution is a corpus affordance (the corpus is authored against this
+ * engine's token grammar); pack content is third-party supply whose bodies
+ * passed the deny scan as written, and rewriting them post-gate would emit
+ * text nobody scanned. The `SKILL.md` HEAD is the one exception, and it is a
+ * conformance requirement rather than an affordance — see
+ * {@link projectOnePackSkill}.
+ *
+ * MCP server definitions resolve in the same pass ({@link packMcpServers}) and
+ * arrive on `mcpServers`. They are a SEPARATE lane from the catalog walk — no
+ * corpus half, no id merge — so the two run concurrently rather than in
+ * sequence, and a pack shipping only `mcp_servers/` still resolves even though
+ * it contributes no walk root.
+ *
+ * `corpusRoot` pins the corpus half of the merged walk; production callers
+ * leave it absent and get the bundled corpus.
+ */
 export async function resolveInstalledPackContent(
   rootDir: string,
   manifest: SetupManifest,

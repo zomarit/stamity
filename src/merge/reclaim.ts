@@ -189,6 +189,14 @@ export interface ReclaimActionEntry {
    * that document is the owner's.
    */
   refused?: true;
+  /**
+   * On a `skipped-user-content`: the file needed the rendering proof and the
+   * rendering could not be built ({@link ReclaimOptions.renderingsUnbuilt}), so
+   * its bytes were never judged and the engine's claim to it stands — the
+   * caller keeps its ledger row and the next sync tries the proof again
+   * (review/61). Absent when the bytes were judged against a built rendering.
+   */
+  unproven?: true;
 }
 
 /** What proved the engine's claim to a file the sweep removes or rewrites. */
@@ -289,6 +297,13 @@ export interface ReclaimOptions {
    * none at all when absent.
    */
   renderings?: ReadonlyMap<string, ReadonlySet<string>>;
+  /**
+   * Why {@link renderings} could not be built (the first line of the error that
+   * stopped the plan), when it could not. A file that needs the rendering proof
+   * is then kept unjudged — marked {@link ReclaimActionEntry.unproven}, its
+   * detail naming this reason — rather than kept as bytes no rendering is.
+   */
+  renderingsUnbuilt?: string;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -567,6 +582,8 @@ type ReclaimPlan =
       detail: string;
       /** A co-owned document's reducer refused it ({@link ReclaimActionEntry.refused}). */
       refused?: true;
+      /** The rendering proof could not be built ({@link ReclaimActionEntry.unproven}). */
+      unproven?: true;
     };
 
 interface SweepContext {
@@ -578,6 +595,8 @@ interface SweepContext {
   coOwned: ReadonlyMap<string, CoOwnedReducer>;
   /** {@link ReclaimOptions.renderings}; empty when none were handed in. */
   renderings: ReadonlyMap<string, ReadonlySet<string>>;
+  /** {@link ReclaimOptions.renderingsUnbuilt}. */
+  renderingsUnbuilt: string | undefined;
 }
 
 /**
@@ -918,6 +937,16 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       // is kept and named.
       const renderingProof = needsRenderingProof(path);
       if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
+        // Unproven is not disproven (review/61): with no rendering built, the
+        // bytes were never judged, so the claim stands for the next sync.
+        if (ctx.renderingsUnbuilt !== undefined) {
+          return {
+            kind: "skip",
+            action: "skipped-user-content",
+            detail: `A file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and that rendering could not be built (${ctx.renderingsUnbuilt}) — the file is kept with its ledger row, and the next sync tries the proof again.`,
+            unproven: true,
+          };
+        }
         return skip(
           "skipped-user-content",
           "The bytes still hash to what the ledger records, but a file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and these are not (an owner's file, or a copy an earlier release rendered) — the file is kept; delete it by hand if it is yours to remove.",
@@ -1170,6 +1199,7 @@ export async function sweepReclaimCandidates(
     trusted: opts.trustedExactPaths ?? new Set<string>(),
     coOwned: opts.coOwnedPaths ?? new Map<string, CoOwnedReducer>(),
     renderings: opts.renderings ?? new Map<string, ReadonlySet<string>>(),
+    renderingsUnbuilt: opts.renderingsUnbuilt,
   };
   const stamp = (opts.now ?? new Date()).toISOString();
 
@@ -1180,7 +1210,13 @@ export async function sweepReclaimCandidates(
     const base = { path: group.path, candidateReason: group.reason };
 
     if (plan.kind === "skip") {
-      entries.push({ ...base, action: plan.action, detail: plan.detail + provenance, ...(plan.refused ? { refused: true as const } : {}) });
+      entries.push({
+        ...base,
+        action: plan.action,
+        detail: plan.detail + provenance,
+        ...(plan.refused ? { refused: true as const } : {}),
+        ...(plan.unproven ? { unproven: true as const } : {}),
+      });
       return;
     }
     if (!opts.consent) {

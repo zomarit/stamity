@@ -152,7 +152,12 @@ async function hashIfPresent(absPath: string): Promise<string | null> {
  * later `add` meets a file its pack does not own at its own path and refuses.
  * Moving it out of the pack's directory (or deleting it) first is what lets
  * the four steps run. `sync` never runs before `clean --pack`: it would carry
- * the current bytes into the generated setup.
+ * the current bytes into the generated setup. The moved file's client copy
+ * is still the pack's by its row, but no rendering proves it once the file is
+ * out, so `clean --pack` keeps and names it; left on disk, a copy a `sync`
+ * already carried the edit into collides with the re-added pack's, so it is
+ * deleted by hand before the `sync` (review/71) — the step `add`'s and
+ * `sync`'s pack remedies print too.
  *
  * `reAdd` is what follows `add`: the source the pack's receipt records
  * (`check`'s `reAddArgsOf`), or a placeholder the caller explains. `null` means
@@ -177,8 +182,8 @@ export function packReinstallSteps(
         `is missing or unreadable, so that source cannot be named here)`
       : call(`add ${reAdd}`);
   return (
-    `${first}run ${call(`clean --pack ${packId}`)}, then ${call("sync")}, then ` +
-    `${add}, then ${call("sync")}`
+    `${first}run ${call(`clean --pack ${packId}`)}, then delete by hand each client copy it keeps ` +
+    `and names, unless it is yours, then ${call("sync")}, then ${add}, then ${call("sync")}`
   );
 }
 

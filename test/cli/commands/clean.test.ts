@@ -1096,6 +1096,76 @@ describe("clean --pack — the pack's projected copies", () => {
     },
     60_000,
   );
+
+  // build/43 under review/61 (signed off: unproven is not disproven): a pack
+  // the planner refuses cannot prove any of its copies, so each is kept and
+  // keeps its ledger row for the next sync, and the copy set is bounded to the
+  // pack's own artifacts (review/68, review/70) — a retired engine file at an
+  // engine name, which the pack-less plan does not render either, and an
+  // owner's file under a forged row, even one naming a pack artifact, are not
+  // the pack's and are left alone: neither named a copy nor disowned.
+  it(
+    "keeps an unplannable pack's copies with their rows, and takes nothing that is not the pack's",
+    async () => {
+      const root = await copyOf(opsSynced);
+      // A command under the name of the pack's own skill: the planner refuses
+      // the pack, as it refuses 1.11.0's ops.
+      const clashRel = "commands/st-ci-pipeline.md";
+      const clashBytes = "---\ndescription: Run the CI pipeline.\n---\n\nRun the pipeline.\n";
+      const retired = ".claude/agents/stamity-retired.md";
+      const retiredBytes = "---\nname: stamity-retired\ndescription: an agent an earlier release shipped\n---\n\nRetired.\n";
+      const owned = ".claude/skills/st-local/SKILL.md";
+      const ownedBytes = "---\nname: st-local\ndescription: the owner's own skill\n---\n\nOurs.\n";
+      const ownedToo = ".claude/agents/stamity-ours.md";
+      const ownedTooBytes = "---\nname: stamity-ours\ndescription: the owner's own agent\n---\n\nOurs.\n";
+      await writeFile(join(root, STATE_DIR, "packs", "ops", ...clashRel.split("/")), clashBytes, "utf-8");
+      await writeFile(join(root, retired), retiredBytes, "utf-8");
+      await mkdir(join(root, ".claude", "skills", "st-local"), { recursive: true });
+      await writeFile(join(root, owned), ownedBytes, "utf-8");
+      await writeFile(join(root, ownedToo), ownedTooBytes, "utf-8");
+      const manifestFile = join(root, STATE_DIR, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
+      manifest.ledger.push(
+        {
+          path: `${STATE_DIR}/packs/ops/${clashRel}`,
+          adapter: "pack:ops",
+          artifactId: `ops/${clashRel}`,
+          artifactType: "infra",
+          contentHash: sha256(clashBytes),
+        },
+        { path: retired, adapter: "claude", artifactId: "retired", artifactType: "agent", contentHash: sha256(retiredBytes) },
+        // Forged: an owner's skill under its own name, and an owner's agent under a row naming the pack's agent.
+        { path: owned, adapter: "claude", artifactId: "local", artifactType: "skill", contentHash: sha256(ownedBytes) },
+        { path: ownedToo, adapter: "claude", artifactId: "devops", artifactType: "agent", contentHash: sha256(ownedTooBytes) },
+      );
+      await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+
+      const result = await runClean(root, ["--pack", "ops", "-y"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.stdout).toContain('Pack "ops" could not be planned as installed');
+      const after = await readLedgerOnDisk(root);
+      expect(rowsOwnedBy(after, "pack:ops")).toEqual([]);
+      for (const copy of opsCopies) {
+        expect(existsSync(join(root, copy)), copy).toBe(true);
+        expect(after.some((row) => row.path === copy && row.adapter === "claude"), `the row of ${copy} stays`).toBe(true);
+      }
+      expect(result.stdout).toContain("could not be built");
+      // Not the pack's: never a candidate, so neither swept, named, nor disowned.
+      for (const [path, bytes] of [
+        [retired, retiredBytes],
+        [owned, ownedBytes],
+        [ownedToo, ownedTooBytes],
+      ] as const) {
+        expect(await readFile(join(root, path), "utf-8"), path).toBe(bytes);
+        expect(after.some((row) => row.path === path), `the row of ${path} stays`).toBe(true);
+        expect(result.stdout, path).not.toContain(path);
+      }
+      // Every kept copy is named with the step by hand, hedged for the owner's own file.
+      expect(result.stdout).toContain("delete by hand each client copy kept above, unless it is yours");
+    },
+    60_000,
+  );
 });
 
 describe("clean — consent is separate from output format", () => {
