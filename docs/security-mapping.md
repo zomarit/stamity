@@ -169,7 +169,8 @@ claim.
 ## The surfaces
 
 Six surfaces belong to the engine. The seventh is the release publish path, which is a surface
-of this repository rather than of the emitted setup.
+of this repository rather than of the emitted setup. Its last row is the one exception: the call
+a fork's emitted setup makes to fetch the package that path publishes.
 
 ### 1. Pack publishing and trust
 
@@ -191,6 +192,7 @@ cannot load the client **refuses** the claim — never a pass, and never the pin
 | Actor | Vector | Control | Residual | Mapped ids | Gap |
 |---|---|---|---|---|---|
 | The operator's org | Installs from a source the org has not approved | Source policy is evaluated before any install is attempted, by pack id, scope wildcard or source kind. A deny match wins. An `allow` list denies everything it does not name. Code: `src/pack/orgPolicy.ts::evaluatePackSource` | Policy is written in ids, scopes and kinds, never in trust tiers, so a minimum tier cannot be expressed | LLM03, GOVERN 1.3, MANAGE 3.1 | Tiers are not a policy lever |
+| A pull request author | Drops a client with its guards, or moves the pinned release, and `check` stays green | `check --expect-version`, `--expect-tools` and `--expect-mode` take the expected release, clients and install mode from the caller and fail with `EXPECTATION_ERROR`. Code: `src/cli/commands/check.ts::evaluateExpectations` | Only as strong as its caller: without the flags, or with values the pull request can edit, `check` trusts the committed manifest | A05, A08, ASI04, GOVERN 1.5 | None |
 
 ### 3. Prompt injection and content integrity
 
@@ -221,6 +223,8 @@ cannot load the client **refuses** the claim — never a pass, and never the pin
 | A concurrent writer, or anything sitting at the target path | Tears a write, redirects it through a symlink, or clobbers content the engine does not own | The temp file is created exclusively and without following links. The rename is atomic and runs under a cross-process lock. Content outside managed blocks is preserved and reclaimed. Code: `src/merge/atomicWrite.ts::atomicWriteFile`, `src/merge/managedBlocks.ts::extractCustomContent`, `src/merge/reclaim.ts::sweepReclaimCandidates` | None | A08, ASI08, MEASURE 2.7 | None |
 | An agent | Pipes an unbounded payload through a write path | Stdin is read under a 250 000-byte ceiling. A payload past it is refused, never truncated. Code: `src/guard/promptGuard.ts::MAX_USER_CONTENT_LENGTH` | The phase bounds beside it are dormant. `src/guard/promptGuard.ts::guardInput`, `src/guard/promptGuard.ts::validateAgentOutput`, `src/guard/promptGuard.ts::wrapWithBoundary` and `src/guard/promptGuard.ts::extractBoundedContent` have no caller outside their own module | LLM10, ASI08, MEASURE 2.7 | Phase IO bounds are dormant |
 | Anyone reading the repo | Finds credentials committed into generated client config | MCP configs emit each dialect's own reference form rather than a literal value. Values are scanned for known secret shapes, and a finding prints masked. Code: `src/mcp/emit.ts::envPlaceholder`, `src/mcp/secretScan.ts::detectSecrets` | Shape detection catches known shapes on sight, and nothing else | LLM02, A05, MEASURE 2.7 | Detection is shape-bound |
+| Any repository writer, a pull request included | Edits the committed manifest so `sync` or `clean` deletes or overwrites a file the engine does not own | The ledger is bounded to the paths a release writes, and a row outside it refuses the whole manifest. Inside the bound, a delete needs a recorded hash that matches the bytes; `AGENTS.md`, `AGENTS.override.md` and the Copilot setup workflow also need bytes that show the engine wrote them, and `CLAUDE.md` needs a managed block that spans it. `check` names every path a `sync` would reclaim. Code: `src/manifest/ownedPaths.ts::ownedPathDefect`, `src/manifest/ownedPaths.ts::bytesShowEngineOutput` | A forged row inside the bound whose hash matches the bytes still proves a delete: a 1.11.0 Cursor guard name with a forged `coOwned` hash, an owner file that copies the charter's headings or the workflow's header line, or a selected `[mcp_servers.<id>]` table | A01, A08, ASI06, MEASURE 2.7 | In-bound records are unauthenticated |
+| Any tool or person editing a client config the engine also writes | Loses an owner's deny rule, allow row, hook entry or Codex table to `sync`, `clean` or `--force` | `.claude/settings.json`, `.cursor/hooks.json` and `.codex/hooks.json` are owned entry by entry, and `.codex/config.toml` table by table. A removal without a verified `.bak` needs a proof by path or by re-rendering, and `--force` changes no owner content. Code: `src/manifest/coOwnedJson.ts::planCoOwnedJson`, `src/manifest/codexConfigToml.ts::planCodexConfigToml` | An entry another tool or a pull request adds is kept, and `check` does not report it as drift | A05, A08, ASI02, MEASURE 2.7 | Added entries are not drift |
 
 ### 7. The release publish path
 
@@ -229,6 +233,7 @@ cannot load the client **refuses** the claim — never a pass, and never the pin
 | A build-time dependency | Reaches the publishing credential | The job that builds does not hold it. The gate job, the isolated third-party route job and `publish` are separate jobs. `publish` takes no checkout, and it verifies the tarball hash against the gate job's output. Code: `.github/workflows/release.yml` | A compromised build dependency runs where no credential is | ASI04, LLM03, A08, MANAGE 3.1 | None |
 | Anyone | Publishes a build nobody can trace to this repository | `npm publish --provenance` over OIDC trusted publishing. No long-lived token exists here, and third-party actions are SHA-pinned | The platform half is maintainer setup rather than a file: the required reviewer, the tag ruleset and the trusted-publisher entry. It is re-verified at each cut | ASI04, A06, A08, GOVERN 1.5, MANAGE 2.1 | The platform half is not code |
 | Anyone serving a plugin distribution | Serves a client plugin tree that is not the one this release built | Since 1.9.0 the same run publishes four client plugin archives, a distribution branch and a `plugins/v<version>` tag. The publish job verifies the distribution manifest against the digest the gate job put on its outputs channel, then every archive against that manifest, both before the npm publish; each archive carries a build-provenance attestation over the same OIDC identity; the branch is replaced by one orphan commit whose dates come from the manifest, and the push refuses a remote head that carries a parent or a release tag that already names another commit. Code: `.github/workflows/release.yml`, `scripts/plugins/releaseManifest.mjs::validateReleaseManifest` | Verification at the consumer's end is the consumer's: a mirror that republishes the tree is trusted the way its own repository is trusted, and nothing here attests a mirror | ASI04, LLM03, A08, A06, MANAGE 3.1 | No mirror attestation |
+| Anyone holding a fork's package name on the public registry | Serves a look-alike to a `--registry` fork's generated CLI call | Every pinned call a `--registry` fork renders carries `--@<scope>:registry=<url>`. A URL outside a strict plain-https grammar is refused by `fork-identity.mjs` before writing, and renders `npx --no` if it was set by hand. Code: `src/shared/cliCall.ts::scopeRegistryArg` | Unmeasured under PowerShell's `npx.ps1` shim | ASI04, LLM03, A08, A06 | None |
 
 ## Gaps this mapping leaves open
 
@@ -253,6 +258,14 @@ Every gap named in a row above, collected so the list reads without the tables.
 8. **No mirror attestation.** A plugin distribution is verified where it is published. An
    organization that mirrors the tree is trusted the way its own repository is trusted, and
    nothing here attests a mirror.
+9. **In-bound ledger records are unauthenticated.** The manifest carries no signature. A forged
+   row inside the owned-path bound whose hash matches the bytes still proves a delete, and the
+   instruction-file proof is structural, so an owner file that copies the charter's headings
+   passes it.
+10. **An entry added to a co-owned config is not drift.** An allow row, hook entry or table that
+    another tool or a pull request adds to `.claude/settings.json`, `.cursor/hooks.json`,
+    `.codex/hooks.json` or `.codex/config.toml` is kept as the owner's, and `check` stays green.
+    Only a Cursor entry Cursor rejects and a kept key that turns Codex's hooks off fail it.
 
 ## What is not applicable, and why
 

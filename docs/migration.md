@@ -380,9 +380,9 @@ it out of the tree. Or skip the sweep and remove the leftovers by hand with `git
 
 If hatch3r's `.claude/settings.json` was already there at init, stamity merged into it: its own
 allow rows and hook entries were added beside hatch3r's, and every entry hatch3r wrote was kept
-— the engine owns only the entries it wrote. The init notice names the entries it kept, so
-hatch3r's hook entries keep firing beside this setup's. Remove the ones you no longer want by
-hand, then run `sync`; there is no `--force` for this file, and none is needed.
+— the engine owns only the entries it wrote. The init notice counts the entries it kept, member by
+member, and hatch3r's hook entries keep firing beside this setup's. Remove the ones you no longer
+want by hand, then run `sync`; there is no `--force` for this file, and none is needed.
 
 ### In a monorepo, handle each package
 

@@ -519,16 +519,22 @@ stamity clean -y
 stamity plugin setup --client <csv>
 ```
 
-`clean` removes what the engine wrote — every ledger row and its file — and then deletes the
-**whole `.stamity/` directory** and everything in it: your learnings, your handoffs, your
-overrides under `.stamity/overrides/`, your run records, your installed packs, and a hooks
-directory of your own if you keep it there. **Save first** whatever of that you want to keep:
+`clean` removes what the engine wrote — every ledger row and its file, and only the engine's own
+entries from a file it shares with you (`.claude/settings.json`, `.cursor/hooks.json`,
+`.codex/hooks.json`, `.codex/config.toml`) — and then deletes the **whole `.stamity/` directory**
+and everything in it: your learnings, your handoffs, your overrides under `.stamity/overrides/`,
+your run records, your installed packs, and a hooks directory of your own if you keep it there.
+One case keeps it: when a hooks file `clean` leaves in place — one still holding entries of yours,
+or one it cannot read — still runs a script under `.stamity/`, `clean` keeps the whole directory,
+manifest included, and names that file. Remove that wiring and run `stamity clean -y` again before
+`plugin setup`, which otherwise refuses on the manifest still there. **Save first** whatever of
+that you want to keep:
 copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setup`.
 `stamity clean --dry-run` writes nothing and names what a real run removes. `clean` also prints
 one uninstall command line per client the manifest recorded, so the plugin side can be removed
 the same way it was added.
 
-No release through 1.11.0 ships a migration engine. Detecting a generated setup, previewing the removals and
+No release through 1.12.0 ships a migration engine. Detecting a generated setup, previewing the removals and
 refusing on a conflict were planned and cut: the clean-then-setup route above is the documented
 one, and it is the one this page will describe until a later minor ships the engine.
 

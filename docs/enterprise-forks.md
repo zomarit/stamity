@@ -164,8 +164,10 @@ naming each file that differs from its target.
 The script moves the two Renovate presets because they carry the identity as data rather than
 deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
 `renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
-its own. The runtime's own remedies (`run: npx -y <your package>@<version> init`, `npx --no` without
-`--registry`) and `scripts/tarball-smoke.mjs` read `name` from `package.json`, and the four plugin
+its own. The runtime's own remedies
+(`run: npx -y --@<scope>:registry=<url> <your package>@<version> init` with `--registry`,
+`npx --no <your package>@<version> init` without it) and `scripts/tarball-smoke.mjs` read `name`
+from `package.json`, and the four plugin
 manifests are projected from it. The regenerated marketplace entry follows the package. Without
 `--registry` the package is private and has no npm channel, so the entry carries a `github` source
 naming your repository instead of an npm package you never publish. With `--registry` the entry
@@ -231,8 +233,8 @@ assertion for your own filters and your full gate still checks the policy you in
 
 Your rename needs no test edit at all. Every suite that has to know who this package is reads
 `test/support/identity.ts`, which answers from your own `package.json`: the name, the version, the
-publisher, whether the package is private, whether a registry serves it, and the
-`<owner>/<repository>` route your `repository.url` names. So a test asserts the remedy string, the
+publisher, whether the package is private, whether a registry serves it, which registry its pinned
+calls name, and the `<owner>/<repository>` route your `repository.url` names. So a test asserts the remedy string, the
 marketplace source or the Renovate pin that YOUR identity implies, and the inherited gate is green
 on your tree for the same reason it is green upstream. Two things are still yours to keep true, and
 both are data rather than tests: the identity step above (the manifest and the two Renovate
@@ -646,8 +648,10 @@ not applied, so a fork patch of one is skipped, and the only route is your own s
 your own. The refusal says so when the artifact is a skill.
 
 **A fork patch can outrun the pack it patches.** The fork layer is package-global and packs are
-per-repository. A fork patch addressed at an id only an installed pack supplies is skipped in a
-consumer repository that does not carry that pack. `validate` shows a warning row naming the
+per-repository. A fork patch addressed at an agent, command or rule only an installed pack supplies
+is skipped in a consumer repository that does not carry that pack. A fork patch of a skill is
+skipped whether or not the pack is there, and its warning says it will not apply even once a pack
+supplies the skill. `validate` shows a warning row naming the
 artifact the patch waits for; it cannot name the pack, because nothing installed supplies it. It is
 never an error, because nothing there is wrong. A consumer's own orphan patch keeps its error: it
 names an id nothing in that repository supplies, which is almost always a typo in the filename.
@@ -676,7 +680,8 @@ artifact is, with the finding addressed to the fork file.
 
 **Fork artifacts are always on.** Selection admits one by presence, the way it admits a consumer's
 override: a fork ships what it put under `fork/`, and no selection record deselects it. Each then
-reaches every client location its class reaches for corpus content. The per-client copy is an
+reaches every client location its class reaches for corpus content, unless its name is refused as
+a clash (below). The per-client copy is an
 adapter-owned, regenerated, reclaimable file, while the source under `fork/` is never planned,
 never wrapped in a managed block and never reclaimed.
 
@@ -688,7 +693,12 @@ addition, and it projects under its own bare directory. Either way the directory
 `SKILL.md` plus the supported companion files beneath it, as UTF-8 text for the CLI and as the
 original bytes for APM. APM excludes patch control files from the installed companions. The one
 thing a fork skill cannot do is land in a projection directory another skill already occupies under
-a different id. That is refused, naming the file to move.
+a different id. That is refused, naming the file to move. Nor can any fork artifact take a name
+that an artifact of another class installs under. A fork command `qa` lands in `st-qa`, the folder
+of the bundled skill `st-qa`, and so does a command beside a fork skill that replaced the bundled
+one. `sync`, `check`, `init` and `plugin setup` refuse such a name in every consumer before they plan
+anything. The refusal names the fork file to rename in the fork's source, and the fix ships only
+when you publish the package again.
 
 **Your generated reference pages will list your artifacts.** `docs/reference/` is rendered from the
 built index. So in a fork, `node scripts/generate-docs.mjs` writes the fork's agents, rules,
@@ -959,8 +969,8 @@ Set `version` in `package.json`, commit it on the release branch, and push the t
 `v<version>`. A suffix keeps a fork's releases apart from upstream's, and the tag carries it too:
 
 ```sh
-git tag v1.11.0-acme.1
-git push origin v1.11.0-acme.1
+git tag v1.12.0-acme.1
+git push origin v1.12.0-acme.1
 ```
 
 A dispatch of the workflow is a rehearsal unless you say otherwise. Its `dry_run` input starts at
@@ -1054,7 +1064,7 @@ is the file the renderer writes for this repository at the tag its `ref` names:
       "source": {
         "source": "github",
         "repo": "zomarit/stamity",
-        "ref": "plugins/v1.11.0"
+        "ref": "plugins/v1.12.0"
       }
     }
   },
@@ -1065,7 +1075,7 @@ is the file the renderer writes for this repository at the tag its `ref` names:
     {
       "source": "github",
       "repo": "zomarit/stamity",
-      "ref": "plugins/v1.11.0"
+      "ref": "plugins/v1.12.0"
     }
   ],
   "requiredMinimumVersion": "2.1.277"

@@ -2958,6 +2958,10 @@ describe("check — plugin-duplicates", () => {
     expect(duplicates.detail).toContain("claude: hooks (1 file(s), unmanaged) at .claude/settings.json — ");
     expect(duplicates.detail).toContain("loads");
     expect(duplicates.detail).toContain(".claude/settings.local.json");
+    // Since per-entry settings ownership (REQ-FLOW-036), `clean` removes a stale repository-mode
+    // hook entry as well as `sync` (src/manifest/claudeSettings.ts::reduceClaudeSettingsToForeignContent),
+    // so the remedy names both verbs rather than `sync` alone.
+    expect(duplicates.detail).toMatch(/ sync and \S+(?: \S+)* clean both remove a stale repository-mode rendering/);
   });
 
   it("passes when a client records a plugin and nothing duplicates it", async () => {

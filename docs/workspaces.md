@@ -247,7 +247,8 @@ stops the others, and it never quietly passes either. Per member, in order:
 
 1. **Read** that member's `.stamity/manifest.json`. No manifest fails the row by name, telling you
    to run `stamity init` there or drop the entry from `repos[]`. A manifest that exists and does not
-   parse fails the row with the reader's own message.
+   read cleanly — it does not parse, or the reader refuses it, such as for a ledger row naming a
+   path no stamity release writes — fails the row with the reader's own message.
 2. **Compute the patch** over three fields: `tools`, `maturityTier` and `mcp`. A field the workspace
    does not declare is left exactly as the member has it, so a member carrying `scaleup` under a
    workspace declaring no tier keeps it. `mcp` patches as a whole block rather than field by field.
@@ -258,7 +259,10 @@ stops the others, and it never quietly passes either. Per member, in order:
    member's ledger, import choice and creation stamp intact.
 4. **Plan and apply** that member's own sync. That is the same path plain `stamity sync` runs inside
    it.
-5. A member whose apply refused a colliding path fails its row naming the refusals. Everything else
+5. A member whose apply refused a path fails its row naming the refusals and, for each refusal
+   class, the remedy that clears it: `--force` is offered only for content the engine cannot prove
+   it wrote, never for a row refused at its source, an instruction file an import decision
+   protects, or a shared document whose shape the engine cannot merge beside. Everything else
    in that member's plan is already on disk. `stamity workspace sync --force` clears exactly the
    collision class plain `sync --force` clears, which is content the engine cannot prove it wrote at
    a name it wants. It overwrites that content behind a verified `.bak` in the member's own

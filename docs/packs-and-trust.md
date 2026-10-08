@@ -464,7 +464,11 @@ ordinary regeneration drift that `sync` would then propagate into your emitted a
 ```
 
 The check is read-only and never repairs. What to do about a mismatch is your decision. Re-install
-the pack, or accept the edit knowing the row will keep reporting it.
+the pack in the order the row's finding line prints: move an edited file out of
+`.stamity/packs/<id>/` or delete it first (`clean --pack` keeps an edited pack file, and `add` would
+refuse it), then `stamity clean --pack <id>`, `stamity sync`, `stamity add <source>` (the catalog
+id, path or package its install receipt records), and `stamity sync`. Or restore the file, or
+accept the edit knowing the row will keep reporting it.
 
 ## Remove one pack
 

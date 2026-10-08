@@ -159,8 +159,8 @@ Those gates name their own repair unevenly. The matrix, docs and pins failures p
 regeneration command. The plugin-manifest and APM failures say only that the file is stale. The
 sync-emitted trees are held drift-clean by `node dist/cli.js check` in CI rather than by a test.
 
-Coverage is report-only globally, with a blocking floor on the merge and emit core. There is no
-mutation gating.
+Coverage is report-only globally, with a blocking floor on the merge and emit core and on the
+owned-path bound, `src/manifest/ownedPaths.ts`. There is no mutation gating.
 
 Do not weaken or delete a test to land a change. When a test genuinely has to change, the diff
 carries a comment in the test saying why.
@@ -176,7 +176,7 @@ row below is therefore this repository's number, not the rule's.
 |---|---|---|
 | Suite shape | nothing; the rule names suite shape as the repository's own | the three lanes above, one runner |
 | Property tests | nothing | fast-check properties on the invariant-bearing cores (`test/**/*.property.test.ts`) |
-| Coverage | nothing; a floor is the repository's own data | per-file floors in `vitest.config.ts`: 100% on the merge and emit core with named exceptions, report-only elsewhere |
+| Coverage | nothing; a floor is the repository's own data | per-file floors in `vitest.config.ts`: 100% on the merge and emit core with named exceptions, and on the owned-path bound (`src/manifest/ownedPaths.ts`); report-only elsewhere |
 | Derived artifacts | nothing | generate-and-diff over every generator-owned artifact, plus `node dist/cli.js check` over the sync output |
 | Reserved names | nothing | the leak gate, over every tracked and untracked-but-not-ignored path and file |
 | Model-executed prose | nothing; the rule is written for deterministic code | an eval set over `content/`, golden and adversarial cases against pre-declared thresholds |

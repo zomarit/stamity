@@ -151,9 +151,13 @@ refuses the whole manifest rather than being acted on. Remove each row the messa
 re-run the command. `check --json` lists the paths a release writes under `ownedPaths`.
 
 A row inside those paths still proves nothing on its own. `sync` and `clean` delete or overwrite
-a file without a backup only when its bytes still hash to what the row recorded, together with
-an engine-minted `st-` or `stamity-` name in an agent, skill, rule or command folder, or when a
-managed block spans the file. A row with no content hash keeps its file unless a managed block
+a file without a backup only when its bytes still hash to what the row recorded and the place
+proves the rest. In an agent, skill, rule or command folder, the name must be engine-minted (`st-`
+or `stamity-`). Under `.stamity/generated/`, `.stamity/mcp/` or a pack's own folder, the hash is
+enough. At a platform file or charter the ledger records the engine writing, the hash is enough
+too, except at `AGENTS.md`, `AGENTS.override.md` and the Copilot setup workflow, where the bytes
+must also show the engine's own shape. A managed block that spans the file also proves it, and is
+the only proof at `CLAUDE.md`. A row with no content hash keeps its file unless a managed block
 spans it, and an overwrite of one takes a verified `.bak` first. So does removing the engine's
 keys from a shared settings or MCP document such a row names.
 
@@ -269,6 +273,9 @@ member: make it the type it names (or remove it), or fix or delete the file, and
 An engine hook entry you edited by hand is put back on the next `sync` behind a verified `.bak`
 holding your edit, with a warning naming the entry. Keep a hook of your own in an entry of its
 own, and personal rows in `.claude/settings.local.json`, which this engine never writes.
+Editing or removing a hook you define in `.stamity/hooks/` does the same to the entry the engine
+wired for it: the next `sync` removes the old entry behind a verified `.bak` and names it in a
+warning. Adding a definition takes none.
 
 ### `sync` refuses an instruction file with an `import-decision` collision
 
@@ -362,6 +369,8 @@ launch into a block:
 
 `<version>` is the stamity version the setup was generated with, and a renamed fork's package stands
 in place of `@zomarit/stamity`. A fork no registry serves prints `npx --no` in place of `npx -y`.
+A fork that names its registry prints `--@<scope>:registry=<url>` between `npx -y` and the
+package, so a machine without that scope mapping still fetches the fork's build.
 
 Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
 has not synced, or the file was deleted by hand:
@@ -434,10 +443,11 @@ in-repo writes do not take that path, and none of them can damage a file that is
   is kept.
 - The `.bak` the writer leaves before it overwrites a file it cannot regenerate. That happens to
   a colliding unmanaged file under `--force`, to a managed file whose markers a plain `sync`
-  has to repair, to `.claude/settings.json` when an engine entry the engine cannot prove it wrote
-  — an edited one, an earlier setup's hook entry, or one the ledger records outside what it can
-  prove by path — is replaced or removed, and to that file and the three MCP documents when
-  `clean` or a client's removal reclaims an entry the engine cannot prove from bytes that no
+  has to repair, to `.claude/settings.json`, `.cursor/hooks.json` and `.codex/hooks.json` when an
+  engine entry the engine cannot prove it wrote — an edited one, an earlier setup's hook entry, or
+  one the ledger records outside what it can prove by path — is replaced or removed, to
+  `.codex/config.toml` when an engine table that differs from the engine's rendering leaves, and
+  to those files and the three MCP JSON documents when `clean` or a client's removal reclaims an entry the engine cannot prove from bytes that no
   longer match what the ledger recorded. A key another tool added to the file costs no backup;
   an untouched file is reclaimed with none; a backup that cannot be taken refuses the removal and
   leaves the file untouched. The backup takes a name no existing file holds.

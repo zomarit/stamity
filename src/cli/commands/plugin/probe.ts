@@ -872,7 +872,8 @@ async function settingsHooksDuplicate(rootDir: string): Promise<DuplicateFinding
       paths: [CLAUDE_SETTINGS_PATH],
       remedy:
         `this client loads the file's own hooks key beside the plugin's hooks; remove the key — ` +
-        `${packageCommand("sync")} removes a stale repository-mode rendering by itself — or keep ` +
+        `${packageCommand("sync")} and ${packageCommand("clean")} both remove a stale repository-mode ` +
+        `rendering by themselves — or keep ` +
         `personal rows in .claude/settings.local.json, the client's per-user project settings`,
     },
   ];
