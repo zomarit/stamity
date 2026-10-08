@@ -18,28 +18,33 @@
 #
 # MERGE-BLOCKING (required through the `all-ci-checks` aggregator):
 #   - `changes`, one leg, first. It decides which of the two sides below runs.
-#     `scripts/ci/records-only.mjs` prints `records_only=true` only when EVERY path the push or
-#     pull request changes is a record: under `.stamity/runs/`, `.stamity/handoffs/` (the engine's
-#     `.gitkeep` excepted) or `docs/plans/`, or `.stamity/inbox.md` itself. A learnings change, a
-#     missing or all-zero base, a base git cannot find, the weekly schedule and a manual dispatch
-#     all read `false`, and `false` is full CI.
+#     `scripts/ci/records-only.mjs` (the lane classifier; the name predates its other lanes) prints
+#     `full=false` only when EVERY path the push or pull request changes falls in a lane:
+#     `records` (`.stamity/runs/`, `.stamity/handoffs/`, `docs/plans/`, `.stamity/inbox.md`),
+#     `specs` (`docs/specs/`), `learnings` (`.stamity/learnings/`) or `website` (`website/` and
+#     every other `docs/` path); an engine `.gitkeep` is in none. One path in no lane (`README.md`
+#     ships in the package, so it is one), a missing or all-zero base, a base git cannot find, the
+#     weekly schedule and a manual dispatch all read `full=true`, which is full CI. It also prints
+#     the lanes, their suites, `site_build`, `cli_check`, and `records_only` (kept one release).
 #   - `prove-pr`, one leg, on a push to `main` only (skipped on every other trigger), beside
 #     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
 #     tree equals the head tree of a pull request holding that commit, and that head's
 #     `all-ci-checks` check run, created by the GitHub Actions app (`app.slug` `github-actions`),
-#     concluded `success`. Then `check`, `apm-install`, `plugin-route` and `records` all skip: the
+#     concluded `success`. Then `check`, `apm-install`, `plugin-route` and `lanes` all skip: the
 #     tree they would test is the one the pull request's run already passed. A check run of that
 #     name from any other app or from none, any other conclusion, a tree no head carries, and any
 #     failed or malformed read all print `false`, which is full CI and never a red reader. The
 #     push-only workflows (`pack-signing-rehearsal.yml`, `docs-site.yml`) are untouched and still
 #     run on the push.
-#   - `records`, one leg, and ONLY when `changes` said `true` and no push was proven. It stands in for `check`,
-#     `apm-install` and `plugin-route`, which skip. A record feeds no build and no published byte,
-#     so what it can break is what reads the committed records: the suites that open them (the
-#     list is `RECORDS_SUITES` in the detector), the generate-and-diff step (the measurements page
-#     renders from the committed runs), the leak gate, and on pull requests the hygiene scan. The
-#     aggregator asserts which side ran, so a records-only pass can never stand in for a full one.
-#   - `check`, four legs, on every change that is not records-only, unless `prove-pr` proved the
+#   - `lanes`, one leg, and ONLY when `changes` said `full=false` and no push was proven. It stands
+#     in for `check`, `apm-install` and `plugin-route`, which skip. No lane's paths feed the package
+#     build or a published byte, so what a change can break is what reads them: the suites that
+#     open the lanes' committed paths (`LANE_SUITES` in the classifier, the union of the lanes the
+#     change fell in), the generate-and-diff step, the leak gate, and on pull requests the hygiene
+#     scan. The `learnings` lane adds the CLI build and its dogfood `check` (the session hook reads
+#     the learnings); the `website` lane adds the docs site build. The aggregator asserts which side
+#     ran, so a lanes pass can never stand in for a full one.
+#   - `check`, four legs, on every change no lane covers, unless `prove-pr` proved the
 #     push. ubuntu on the declared
 #     engines floor (22.22.2) and on the LTS canonical (24), plus windows on 24 as two legs that
 #     each run one half of the suite
@@ -140,7 +145,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Records-only or not: the one question every other lane in this file waits on. It runs on every
+  # Lanes or full: the one question every other lane in this file waits on. It runs on every
   # trigger with no condition, so the answer always exists; a failure here skips every lane that
   # needs it and the aggregator goes red, which is the fail-closed direction. The full history is
   # fetched because the base can be many commits back (a push of several commits, or a pull
@@ -148,12 +153,17 @@ jobs:
   # script body. On the schedule and a dispatch both halves of the expression are empty, and the
   # detector reads that as full CI.
   changes:
-    name: changes (records-only or full)
+    name: changes (lanes or full)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
     outputs:
+      full: ${{ steps.classify.outputs.full }}
+      lanes: ${{ steps.classify.outputs.lanes }}
+      suites: ${{ steps.classify.outputs.suites }}
+      site_build: ${{ steps.classify.outputs.site_build }}
+      cli_check: ${{ steps.classify.outputs.cli_check }}
       records_only: ${{ steps.classify.outputs.records_only }}
     steps:
       - name: Checkout
@@ -216,7 +226,7 @@ jobs:
   check:
     name: check (${{ matrix.label }}, node ${{ matrix.node }})
     needs: [changes, prove-pr]
-    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only != 'true'"
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ${{ matrix.os }}
     # 30, not the 15 this job carried while it was ubuntu-only: a windows leg installs, builds
     # and runs its half of the suite on the slowest runner image in the matrix, a timeout-only
@@ -428,7 +438,7 @@ jobs:
   apm-install:
     name: apm route (${{ matrix.role }}, apm ${{ matrix.apm }})
     needs: [changes, prove-pr]
-    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only != 'true'"
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -538,7 +548,7 @@ jobs:
   plugin-route:
     name: plugin route (structure and credential-free install)
     needs: [changes, prove-pr]
-    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only != 'true'"
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ubuntu-latest
     # 15, and derived rather than chosen. The three build lines were measured at ~20 s total on
     # 2026-09-20 with `time npm pack --pack-destination "$WORK"` (0.5 s), `time node
@@ -712,22 +722,25 @@ jobs:
           export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude,cursor,copilot,codex
 
-  # The short lane, for a push or pull request whose every changed path is a record. It replaces
-  # `check`, `apm-install` and `plugin-route` rather than running beside them, so its steps are
-  # exactly what a record can break: the suites that read the committed records (the list is
-  # `RECORDS_SUITES` in scripts/ci/records-only.mjs, held equal to the step below by
-  # test/ci/workflow.test.ts), the generate-and-diff step — the measurements page renders from the
-  # committed runs, so a record can make it drift, and the generators need no build — the leak
-  # gate over the whole tree, and on pull requests the same hygiene scan the `check` LTS leg runs.
-  records:
-    name: records (records-only changes)
+  # The short side, for a push or pull request whose every changed path falls in a lane. It
+  # replaces `check`, `apm-install` and `plugin-route` rather than running beside them, so its
+  # steps are exactly what a lane's paths can break: the suites that read them (the classifier's
+  # `LANE_SUITES`, the union for the lanes the change fell in, arriving as data through `env:` —
+  # the classifier is the one source of the lists), the generate-and-diff step — the measurements
+  # page renders from the committed runs and the reference pages live under `docs/`, and the
+  # generators need no build — the leak gate over the whole tree, and on pull requests the same
+  # hygiene scan the `check` LTS leg runs. Then, only for the lanes that ask: the CLI build and its
+  # dogfood `check` for `learnings`, and the docs site build (docs-site.yml's own steps) for
+  # `website`. Both come AFTER the suites, so no suite can quietly start depending on a build.
+  lanes:
+    name: lanes (records, specs, learnings and website changes)
     needs: [changes, prove-pr]
-    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.records_only == 'true'"
+    if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full == 'false'"
     runs-on: ubuntu-latest
-    # 15, the ceiling of the other one-leg lanes. The records suites measured 85 s on 2026-09-30
-    # (`npx vitest run` over the five entries, darwin, no dist/); install and the generators come
-    # on top.
-    timeout-minutes: 15
+    # 20: the records suites measured 85 s on 2026-09-30 (`npx vitest run` over the five entries,
+    # darwin, no dist/) inside the 15 the records lane carried; the website lane adds a site
+    # install and build, which docs-site.yml's build job holds under its own 15.
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -753,8 +766,12 @@ jobs:
           HYGIENE_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: node scripts/repo-hygiene.mjs --base "$HYGIENE_BASE_REF"
 
-      - name: Records suites
-        run: npx vitest run test/records test/docsPages.test.ts test/cli/docs/measurements.test.ts test/authoring/specPlanCoverage.test.ts test/ci/leakGate.test.ts
+      # Unquoted on purpose: the list is space-joined suite paths from the classifier's constants,
+      # never a path from the diff, and each word is one vitest filter.
+      - name: Lane suites
+        env:
+          SUITES: ${{ needs.changes.outputs.suites }}
+        run: npx vitest run $SUITES
 
       - name: Self-consistency (generate-and-diff)
         run: >-
@@ -767,6 +784,34 @@ jobs:
 
       - name: Leak gate
         run: npm run gate
+
+      - name: Build
+        if: needs.changes.outputs.cli_check == 'true'
+        run: npm run build
+
+      - name: Dogfood check
+        if: needs.changes.outputs.cli_check == 'true'
+        run: node dist/cli.js check
+
+      - name: Set up Node for the site
+        if: needs.changes.outputs.site_build == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      # `--ignore-scripts` spelled out, for the reason docs-site.yml's install step gives: the root
+      # `.npmrc` does not reach an install whose project root is `website/`.
+      - name: Install the site
+        if: needs.changes.outputs.site_build == 'true'
+        working-directory: website
+        run: npm ci --ignore-scripts
+
+      - name: Build the site
+        if: needs.changes.outputs.site_build == 'true'
+        working-directory: website
+        run: npm run build
 
   # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
   # change, which is precisely why something has to go and ask whether those bytes are still
@@ -867,15 +912,15 @@ jobs:
   # can see. Its credential-bound legs are the ones it leaves SKIPPED, so requiring it never makes
   # the merge path depend on a secret this repository does not hold.
   #
-  # The records-only lane splits the heavy three from `records`, and the split is ASSERTED here in
-  # both directions rather than inferred from which results happen to be green. `changes` must
-  # have succeeded, or neither side's answer means anything. When it said records-only, `records`
-  # must have passed AND the three heavy lanes must read `skipped` — so a green here always says
-  # which lane proved the change. Otherwise the three must have passed and `records` must read
-  # `skipped`, so a mis-wired condition that ran the short lane on a code change goes red.
+  # The lane split divides the heavy three from `lanes`, and the split is ASSERTED here in both
+  # directions rather than inferred from which results happen to be green. `changes` must have
+  # succeeded, or neither side's answer means anything. When it said `full=false`, `lanes` must
+  # have passed AND the three heavy lanes must read `skipped` — so a green here always says which
+  # side proved the change. Otherwise the three must have passed and `lanes` must read `skipped`,
+  # so a mis-wired condition that ran the short lane on a code change goes red.
   #
   # The proven push is the third legal shape, asserted first: `prove-pr` succeeded with
-  # `proven=true`, and `check`, `apm-install`, `plugin-route` and `records` all read `skipped`. On
+  # `proven=true`, and `check`, `apm-install`, `plugin-route` and `lanes` all read `skipped`. On
   # any other answer `prove-pr` must have been skipped (every event but a push to `main`) or have
   # succeeded with `proven` not `true`, and one of the two shapes above must hold. So a failed or
   # cancelled reader is red, and a `true` beside a skipped reader is red.
@@ -885,23 +930,23 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [changes, prove-pr, check, records, supply-chain, apm-install, plugin-route]
+    needs: [changes, prove-pr, check, lanes, supply-chain, apm-install, plugin-route]
     steps:
       - name: Report
         run: |
-          echo "changes=${{ needs.changes.result }} records_only=${{ needs.changes.outputs.records_only }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
+          echo "changes=${{ needs.changes.result }} full=${{ needs.changes.outputs.full }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} lanes=${{ needs.lanes.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
           test "${{ needs.changes.result }}" = "success"
           if [ "${{ needs.prove-pr.result }}" = "success" ] && [ "${{ needs.prove-pr.outputs.proven }}" = "true" ]; then
             test "${{ needs.check.result }}" = "skipped"
             test "${{ needs.apm-install.result }}" = "skipped"
             test "${{ needs.plugin-route.result }}" = "skipped"
-            test "${{ needs.records.result }}" = "skipped"
+            test "${{ needs.lanes.result }}" = "skipped"
           else
             test "${{ needs.prove-pr.result }}" = "skipped" || test "${{ needs.prove-pr.result }}" = "success"
             test "${{ needs.prove-pr.outputs.proven }}" != "true"
-            if [ "${{ needs.changes.outputs.records_only }}" = "true" ]; then
-              test "${{ needs.records.result }}" = "success"
+            if [ "${{ needs.changes.outputs.full }}" = "false" ]; then
+              test "${{ needs.lanes.result }}" = "success"
               test "${{ needs.check.result }}" = "skipped"
               test "${{ needs.apm-install.result }}" = "skipped"
               test "${{ needs.plugin-route.result }}" = "skipped"
@@ -909,6 +954,6 @@ jobs:
               test "${{ needs.check.result }}" = "success"
               test "${{ needs.apm-install.result }}" = "success"
               test "${{ needs.plugin-route.result }}" = "success"
-              test "${{ needs.records.result }}" = "skipped"
+              test "${{ needs.lanes.result }}" = "skipped"
             fi
           fi
