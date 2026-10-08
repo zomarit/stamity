@@ -26,7 +26,14 @@ const FIXTURE_RULES: readonly ClassRule[] = [
   ...BUILT_IN_RULES,
   { class: "tests", paths: ["test/**"], rationale: "fixture: the test tree" },
   { class: "config", paths: ["tsconfig*.json"], rationale: "fixture: tool configuration" },
-  { class: "public-contract", paths: ["src/api/**"], rationale: "fixture: the published API" },
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, p1d-classify-security-row.
+   * This fixture placed `src/api/**` in public-contract. The trigger roster's security row
+   * matches the `api/` segment, and p1d makes the classifier read that row, so `src/api/v1.ts`
+   * is now security-sensitive whatever a caller's rules say. The public-contract fixture moves
+   * to a path no trigger row matches, so the seven-classes case still reaches public-contract.
+   */
+  { class: "public-contract", paths: ["src/published/**"], rationale: "fixture: the published API" },
   { class: "security-sensitive", paths: ["src/auth/**"], rationale: "fixture: authentication" },
 ];
 
@@ -241,7 +248,8 @@ describe("classifyChange: the strongest class wins", () => {
       "test/a.test.ts": "tests",
       "tsconfig.json": "config",
       "src/x.ts": "product",
-      "src/api/v1.ts": "public-contract",
+      // TEST CHANGE, justified: 2026-10-09, p1d — the fixture's public-contract path moved (see FIXTURE_RULES).
+      "src/published/v1.ts": "public-contract",
       "src/auth/login.ts": "security-sensitive",
     };
     for (const [path, cls] of Object.entries(expected)) {
@@ -263,7 +271,9 @@ describe("classifyChange: the strongest class wins", () => {
     expect(stronger.lenses).toEqual(["stamity-security"]);
   });
 
-  it("names no lens below security-sensitive", () => {
+  // TEST CHANGE, justified: 2026-10-09, p1d — retitled from "names no lens below security-sensitive":
+  // a design-quality or performance row now adds its lens at any class; these paths match no row.
+  it("names no lens for paths no trigger row matches", () => {
     expect(given(["docs/x.md"]).lenses).toEqual([]);
     expect(given(["src/x.ts"]).lenses).toEqual([]);
   });
@@ -397,5 +407,89 @@ describe("classifyChange: a backslash read both ways (review/5, review/9)", () =
     expect(given([".stamity\\overrides\\x.md"]).class).toBe("security-sensitive");
     expect(given(["src\\auth\\login.ts"], FIXTURE_RULES).class).toBe("security-sensitive");
     expect(given(["src\\auth\\login.ts"], FIXTURE_RULES).byPath[0]?.path).toBe("src/auth/login.ts");
+  });
+});
+
+describe("classifyChange: the trigger roster's security row (p1d, REQ-FLOW-065)", () => {
+  it("places src/auth/login.ts in security-sensitive with the security lens, by the built-ins alone", () => {
+    const result = given(["src/auth/login.ts"]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).toEqual([...CLASS_CHECKS["security-sensitive"]]);
+    expect(result.byPath).toEqual([
+      { path: "src/auth/login.ts", class: "security-sensitive", rule: "the trigger roster's security row (auth/)" },
+    ]);
+    expect(result.reason).toContain("security-sensitive by the trigger roster's security row (auth/)");
+  });
+
+  it("reads each pattern form of the row: a segment, a suffix and a basename, in any case", () => {
+    const cases: readonly (readonly [string, string])[] = [
+      ["server/routes/users.ts", "routes/"],
+      ["certs/server.pem", "*.pem"],
+      ["package.json", "package.json"],
+      ["web/package-lock.json", "package-lock.json"],
+      ["Gemfile", "gemfile"],
+      ["SRC/Auth/Login.ts", "auth/"],
+    ];
+    for (const [path, pattern] of cases) {
+      const result = given([path]);
+      expect(result.class, path).toBe("security-sensitive");
+      expect(result.byPath[0]?.rule, path).toBe(`the trigger roster's security row (${pattern})`);
+      expect(result.lenses, path).toEqual(["stamity-security"]);
+    }
+  });
+
+  it("lifts a path a weaker rule placed: a docs page under an auth/ segment is security-sensitive", () => {
+    expect(given(["docs/x.md"]).class).toBe("docs");
+    const result = given(["docs/auth/x.md"]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
+  });
+
+  it("binds whatever rules a caller passes, so no rule set can drop the row", () => {
+    const narrowing: readonly ClassRule[] = [{ class: "docs", paths: ["**"], rationale: "fixture: everything is docs" }];
+    expect(given(["guide/x.md"], narrowing).class).toBe("docs");
+    expect(given(["guide/auth/x.md"], narrowing).class).toBe("security-sensitive");
+    expect(given(["guide/auth/x.md"], []).class).toBe("security-sensitive");
+  });
+
+  it("keeps a built-in security rule's name when both place the path", () => {
+    expect(given([".stamity/manifest.json"]).byPath[0]?.rule).toBe(".stamity/manifest.json");
+  });
+
+  it("adds a design-quality or performance lens and leaves the class unchanged", () => {
+    const design = given(["src/components/Button.tsx"]);
+    expect(design.class).toBe("product");
+    expect(design.lenses).toEqual(["stamity-design-quality"]);
+
+    const performance = given(["src/workers/drain.ts"]);
+    expect(performance.class).toBe("product");
+    expect(performance.lenses).toEqual(["stamity-performance"]);
+
+    const docsPage = given(["docs/pages/intro.md"]);
+    expect(docsPage.class).toBe("docs");
+    expect(docsPage.lenses).toEqual(["stamity-design-quality"]);
+  });
+
+  it("unions the lenses over every path, security first, each once", () => {
+    const result = given(["src/components/a.tsx", "src/components/b.tsx", "src/auth/login.ts", "src/jobs/x.ts"]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security", "stamity-design-quality", "stamity-performance"]);
+  });
+
+  it("names the security lens for a class a built-in rule set, with any trigger lens beside it", () => {
+    const result = given([".stamity/manifest.json", "src/components/a.tsx"]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security", "stamity-design-quality"]);
+  });
+
+  it("reads a rename's sides for the row too", () => {
+    const result = classifyChange({
+      paths: [],
+      renames: [{ from: "src/login.ts", to: "src/auth/login.ts" }],
+      base: "given",
+    });
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
   });
 });

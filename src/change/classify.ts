@@ -27,10 +27,19 @@
  * `.stamity/change-classes.json`, read from the base commit by the caller, never
  * from the head, so a change cannot lower its own checks.
  *
- * Pure: no filesystem, no git and no internal import. The verb in
- * `../cli/commands/gate.ts` gathers the paths and prints the result.
+ * **The trigger roster's security row** (REQ-FLOW-065). A path the
+ * `stamity-security` row of the specialist trigger table matches is
+ * `security-sensitive`, whatever rules the caller passes: the row is read here,
+ * not merged into `rules`, so no class file can drop or weaken it. A change's
+ * lenses are every trigger row its paths match, plus the security lens when the
+ * class is `security-sensitive` by any rule.
+ *
+ * Pure: no filesystem, no git, and one internal import, the trigger roster
+ * (`../roster/triggers.ts`, wave 1). The verb in `../cli/commands/gate.ts`
+ * gathers the paths and prints the result.
  */
 import { posix } from "node:path";
+import { findSpecialistTrigger, specialistsForPath } from "../roster/triggers.ts";
 
 /** The seven change classes. */
 export type ChangeClass =
@@ -79,8 +88,18 @@ export const CLASS_CHECKS: Readonly<Record<ChangeClass, readonly Check[]>> = {
   "security-sensitive": ["scan", "gates-all", "review"],
 };
 
-/** The lens a `security-sensitive` change always gets. */
+/** The lens a `security-sensitive` change always gets; also the trigger roster's id for the security row. */
 const SECURITY_LENS = "stamity-security";
+
+/** The roster's security row, read once. `undefined` only if a roster ships without it. */
+const SECURITY_ROW = findSpecialistTrigger(SECURITY_LENS);
+
+/** The first pattern of the security row that matches `path`, by the roster's own matching. */
+function securityRowPattern(path: string): string | undefined {
+  const row = SECURITY_ROW;
+  if (row === undefined) return undefined;
+  return row.triggerPaths.find((pattern) => specialistsForPath(path, [{ ...row, triggerPaths: [pattern] }]).length > 0);
+}
 
 /**
  * The one list of code extensions every rule over code reads: the floor here,
@@ -250,6 +269,10 @@ function classifyPath(path: string, rules: readonly ClassRule[]): PathClass & { 
     }
     if (best === undefined || rank(rule.class) < rank(best.class)) best = { class: rule.class, rule: glob };
   }
+  const securityPattern = securityRowPattern(path);
+  if (securityPattern !== undefined && (best === undefined || rank("security-sensitive") < rank(best.class))) {
+    best = { class: "security-sensitive", rule: `the trigger roster's security row (${securityPattern})` };
+  }
   if (floored) {
     const testGlob = BUILT_IN_TEST_GLOBS.find((glob) => matchRead(path, glob));
     if (testGlob !== undefined && (best === undefined || rank("tests") < rank(best.class))) {
@@ -368,11 +391,15 @@ export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[]
     reasons.push(`the strongest path is ${top.path}, ${top.class} by ${top.rule}`);
   }
 
+  // The security lens first when the class asks for it, then every row the paths match, each once.
+  const lenses = new Set<string>(cls === "security-sensitive" ? [SECURITY_LENS] : []);
+  for (const entry of byPath) for (const lens of specialistsForPath(entry.path)) lenses.add(lens);
+
   return {
     class: cls,
     byPath,
     checks: [...CLASS_CHECKS[cls]],
-    lenses: cls === "security-sensitive" ? [SECURITY_LENS] : [],
+    lenses: [...lenses],
     reason: reasons.join("; "),
   };
 }

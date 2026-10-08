@@ -902,7 +902,11 @@ const REGISTRY_ONLY_MODULES: ReadonlyMap<string, string> = new Map([
   ["src/resilience/adapterTimeout.ts", "the one timeout wrapper; the plan composer awaits planners unwrapped"],
   ["src/resilience/failureClass.ts", "transient-vs-substantive classification; only a retry loop would read it"],
   ["src/resilience/retry.ts", "retry with backoff; no engine call site retries"],
-  ["src/roster/triggers.ts", "specialist trigger table, consumed as prompt content rather than by engine code"],
+  // Retired by the change classifier (p1d-classify-security-row, 2026-10-09):
+  // `src/change/classify.ts` reads `src/roster/triggers.ts`'s security row to
+  // place a path in `security-sensitive` and unions its rows into the lenses,
+  // which gives the trigger table a production call site. One row, deleted in
+  // the direction this ratchet allows.
   // Retired by the overlay ceiling: `src/content/catalog.ts` now imports
   // `MAX_USER_CONTENT_LENGTH` from `src/guard/promptGuard.ts` instead of
   // restating the number, which gives the guard a production call site — and

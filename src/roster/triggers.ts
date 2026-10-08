@@ -8,11 +8,14 @@
  * code; the rows are content, so a roster change stays a data edit rather than
  * a code one.
  *
- * WHO READS IT, exactly — no `src/` module does. The composition root
+ * WHO READS IT, exactly — one `src/` module: the change classifier
+ * (`src/change/classify.ts`), which places a path the `stamity-security` row
+ * matches in the `security-sensitive` class and unions the rows a change's
+ * paths match into its lenses. The composition root
  * (`src/composition/root.ts`) namespace-imports it the way it imports every
- * module, which is wiring rather than reading: it calls nothing here. The rows
- * are the reference the corpus is held against, and the readers are parity
- * suites:
+ * module, which is wiring rather than reading: it calls nothing here. Beyond
+ * the classifier, the rows are the reference the corpus is held against, and
+ * the other readers are parity suites:
  *
  * - `test/corpus/agents/specialists.test.ts` — each specialist agent body's
  *   `## Trigger` section against its row, both directions, so neither a pattern

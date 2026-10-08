@@ -465,7 +465,14 @@ describe("src/roster/triggers.ts — the header's consumer claim", () => {
   /** The composition root imports every module to wire the graph; it reads none of them. */
   const REGISTRY = "composition/root.ts";
 
-  it("holds the header's other half: no src/ module reads the table today", () => {
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, p1d-classify-security-row.
+   * This case pinned "no src/ module reads the table" (`importers` equal to `[]`). The change
+   * classifier now reads the security row to place a path in `security-sensitive` and unions the
+   * rows into a change's lenses (REQ-FLOW-061, REQ-FLOW-065), so the pin moves to "the classifier
+   * is the one src/ importer", and the header must name it.
+   */
+  it("holds the header's other half: the change classifier is the one src/ module reading the table", () => {
     const srcRoot = join(REPO_ROOT, "src");
     const modules = readdirSync(srcRoot, { recursive: true, encoding: "utf8" })
       .filter((relative) => relative.endsWith(".ts"))
@@ -486,7 +493,8 @@ describe("src/roster/triggers.ts — the header's consumer claim", () => {
     );
     // When this fails, the header is what needs the edit: name the new consumer
     // there, and this case goes green describing the truth again.
-    expect(importers).toEqual([]);
+    expect(importers).toEqual(["change/classify.ts"]);
+    expect(NAMED).toContain("src/change/classify.ts");
   });
 
   it("no longer claims the two consumers that never existed", () => {
