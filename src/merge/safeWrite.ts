@@ -759,6 +759,18 @@ export function toLedgerKey(filePath: string): string {
  * around it did not. `boundaryDir` is that root wherever a caller emits into a
  * tree, so no new parameter is needed to answer the question.
  */
+/**
+ * `shown` — a {@link displayPath} result — with every `separator` read as `/`:
+ * the spelling the class decisions take (`../manifest/ownedPaths.ts`'s
+ * `needsByteProof` and `renderingProofClass` name files by `/`-separated
+ * segments). With no setup root the shown path is the native absolute one, so
+ * on Windows `C:\repo\AGENTS.md` read as no instruction file and its
+ * overwrite took no `.bak` (prove/3). The shown text itself stays native.
+ */
+export function classPathOf(shown: string, separator: string = sep): string {
+  return separator === "/" ? shown : shown.split(separator).join("/");
+}
+
 export function displayPath(filePath: string, boundaryDir: string | undefined): string {
   if (boundaryDir === undefined) return filePath;
   const rel = relative(boundaryDir, filePath);
@@ -1336,7 +1348,9 @@ async function safeWriteFileLocked(
   // bytes must also show the engine wrote them, or the overwrite takes the
   // `.bak` like any drifted one.
   const shownPath = displayPath(filePath, options.boundaryDir);
-  const fingerprintFails = managed && !bytesProveEngineOutput(shownPath, existingContent);
+  // The class decisions read `/`-separated names on every platform (prove/3).
+  const classPath = classPathOf(shownPath);
+  const fingerprintFails = managed && !bytesProveEngineOutput(classPath, existingContent);
   const hashDrifted = managed && hasLedgerDrift(filePath, existingContent, options.ledgerHashes);
   // Rows 519 and 586, the overwrite half. At a charter or instruction file and
   // at Copilot's hooks file, neither the recorded hash (a hand-added row can
@@ -1347,7 +1361,7 @@ async function safeWriteFileLocked(
   // uncommitted change ({@link isTrackedAndClean}), from a verified `.bak`
   // otherwise, and from a `.bak` whenever git cannot answer.
   const needsRecovery =
-    managed && !fingerprintFails && !hashDrifted && overwriteNeedsRecovery(shownPath, existingContent, content);
+    managed && !fingerprintFails && !hashDrifted && overwriteNeedsRecovery(classPath, existingContent, content);
   const inGitHistory = needsRecovery && options.backup !== false && (await isTrackedAndClean(filePath, existingContent, options.boundaryDir));
   // The fingerprint and the recorded hash passed; only git could not vouch
   // that the bytes this overwrite replaces are committed (review/132).

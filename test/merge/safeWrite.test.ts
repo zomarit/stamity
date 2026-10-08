@@ -7,6 +7,7 @@ import { chmod, mkdir, readdir, readFile, stat, utimes, writeFile } from "node:f
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  classPathOf,
   hasLedgerDrift,
   isManagedPath,
   ledgerHashIndex,
@@ -25,6 +26,7 @@ import {
   wrapInManagedBlock,
 } from "../../src/merge/managedBlocks.ts";
 import { resetCrossProcessLocking } from "../../src/merge/atomicWrite.ts";
+import { renderingProofClass } from "../../src/manifest/ownedPaths.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -1502,5 +1504,30 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 
     expect(result).toEqual({ path: join(root, "AGENTS.md"), action: "updated" });
     expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+});
+
+/**
+ * prove/3: with no setup root the path shown in a notice is the native absolute
+ * one, and on Windows that spelling uses `\\`. The class decisions (which file
+ * is an instruction file, which overwrite owes recovery) read `/`-separated
+ * names, so `C:\\repo\\AGENTS.md` read as no instruction file and the overwrite
+ * took no `.bak` on the Windows leg. The decisions now read the path with every
+ * native separator as `/`; the shown text stays native. The Windows CI leg is
+ * the proof of record; this pins the conversion on every platform.
+ */
+describe("classPathOf — the class decisions read a /-separated path on every platform (prove/3)", () => {
+  it("reads a win32-shaped absolute charter path as an instruction file, as a POSIX one already is", () => {
+    const win = "C:\\Users\\dev\\repo\\AGENTS.md";
+
+    expect(renderingProofClass(win)).toBeNull();
+    expect(classPathOf(win, "\\")).toBe("C:/Users/dev/repo/AGENTS.md");
+    expect(renderingProofClass(classPathOf(win, "\\"))).toBe("instruction");
+    expect(renderingProofClass(classPathOf("/home/dev/repo/AGENTS.md", "/"))).toBe("instruction");
+  });
+
+  it("leaves a /-separated path as it is", () => {
+    expect(classPathOf("docs/AGENTS.md", "/")).toBe("docs/AGENTS.md");
+    expect(classPathOf(".github/hooks/stamity.json", "\\")).toBe(".github/hooks/stamity.json");
   });
 });
