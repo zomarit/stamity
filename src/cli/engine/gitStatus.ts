@@ -104,21 +104,42 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/** The bounds one {@link gitCheckRunner} puts on every git call it makes. */
+export interface GitCheckRunnerOptions {
+  /** Wall time per call; the two readers here keep the 5-second default. */
+  timeoutMs?: number;
+  /** Bytes of stdout per call before the call fails; omitted keeps Node's default. */
+  maxBuffer?: number;
+}
+
 /**
- * The seam both readers run by default, mirroring the construction in
- * `src/workspace/git.ts`: synchronous git, stdout captured, stdin and stderr
- * discarded (`shortlog` must never fall back to reading stdin), bounded wall
- * time — in {@link gitCheckEnv}, with two options ahead of every command. `safe.bareRepository=explicit` (protected configuration, so
- * honoured from the command line) refuses a committed folder shaped like a
- * bare repository, and `core.fsmonitor=false` runs no file-system monitor
- * command, whatever any config says (`../../merge/safeWrite.ts::runGitCheck`).
+ * The hardened git construction, mirroring `src/workspace/git.ts`: synchronous
+ * git, argv only, stdout captured, stdin and stderr discarded (`shortlog` must
+ * never fall back to reading stdin), bounded wall time and output — in
+ * {@link gitCheckEnv}, with two options ahead of every command.
+ * `safe.bareRepository=explicit` (protected configuration, so honoured from the
+ * command line) refuses a committed folder shaped like a bare repository, and
+ * `core.fsmonitor=false` runs no file-system monitor command, whatever any
+ * config says (`../../merge/safeWrite.ts::runGitCheck`).
+ *
+ * Exported so every other git read of the CLI runs the same construction:
+ * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's
+ * diff can outgrow a status probe.
  */
-const execGitCheck: GitRunner = (args, cwd) =>
-  execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
-    cwd,
-    env: gitCheckEnv(),
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    timeout: GIT_FACT_TIMEOUT_MS,
-    windowsHide: true,
-  });
+export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
+  const timeout = options.timeoutMs ?? GIT_FACT_TIMEOUT_MS;
+  const { maxBuffer } = options;
+  return (args, cwd) =>
+    execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
+      cwd,
+      env: gitCheckEnv(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout,
+      ...(maxBuffer === undefined ? {} : { maxBuffer }),
+      windowsHide: true,
+    });
+}
+
+/** The seam both readers run by default: {@link gitCheckRunner} at its 5-second default. */
+const execGitCheck: GitRunner = gitCheckRunner();

@@ -338,6 +338,7 @@ Reads only. Nothing is written, so there is no preview mode to need.
 
 | Flag | What it does | Default |
 |---|---|---|
-| `--paths <path...>` | the changed paths to classify, by path rules alone | required |
+| `--base <ref>` | the base the change is read against (default: HEAD, reported as no base) | — |
+| `--paths <path...>` | classify these paths by path rules instead of reading the change from git | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
