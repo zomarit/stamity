@@ -25,7 +25,10 @@
 #     every other `docs/` path); an engine `.gitkeep` is in none. One path in no lane (`README.md`
 #     ships in the package, so it is one), a missing or all-zero base, a base git cannot find, the
 #     weekly schedule and a manual dispatch all read `full=true`, which is full CI. It also prints
-#     the lanes, their suites, `site_build`, `cli_check`, and `records_only` (kept one release).
+#     the lanes, their suites, `site_build`, `cli_check`, and `records_only` (kept one release,
+#     read by nothing here; it leaves at the first release after the lanes merged). `site_build`
+#     is true whenever the diff touches a `website` path, on a full answer too, and whenever the
+#     diff could not be read, so no side of the split passes a site change it did not build.
 #   - `prove-pr`, one leg, on a push to `main` only (skipped on every other trigger), beside
 #     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
 #     tree equals the head tree of a pull request holding that commit, and that head's newest
@@ -44,8 +47,9 @@
 #     open the lanes' committed paths (`LANE_SUITES` in the classifier, the union of the lanes the
 #     change fell in), the generate-and-diff step, the leak gate, and on pull requests the hygiene
 #     scan. The `learnings` lane adds the CLI build and its dogfood `check` (the session hook reads
-#     the learnings); the `website` lane adds the docs site build. The aggregator asserts which side
-#     ran, so a lanes pass can never stand in for a full one.
+#     the learnings); the `website` lane adds the docs site build and the root typecheck (a test
+#     imports a `website/` module). The aggregator asserts which side ran, so a lanes pass can
+#     never stand in for a full one.
 #   - `check`, four legs, on every change no lane covers, unless `prove-pr` proved the push.
 #     ubuntu on the declared engines floor (22.22.2) and on the LTS canonical (24), plus windows
 #     on 24 as two legs that each run one half of the suite
@@ -59,7 +63,9 @@
 #     coverage floor, or any failure on the re-run is red. The floor leg additionally packs and
 #     installs the tarball (`tarball-smoke`), because the published SHAPE is a different tree
 #     from the repository. On pull requests the LTS leg also rejects tracked runtime files, new
-#     raw evidence, and growth beyond file budgets.
+#     raw evidence, and growth beyond file budgets. When `changes` reports `site_build` (a change
+#     mixing a `website` path with one in no lane, or a diff it could not read), the LTS leg also
+#     builds the docs site, last, with docs-site.yml's own steps.
 #   - `apm-install`, three legs. The APM route, proven by what a real consumer's tree HOLDS after
 #     an install rather than by the exit code — the routing failure this lane exists for exited 0
 #     and deployed nothing. Two legs install the package with a fixed client (0.29.1, the minimum
@@ -165,6 +171,8 @@ jobs:
       suites: ${{ steps.classify.outputs.suites }}
       site_build: ${{ steps.classify.outputs.site_build }}
       cli_check: ${{ steps.classify.outputs.cli_check }}
+      # Kept one release for any reader of the old output; nothing in this file reads it. Remove it
+      # at the first release after the lanes merged, with the classifier's line that prints it.
       records_only: ${{ steps.classify.outputs.records_only }}
     steps:
       - name: Checkout
@@ -422,6 +430,31 @@ jobs:
       - name: Tarball smoke (publish shape)
         if: matrix.tarball_smoke
         run: node scripts/tarball-smoke.mjs
+
+      # The docs site, on the full side: a change mixing a `website` path with a path in no lane
+      # takes this matrix and not the `lanes` job, and `all-ci-checks` must never pass a website
+      # change whose site does not build. So the LTS leg builds it whenever `changes` reports
+      # `site_build` (and on an absent answer, the full side's fail-closed direction), with the
+      # steps docs-site.yml builds with, LAST, so no gate above reads the site's install or output.
+      - name: Set up Node for the site
+        if: matrix.toolchain && needs.changes.outputs.site_build != 'false'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      # `--ignore-scripts` spelled out, for the reason docs-site.yml's install step gives: the root
+      # `.npmrc` does not reach an install whose project root is `website/`.
+      - name: Install the site
+        if: matrix.toolchain && needs.changes.outputs.site_build != 'false'
+        working-directory: website
+        run: npm ci --ignore-scripts
+
+      - name: Build the site
+        if: matrix.toolchain && needs.changes.outputs.site_build != 'false'
+        working-directory: website
+        run: npm run build
 
   # The regression gate on the APM route, and the one lane in this file that reads a DEPLOYED
   # TREE rather than a command's exit code.
@@ -734,8 +767,9 @@ jobs:
   # page renders from the committed runs and the reference pages live under `docs/`, and the
   # generators need no build — the leak gate over the whole tree, and on pull requests the same
   # hygiene scan the `check` LTS leg runs. Then, only for the lanes that ask: the CLI build and its
-  # dogfood `check` for `learnings`, and the docs site build (docs-site.yml's own steps) for
-  # `website`. Both come AFTER the suites, so no suite can quietly start depending on a build.
+  # dogfood `check` for `learnings`, and the root typecheck and the docs site build (docs-site.yml's
+  # own steps) for `website`. The builds come AFTER the suites, so no suite can quietly start
+  # depending on one.
   lanes:
     name: lanes (records, specs, learnings and website changes)
     needs: [changes, prove-pr]
@@ -788,6 +822,14 @@ jobs:
 
       - name: Leak gate
         run: npm run gate
+
+      # The root typecheck for the website lane: `tsconfig.json` takes in `test/**`, and a test
+      # imports `website/src/rehype/tableHeaderScope.mjs` under `@ts-expect-error`, so a website
+      # change can turn it red, and a proven push skips `main`'s matrix that would catch it. On
+      # this side `site_build` is exactly the website lane.
+      - name: Typecheck
+        if: needs.changes.outputs.site_build == 'true'
+        run: npm run typecheck
 
       - name: Build
         if: needs.changes.outputs.cli_check == 'true'

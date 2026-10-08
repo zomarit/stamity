@@ -283,10 +283,54 @@ describe("the lanes — website, specs and learnings beside the records", () => 
       "website/./x.md",
     ]) {
       expect(laneOfTyped(path), path).toBeNull();
+      // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes,
+      // review/32 signed off): a full answer now reports the site build when the diff touches the
+      // site, so the mixed diff here reads `siteBuild: true`, and the path alone reads `false`.
+      // The property this case pins is unchanged: a path in no lane is full CI and runs no lane.
       const decision = decideTyped({ event: "pull_request", base: SHA, paths: ["website/x.md", path] });
-      expect(decision, path).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: false, cliCheck: false });
+      expect(decision, path).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true, cliCheck: false });
       expect(decision.reason, path).toContain(path);
+      const alone = decideTyped({ event: "pull_request", base: SHA, paths: [path] });
+      expect(alone, `${path} alone`).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: false, cliCheck: false });
     }
+  });
+
+  // ADDED by run 2026-10-08_maintainer-tooling, unit a2-ci-lanes (review/32, signed off: S3 as
+  // written). `all-ci-checks` never passes a website change whose site does not build, mixed
+  // changes included, so the site build is reported on a full answer too: the full side's LTS leg
+  // reads it. The direction of risk is a site change that no required job builds, so a diff the
+  // classifier could not read builds the site as well.
+  it("reports the site build on a full answer whose diff touches the site, mixed changes included", () => {
+    for (const paths of [
+      ["website/src/pages/index.tsx", "src/cli.ts"],
+      ["docs/getting-started.md", "README.md"],
+      ["src/cli.ts", "content/x.md", "website/package-lock.json"],
+      [".stamity/runs/r/record.md", "docs/specs/x.md", "docs/troubleshooting.md", "src/cli.ts"],
+    ]) {
+      const decision = decideTyped({ event: "pull_request", base: SHA, paths });
+      expect(decision, paths.join(" ")).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true, recordsOnly: false });
+    }
+    // A full answer whose diff names no site path builds no site.
+    for (const paths of [
+      ["src/cli.ts"],
+      ["docs/specs/x.md", "src/cli.ts"],
+      ["docs/plans/019-x.md", "README.md"],
+      [".stamity/learnings/x.md", "content/x.md"],
+      ["website-old/x", "docs/../src/cli.ts"],
+    ]) {
+      const decision = decideTyped({ event: "push", base: SHA, paths });
+      expect(decision, paths.join(" ")).toMatchObject({ full: true, siteBuild: false });
+    }
+  });
+
+  it("builds the site when it cannot read the diff, and not for an empty one", () => {
+    for (const event of ["schedule", "workflow_dispatch", "merge_group", undefined]) {
+      expect(decideTyped({ event, base: SHA, paths: ["src/cli.ts"] }), String(event)).toMatchObject({ full: true, siteBuild: true });
+    }
+    for (const base of [undefined, "", "0".repeat(40), "not-a-sha"]) {
+      expect(decideTyped({ event: "push", base, paths: ["src/cli.ts"] }), String(base)).toMatchObject({ full: true, siteBuild: true });
+    }
+    expect(decideTyped({ event: "push", base: SHA, paths: [] })).toMatchObject({ full: true, siteBuild: false });
   });
 
   it("sends a docs path to the website lane unless it sits under plans or specs", () => {
@@ -468,6 +512,36 @@ describe("records-only.mjs — the CLI over a real diff", () => {
       cli_check: "false",
       records_only: "false",
     });
+  });
+
+  // ADDED by run 2026-10-08_maintainer-tooling, unit a2-ci-lanes (review/32): a real diff mixing a
+  // site page with code takes the full matrix AND reports the site build, which the full side's
+  // LTS leg runs inside the required result.
+  it("reports the site build on a full answer for a diff mixing a site page with code", () => {
+    const repo = repository();
+    const base = repo.commit("noop");
+    repo.write("website/src/pages/index.tsx", "export default function Home() { return null; }\n");
+    repo.write("src/cli.ts", "export const changed = 1;\n");
+    repo.commit("site and code");
+    const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "pull_request" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(outputsOf(result.stdout)).toEqual({
+      full: "true",
+      lanes: "[]",
+      suites: "",
+      site_build: "true",
+      cli_check: "false",
+      records_only: "false",
+    });
+  });
+
+  it("reports the site build when git cannot diff against the base", () => {
+    const repo = repository();
+    repo.write("src/cli.ts", "export const changed = 1;\n");
+    repo.commit("code");
+    const result = run(repo.root, ["--base", "b".repeat(40)], { GITHUB_EVENT_NAME: "push" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(outputsOf(result.stdout)).toMatchObject({ full: "true", site_build: "true" });
   });
 
   it("refuses an argument it does not know, rather than guessing", () => {

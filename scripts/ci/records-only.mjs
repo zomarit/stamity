@@ -13,8 +13,12 @@
 // `GITHUB_EVENT_NAME`), a base that is a non-zero hex commit id git can resolve, a non-empty diff,
 // and EVERY path in `git diff --name-only --no-renames <base> HEAD` inside some lane. Any other
 // answer — a schedule, a dispatch, a new branch's all-zero base, a base git cannot find, one path
-// in no lane — is `full=true`, which is full CI. `records_only=true` still means every path is a
-// record; it is derived from the lanes and kept for one release for any reader of the old output.
+// in no lane — is `full=true`, which is full CI. `site_build=true` whenever the diff touches a
+// website path, on a full answer too (the full side's LTS leg builds the site then), and whenever
+// the diff could not be read; an empty diff builds no site. `records_only=true` still means every
+// path is a record; it is derived from the lanes, nothing in ci.yml reads it, and it is kept for
+// one release for any reader of the old output: remove it at the first release after this change
+// merges.
 // Exit 2 is reserved for an argument this script does not know, so a typo in the workflow is red
 // rather than quietly full.
 import { execFileSync } from 'node:child_process'
@@ -40,9 +44,10 @@ export const RECORDS_PATHS = Object.freeze([
  * The suites that read the REAL repository-root copies of the record locations, confirmed by
  * reading each suite on 2026-09-30: the ledgers and the spec-status plan walk (`test/records`),
  * the plan-coverage check over two committed plans, the measurements page rendered from the
- * committed runs, and the two suites that run the leak gate over the whole tree. The records job
- * in `.github/workflows/ci.yml` runs exactly this list, and `test/ci/workflow.test.ts` holds the
- * two equal.
+ * committed runs, and the two suites that run the leak gate over the whole tree. It is the records
+ * lane's list in `LANE_SUITES`, and the specs lane's starts with it. The `lanes` job in
+ * `.github/workflows/ci.yml` runs the `suites` output this script prints, so the workflow spells
+ * no list of its own; `test/ci/recordsOnly.test.ts` pins this one.
  */
 export const RECORDS_SUITES = Object.freeze([
   'test/records',
@@ -134,9 +139,13 @@ export function laneOf(path) {
   return null
 }
 
-/** The answer that runs the full matrix and no lane. */
-function fullCi(reason) {
-  return { full: true, lanes: [], suites: [], siteBuild: false, cliCheck: false, recordsOnly: false, reason }
+/**
+ * The answer that runs the full matrix and no lane. `siteBuild` asks the full side to build the
+ * docs site: true when the diff touches a website path, and true when the diff could not be read,
+ * because a site change no required job builds is the failure this answer exists to prevent.
+ */
+function fullCi(reason, siteBuild) {
+  return { full: true, lanes: [], suites: [], siteBuild, cliCheck: false, recordsOnly: false, reason }
 }
 
 /**
@@ -144,16 +153,18 @@ function fullCi(reason) {
  * reason }`. `lanes` is sorted; `suites` is the union in `LANE_SUITES` order, each suite once.
  */
 export function decide({ event, base, paths }) {
-  if (!DIFF_EVENTS.has(event ?? '')) return fullCi(`event "${event ?? ''}" always runs full CI`)
+  if (!DIFF_EVENTS.has(event ?? '')) return fullCi(`event "${event ?? ''}" always runs full CI`, true)
   const verdict = baseProblem(base)
-  if (verdict !== null) return fullCi(verdict)
-  if (paths.length === 0) return fullCi('the diff lists no path')
+  if (verdict !== null) return fullCi(verdict, true)
+  if (paths.length === 0) return fullCi('the diff lists no path', false)
   const hit = new Set()
+  let outside = null
   for (const path of paths) {
     const lane = laneOf(path)
-    if (lane === null) return fullCi(`${path} is in no lane`)
-    hit.add(lane)
+    if (lane === null) outside ??= path
+    else hit.add(lane)
   }
+  if (outside !== null) return fullCi(`${outside} is in no lane`, hit.has('website'))
   const lanes = [...hit].toSorted()
   const suites = [...new Set(Object.keys(LANE_SUITES).filter(lane => hit.has(lane)).flatMap(lane => LANE_SUITES[lane]))]
   return {
@@ -229,7 +240,7 @@ function main(argv) {
     const paths = changedPaths(args.base, process.cwd())
     decision = Array.isArray(paths)
       ? decide({ event, base: args.base, paths })
-      : fullCi(`git could not diff against the base: ${paths.failure}`)
+      : fullCi(`git could not diff against the base: ${paths.failure}`, true)
   }
   const lines = outputLines(decision)
   process.stdout.write(lines)

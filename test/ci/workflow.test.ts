@@ -378,6 +378,52 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(jobOf(ci, "all-ci-checks").needs).toContain("check");
   });
 
+  // ADDED by run 2026-10-08_maintainer-tooling, unit a2-ci-lanes (review/32, signed off: S3 as
+  // written). `all-ci-checks` never passes a website change whose site does not build, mixed
+  // changes included: a change touching the site AND a path in no lane takes the full side, so
+  // the full side builds the site too — on the LTS leg alone, with docs-site.yml's own steps, last.
+  it("builds the docs site on the LTS leg when the change touches the site, mixed changes included", () => {
+    const site = docsSite.workflow.jobs["build"]?.steps ?? [];
+    const legs = jobs["check"]?.strategy?.matrix?.include ?? [];
+    const names = ["Set up Node for the site", "Install the site", "Build the site"] as const;
+    const condition = "matrix.toolchain && needs.changes.outputs.site_build != 'false'";
+    for (const name of names) expect(conditionOf(check, name), name).toBe(condition);
+    const siteNode = stepOf(check, "Set up Node for the site");
+    expect(siteNode.uses).toBe(stepOf(site, "Set up Node").uses);
+    expect(siteNode.with).toEqual(stepOf(site, "Set up Node").with);
+    for (const [name, from] of [["Install the site", "Install"], ["Build the site", "Build"]] as const) {
+      const step = stepOf(check, name) as WorkflowStep & { readonly "working-directory"?: string };
+      expect(step.run, name).toBe(runOf(site, from));
+      expect(step["working-directory"], name).toBe("website");
+    }
+    expect(runOf(check, "Install the site")).toBe("npm ci --ignore-scripts");
+    // Last, after every gate the leg runs, so no gate reads the site's install or build output.
+    expect(check.slice(-names.length).map((step) => step.name)).toEqual([...names]);
+    // Evaluated per leg: the LTS leg builds the site on `true`, and on an absent answer (the full
+    // side fails closed); `false` builds nothing, and no other leg ever builds it.
+    for (const site_build of ["true", "false", ""]) {
+      for (const leg of legs) {
+        const context = { matrix: leg, needs: { changes: { result: "success", outputs: { full: "true", site_build } } } };
+        const builds = evaluateWorkflowExpression(condition, context) === true;
+        expect(builds, `${leg.label ?? "?"}/${site_build}`).toBe(leg.label === "lts" && site_build !== "false");
+      }
+    }
+    // The mixed change end to end: the classifier answers full with the site build, so `check`
+    // runs (and the lanes job does not), and its LTS leg builds the site inside the required result.
+    const mixed = {
+      github: { event_name: "pull_request" },
+      needs: {
+        changes: { result: "success", outputs: { full: "true", site_build: "true" } },
+        "prove-pr": { result: "skipped", outputs: {} },
+      },
+    };
+    expect(evaluateWorkflowExpression(jobOf(ci, "check").if ?? "false", mixed)).toBe(true);
+    expect(evaluateWorkflowExpression(jobOf(ci, "lanes").if ?? "false", mixed)).toBe(false);
+    const lts = legs.find((leg) => leg.label === "lts");
+    expect(evaluateWorkflowExpression(condition, { ...mixed, matrix: lts })).toBe(true);
+    expect(jobOf(ci, "all-ci-checks").needs).toContain("check");
+  });
+
   it("runs the coverage floors on the legs that can meet them, and the suite on all of them", () => {
     // vitest.config.ts holds the merge and emit core at 100% and those floors BLOCK. The windows
     // leg skips the mode- and symlink-dependent cases by platform guard, so a coverage run there
@@ -777,7 +823,8 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(changes.if).toBeUndefined();
       expect(changes.needs).toBeUndefined();
       // The six answers the classifier prints, each passed through under its own name;
-      // `records_only` is kept, derived, for one release, for any reader outside this file.
+      // `records_only` is kept, derived, for one release, for any reader outside this file; nothing
+      // in this file reads it, and it leaves at the first release after this change merges.
       expect(changes.outputs).toEqual(
         Object.fromEntries(OUTPUTS.map((key) => [key, `\${{ steps.classify.outputs.${key} }}`])),
       );
@@ -801,6 +848,15 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
 
     it("runs exactly one side of the split for every answer the classifier can give", () => {
+      // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): the four jobs need `prove-pr`
+      // beside `changes`, and their conditions read its result and its `proven` output. The
+      // property is unchanged where no push is proven — only the literal `true` takes the short
+      // lane — and the context now carries `changes` green and `prove-pr` in the shape each event
+      // gives it (`success` with `proven=false` on a push, `skipped` otherwise). The proven side
+      // and the failed-classifier side are pinned in "the proven-push skip" below.
+      // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): the
+      // short lane is the `lanes` job and it reads `full`, so the literal that takes it is `false`
+      // of `full` where it was `true` of `records_only`; the `prove-pr` context above is unchanged.
       const lanes = jobOf(ci, "lanes");
       expect(lanes.needs).toEqual(["changes", "prove-pr"]);
       for (const heavy of HEAVY) {
@@ -869,6 +925,28 @@ describe("ci.yml — the merge-blocking gate", () => {
         expect(source["working-directory"], from).toBe("website");
       }
       expect(runOf(steps, "Install the site")).toBe("npm ci --ignore-scripts");
+      // ADDED (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes, review/37 signed
+      // off as a gap): the website lane also runs the root typecheck, because a website file feeds
+      // it (test/ci/tableHeaderScope.test.ts imports website/src/rehype/tableHeaderScope.mjs) and a
+      // proven push skips `main`'s matrix. On the lanes side `site_build` is exactly the website lane
+      // (test/ci/recordsOnly.test.ts pins `siteBuild` to the website lane on every lanes answer).
+      expect(stepOf(steps, "Typecheck")).toMatchObject({ if: siteBuild, run: runOf(check, "Typecheck") });
+      // The whole step list, in order, so a gate dropped from the short lane fails here by name.
+      expect(steps.map((step) => step.name)).toEqual([
+        "Checkout",
+        "Set up Node",
+        "Install",
+        "Repository hygiene",
+        "Lane suites",
+        "Self-consistency (generate-and-diff)",
+        "Leak gate",
+        "Typecheck",
+        "Build",
+        "Dogfood check",
+        "Set up Node for the site",
+        "Install the site",
+        "Build the site",
+      ]);
       // Every unconditional step stays build-free: only the four guarded steps above build.
       for (const step of steps) {
         if (step.if === cliCheck || step.if === siteBuild) continue;
