@@ -1,6 +1,6 @@
 {
   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
-  "accessDate": "2026-09-30",
+  "accessDate": "2026-10-08",
   "claude-fable-5-1": {
     "inputPerMTok": 10,
     "outputPerMTok": 50,
@@ -21,5 +21,19 @@
     "cacheWrite5mPerMTok": 6.25,
     "cacheWrite1hPerMTok": 10,
     "cacheReadPerMTok": 0.5
+  },
+  "claude-sonnet-5-5": {
+    "inputPerMTok": 2,
+    "outputPerMTok": 10,
+    "cacheWrite5mPerMTok": 2.5,
+    "cacheWrite1hPerMTok": 4,
+    "cacheReadPerMTok": 0.1
+  },
+  "claude-haiku-4-5-20251001": {
+    "inputPerMTok": 1,
+    "outputPerMTok": 5,
+    "cacheWrite5mPerMTok": 1.25,
+    "cacheWrite1hPerMTok": 2,
+    "cacheReadPerMTok": 0.1
   }
 }

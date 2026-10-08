@@ -130,6 +130,25 @@ describe("usageFromCalls", () => {
     expect(cost.priceAccessDate).toBe(list.accessDate);
   });
 
+  it("prices a Sonnet 5.5 call and a Haiku 4.5 call from the committed price list under the ids call records carry", () => {
+    // Call records carry the API response's model id: the bare id for Sonnet 5.5, the dated snapshot for Haiku 4.5.
+    const calls = [
+      attempt("scenario", "claude-sonnet-5-5", usage(1000, 2000, 1000, 2000, 4000)),
+      attempt("judge", "claude-haiku-4-5-20251001", usage(500, 100, 200, 400, 10000)),
+    ];
+    const list = JSON.parse(readFileSync("evals/price-list.json", "utf8"));
+    const cost = usageFromCalls(calls, list).listCostUsd;
+    // Sonnet 5.5 ($2 in, $10 out, $2.50 5m, $4 1h, $0.10 hits):
+    //   1000*2 + 2000*10 + 2000*2.5 + 1000*4 + 4000*0.1 = 31,400 micro-USD
+    // Haiku 4.5 ($1 in, $5 out, $1.25 5m, $2 1h, $0.10 hits):
+    //   500*1 + 100*5 + 400*1.25 + 200*2 + 10000*0.1 = 2,900 micro-USD
+    expect(cost.unpriced).toEqual([]);
+    expect(cost.notListPriced).toBe(0);
+    expect(cost.byModel).toEqual({ "claude-sonnet-5-5": 0.0314, "claude-haiku-4-5-20251001": 0.0029 });
+    expect(cost.byRole).toEqual({ scenario: 0.0314, judge: 0.0029, calibration: 0, isolation: 0 });
+    expect(cost.total).toBe(0.0343);
+  });
+
   it("keeps a committed price list that names its source, its access date and both cache-write rates", () => {
     const list = JSON.parse(readFileSync("evals/price-list.json", "utf8"));
     expect(list.source).toMatch(/^https:\/\/platform\.claude\.com\//);
