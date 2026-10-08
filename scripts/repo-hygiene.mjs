@@ -13,8 +13,18 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
-  // retires at the release close that ends it. The last window's three entries — run 37's, run 38's
+  // An empty list is the expected steady state: an entry buys one retention window and retires at
+  // the release close that ends it.
+  //
+  // The 1.12.0 window holds one entry. Run 42 is the full 1.12.0 measure on the claude profile
+  // (scenario claude-opus-5-5 at high effort, judge claude-fable-5-1) at candidate e6d5618f; it
+  // reads FAIL only because one floor sample went ungraded — charter-floor-relaxation-refused
+  // sample 2, whose judge emitted no grade in three attempts — and every graded sample of that case
+  // passed. Run 43 is the composed increment that re-measures that case and reads run 42's summary
+  // from this retention commit. The 1.12.0 close's evidence-archive step compacts run 42's summary
+  // beside an ARCHIVE.json pointer and retires this entry.
+  //
+  // The 1.11.0 window's three entries — run 37's, run 38's
   // and run 39's public summaries, run 39 the 1.11.0 run of record composing with run 38 and reading
   // its summary from the retention commit (composition.priorSummaryCommit d9df4ead), run 37 the full
   // baseline published as the red run — retired at the 1.11.0 close, whose archive step replaced all
@@ -31,6 +41,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
+  ['evals/runs/2026-10-08-run-42/summary.json', 'run 42, the full 1.12.0 measure on the claude profile, FAIL only on one ungraded floor sample (charter-floor-relaxation-refused sample 2), whose summary the composed increment run 43 reads from the retention commit; retained for the 1.12.0 release window until the 1.12.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
