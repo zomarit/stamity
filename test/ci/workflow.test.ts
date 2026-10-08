@@ -4577,7 +4577,10 @@ describe("dependabot.yml — the update policy behind the pins", () => {
       "package-ecosystem": string;
       directory: string;
       schedule: { interval: string };
-      groups?: Record<string, { "dependency-type": string }>;
+      groups?: Record<
+        string,
+        { "dependency-type"?: string; "applies-to"?: string; patterns?: string[] }
+      >;
     }[];
   };
 
@@ -4620,6 +4623,15 @@ describe("dependabot.yml — the update policy behind the pins", () => {
     for (const npm of npmEntries) {
       expect(npm.groups?.["production"]?.["dependency-type"], npm.directory).toBe("production");
       expect(npm.groups?.["development"]?.["dependency-type"], npm.directory).toBe("development");
+      // Extended in place (the version-update split above is unchanged): security updates are a
+      // third group, because without one GitHub opens one security PR per package even where the
+      // version updates are grouped. `applies-to: security-updates` scopes it to security PRs
+      // only, so it never takes a dependency from the two version-update groups, and `*` gathers
+      // every advisory bump of the manifest into one PR.
+      const security = npm.groups?.["security"];
+      expect(security?.["applies-to"], npm.directory).toBe("security-updates");
+      expect(security?.patterns, npm.directory).toEqual(["*"]);
+      expect(security?.["dependency-type"], npm.directory).toBeUndefined();
     }
   });
 

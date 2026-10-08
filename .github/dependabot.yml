@@ -18,11 +18,17 @@ updates:
     # Two grouped PRs a week instead of one per package. The split is along the line that matters
     # when reviewing: a production bump changes what ships to users, a development bump changes
     # only what gates it, and the two deserve different scrutiny even when the diff looks alike.
+    # Those two groups apply to version updates only (the default when `applies-to` is unset).
+    # `security` is the third: `applies-to: security-updates` scopes it to the PRs an advisory
+    # opens, which would otherwise arrive one per package, and `*` gathers them into one PR.
     groups:
       production:
         dependency-type: production
       development:
         dependency-type: development
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
     # Deterministic, rather than inferred from commit history. The repository uses Conventional
     # Commits, and dependabot's auto-detection reads recent commits to guess the prefix — a guess
     # that changes as history changes.
@@ -34,7 +40,8 @@ updates:
   # The docs site (`website/`). A separate npm project with its own lockfile: it ships nothing to
   # users — `package.json` publishes `dist` only — so every bump here is a bump to what RENDERS
   # the documentation, not to what runs on a consumer's machine. Same weekly cadence and the same
-  # production/development split, so a site bump is reviewed on the same terms as a root one.
+  # production/development split and the same security group, so a site bump is reviewed on the
+  # same terms as a root one.
   - package-ecosystem: npm
     directory: /website
     schedule:
@@ -44,6 +51,9 @@ updates:
         dependency-type: production
       development:
         dependency-type: development
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
     commit-message:
       prefix: chore
       prefix-development: chore
