@@ -45,8 +45,12 @@ export function parsePorcelainStatus(output: string): { dirty: boolean; changedC
  * Read working-tree cleanliness for the sync dirty-tree warning. Total: any
  * git failure collapses to `available: false` with a clean-looking zero count,
  * which callers must read as "unknown", not "clean".
+ *
+ * `cwd` is the setup root, and the default runner is {@link execGitCheck}: a
+ * folder a repository writer committed in the shape of a bare repository never
+ * answers, and no configured file-system monitor command runs (review/112).
  */
-export function readWorkingTreeStatus(cwd: string, runner: GitRunner = execGit): WorkingTreeStatus {
+export function readWorkingTreeStatus(cwd: string, runner: GitRunner = execGitCheck): WorkingTreeStatus {
   try {
     return { available: true, ...parsePorcelainStatus(runner(["status", "--porcelain"], cwd)) };
   } catch {
@@ -94,4 +98,38 @@ const execGit: GitRunner = (args, cwd) =>
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     timeout: GIT_FACT_TIMEOUT_MS,
+  });
+
+/**
+ * The caller's environment minus every `GIT_*` variable (inside a git hook
+ * `GIT_DIR` and `GIT_INDEX_FILE` would point the read at another repository),
+ * plus `GIT_OPTIONAL_LOCKS=0`, so `status` never takes the index lock a
+ * concurrent git command holds — as the overwrite lane's tracked-and-clean
+ * check runs git (`../../merge/safeWrite.ts::gitCheckEnv`).
+ */
+function gitCheckEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!/^GIT_/i.test(key)) env[key] = value;
+  }
+  env["GIT_OPTIONAL_LOCKS"] = "0";
+  return env;
+}
+
+/**
+ * The seam {@link readWorkingTreeStatus} runs by default: {@link execGit}'s
+ * capture and wall time, in {@link gitCheckEnv}, with two options ahead of
+ * every command. `safe.bareRepository=explicit` (protected configuration, so
+ * honoured from the command line) refuses a committed folder shaped like a
+ * bare repository, and `core.fsmonitor=false` runs no file-system monitor
+ * command, whatever any config says (`../../merge/safeWrite.ts::runGitCheck`).
+ */
+const execGitCheck: GitRunner = (args, cwd) =>
+  execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
+    cwd,
+    env: gitCheckEnv(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: GIT_FACT_TIMEOUT_MS,
+    windowsHide: true,
   });

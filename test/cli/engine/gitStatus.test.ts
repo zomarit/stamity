@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   parsePorcelainStatus,
@@ -177,9 +179,11 @@ const gitAvailable = (() => {
 /**
  * Config isolation for every spawned git: the host's global/system config must
  * not leak into seeding (commit.gpgsign would break commits) or into reads
- * (status.showUntrackedFiles=no would blank the porcelain output). The default
- * runner inherits process.env, so the read-side isolation is applied per test
- * around the calls that use it.
+ * (status.showUntrackedFiles=no would blank the porcelain output). The history
+ * reader's default runner inherits process.env, so the read-side isolation is
+ * applied per test around the calls that use it. The working-tree reader's
+ * strips every `GIT_*` variable (review/112), so for it these values, and the
+ * discovery ceiling, reach only the seeding.
  */
 const ISOLATED_GIT_ENV = {
   // Git for Windows also reads a ProgramData-level config that GIT_CONFIG_SYSTEM alone does not cut.
@@ -279,5 +283,51 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
       expect(readWorkingTreeStatus(plain)).toEqual(UNAVAILABLE);
       expect(readHistoryFacts(plain)).toBeNull();
     });
+  });
+
+  // review/112: `sync`, `check` and `init` read the working tree through this
+  // call, so it runs git the way the overwrite lane's tracked-and-clean check
+  // does (`src/merge/safeWrite.ts::runGitCheck`): a folder a repository writer
+  // committed in the shape of a bare repository never answers it, and no
+  // configured file-system monitor command runs.
+  it("never runs a planted bare repository's core.fsmonitor at the setup root", async () => {
+    const root = getRoot().path("planted");
+    await mkdir(root);
+    const marker = getRoot().path("ran").replaceAll("\\", "/");
+    git(root, ["init", "-q", "--bare", "."]);
+    await getRoot().seedFiles({ "planted/AGENTS.md": "# Charter\n" });
+    git(root, ["--git-dir=.", "--work-tree=.", "add", "--", "AGENTS.md"]);
+    git(root, ["--git-dir=.", "--work-tree=.", "commit", "-q", "-m", "planted"], {
+      GIT_AUTHOR_NAME: ALICE.name,
+      GIT_AUTHOR_EMAIL: ALICE.email,
+      GIT_COMMITTER_NAME: ALICE.name,
+      GIT_COMMITTER_EMAIL: ALICE.email,
+    });
+    git(root, ["config", "--file", "config", "core.bare", "false"]);
+    git(root, ["config", "--file", "config", "core.worktree", "."]);
+    git(root, ["config", "--file", "config", "core.fsmonitor", `touch '${marker}'; false`]);
+
+    const status = withProcessEnv({ ...ISOLATED_GIT_ENV, GIT_CEILING_DIRECTORIES: getRoot().dir }, () => readWorkingTreeStatus(root));
+
+    expect(existsSync(marker)).toBe(false);
+    expect(status).toEqual(UNAVAILABLE);
+  });
+
+  it("reads the setup root's own repository whatever GIT_DIR names", async () => {
+    const other = getRoot().path("other");
+    const target = getRoot().path("target");
+    await mkdir(other);
+    await mkdir(target);
+    git(other, ["init", "-q"]);
+    commit(other, "base", ALICE);
+    git(target, ["init", "-q"]);
+    commit(target, "base", ALICE);
+    await getRoot().seedFiles({ "other/untracked.txt": "x\n" });
+
+    const status = withProcessEnv({ ...ISOLATED_GIT_ENV, GIT_DIR: join(other, ".git"), GIT_WORK_TREE: other }, () =>
+      readWorkingTreeStatus(target),
+    );
+
+    expect(status).toEqual({ available: true, dirty: false, changedCount: 0 });
   });
 });
