@@ -73,8 +73,9 @@ export function parseShortlogContributors(output: string): number {
  * whenever history cannot be read — git missing, not a repository, or a
  * zero-commit repo whose `HEAD` names no revision yet. `rev-list` output is
  * validated digit-by-digit: garbage stdout is "unavailable", never `NaN`.
+ * The default runner is {@link execGitCheck}, as for the working tree (build/69).
  */
-export function readHistoryFacts(cwd: string, runner: GitRunner = execGit): HistoryFacts | null {
+export function readHistoryFacts(cwd: string, runner: GitRunner = execGitCheck): HistoryFacts | null {
   try {
     const countOutput = runner(["rev-list", "--count", "HEAD"], cwd).trim();
     if (!/^\d+$/.test(countOutput)) return null;
@@ -86,19 +87,6 @@ export function readHistoryFacts(cwd: string, runner: GitRunner = execGit): Hist
     return null;
   }
 }
-
-/**
- * Default seam, mirroring the construction in `src/workspace/git.ts`:
- * synchronous git, stdout captured, stdin and stderr discarded (`shortlog`
- * must never fall back to reading stdin), bounded wall time.
- */
-const execGit: GitRunner = (args, cwd) =>
-  execFileSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    timeout: GIT_FACT_TIMEOUT_MS,
-  });
 
 /**
  * The caller's environment minus every `GIT_*` variable (inside a git hook
@@ -117,9 +105,10 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
 }
 
 /**
- * The seam {@link readWorkingTreeStatus} runs by default: {@link execGit}'s
- * capture and wall time, in {@link gitCheckEnv}, with two options ahead of
- * every command. `safe.bareRepository=explicit` (protected configuration, so
+ * The seam both readers run by default, mirroring the construction in
+ * `src/workspace/git.ts`: synchronous git, stdout captured, stdin and stderr
+ * discarded (`shortlog` must never fall back to reading stdin), bounded wall
+ * time — in {@link gitCheckEnv}, with two options ahead of every command. `safe.bareRepository=explicit` (protected configuration, so
  * honoured from the command line) refuses a committed folder shaped like a
  * bare repository, and `core.fsmonitor=false` runs no file-system monitor
  * command, whatever any config says (`../../merge/safeWrite.ts::runGitCheck`).

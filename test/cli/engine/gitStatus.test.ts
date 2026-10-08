@@ -179,11 +179,12 @@ const gitAvailable = (() => {
 /**
  * Config isolation for every spawned git: the host's global/system config must
  * not leak into seeding (commit.gpgsign would break commits) or into reads
- * (status.showUntrackedFiles=no would blank the porcelain output). The history
- * reader's default runner inherits process.env, so the read-side isolation is
- * applied per test around the calls that use it. The working-tree reader's
- * strips every `GIT_*` variable (review/112), so for it these values, and the
- * discovery ceiling, reach only the seeding.
+ * (status.showUntrackedFiles=no would blank the porcelain output). Both
+ * readers' default runner strips every `GIT_*` variable (review/112,
+ * build/69), so these values, and the discovery ceiling, reach only the
+ * seeding; the reads are isolated by {@link readEnv} instead, which points
+ * `HOME` and `XDG_CONFIG_HOME` at an empty folder so no global config is found
+ * (build/70).
  */
 const ISOLATED_GIT_ENV = {
   // Git for Windows also reads a ProgramData-level config that GIT_CONFIG_SYSTEM alone does not cut.
@@ -208,6 +209,16 @@ function commit(cwd: string, message: string, author: { name: string; email: str
     GIT_COMMITTER_NAME: author.name,
     GIT_COMMITTER_EMAIL: author.email,
   });
+}
+
+/**
+ * The environment a read runs under: the seeding isolation (which the runner
+ * strips, and which therefore cuts nothing for the read), plus `HOME` and
+ * `XDG_CONFIG_HOME` at an empty folder, so git finds no global config.
+ */
+async function readEnv(home: string, extra: Record<string, string> = {}): Promise<Record<string, string>> {
+  await mkdir(home, { recursive: true });
+  return { ...ISOLATED_GIT_ENV, HOME: home, XDG_CONFIG_HOME: home, ...extra };
 }
 
 /** Runs `fn` with env overrides on this process, so the default runner's children inherit them. */
@@ -238,7 +249,7 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     commit(repo, "two", ASA);
     commit(repo, "three", ALICE);
 
-    withProcessEnv(ISOLATED_GIT_ENV, () => {
+    withProcessEnv(await readEnv(getRoot().path("home")), () => {
       expect(readHistoryFacts(repo)).toEqual({ commitCount: 3, contributorCount: 2 });
       expect(readWorkingTreeStatus(repo)).toEqual({
         available: true,
@@ -248,7 +259,7 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     });
 
     await getRoot().seedFiles({ "repo/untracked.txt": "x\n" });
-    withProcessEnv(ISOLATED_GIT_ENV, () => {
+    withProcessEnv(await readEnv(getRoot().path("home")), () => {
       expect(readWorkingTreeStatus(repo)).toEqual({
         available: true,
         dirty: true,
@@ -262,7 +273,7 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     await mkdir(fresh);
     git(fresh, ["init", "-q"]);
 
-    withProcessEnv(ISOLATED_GIT_ENV, () => {
+    withProcessEnv(await readEnv(getRoot().path("home")), () => {
       // rev-list cannot resolve an unborn HEAD -> null; status still answers.
       expect(readHistoryFacts(fresh)).toBeNull();
       expect(readWorkingTreeStatus(fresh)).toEqual({
@@ -279,7 +290,7 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
 
     // The ceiling pins discovery inside the temp dir, so the test cannot
     // accidentally find a repository above tmpdir on some exotic host.
-    withProcessEnv({ ...ISOLATED_GIT_ENV, GIT_CEILING_DIRECTORIES: getRoot().dir }, () => {
+    withProcessEnv(await readEnv(getRoot().path("home"), { GIT_CEILING_DIRECTORIES: getRoot().dir }), () => {
       expect(readWorkingTreeStatus(plain)).toEqual(UNAVAILABLE);
       expect(readHistoryFacts(plain)).toBeNull();
     });
@@ -290,7 +301,7 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
   // does (`src/merge/safeWrite.ts::runGitCheck`): a folder a repository writer
   // committed in the shape of a bare repository never answers it, and no
   // configured file-system monitor command runs.
-  it("never runs a planted bare repository's core.fsmonitor at the setup root", async () => {
+  it("never runs a planted bare repository's core.fsmonitor at the setup root, nor reads its history", async () => {
     const root = getRoot().path("planted");
     await mkdir(root);
     const marker = getRoot().path("ran").replaceAll("\\", "/");
@@ -307,13 +318,17 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     git(root, ["config", "--file", "config", "core.worktree", "."]);
     git(root, ["config", "--file", "config", "core.fsmonitor", `touch '${marker}'; false`]);
 
-    const status = withProcessEnv({ ...ISOLATED_GIT_ENV, GIT_CEILING_DIRECTORIES: getRoot().dir }, () => readWorkingTreeStatus(root));
+    const env = await readEnv(getRoot().path("home"), { GIT_CEILING_DIRECTORIES: getRoot().dir });
+    const status = withProcessEnv(env, () => readWorkingTreeStatus(root));
+    // build/69: the history reader runs git the same way, so it reads no history here.
+    const history = withProcessEnv(env, () => readHistoryFacts(root));
 
     expect(existsSync(marker)).toBe(false);
     expect(status).toEqual(UNAVAILABLE);
+    expect(history).toBeNull();
   });
 
-  it("reads the setup root's own repository whatever GIT_DIR names", async () => {
+  it("reads the setup root's own repository and history whatever GIT_DIR names", async () => {
     const other = getRoot().path("other");
     const target = getRoot().path("target");
     await mkdir(other);
@@ -324,10 +339,13 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     commit(target, "base", ALICE);
     await getRoot().seedFiles({ "other/untracked.txt": "x\n" });
 
-    const status = withProcessEnv({ ...ISOLATED_GIT_ENV, GIT_DIR: join(other, ".git"), GIT_WORK_TREE: other }, () =>
-      readWorkingTreeStatus(target),
-    );
+    commit(other, "second", ALICE);
+    const env = await readEnv(getRoot().path("home"), { GIT_DIR: join(other, ".git"), GIT_WORK_TREE: other });
+    const status = withProcessEnv(env, () => readWorkingTreeStatus(target));
+    // build/69: the history reader counts the target's one commit, not the other repository's two.
+    const history = withProcessEnv(env, () => readHistoryFacts(target));
 
     expect(status).toEqual({ available: true, dirty: false, changedCount: 0 });
+    expect(history).toEqual({ commitCount: 1, contributorCount: 1 });
   });
 });
