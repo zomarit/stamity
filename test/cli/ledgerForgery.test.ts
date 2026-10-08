@@ -7,6 +7,7 @@ import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.t
 import { addCommand } from "../../src/cli/commands/add.ts";
 import { checkCommand } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
+import { initCommand } from "../../src/cli/commands/init.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncCommand } from "../../src/cli/commands/sync.ts";
@@ -576,6 +577,34 @@ describe("the renderings are the setup's own", () => {
     expect(thrownValue.renderingsUnbuilt).toBe("not an Error");
   });
 
+  // Row 586 (unit d1c): a nested charter is a verbatim copy of the root
+  // charter the engine renders for a package at that folder, for a client that
+  // reads per-folder files. Once the package leaves, no plan renders that
+  // folder, so the proof renders the root charter there itself, and only for a
+  // setup holding such a client.
+  it("renders the root charter at a nested AGENTS.md for a per-folder client, with no package there", async () => {
+    const root = await initialisedRepo(["claude"]);
+    const onDisk = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
+    const charter = "# Charter\n\nthe root render\n";
+    const plan: Parameters<typeof engineRenderingsFor>[3] = async () => [
+      { path: "AGENTS.md", content: charter, owner: { adapter: "claude", artifactId: "charter", artifactType: "infra" } },
+      { path: "docs/AGENTS.md", content: "# Conditional rules (Codex down-conversion)\n", owner: { adapter: "codex", artifactId: "appendix", artifactType: "infra" } },
+    ];
+    const nested = ["packages/gone/AGENTS.md", "docs/AGENTS.md"];
+
+    const claudeOnly = await engineRenderingsFor(root, onDisk, nested, plan);
+    expect(claudeOnly.renderings.get("packages/gone/AGENTS.md")).toBeUndefined();
+
+    const withCodex = await engineRenderingsFor(root, { ...onDisk, tools: ["claude", "codex"] }, [...nested, "AGENTS.md"], plan);
+    expect(withCodex.renderings.get("packages/gone/AGENTS.md")).toEqual(new Set([sha256(charter)]));
+    // A folder the plan renders keeps that rendering beside the charter copy.
+    expect(withCodex.renderings.get("docs/AGENTS.md")).toEqual(
+      new Set([sha256("# Conditional rules (Codex down-conversion)\n"), sha256(charter)]),
+    );
+    // The root is the root's own rendering, not a nested copy.
+    expect(withCodex.renderings.get("AGENTS.md")).toEqual(new Set([sha256(charter)]));
+  });
+
   it("previews a deselected client's unedited file as a delete, and keeps it under a plan with no engine version", async () => {
     const root = await initialisedRepo(["claude", "cursor"]);
     const manifestFile = join(root, ".stamity", "manifest.json");
@@ -883,6 +912,135 @@ describe("an instruction file leaves only on its own bytes", () => {
       proof: "hash",
     });
   });
+});
+
+// ── Rows 586 and 519: the fingerprint no longer proves a delete ────────────
+
+/**
+ * Rows 586 and 519 (unit d1c-charter-and-exact-paths): an owner's file can pass
+ * the structural fingerprint the overwrite lane reads (a charter's title and
+ * four headings, the Codex appendix title or heading, the Copilot workflow's
+ * header line), and Copilot's hooks file has no fingerprint at all. Under a
+ * forged row hashing it, each was deleted whole. The delete now needs bytes the
+ * running engine renders at the path, or a managed block spanning the file.
+ */
+describe("an owner's charter-shaped or exact-path file under a forged row and hash is kept", () => {
+  /** A charter as an owner copies it: the title and the four headings, with their own words. */
+  const OWNER_CHARTER =
+    "# Charter\n\nOur own rules.\n\n## Repo facts\n\nMonorepo.\n\n## Invariants\n\nNo force pushes.\n\n## Touchpoints\n\nAsk Ana.\n\n## Conditional layer\n\nNone.\n";
+  const OWNER_COPIES: Readonly<Record<string, readonly [string, Tool]>> = {
+    "docs/AGENTS.md": [OWNER_CHARTER, "codex"],
+    "packages/lib/AGENTS.md": ["# Conditional rules (Codex down-conversion) for our lib\n\nKeep it small.\n", "codex"],
+    "AGENTS.override.md": ["# Our Codex overrides\n\n## Conditional rules (Codex down-conversion)\n\nUse staging.\n", "codex"],
+    ".github/workflows/copilot-setup-steps.yml": [
+      "name: ours\n# Prepares the environment the GitHub Copilot coding agent works in. The agent runs\non: workflow_dispatch\njobs:\n  s:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ours\n",
+      "copilot",
+    ],
+    ".github/hooks/stamity.json": [
+      `${JSON.stringify({ version: 1, hooks: { sessionStart: [{ type: "command", bash: "./scripts/ours.sh" }] } }, null, 2)}\n`,
+      "copilot",
+    ],
+  };
+  const PATHS = Object.keys(OWNER_COPIES);
+  const bytesOf = (path: string): string => (OWNER_COPIES[path] as readonly [string, Tool])[0];
+
+  type SweepDoc = { entries: { path: string; action: string; detail: string; proof?: string }[] };
+
+  async function forgedRepo(): Promise<string> {
+    const root = await initialisedRepo();
+    await seed(root, Object.fromEntries(PATHS.map((path) => [path, bytesOf(path)])));
+    await forgeRows(
+      root,
+      PATHS.map((path) => hashedInfraRow(path, bytesOf(path), (OWNER_COPIES[path] as readonly [string, Tool])[1])),
+    );
+    return root;
+  }
+
+  it("sync -y keeps each one, and names it skipped-user-content", async () => {
+    const root = await forgedRepo();
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const entries = (JSON.parse(sync.stdout.trim()) as { reclaim: SweepDoc }).reclaim.entries;
+    for (const path of PATHS) {
+      const entry = entries.find((candidate) => candidate.path === path);
+      expect(entry?.action, path).toBe("skipped-user-content");
+      expect(entry?.detail, path).toContain("delete it by hand");
+      expect(await readFile(join(root, path), "utf8"), path).toBe(bytesOf(path));
+    }
+  }, 60_000);
+
+  it("clean -y keeps each one, and the owner's charter-shaped AGENTS.md at the root", async () => {
+    const root = await forgedRepo();
+    await writeFile(join(root, "AGENTS.md"), OWNER_CHARTER, "utf8");
+    await editManifest(root, (manifest) => {
+      for (const row of manifest.ledger) if (row.path === "AGENTS.md") row.contentHash = sha256(OWNER_CHARTER);
+    });
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+
+    expect(clean.code, clean.stderr).toBe(0);
+    const entries = (JSON.parse(clean.stdout.trim()) as SweepDoc).entries;
+    for (const path of [...PATHS, "AGENTS.md"]) {
+      expect(entries.find((candidate) => candidate.path === path)?.action, path).toBe("skipped-user-content");
+    }
+    for (const path of PATHS) expect(await readFile(join(root, path), "utf8"), path).toBe(bytesOf(path));
+    expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(OWNER_CHARTER);
+  }, 60_000);
+
+  // `init --force` sweeps nothing: it replaces the setup, and the previous
+  // ledger's rows are not its authority over any file. The owner's
+  // charter-shaped root file survives it, in place or in the verified `.bak`.
+  it("init --force keeps the owner's charter-shaped AGENTS.md a forged row hashes", async () => {
+    const root = await initialisedRepo();
+    await writeFile(join(root, "AGENTS.md"), OWNER_CHARTER, "utf8");
+    await editManifest(root, (manifest) => {
+      for (const row of manifest.ledger) if (row.path === "AGENTS.md") row.contentHash = sha256(OWNER_CHARTER);
+    });
+
+    const init = await runInProcess([initCommand], ["init", "--force", "-y", "--tools", "claude,cursor"], { cwd: root });
+
+    expect(init.code, init.stderr).toBe(0);
+    const kept = [
+      await readFile(join(root, "AGENTS.md"), "utf8"),
+      ...(await Promise.all(
+        (await readdir(root)).filter((name) => name.startsWith("AGENTS.md.bak")).map((name) => readFile(join(root, name), "utf8")),
+      )),
+    ];
+    expect(kept.some((bytes) => bytes.includes("Our own rules.") && bytes.includes("Ask Ana."))).toBe(true);
+  }, 60_000);
+
+  // The controls: the engine's own renderings at these paths still leave.
+  it("clean -y still deletes the engine's own AGENTS.md, proven as its rendering", async () => {
+    const root = await initialisedRepo();
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+
+    expect(clean.code, clean.stderr).toBe(0);
+    const entry = (JSON.parse(clean.stdout.trim()) as SweepDoc).entries.find((candidate) => candidate.path === "AGENTS.md");
+    expect(entry).toMatchObject({ action: "deleted", proof: "hash" });
+    expect(entry?.detail).toContain("a rendering this engine produces at that path");
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+  }, 60_000);
+
+  it("sync -y still deletes a deselected Copilot's unedited workflow and hooks file", async () => {
+    const root = await initialisedRepo(["claude", "copilot"]);
+    const engineFiles = [".github/workflows/copilot-setup-steps.yml", ".github/hooks/stamity.json"];
+    for (const path of engineFiles) expect(existsSync(join(root, path)), path).toBe(true);
+    await editManifest(root, (manifest) => {
+      manifest.tools = ["claude"];
+    });
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code, sync.stderr).toBe(0);
+    const entries = (JSON.parse(sync.stdout.trim()) as { reclaim: SweepDoc }).reclaim.entries;
+    for (const path of engineFiles) {
+      expect(entries.find((candidate) => candidate.path === path), path).toMatchObject({ action: "deleted", proof: "hash" });
+      expect(existsSync(join(root, path)), path).toBe(false);
+    }
+  }, 60_000);
 });
 
 // ── REQ-PLUGIN-046: the engine's own Codex override ───────────────────────

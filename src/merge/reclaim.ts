@@ -6,11 +6,12 @@ import {
   bytesShowEngineOutput,
   carriesEngineMintedPrefix,
   hasEngineMintedName,
-  needsRenderingProof,
   ownedFolderOf,
   ownedPathKind,
   provenByRendering,
+  renderingProofClass,
   type OwnedPathKind,
+  type RenderingProofClass,
 } from "../manifest/ownedPaths.ts";
 import type { CoOwnedReducer } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
@@ -64,14 +65,18 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  *    listed the exact path in `trustedExactPaths`, the allowlist for infra files
  *    the engine writes under names it did not mint (MCP config, hook config).
  *    A whole-file delete then needs the bytes: a matching recorded hash where
- *    (b) holds — plus, at an `AGENTS.md` in any folder, `AGENTS.override.md`,
- *    `CLAUDE.md` and the Copilot setup workflow, bytes that show the engine
- *    wrote them (`../manifest/ownedPaths.ts::bytesShowEngineOutput`,
- *    REQ-PLUGIN-046) — the engine's name AND a matching recorded hash AND bytes
- *    that hash to a rendering the running engine produces at the path in a
- *    content folder (`ReclaimOptions.renderings`,
- *    `../manifest/ownedPaths.ts::needsRenderingProof`), or a managed block that
- *    spans the file. A row with no recorded
+ *    (b) holds, or the engine's name AND a matching recorded hash, or a managed
+ *    block that spans the file. At the paths
+ *    `../manifest/ownedPaths.ts::needsRenderingProof` names (an engine-named
+ *    file in a content folder, an `AGENTS.md` in any folder,
+ *    `AGENTS.override.md`, `CLAUDE.md`, the Copilot setup workflow, Copilot's
+ *    hooks file and Cursor's two 1.11.0 guard names, REQ-PLUGIN-046) a
+ *    matching hash proves nothing without the bytes hashing to a rendering the
+ *    running engine produces at the path (`ReclaimOptions.renderings`); at an
+ *    instruction file the bytes must also show the engine wrote them
+ *    (`../manifest/ownedPaths.ts::bytesShowEngineOutput`) before the rendering
+ *    is asked, and a managed block spanning the file still proves it on its
+ *    own. A row with no recorded
  *    hash proves nothing: no release ever wrote one, so it is a hand edit.
  * 3. **Containment (physical).** The parent directory's realpath still resolves
  *    under the root's realpath — and under the realpath of the bound folder the
@@ -649,6 +654,70 @@ function keptUnjudged(ctx: SweepContext): string {
     : "the file is kept with its ledger row, and the next sync tries the proof again.";
 }
 
+/**
+ * What a report sentence calls each kind of path the rendering proof governs,
+ * the bytes that prove a delete there, and what a copy those bytes are not
+ * usually is — so the sentence names the path's own class (review/100).
+ */
+const RENDERING_PROOF_WORDS: Readonly<Record<RenderingProofClass, { subject: string; proof: string; usually: string }>> = {
+  content: {
+    subject: "a file under an engine name in a content folder",
+    proof: "a rendering this engine produces at that path",
+    usually: "an owner's file, or a copy an earlier release rendered",
+  },
+  instruction: {
+    subject: "an instruction file (a charter in any folder, `AGENTS.override.md`, `CLAUDE.md` or the Copilot setup workflow)",
+    proof: "a rendering this engine produces at that path",
+    usually: "an owner's file, or one an earlier release rendered",
+  },
+  "copilot-hooks": {
+    subject: "Copilot's hooks file",
+    proof: "a rendering this engine produces at that path",
+    usually: "an owner's hooks file, or one an earlier release rendered",
+  },
+  "cursor-1.11.0-guard": {
+    subject: "a file at a name Cursor's guards carried up to 1.11.0",
+    proof: "the guard 1.11.0 rendered for this setup",
+    usually: "an owner's own script, a guard edited by hand, or one an earlier release wrote",
+  },
+};
+
+/**
+ * The rendering proof at a path of class `proofClass`
+ * (`../manifest/ownedPaths.ts::needsRenderingProof`): `null` when the bytes —
+ * raw or CRLF-folded — hash to a rendering the engine produces at the path, and
+ * otherwise the skip that keeps the file and names why.
+ *
+ * Unproven is not disproven (review/61): with no rendering built for the path,
+ * the bytes were never judged, so the claim stands for the next sync — unless
+ * the run removes the setup, and no sync follows (review/87). A rendering built
+ * for the path judged the file whatever else failed to build: the 1.11.0
+ * re-render at Cursor's old guard names never runs the engine's plan
+ * (review/98).
+ */
+function renderingRefusal(
+  path: string,
+  proofClass: RenderingProofClass,
+  bytes: Buffer,
+  content: string,
+  ctx: SweepContext,
+): ReclaimPlan | null {
+  if (matchesRendering(ctx.renderings.get(path), bytes, content)) return null;
+  const words = RENDERING_PROOF_WORDS[proofClass];
+  if (ctx.renderingsUnbuilt !== undefined && !ctx.renderings.has(path)) {
+    return {
+      kind: "skip",
+      action: "skipped-user-content",
+      detail: `${words.subject.charAt(0).toUpperCase()}${words.subject.slice(1)} is deleted only when its bytes are ${words.proof}, and the renderings could not be built (${ctx.renderingsUnbuilt}) — ${keptUnjudged(ctx)}`,
+      unproven: true,
+    };
+  }
+  return skip(
+    "skipped-user-content",
+    `The bytes still hash to what the ledger records, but ${words.subject} is deleted only when its bytes are ${words.proof}, and these are not (${words.usually}) — the file is kept; delete it by hand if it is yours to remove.`,
+  );
+}
+
 /** Run gates 1-4 for one candidate path. Reads only; never mutates. */
 async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<ReclaimPlan> {
   const path = group.path;
@@ -906,45 +975,35 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   // At an instruction file or the Copilot setup workflow the match is not
   // enough on its own (REQ-PLUGIN-046): an owner's file sits at the very name
   // the engine writes, and a hand-added row can record the hash of the owner's
-  // bytes as easily as of the engine's. There the bytes must also show the
+  // bytes as easily as of the engine's. There the bytes must first show the
   // engine wrote them; when they do not, the file falls through to the block
   // split below — a block spanning it still proves it, a block beside owner
-  // text is stripped, and a block-less file is kept.
+  // text is stripped, and a block-less file is kept. When they do, the
+  // rendering still decides below: an owner's copy can pass that fingerprint.
   const bytesProveEngine = bytesShowEngineOutput(path, content);
   // Settled before the managed-block split on purpose: bytes identical to what
   // the engine recorded writing leave nothing a user could have authored, so
   // there is no veto for the split to find and no block worth stripping out of
   // a file that is engine output end to end.
   if (hashProvable && hashMatched && bytesProveEngine) {
-    // At Cursor's two 1.11.0 guard names the match is not enough either (row
-    // 585, REQ-FLOW-038): an owner may keep a script of their own there, and a
-    // hand-added row can hash it. The bytes have to be the guard 1.11.0
-    // rendered for this setup (`../cli/engine/emissionWrite.ts::engineRenderingsFor`).
-    const renderingProof = needsRenderingProof(path);
-    if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
-      // Unproven is not disproven (review/61), as for a content folder below.
-      // The 1.11.0 re-render never runs the engine's plan, so a rendering it
-      // built judged the file whatever else failed to build (review/98).
-      if (ctx.renderingsUnbuilt !== undefined && !ctx.renderings.has(path)) {
-        return {
-          kind: "skip",
-          action: "skipped-user-content",
-          detail: `A file at a name Cursor's guards carried up to 1.11.0 is deleted only when its bytes are the guard 1.11.0 rendered for this setup, and the renderings could not be built (${ctx.renderingsUnbuilt}) — ${keptUnjudged(ctx)}`,
-          unproven: true,
-        };
-      }
-      return skip(
-        "skipped-user-content",
-        "The bytes still hash to what the ledger records, but a file at a name Cursor's guards carried up to 1.11.0 is deleted only when its bytes are the guard 1.11.0 rendered for this setup, and these are not (an owner's own script, a guard edited by hand, or one an earlier release wrote) — the file is kept; delete it by hand if it is yours to remove.",
-      );
-    }
+    // At an instruction file, Copilot's hooks file and Cursor's two 1.11.0
+    // guard names the match is not enough either (rows 519, 585, 586;
+    // REQ-PLUGIN-046, REQ-FLOW-038): an owner may keep a file of their own
+    // there, and a hand-added row can hash it. The bytes have to be a
+    // rendering the engine produces at the path — at the old guard names, the
+    // guard 1.11.0 rendered for this setup
+    // (`../cli/engine/emissionWrite.ts::engineRenderingsFor`).
+    const proofClass = renderingProofClass(path);
+    const refusal = proofClass === null ? null : renderingRefusal(path, proofClass, bytes, content, ctx);
+    if (refusal !== null) return refusal;
     return {
       kind: "delete",
       target,
       pin,
-      detail: renderingProof
-        ? "Whole-file engine output: the bytes still hash to what the ledger recorded writing here and are the guard 1.11.0 rendered at this name for this setup, so nothing in the file is user-authored."
-        : "Whole-file engine output: the bytes still hash to what the ledger recorded writing here, so nothing in the file is user-authored.",
+      detail:
+        proofClass === null
+          ? "Whole-file engine output: the bytes still hash to what the ledger recorded writing here, so nothing in the file is user-authored."
+          : `Whole-file engine output: the bytes still hash to what the ledger recorded writing here and are ${RENDERING_PROOF_WORDS[proofClass].proof}, so nothing in the file is user-authored.`,
       proof: "hash",
     };
   }
@@ -979,29 +1038,14 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       // engine produces at this path; a copy no rendering proves — an owner's
       // file, or an earlier release's rendering this engine no longer produces —
       // is kept and named.
-      const renderingProof = needsRenderingProof(path);
-      if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
-        // Unproven is not disproven (review/61): with no rendering built, the
-        // bytes were never judged, so the claim stands for the next sync —
-        // unless the run removes the setup, and no sync follows (review/87).
-        if (ctx.renderingsUnbuilt !== undefined) {
-          return {
-            kind: "skip",
-            action: "skipped-user-content",
-            detail: `A file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and that rendering could not be built (${ctx.renderingsUnbuilt}) — ${keptUnjudged(ctx)}`,
-            unproven: true,
-          };
-        }
-        return skip(
-          "skipped-user-content",
-          "The bytes still hash to what the ledger records, but a file under an engine name in a content folder is deleted only when its bytes are a rendering this engine produces at that path, and these are not (an owner's file, or a copy an earlier release rendered) — the file is kept; delete it by hand if it is yours to remove.",
-        );
-      }
+      const proofClass = renderingProofClass(path);
+      const refusal = proofClass === null ? null : renderingRefusal(path, proofClass, bytes, content, ctx);
+      if (refusal !== null) return refusal;
       return {
         kind: "delete",
         target,
         pin,
-        detail: renderingProof
+        detail: proofClass !== null
           ? "Whole-file engine output: the name is engine-minted, the bytes still hash to what the ledger recorded writing here and are a rendering this engine produces at that path, and there is no managed block whose surroundings could be user-authored."
           : "Whole-file engine output: the name is engine-minted, the bytes still hash to what the ledger recorded writing here, and there is no managed block whose surroundings could be user-authored.",
         proof: "hash",

@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leave with no backup when the file is as the engine last wrote it, and behind a verified `.bak`,
   with a warning naming them, when you have edited it since. A scoped row such as `Read(./src/**)`
   stays. The capability matrix drops Claude's `permission-rows` cap.
+- **A forged ledger row and hash alone no longer delete your file.** At an engine-named content
+  file, a charter or instruction file, the Copilot workflow and hooks file, and Cursor's 1.11.0
+  guard names, a delete needs bytes the engine renders (or, at those two names, the bytes 1.11.0
+  rendered for that setup). A copy no rendering proves is kept and named. What stays open, as
+  `SECURITY.md` says: a pack or override planted beside the forged row can still prove the delete
+  of a file it renders byte for byte, through `sync`, `clean` and `clean --pack`; and a forged row
+  hashing your file at a path the engine writes still lets `sync` overwrite it without a `.bak`.
 
 ### Changed
 

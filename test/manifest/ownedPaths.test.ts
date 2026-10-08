@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { COPILOT_HOOKS_PATH } from "../../src/adapters/copilot.ts";
 import { LEGACY_CURSOR_GUARD_PATHS, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
 import { addCommand } from "../../src/cli/commands/add.ts";
 import { planSync } from "../../src/cli/commands/sync/engine.ts";
@@ -22,6 +23,7 @@ import {
   needsRenderingProof,
   packDirName,
   provenByRendering,
+  renderingProofClass,
   type OwnedPathRow,
 } from "../../src/manifest/ownedPaths.ts";
 import { packDirRelPath } from "../../src/pack/receipt.ts";
@@ -348,6 +350,48 @@ describe("the rendering proof", () => {
     expect(needsRenderingProof(SUBAGENT_GUARD_PATH)).toBe(false);
     expect(needsRenderingProof(MCP_GUARD_PATH)).toBe(false);
     expect(needsRenderingProof(".cursor/hooks/other-guard.mjs")).toBe(false);
+  });
+
+  // Rows 586 and 519 (unit d1c): at a charter in any folder, the Codex
+  // override, `CLAUDE.md`, the Copilot setup workflow and Copilot's hooks file
+  // an owner keeps a file of their own at the very name the engine writes, and
+  // the structural fingerprint an owner's copy can pass no longer proves a
+  // delete there: the rendering does.
+  it("governs every instruction-file path the byte proof names, and Copilot's hooks file", () => {
+    for (const path of [
+      "AGENTS.md",
+      "docs/AGENTS.md",
+      "packages/app/AGENTS.md",
+      ".claude/skills/st-x/AGENTS.md",
+      "AGENTS.override.md",
+      "CLAUDE.md",
+      ".github/workflows/copilot-setup-steps.yml",
+      ".github/hooks/stamity.json",
+    ]) {
+      expect(needsRenderingProof(path), path).toBe(true);
+    }
+    for (const path of [
+      ".github/hooks/other.json",
+      ".github/workflows/ci.yml",
+      ".codex/config.toml",
+      ".cursor/hooks.json",
+      "docs/AGENTS.md.bak",
+    ]) {
+      expect(needsRenderingProof(path), path).toBe(false);
+    }
+  });
+
+  it("names the class of each path the proof governs, an instruction name first", () => {
+    expect(renderingProofClass(".claude/skills/st-local/SKILL.md")).toBe("content");
+    // A charter name inside a content folder is an instruction file first (review/66).
+    expect(renderingProofClass(".claude/skills/st-x/AGENTS.md")).toBe("instruction");
+    expect(renderingProofClass("AGENTS.md")).toBe("instruction");
+    expect(renderingProofClass(".github/workflows/copilot-setup-steps.yml")).toBe("instruction");
+    // The literal this earlier-wave module restates is the adapter's own path.
+    expect(renderingProofClass(COPILOT_HOOKS_PATH)).toBe("copilot-hooks");
+    for (const path of LEGACY_CURSOR_GUARD_PATHS) expect(renderingProofClass(path), path).toBe("cursor-1.11.0-guard");
+    expect(renderingProofClass("README.md")).toBeNull();
+    expect(renderingProofClass(".claude/skills/my-notes/SKILL.md")).toBeNull();
   });
 
   it("proves only a hash the engine's renderings at the path hold", () => {

@@ -18,6 +18,7 @@ import {
 } from "../../adapters/cursor.ts";
 import { buildContentIndex, type ContentIndex } from "../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../detect/repoAnalyzer.ts";
+import { emitsPerPackage } from "../../emit/monorepoPlan.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { readHookDefinitions, type UserHookDefinition } from "../../hooks/userHooks.ts";
 import {
@@ -45,7 +46,7 @@ import {
 } from "../../manifest/hookDocuments.ts";
 import { memberHash } from "../../manifest/jsonMembers.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
-import { needsRenderingProof } from "../../manifest/ownedPaths.ts";
+import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
@@ -983,6 +984,15 @@ export interface RenderingProof {
  * under `legacyCursor` ({@link releaseOneElevenGuardsFor}, REQ-FLOW-038), and
  * no plan is run for it. Without `legacyCursor` there is none, so both old
  * guards are kept.
+ *
+ * At an `AGENTS.md` below the root, the renderings are what the plan renders
+ * there (a Codex rule appendix, or the charter copy of a package detected now)
+ * and also the charter the engine renders for a package at that folder, when a
+ * client of this setup reads per-folder files (`../../emit/monorepoPlan.ts`):
+ * that copy is the root charter verbatim (`../../emit/agentsMd.ts`), and once
+ * its package has left no plan renders the folder, yet the copy is still the
+ * engine's to remove (REQ-PLUGIN-046). The root charter is read off the plan,
+ * never off disk.
  */
 export async function engineRenderingsFor(
   rootDir: string,
@@ -1002,13 +1012,14 @@ export async function engineRenderingsFor(
     }
   }
   if (wanted.size === 0) return { renderings };
+  const clients = TOOLS.filter(
+    (tool) => manifest.tools.includes(tool) || manifest.ledger.some((row) => row.adapter === tool),
+  );
   let outputs: readonly AdapterOutput[];
   try {
     const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
     const setupClients = structuredClone(manifest);
-    setupClients.tools = TOOLS.filter(
-      (tool) => manifest.tools.includes(tool) || manifest.ledger.some((row) => row.adapter === tool),
-    );
+    setupClients.tools = clients;
     setupClients.selection = fullCorpusSelection(index);
     setupClients.detected = summarizeDetection(repoInfo);
     delete setupClients.plugin;
@@ -1023,11 +1034,19 @@ export async function engineRenderingsFor(
       renderingsUnbuilt: (error instanceof Error ? error.message : String(error)).split("\n")[0] ?? "",
     };
   }
+  const add = (path: string, content: string): void => {
+    const hashes = renderings.get(path) ?? new Set<string>();
+    hashes.add(sha256(content));
+    renderings.set(path, hashes);
+  };
   for (const output of outputs) {
-    if (!wanted.has(output.path)) continue;
-    const hashes = renderings.get(output.path) ?? new Set<string>();
-    hashes.add(sha256(output.content));
-    renderings.set(output.path, hashes);
+    if (wanted.has(output.path)) add(output.path, output.content);
+  }
+  const charter = outputs.find((output) => output.path === OWNED_PATHS.charterFileName);
+  if (charter !== undefined && clients.some(emitsPerPackage)) {
+    for (const path of wanted) {
+      if (path.endsWith(`/${OWNED_PATHS.charterFileName}`)) add(path, charter.content);
+    }
   }
   return { renderings };
 }

@@ -1134,10 +1134,15 @@ describe("sweepReclaimCandidates — recorded-hash ownership", () => {
     // match is the uninstall licence) is unchanged.
     await temp.seedFiles({ "repo/AGENTS.md": CHARTER_BODY });
 
+    // TEST CHANGE, justified (2026-10-08, row 586, unit d1c-charter-and-exact-paths):
+    // a charter is deleted whole only when its bytes are a rendering the
+    // running engine produces there, so the case hands the sweep that
+    // rendering; its subject and assertions are unchanged.
     const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", CHARTER_BODY)], {
       rootDir: root,
       consent: true,
       trustedExactPaths: new Set(["AGENTS.md"]),
+      renderings: renderingsOf({ "AGENTS.md": CHARTER_BODY }),
     });
 
     const entry = onlyEntry(report);
@@ -1362,10 +1367,15 @@ describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", ()
     const untrusted = await sweepReclaimCandidates([row], { rootDir: root, consent: true });
     expect(onlyEntry(untrusted).action).toBe("skipped-unsafe-path");
 
+    // TEST CHANGE, justified (2026-10-08, row 586, unit d1c-charter-and-exact-paths):
+    // a charter in any folder is deleted whole only when its bytes are a
+    // rendering the running engine produces there, so the trusted case hands
+    // the sweep that rendering; its assertion is unchanged.
     const trusted = await sweepReclaimCandidates([row], {
       rootDir: root,
       consent: true,
       trustedExactPaths: new Set([charter]),
+      renderings: renderingsOf({ [charter]: body }),
     });
     expect(onlyEntry(trusted)).toMatchObject({ action: "deleted", proof: "hash" });
   });
@@ -1643,15 +1653,149 @@ describe("sweepReclaimCandidates — an instruction file leaves only on its own 
     const appendixBytes = "# Conditional rules (Codex down-conversion) — `packages/app`\n\nRules.\n";
     await temp.seedFiles({ [`repo/${workflow}`]: workflowBytes, [`repo/${appendix}`]: appendixBytes });
 
+    // TEST CHANGE, justified (2026-10-08, row 586, unit d1c-charter-and-exact-paths):
+    // the structural fingerprint no longer proves a delete at these paths; the
+    // bytes have to be a rendering the running engine produces there, so the
+    // case hands the sweep those renderings. Its assertions are unchanged.
     const report = await sweepReclaimCandidates(
       [hashedCandidate(workflow, workflowBytes), hashedCandidate(appendix, appendixBytes)],
-      { rootDir: root, consent: true, trustedExactPaths: new Set([workflow, appendix]) },
+      {
+        rootDir: root,
+        consent: true,
+        trustedExactPaths: new Set([workflow, appendix]),
+        renderings: renderingsOf({ [workflow]: workflowBytes, [appendix]: appendixBytes }),
+      },
     );
 
     expect(report.entries.map((entry) => [entry.path, entry.action, entry.proof])).toEqual([
       [workflow, "deleted", "hash"],
       [appendix, "deleted", "hash"],
     ]);
+  });
+});
+
+/**
+ * Rows 586 and 519 (unit d1c-charter-and-exact-paths): at a charter in any
+ * folder, `AGENTS.override.md`, the Copilot setup workflow and Copilot's hooks
+ * file, an owner's file can pass the structural fingerprint (a copy of the
+ * charter's title and four headings, the appendix heading, the workflow's
+ * header line), and a hand-added row can hash it. So the fingerprint no longer
+ * proves a delete there: the bytes have to be a rendering the running engine
+ * produces at the path, or a managed block has to span the file.
+ */
+describe("sweepReclaimCandidates — an instruction file or Copilot's hooks file leaves only as the engine's rendering", () => {
+  const WORKFLOW = ".github/workflows/copilot-setup-steps.yml";
+  const HOOKS = ".github/hooks/stamity.json";
+  /** Owner files that each pass the structural fingerprint at their path. */
+  const OWNER_COPIES: Readonly<Record<string, string>> = {
+    "AGENTS.md": `${CHARTER_BODY}\nOur own release rules.\n`,
+    "docs/AGENTS.md": "# Conditional rules (Codex down-conversion) of our docs team\n\nWrite short sentences.\n",
+    "AGENTS.override.md": "# Our Codex overrides\n\n## Conditional rules (Codex down-conversion)\n\nUse staging.\n",
+    [WORKFLOW]:
+      "name: ours\n# Prepares the environment the GitHub Copilot coding agent works in. The agent runs\non: workflow_dispatch\n",
+    [HOOKS]: `${JSON.stringify({ version: 1, hooks: { sessionStart: [{ type: "command", bash: "./ours.sh" }] } })}\n`,
+  };
+  const PATHS = Object.keys(OWNER_COPIES);
+
+  async function seeded(): Promise<string> {
+    const temp = tempDir();
+    await temp.seedFiles(Object.fromEntries(PATHS.map((path) => [`repo/${path}`, OWNER_COPIES[path] as string])));
+    return temp.path("repo");
+  }
+
+  const rows = (): ReclaimCandidate[] => PATHS.map((path) => hashedCandidate(path, OWNER_COPIES[path] as string));
+
+  it("keeps each owner file a trusted row hashes when no rendering is its bytes, and names the remedy", async () => {
+    const root = await seeded();
+
+    const report = await sweepReclaimCandidates(rows(), {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(PATHS),
+      renderings: new Map([["AGENTS.md", new Set([sha256Of(CHARTER_BODY)])]]),
+    });
+
+    expect(report.entries.map((entry) => [entry.path, entry.action])).toEqual(
+      PATHS.map((path) => [path, "skipped-user-content"]),
+    );
+    for (const entry of report.entries) {
+      expect(entry.detail, entry.path).toContain("a rendering this engine produces at that path");
+      expect(entry.detail, entry.path).toContain("delete it by hand");
+      // review/100: the sentence names this path's class, never Cursor's guards.
+      expect(entry.detail, entry.path).not.toContain("Cursor");
+      expect(entry, entry.path).not.toHaveProperty("unproven");
+    }
+    const detailOf = (path: string): string => report.entries.find((entry) => entry.path === path)?.detail ?? "";
+    expect(detailOf(HOOKS)).toContain("Copilot's hooks file");
+    expect(detailOf("AGENTS.md")).toContain("an instruction file");
+    expect(detailOf(WORKFLOW)).toContain("an instruction file");
+    expect(report.deletedCount).toBe(0);
+    for (const path of PATHS) expect(await readFile(join(root, path), "utf-8"), path).toBe(OWNER_COPIES[path]);
+  });
+
+  it("deletes each one whose bytes are a rendering the engine produces there, naming the proof", async () => {
+    const root = await seeded();
+
+    const report = await sweepReclaimCandidates(rows(), {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(PATHS),
+      renderings: renderingsOf(OWNER_COPIES),
+    });
+
+    for (const entry of report.entries) {
+      expect(entry, entry.path).toMatchObject({ action: "deleted", proof: "hash" });
+      expect(entry.detail, entry.path).toContain("a rendering this engine produces at that path");
+    }
+    expect(report.deletedCount).toBe(PATHS.length);
+  });
+
+  // review/66 and review/100: a charter name inside a content folder, under a
+  // trusted `infra` row, is held to the rendering and named as an instruction
+  // file, not as one of Cursor's old guards.
+  it("keeps a charter-shaped file at a charter name inside a content folder under a trusted row", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const nested = ".claude/skills/st-x/AGENTS.md";
+    await temp.seedFiles({ [`repo/${nested}`]: CHARTER_BODY });
+
+    // An `infra` row, as a release records a charter: the bound reads it as a
+    // charter, and the trusted allowlist admits its hash.
+    const row = hashedCandidate(nested, CHARTER_BODY);
+    const infraRow: ReclaimCandidate = { ...row, entry: { ...row.entry, artifactType: "infra" } };
+
+    const report = await sweepReclaimCandidates([infraRow], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([nested]),
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-user-content");
+    expect(entry.detail).toContain("an instruction file");
+    expect(entry.detail).not.toContain("Cursor");
+    expect(await readFile(join(root, nested), "utf-8")).toBe(CHARTER_BODY);
+  });
+
+  it("keeps each one unproven, naming why, when the renderings could not be built", async () => {
+    const root = await seeded();
+    const reason = "a corpus read failed";
+
+    const report = await sweepReclaimCandidates(rows(), {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(PATHS),
+      renderings: new Map(),
+      renderingsUnbuilt: reason,
+    });
+
+    for (const entry of report.entries) {
+      expect(entry, entry.path).toMatchObject({ action: "skipped-user-content", unproven: true });
+      expect(entry.detail, entry.path).toContain(`could not be built (${reason})`);
+      expect(entry.detail, entry.path).toContain("the next sync tries the proof again");
+      expect(entry.detail, entry.path).not.toContain("Cursor");
+    }
+    for (const path of PATHS) expect(await readFile(join(root, path), "utf-8"), path).toBe(OWNER_COPIES[path]);
   });
 });
 
@@ -2070,11 +2214,15 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
     // The blast-radius guard: declaring one path co-owned must not change how any
     // other trusted hash-proved path is judged, or the fix would have withdrawn
     // the block-less-infra uninstall it is not about.
+    // TEST CHANGE, justified (2026-10-08, row 586, unit d1c-charter-and-exact-paths):
+    // the charter's delete also needs the engine's rendering at the path, so
+    // the case hands it over; the subject (no reducer consulted) is unchanged.
     const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", CHARTER_BODY)], {
       rootDir: root,
       consent: true,
       trustedExactPaths: new Set(["AGENTS.md"]),
       coOwnedPaths: reducerFor(CO_OWNED),
+      renderings: renderingsOf({ "AGENTS.md": CHARTER_BODY }),
     });
 
     expect(onlyEntry(report).action).toBe("deleted");

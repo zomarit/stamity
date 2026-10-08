@@ -267,25 +267,64 @@ export function hasEngineMintedName(path: string): boolean {
 // ── The rendering proof (REQ-PLUGIN-046) ───────────────────────────────────
 
 /**
+ * The kinds of path {@link needsRenderingProof} names, which the reclaim sweep
+ * reads to say what it kept: a file under an engine name in a content folder,
+ * an instruction file ({@link needsByteProof}: a charter in any folder,
+ * `AGENTS.override.md`, `CLAUDE.md`, the Copilot setup workflow), Copilot's
+ * hooks file, or one of Cursor's two 1.11.0 guard names.
+ */
+export type RenderingProofClass = "content" | "instruction" | "copilot-hooks" | "cursor-1.11.0-guard";
+
+/**
+ * Copilot's hooks file (`../adapters/copilot.ts`'s `COPILOT_HOOKS_PATH`, which
+ * this earlier-wave module cannot import; a test holds the two equal). The
+ * engine writes it whole, under a name an owner may already use for hooks of
+ * their own.
+ */
+const COPILOT_HOOKS_FILE = ".github/hooks/stamity.json";
+
+/**
+ * Which kind of path `path` is for the rendering proof, or `null` when the
+ * proof does not govern it. An instruction-file name decides first, so a
+ * charter name inside a content folder is held as a charter.
+ */
+export function renderingProofClass(path: string): RenderingProofClass | null {
+  if (LEGACY_CURSOR_GUARD_NAMES.has(path)) return "cursor-1.11.0-guard";
+  if (needsByteProof(path)) return "instruction";
+  if (path === COPILOT_HOOKS_FILE) return "copilot-hooks";
+  return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) && hasEngineMintedName(path)
+    ? "content"
+    : null;
+}
+
+/**
  * True when a whole-file delete at `path` needs bytes that hash to a rendering
- * the running engine produces there ({@link provenByRendering}): a file under a
- * content folder whose name {@link hasEngineMintedName} reads as the engine's,
- * and Cursor's two 1.11.0 guard names ({@link LEGACY_CURSOR_GUARD_NAMES}).
+ * the running engine produces there ({@link provenByRendering}), or a managed
+ * block spanning the file: a file under a content folder whose name
+ * {@link hasEngineMintedName} reads as the engine's, every path
+ * {@link needsByteProof} names, Copilot's hooks file, and Cursor's two 1.11.0
+ * guard names ({@link LEGACY_CURSOR_GUARD_NAMES}), where the rendering is the
+ * guard 1.11.0 rendered for the setup.
  *
- * An owner may keep a file under an engine-style name in those folders, and a
- * hand-added row can record the hash of its bytes as easily as the engine
- * records the hash of its own, so at these paths the recorded hash says only
- * that nobody edited the file since the row was written, not who wrote it. So
- * the delete needs the running engine's own rendering at the path: a forged
- * row and hash alone no longer delete. What the proof does not close: the
- * rendering is built from the setup's packs and overrides, which a repository
- * writer can also plant, so a planted pack or override whose rendering copies
- * an owner's file byte for byte, beside a forged row hashing it, still proves
- * that delete (a residual `SECURITY.md` names).
+ * An owner may keep a file of their own at these paths, and a hand-added row
+ * can record the hash of its bytes as easily as the engine records the hash of
+ * its own, so here the recorded hash says only that nobody edited the file
+ * since the row was written, not who wrote it. At an instruction file the
+ * structural fingerprint ({@link bytesShowEngineOutput}) does not settle it
+ * either: an owner's copy can carry a charter's title and four headings, the
+ * Codex appendix heading or the workflow's header line. The fingerprint stays
+ * the overwrite lane's proof (`../merge/safeWrite.ts`) and no longer proves a
+ * delete. So the delete needs the running engine's own rendering at the path:
+ * a forged row and hash alone no longer delete.
+ *
+ * What the proof does not close: the rendering is built from the setup's packs
+ * and overrides, which a repository writer can also plant, so a planted pack or
+ * override whose rendering copies an owner's file byte for byte, beside a
+ * forged row hashing it, still proves that delete (a residual `SECURITY.md`
+ * names).
  */
 export function needsRenderingProof(path: string): boolean {
-  if (LEGACY_CURSOR_GUARD_NAMES.has(path)) return true;
-  return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) && hasEngineMintedName(path);
+  return renderingProofClass(path) !== null;
 }
 
 /**
@@ -316,10 +355,12 @@ const BYTE_PROOF_PATHS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * True when a recorded hash at `path` proves a whole-file delete or a
- * backup-free overwrite only together with bytes that show the engine wrote
- * them ({@link bytesShowEngineOutput}): an `AGENTS.md` in any folder,
- * `AGENTS.override.md`, `CLAUDE.md` and the Copilot setup workflow.
+ * True when a recorded hash at `path` proves a backup-free overwrite only
+ * together with bytes that show the engine wrote them
+ * ({@link bytesShowEngineOutput}): an `AGENTS.md` in any folder,
+ * `AGENTS.override.md`, `CLAUDE.md` and the Copilot setup workflow. A
+ * whole-file delete there needs more: the running engine's rendering
+ * ({@link needsRenderingProof}), since an owner's copy can pass the fingerprint.
  *
  * These are the paths where an owner's own file sits at the name the engine
  * writes, so a hand-added row hashing the owner's bytes would otherwise read as
