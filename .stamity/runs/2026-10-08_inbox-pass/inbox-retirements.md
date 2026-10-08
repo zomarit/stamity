@@ -10,7 +10,13 @@ it; **scheduled-fold** — the pass folded it into the named unit or place (`357
 last: it names the learning commit this pass made.
 
 Rows: 416 decided · removed here: 396 · staying: 15 (named with their places in `record.md`) · waiting on part 2: 5
-(rows 519, 560, 585, 586, 588) · re-filed remainders: 1 (row 524's, as `2026-10-08_inbox-pass/pass/1`).
+(rows 519, 560, 585, 586, 588) · re-filed remainders: 2 (row 524's, as `2026-10-08_inbox-pass/pass/1`, and row
+306's, as `2026-10-08_inbox-pass/pass/2`).
+
+The review of the pass's mechanics corrected some lines; `record.md`'s "Corrections after review" section carries
+each correction. A ledger-ref row's line below stays as its ledger row's `retired` field carries it, since a retired
+value is written once; row 306's line, which no ledger row carries, is corrected in place. In the reasons of rows 49,
+80, 110 and 145, "line N" names row N of this table (the bullet's line at `077e8a78`), not a line of today's inbox.
 
 | Row | Ref | Exit | Reason |
 |---|---|---|---|
@@ -203,7 +209,7 @@ Rows: 416 decided · removed here: 396 · staying: 15 (named with their places i
 | 283 | `2026-09-24_enterprise-release/review/144` | fixed | fixed in 2e2c3212 (citations re-pointed to d227ca57; the spec names the tree every citation reads at); inbox pass 2026-10-08 |
 | 284 | `2026-09-24_enterprise-release/review/149` | scheduled | scheduled to u1-manifest-stable (docs/plans/016-fork-distribution-01.md); inbox pass 2026-10-08 |
 | 300 | `2026-09-28_replay-v2/build/1` | scheduled | scheduled to b4-daily-use (docs/plans/017-docs-overhaul-02.md); inbox pass 2026-10-08 |
-| 306 | `docs/plans/013-optimization-sweep-03.md` | fixed | fixed in c419eab1 (short ids on close, an idempotent --stdin append, sizes named in refusals); the salvage mode cut below the floor; inbox pass 2026-10-08 |
+| 306 | `docs/plans/013-optimization-sweep-03.md` | fixed | fixed in c419eab1 (short ids on close, an idempotent --stdin append, sizes named in refusals); the salvage mode, which waits on its own trigger, re-filed as 2026-10-08_inbox-pass/pass/2; inbox pass 2026-10-08 |
 | 307 | `docs/plans/013-optimization-sweep-03.md` | cut | cut: a trigger-only row: no user has reported shell prompts from a /st-rework or /st-pr-resolve record, and nothing fails until one does; inbox pass 2026-10-08 |
 | 315 | `2026-09-30_optimization-sweep/build/11` | fix-in-session | fixed in 6482b38d (the carry suffix prints only beside a row carried forward); inbox pass 2026-10-08 |
 | 317 | `2026-09-30_optimization-sweep/review/57` | cut | cut: two debug runs in one tree at once is the only case where the repo-wide wording and the run-id count differ; the close already counts by run id (:167-168); inbox pass 2026-10-08 |

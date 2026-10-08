@@ -70,10 +70,29 @@ archived); 389 `e03a48d1`.
 
 ## Remainders
 
-Nine rows settled only in part. Each remainder is covered or re-filed:
+Nine rows settled only in part. Each remainder is cut, covered or re-filed. The walk decided rows, not remainders, so
+each remainder takes the walk's own rule by its reader's verdict (`remainderVerdict` in the final verdicts, the second
+read agreeing where one ran): a remainder judged below the floor is cut, as the walk cut below-floor rows, and any
+other remainder is re-filed with its place (the maintainer's sign-off on the review's finding, run
+`2026-10-08_maintainer-tooling`, `review/88`).
 
-- Rows 43, 125, 126, 169, 181, 306 and 386: each remainder is cut below the floor, and the row's retirement line
-  says so.
+- Row 43: the remainder (a rate limit hitting only the compare calls still reads the generic note) is cut as below the
+  floor, as the walk cut below-floor rows; the check fails closed either way.
+- Row 125: the remainder (the 1.8.0 test stubs and getting-started not naming `config set gates.*`) is cut as below the
+  floor, as the walk cut below-floor rows.
+- Row 126: the remainder (the guard still does not launch under the PowerShell fallback) is cut as below the floor, as
+  the walk cut below-floor rows; it is declared, check-detected and carries an install remedy (second read agreed).
+- Row 169: the remainder (a file vanishing mid-reclaim reported as an unsafe path instead of missing) is cut as below
+  the floor, as the walk cut below-floor rows; label only, disk state right (second read agreed).
+- Row 181: the remainder (no runnable case-input check, the `generatedPaths` example, the compressed 1.9.1 line) is cut
+  as below the floor, as the walk cut below-floor rows.
+- Row 386: the remainder (no key-level ownership inside an engine-named `.codex/config.toml` table) is cut as below
+  the floor, as the walk cut below-floor rows; nothing foreign is overwritten (second read agreed).
+- Row 306: the remainder (a salvage mode that keeps the good lines of a refused findings or closures block) was cut by
+  part 1's mechanics, though the row's decision says the salvage mode waits on its own trigger. It is re-filed as
+  `2026-10-08_inbox-pass/pass/2` (this run's `ledger.jsonl`, closed `deferred` to that trigger: the next run that
+  re-files ledger rows by hand after a refused block; files `src/runs/blocks.ts`, `src/cli/commands/ledger.ts`), with
+  a new inbox bullet whose `Ref:` names it, and its line in `inbox-retirements.md` is corrected in place.
 - Row 76: the remote `--ref` route the remainder names was executed after the row was filed (`docs/plugins.md:267-278`,
   the 2026-09-24 walk on codex-cli 0.155.1).
 - Row 524: the hooks documents that still name a removed pack's hooks until the next `sync` are not re-rendered by
@@ -91,7 +110,7 @@ Nine rows settled only in part. Each remainder is covered or re-filed:
 | 147 | `2026-09-17_plugin-lifecycle/prove/252` | trigger: before nightly.yml is re-enabled, grouped with row 163 (beside docs/plans/014-lean-repository-01.md:264 f3-nightly-canonical-guard) |
 | 163 | `2026-09-17_plugin-lifecycle/prove/296` | trigger: before nightly.yml is re-enabled, grouped with row 147 (beside docs/plans/014-lean-repository-01.md:264 f3-nightly-canonical-guard) |
 | 167 | `2026-09-17_plugin-lifecycle/prove/302` | next touch of content/skills/st-browser-evidence/SKILL.md (one redaction line in the Output artifact table) |
-| 241 | `2026-09-23_orchestrator-context/build/358` | plan 019 file 1 t10 fixed exit, or the next touch of test/merge/writeEscape.test.ts (widen to content/ and scripts/, exempting scripts/leak-gate.mjs) |
+| 241 | `2026-09-23_orchestrator-context/build/358` | trigger: the next touch of test/merge/writeEscape.test.ts (widen to content/ and scripts/, exempting scripts/leak-gate.mjs); the decision's other half, a t10 fixed exit, lapsed when this pass did not take it |
 | 285 | `2026-09-24_enterprise-release/review/204` | trigger: the private eval driver's next revision |
 | 316 | `2026-09-30_optimization-sweep/review/45` | trigger: the first Windows Python repository, with review/78 in one change |
 | 318 | `2026-09-30_optimization-sweep/review/77` | trigger: the next change to check.ts gate resolution |
@@ -119,4 +138,36 @@ Their bullets and ledger rows are untouched by part 1.
 
 ## After part 1
 
-The inbox holds 21 bullets: the 15 that stay, the 5 waiting on part 2, and the re-filed remainder of row 524.
+The inbox holds 21 bullets: the 15 that stay, the 5 waiting on part 2, and the re-filed remainder of row 524. After
+the review's correction it holds 22: row 306's re-filed remainder joins them. Each dated paragraph that kept a bullet
+now says how many of its rows left in this pass.
+
+## Corrections after review
+
+The review of part 1's mechanics (run `2026-10-08_maintainer-tooling`, unit i3, round 1) found the following; a
+`retired` value already set is written once, so where a ledger row's text is wrong this section carries the correction.
+
+- `review/88` (Warning): the remainders of rows 43, 125, 126, 169, 181, 306 and 386 — see "Remainders" above; row
+  306's is re-filed as `2026-10-08_inbox-pass/pass/2`, the other six stay cut by their below-floor verdicts.
+- `review/89`: the `retired` texts of `2026-09-17_plugin-lifecycle/prove/1`, `prove/104`, `prove/133` and `prove/234`
+  (rows 49, 80, 110 and 145) say "line 35", "line 40", "line 109" and "line 95". Each means that row of
+  `inbox-retirements.md` (the bullet's line at `077e8a78`, not a line of today's inbox): rows 35
+  (`2026-09-17_plugin-lifecycle/build/12`), 40 (`build/22`), 109 (`prove/132`) and 95 (`build/65`).
+- `review/92`: rows 274, 275 and 597 are retired "fixed in … and the route of record's driver". The driver half is the
+  private eval driver's companion change: two local commits in the private layer, reviewed and approved, with their
+  deterministic canaries passing, as run `2026-10-08_maintainer-tooling`'s record states. Until those commits are
+  pushed, no public reader can check that half; for row 274 (`2026-09-24_enterprise-release/build/33`), which is only
+  about the private comparator, the whole fix rests on it. The public half (`f0197b8a`, and `441c7192`, `a9d7fbcd` for
+  row 597) is checkable on this branch.
+- `review/93`: row 337 (`2026-09-30_release-1-11-0/review/34`) is closed by the test `4dcedb41` added, "refuses a file
+  naming a results file that is absent" (`test/cli/docs/measurements.test.ts`), which drives the page's refusal when the
+  run of record's results file is missing; the pointer file and the lazy read its `retired` text names are the change
+  that test covers.
+- `review/94`: the message of `e03a48d1` says `reviewBy` and `validatedAgainst` were "added as the other learnings carry
+  them". The old file already carried both; the recapture replaced their values (`reviewBy` 2027-03-30 to 2027-04-08,
+  and `validatedAgainst` re-read on vitest 5.0.3). The learning file itself is right.
+- `review/95`: row 241's place in "Rows that stay" now names only its live trigger, the next touch of
+  `test/merge/writeEscape.test.ts`; the t10 half lapsed when this pass did not take it.
+- `review/90` and `review/91`: the inbox's kept dated paragraphs now say how many of their rows left in this pass, and
+  the `pass/1` bullet's writer reads `source: /st-work`, the run that wrote it (its ledger row's `source: pass` is the
+  filing role, set by `ledger append --source`).
