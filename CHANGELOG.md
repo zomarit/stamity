@@ -31,6 +31,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-08
+
+### Upgrading from 1.11.0
+
+Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
+read what it will write and remove.
+
+- **Cursor's two guards change names.** The first `sync` writes
+  `.cursor/hooks/stamity-subagent-guard.mjs` and `.cursor/hooks/stamity-mcp-guard.mjs`, points
+  `.cursor/hooks.json` at them, and deletes `subagent-guard.mjs` and `mcp-guard.mjs` where their
+  bytes still match what the ledger recorded. An old guard you edited is kept, and the sync report
+  lists it among the files that are yours now. `check` and `sync --dry-run` show the deletion first.
+- **The shared files are owned entry by entry.** In `.claude/settings.json`, `.cursor/hooks.json`
+  and `.codex/hooks.json` the engine owns only the allow rows and hook entries it wrote, and in
+  `.codex/config.toml` only its own tables. Your `deny` and `ask` rules, your own rows, hook
+  entries and tables, and keys such as `model`, `env` and `enabledPlugins` survive every `sync`
+  and `clean`. At 1.11.0 a deny rule added after setup was removed by the next plain `sync`.
+- **`sync --force` no longer replaces an unparseable `.claude/settings.json`.** A settings file
+  that is not a JSON object, or whose `permissions`, `permissions.allow`, `hooks` or a hook event
+  has another type, is skipped and named; the rest of the sync is written and the run exits
+  non-zero. Fix the member the message names, or delete the file, then run `sync`.
+- **Editing or removing a hook you define in `.stamity/hooks/` costs one `.bak`.** The next `sync`
+  removes that hook's old entry from `.claude/settings.json` behind a verified `.bak` and names it
+  in a warning. Adding a definition takes none. A hand edit inside one of the engine's own hook
+  entries is put back the same way, with your edit in the `.bak`.
+
 ### Security
 
 - **A committed manifest can no longer make `sync` or `clean` delete or overwrite a file the
@@ -103,6 +129,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries the `stamity-` prefix. The next `sync` writes them, points `.cursor/hooks.json` at them,
   and removes the old names it can prove it wrote; an old guard you edited is kept and the sync
   report names it. `check` and `sync --dry-run` preview that removal as the write makes it.
+- **The generated `st-setup` body says everything `clean -y` deletes.** Its remedy for a file this
+  engine wrote said only that `clean -y` removes ledger rows and the files they name. It now says
+  the command also deletes the whole `.stamity/` directory (learnings, handoffs, overrides, run
+  records and packs) unless a hooks file it keeps still runs a script there, and that you copy out
+  what to keep first.
+- **`/st-ask` places a claim's band and assumption before its full stop.** A medium or low claim
+  carries its confidence band and its unverified assumption inside the sentence that makes it,
+  with one example in the command; a band after the full stop, or an assumption opened as its own
+  sentence, is outside the claim.
+- **`check`'s `plugin-duplicates` remedy names `clean` too.** For a `hooks` key in
+  `.claude/settings.json` under a plugin install, it said only `sync` removes a stale
+  repository-mode hook entry; `clean` removes it as well.
 
 ## [1.11.0] - 2026-10-01
 
@@ -1501,7 +1539,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/zomarit/stamity/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/zomarit/stamity/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/zomarit/stamity/compare/v1.9.1...v1.10.0
 [1.9.1]: https://github.com/zomarit/stamity/compare/v1.9.0...v1.9.1
