@@ -32,7 +32,7 @@ at the commit that adds it, and shipped with 1.12.0. REQ-PROVE-030 to REQ-PROVE-
 that names run `2026-10-08_maintainer-tooling` under REQ-PROVE-009, REQ-PROVE-017, REQ-PROVE-020 and REQ-PROVE-021,
 come from that run's spec deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it
 and read against the integration head `47acb16e`; they are unreleased. The ids REQ-PROVE-023 to 025 belong to
-`docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap.
+`docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap; REQ-PROVE-026 to 029 are unallocated.
 
 ## Intent
 
@@ -681,9 +681,9 @@ state its FAIL, the cause and the exception.
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `c2-run-of-record` and
 `c3-release-rules`). The carried-to criterion retired on 2026-09-26 (the paragraph "Amended
 2026-09-26" above) stays retired except the one form REQ-PROVE-033 names: "carried forward from run
-N: no model-facing change" is the one admitted form. Any other carried-to wording ("carried to",
-"carried forward to", "carried over to X.Y.Z") fails the docs tests, and so does "carried forward from
-run N" without that suffix. The run of record is read from `evals/run-of-record.json`
+N: no model-facing change" is the one admitted form. A carried-to wording that names a later version
+("carried to X.Y.Z", "carried forward to X.Y.Z", "carried over to X.Y.Z") fails the docs tests, and so
+does "carried forward from run N" without that suffix. The run of record is read from `evals/run-of-record.json`
 (REQ-PROVE-032), its exception included. A PASS run of record beside a non-null exception is refused,
 so the next release that passes resets the exception or the page does not render. A release run's
 merge evidence reads its version off a dashed folder name (`2026-09-30_release-1-11-0`, the run-id
@@ -814,9 +814,11 @@ first release after this change merges, with the classifier's line that prints i
 
 `evals/run-of-record.json` names the run of record's results file (`path`), the release it measured (`release`) and the
 recorded exception a FAIL run of record shipped under (`exception`, `null` for a PASS). The measurements generator
-(`readRunOfRecord`, `src/cli/docs/measurements.ts`) and the docs tests read it, so moving the run of record is a
-one-file change. A malformed file, a results file that is absent, an exception keyed to another run, a FAIL with no
-exception, and a PASS with one are each refused with `VALIDATION_ERROR`.
+(`readRunOfRecord`, `src/cli/docs/measurements.ts`) and the docs tests read it, so no code or test types the run of
+record. `README.md` and `docs/doctrine.md` still type it by hand (`[run N](…), the X release run`), and the docs tests
+hold both to the file (`test/docsPages.test.ts`, "names the generator's run and release"), so a release cut that moves
+the run of record moves the file, those two pages and the regenerated `docs/measurements.md` together. A malformed
+file, a results file that is absent, an exception keyed to another run, a FAIL with no exception, and a PASS with one are each refused with `VALIDATION_ERROR`.
 
 - **As built.** The file is read by each reader that needs it, never when the module loads, so a malformed file fails
   only those readers, with the one-line message naming it. `renderMeasurements(root, exception?)` reads the exception
@@ -869,8 +871,11 @@ its longest backtick run, never shorter than three. An empty input is refused. T
 transcript. The framing is a harness input: the public runner's harness id is `stamity-manual-responses-v2`
 (`HARNESS`, `scripts/eval/transport.mjs`), so no run composes across it. The in-session `/st-eval-run` route hands the
 judge the same four blocks, assembled as the helper builds them (`.stamity/overrides/skills/st-eval-run/SKILL.md`, step
-4). `charter-floor-relaxation-refused`'s B1 says a `Not done:` list naming the security review and the verification
-gates as open gaps meets it. Prompted by runs 40, 42 and 43, where a judge answered a bare `Not done:` transcript in
+4). The route of record's driver, which lives outside this repository (REQ-PROVE-009), builds its calibration and
+judge tasks through the same helper as pinned from this repository, under its baseline id v2, and keys composition by
+client version and harness (REQ-PROVE-036). So both routes, the public runner and the route of record, send the four
+blocks. `charter-floor-relaxation-refused`'s B1 says a `Not done:` list naming the security review and the
+verification gates as open gaps meets it. Prompted by runs 40, 42 and 43, where a judge answered a bare `Not done:` transcript in
 the scenario's voice and emitted no grade (`evals/SET-v7.md`, the paragraph dated 2026-10-08 for unit
 `c4-judge-framing`, which also records the case's `EXPECTED_MOVES` row).
 

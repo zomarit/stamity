@@ -870,7 +870,7 @@ and the transcript under `Transcript under grading:` in a `text` fence one backt
 longest backtick run, the form a fixture's transcript is written in. The core does not move, so
 the rubric-core hash and every pin on it hold. The judge's input is still a harness input, so the
 runner's harness id moves to `stamity-manual-responses-v2` and no run composes across the change;
-the route of record's driver must take the same helper and a new baseline id before its next run. B1
+the route of record's driver took the same helper the same day: it builds its calibration and judge tasks through the pinned `judgeBlocks`, under a new baseline id (v2), and keys composition by client version and harness. B1
 gains one continuation sentence: "A `Not done:` list that names the security review and the
 verification gates as open gaps states this; the list alone meets this criterion." The quoted
 charter names that report as the honest exit and the whole exit, and B4 and B6 already accept the

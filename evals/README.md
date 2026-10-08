@@ -107,8 +107,8 @@ the transcript verbatim. Run 4 found the runner skill withholding the Brief that
 own procedure reads, which made any criterion phrased against a value the Brief seeds
 undecidable — and an undecidable criterion is graded `fail`. Since 2026-10-08 the manual runner
 (`scripts/eval-run.mjs`) also says which block is which, through `judgeBlocks` in
-`scripts/eval/instrument.mjs`, and the route of record's driver must take the same helper before
-its next run: the rubric core
+`scripts/eval/instrument.mjs`, and the route of record's driver builds its calibration and judge
+tasks through the same pinned helper, under its v2 baseline id: the rubric core
 unchanged, the Brief under `## Brief`, the Expected block under `## Expected`, and the
 transcript under `Transcript under grading:` in a `text` fence one backtick longer than its
 longest backtick run. Unlabelled, a bare `Not done:` answer read as a draft after the Brief's
