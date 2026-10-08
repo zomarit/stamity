@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-08T23:47:18.338Z",
+  "updatedAt": "2026-10-08T23:55:35.096Z",
   "tools": [
     "claude"
   ],
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "a26600b199aa51d3b65779c9943e32433ff0a45771a3385bf5d66e2517c3f28a",
+      "contentHash": "32954ed36a76f4ec16913fec5c234500456f214c353fdb3f62f327fa76f23382",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "22565b6f7cfc3ab1f013b6a25db7fe6781a69b39f23fd20ffb1d31e5de5dbeac",
+      "contentHash": "bfd0b2d119ab0f5fad7ade4445999d6ce6888604bf96cc86144066fcc510e157",
       "path": ".claude/commands/st-work.md"
     },
     {
