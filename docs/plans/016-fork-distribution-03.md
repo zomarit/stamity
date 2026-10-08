@@ -1263,7 +1263,8 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
       commit (learning `a-full-eval-export-needs-its-hygiene-exception`). After plan 014 file 2 the export goes to the
       `records` branch through `node scripts/records.mjs commit -m "<msg>"`, and the exception lands on `main` first,
       because the records branch's own check runs `main`'s scripts.
-   f. `RUN_OF_RECORD_PATH` (`src/cli/docs/measurements.ts:103`) and `RUN_OF_RECORD_RELEASE` (`:116`) move; README
+   f. `evals/run-of-record.json`'s `path` and `release` (read through `readRunOfRecord`,
+      `src/cli/docs/measurements.ts:136`) move; README
       (`:34-38`) and the doctrine (`:96-106`) state the claim in the form `test/docsPages.test.ts:1277-1278` holds, and
       the FAIL-baseline disclosure only when the run of record is composed (`:1388-1420`); `.github/release-controls-
       checklist.md:210-226` names 1.12.0's run(s) and the roster count.
@@ -1299,7 +1300,7 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
    (`:27-32`) follows the file. After plan 014 file 2: the snapshot and the records reach `records` through
    `node scripts/records.mjs commit -m "records: the 1.12.0 measurements snapshot"` first, then one `main` commit
    moves `MEASUREMENT_SNAPSHOT_PATH`,
-   `RUN_OF_RECORD_PATH` and the regenerated page together.
+   `evals/run-of-record.json` and the regenerated page together.
 8. **The channel and checklist lines.** `.github/release-controls-checklist.md:110-129` (Control 2) gains one paragraph:
    the channel branches are force-pushed by the promotion workflow's token behind its environment, and any branch rule
    there must allow it; the per-release section gains "the first channel promotion of a release is approved by the
@@ -1424,7 +1425,7 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
 | The route-proof evidence JSON `{ sha, generatedAt, rows, verdicts }` | u3-route-proofs | u3-release-1-12-0 (record, QA, checklist's seventh line) |
 | `.github/release-controls-checklist.md` lines | u3-route-proofs (seventh line), u3-release-1-12-0 (eval paragraph, Control 2, promotion line) | `test/ci/hookLatency.test.ts` (sixth line), `test/qa/routeProof.test.ts` (seventh line), every later release |
 | `CHANGELOG.md` `## [Unreleased]` and the `## [1.12.0]` section | every lane-A unit (one bullet each, in chain order), u3-release-1-12-0 (heading, lead, footer) | `release.yml` notes extraction, `test/ci/changelogLinks.test.ts`, the upstream lane's notes extraction, `scripts/merge-ready-rate.mjs` (changelog head) |
-| `RUN_OF_RECORD_PATH`, `RUN_OF_RECORD_RELEASE`, and after plan 014 `MEASUREMENT_SNAPSHOT_PATH` | u3-release-1-12-0 | `docs/measurements.md`, docsPages run-of-record cases, README, doctrine |
+| `evals/run-of-record.json` (`path`, `release`, `exception`, read through `readRunOfRecord`), and after plan 014 `MEASUREMENT_SNAPSHOT_PATH` | u3-release-1-12-0 | `docs/measurements.md`, docsPages run-of-record cases, README, doctrine |
 | Spec statuses (`docs/specs/*.md` `status:`) | u3-release-1-12-0 | `test/records/specStatus.test.ts` (in `release.yml`'s gates job) |
 | `LARGE_FILE_EXCEPTIONS` (`scripts/repo-hygiene.mjs`) | u3-release-1-12-0 (add, then retire at the close) | CI hygiene, after plan 014 the `records.mjs commit` gate and `records.yml` |
 | The distribution README's Codex note (`scripts/build-plugin-distribution.mjs` `clientRoutes`) | u3-rollout-guides | every built distribution `README.md`, `test/ci/pluginDistribution.test.ts` |

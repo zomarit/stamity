@@ -130,8 +130,8 @@ stay. History is not rewritten.
 - **The guard** runs only in the canonical repository: `ci.yml`'s `records` job is guarded to
   `github.repository == 'zomarit/stamity'`.
 
-- **Evidence:** today's readers are `RUNS_DIR`, `SNAPSHOT_DIR`, `REACH_SNAPSHOT_PATH` and `RUN_OF_RECORD_PATH`
-  (`src/cli/docs/measurements.ts:75,78,84,103`), `trackedLedgers` (`test/records/ledgers.test.ts:214-219`, through
+- **Evidence:** today's readers are `RUNS_DIR`, `SNAPSHOT_DIR`, `REACH_SNAPSHOT_PATH` and `readRunOfRecord` over
+  `evals/run-of-record.json` (`src/cli/docs/measurements.ts:75,78,84,136`), `trackedLedgers` (`test/records/ledgers.test.ts:214-219`, through
   `git ls-files -- .stamity/runs`), and the records-only lane's path list (`scripts/ci/records-only.mjs:28-33`).
 - **Expand/contract.** Expand: `records.mjs init` creates the branch and `verify` proves blob identity. Contract: the
   removal commit, last in the same pull request. Rollback: revert the removal commit; history holds every blob.
@@ -262,7 +262,7 @@ Criteria:
 Added after `docs/specs/prove-behavior-and-value.md:395`: Amended `<date>` (plan 014 file 2). The run artifacts now
 live on the `records` branch, the route of record's protocol `evals/runs/2026-09-11-run-24/PROTOCOL.md` included.
 `evals/README.md` links them as `https://github.com/zomarit/stamity/blob/records/<path>`. The release's composed
-artifact reaches `records` through `records.mjs commit` before the tag, and `main`'s `RUN_OF_RECORD_PATH` names it.
+artifact reaches `records` through `records.mjs commit` before the tag, and `main`'s `evals/run-of-record.json` names it.
 
 - **Evidence:** `evals/README.md:37-38`.
 
@@ -282,8 +282,9 @@ Replaces `docs/specs/prove-behavior-and-value.md:433-436`, "`docs/measurements.m
 the committed snapshot `evals/measurements/merge-ready-<date>.json` — 5 of 7 at the first — refreshed per release by
 `node scripts/merge-ready-rate.mjs --write` (`.github/release-controls-checklist.md:228-233`)". New text:
 
-`docs/measurements.md` stays on `main` as a generated page. Its inputs are named by three constants on `main`:
-`RUN_OF_RECORD_PATH`, `REACH_SNAPSHOT_PATH`, and `MEASUREMENT_SNAPSHOT_PATH`. The last names one
+`docs/measurements.md` stays on `main` as a generated page. Its inputs are named on `main`: the run of record by
+`evals/run-of-record.json` (read through `readRunOfRecord`), and the two snapshots by the constants
+`REACH_SNAPSHOT_PATH` and `MEASUREMENT_SNAPSHOT_PATH`. The last names one
 `evals/measurements/merge-ready-<date>.json` and replaces the newest-by-filename pick. The inputs themselves live on the
 `records` branch, so a new snapshot there changes nothing until `main` moves the pin.
 
@@ -344,11 +345,11 @@ Criteria:
 
 Replaces `docs/specs/plugin-lifecycle.md:1162-1163`, "the committed run artifact under `evals/runs/` records a per-metric
 score". New text: "the run artifact under `evals/runs/` on the `records` branch, named by `main`'s
-`RUN_OF_RECORD_PATH`, records a per-metric score".
+`evals/run-of-record.json`, records a per-metric score".
 
 Criteria:
 - GIVEN the release eval run WHEN it is published THEN its artifact is committed to `records` by `records.mjs commit`,
-  AND `main`'s `RUN_OF_RECORD_PATH` names its `RESULTS.md`.
+  AND `main`'s `evals/run-of-record.json` names its `RESULTS.md` as `path`.
 
 ### C. `docs/specs/apm-canonical-distribution.md`
 
@@ -457,7 +458,7 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
 | `files` | `src/cli/docs/measurements.ts`, `scripts/generate-docs.mjs`, `docs/measurements.md`, `test/cli/docs/measurements.test.ts`, `test/cli/docs/llmsIndex.test.ts`, `test/records/measurements.test.ts` (new) |
 | `interfaces` | See the block below the table. |
 | `testCriteria` | The criteria of REQ-PROVE-020. **Given** `r0`'s copy of `docs/measurements.md`, **when** the page regenerates with the records present, **then** `git diff --word-diff` shows only link targets changing from relative to `https://github.com/zomarit/stamity/blob/records/…` (invariant 7). **Given** `npm test`, **then** it exits 0. **Given** `npm run test:records`, **then** it exits 0, the drift case included. |
-| `edgeCases` | The pinned snapshot is missing but the other two inputs are present → `--page all` exits 1 (partial), naming it. A future release moves `RUN_OF_RECORD_PATH` and `MEASUREMENT_SNAPSHOT_PATH` in the same `main` commit as the regenerated page, after the records arrive (settled default 8). `src/cli/docs/**` is not bundled into `dist` (`grep -l RUN_OF_RECORD_PATH dist/*.js` finds nothing at `9239379c`), so the npm package does not move. |
+| `edgeCases` | The pinned snapshot is missing but the other two inputs are present → `--page all` exits 1 (partial), naming it. A future release moves `evals/run-of-record.json` and `MEASUREMENT_SNAPSHOT_PATH` in the same `main` commit as the regenerated page, after the records arrive (settled default 8). `src/cli/docs/**` is not bundled into `dist` (`grep -c -e run-of-record -e readRunOfRecord dist/*.js` counts 0 in every bundle at `97b42257`), so the npm package does not move. |
 | `depends_on` | r1-records-suite |
 | `verify` | `npm test && npm run test:records && npm run lint && npm run typecheck && node scripts/generate-docs.mjs && git diff --exit-code -- docs ':!docs/measurements.md'` |
 
@@ -466,7 +467,8 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
 - **`src/cli/docs/measurements.ts` (current).**
   - `RUNS_DIR = ".stamity/runs"` (`:75`), `SNAPSHOT_DIR = "evals/measurements"` (`:78`),
     `REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json"` (`:84`),
-    `RUN_OF_RECORD_PATH = "evals/runs/2026-10-01-run-39/RESULTS.md"` (`:103`).
+    `RUN_OF_RECORD_FILE = "evals/run-of-record.json"` (`:87`), read by `readRunOfRecord(root)` (`:136`), whose
+    `path` names the run of record's `RESULTS.md`.
   - `snapshotFiles(root)` lists `merge-ready-*.json`, sorted (`:862-868`).
   - `readMeasurementSnapshot(root = repoRoot())` reads `snapshotFiles(root).at(-1)` and fails with `VALIDATION_ERROR`
     when there is none (`:880-891`).
@@ -475,14 +477,14 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
   - The reach and run-of-record reads throw when missing (`:943-962`).
 - **`src/cli/docs/measurements.ts` (new).**
   - `export const MEASUREMENT_SNAPSHOT_PATH = "evals/measurements/merge-ready-2026-10-01.json"`, beside
-    `RUN_OF_RECORD_PATH`, with a doc comment saying a release moves it in the same `main` commit as the regenerated page.
+    `RUN_OF_RECORD_FILE`, with a doc comment saying a release moves it in the same `main` commit as the regenerated page.
   - `readMeasurementSnapshot(root = repoRoot(), path = MEASUREMENT_SNAPSHOT_PATH)` reads that path and fails naming it
     and `node scripts/records.mjs restore`. `snapshotFiles` stays for `writeMeasurementSnapshot`'s never-rewrite rule.
   - `export const RECORDS_BLOB_URL = "https://github.com/zomarit/stamity/blob/records/"`. Every link the page renders
     into a record path becomes `${RECORDS_BLOB_URL}${path}`: the snapshot, the run of record, its prior runs, the reach
     snapshot (link sites near `:1081`, `:1144`, `:1246`). Links into `main` paths stay relative.
   - `export function measurementInputs(root = repoRoot()): { present: string[]; missing: string[] }` checks
-    `[RUN_OF_RECORD_PATH, REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH]`.
+    `[readRunOfRecord(root).path, REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH]`.
   - `export function measurementsAction(which: string, inputs: { present: string[]; missing: string[] }): "render" | "skip" | { refuse: string[] }`
     decides: `which === "all"` and no input present → `"skip"`; any input missing otherwise → `{ refuse: missing }`;
     else `"render"`.
@@ -515,7 +517,7 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
     - `writeMeasurementSnapshot(root, "2026-10-01")`, which writes the pinned filename;
     - a synthetic reach JSON at `REACH_SNAPSHOT_PATH`: `accessed`, `label`, `source`, `lastWeek` and `lastMonth` as
       `{ downloads, start, end }`, and `daily { start, end, downloads: [{ day, downloads }] }` with at least two rows;
-    - a synthetic full-run `RESULTS.md` at `RUN_OF_RECORD_PATH`: `Status: **PASS**`, a `## 5. Per-metric scores beside
+    - a synthetic full-run `RESULTS.md` at the `path` a synthetic `evals/run-of-record.json` names: `Status: **PASS**`, a `## 5. Per-metric scores beside
       their declared thresholds` section with the header row `\| Metric \| Score (SET-v6 rule) \|…` and the four metric
       rows, and no `## 0.` section.
   - **Results pair** (cases `:621`, `:650`, `:675`, `:778`, `:796`, `:809`, `:840`, `:864`, `:900`):
@@ -544,7 +546,7 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
 | `id` | r3-hand-page-links |
 | `requirements` | REQ-PROVE-020, REQ-UPSTREAM-001, REQ-UPSTREAM-007 |
 | `files` | `README.md`, `docs/doctrine.md`, `docs/enterprise-forks.md`, `docs/plugins.md`, `SECURITY.md`, `test/docsPages.test.ts`, `test/records/docsPages.test.ts` (new) |
-| `interfaces` | **`README.md`:** the links at `:31` (snapshot), `:34` (run of record) and `:41` (reach) become `https://github.com/zomarit/stamity/blob/records/<path>`. `:138` "Every link on this page is repo-relative, so the docs are read from the tree." becomes "…repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence." `:149-155` (`.stamity/` holds "the manifest, learnings, handoffs, runs, overrides, the inbox") says that in this repository the runs, handoffs, evidence and inbox live on the `records` branch. The consumer layout in `docs/getting-started.md:313-324` is product documentation and does not change. **`docs/doctrine.md`:** links `:98`, `:101`, `:105` → absolute; the comment `:10` and the code span `:143` gain "on the `records` branch". **`docs/enterprise-forks.md`:** the plan-005 links `:84`, `:121` → absolute. `docs/measurements.md` leaves `generatedPaths` (`:302`). The explanation `:310-319` becomes: "`docs/measurements.md` is not listed: a fork holds no records, so `generate-docs.mjs` skips that page there with a notice and leaves the committed page as it is." The code span `:1145` gains "on the `records` branch". **`docs/plugins.md`:** the code spans `:100`, `:104`, `:564` gain "(on the `records` branch)". **`SECURITY.md:315`:** "…archived under `.stamity/runs/2026-09-14_package-11/evidence/` on the `records` branch." **`test/docsPages.test.ts`:** the README check (`:1254-1262`, `existsSync` for every non-anchor target) skips targets matching `ALLOWED_URL` (`:407`), as the hand-page check does at `:811`. `RUN_OF_RECORD_CLAIM` (`:1277-1278`) also accepts the prefix `https://github.com/zomarit/stamity/blob/records/` before `(evals\/runs\/[^)\s]+)`; the capture group is unchanged, so the comparison with `RUN_OF_RECORD_PATH` at `:1296` holds. `failBaselineDisclosure` (`:1372`) accepts the same prefix. The case at `:1388` ("%s discloses a FAIL baseline behind the composed run of record") moves to `test/records/docsPages.test.ts`. The case at `:1426` uses a synthetic results file with a § 5 "NOT met" row and no case listed. The case at `:1442` is deleted, with a one-line reason: it duplicates `test/cli/docs/measurements.test.ts:623-624`. **Headers:** each edited hand page's attestation moves to the commit form `Re-attested <date>` (regex `:431`). `REATTESTATION_DATE` (`:597`) equals the newest such date (`:924-929`). |
+| `interfaces` | **`README.md`:** the links at `:31` (snapshot), `:34` (run of record) and `:41` (reach) become `https://github.com/zomarit/stamity/blob/records/<path>`. `:138` "Every link on this page is repo-relative, so the docs are read from the tree." becomes "…repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence." `:149-155` (`.stamity/` holds "the manifest, learnings, handoffs, runs, overrides, the inbox") says that in this repository the runs, handoffs, evidence and inbox live on the `records` branch. The consumer layout in `docs/getting-started.md:313-324` is product documentation and does not change. **`docs/doctrine.md`:** links `:98`, `:101`, `:105` → absolute; the comment `:10` and the code span `:143` gain "on the `records` branch". **`docs/enterprise-forks.md`:** the plan-005 links `:84`, `:121` → absolute. `docs/measurements.md` leaves `generatedPaths` (`:302`). The explanation `:310-319` becomes: "`docs/measurements.md` is not listed: a fork holds no records, so `generate-docs.mjs` skips that page there with a notice and leaves the committed page as it is." The code span `:1145` gains "on the `records` branch". **`docs/plugins.md`:** the code spans `:100`, `:104`, `:564` gain "(on the `records` branch)". **`SECURITY.md:315`:** "…archived under `.stamity/runs/2026-09-14_package-11/evidence/` on the `records` branch." **`test/docsPages.test.ts`:** the README check (`:1254-1262`, `existsSync` for every non-anchor target) skips targets matching `ALLOWED_URL` (`:407`), as the hand-page check does at `:811`. `RUN_OF_RECORD_CLAIM` (`:1277-1278`) also accepts the prefix `https://github.com/zomarit/stamity/blob/records/` before `(evals\/runs\/[^)\s]+)`; the capture group is unchanged, so the comparison with the run of record's `path` (`readRunOfRecord`) holds. `failBaselineDisclosure` (`:1372`) accepts the same prefix. The case at `:1388` ("%s discloses a FAIL baseline behind the composed run of record") moves to `test/records/docsPages.test.ts`. The case at `:1426` uses a synthetic results file with a § 5 "NOT met" row and no case listed. The case at `:1442` is deleted, with a one-line reason: it duplicates `test/cli/docs/measurements.test.ts:623-624`. **Headers:** each edited hand page's attestation moves to the commit form `Re-attested <date>` (regex `:431`). `REATTESTATION_DATE` (`:597`) equals the newest such date (`:924-929`). |
 | `testCriteria` | The fourth REQ-PROVE-020 criterion. **Given** `docs/enterprise-forks.md`, **then** its `generatedPaths` example no longer lists `docs/measurements.md` and its explanation no longer justifies it (`rg -n "docs/measurements.md" docs/enterprise-forks.md` shows neither line). **Given** a scratch copy of the tree with no record on disk, **when** the guide's `regenerate` commands run there, **then** `docs/measurements.md` is byte-unchanged (r2's skip) and `git status --porcelain` lists no tracked path outside the guide's `generatedPaths`; together these are the REQ-UPSTREAM-007 criteria. **Given** `npx vitest run test/docsPages.test.ts`, **then** it passes with no record on disk. **Given** `npm run test:records`, **then** the moved case passes. **Given** `cd website && npm run build`, **then** it completes with `onBrokenLinks: 'throw'` (`website/docusaurus.config.ts:111`). |
 | `edgeCases` | A link with a `#L12` anchor or a query string fails `ALLOWED_URL` → link whole files only. The site build runs in CI's docs-site workflow; do not run it beside a test runner's full gate on the same machine (`test/qa/hookRuns.test.ts:167` is load-sensitive). |
 | `depends_on` | r2-measurements-page |
