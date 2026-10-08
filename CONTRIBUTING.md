@@ -1,11 +1,11 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.12.0 release cut (2026-10-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 038282a2. Re-attested 2026-10-08 for the CI lanes and the proven push. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
      eval set's version bumps — the `evals/` paths below carry that version in their own names.
-     `test/docsPages.test.ts` asserts the contributor-gate command, the
-     leak-gate row and five regeneration commands; `test/ci/workflow.test.ts` asserts the two
-     required status contexts. -->
+     `test/docsPages.test.ts` asserts the contributor-gate command, the leak-gate row, five
+     regeneration commands, the proven-push reader and the CI lane names; `test/ci/workflow.test.ts`
+     asserts the two required status contexts. -->
 
 # Contributing
 
@@ -109,14 +109,31 @@ suite between them. Beside the six steps you already ran, it adds six things:
   through the QA harness. A client CLI that will not install leaves its own legs skipped with a
   notice, never a red lane; a broken root is red.
 
-A change made only of records takes a records-only lane instead of those three. Records are run
-records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under `.stamity/handoffs/`, and plans
-under `docs/plans/`, the engine's `.gitkeep` excepted at every location.
-`node scripts/ci/records-only.mjs` decides, and it answers `true` only when every changed path is
-one of them. The lane runs the suites that read the committed records, the
-generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. A learnings change,
-a push with no earlier commit to compare, the weekly schedule and a manual run always get the full
-three lanes. `all-ci-checks` checks which side ran, so a records-only pass never reads as a full one.
+A change whose every path falls in a lane takes the `lanes` job instead of those three.
+`node scripts/ci/records-only.mjs` decides; its name is older than three of its four lanes. The
+lanes, the engine's `.gitkeep` excepted at every location:
+
+- `records`: run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
+  `.stamity/handoffs/`, and plans under `docs/plans/`.
+- `specs`: the spec under `docs/specs/`.
+- `learnings`: `.stamity/learnings/`.
+- `website`: `website/` and every other page under `docs/`.
+
+The job runs the suites that read the lanes the change fell in, the generate-and-diff step, the
+leak gate and, on pull requests, the hygiene scan. The `learnings` lane adds the CLI build and its
+dogfood `check`, because the session hook reads the learnings. The `website` lane adds the docs site
+build and the root typecheck, because a test imports a `website/` module. Any path in no lane, a
+push with no earlier commit to compare, a diff the script cannot read, the weekly schedule and a
+manual run get the full three lanes. On that side the LTS leg also builds the docs site, last,
+when the change touches a `website` path or no diff was read.
+
+A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed
+commit's tree is the head tree of a pull request whose latest `ci.yml` pull-request run passed
+`all-ci-checks`. When it is, the check matrix, the two route lanes and the `lanes` job all skip:
+that tree was already proven. Only `ci.yml`'s own run counts as evidence, and a failed or unclear
+read means full CI, never a red job. The push-only workflows, `pack-signing-rehearsal.yml` and
+`docs-site.yml`, still run on the push. `all-ci-checks` asserts which of the three shapes ran, a
+proven push, the `lanes` job or the full side, so neither short answer reads as a full pass.
 
 Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
 `STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`

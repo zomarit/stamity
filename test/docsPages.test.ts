@@ -29,6 +29,8 @@ import { resolveDistributionIdentity } from "../scripts/distribution-identity.mj
 import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings.mjs";
 // @ts-expect-error — the manual eval harness is import-safe native ESM, outside the product package.
 import { RUNNER_FILES } from "../scripts/eval/run.mjs";
+// @ts-expect-error — the CI lane classifier is import-safe native ESM with no type declarations.
+import { LANE_PATHS } from "../scripts/ci/records-only.mjs";
 
 /**
  * The gate on the fifteen hand-written pages: three at the root, twelve guides
@@ -630,6 +632,17 @@ const RELEASE_CUT_DATE = "2026-10-08";
  * of 2026-10-07 among them, so the commit form has no members and the assertion's else branch
  * requires this constant to equal RELEASE_CUT_DATE. Their `Re-attested 2026-10-07` clauses are
  * not carried: each page now says it was verified at the cut, and the cut is the later pass.
+ *
+ * NOT MOVED, 2026-10-08, after the 1.12.0 cut: the commit form has five members again, all
+ * re-read on the constant's own date in run 2026-10-08_maintainer-tooling, so the constant already
+ * names the pass and the assertion's first branch now reads it. `docs/plugins.md`,
+ * `docs/troubleshooting.md` and `docs/migration.md` name the lane base 0ee31417 plus `Re-attested
+ * 2026-10-08 for the Claude allow rows` (the emitted Claude settings pre-approve no tool).
+ * `CONTRIBUTING.md` and `GOVERNANCE.md` name the integration head 038282a2 plus `Re-attested
+ * 2026-10-08 for the CI lanes and the proven push`: their `all-ci-checks` passages were re-read
+ * against `.github/workflows/ci.yml` and `scripts/ci/records-only.mjs`, which now skip the matrix
+ * on a push whose tree `ci.yml`'s own pull-request run passed and give specs, learnings and
+ * website changes a lane beside the records lane.
  */
 const REATTESTATION_DATE = "2026-10-08";
 
@@ -2229,6 +2242,29 @@ describe("CONTRIBUTING.md", () => {
     expect(text).toContain("scripts/leak-gate.mjs");
     expect(text, "CONTRIBUTING does not say what the gate refuses").toMatch(/reserved/i);
   });
+});
+
+/**
+ * ADDED in run 2026-10-08_maintainer-tooling (integration step 1): the two pages that say how
+ * `all-ci-checks` passes. `test/ci/workflow.test.ts` pins that both name the lane classifier; these
+ * pin what `all-ci-checks` gained beside the records lane, the proven push and three more lanes,
+ * and read the lane names off the classifier itself, so a lane the pages never mention fails here
+ * rather than reading as documented.
+ */
+describe("the CI hand pages", () => {
+  for (const page of [CONTRIBUTING, GOVERNANCE]) {
+    it(`${page} names the proven-push reader and every lane the classifier declares`, () => {
+      const text = read(page);
+      expect(text, `${page} does not describe the proven push`).toContain("scripts/ci/pr-proven.mjs");
+      for (const lane of Object.keys(LANE_PATHS)) {
+        expect(text, `${page} does not name the \`${lane}\` lane`).toContain(`\`${lane}\``);
+      }
+      // The claim the lanes made false: a learnings change takes its own lane, not full CI.
+      expect(text, `${page} still sends a learnings change to full CI`).not.toMatch(
+        /learnings change[^.]*full/i,
+      );
+    });
+  }
 });
 
 /**
