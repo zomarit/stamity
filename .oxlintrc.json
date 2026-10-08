@@ -62,6 +62,7 @@
               {
                 "group": [
                   "**/adapters/**",
+                  "**/change/**",
                   "**/composition/**",
                   "**/config/**",
                   "**/content/**",
@@ -111,6 +112,7 @@
               {
                 "group": [
                   "**/adapters/**",
+                  "**/change/**",
                   "**/composition/**",
                   "**/config/**",
                   "**/content/**",

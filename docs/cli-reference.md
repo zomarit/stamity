@@ -31,6 +31,7 @@ mistake.
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, and print its resume card (plumbing) |
+| `stamity gate` | plumbing | reads only | classify a change by its paths: the class, its checks and its lenses (plumbing) |
 
 ## What every command shares
 
@@ -49,7 +50,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 13 of the commands above, success and
+run that reaches a command — all 14 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -319,5 +320,24 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--state <state>` | the state a manual close sets — one of `fixed`, `rejected`, `deferred` | — |
 | `--rationale <text>` | why a manual close moves the row, recorded on it | — |
 | `--retired <disposition>` | retire a deferred row whose inbox row left: keeps its state and records the date and this disposition | — |
+
+## `stamity gate`
+
+classify a change by its paths: the class, its checks and its lenses (plumbing)
+
+Plumbing. This verb is not listed in `stamity --help` because its caller is generated
+agent content rather than a person. Hidden is not secret — `stamity gate --help` prints
+in full — and it is documented here because a verb that exists and is undocumented is
+worse than one that is merely unadvertised.
+
+Reads only. Nothing is written, so there is no preview mode to need.
+
+| Argument | What it is |
+|---|---|
+| `<subcommand>` | which gate action to run — one of `classify` |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--paths <path...>` | the changed paths to classify, by path rules alone | required |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

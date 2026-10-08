@@ -1,0 +1,305 @@
+import { describe, expect, it } from "vitest";
+import {
+  BUILT_IN_RULES,
+  BUILT_IN_TEST_GLOBS,
+  CLASS_CHECKS,
+  CLASS_ORDER,
+  CODE_EXTENSIONS,
+  classifyChange,
+  matchGlob,
+  type ChangeClass,
+  type ClassRule,
+} from "../../src/change/classify.ts";
+
+/**
+ * p1a-classifier-verb (REQ-FLOW-061): the change classifier over a path list.
+ *
+ * Pure module, no filesystem and no git: every input is a path string, so no
+ * double stands in for anything here. Every case that asserts a class other than
+ * `product` is non-degenerate on purpose — `product` is what an unplaced path and
+ * every fail-closed branch return, so a classifier that placed nothing would
+ * pass any case expecting it.
+ */
+
+/** A fixture rule set that places one path per class, beyond the built-ins. */
+const FIXTURE_RULES: readonly ClassRule[] = [
+  ...BUILT_IN_RULES,
+  { class: "tests", paths: ["test/**"], rationale: "fixture: the test tree" },
+  { class: "config", paths: ["tsconfig*.json"], rationale: "fixture: tool configuration" },
+  { class: "public-contract", paths: ["src/api/**"], rationale: "fixture: the published API" },
+  { class: "security-sensitive", paths: ["src/auth/**"], rationale: "fixture: authentication" },
+];
+
+const given = (paths: readonly string[], rules?: readonly ClassRule[]) =>
+  classifyChange({ paths, base: "given" }, rules);
+
+describe("the class vocabulary", () => {
+  it("orders the seven classes strongest first, per S1", () => {
+    expect(CLASS_ORDER).toEqual([
+      "security-sensitive",
+      "public-contract",
+      "product",
+      "config",
+      "tests",
+      "docs",
+      "records",
+    ]);
+  });
+
+  it("gives each class the checks of D1, the full gates from config up", () => {
+    expect(CLASS_CHECKS.records).toEqual(["scan", "tests-selected"]);
+    expect(CLASS_CHECKS.docs).toEqual(["scan", "tests-selected", "review-once"]);
+    expect(CLASS_CHECKS.tests).toEqual(["scan", "tests-selected", "lint", "typecheck", "review"]);
+    for (const cls of ["config", "product", "public-contract", "security-sensitive"] as const) {
+      expect(CLASS_CHECKS[cls]).toEqual(["scan", "gates-all", "review"]);
+    }
+  });
+
+  it("lists the code extensions every later rule reads, and the built-in test globs", () => {
+    for (const ext of [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".py", ".rb", ".go", ".rs"]) {
+      expect(CODE_EXTENSIONS).toContain(ext);
+    }
+    for (const ext of [".java", ".kt", ".swift", ".cs", ".php", ".sh", ".bash", ".ps1"]) {
+      expect(CODE_EXTENSIONS).toContain(ext);
+    }
+    expect(CODE_EXTENSIONS).not.toContain(".md");
+    expect(CODE_EXTENSIONS).not.toContain(".json");
+    expect(BUILT_IN_TEST_GLOBS).toEqual(["**/*.test.*", "**/*.spec.*", "test/**", "tests/**", "**/__tests__/**"]);
+  });
+});
+
+describe("matchGlob", () => {
+  it("lets ** span segments, including none, and keeps * inside one", () => {
+    expect(matchGlob("docs/a/b/c.md", "docs/**")).toBe(true);
+    expect(matchGlob("a.test.ts", "**/*.test.*")).toBe(true);
+    expect(matchGlob("src/x/a.test.ts", "**/*.test.*")).toBe(true);
+    expect(matchGlob("README.md", "*.md")).toBe(true);
+    expect(matchGlob("docs/README.md", "*.md")).toBe(false);
+    expect(matchGlob("docsx/a.md", "docs/**")).toBe(false);
+  });
+
+  it("reads every other character literally", () => {
+    expect(matchGlob("a.md", "a?md")).toBe(false);
+    expect(matchGlob("a?md", "a?md")).toBe(true);
+    expect(matchGlob("tsconfigXjson", "tsconfig.json")).toBe(false);
+    expect(matchGlob("a[1].md", "a[1].md")).toBe(true);
+  });
+
+  it("matches a Windows-separated path as its POSIX twin", () => {
+    expect(matchGlob("docs\\x.md", "docs/**")).toBe(true);
+  });
+});
+
+describe("classifyChange: the built-in rules", () => {
+  const cases: readonly (readonly [string, ChangeClass])[] = [
+    [".stamity/runs/2026-10-08_x/record.md", "records"],
+    [".stamity/inbox.md", "records"],
+    [".stamity/handoffs/h.md", "records"],
+    ["docs/guide.md", "docs"],
+    ["CHANGELOG.md", "docs"],
+    [".stamity/change-classes.json", "config"],
+    [".stamity/manifest.json", "security-sensitive"],
+    [".stamity/overrides/rules/x.md", "security-sensitive"],
+  ];
+
+  for (const [path, cls] of cases) {
+    it(`places ${path} in ${cls}`, () => {
+      const result = given([path]);
+      expect(result.class).toBe(cls);
+      expect(result.byPath).toEqual([{ path, class: cls, rule: expect.any(String) as string }]);
+      expect(result.checks).toEqual([...CLASS_CHECKS[cls]]);
+    });
+  }
+
+  it("places plans and specs in docs, with one review pass", () => {
+    for (const path of ["docs/plans/x.md", "docs/specs/x.md"]) {
+      const result = given([path]);
+      expect(result.class).toBe("docs");
+      expect(result.checks).toContain("review-once");
+      expect(result.checks).not.toContain("gates-all");
+    }
+  });
+
+  it("leaves AGENTS.md and CLAUDE.md out of docs: they steer every session (D10)", () => {
+    expect(given(["AGENTS.md"]).class).toBe("product");
+    expect(given(["CLAUDE.md"]).class).toBe("product");
+    // The exception is the top-level pair only.
+    expect(given(["docs/AGENTS.md"]).class).toBe("docs");
+  });
+
+  it("never places the engine's state in records", () => {
+    const result = given([".stamity/manifest.json", ".stamity/inbox.md"]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
+  });
+});
+
+describe("classifyChange: the code-path floor", () => {
+  it("keeps a code file under docs/** out of docs: it is product (closes plan/10)", () => {
+    for (const path of ["docs/conf.py", "docs/.vitepress/config.ts"]) {
+      const result = given([path]);
+      expect(result.class).toBe("product");
+      expect(result.byPath[0]?.rule).toContain("floor");
+    }
+  });
+
+  it("places a code file under a test glob that a docs rule matched in tests", () => {
+    const result = given(["docs/a.test.ts"]);
+    expect(result.class).toBe("tests");
+    expect(result.checks).toEqual([...CLASS_CHECKS.tests]);
+  });
+
+  it("keeps a code file out of records too", () => {
+    expect(given([".stamity/runs/2026-10-08_x/probe.mjs"]).class).toBe("product");
+  });
+
+  it("binds a caller's rules as well as the built-ins", () => {
+    const rules: readonly ClassRule[] = [
+      { class: "docs", paths: ["website/**"], rationale: "fixture: the site" },
+      { class: "records", paths: ["notes/**"], rationale: "fixture: notes" },
+    ];
+    expect(given(["website/x.md"], rules).class).toBe("docs");
+    expect(given(["website/src/x.tsx"], rules).class).toBe("product");
+    expect(given(["notes/x.sh"], rules).class).toBe("product");
+  });
+
+  it("reads the extension case-insensitively, so an upper-case script is still code", () => {
+    expect(given(["docs/BUILD.SH"]).class).toBe("product");
+  });
+});
+
+describe("classifyChange: the strongest class wins", () => {
+  it("reaches each of the seven classes through a fixture rule set", () => {
+    const expected: Record<string, ChangeClass> = {
+      ".stamity/inbox.md": "records",
+      "docs/x.md": "docs",
+      "test/a.test.ts": "tests",
+      "tsconfig.json": "config",
+      "src/x.ts": "product",
+      "src/api/v1.ts": "public-contract",
+      "src/auth/login.ts": "security-sensitive",
+    };
+    for (const [path, cls] of Object.entries(expected)) {
+      expect(given([path], FIXTURE_RULES).class, path).toBe(cls);
+    }
+  });
+
+  it("gives a mixed change its strongest path's class, and keeps every path's own", () => {
+    const result = given(["docs/x.md", "test/a.test.ts", ".stamity/inbox.md"], FIXTURE_RULES);
+    expect(result.class).toBe("tests");
+    expect(result.byPath.map((entry) => [entry.path, entry.class])).toEqual([
+      ["docs/x.md", "docs"],
+      ["test/a.test.ts", "tests"],
+      [".stamity/inbox.md", "records"],
+    ]);
+
+    const stronger = given(["docs/x.md", "src/auth/login.ts"], FIXTURE_RULES);
+    expect(stronger.class).toBe("security-sensitive");
+    expect(stronger.lenses).toEqual(["stamity-security"]);
+  });
+
+  it("names no lens below security-sensitive", () => {
+    expect(given(["docs/x.md"]).lenses).toEqual([]);
+    expect(given(["src/x.ts"]).lenses).toEqual([]);
+  });
+});
+
+describe("classifyChange: at least product, never lower", () => {
+  it("makes an unplaced path product, naming it", () => {
+    const result = given(["src/x.ts"]);
+    expect(result.class).toBe("product");
+    expect(result.reason).toContain("src/x.ts");
+    expect(result.reason).toContain("no rule places");
+  });
+
+  it("makes an empty path list product", () => {
+    const result = given([]);
+    expect(result.class).toBe("product");
+    expect(result.byPath).toEqual([]);
+    expect(result.reason).toContain("no changed path");
+  });
+
+  it("makes an unresolved base product even for a docs-only change", () => {
+    const result = classifyChange({ paths: ["docs/x.md"], base: "unresolved" });
+    expect(result.class).toBe("product");
+    expect(result.byPath).toEqual([{ path: "docs/x.md", class: "docs", rule: "docs/**" }]);
+    expect(result.reason).toContain("base could not be resolved");
+  });
+
+  it("keeps a stronger class through an unresolved base", () => {
+    const result = classifyChange({ paths: [".stamity/manifest.json"], base: "unresolved" });
+    expect(result.class).toBe("security-sensitive");
+  });
+
+  it("makes a rename across classes product, naming both sides", () => {
+    const result = classifyChange({
+      paths: ["src/a.ts"],
+      renames: [{ from: "docs/a.md", to: "src/a.ts" }],
+      base: "given",
+    });
+    expect(result.class).toBe("product");
+    expect(result.reason).toContain("docs/a.md -> src/a.ts");
+  });
+
+  it("lifts a rename between two weaker classes to product", () => {
+    const result = classifyChange({
+      paths: [".stamity/inbox.md"],
+      renames: [{ from: "docs/a.md", to: ".stamity/inbox.md" }],
+      base: "given",
+    });
+    // docs and records differ, so the rename is at least product.
+    expect(result.class).toBe("product");
+  });
+
+  it("keeps a rename within one class at that class", () => {
+    const result = classifyChange({
+      paths: ["docs/b.md"],
+      renames: [{ from: "docs/a.md", to: "docs/b.md" }],
+      base: "given",
+    });
+    expect(result.class).toBe("docs");
+    expect(result.byPath.map((entry) => entry.path)).toEqual(["docs/b.md", "docs/a.md"]);
+  });
+
+  it("never lowers a rename into a stronger class to product", () => {
+    const result = classifyChange(
+      { paths: ["src/a.ts"], renames: [{ from: "docs/a.md", to: "src/a.ts" }], base: "given" },
+      [{ class: "security-sensitive", paths: ["src/a.ts"], rationale: "fixture" }, ...BUILT_IN_RULES],
+    );
+    expect(result.class).toBe("security-sensitive");
+  });
+});
+
+describe("classifyChange: no base (D5)", () => {
+  it("classifies each known path by its built-in class, saying no base was given", () => {
+    const result = classifyChange({ paths: ["docs/x.md"], base: "absent" });
+    expect(result.class).toBe("docs");
+    expect(result.byPath).toEqual([{ path: "docs/x.md", class: "docs", rule: "docs/**" }]);
+    expect(result.reason).toContain("no base was given");
+  });
+
+  it("does not say so when a base was given", () => {
+    expect(given(["docs/x.md"]).reason).not.toContain("no base was given");
+  });
+});
+
+describe("classifyChange: path normalisation", () => {
+  it("normalises a Windows path to POSIX before matching", () => {
+    const result = given(["docs\\x.md"]);
+    expect(result.class).toBe("docs");
+    expect(result.byPath[0]?.path).toBe("docs/x.md");
+  });
+
+  it("drops a leading ./ and a repeated path", () => {
+    const result = given(["./docs/x.md", "docs/x.md"]);
+    expect(result.byPath).toEqual([{ path: "docs/x.md", class: "docs", rule: "docs/**" }]);
+  });
+
+  it("resolves dot segments and doubled separators, so no spelling escapes a stronger rule", () => {
+    expect(given(["docs/../.stamity/manifest.json"]).class).toBe("security-sensitive");
+    expect(given([".stamity//manifest.json"]).class).toBe("security-sensitive");
+    expect(given(["docs/./x.md"]).byPath[0]?.path).toBe("docs/x.md");
+    // A path that climbs out of the repository matches no rule.
+    expect(given(["../docs/x.md"]).class).toBe("product");
+  });
+});

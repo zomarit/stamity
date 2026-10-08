@@ -31,8 +31,8 @@ import { npxCommand } from "../support/identity.ts";
 const packageJson = createRequire(import.meta.url)("../../package.json") as { version: string };
 
 /**
- * The advertised surface, in the SoT help order. `learn`, `handoff` and
- * `ledger` are hidden plumbing.
+ * The advertised surface, in the SoT help order. `learn`, `handoff`, `ledger`
+ * and `gate` are hidden plumbing.
  *
  * `workspace` joined between `config` and `clean` with the multi-repo verb, and
  * `worktree` joined directly after it with the managed parallel-checkout lane —
@@ -58,7 +58,10 @@ const ADVERTISED = [
 ] as const;
 
 /** The plumbing verbs, in registration order: off `--help`, on the surface. */
-const HIDDEN = ["learn", "handoff", "ledger"] as const;
+// TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p1a-classifier-verb): `gate`
+// joined the hidden plumbing verbs as the change classifier a flow's gates follow
+// (REQ-FLOW-061), so the surface grew a command; no assertion below was loosened.
+const HIDDEN = ["learn", "handoff", "ledger", "gate"] as const;
 
 /** A minimal CommandModule under the given name, for the uniqueness guard. */
 const twin = (name: string): CommandModule => ({
@@ -69,9 +72,10 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 13 uniquely-named commands in help order, the hidden three last", () => {
+  it("registers exactly 14 uniquely-named commands in help order, the hidden four last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(13);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(14);
+    expect(HIDDEN).toHaveLength(4);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
     ]);
@@ -99,7 +103,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 10 advertised commands and none of the three plumbing verbs", async () => {
+  it("--help lists exactly the 10 advertised commands and none of the four plumbing verbs", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -111,6 +115,7 @@ describe("advertised surface (child process)", () => {
     expect(result.stdout).not.toMatch(/^ {2}learn\b/m);
     expect(result.stdout).not.toMatch(/^ {2}handoff\b/m);
     expect(result.stdout).not.toMatch(/^ {2}ledger\b/m);
+    expect(result.stdout).not.toMatch(/^ {2}gate\b/m);
   });
 
   it("--version prints the package version and exits 0", async () => {
