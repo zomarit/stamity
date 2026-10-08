@@ -1627,11 +1627,16 @@ describe("add — name clashes", () => {
     // TEST CHANGE, justified (prove/3): 2026-10-06. `clean --pack` leaves the
     // copies an earlier sync projected, so an `add` straight after it finds
     // their paths "already owned"; the remedy now runs `sync` between them.
+    // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies): `clean --pack` now
+    // removes the pack's client copies itself, but a copy it cannot prove is kept, named
+    // and disowned, and would collide with the re-added pack's copy; the remedy gains the
+    // step by hand that deletes it before the `sync`. The four commands and their order hold.
     expect(next).toContain(
       `pack "${PACK_ID}" is installed and keeps st-shared: remove it only to replace it with ` +
         `pack "acme-two" on purpose, which then takes the name — ` +
-        `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then \`${npxCommand("sync")}\` to remove ` +
-        `its client copies, then \`${npxCommand("add ./packs/two")}\`, then \`${npxCommand("sync")}\``,
+        `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then delete by hand any client copy it ` +
+        `keeps and names, then \`${npxCommand("sync")}\`, then \`${npxCommand("add ./packs/two")}\`, ` +
+        `then \`${npxCommand("sync")}\``,
     );
     expect(next).not.toContain("remove it first");
     expect(packRows(await readProjectManifest(), "acme-two")).toEqual([]);
@@ -1736,9 +1741,14 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     // TEST CHANGE, justified (prove/3): 2026-10-06. `clean --pack` leaves the
     // copies an earlier sync projected, so an `add` straight after it finds
     // their paths "already owned"; the remedy now runs `sync` between them.
+    // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies): `clean --pack` now
+    // removes the pack's client copies itself, but a copy it cannot prove is kept, named
+    // and disowned, and would collide with the re-added pack's copy; the remedy gains the
+    // step by hand that deletes it before the `sync`. The four commands and their order hold.
     expect(human.stderr).toContain(
-      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then \`${npxCommand("sync")}\` to remove its ` +
-        `client copies, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, then \`${npxCommand("sync")}\``,
+      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then delete by hand any client copy it ` +
+        `keeps and names, then \`${npxCommand("sync")}\`, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, ` +
+        `then \`${npxCommand("sync")}\``,
     );
     // Nothing written: the ledger, the receipt and the dropped file are as they were.
     expect(await readProjectManifest()).toEqual(before);
@@ -1833,9 +1843,14 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     // between `clean --pack` and `add`; this repository never synced, so the
     // `clean` then `add` below still clears it (upgradeRemedy.test.ts covers
     // the synced repository).
+    // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies): `clean --pack` now
+    // removes the pack's client copies itself, but a copy it cannot prove is kept, named
+    // and disowned, and would collide with the re-added pack's copy; the remedy gains the
+    // step by hand that deletes it before the `sync`. The four commands and their order hold.
     expect(refused.stderr).toContain(
-      `run \`${npxCommand("clean --pack ops")}\`, then \`${npxCommand("sync")}\` to remove its client ` +
-        `copies, then \`${npxCommand("add ops")}\`, then \`${npxCommand("sync")}\``,
+      `run \`${npxCommand("clean --pack ops")}\`, then delete by hand any client copy it keeps ` +
+        `and names, then \`${npxCommand("sync")}\`, then \`${npxCommand("add ops")}\`, ` +
+        `then \`${npxCommand("sync")}\``,
     );
     expect(await readProjectManifest()).toEqual(before);
     expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release-runbook"))).toBe(false);

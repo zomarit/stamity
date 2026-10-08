@@ -881,18 +881,20 @@ function refuseInvocableNameClashes(index: ContentIndex, cli: CliCallContext): v
 
 /**
  * The remedy for one owner of a clashing name, or none for a core owner. A
- * pack's remedy runs `sync` between `clean --pack` and `add`: `clean --pack`
- * removes only the pack's own files, and the copies an earlier `sync`
- * projected into the clients stay ledgered until a `sync` reclaims them — an
- * `add` before that finds its paths "already owned" and refuses.
+ * pack's remedy has a step by hand between `clean --pack` and `sync`:
+ * `clean --pack` removes a pack's client copies only as bytes the engine
+ * renders from the installed pack, and a pack this refusal names cannot be
+ * planned, so its copies are kept, named and disowned. Left on disk, they
+ * collide with the copies the re-added pack's `sync` writes.
  */
 function remedyOf(owner: InvocableNameOwner, cli: CliCallContext): string[] {
   switch (owner.layer) {
     case "pack": {
       const packId = owner.packId ?? "<pack-id>";
       return [
-        `pack "${packId}": run \`${remedyCall(cli, `clean --pack ${packId}`)}\`, then ` +
-          `\`${remedyCall(cli, "sync")}\` to remove its client copies, then ` +
+        `pack "${packId}": run \`${remedyCall(cli, `clean --pack ${packId}`)}\`, then delete by ` +
+          `hand each client copy it keeps and names (a clashing pack cannot prove them), then ` +
+          `\`${remedyCall(cli, "sync")}\`, then ` +
           `\`${remedyCall(cli, `add ${packId}`)}\` once the pack ships distinct names, then ` +
           `\`${remedyCall(cli, "sync")}\``,
       ];

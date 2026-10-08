@@ -72,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The eval price list covers Sonnet 5.5 and Haiku 4.5.** `evals/price-list.json` gains
   `claude-sonnet-5-5` and `claude-haiku-4-5-20251001`, read off the vendor's pricing page on
   2026-10-08.
+- `clean --pack <id>` also removes the copies `sync` projected from that pack into each client's
+  folders, while the pack is still installed. A copy you edited is kept and named. A pack whose
+  command and skill share a name cannot be planned, so none of its copies can be proven: each is
+  kept and named, and the remedy `sync` prints for that clash gains a step by hand, deleting
+  those copies before the `sync` that follows `clean --pack`.
 
 ### Fixed
 

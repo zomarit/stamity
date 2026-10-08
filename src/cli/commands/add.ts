@@ -519,12 +519,14 @@ interface RefusalPart {
  * the paths, and which steps clear them depends on whether the pack being
  * added is still installed (`installed`, read from its `pack:<id>` rows):
  *
- * - installed: the stale copy is replaced in {@link replaceSteps}' four steps —
- *   its `sync` after `clean --pack` reclaims the client copies an earlier
- *   `sync` projected, which are what the `add` would otherwise find owned;
+ * - installed: the stale copy is replaced in {@link replaceSteps}' steps —
+ *   `clean --pack` removes the client copies an earlier `sync` projected, which
+ *   are what the `add` would otherwise find owned, and drops the rows of any it
+ *   keeps;
  * - not installed (a `clean --pack` already ran): `clean --pack` would refuse,
  *   since the ledger holds no row of the pack, and the claims left are client
- *   copies only a `sync` reclaims — so `sync`, then `add`, then `sync`.
+ *   copies a `clean --pack` of an earlier release left for `sync` — so `sync`,
+ *   then `add`, then `sync`.
  *
  * Either way a file no ledger row owns (a stray, or an edited pack file
  * `clean --pack` kept as salvage) is never removed by a verb: it is the
@@ -633,16 +635,18 @@ function nameClashRemedyOf(
 }
 
 /**
- * The four steps that replace an installed pack: `clean --pack` removes only
- * the pack's own files, so the copies an earlier `sync` projected into the
- * clients stay ledgered until a `sync` reclaims them, and an `add` run before
- * that finds those paths "already owned" and refuses. Then `add`, then `sync`
- * to project what it installed.
+ * The steps that replace an installed pack: `clean --pack` removes the pack's
+ * own files and the copies an earlier `sync` projected into the clients, but a
+ * copy only as bytes the engine renders from the installed pack. A copy it
+ * cannot prove (one its owner edited, or every copy of a pack the planner
+ * refuses) is kept, named and disowned, and left on disk it collides with the
+ * copy the re-added pack's `sync` writes, so it is deleted by hand first. Then
+ * `sync`, `add`, and `sync` to project what it installed.
  */
 function replaceSteps(removed: string, spec: string): string {
   return (
-    `run \`${packageCommand(`clean --pack ${removed}`)}\`, then ` +
-    `\`${packageCommand("sync")}\` to remove its client copies, then ` +
+    `run \`${packageCommand(`clean --pack ${removed}`)}\`, then delete by hand any client ` +
+    `copy it keeps and names, then \`${packageCommand("sync")}\`, then ` +
     `\`${packageCommand(`add ${spec}`)}\`, then \`${packageCommand("sync")}\``
   );
 }

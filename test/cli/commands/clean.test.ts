@@ -1,16 +1,19 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { COMMANDS } from "../../../src/cli.ts";
 import { cleanCommand, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
 import type * as PackageNameApi from "../../../src/cli/kit/packageName.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
+import { ORG_POLICY_REL_PATH } from "../../../src/pack/orgPolicy.ts";
 import { MANIFEST_VERSION, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
-import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+import { seedGitRepo } from "../../support/repoFixtures.ts";
+import { makeTempDir, useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
  * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
  * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
@@ -644,7 +647,12 @@ describe("clean --pack — scoped removal", () => {
 
     const result = await runClean(root, ["--pack", OPS_ID, "-y"]);
 
-    expect(result.stdout).toContain("stamity sync");
+    // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies): the step read
+    // "reclaim any projected copies of the pack's content: stamity sync", a bare call that
+    // runs only where a global install put the binary, for copies `clean --pack` now removes
+    // itself. It now regenerates the clients' files in the pinned call every other remedy
+    // prints. What this case pins, a sync next step and no reinit offer, holds.
+    expect(result.stdout).toContain(`regenerate the clients' files without the pack: ${npxCommand("sync")}`);
     expect(result.stdout).not.toContain(npxCommand("init"));
   });
 
@@ -879,6 +887,215 @@ describe("clean --pack — salvage and convergence", () => {
     expect(rowsOwnedBy(ledger, "pack:@acme/ops")).toHaveLength(2);
     expect(rowsOwnedBy(ledger, "pack:@acme/ops-extra")).toEqual([]);
   });
+});
+
+// ── Scoped mode: the pack's projected copies (REQ-PLUGIN-046, d1a2) ─────
+//
+// Real setups, no hand-built ledger: `clean --pack` finds a copy by planning
+// the emission twice (the pack installed, and the pack's rows removed), so the
+// fixture has to be one the real planner renders — `init --tools claude`,
+// `add`, `sync`. Each template is built once per describe and copied per case.
+
+describe("clean --pack — the pack's projected copies", () => {
+  type Row = LedgerEntry;
+  type Entry = ReportEntry & { proof?: string };
+
+  let templates: TempDirHandle;
+  /** `init -y --tools claude`, `add ops -y`, `sync`. */
+  let opsSynced: string;
+  /** The same, with `scaffold` added and synced too. */
+  let twoPacksSynced: string;
+  /** The claude rows `add ops` + `sync` added under `.claude/`: the pack's copies. */
+  let opsCopies: string[];
+  /** The claude rows `add scaffold` + `sync` added under `.claude/`. */
+  let scaffoldCopies: string[];
+
+  async function run(cwd: string, argv: readonly string[]): Promise<Awaited<ReturnType<typeof runInProcess>>> {
+    const result = await runInProcess(COMMANDS, argv, { cwd });
+    expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
+    return result;
+  }
+
+  async function addAndSync(repo: string, pack: string): Promise<string[]> {
+    const before = new Set((await readLedgerOnDisk(repo)).map((row) => row.path));
+    await run(repo, ["add", pack, "-y"]);
+    await run(repo, ["sync"]);
+    return (await readLedgerOnDisk(repo))
+      .filter((row) => row.adapter === "claude" && row.path.startsWith(".claude/") && !before.has(row.path))
+      .map((row) => row.path);
+  }
+
+  beforeAll(async () => {
+    templates = await makeTempDir("stamity-clean-copies");
+    opsSynced = templates.path("ops");
+    await mkdir(opsSynced, { recursive: true });
+    await seedGitRepo(opsSynced);
+    await run(opsSynced, ["init", "-y", "--tools", "claude"]);
+    opsCopies = await addAndSync(opsSynced, "ops");
+    twoPacksSynced = templates.path("two");
+    await cp(opsSynced, twoPacksSynced, { recursive: true });
+    scaffoldCopies = await addAndSync(twoPacksSynced, "scaffold");
+  }, 180_000);
+
+  afterAll(async () => {
+    await templates.cleanup();
+  });
+
+  async function copyOf(template: string): Promise<string> {
+    const root = tempDir().path("repo");
+    await cp(template, root, { recursive: true });
+    return root;
+  }
+
+  function cleanJson(root: string, extra: readonly string[] = []): Promise<Record<string, unknown>> {
+    return runClean(root, ["--pack", "ops", "--json", "-y", ...extra]).then((result) => {
+      expect(result.code, result.stderr).toBe(0);
+      return parseSingleDoc(result.stdout);
+    });
+  }
+
+  function entryAt(doc: Record<string, unknown>, path: string): Entry | undefined {
+    return (entriesOf(doc) as Entry[]).find((entry) => entry.path === path);
+  }
+
+  const EDITED_COPY = ".claude/skills/st-ci-pipeline/SKILL.md";
+
+  it("the fixture: ops projects skills and an agent into .claude/", () => {
+    expect(opsCopies).toContain(".claude/agents/stamity-devops.md");
+    expect(opsCopies).toContain(EDITED_COPY);
+    expect(scaffoldCopies.length).toBeGreaterThan(0);
+  });
+
+  it(
+    "deletes every .claude/ copy of the pack with proof hash, drops its rows, and moves no row of the corpus",
+    async () => {
+      const root = await copyOf(opsSynced);
+      const before = await readLedgerOnDisk(root);
+
+      const doc = await cleanJson(root);
+
+      for (const copy of opsCopies) {
+        expect(entryAt(doc, copy), copy).toMatchObject({ action: "deleted", proof: "hash" });
+        expect(existsSync(join(root, copy)), copy).toBe(false);
+      }
+      const after = await readLedgerOnDisk(root);
+      for (const copy of opsCopies) expect(after.map((row) => row.path), copy).not.toContain(copy);
+      expect(rowsOwnedBy(after, "pack:ops")).toEqual([]);
+      // Every other row is byte-unchanged: the corpus's own content did not move.
+      const untouched = (rows: readonly Row[]): Row[] =>
+        rows.filter((row) => row.adapter !== "pack:ops" && !opsCopies.includes(row.path));
+      expect(after).toEqual(untouched(before));
+      expect(doc["removedRows"]).toBe(before.length - after.length);
+    },
+    60_000,
+  );
+
+  it(
+    "keeps a copy its owner edited, names it, and still drops its row",
+    async () => {
+      const root = await copyOf(opsSynced);
+      const edited = `${await readFile(join(root, EDITED_COPY), "utf-8")}\nOur own step.\n`;
+      await writeFile(join(root, EDITED_COPY), edited, "utf-8");
+
+      const result = await runClean(root, ["--pack", "ops", "-y"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(await readFile(join(root, EDITED_COPY), "utf-8")).toBe(edited);
+      expect(result.stdout).toContain(`skipped-user-content  ${EDITED_COPY}`);
+      expect((await readLedgerOnDisk(root)).map((row) => row.path)).not.toContain(EDITED_COPY);
+      // The unedited copies still leave.
+      expect(existsSync(join(root, ".claude/agents/stamity-devops.md"))).toBe(false);
+    },
+    60_000,
+  );
+
+  it(
+    "keeps an owner's own file at a copy's name under a forged claude row hashing it",
+    async () => {
+      const root = await copyOf(opsSynced);
+      const ownerBytes = "---\nname: st-ci-pipeline\ndescription: our own pipeline notes\n---\n\nOurs.\n";
+      await writeFile(join(root, EDITED_COPY), ownerBytes, "utf-8");
+      const manifestFile = join(root, STATE_DIR, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
+      for (const row of manifest.ledger) if (row.path === EDITED_COPY) row.contentHash = sha256(ownerBytes);
+      await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+
+      const doc = await cleanJson(root);
+
+      expect(entryAt(doc, EDITED_COPY)?.action).toBe("skipped-user-content");
+      expect(await readFile(join(root, EDITED_COPY), "utf-8")).toBe(ownerBytes);
+    },
+    60_000,
+  );
+
+  it(
+    "lists each copy as dry-run, counts it, and writes nothing",
+    async () => {
+      const root = await copyOf(opsSynced);
+      const before = await snapshot(root);
+
+      const result = await runClean(root, ["--pack", "ops", "--dry-run"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      for (const copy of opsCopies) expect(result.stdout).toContain(`dry-run  ${copy}`);
+      expect(result.stdout).toContain(`the rows of its ${opsCopies.length} client copy(ies)`);
+      expect(await snapshot(root)).toEqual(before);
+    },
+    60_000,
+  );
+
+  it(
+    "leaves another installed pack's copies and rows untouched",
+    async () => {
+      const root = await copyOf(twoPacksSynced);
+      const before = await readLedgerOnDisk(root);
+
+      const doc = await cleanJson(root);
+
+      const after = await readLedgerOnDisk(root);
+      for (const copy of scaffoldCopies) {
+        expect(entryAt(doc, copy), copy).toBeUndefined();
+        expect(existsSync(join(root, copy)), copy).toBe(true);
+      }
+      const scaffoldRows = (rows: readonly Row[]): Row[] =>
+        rows.filter((row) => row.adapter === "pack:scaffold" || scaffoldCopies.includes(row.path));
+      expect(scaffoldRows(after)).toEqual(scaffoldRows(before));
+      for (const copy of opsCopies) expect(existsSync(join(root, copy)), copy).toBe(false);
+    },
+    60_000,
+  );
+
+  it(
+    "finds the copies of a pack the org policy denies, and removes them",
+    async () => {
+      const root = await copyOf(opsSynced);
+      await writeFile(
+        join(root, ORG_POLICY_REL_PATH),
+        `${JSON.stringify({ version: 1, packs: { deny: ["*"] } }, null, 2)}\n`,
+        "utf-8",
+      );
+
+      const doc = await cleanJson(root);
+
+      for (const copy of opsCopies) {
+        expect(entryAt(doc, copy), copy).toMatchObject({ action: "deleted", proof: "hash" });
+        expect(existsSync(join(root, copy)), copy).toBe(false);
+      }
+    },
+    60_000,
+  );
+
+  it(
+    "ends on the pinned sync that regenerates the clients' files without the pack",
+    async () => {
+      const root = await copyOf(opsSynced);
+
+      const result = await runClean(root, ["--pack", "ops", "-y"]);
+
+      expect(result.stdout).toContain(`regenerate the clients' files without the pack: ${npxCommand("sync")}`);
+    },
+    60_000,
+  );
 });
 
 describe("clean — consent is separate from output format", () => {

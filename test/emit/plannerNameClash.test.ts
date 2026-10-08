@@ -134,9 +134,15 @@ const call = (verb: string): string => `npx -y @zomarit/stamity@${ENGINE_VERSION
 // so `add` found their paths "already owned". A `sync` between `clean --pack`
 // and `add` reclaims them; the remedy is now four steps
 // (test/pack/upgradeRemedy.test.ts runs them).
+// TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies): `clean --pack`
+// now removes a pack's client copies itself, but only as bytes the engine renders
+// from the installed pack, and a pack this refusal names cannot be planned, so its
+// copies are kept and named. The remedy gains the step by hand that deletes them
+// before the `sync`; the four commands and their order are unchanged.
 const ACME_REMEDY =
-  `pack "acme-demo": run \`${call("clean --pack acme-demo")}\`, then ` +
-  `\`${call("sync")}\` to remove its client copies, then ` +
+  `pack "acme-demo": run \`${call("clean --pack acme-demo")}\`, then delete by ` +
+  `hand each client copy it keeps and names (a clashing pack cannot prove them), then ` +
+  `\`${call("sync")}\`, then ` +
   `\`${call("add acme-demo")}\` once the pack ships distinct names, then \`${call("sync")}\``;
 
 describe("composeEmissionPlanner — an installed cross-class name clash", () => {

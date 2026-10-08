@@ -2083,9 +2083,9 @@ function renderNextSteps(
     // Deliberately NOT sync first: for an edited pack body sync copies the
     // current bytes into the generated setup, which propagates the change
     // rather than correcting it. Re-installing is what restores the recorded
-    // content. After `clean --pack` the pack is gone, so a sync there only
-    // reclaims its projected client copies — without it, `add` finds their
-    // paths still owned and refuses (prove/6). An edited file is moved out
+    // content. `clean --pack` removes the pack's projected client copies while
+    // it is still installed, and a sync after it regenerates the clients'
+    // files without the pack, before `add` (prove/6). An edited file is moved out
     // first, since `clean --pack` keeps it and `add` would refuse it
     // (review/56). The order is `packReinstallSteps`', the one each finding
     // line in the row prints too (review/58). `<source>` is the one value

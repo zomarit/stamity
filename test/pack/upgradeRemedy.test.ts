@@ -310,6 +310,46 @@ async function runSteps(repo: string, steps: readonly string[]): Promise<void> {
   }
 }
 
+/**
+ * The client copies a `clean --pack` run kept and named: its sweep lines
+ * (`  skipped-…  <path> — <detail>`) for paths under a client folder.
+ */
+function keptCopies(output: string): string[] {
+  return [...output.matchAll(/^ {2}skipped-\S+ {2}(\.\S+) — /gm)]
+    .map((match) => match[1] ?? "")
+    .filter((path) => !path.startsWith(".stamity/"));
+}
+
+/**
+ * Runs `steps` as {@link runSteps} does, plus the step by hand the remedy names
+ * after `clean --pack`: each client copy it keeps and names is deleted.
+ */
+async function runStepsDeletingKept(repo: string, steps: readonly string[]): Promise<string[]> {
+  const deleted: string[] = [];
+  for (const step of steps) {
+    const argv = step.split(" ");
+    if (argv[0] === "clean" || argv[0] === "add") argv.push("-y");
+    // oxlint-disable-next-line no-await-in-loop -- sequential: each step reads the state the one before it left
+    const result = await cli(repo, argv);
+    expect(result.code, `remedy step \`${argv.join(" ")}\` must exit 0 — ${said(result)}`).toBe(0);
+    if (argv[0] !== "clean") continue;
+    for (const path of keptCopies(result.output)) {
+      // oxlint-disable-next-line no-await-in-loop -- the step by hand, one named file at a time
+      await rm(join(repo, ...path.split("/")));
+      deleted.push(path);
+    }
+  }
+  return deleted;
+}
+
+/** The 1.11.0 copies the clash leaves unprovable: each must be among those `clean --pack` keeps and names. */
+const UNPROVABLE = [
+  ".claude/agents/stamity-devops.md",
+  ".claude/commands/st-release.md",
+  ".claude/skills/st-release/SKILL.md",
+  ".claude/skills/st-ci-pipeline/SKILL.md",
+] as const;
+
 describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal prints", () => {
   it(
     "sync refuses the installed clash, and the printed steps, run in order, each exit 0 and leave check green",
@@ -342,16 +382,16 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
         "sync",
       ]);
 
-      // The steps run one after another, in the printed order: each reads the
-      // state the one before it left.
-      for (const step of steps) {
-        const argv = step.split(" ");
-        // Non-interactive: the destructive and installing verbs take -y.
-        if (argv[0] === "clean" || argv[0] === "add") argv.push("-y");
-        // oxlint-disable-next-line no-await-in-loop -- sequential by design (above)
-        const result = await cli(repo, argv);
-        expect(result.code, `remedy step \`${argv.join(" ")}\` must exit 0 — ${said(result)}`).toBe(0);
-      }
+      // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies; the declared
+      // default recorded in the run's record): `clean --pack` now removes a pack's client
+      // copies itself, only as bytes the engine renders from the installed pack. This
+      // pack's own command and skill clash, so the planner refuses it and no copy can be
+      // proven: `clean --pack` keeps each one and names it, and the remedy gains the step
+      // by hand that deletes them before the `sync`. The four commands, their order and
+      // the green `check` at the end are unchanged; the steps now run with that step.
+      expect(refused.output).toContain("then delete by hand each client copy it keeps and names");
+      const deleted = await runStepsDeletingKept(repo, steps);
+      for (const path of UNPROVABLE) expect(deleted, `kept and named: ${path}`).toContain(path);
 
       const checked = await cli(repo, ["check"]);
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
@@ -364,33 +404,40 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
     CASE_TIMEOUT,
   );
 
+  // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies; the declared default
+  // recorded in the run's record): the case was "add straight after clean --pack is refused
+  // on the copies, and its printed remedy runs to exit 0 (prove/5)". `clean --pack` now
+  // takes the copies' rows with the pack's, so `add` right after it no longer finds their
+  // paths owned and installs. This pack cannot be planned (its command and skill clash), so
+  // the copies themselves are kept and named, and left on disk they collide with the
+  // re-added pack's `sync`. What prove/5 pins holds: the steps `clean --pack` prints, run in
+  // order, reach a `check` that exits 0.
   it(
-    "add straight after clean --pack is refused on the copies, and its printed remedy runs to exit 0 (prove/5)",
+    "add straight after clean --pack installs, and the kept copies, deleted as clean --pack names them, let sync run to a green check (prove/5)",
     async () => {
       const repo = await syncedAt1110("collision");
 
       const cleaned = await cli(repo, ["clean", "--pack", "ops", "-y"]);
       expect(cleaned.code, `clean --pack ops must exit 0 — ${said(cleaned)}`).toBe(0);
+      expect(cleaned.output).toContain('Pack "ops" could not be planned as installed');
+      const kept = keptCopies(cleaned.output);
+      for (const path of UNPROVABLE) expect(kept, `kept and named: ${path}`).toContain(path);
+      const rows = new Set((await readManifest(repo))?.ledger.map((row) => row.path));
+      for (const path of kept) expect(rows.has(path), `the row of ${path} leaves`).toBe(false);
 
-      // The three-step order's second step: the projected copies still own
-      // their paths, so add refuses on the collision.
-      const refused = await cli(repo, ["add", "ops", "-y"]);
-      expect(refused.code, `add right after clean --pack must refuse — ${said(refused)}`).toBe(1);
-      expect(refused.output).toContain("path(s) it would write are not free");
-      expect(refused.output).toContain(".claude/agents/stamity-devops.md");
+      // No row claims the copies' paths any more, so add installs straight away.
+      const added = await cli(repo, ["add", "ops", "-y"]);
+      expect(added.code, `add right after clean --pack must install — ${said(added)}`).toBe(0);
 
-      // TEST CHANGE, justified (review/57): 2026-10-06. The prove/5 remedy led
-      // with `clean --pack <id>`, which exits 1 here — the pack has no rows
-      // left — so this case skipped it by hand. Not installed, the printed
-      // steps are sync, add, sync, and every one of them runs.
-      expect(refused.output).toContain('pack "ops" is not installed');
-      const steps = collisionVerbs(refused.output, "ops");
-      expect(steps, `the collision refusal's printed remedy — ${said(refused)}`).toEqual([
-        "sync",
-        "add ops",
-        "sync",
-      ]);
-      await runSteps(repo, steps);
+      // Left on disk, the kept copies collide with what the re-added pack projects.
+      const collided = await cli(repo, ["sync"]);
+      expect(collided.code, `sync over the kept copies must refuse them — ${said(collided)}`).toBe(1);
+      expect(collided.output).toContain(".claude/agents/stamity-devops.md");
+
+      // The step by hand `clean --pack` printed, then the sync.
+      expect(cleaned.output).toContain("delete by hand each client copy kept above, unless it is yours");
+      await Promise.all(kept.map((path) => rm(join(repo, ...path.split("/")))));
+      await runSteps(repo, ["sync"]);
 
       const checked = await cli(repo, ["check"]);
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
@@ -415,7 +462,14 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
         "add ops",
         "sync",
       ]);
-      await runSteps(repo, steps);
+      // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies; the declared
+      // default recorded in the run's record): the installed-state remedy gains the step
+      // by hand that deletes each client copy `clean --pack` keeps and names. This pack's
+      // command and skill clash, so the planner refuses it and none of its copies can be
+      // proven. The four commands, their order and the green `check` are unchanged.
+      expect(refused.output).toContain("then delete by hand any client copy it keeps and names");
+      const deleted = await runStepsDeletingKept(repo, steps);
+      for (const path of UNPROVABLE) expect(deleted, `kept and named: ${path}`).toContain(path);
 
       const checked = await cli(repo, ["check"]);
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
