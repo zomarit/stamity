@@ -302,6 +302,21 @@ describe("runTests — the one re-run and what it says", () => {
     expect(run.err.join("")).toContain("per-file coverage floors");
   });
 
+  it("says coverage was off on stdout too, so a pass read from either stream shows it", () => {
+    // A pass prints nothing else of this script's own, so a caller reading only stdout (a tool
+    // capture, a log that drops stderr) would see a green scoped `--coverage` run and no sign that
+    // it measured no coverage (review/79).
+    const asked = scripted(GREEN);
+    expect(runTyped(["--coverage", "test/ci/recordsOnly.test.ts", "test/ci/testRun.test.ts"], asked.io)).toBe(0);
+    expect(asked.out.join("")).toContain("a scoped run of 2 file(s), coverage off");
+    expect(asked.out.join("")).toBe(asked.err.join(""));
+
+    // Control: a scoped run that never asked for coverage has nothing to explain.
+    const plain = scripted(GREEN);
+    expect(runTyped(["test/ci/recordsOnly.test.ts"], plain.io)).toBe(0);
+    expect([...plain.out, ...plain.err]).toEqual([]);
+  });
+
   it("re-runs a timed-out named file alone on a scoped run, never the whole suite", () => {
     const run = scripted(
       failed({ file: "test/upstream/lane.test.ts", errors: [HOOK] }),

@@ -4,11 +4,14 @@
 //
 //   node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>] [<test file>...]
 //
-// Named test files make a scoped run: vitest runs exactly those files, and `--coverage` is not
-// passed on, because the floors in `vitest.config.ts` are per-file and keyed over all of `src/**`,
-// so a partial run reports every file it did not load below its floor and is red for no defect;
-// collecting coverage with the thresholds off would only add wall time for a report no gate
-// reads. The per-file floors are measured on the full run, CI's command, which names no file.
+// Named test files make a scoped run: each name goes to vitest as a file filter, which vitest
+// matches as a substring of a test file's path (so `test/ci` runs every test file under it), and
+// `--coverage` is not passed on, because the floors in `vitest.config.ts` are per-file and keyed
+// over all of `src/**`, so a partial run reports every file it did not load below its floor and is
+// red for no defect; collecting coverage with the thresholds off would only add wall time for a
+// report no gate reads. A scoped run asked for `--coverage` says before vitest starts that coverage
+// is off, on stdout and on stderr, so a pass read from either stream shows it. The per-file floors
+// are measured on the full run, CI's command, which names no file.
 //
 // It runs vitest once, with this file as an extra reporter (the default export below) that writes
 // every failure's error name and message to a JSON report. Exit 0 from vitest is a pass. Otherwise
@@ -192,10 +195,13 @@ export function runTests(argv, io) {
   const scoped = parsed.files !== undefined
   const args = scoped ? { ...parsed, coverage: false } : parsed
   if (scoped && parsed.coverage) {
-    io.err(
+    // On both streams: a pass prints nothing else of this script's own, so a reader of stdout alone
+    // would otherwise see a green `--coverage` run with no sign that it measured no coverage.
+    const notice =
       `test-run: a scoped run of ${parsed.files.length} file(s), coverage off: ` +
-        'the per-file coverage floors are measured on the full run only\n',
-    )
+      'the per-file coverage floors are measured on the full run only\n'
+    io.out(notice)
+    io.err(notice)
   }
   const decision = decide(io.vitest(vitestArgs(args, io.env)))
   if (decision.action === 'pass') return 0
