@@ -1,9 +1,15 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { CLAUDE_SETTINGS_PATH, claudeUserHookEntries } from "../../adapters/claude.ts";
 import { CODEX_CONFIG_FILE, CODEX_HOOKS_FILE, codexConfigTableRendering } from "../../adapters/codex.ts";
 import { COPILOT_HOOKS_PATH } from "../../adapters/copilot.ts";
+import {
+  CURSOR_1_11_0_GUARD_ENTRIES,
+  CURSOR_1_11_0_RUNTIME_AGENT_IDS,
+  render1110CursorGuards,
+} from "../../adapters/cursorLegacyGuards.ts";
 import {
   CURSOR_HOOKS_CONFIG_PATH,
   LEGACY_CURSOR_GUARD_PATHS,
@@ -37,6 +43,7 @@ import {
   directHookRendering,
   hookScriptReader,
 } from "../../manifest/hookDocuments.ts";
+import { memberHash } from "../../manifest/jsonMembers.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
@@ -437,13 +444,150 @@ const CURSOR_GUARD_PATHS: readonly string[] = [SUBAGENT_GUARD_PATH, MCP_GUARD_PA
  * Cursor's guards, as `.cursor/hooks.json`'s spec recognises and bounds them:
  * the current names, and a 1.11.0 name only where `ledger` records that path
  * — a setup that ran a release before the rename (REQ-FLOW-038; the review/70
- * sign-off). There the first sync recognises an entry running the old name as
- * the engine's and replaces it; anywhere else the old names are free, and an
- * entry running one is the owner's.
+ * sign-off) — and, when the caller proved them ({@link provenLegacyCursorGuards}),
+ * only where the file there is absent or is the guard 1.11.0 rendered for the
+ * setup (row 585). There the first sync recognises an entry running the old
+ * name as the engine's and replaces it; anywhere else the old names are free,
+ * and an entry running one is the owner's.
  */
-function cursorGuardPathsFor(ledger: readonly LedgerEntry[]): string[] {
+function cursorGuardPathsFor(ledger: readonly LedgerEntry[], provenLegacy?: ReadonlySet<string>): string[] {
   const recorded = new Set(ledger.map((row) => row.path));
-  return [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, ...LEGACY_CURSOR_GUARD_PATHS.filter((path) => recorded.has(path))];
+  return [
+    SUBAGENT_GUARD_PATH,
+    MCP_GUARD_PATH,
+    ...LEGACY_CURSOR_GUARD_PATHS.filter((path) => recorded.has(path) && (provenLegacy === undefined || provenLegacy.has(path))),
+  ];
+}
+
+/**
+ * The package identity the 1.11.0 guards embedded in their pinned sync call:
+ * the running installation's (`../kit/packageName.ts`), which the caller
+ * passes because this module may not import it (`test/architecture`). A fork's
+ * setup is upgraded by the fork's own engine.
+ */
+export interface LegacyCursorIdentity {
+  readonly packageName: string;
+  readonly npmChannel: boolean;
+}
+
+/** The Cursor agents directory every release wrote one file per admitted agent into. */
+const CURSOR_AGENT_ROW_DIR = ".cursor/agents/";
+
+/**
+ * The two guards 1.11.0 rendered for this setup, by old name
+ * (`../../adapters/cursorLegacyGuards.ts`): the ten agents 1.11.0 shipped plus
+ * every Cursor agent `ledger` records — the agents 1.11.0 actually emitted,
+ * packs and overrides included — under `identity`. The current corpus and
+ * packs are not read, since they can differ from 1.11.0's. A forged agent row
+ * only widens the roster, so the only file it can prove is one whose bytes are
+ * exactly a 1.11.0 guard for that roster. Empty when the identity cannot be
+ * rendered (a package name 1.11.0 refused), so nothing is proved.
+ */
+function releaseOneElevenGuardsFor(ledger: readonly LedgerEntry[], identity: LegacyCursorIdentity): ReadonlyMap<string, string> {
+  const agents = ledger.flatMap((row) => {
+    const name = row.path.slice(CURSOR_AGENT_ROW_DIR.length);
+    return row.adapter === "cursor" && row.artifactType === "agent" && row.path.startsWith(CURSOR_AGENT_ROW_DIR) && !name.includes("/") && name.endsWith(".md")
+      ? [name.slice(0, -".md".length)]
+      : [];
+  });
+  try {
+    return render1110CursorGuards({ agentIds: [...CURSOR_1_11_0_RUNTIME_AGENT_IDS, ...agents], ...identity });
+    // reason: not silent — with no rendering nothing is proved, and both old guards are kept and named.
+  } catch {
+    return new Map();
+  }
+}
+
+/** `text`, and `text` with every `\r\n` folded to `\n`, as the reclaim sweep's byte compare reads a CRLF checkout. */
+const lineEndingSpellings = (text: string): string[] => [text, text.replaceAll("\r\n", "\n")];
+
+/**
+ * The 1.11.0 guard names whose `.cursor/hooks.json` entry the engine may still
+ * claim (row 585, REQ-FLOW-038): each one `ledger` records whose file is absent
+ * — the owner deleted it, so rewiring the entry deletes nothing — or holds
+ * exactly the guard 1.11.0 rendered for this setup, raw or CRLF-folded. A file
+ * that cannot be read as a regular file (a link, an unreadable one) proves
+ * nothing. Read once per verb, before its write, and handed to
+ * {@link coOwnedDocumentLanes} and {@link coOwnedReclaimReducers}.
+ */
+export async function provenLegacyCursorGuards(
+  rootDir: string,
+  ledger: readonly LedgerEntry[],
+  identity: LegacyCursorIdentity,
+): Promise<ReadonlySet<string>> {
+  const recorded = LEGACY_CURSOR_GUARD_PATHS.filter((path) => ledger.some((row) => row.path === path));
+  if (recorded.length === 0) return new Set();
+  const rendered = releaseOneElevenGuardsFor(ledger, identity);
+  const proven = await Promise.all(
+    recorded.map(async (path): Promise<string | null> => {
+      let stats;
+      try {
+        stats = await lstat(resolve(rootDir, path));
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === "ENOENT" ? path : null;
+      }
+      if (!stats.isFile()) return null;
+      const expected = rendered.get(path);
+      if (expected === undefined) return null;
+      const text = await readFile(resolve(rootDir, path), "utf8").catch(() => null);
+      return text !== null && lineEndingSpellings(text).includes(expected) ? path : null;
+    }),
+  );
+  return new Set(proven.filter((path): path is string => path !== null));
+}
+
+/** The `command` of a Cursor hooks entry, or `null`. */
+function cursorEntryCommand(element: unknown): string | null {
+  if (element === null || typeof element !== "object" || Array.isArray(element)) return null;
+  const command = (element as Record<string, unknown>)["command"];
+  return typeof command === "string" ? command : null;
+}
+
+/** The memberHash of each 1.11.0 guard entry pin: what a forged co-owned record would list to claim an owner's entry. */
+const RELEASE_ONE_ELEVEN_ENTRY_HASHES: ReadonlySet<string> = new Set([...CURSOR_1_11_0_GUARD_ENTRIES.values()].map((pin) => memberHash(pin.entry)));
+
+/**
+ * `.cursor/hooks.json`'s spec with the 1.11.0 guard entries pinned (row 585):
+ * an entry whose command names a 1.11.0 guard name is the engine's only when it
+ * deep-equals the entry 1.11.0 rendered for that name
+ * (`CURSOR_1_11_0_GUARD_ENTRIES`), and only while that name is among
+ * `guardPaths` ({@link cursorGuardPathsFor}); any other is the owner's.
+ */
+function withReleaseOneElevenGuardPins(spec: CoOwnedJsonSpec): CoOwnedJsonSpec {
+  const pinned = (claims: (element: unknown) => boolean) => (element: unknown): boolean => {
+    const command = cursorEntryCommand(element);
+    const pin = command === null ? undefined : [...CURSOR_1_11_0_GUARD_ENTRIES].find(([path]) => command.includes(path))?.[1];
+    return (pin === undefined || isDeepStrictEqual(element, pin.entry)) && claims(element);
+  };
+  return {
+    ...spec,
+    elements: spec.elements.map((element) => ({ ...element, recognise: pinned((e) => element.recognise(e)), inBound: pinned((e) => element.inBound(e)) })),
+  };
+}
+
+/**
+ * `ownership` with the 1.11.0 guard entry pins' hashes dropped from its
+ * co-owned record. No release recorded one: 1.11.0's ledger carries no record,
+ * and the first sync after it writes the `stamity-` entries. So a recorded pin
+ * hash is a forged claim on an owner's entry, which the per-entry core would
+ * otherwise read as the engine's (rule 1, `outsideBound: "backup"`); the
+ * entry is the engine's only by {@link withReleaseOneElevenGuardPins}.
+ */
+function withoutReleaseOneElevenPinClaims(ownership: CoOwnedOwnership): CoOwnedOwnership {
+  const elements = ownership.record?.elements;
+  if (ownership.record === null || elements === undefined) return ownership;
+  const kept = Object.fromEntries(Object.entries(elements).map(([pointer, hashes]) => [pointer, hashes.filter((hash) => !RELEASE_ONE_ELEVEN_ENTRY_HASHES.has(hash))]));
+  return { ...ownership, record: { ...ownership.record, elements: kept } };
+}
+
+/** `lane` reading every ownership through {@link withoutReleaseOneElevenPinClaims}. */
+function withoutPinClaims(lane: CoOwnedDocumentLane): CoOwnedDocumentLane {
+  return {
+    ...lane,
+    predict: (absPath, emitted, ownership) => lane.predict(absPath, emitted, withoutReleaseOneElevenPinClaims(ownership)),
+    materialize: (absPath, emitted, ownership) => lane.materialize(absPath, emitted, withoutReleaseOneElevenPinClaims(ownership)),
+    reducer: (ownership, deleteWhenEngineOnly, rendered) => lane.reducer(withoutReleaseOneElevenPinClaims(ownership), deleteWhenEngineOnly, rendered),
+  };
 }
 
 /**
@@ -536,12 +680,17 @@ function hookDocumentLane(
  * Codex config's renderings resolve against `packServers`, and its legacy
  * proof reads `manifest`'s server selection. `ledger`, the rows the lanes
  * judge ownership from (`manifest`'s, or on init the previous setup's), says
- * which of Cursor's old guard names are still the engine's.
+ * which of Cursor's old guard names are still the engine's, and
+ * `provenLegacy` ({@link provenLegacyCursorGuards}) narrows them to the ones
+ * whose file is absent or is the guard 1.11.0 rendered for the setup; without
+ * it the ledger alone says so. Either way an entry running an old name is the
+ * engine's only as 1.11.0 rendered it ({@link withReleaseOneElevenGuardPins}).
  */
 export function coOwnedDocumentLanes(
   manifest: SetupManifest | null,
   packServers: readonly PackSuppliedServer[] = [],
   ledger: readonly LedgerEntry[] = manifest?.ledger ?? [],
+  provenLegacy?: ReadonlySet<string>,
 ): ReadonlyMap<string, CoOwnedDocumentLane> {
   const claude: CoOwnedDocumentLane = {
     path: CLAUDE_SETTINGS_PATH,
@@ -557,7 +706,13 @@ export function coOwnedDocumentLanes(
         ...(rendered === undefined ? {} : { rendered }),
       }),
   };
-  const cursorHooks = hookDocumentLane(CURSOR_HOOKS_CONFIG_PATH, cursorHooksSpec({ guardPaths: cursorGuardPathsFor(ledger) }), describeCursorHookDefects);
+  const cursorHooks = withoutPinClaims(
+    hookDocumentLane(
+      CURSOR_HOOKS_CONFIG_PATH,
+      withReleaseOneElevenGuardPins(cursorHooksSpec({ guardPaths: cursorGuardPathsFor(ledger, provenLegacy) })),
+      describeCursorHookDefects,
+    ),
+  );
   const codexHooks = hookDocumentLane(CODEX_HOOKS_FILE, codexHooksSpec());
   const render = codexConfigTableRendering(packServers);
   const selected = manifest?.mcp?.servers ?? [];
@@ -695,15 +850,16 @@ export function hookScriptRetention(
  * where a hash match over merged bytes reads as sole authorship — the
  * regression the MCP reducers exist for, and the one
  * `test/merge/settingsKeyOwnership.test.ts` drives at the shipped verbs for the
- * settings document.
+ * settings document. `provenLegacy` is {@link coOwnedDocumentLanes}'.
  */
 export function coOwnedReclaimReducers(
   manifest: SetupManifest,
   packServers: readonly PackSuppliedServer[] = [],
   renderings: ReadonlyMap<string, unknown> = new Map(),
+  provenLegacy?: ReadonlySet<string>,
 ): Map<string, CoOwnedReducer> {
   const reducers = mcpReclaimReducers(packServers);
-  for (const lane of coOwnedDocumentLanes(manifest, packServers).values()) {
+  for (const lane of coOwnedDocumentLanes(manifest, packServers, manifest.ledger, provenLegacy).values()) {
     const ownership = coOwnedOwnershipOf(manifest.ledger, lane.path);
     reducers.set(lane.path, lane.reducer(ownership, ownership.deleteWhenEngineOnly, renderings.get(lane.path)));
   }
@@ -821,15 +977,30 @@ export interface RenderingProof {
  * proof fails closed. It then says why (`renderingsUnbuilt`), so the sweep
  * keeps those files unjudged, with their rows, and names the cause rather
  * than an owner's file (review/61).
+ *
+ * At Cursor's two 1.11.0 guard names the rendering is never the running
+ * engine's: it is the guard the frozen 1.11.0 builder renders for this setup
+ * under `legacyCursor` ({@link releaseOneElevenGuardsFor}, REQ-FLOW-038), and
+ * no plan is run for it. Without `legacyCursor` there is none, so both old
+ * guards are kept.
  */
 export async function engineRenderingsFor(
   rootDir: string,
   manifest: SetupManifest,
   paths: Iterable<string>,
   planFor: EmissionPlanFor,
+  legacyCursor?: LegacyCursorIdentity,
 ): Promise<RenderingProof> {
   const renderings = new Map<string, Set<string>>();
   const wanted = new Set([...paths].filter(needsRenderingProof));
+  const legacy = LEGACY_CURSOR_GUARD_PATHS.filter((path) => wanted.delete(path));
+  if (legacy.length > 0 && legacyCursor !== undefined) {
+    const guards = releaseOneElevenGuardsFor(manifest.ledger, legacyCursor);
+    for (const path of legacy) {
+      const bytes = guards.get(path);
+      if (bytes !== undefined) renderings.set(path, new Set([sha256(bytes)]));
+    }
+  }
   if (wanted.size === 0) return { renderings };
   let outputs: readonly AdapterOutput[];
   try {

@@ -3,6 +3,7 @@ import { link, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { join, relative, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
+import { CURSOR_1_11_0_RUNTIME_AGENT_IDS, render1110CursorGuards } from "../../src/adapters/cursorLegacyGuards.ts";
 import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
@@ -13,9 +14,12 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
-import { sha256 } from "../../src/cli/engine/emissionWrite.ts";
+import { engineRenderingsFor, sha256, type EmissionPlanFor } from "../../src/cli/engine/emissionWrite.ts";
 import { createApp } from "../../src/index.ts";
+import { memberHash } from "../../src/manifest/jsonMembers.ts";
+import { trustedInfraPaths } from "../../src/manifest/ledger.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
+import { sweepReclaimCandidates, type ReclaimReport } from "../../src/merge/reclaim.ts";
 import { applyPackInstall, planPackInstall } from "../../src/pack/install.ts";
 import type { MergeResult } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
@@ -660,7 +664,14 @@ async function setUpByReleaseOneSix(
   const root = await freshRepo(sub);
   await init(root, [tool]);
   // Every release up to 1.11.0 wrote and recorded the guards at their old names.
-  if (tool === "cursor") await moveGuardsToOldNames(root);
+  // TEST CHANGE, justified (2026-10-08, unit d1b-cursor-guard-pins, row 585):
+  // they were seeded as the current guard's bytes respelled, which were never
+  // any release's. Only the bytes 1.11.0 rendered for the setup now prove a
+  // guard (and the entry running it) the engine's, so they are seeded with
+  // those; this block's subject, the user hook's direct entry, is unchanged,
+  // and so is every assertion. An older release's guard is kept and named
+  // (the REQ-FLOW-038 block below).
+  if (tool === "cursor") await moveGuardsToOldNames(root, releaseOneElevenGuards());
   await mkdir(abs(root, ".stamity/hooks"), { recursive: true });
   await writeFile(abs(root, USER_SCRIPT), "process.exit(0)\n", "utf8");
   await writeFile(abs(root, ".stamity/hooks/guard.json"), JSON.stringify(USER_DEFINITION), "utf8");
@@ -878,21 +889,67 @@ const OLD_SUBAGENT_GUARD = RENAMED_GUARDS[0][0];
 const OLD_MCP_GUARD = RENAMED_GUARDS[1][0];
 
 /**
- * A Cursor setup rewritten to the shape 1.11.0 left: the two guards at their
- * old names (their own bytes naming the old path, as 1.11.0 rendered them),
- * `.cursor/hooks.json` running them, ledger rows at the old paths, no co-owned
- * record, and every hash recomputed over the bytes now on disk. `ownerEntry`
- * adds an owner's entry after the hashes are taken, as an owner edits the file.
+ * The guards the published 1.11.0 package wrote for a core Cursor setup of the
+ * canonical package (`../adapters/fixtures/cursor-guards-1.11.0/`, captured as
+ * `../adapters/cursorLegacyGuards.test.ts` records), by old name.
  */
-async function setUpByReleaseOneEleven(sub = "repo", ownerEntry = false): Promise<string> {
+function releaseOneElevenGuards(spawnFixture = "subagent-guard.mjs.txt"): Map<string, string> {
+  const fixture = (name: string): string => readFileSync(join(import.meta.dirname, "..", "adapters", "fixtures", "cursor-guards-1.11.0", name), "utf8");
+  return new Map([
+    [OLD_SUBAGENT_GUARD, fixture(spawnFixture)],
+    [OLD_MCP_GUARD, fixture("mcp-guard.mjs.txt")],
+  ]);
+}
+
+/** What a 1.11.0 setup held besides the core: the Cursor agents its ledger recorded, and the guards 1.11.0 wrote for them. */
+interface ReleaseOneElevenShape {
+  /** Runtime ids of the agents beyond the ten shipped ones (a pack's, an override's), each with its `.cursor/agents/` row. */
+  agents?: readonly string[];
+  /** The guard bytes at the old names; the core capture when absent. */
+  guards?: ReadonlyMap<string, string>;
+}
+
+/**
+ * A Cursor setup rewritten to the shape 1.11.0 left: the two guards at their
+ * old names, `.cursor/hooks.json` running them, ledger rows at the old paths,
+ * no co-owned record, and every hash recomputed over the bytes now on disk.
+ * `ownerEntry` adds an owner's entry after the hashes are taken, as an owner
+ * edits the file.
+ *
+ * TEST CHANGE, justified (2026-10-08, unit d1b-cursor-guard-pins, row 585):
+ * the old guards were seeded as the current guard's bytes with the names
+ * respelled. A delete at a 1.11.0 guard name now needs the bytes 1.11.0
+ * rendered for the setup, which the current builder no longer produces, so
+ * they are seeded with the bytes the published 1.11.0 package wrote. Every
+ * assertion that reads this fixture is unchanged except where its own note says.
+ */
+async function setUpByReleaseOneEleven(sub = "repo", ownerEntry = false, shape: ReleaseOneElevenShape = {}): Promise<string> {
   const root = await freshRepo(sub);
   await init(root, ["cursor"]);
-  await moveGuardsToOldNames(root);
+  await moveGuardsToOldNames(root, shape.guards ?? releaseOneElevenGuards());
+  await recordCursorAgents(root, shape.agents ?? []);
   await writeFile(abs(root, CURSOR_HOOKS), respellGuards(await readText(root, CURSOR_HOOKS)), "utf8");
   await asReleaseOneEleven(root);
   await recordAsWritten(root, CURSOR_HOOKS);
   if (ownerEntry) await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
   return root;
+}
+
+/** A `.cursor/agents/<id>.md` file and its Cursor agent row for each of `ids`, as 1.11.0 wrote one per admitted agent. */
+async function recordCursorAgents(root: string, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await mkdir(abs(root, ".cursor/agents"), { recursive: true });
+  const rows = await Promise.all(
+    ids.map(async (id) => {
+      const path = `.cursor/agents/${id}.md`;
+      const text = `---\nname: ${id}\n---\n\nAn agent 1.11.0 emitted.\n`;
+      await writeFile(abs(root, path), text, "utf8");
+      return { path, adapter: "cursor" as const, artifactId: id.slice("stamity-".length), artifactType: "agent" as const, contentHash: sha256(text) };
+    }),
+  );
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  await writeManifest(root, { ...manifest, ledger: [...manifest.ledger, ...rows] }, { now: T1 });
 }
 
 /** `text` with each guard's current name respelled as its name up to 1.11.0. */
@@ -902,13 +959,13 @@ function respellGuards(text: string): string {
 
 /**
  * Cursor's guards moved back to the names every release up to 1.11.0 wrote:
- * each file at its old path (its own bytes naming that path), and its ledger
- * row at that path with the hash of those bytes.
+ * each file at its old path holding `guards`' bytes for it, and its ledger row
+ * at that path with the hash of those bytes.
  */
-async function moveGuardsToOldNames(root: string): Promise<void> {
+async function moveGuardsToOldNames(root: string, guards: ReadonlyMap<string, string>): Promise<void> {
   const moved = await Promise.all(
     RENAMED_GUARDS.map(async ([old, current]) => {
-      const text = respellGuards(await readText(root, current));
+      const text = guards.get(old) ?? "";
       await writeFile(abs(root, old), text, "utf8");
       await rm(abs(root, current));
       return [current, { path: old, contentHash: sha256(text) }] as const;
@@ -1113,9 +1170,22 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
     expect(existsSync(abs(root, OLD_SUBAGENT_GUARD))).toBe(false);
     expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(true);
     expect(synced.stdout).toContain(OLD_MCP_GUARD);
-    expect(await readText(root, CURSOR_HOOKS)).not.toContain(OLD_MCP_GUARD);
-    // Kept for its edit, not because a hooks document runs it: the owner's now, so its row is not carried (review/75, review/76).
-    expect((await readManifest(root))?.ledger.map((row) => row.path)).not.toContain(OLD_MCP_GUARD);
+    // TEST CHANGE, justified (2026-10-08, unit d1b-cursor-guard-pins, row 585;
+    // REQ-FLOW-038's amendment): the entry running the edited guard was
+    // rewired and the guard's row dropped. An entry running a 1.11.0 name is
+    // now the engine's only while the file it runs is absent or is the bytes
+    // 1.11.0 rendered for the setup, so the edited guard's entry stays with it,
+    // the kept document still runs it, and its row is carried with the
+    // document (review/75), while the untouched spawn guard still moves.
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${SUBAGENT_GUARD_PATH}`],
+      // The owner's entry first, the engine's appended after it (S14).
+      beforeMCPExecution: [`node ${OLD_MCP_GUARD}`, `node ${MCP_GUARD_PATH}`],
+    });
+    expect(await backups(root)).toEqual([]);
+    const kept = (await readManifest(root))?.ledger.map((row) => row.path) ?? [];
+    expect(kept).toContain(OLD_MCP_GUARD);
+    expect(kept).not.toContain(OLD_SUBAGENT_GUARD);
   });
 
   it("a 1.11.0 setup with an owner entry: clean -y before any sync keeps the entry alone, behind a verified .bak, and deletes both old guards it no longer runs", async () => {
@@ -1130,6 +1200,171 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
     for (const [old, current] of RENAMED_GUARDS) {
       expect(existsSync(abs(root, old)), old).toBe(false);
       expect(existsSync(abs(root, current)), current).toBe(false);
+    }
+  });
+});
+
+describe("the first sync recognises a 1.11.0 guard by the bytes 1.11.0 rendered for the setup, and keeps an owner's file at the old names (REQ-FLOW-038, row 585)", () => {
+  /** The agents of `ops` a local pack carried into a 1.11.0 setup, and an override agent (the shapes 1.11.0 could sync on Cursor). */
+  const OPS_AGENTS = ["stamity-devops", "stamity-incident-responder"];
+  const OVERRIDE_AGENT = "stamity-site-reliability";
+
+  async function expectMoved(root: string): Promise<void> {
+    const { report } = await sync(root);
+    for (const [old, current] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(false);
+      expect(existsSync(abs(root, current)), current).toBe(true);
+      expect(report.reclaimed?.entries.find((entry) => entry.path === old), old).toMatchObject({ action: "deleted", proof: "hash" });
+    }
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${SUBAGENT_GUARD_PATH}`],
+      beforeMCPExecution: [`node ${MCP_GUARD_PATH}`],
+    });
+    expect(await backups(root)).toEqual([]);
+  }
+
+  it.each([
+    ["a pack's two agents", OPS_AGENTS, "subagent-guard-ops.mjs.txt"],
+    ["an override agent", [OVERRIDE_AGENT], "subagent-guard-override.mjs.txt"],
+  ] as const)("a 1.11.0 setup with %s: the spawn guard 1.11.0 wrote for that roster is proven, and both old guards move", async (_name, agents, spawnFixture) => {
+    const root = await setUpByReleaseOneEleven("repo", false, { agents, guards: releaseOneElevenGuards(spawnFixture) });
+    await expectMoved(root);
+  });
+
+  it("a 1.11.0 setup with a pack whose ledger lost one of its agent rows: the spawn guard no longer re-renders, so it and its entry stay and are named, while the MCP guard moves", async () => {
+    const root = await setUpByReleaseOneEleven("repo", false, {
+      agents: OPS_AGENTS.slice(0, 1),
+      guards: releaseOneElevenGuards("subagent-guard-ops.mjs.txt"),
+    });
+    const kept = await readText(root, OLD_SUBAGENT_GUARD);
+
+    const { report } = await sync(root);
+
+    expect(await readText(root, OLD_SUBAGENT_GUARD)).toBe(kept);
+    const entry = report.reclaimed?.entries.find((candidate) => candidate.path === OLD_SUBAGENT_GUARD);
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry?.detail).toContain(CURSOR_HOOKS);
+    expect(existsSync(abs(root, OLD_MCP_GUARD))).toBe(false);
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${OLD_SUBAGENT_GUARD}`, `node ${SUBAGENT_GUARD_PATH}`],
+      beforeMCPExecution: [`node ${MCP_GUARD_PATH}`],
+    });
+    expect(await backups(root)).toEqual([]);
+  });
+
+  it("a 1.11.0 setup whose owner deleted the old MCP guard: its entry is still rewired, and nothing else is deleted", async () => {
+    const root = await setUpByReleaseOneEleven();
+    await rm(abs(root, OLD_MCP_GUARD));
+
+    await sync(root);
+
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${SUBAGENT_GUARD_PATH}`],
+      beforeMCPExecution: [`node ${MCP_GUARD_PATH}`],
+    });
+    expect(existsSync(abs(root, OLD_SUBAGENT_GUARD))).toBe(false);
+    expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(true);
+    expect(await backups(root)).toEqual([]);
+  });
+
+  /** The owner's own scripts at both old names, as a team might keep. */
+  const OWNER_SCRIPTS = new Map([
+    [OLD_SUBAGENT_GUARD, "// the team's own spawn log\nprocess.exit(0)\n"],
+    [OLD_MCP_GUARD, "// the team's own MCP audit\nprocess.exit(0)\n"],
+  ]);
+  const PINNED_MCP_ENTRY = { command: `node ${OLD_MCP_GUARD}`, failClosed: true };
+
+  /**
+   * A setup that never ran 1.11.0, holding the owner's own scripts at both old
+   * names, with every record a hand edit can forge: an infra row at each name
+   * hashing the owner's bytes, the owner's `.cursor/hooks.json` entry shaped
+   * exactly as 1.11.0's pin, its hash in the document's co-owned record, and
+   * the document's whole-file hash re-pointed at the bytes on disk.
+   */
+  async function ownersScriptsWithForgedRows(sub: string): Promise<string> {
+    const root = await freshRepo(sub);
+    await init(root, ["cursor"]);
+    await Promise.all([...OWNER_SCRIPTS].map(([path, text]) => writeFile(abs(root, path), text, "utf8")));
+    await addHookEntry(root, CURSOR_HOOKS, "beforeMCPExecution", PINNED_MCP_ENTRY);
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    const template = manifest.ledger.find((row) => row.path === MCP_GUARD_PATH);
+    if (template === undefined) throw new Error("fixture lost the guard row");
+    const forged = [...OWNER_SCRIPTS].map(([path, text]) => Object.assign(structuredClone(template), { path, contentHash: sha256(text) }));
+    const record = manifest.ledger.find((row) => row.path === CURSOR_HOOKS)?.coOwned;
+    if (record === undefined) throw new Error("fixture lost the hooks document's co-owned record");
+    const elements = (record.elements ??= {});
+    const key = Object.keys(elements).find((pointer) => pointer.endsWith("/beforeMCPExecution")) ?? "/hooks/beforeMCPExecution";
+    elements[key] = [...(elements[key] ?? []), memberHash(PINNED_MCP_ENTRY)];
+    await writeManifest(root, { ...manifest, ledger: [...manifest.ledger, ...forged] }, { now: T1 });
+    await recordAsWritten(root, CURSOR_HOOKS);
+    return root;
+  }
+
+  it("an owner's own scripts at both old names, with forged rows, a pinned entry and a forged co-owned hash: sync -y and clean -y keep both byte for byte, and the entry, with no .bak", async () => {
+    const synced = await ownersScriptsWithForgedRows("synced");
+
+    const { report } = await sync(synced);
+
+    const scripts = async (root: string): Promise<Map<string, string>> =>
+      new Map(await Promise.all([...OWNER_SCRIPTS.keys()].map(async (path) => [path, await readText(root, path)] as const)));
+    expect(await scripts(synced)).toEqual(OWNER_SCRIPTS);
+    for (const path of OWNER_SCRIPTS.keys()) {
+      expect(report.reclaimed?.entries.find((entry) => entry.path === path)?.action, path).toBe("skipped-user-content");
+    }
+    expect(((await readDoc(synced, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeMCPExecution"]).toContainEqual(PINNED_MCP_ENTRY);
+    expect(await backups(synced)).toEqual([]);
+
+    const cleaned = await ownersScriptsWithForgedRows("cleaned");
+    expect((await clean(cleaned)).code).toBe(0);
+    expect(await scripts(cleaned)).toEqual(OWNER_SCRIPTS);
+    expect(await readDoc(cleaned, CURSOR_HOOKS)).toEqual({ version: 1, hooks: { beforeMCPExecution: [PINNED_MCP_ENTRY] } });
+    expect(await backups(cleaned)).toEqual([]);
+  });
+
+  it("a fork's 1.11.0 setup: the re-render under the fork's own package and channel proves both old guards, and the canonical identity proves neither", async () => {
+    const FORK_IDENTITY = { packageName: "@acme/stamity", npmChannel: false };
+    const forkGuards = render1110CursorGuards({ agentIds: CURSOR_1_11_0_RUNTIME_AGENT_IDS, ...FORK_IDENTITY });
+    // Not planned: the old names are proven by the frozen 1.11.0 copy alone, so a
+    // planner that refuses shows the proof never needs the running engine's plan.
+    const noPlan: EmissionPlanFor = () => Promise.reject(new Error("no plan is needed for the 1.11.0 names"));
+    const sweepWith = async (sub: string, identity: { packageName: string; npmChannel: boolean }): Promise<ReclaimReport> => {
+      const root = await setUpByReleaseOneEleven(sub, false, { guards: forkGuards });
+      const manifest = await readManifest(root);
+      if (manifest === null) throw new Error("fixture lost its manifest");
+      const proof = await engineRenderingsFor(root, manifest, OLD_GUARDS, noPlan, identity);
+      expect(proof.renderingsUnbuilt).toBeUndefined();
+      const candidates = manifest.ledger.filter((row) => (OLD_GUARDS as readonly string[]).includes(row.path)).map((entry) => ({ entry, reason: "path-renamed" as const }));
+      expect(candidates).toHaveLength(2);
+      return sweepReclaimCandidates(candidates, { rootDir: root, consent: true, trustedExactPaths: trustedInfraPaths(manifest.ledger), ...proof });
+    };
+
+    const fork = await sweepWith("fork", FORK_IDENTITY);
+    for (const old of OLD_GUARDS) expect(fork.entries.find((entry) => entry.path === old), old).toMatchObject({ action: "deleted", proof: "hash" });
+
+    // No identity and a plan that could not be built: the guards were never judged, so each is kept unproven, its row with it (review/61).
+    const unbuilt = await setUpByReleaseOneEleven("unbuilt");
+    const unbuiltManifest = await readManifest(unbuilt);
+    if (unbuiltManifest === null) throw new Error("fixture lost its manifest");
+    const unbuiltLedger = unbuiltManifest.ledger;
+    const unjudged = await sweepReclaimCandidates(
+      unbuiltLedger.filter((row) => (OLD_GUARDS as readonly string[]).includes(row.path)).map((entry) => ({ entry, reason: "path-renamed" as const })),
+      { rootDir: unbuilt, consent: true, trustedExactPaths: trustedInfraPaths(unbuiltLedger), renderings: new Map(), renderingsUnbuilt: "the plan threw" },
+    );
+    for (const old of OLD_GUARDS) {
+      expect(unjudged.entries.find((entry) => entry.path === old), old).toMatchObject({ action: "skipped-user-content", unproven: true });
+      expect(existsSync(abs(unbuilt, old)), old).toBe(true);
+    }
+    // A package name 1.11.0 could not render proves nothing: no rendering at either name.
+    const refused = await engineRenderingsFor(unbuilt, unbuiltManifest, OLD_GUARDS, noPlan, { packageName: "-rf", npmChannel: true });
+    expect(refused.renderings.size).toBe(0);
+
+    const canonical = await sweepWith("canonical", { packageName: "@zomarit/stamity", npmChannel: true });
+    for (const old of OLD_GUARDS) {
+      const entry = canonical.entries.find((candidate) => candidate.path === old);
+      expect(entry?.action, old).toBe("skipped-user-content");
+      expect(entry?.detail, old).toContain("1.11.0");
+      expect(existsSync(abs(getTemp().path("canonical"), old)), old).toBe(true);
     }
   });
 });

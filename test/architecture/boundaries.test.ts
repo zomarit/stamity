@@ -278,6 +278,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // nothing else. Placed at its true depth rather than at its unit's adapter
   // wave, so a future non-codex consumer is not forced above wave 10.
   "src/adapters/toml.ts": { unit: "p4-u08", wave: 1 },
+  // The frozen 1.11.0 Cursor guard builder: zero imports, at its true depth.
+  "src/adapters/cursorLegacyGuards.ts": { unit: "p23f1-d1b", wave: 1 },
   // Generated pin data with zero imports — same reasoning as agentPolicies
   // above: kept at its true depth so a future consumer of the pins is not
   // forced above the catalog reader that ships with it.

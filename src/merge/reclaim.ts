@@ -895,12 +895,33 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   // there is no veto for the split to find and no block worth stripping out of
   // a file that is engine output end to end.
   if (hashProvable && hashMatched && bytesProveEngine) {
+    // At Cursor's two 1.11.0 guard names the match is not enough either (row
+    // 585, REQ-FLOW-038): an owner may keep a script of their own there, and a
+    // hand-added row can hash it. The bytes have to be the guard 1.11.0
+    // rendered for this setup (`../cli/engine/emissionWrite.ts::engineRenderingsFor`).
+    const renderingProof = needsRenderingProof(path);
+    if (renderingProof && !matchesRendering(ctx.renderings.get(path), bytes, content)) {
+      // Unproven is not disproven (review/61), as for a content folder below.
+      if (ctx.renderingsUnbuilt !== undefined) {
+        return {
+          kind: "skip",
+          action: "skipped-user-content",
+          detail: `A file at a name Cursor's guards carried up to 1.11.0 is deleted only when its bytes are the guard 1.11.0 rendered for this setup, and the renderings could not be built (${ctx.renderingsUnbuilt}) — the file is kept with its ledger row, and the next sync tries the proof again.`,
+          unproven: true,
+        };
+      }
+      return skip(
+        "skipped-user-content",
+        "The bytes still hash to what the ledger records, but a file at a name Cursor's guards carried up to 1.11.0 is deleted only when its bytes are the guard 1.11.0 rendered for this setup, and these are not (an owner's own script, a guard edited by hand, or one an earlier release wrote) — the file is kept; delete it by hand if it is yours to remove.",
+      );
+    }
     return {
       kind: "delete",
       target,
       pin,
-      detail:
-        "Whole-file engine output: the bytes still hash to what the ledger recorded writing here, so nothing in the file is user-authored.",
+      detail: renderingProof
+        ? "Whole-file engine output: the bytes still hash to what the ledger recorded writing here and are the guard 1.11.0 rendered at this name for this setup, so nothing in the file is user-authored."
+        : "Whole-file engine output: the bytes still hash to what the ledger recorded writing here, so nothing in the file is user-authored.",
       proof: "hash",
     };
   }

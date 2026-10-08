@@ -55,10 +55,12 @@ import {
   installedPackServers,
   type CoOwnedDocumentLane,
   type EmissionPlanFor,
+  type LegacyCursorIdentity,
   type RenderingProof,
   ledgerRowsForOutput,
   outputWriteOptions,
   predictMcpDocumentMerge,
+  provenLegacyCursorGuards,
   readIfExists,
   rowsCarriedThroughSweep,
   sha256,
@@ -582,7 +584,10 @@ export async function planSync(
     ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path)),
     manifest.mcp?.servers ?? [],
     packServers,
-    { lanes: coOwnedDocumentLanes(manifest, packServers), ledger: manifest.ledger },
+    {
+      lanes: coOwnedDocumentLanes(manifest, packServers, manifest.ledger, await provenLegacyCursorGuards(rootDir, manifest.ledger, legacyCursorIdentity())),
+      ledger: manifest.ledger,
+    },
     manifest.importChoice,
   );
   const collisions = entries.filter((entry) => entry.action === "collision").map((entry) => entry.path);
@@ -679,13 +684,19 @@ export async function previewReclaim(
   if (plan.reclaim.length === 0) return null;
   const packMcpSupply = await installedPackServers(rootDir, plan.manifest);
   const retention = hookScriptRetention(plan.manifest, packMcpSupply);
+  const provenLegacy = await provenLegacyCursorGuards(rootDir, plan.manifest.ledger, legacyCursorIdentity());
   return sweepReclaimCandidates(plan.reclaim, {
     rootDir,
     consent: false,
     trustedExactPaths: trustedInfraPaths(plan.manifest.ledger),
-    coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest)),
+    coOwnedPaths: coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest), provenLegacy),
     ...retention,
-    hookDocumentsAfterWrite: await hookDocumentsAfterWrite(rootDir, plan, retention.hookDocuments, coOwnedDocumentLanes(plan.manifest, packMcpSupply)),
+    hookDocumentsAfterWrite: await hookDocumentsAfterWrite(
+      rootDir,
+      plan,
+      retention.hookDocuments,
+      coOwnedDocumentLanes(plan.manifest, packMcpSupply, plan.manifest.ledger, provenLegacy),
+    ),
     ...(await reclaimRenderings(rootDir, plan, engineVersion)),
     ...(now === undefined ? {} : { now }),
   });
@@ -708,7 +719,19 @@ async function reclaimRenderings(
     plan.manifest,
     plan.reclaim.map((candidate) => candidate.entry.path),
     renderingPlanner(rootDir, engineVersion),
+    legacyCursorIdentity(),
   );
+}
+
+/**
+ * This installation's package identity, which the guards 1.11.0 wrote embedded
+ * in their pinned sync call: the frozen 1.11.0 builder re-renders them under
+ * it to prove them the engine's (REQ-FLOW-038,
+ * `../../engine/emissionWrite.ts::provenLegacyCursorGuards`). `clean` passes
+ * the same.
+ */
+function legacyCursorIdentity(): LegacyCursorIdentity {
+  return { packageName: packageName(), npmChannel: hasNpmChannel() };
 }
 
 /**
@@ -1008,7 +1031,10 @@ export async function applySync(
   // emission ∪ the operator's own entries; handing the sweep a reducer is what
   // stops it reading a match as sole authorship and unlinking a document
   // carrying a hand-added server (`../../../merge/reclaim.ts` gate 4).
-  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest));
+  // Which of Cursor's 1.11.0 guard names the engine may still claim (row 585):
+  // read before any write, for the write lane and the sweep alike.
+  const provenLegacy = await provenLegacyCursorGuards(rootDir, plan.manifest.ledger, legacyCursorIdentity());
+  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply, await coOwnedReclaimRenderings(rootDir, plan.manifest), provenLegacy);
 
   // The collision gate, applied PER PATH rather than to the whole plan.
   //
@@ -1066,7 +1092,7 @@ export async function applySync(
   // wrote, and only the pair licenses replacing a file with no `.bak`.
   const ownedPaths = ledgerPathSet(rootDir, plan.manifest.ledger.map((row) => row.path));
   const ownedHashes = ledgerHashIndex(rootDir, plan.manifest.ledger);
-  const coOwnedLanes = coOwnedDocumentLanes(plan.manifest, packMcpSupply);
+  const coOwnedLanes = coOwnedDocumentLanes(plan.manifest, packMcpSupply, plan.manifest.ledger, provenLegacy);
 
   const wrote: MergeResult[] = [];
   const emitted: EmittedArtifact[] = [];

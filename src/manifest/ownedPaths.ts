@@ -269,7 +269,8 @@ export function hasEngineMintedName(path: string): boolean {
 /**
  * True when a whole-file delete at `path` needs bytes that hash to a rendering
  * the running engine produces there ({@link provenByRendering}): a file under a
- * content folder whose name {@link hasEngineMintedName} reads as the engine's.
+ * content folder whose name {@link hasEngineMintedName} reads as the engine's,
+ * and Cursor's two 1.11.0 guard names ({@link LEGACY_CURSOR_GUARD_NAMES}).
  *
  * An owner may keep a file under an engine-style name in those folders, and a
  * hand-added row can record the hash of its bytes as easily as the engine
@@ -283,8 +284,18 @@ export function hasEngineMintedName(path: string): boolean {
  * that delete (a residual `SECURITY.md` names).
  */
 export function needsRenderingProof(path: string): boolean {
+  if (LEGACY_CURSOR_GUARD_NAMES.has(path)) return true;
   return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) && hasEngineMintedName(path);
 }
+
+/**
+ * The names Cursor's two guards carried up to 1.11.0 (`../adapters/cursor.ts`'s
+ * `LEGACY_CURSOR_GUARD_PATHS`, which this wave-3 module cannot import). An
+ * owner may keep a script of their own there, so a delete needs the bytes
+ * 1.11.0 rendered for the setup (REQ-FLOW-038,
+ * `../adapters/cursorLegacyGuards.ts`), never a recorded hash alone.
+ */
+const LEGACY_CURSOR_GUARD_NAMES: ReadonlySet<string> = new Set([".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/mcp-guard.mjs"]);
 
 /**
  * True when `sha256OfBytes` is one of `renderings`, the SHA-256 of each

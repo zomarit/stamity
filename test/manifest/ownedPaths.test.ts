@@ -339,6 +339,17 @@ describe("the rendering proof", () => {
     expect(needsRenderingProof("notes/st-owner.md")).toBe(false);
   });
 
+  // Row 585 (REQ-FLOW-038): at Cursor's two 1.11.0 guard names an owner may
+  // keep a script of their own, so a delete there needs the bytes 1.11.0
+  // rendered for the setup, never the recorded hash alone. The current names
+  // are the engine's own and keep their proof.
+  it("governs Cursor's two 1.11.0 guard names, and not the stamity- names that replaced them", () => {
+    for (const path of LEGACY_CURSOR_GUARD_PATHS) expect(needsRenderingProof(path), path).toBe(true);
+    expect(needsRenderingProof(SUBAGENT_GUARD_PATH)).toBe(false);
+    expect(needsRenderingProof(MCP_GUARD_PATH)).toBe(false);
+    expect(needsRenderingProof(".cursor/hooks/other-guard.mjs")).toBe(false);
+  });
+
   it("proves only a hash the engine's renderings at the path hold", () => {
     const hash = "a".repeat(64);
     expect(provenByRendering(hash, new Set([hash]))).toBe(true);

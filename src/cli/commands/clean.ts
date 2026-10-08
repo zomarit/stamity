@@ -31,7 +31,9 @@ import {
   coOwnedReclaimRenderings,
   engineRenderingsFor,
   hookScriptRetention,
+  provenLegacyCursorGuards,
   type EmissionPlanFor,
+  type LegacyCursorIdentity,
   type RenderingProof,
 } from "../engine/emissionWrite.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
@@ -132,7 +134,17 @@ function cleanRenderings(
     manifest,
     candidates.map((candidate) => candidate.entry.path),
     cleanPlanner(rootDir, engineVersion),
+    legacyCursorIdentity(),
   );
+}
+
+/**
+ * This installation's package identity, under which the frozen 1.11.0 builder
+ * re-renders the guards 1.11.0 wrote at their old names (REQ-FLOW-038), as
+ * `sync` passes it (`./sync/engine.ts`).
+ */
+function legacyCursorIdentity(): LegacyCursorIdentity {
+  return { packageName: packageName(), npmChannel: hasNpmChannel() };
 }
 
 /** What one planner run showed: every path it renders, or `null` when it could not be built. */
@@ -956,7 +968,13 @@ export const cleanCommand: CommandModule = {
       // client documents themselves, and it resolves pack supply BEFORE the
       // sweep, so the reducer can still prove a pack-supplied entry. The
       // selection goes with the state directory a few lines below.
-      coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
+      // An entry running a 1.11.0 guard name is the engine's only while that guard is proven (row 585).
+      coOwnedPaths: coOwnedReclaimReducers(
+        manifest,
+        packSupply,
+        await coOwnedReclaimRenderings(rootDir, manifest),
+        await provenLegacyCursorGuards(rootDir, manifest.ledger, legacyCursorIdentity()),
+      ),
       ...hookScriptRetention(manifest, packSupply),
       ...(await cleanRenderings(rootDir, manifest, candidates, ctx.app.version)),
     });
