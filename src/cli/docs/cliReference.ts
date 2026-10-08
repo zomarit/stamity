@@ -130,15 +130,19 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
     "a check found drift, a pack failed a trust or integrity gate, a write was refused over " +
     "injection patterns in content it would keep, or a handoff failed its read-back digest",
   FS_ERROR: "a filesystem operation failed",
-  // Both throw sites are the destructive gate in `src/cli/commands/clean.ts`
-  // (`confirmDestruction`), and both fire BEFORE the first removal: one when
-  // the prompt cannot be asked at all (non-TTY stdin, or
-  // `--json`, whose stdout belongs to the envelope), one when it was asked and
-  // answered no. The row used to read "removal failed part-way", which named a
-  // partially-deleted tree that this code has never once signalled — the worst
-  // way to be wrong here, because it sends an operator looking for wreckage
-  // instead of re-running with `-y`.
-  CLEAN_ERROR: "clean's confirmation was declined or could not be asked; nothing was removed",
+  // Three throw sites in `src/cli/commands/clean.ts`, and all of them fire
+  // BEFORE the first removal. Two are the destructive gate
+  // (`confirmDestruction`): one when the prompt cannot be asked at all (non-TTY
+  // stdin, or `--json`, whose stdout belongs to the envelope), one when it was
+  // asked and answered no. The third (`refuseStaleRenderings`, review/128)
+  // fires on the preview sweep when a file clean would keep is one a `sync`
+  // with this version rewrites. The row used to read "removal failed
+  // part-way", which named a partially-deleted tree that this code has never
+  // once signalled — the worst way to be wrong here, because it sends an
+  // operator looking for wreckage instead of re-running.
+  CLEAN_ERROR:
+    "clean's confirmation was declined or could not be asked, or a file it would keep is one a `sync` " +
+    "with this version rewrites; nothing was removed",
   // Until the worktree lane landed, this row read "nothing in this build throws
   // it" and the table carried a "Reserved, never thrown" note beneath it. The
   // branch-plan fetch in `src/worktree/git.ts` now throws it, so both the row

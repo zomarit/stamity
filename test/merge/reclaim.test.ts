@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, link, lstat, mkdir, readFile, readdir, rm, symlink } from "node:fs/promises";
+import { chmod, link, lstat, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 // Namespace import of the REAL module, so the one case that has to change the
 // tree mid-sweep can delegate to the unpatched calls from inside its replacement.
 import * as realFsPromises from "node:fs/promises";
@@ -1731,6 +1731,41 @@ describe("sweepReclaimCandidates — an instruction file or Copilot's hooks file
     expect(detailOf(WORKFLOW)).toContain("an instruction file");
     expect(report.deletedCount).toBe(0);
     for (const path of PATHS) expect(await readFile(join(root, path), "utf-8"), path).toBe(OWNER_COPIES[path]);
+  });
+
+  // review/128: where `sync` with this version writes the path with other bytes,
+  // a kept file whose bytes hash to the recorded hash is one that sync rewrites.
+  it("marks a kept file staleRendering only where sync writes other bytes there, and never an edited one", async () => {
+    const root = await seeded();
+    const edited = `${OWNER_COPIES[HOOKS] as string}\n`;
+    await writeFile(join(root, HOOKS), edited, "utf-8");
+
+    const report = await sweepReclaimCandidates(rows(), {
+      rootDir: root,
+      consent: false,
+      trustedExactPaths: new Set(PATHS),
+      renderings: new Map([["AGENTS.md", new Set([sha256Of(CHARTER_BODY)])]]),
+      // AGENTS.md: sync writes other bytes. The workflow: sync writes these very
+      // bytes, so no sync changes it. The hooks file: sync writes other bytes,
+      // but it was edited, so the hash veto keeps it unmarked.
+      syncRenderings: new Map([
+        ["AGENTS.md", new Set([sha256Of(CHARTER_BODY)])],
+        [WORKFLOW, new Set([sha256Of(OWNER_COPIES[WORKFLOW] as string)])],
+        [HOOKS, new Set([sha256Of("{}\n")])],
+      ]),
+    });
+
+    const marked = report.entries.filter((entry) => entry.staleRendering === true).map((entry) => entry.path);
+    expect(marked).toEqual(["AGENTS.md"]);
+    expect(report.entries.find((entry) => entry.path === HOOKS)?.detail).toContain("edited since");
+
+    const unmarked = await sweepReclaimCandidates(rows(), {
+      rootDir: root,
+      consent: false,
+      trustedExactPaths: new Set(PATHS),
+      renderings: new Map([["AGENTS.md", new Set([sha256Of(CHARTER_BODY)])]]),
+    });
+    expect(unmarked.entries.some((entry) => entry.staleRendering === true)).toBe(false);
   });
 
   it("deletes each one whose bytes are a rendering the engine produces there, naming the proof", async () => {

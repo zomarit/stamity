@@ -202,6 +202,16 @@ export interface ReclaimActionEntry {
    * (review/61). Absent when the bytes were judged against a built rendering.
    */
   unproven?: true;
+  /**
+   * On a `skipped-user-content` the rendering proof kept: the bytes still hash
+   * to what the ledger records, and `sync` with this version writes this path
+   * with other bytes ({@link ReclaimOptions.syncRenderings}) — a file an
+   * earlier version wrote, or one written before detection or the gates moved.
+   * That `sync` rewrites it, after which the proof holds, so `clean` refuses
+   * rather than keep it (review/128). Only set when the caller passes
+   * `syncRenderings`.
+   */
+  staleRendering?: true;
 }
 
 /** What proved the engine's claim to a file the sweep removes or rewrites. */
@@ -317,6 +327,16 @@ export interface ReclaimOptions {
    * instead of promised a retry (review/87, build/60).
    */
   setupRemoved?: boolean;
+  /**
+   * Repo-relative POSIX path → the SHA-256 of what `sync` with the running
+   * engine writes there for this setup (its own plan: the manifest's clients,
+   * its plugin record, the org policy applied) — never a rendering added only
+   * to prove a delete (Cursor's 1.11.0 guards, a departed package's charter
+   * copy). A file the rendering proof keeps although its bytes hash to the
+   * recorded hash is marked {@link ReclaimActionEntry.staleRendering} when its
+   * path is here and its bytes are none of these. Passed by `clean` alone.
+   */
+  syncRenderings?: ReadonlyMap<string, ReadonlySet<string>>;
   /** Sweep timestamp recorded in mutating entries' `detail`; defaults to now. */
   now?: Date;
 }
@@ -597,6 +617,8 @@ type ReclaimPlan =
       refused?: true;
       /** The rendering proof could not be built ({@link ReclaimActionEntry.unproven}). */
       unproven?: true;
+      /** A sync with this version rewrites the file ({@link ReclaimActionEntry.staleRendering}). */
+      staleRendering?: true;
     };
 
 interface SweepContext {
@@ -612,6 +634,8 @@ interface SweepContext {
   renderingsUnbuilt: string | undefined;
   /** {@link ReclaimOptions.setupRemoved}. */
   setupRemoved: boolean;
+  /** {@link ReclaimOptions.syncRenderings}; empty when none were handed in. */
+  syncRenderings: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 /**
@@ -712,10 +736,17 @@ function renderingRefusal(
       unproven: true,
     };
   }
-  return skip(
-    "skipped-user-content",
-    `The bytes still hash to what the ledger records, but ${words.subject} is deleted only when its bytes are ${words.proof}, and these are not (${words.usually}) — the file is kept; delete it by hand if it is yours to remove.`,
-  );
+  // Reached only after the recorded hash matched (both callers): where `sync`
+  // with this version writes the path with other bytes, it rewrites the file,
+  // after which the proof holds (review/128).
+  const synced = ctx.syncRenderings.get(path);
+  const staleRendering = synced !== undefined && !matchesRendering(synced, bytes, content);
+  return {
+    kind: "skip",
+    action: "skipped-user-content",
+    detail: `The bytes still hash to what the ledger records, but ${words.subject} is deleted only when its bytes are ${words.proof}, and these are not (${words.usually}) — the file is kept; delete it by hand if it is yours to remove.`,
+    ...(staleRendering ? { staleRendering: true as const } : {}),
+  };
 }
 
 /** Run gates 1-4 for one candidate path. Reads only; never mutates. */
@@ -1290,6 +1321,7 @@ export async function sweepReclaimCandidates(
     renderings: opts.renderings ?? new Map<string, ReadonlySet<string>>(),
     renderingsUnbuilt: opts.renderingsUnbuilt,
     setupRemoved: opts.setupRemoved === true,
+    syncRenderings: opts.syncRenderings ?? new Map<string, ReadonlySet<string>>(),
   };
   const stamp = (opts.now ?? new Date()).toISOString();
 
@@ -1306,6 +1338,7 @@ export async function sweepReclaimCandidates(
         detail: plan.detail + provenance,
         ...(plan.refused ? { refused: true as const } : {}),
         ...(plan.unproven ? { unproven: true as const } : {}),
+        ...(plan.staleRendering ? { staleRendering: true as const } : {}),
       });
       return;
     }

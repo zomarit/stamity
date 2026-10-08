@@ -1010,7 +1010,7 @@ describe("clean --pack — the pack's projected copies", () => {
   );
 
   it(
-    "keeps an owner's own file at a copy's name under a forged claude row hashing it",
+    "refuses, keeping an owner's own file at a copy's name under a forged claude row hashing it",
     async () => {
       const root = await copyOf(opsSynced);
       const ownerBytes = "---\nname: st-ci-pipeline\ndescription: our own pipeline notes\n---\n\nOurs.\n";
@@ -1019,11 +1019,23 @@ describe("clean --pack — the pack's projected copies", () => {
       const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
       for (const row of manifest.ledger) if (row.path === EDITED_COPY) row.contentHash = sha256(ownerBytes);
       await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+      const manifestBefore = await readFile(manifestFile, "utf-8");
 
-      const doc = await cleanJson(root);
+      // TEST CHANGE, justified (2026-10-08, review/128, the maintainer's sign-off on
+      // the whole-branch review's W-1): the run exited 0 and reported the file
+      // `skipped-user-content`. The path is one the running engine writes for this
+      // setup and the bytes hash to the recorded hash, so `clean --pack` now
+      // refuses before touching anything, with CLEAN_ERROR naming the path. The
+      // owner's file stays, as before, and so does every row.
+      const result = await runClean(root, ["--pack", "ops", "--json", "-y"]);
 
-      expect(entryAt(doc, EDITED_COPY)?.action).toBe("skipped-user-content");
+      expect(result.code).toBe(1);
+      const error = parseSingleDoc(result.stdout)["error"] as { code: string; message: string; why: string };
+      expect(error.code).toBe("CLEAN_ERROR");
+      expect(error.message).toContain(EDITED_COPY);
+      expect(error.why).toContain("if one of them is yours");
       expect(await readFile(join(root, EDITED_COPY), "utf-8")).toBe(ownerBytes);
+      expect(await readFile(manifestFile, "utf-8")).toBe(manifestBefore);
     },
     60_000,
   );

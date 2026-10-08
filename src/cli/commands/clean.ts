@@ -9,7 +9,7 @@ import {
 } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { MERGED_MCP_JSON_PATHS, engineOwnedServerIds } from "../../mcp/emit.ts";
-import { formatReclaimReport, sweepReclaimCandidates } from "../../merge/reclaim.ts";
+import { formatReclaimReport, sweepReclaimCandidates, type ReclaimReport } from "../../merge/reclaim.ts";
 import { applyCommandPrefix, slugOf } from "../../content/catalog.ts";
 import { planPackRemoval } from "../../pack/install.ts";
 import { packDirRelPath } from "../../pack/receipt.ts";
@@ -31,6 +31,7 @@ import {
   coOwnedReclaimRenderings,
   engineRenderingsFor,
   hookScriptRetention,
+  syncRenderingsFor,
   provenLegacyCursorGuards,
   type EmissionPlanFor,
   type LegacyCursorIdentity,
@@ -122,20 +123,22 @@ export function planCleanCandidates(manifest: SetupManifest): ReclaimCandidate[]
  * (`./sync/engine.ts`'s `renderingPlanner`, which the layering keeps this verb
  * from importing), with this engine's version and package identity. Read before
  * the sweep, while the packs and overrides they are rendered from are on disk.
+ * With them, what `sync` with this version writes at those paths
+ * (`syncRenderings`), which the sweep marks a kept file against
+ * ({@link refuseStaleRenderings}).
  */
-function cleanRenderings(
+async function cleanRenderings(
   rootDir: string,
   manifest: SetupManifest,
   candidates: readonly ReclaimCandidate[],
   engineVersion: string,
-): Promise<RenderingProof> {
-  return engineRenderingsFor(
-    rootDir,
-    manifest,
-    candidates.map((candidate) => candidate.entry.path),
-    cleanPlanner(rootDir, engineVersion),
-    legacyCursorIdentity(),
-  );
+): Promise<RenderingProof & { syncRenderings: ReadonlyMap<string, ReadonlySet<string>> }> {
+  const paths = candidates.map((candidate) => candidate.entry.path);
+  const [proof, syncRenderings] = await Promise.all([
+    engineRenderingsFor(rootDir, manifest, paths, cleanPlanner(rootDir, engineVersion), legacyCursorIdentity()),
+    syncRenderingsFor(rootDir, manifest, paths, cleanPlanner(rootDir, engineVersion)),
+  ]);
+  return { ...proof, syncRenderings };
 }
 
 /**
@@ -431,6 +434,38 @@ function nothingToClean(ctx: CliContext): CommandResult {
     exitCode: 0,
     json: { removed: 0, stripped: 0, skipped: 0, stateDirRemoved: false, entries: [] },
   };
+}
+
+/** How many kept files the refusal names before it counts the rest. */
+const STALE_NAMED = 3;
+
+/**
+ * Refuse before anything is touched when the sweep would keep a file a `sync`
+ * with this version rewrites (review/128): its bytes still hash to what the
+ * ledger records, and `sync` with this version writes its path with other bytes
+ * — an earlier version wrote it, or detection or the gates moved since the last
+ * `sync` (`../../merge/reclaim.ts`'s `staleRendering`). Keeping
+ * it would strand an unedited engine file once the ledger goes; after that
+ * `sync` the proof holds and the clean removes it. Runs on the preview sweep,
+ * before the confirmation, so `--dry-run` refuses the same way. A retired
+ * artifact, an edited file and one the proof could not judge are never marked.
+ */
+function refuseStaleRenderings(ctx: CliContext, manifest: SetupManifest, preview: ReclaimReport, rerun: string): void {
+  const stale = preview.entries.filter((entry) => entry.staleRendering === true).map((entry) => entry.path);
+  if (stale.length === 0) return;
+  const named =
+    stale.slice(0, STALE_NAMED).join(", ") + (stale.length > STALE_NAMED ? ` and ${stale.length - STALE_NAMED} more` : "");
+  const wroteBy =
+    manifest.generatedBy === ctx.app.version ? "" : ` Version ${manifest.generatedBy} last wrote this setup.`;
+  throw new CliFailure({
+    code: "CLEAN_ERROR",
+    message: `clean refused: ${stale.length} file(s) the ledger records as unedited differ from what this version renders there — ${named}`,
+    why:
+      `each still hashes to what the ledger records, but this version (${ctx.app.version}) renders other bytes at its path, ` +
+      `so the delete cannot be proven and clean would leave the file behind.${wroteBy} Nothing was removed. ` +
+      `A sync rewrites these paths, so if one of them is yours rather than the engine's, move it aside first.`,
+    next: `run ${packageCommand("sync")} with this version first, then ${packageCommand(rerun)}`,
+  });
 }
 
 /**
@@ -761,6 +796,25 @@ async function runScopedClean(
   const copies = await findPackCopies(rootDir, manifest, packId, candidates, ctx.app.version);
   const alsoCopies =
     copies.rows.size === 0 ? "" : `, its ${copies.rows.size} client copy(ies)`;
+  const swept = [...candidates, ...copies.candidates];
+  const sweepOptions = {
+    rootDir,
+    trustedExactPaths: trustedInfraPaths(manifest.ledger),
+    coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
+    ...hookScriptRetention(manifest, packSupply),
+    // Rendered while the pack is still installed, so the pack's own content
+    // still proves itself and its copies (REQ-PLUGIN-046).
+    ...copies.proof,
+    syncRenderings: await syncRenderingsFor(
+      rootDir,
+      manifest,
+      copies.candidates.map((candidate) => candidate.entry.path),
+      cleanPlanner(rootDir, ctx.app.version),
+    ),
+  };
+  // Before the confirmation and before the client documents are touched: a
+  // copy a sync with this version rewrites refuses the run (review/128).
+  refuseStaleRenderings(ctx, manifest, await sweepReclaimCandidates(swept, { ...sweepOptions, consent: false }), `clean --pack ${packId}`);
 
   // --dry-run neither prompts nor refuses: it writes nothing, so the
   // destructive gate has nothing to gate.
@@ -775,7 +829,6 @@ async function runScopedClean(
     });
   }
 
-  const swept = [...candidates, ...copies.candidates];
   ctx.spinner.start(
     ctx.dryRun
       ? `Inspecting ${swept.length} path(s) of pack "${packId}"...`
@@ -785,16 +838,7 @@ async function runScopedClean(
   // repo the next `sync` re-emits into, rather than one holding an entry nobody
   // can prove and a selection nobody can resolve.
   const mcp = await removePackMcpEntries(rootDir, manifest, packId, packSupply, !ctx.dryRun);
-  const report = await sweepReclaimCandidates(swept, {
-    rootDir,
-    consent: !ctx.dryRun,
-    trustedExactPaths: trustedInfraPaths(manifest.ledger),
-    coOwnedPaths: coOwnedReclaimReducers(manifest, packSupply, await coOwnedReclaimRenderings(rootDir, manifest)),
-    ...hookScriptRetention(manifest, packSupply),
-    // Rendered while the pack is still installed, so the pack's own content
-    // still proves itself and its copies (REQ-PLUGIN-046).
-    ...copies.proof,
-  });
+  const report = await sweepReclaimCandidates(swept, { ...sweepOptions, consent: !ctx.dryRun });
   ctx.spinner.stop();
 
   // Copies the proof could not judge (the pack could not be planned): unproven
@@ -950,24 +994,11 @@ export const cleanCommand: CommandModule = {
 
     const candidates = planCleanCandidates(manifest);
 
-    // --dry-run neither prompts nor refuses: it writes nothing, so the
-    // destructive gate has nothing to gate.
-    if (!ctx.dryRun) {
-      await confirmDestruction(ctx, {
-        refusedWhat: `${candidates.length} generated file(s) and ${STATE_DIR}/`,
-        question: `Remove ${candidates.length} generated file(s) and the ${STATE_DIR}/ state directory (learnings, handoffs and installed packs included)?`,
-      });
-    }
-
-    ctx.spinner.start(
-      ctx.dryRun
-        ? `Inspecting ${candidates.length} recorded path(s)...`
-        : `Removing ${candidates.length} recorded path(s)...`,
-    );
+    // Read-only, so it runs ahead of the confirmation: the preview sweep below
+    // needs it, and so does the live one.
     const packSupply = await installedPackMcpSupply(rootDir, manifest);
-    const report = await sweepReclaimCandidates(candidates, {
+    const sweepOptions = {
       rootDir,
-      consent: !ctx.dryRun,
       trustedExactPaths: trustedInfraPaths(manifest.ledger),
       // No deselection step here, and none is owed: the full clean sweeps the
       // client documents themselves, and it resolves pack supply BEFORE the
@@ -985,8 +1016,29 @@ export const cleanCommand: CommandModule = {
       // The state directory goes below, ledger and all: a file the proof could
       // not judge is named for a delete by hand, never promised a retry (review/87).
       setupRemoved: true,
-    });
+    };
+    // Gates 1-4 with nothing written, before the confirmation: a file a sync
+    // with this version rewrites refuses the run, `--dry-run` included (review/128).
+    ctx.spinner.start(`Inspecting ${candidates.length} recorded path(s)...`);
+    const preview = await sweepReclaimCandidates(candidates, { ...sweepOptions, consent: false });
     ctx.spinner.stop();
+    refuseStaleRenderings(ctx, manifest, preview, "clean -y");
+
+    // --dry-run neither prompts nor refuses: it writes nothing, so the
+    // destructive gate has nothing to gate.
+    if (!ctx.dryRun) {
+      await confirmDestruction(ctx, {
+        refusedWhat: `${candidates.length} generated file(s) and ${STATE_DIR}/`,
+        question: `Remove ${candidates.length} generated file(s) and the ${STATE_DIR}/ state directory (learnings, handoffs and installed packs included)?`,
+      });
+    }
+
+    let report = preview;
+    if (!ctx.dryRun) {
+      ctx.spinner.start(`Removing ${candidates.length} recorded path(s)...`);
+      report = await sweepReclaimCandidates(candidates, { ...sweepOptions, consent: true });
+      ctx.spinner.stop();
+    }
 
     // A hooks document the sweep left in place that still runs a hook script
     // under the state directory keeps the directory whole, since deleting it

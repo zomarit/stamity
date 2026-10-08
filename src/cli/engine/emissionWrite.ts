@@ -1076,3 +1076,44 @@ export async function engineRenderingsFor(
   }
   return { renderings };
 }
+
+/**
+ * The SHA-256 of what `sync` with the running engine writes at each of `paths`
+ * that needs the rendering proof, for this setup as it stands: the plan
+ * `../commands/sync/engine.ts::planSync` runs — full-corpus selection and fresh
+ * detection over the manifest's own clients and plugin record, the org policy
+ * applied — and not {@link engineRenderingsFor}'s wider proof plan, whose extra
+ * clients change a rule-skill's bytes. `clean` reads it to tell a kept file a
+ * `sync` would rewrite (review/128) from one no `sync` changes. Empty when the
+ * plan cannot be built, so nothing is refused on it and the sweep keeps such
+ * files as before; the plan is hashed and discarded, never written.
+ */
+export async function syncRenderingsFor(
+  rootDir: string,
+  manifest: SetupManifest,
+  paths: Iterable<string>,
+  planFor: EmissionPlanFor,
+): Promise<Map<string, Set<string>>> {
+  const renderings = new Map<string, Set<string>>();
+  const wanted = new Set([...paths].filter(needsRenderingProof));
+  if (wanted.size === 0) return renderings;
+  let outputs: readonly AdapterOutput[];
+  try {
+    const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
+    const setup = structuredClone(manifest);
+    setup.selection = fullCorpusSelection(index);
+    setup.detected = summarizeDetection(repoInfo);
+    outputs = await withoutPolicyWarningPrint(() => planFor(setup, { monorepoPackages: repoInfo.monorepoPackages }));
+    // reason: not silent — with no rendering nothing is refused, and the sweep's
+    // own proof still keeps and names each file it cannot prove.
+  } catch {
+    return renderings;
+  }
+  for (const output of outputs) {
+    if (!wanted.has(output.path)) continue;
+    const hashes = renderings.get(output.path) ?? new Set<string>();
+    hashes.add(sha256(output.content));
+    renderings.set(output.path, hashes);
+  }
+  return renderings;
+}

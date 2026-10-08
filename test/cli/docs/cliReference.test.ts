@@ -488,6 +488,8 @@ describe("the restated kit contract", () => {
     expect(cleanRow).toContain("could not be asked");
     // The positive half of the claim, and the half an operator acts on.
     expect(cleanRow).toContain("nothing was removed");
+    // review/128: the third producer, the refusal ahead of the sweep.
+    expect(cleanRow).toContain("a `sync` with this version rewrites");
 
     // `--untracked` and the ignore rules for the same reasons given above.
     const sources = execFileSync("git", ["grep", "-l", "--untracked", "CLEAN_ERROR", "--", "src"], {
@@ -505,16 +507,33 @@ describe("the restated kit contract", () => {
       "src/types/errors.ts",
     ]);
 
-    // Two throw sites, and both of them sit in the confirmation gate ahead of
-    // any removal — which is the whole content of the row.
+    // TEST CHANGE, justified (2026-10-08, review/128, the maintainer's sign-off on
+    // the whole-branch review's W-1): two throw sites, both in the confirmation
+    // gate. A third now refuses a clean that would keep a file a `sync` with this
+    // version rewrites. All three sit ahead of any removal — which is the whole
+    // content of the row — and the census still fails a fourth producer.
     const cleanSource = readFileSync(join(REPO_ROOT, "src/cli/commands/clean.ts"), "utf-8");
-    expect(cleanSource.split(`code: "CLEAN_ERROR"`).length - 1).toBe(2);
+    expect(cleanSource.split(`code: "CLEAN_ERROR"`).length - 1).toBe(3);
     const gate = cleanSource.slice(
       cleanSource.indexOf("async function confirmDestruction("),
       cleanSource.indexOf("async function removeStateDir("),
     );
     expect(gate.split(`code: "CLEAN_ERROR"`).length - 1).toBe(2);
     expect(gate).not.toContain("await rm(");
+    const refusal = cleanSource.slice(
+      cleanSource.indexOf("function refuseStaleRenderings("),
+      cleanSource.indexOf("async function confirmDestruction("),
+    );
+    expect(refusal.split(`code: "CLEAN_ERROR"`).length - 1).toBe(1);
+    expect(refusal).not.toContain("await rm(");
+    // Each scope calls it on the preview, before its first write: the full
+    // clean before the consented sweep, `--pack` before the client documents.
+    expect(cleanSource.indexOf(`refuseStaleRenderings(ctx, manifest, preview, "clean -y")`)).toBeLessThan(
+      cleanSource.indexOf("consent: true }"),
+    );
+    expect(cleanSource.indexOf("`clean --pack ${packId}`)")).toBeLessThan(
+      cleanSource.indexOf("await removePackMcpEntries(rootDir, manifest, packId"),
+    );
   });
 
   /**

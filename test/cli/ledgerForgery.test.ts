@@ -1072,21 +1072,42 @@ describe("an owner's charter-shaped or exact-path file under a forged row and ha
     }
   }, 60_000);
 
-  it("clean -y keeps each one, and the owner's charter-shaped AGENTS.md at the root", async () => {
+  // TEST CHANGE, justified (2026-10-08, review/128, the maintainer's sign-off on the
+  // whole-branch review's W-1): one case seeded the owner's charter-shaped root
+  // `AGENTS.md` under a forged row beside the other owner files and expected
+  // `clean -y` to exit 0 keeping all of them. The root charter is a path the
+  // running engine writes for this setup and its bytes hash to the (forged)
+  // recorded hash, so `clean` now refuses before touching anything. The case is
+  // split: the other owner files are still kept by a clean that runs, and the
+  // root charter's owner file is still kept, by a refusal that changes nothing.
+  it("clean -y keeps each one", async () => {
     const root = await forgedRepo();
-    await writeFile(join(root, "AGENTS.md"), OWNER_CHARTER, "utf8");
-    await editManifest(root, (manifest) => {
-      for (const row of manifest.ledger) if (row.path === "AGENTS.md") row.contentHash = sha256(OWNER_CHARTER);
-    });
 
     const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
 
     expect(clean.code, clean.stderr).toBe(0);
     const entries = (JSON.parse(clean.stdout.trim()) as SweepDoc).entries;
-    for (const path of [...PATHS, "AGENTS.md"]) {
+    for (const path of PATHS) {
       expect(entries.find((candidate) => candidate.path === path)?.action, path).toBe("skipped-user-content");
     }
     for (const path of PATHS) expect(await readFile(join(root, path), "utf8"), path).toBe(bytesOf(path));
+  }, 60_000);
+
+  it("clean -y refuses over the owner's charter-shaped AGENTS.md at the root, and changes nothing", async () => {
+    const root = await forgedRepo();
+    await writeFile(join(root, "AGENTS.md"), OWNER_CHARTER, "utf8");
+    await editManifest(root, (manifest) => {
+      for (const row of manifest.ledger) if (row.path === "AGENTS.md") row.contentHash = sha256(OWNER_CHARTER);
+    });
+    const before = await snapshot(root);
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+
+    expect(clean.code).toBe(1);
+    const error = (JSON.parse(clean.stdout.trim()) as { error: { code: string; message: string } }).error;
+    expect(error.code).toBe("CLEAN_ERROR");
+    expect(error.message).toContain("AGENTS.md");
+    expect(await snapshot(root)).toEqual(before);
     expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(OWNER_CHARTER);
   }, 60_000);
 
@@ -1341,4 +1362,71 @@ describe("the engine's own AGENTS.override.md proves itself by its appendix head
       expect(await readFile(join(root, OVERRIDE), "utf8")).toBe(OWNER_OVERRIDE);
     });
   });
+});
+
+// review/128 (the maintainer's sign-off on the whole-branch review's W-1): the
+// rendering proof trusts only the running engine's renderings, so a full
+// `clean` after an upgrade, or after drift since the last `sync`, kept every
+// unedited engine file and then removed `.stamity/`, leaving no ledger to
+// reclaim them. It now refuses before touching anything and says to `sync`.
+describe("clean refuses while a file it would keep is one a sync with this version rewrites", () => {
+  const OLDER = "1.11.0";
+
+  /** The charter and one skill as an earlier release left them: other bytes, the recorded hashes matching. */
+  async function olderSetup(): Promise<{ root: string; stale: string[] }> {
+    const root = await initialisedRepo(["claude"]);
+    const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] })
+      .ledger;
+    const skill = ledger.find((row) => row.path.startsWith(".claude/skills/st-") && row.path.endsWith("/SKILL.md"));
+    if (skill === undefined) throw new Error("fixture has no skill");
+    const stale = ["AGENTS.md", skill.path];
+    const older: Record<string, string> = {};
+    for (const path of stale) {
+      older[path] = `${await readFile(join(root, path), "utf8")}\nA line an earlier release rendered.\n`;
+      await writeFile(join(root, path), older[path] as string, "utf8");
+    }
+    await editManifest(root, (manifest) => {
+      const doc = manifest as unknown as { generatedBy: string; ledger: LedgerEntry[] };
+      doc.generatedBy = OLDER;
+      for (const row of doc.ledger) {
+        const bytes = older[row.path];
+        if (bytes !== undefined) row.contentHash = sha256(bytes);
+      }
+    });
+    return { root, stale };
+  }
+
+  it("clean -y and clean --dry-run refuse with CLEAN_ERROR, name the files and the version, and change nothing", async () => {
+    const { root, stale } = await olderSetup();
+    const before = await snapshot(root);
+
+    for (const args of [["clean", "-y"], ["clean", "--dry-run"], ["clean", "-y", "--json"]]) {
+      const run = await runInProcess([cleanCommand], args, { cwd: root });
+
+      expect(run.code, args.join(" ")).toBe(1);
+      const said = `${run.stdout}${run.stderr}`;
+      // The human report names no code; the JSON envelope carries it.
+      if (args.includes("--json")) expect(said, args.join(" ")).toContain('"code":"CLEAN_ERROR"');
+      else expect(said, args.join(" ")).toContain("clean refused");
+      for (const path of stale) expect(said, `${args.join(" ")} ${path}`).toContain(path);
+      expect(said, args.join(" ")).toContain(OLDER);
+      expect(said, args.join(" ")).toContain("sync");
+      expect(await snapshot(root), args.join(" ")).toEqual(before);
+    }
+  }, 120_000);
+
+  it("after sync, clean -y removes every engine file and .stamity/", async () => {
+    const { root } = await olderSetup();
+    const sync = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+    expect(sync.code, sync.stderr).toBe(0);
+    const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] })
+      .ledger;
+
+    const clean = await runInProcess([cleanCommand], ["clean", "-y"], { cwd: root });
+
+    expect(clean.code, clean.stderr).toBe(0);
+    const left = ledger.map((row) => row.path).filter((path) => existsSync(join(root, path)));
+    expect(left).toEqual([]);
+    expect(existsSync(join(root, ".stamity"))).toBe(false);
+  }, 120_000);
 });
