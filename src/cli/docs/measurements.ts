@@ -410,7 +410,7 @@ const FLOOR_COUNT = /\bfloors (\d+)\/(\d+)\b/;
  * number of failing floor cases it lists disagrees with the count: a clause whose two halves
  * disagree is one the page cannot word truthfully.
  */
-export function floorClause(results: string): string {
+function floorClause(results: string): string {
   const section = resultsSection(results, SCORES_HEADING) ?? "";
   const golden = section
     .split("\n")
