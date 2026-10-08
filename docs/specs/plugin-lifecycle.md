@@ -1654,14 +1654,15 @@ inside the bound with the artifact-type split above. The bound is `OWNED_PATHS`,
 `ownedPaths`.
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `d1a-rendering-proof-core` to
-`d1c-charter-and-exact-paths` and lane D's fixer rounds): inside the bound, the delete proof at the paths
-REQ-PLUGIN-046 names is a rendering — the running engine's, or at the two 1.11.0 Cursor guard names the frozen 1.11.0 builder's
-rendering for the setup — not a recorded hash, and a backup-free overwrite at a charter or instruction file and at
-`.github/hooks/stamity.json` needs the incoming rendering or a managed block spanning the file, or it keeps the
-previous content recoverable (REQ-PLUGIN-046, amended 2026-10-08; `needsRenderingProof` and `renderingProofClass`,
-`src/manifest/ownedPaths.ts`). Elsewhere inside the bound the recorded hash still proves what the paragraph above
-says: a delete at the state and pack folders and at the `stamity-` Cursor guards, and a backup-free overwrite at any
-other path the engine writes. `SECURITY.md` names both among its known residuals.
+`d1c-charter-and-exact-paths` and lane D's fixer rounds): inside the bound, a delete at the paths REQ-PLUGIN-046 names
+needs a rendering — the running engine's, or at the two 1.11.0 Cursor guard names the frozen 1.11.0 builder's
+rendering for the setup — beside the recorded hash the bytes match, which no longer proves it alone (or a managed
+block spanning the file, which a recorded hash the bytes do not match vetoes). A backup-free overwrite at a charter or
+instruction file and at `.github/hooks/stamity.json` needs the incoming rendering or a managed block spanning the
+file, or it keeps the previous content recoverable (REQ-PLUGIN-046, amended 2026-10-08; `needsRenderingProof` and
+`renderingProofClass`, `src/manifest/ownedPaths.ts`). Elsewhere inside the bound the recorded hash still proves what
+the paragraph above says: a delete at the state and pack folders and at the `stamity-` Cursor guards, and a
+backup-free overwrite at any other path the engine writes. `SECURITY.md` names both among its known residuals.
 
 ### REQ-PLUGIN-046 An import decision binds only as `init` records it, and an instruction file leaves only on its own bytes
 
@@ -1712,23 +1713,25 @@ kind is `import-decision` in `src/cli/commands/sync/engine.ts`. Tests: `test/cli
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `d1a-rendering-proof-core`, `d1b-cursor-guard-pins` and
 `d1c-charter-and-exact-paths`, with lane D's fixer rounds 1, 3 and 4; inbox rows 519, 560, 585 and 586). A whole-file
-delete at an engine-named file in a content folder, an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md` and
-the Copilot setup workflow at the repository root, `.github/hooks/stamity.json`, or one of Cursor's two 1.11.0 guard
-names needs one of two proofs. The first is bytes that hash, raw or with `\r\n` read as `\n`, to a rendering the
-running engine produces at that path, planned for the clients the setup wrote for (the manifest's clients and every
-client a ledger row names, each in repository mode) over the bundled corpus, the override tree and the installed packs.
-Every installed pack is rendered whatever the organisation's trust policy says, so the first `sync` after the policy
-denies a pack proves and removes that pack's copies, while the projection itself still writes nothing of a denied pack;
-the plan is hashed and discarded, never written. The second is a managed block spanning the file. At an `AGENTS.md`
-below the root, when a client of the setup reads per-folder files, the renderings also include the root charter as the
-engine renders it before an import decision on the root, so the engine's unedited copy whose package has left is still
-proven and removed. At the two 1.11.0 Cursor guard names only, the rendering is the guard a frozen copy of the 1.11.0
-builder (`src/adapters/cursorLegacyGuards.ts`) renders for the setup: the ten agents 1.11.0 shipped plus every Cursor
-agent the ledger records, the running installation's package name and npm channel, at version 1.11.0. A test holds the
-copy to four fixtures captured from the published 1.11.0 package, each pinned by its SHA-256 (REQ-FLOW-038, amended
-2026-10-08). A recorded hash that matches, and the structural fingerprint, no longer prove a delete there. The
-fingerprint still decides which instruction files may reach the proof: a file it does not read as the engine's falls to
-the managed-block rules, so `CLAUDE.md` is proven only by a block that spans it.
+delete at an engine-named file in a content folder, an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md`
+and the Copilot setup workflow at the repository root, `.github/hooks/stamity.json`, or one of Cursor's two 1.11.0
+guard names needs one of two proofs, and a recorded hash the bytes do not match vetoes both. The first is bytes that
+hash to the row's recorded hash and, raw or with `\r\n` read as `\n`, to a rendering the running engine produces at
+that path, planned for the clients the setup wrote for (the manifest's clients and every client a ledger row names,
+each in repository mode) over the bundled corpus, the override tree and the installed packs. Every installed pack is
+rendered whatever the organisation's trust policy says, so the first `sync` after the policy denies a pack proves and
+removes that pack's copies, while the projection itself still writes nothing of a denied pack; the plan is hashed and
+discarded, never written. The second is a managed block spanning the file. At an `AGENTS.md` below the root, when a
+client of the setup reads per-folder files, the renderings also include the root charter as the engine renders it
+before an import decision on the root, so the engine's unedited copy whose package has left is still proven and
+removed. At the two 1.11.0 Cursor guard names only, the rendering is the guard a frozen copy of the 1.11.0 builder
+(`src/adapters/cursorLegacyGuards.ts`) renders for the setup: the ten agents 1.11.0 shipped plus every Cursor agent
+the ledger records, the running installation's package name and npm channel, at version 1.11.0. A test holds the copy
+to four fixtures captured from the published 1.11.0 package, each pinned by its SHA-256 (REQ-FLOW-038, amended
+2026-10-08). A recorded hash that matches, and the structural fingerprint, no longer prove a delete there on their own
+(`src/merge/reclaim.ts`, gate 4: the matching hash, then the rendering). The fingerprint still decides which
+instruction files may reach the proof: a file it does not read as the engine's falls to the managed-block rules, so
+`CLAUDE.md` is proven only by a block that spans it.
 
 A file whose bytes no built rendering matches — an owner's file, or a copy an earlier release rendered that the running
 engine no longer produces — is kept as `skipped-user-content`, its report entry names the path's class and the step to
@@ -1743,36 +1746,44 @@ proven delete keeps `proof: "hash"` and names the rendering in its detail (`engi
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, lane D's fixer rounds 4 to 6, under the declared default of
 the ledger rows `build/62` and `review/109`; a `.bak` on every such overwrite, or a machine-local record of the hashes
-this checkout's engine wrote, are the alternatives the run's record leaves to the maintainer). At a charter or instruction file and at `.github/hooks/stamity.json`, a
-whole-file overwrite the ledger records keeps the bytes it replaces recoverable unless the incoming rendering proves
-them (they equal it once `\r\n` reads as `\n`) or a managed block spans the file. The previous content is then kept in
-git history, with no `.bak` and a notice naming it, when the file is tracked and clean in the repository whose top level
-is the setup root. Otherwise it is kept behind a verified `.bak` and a warning: for an uncommitted or untracked file, a
-setup in a monorepo subfolder, a charter inside a submodule, and whenever git is absent or a git check fails or outlives
-its 5-second timeout. The checks run git from the setup root, never the file's own folder, with every `GIT_*` variable
-stripped and `safe.bareRepository=explicit` and `core.fsmonitor=false` on every call. They require one ordinary,
-merged, regular-file index entry that agrees with `HEAD`, and the bytes read under the write lock must hash in process to
-that entry's blob, raw or with `\r\n` read as `\n`; no call reads work-tree content, so no filter command runs
-(`overwriteNeedsRecovery` and `isTrackedAndClean`, `src/merge/safeWrite.ts`). A file whose fingerprint fails, or whose
-bytes drifted from the recorded hash, takes the `.bak` as before. So the structural fingerprint no longer proves a
-backup-free overwrite on its own there. The notice also prints for the engine's own committed, unedited `AGENTS.md` on a
-release that changes the charter, and an uncommitted setup, or one in a monorepo subfolder, gets an `AGENTS.md.bak`.
-For the delete and the overwrite alike, the paragraph above read: "a recorded hash proves a whole-file delete or a
-backup-free overwrite only when the bytes show the engine wrote them: the charter (…), the Codex rule appendix (…), the
-Copilot workflow's engine header line, or a managed block spanning the file."
+this checkout's engine wrote, are the alternatives the run's record leaves to the maintainer). At a charter or
+instruction file and at `.github/hooks/stamity.json`, a whole-file overwrite the ledger records keeps the bytes it
+replaces recoverable unless the incoming rendering proves them (they equal it once `\r\n` reads as `\n`) or a managed
+block spans the file. The previous content is then kept in git history, with no `.bak` and a notice naming it, when
+the file is tracked and clean in the repository whose top level is the setup root. Otherwise it is kept behind a
+verified `.bak` and a warning: for an uncommitted or untracked file, a setup in a monorepo subfolder, a charter inside
+a submodule, and whenever git is absent or a git check fails or outlives its 5-second timeout. The checks run git from
+the setup root, never the file's own folder, with every `GIT_*` variable stripped and `safe.bareRepository=explicit`
+and `core.fsmonitor=false` on every call. They require one ordinary, merged, regular-file index entry that agrees with
+`HEAD`, and the bytes read under the write lock must hash in process to that entry's blob, raw or with `\r\n` read as
+`\n`; no call reads work-tree content, so no filter command runs (`overwriteNeedsRecovery` and `isTrackedAndClean`,
+`src/merge/safeWrite.ts`). A file whose fingerprint fails, or whose bytes drifted from the recorded hash, takes the
+`.bak` as before. So the structural fingerprint no longer proves a backup-free overwrite on its own there. The notice
+also prints for the engine's own committed, unedited `AGENTS.md` on a release that changes the charter, and an
+uncommitted setup, or one in a monorepo subfolder, gets an `AGENTS.md.bak`. The notice reads as that routine case: the
+previous content is in git history and the change shows in `git status`. A `.bak` taken because git could not confirm
+the previous bytes are committed says so and names the `.bak`, and "may be yours" stays for bytes the fingerprint does
+not read as the engine's (`review/129`, `review/132`). For the delete and the overwrite alike, the paragraph above
+read: "a recorded hash proves a whole-file delete or a backup-free overwrite only when the bytes show the engine wrote
+them: the charter (…), the Codex rule appendix (…), the Copilot workflow's engine header line, or a managed block
+spanning the file." A delete there still needs that matching recorded hash; the hash and the fingerprint together no
+longer prove it, nor a backup-free overwrite.
 
 `SECURITY.md`'s manifest-forgery row names three known residuals inside the bound. (1) At an instruction file and at
-`.github/hooks/stamity.json`, an overwrite of a file git tracks with no uncommitted change takes no `.bak`, under a forged
-row hashing an owner's file too: the owner's previous content is in git history, and the overwrite shows in `git status`
-and in the notice. Git before 2.38 ignores `safe.bareRepository`, and the engine does not check git's version, so there a
-setup root with no `.git` of its own that holds committed bare-repository files can answer the check from its own index.
-Elsewhere inside the bound a backup-free overwrite still rests on the recorded hash alone, and so does a delete at the
-state and pack folders and at the `stamity-` Cursor guards. (2) A planted pack or override whose rendering copies an
-owner's file byte for byte, beside a forged row hashing it, still proves that delete through `sync`, `clean` and
-`clean --pack`, and a planted pack folder widens what the proof renders even under a policy that denies every pack
-(ledger rows `review/63`, `review/65` and `review/69` of run `2026-10-08_maintainer-tooling`). (3) A selected `[mcp_servers.<id>]` table in
-`.codex/config.toml`, and the bare `[mcp_servers]` table the engine renders when no server is selected, are proved by
-their record alone (REQ-FLOW-037).
+`.github/hooks/stamity.json`, an overwrite of a file git tracks with no uncommitted change takes no `.bak`, under a
+forged row hashing an owner's file too: the owner's previous content is in git history, and the overwrite shows in
+`git status` and in the notice. Git before 2.38 ignores `safe.bareRepository`, and the engine does not check git's
+version, so there a setup root with no `.git` of its own that holds committed bare-repository files can answer the
+check from its own index. Elsewhere inside the bound a backup-free overwrite still rests on the recorded hash alone,
+and so does a delete at the state and pack folders and at the `stamity-` Cursor guards. (2) A planted pack or override
+whose rendering copies an owner's file byte for byte, beside a forged row hashing it, still proves that delete through
+`sync`, `clean` and `clean --pack`, and a planted pack folder widens what the proof renders even under a policy that
+denies every pack (ledger rows `review/63`, `review/65` and `review/69` of run `2026-10-08_maintainer-tooling`). (3) A
+selected `[mcp_servers.<id>]` table in `.codex/config.toml`, and the bare `[mcp_servers]` table the engine renders
+when no server is selected, are proved by their record alone (REQ-FLOW-037): a forged `coOwned` record that hashes an
+owner's bare `[mcp_servers]` makes it the engine's, and owner servers written under it as dotted keys are then
+refreshed away with no `.bak`. It is tracked as the deferred row `2026-10-08_inbox-pass/pass/3`
+(`.stamity/runs/2026-10-08_inbox-pass/ledger.jsonl`).
 
 - GIVEN an owner's `.claude/skills/st-local/SKILL.md`, an owner's `.cursor/hooks/mcp-guard.mjs` whose bytes are not the
   setup's 1.11.0 re-render, an owner `AGENTS.md` copying the charter's title and four headings at the root, an owner
@@ -1797,10 +1808,11 @@ their record alone (REQ-FLOW-037).
   setup root that is not the repository's top level, no setup root, git missing, or `GIT_DIR` aimed at another
   repository THEN it takes the `.bak`; GIVEN a committed bare-repository-shaped folder beside the hooks file whose config
   names a file-system monitor, or a clean filter on a stat-dirty tracked file, THEN neither command runs, and every git
-  call the check makes carries `safe.bareRepository=explicit` and `core.fsmonitor=false` (added 2026-10-08). Test
-  evidence: `test/cli/ledgerForgery.test.ts`, `test/merge/reclaim.test.ts`, `test/merge/hookFilesOwnership.test.ts`,
-  `test/adapters/cursorLegacyGuards.test.ts`, `test/manifest/ownedPaths.test.ts`, `test/merge/safeWrite.test.ts`,
-  `test/cli/flows.e2e.test.ts`.
+  call the check makes carries `safe.bareRepository=explicit` and `core.fsmonitor=false` (added 2026-10-08).
+
+Tests for the criteria added 2026-10-08: `test/cli/ledgerForgery.test.ts`, `test/merge/reclaim.test.ts`,
+`test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`, `test/manifest/ownedPaths.test.ts`,
+`test/merge/safeWrite.test.ts`, `test/cli/flows.e2e.test.ts`.
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `d1a2-clean-pack-copies`, with lane D's fixer rounds 1
 and 2). `clean --pack <id>` also removes the copies `sync` projected from that pack into the clients' folders, while the
@@ -1835,8 +1847,12 @@ left the copies to the next `sync`, which no rendering can prove once the pack i
   keep their rows, and the printed remedy with its step by hand runs to a green `check`; GIVEN a setup that cannot be
   planned without the pack THEN no copy is taken and every copy keeps its bytes and its row; GIVEN a scoped pack whose
   edited file was moved out of its folder as `check`'s integrity remedy says THEN the printed steps run to a green
-  `check` (added 2026-10-08). Test evidence: `test/cli/commands/clean.test.ts`, `test/pack/upgradeRemedy.test.ts`,
-  `test/pack/installSmoke.e2e.test.ts`.
+  `check` (added 2026-10-08).
+
+Tests for these criteria: `test/cli/commands/clean.test.ts` (the `clean --pack` copies cases: the proof-hash delete,
+the edited copy, the forged row, `--dry-run`, two packs, a deny-all policy, the unplannable pack and the setup that
+cannot be planned without it) and `test/pack/upgradeRemedy.test.ts` (the 1.11.0 `ops` clash and the integrity remedy's
+printed steps, a scoped pack's included).
 
 ### REQ-PLUGIN-047 `check` takes the expected release, client set and install mode from its caller
 

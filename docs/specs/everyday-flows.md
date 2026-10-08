@@ -765,8 +765,9 @@ when such a script lives there.
     script the forced run deletes. A document the forced write refuses at write time (a hard link, a symbolic link, or
     one under a folder that resolves outside the repository) is still read from disk, as the forced run stops before its
     sweep, and so is a document of any other collision class, which `--force` does not clear; `check` previews without
-    the flag (`forceClears` and `forcedWriteLands`, `src/cli/commands/sync/engine.ts`). It read that a preview reads
-    every collided document from disk.
+    the flag (`forceClears` and `forcedWriteLands`, `src/cli/commands/sync/engine.ts`). Before the amendment
+    `hookDocumentsAfterWrite` left every collided document out, so a preview read it from disk even where `--force`
+    clears the collision.
   - **Cursor's rejected entries.** A `.cursor/hooks.json` holding an entry Cursor rejects fails `check`, whoever wrote
     it; `sync` and `init` keep the entry and warn naming it. The check reads the event key against the 21 events
     cursor.com/docs/hooks lists (read 2026-10-07, Cursor 3.23.23; `CURSOR_HOOK_EVENTS`) and each entry by type: `type`
@@ -1222,15 +1223,15 @@ exists, it is the normative record for that requirement.
   `node .cursor/hooks/mcp-guard.mjs` THEN that entry stays the owner's (added 2026-10-07 from the build).
 - GIVEN a 1.11.0 setup's unedited guards and entries — core, with a local pack's agents, or with an override agent —
   WHEN the first `sync -y` runs THEN both guards are deleted, both entries name the `stamity-` guards, and no `.bak`
-  exists; GIVEN a fork's setup THEN the fork's identity proves both guards and the canonical identity keeps both. GIVEN
-  an owner's own scripts at both old names under forged rows, a pinned entry, a forged co-owned hash and a re-pointed
-  document hash WHEN `sync -y` or `clean -y` runs THEN both scripts and the entry stay byte for byte and no `.bak`
-  exists; WHEN `init --force` runs THEN both scripts and the entry stay. GIVEN the old MCP guard edited by hand WHEN `sync -y` or `init --force` runs THEN the guard and the
-  entry that runs it stay. GIVEN a setup whose ledger lost one Cursor agent row THEN the spawn guard and its entry stay
-  and are named, and the MCP guard moves. GIVEN an old guard the owner deleted THEN its entry is still rewired. GIVEN the
-  four fixtures THEN each hashes to its pinned SHA-256 and the frozen builder renders it byte for byte (added
-  2026-10-08, unit `d1b-cursor-guard-pins`; `test/merge/hookFilesOwnership.test.ts`,
-  `test/adapters/cursorLegacyGuards.test.ts`).
+  exists; GIVEN a fork's setup THEN the fork's identity proves both guards and the canonical identity keeps both.
+  GIVEN an owner's own scripts at both old names under forged rows, a pinned entry, a forged co-owned hash and a
+  re-pointed document hash WHEN `sync -y` or `clean -y` runs THEN both scripts and the entry stay byte for byte and no
+  `.bak` exists; WHEN `init --force` runs THEN both scripts and the entry stay. GIVEN the old MCP guard edited by hand
+  WHEN `sync -y` or `init --force` runs THEN the guard and the entry that runs it stay. GIVEN a setup whose ledger
+  lost one Cursor agent row THEN the spawn guard and its entry stay and are named, and the MCP guard moves. GIVEN an
+  old guard the owner deleted THEN its entry is still rewired. GIVEN the four fixtures THEN each hashes to its pinned
+  SHA-256 and the frozen builder renders it byte for byte (added 2026-10-08, unit `d1b-cursor-guard-pins`;
+  `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`).
 
 ## References
 
@@ -1292,11 +1293,11 @@ exists, it is the normative record for that requirement.
   tree. No shipped command uses `tools:` (the unit's deferral M-1).
 - REQ-FLOW-026 and REQ-FLOW-038, as amended 2026-10-08: a copy an earlier release rendered that the running engine no
   longer produces is kept on upgrade and named for a delete by hand, not reclaimed; the run's plan leaves it to a
-  release that retires an artifact to say so in its CHANGELOG. The two 1.11.0 Cursor guards are the one exception, recognised by the frozen 1.11.0
-  builder, and the two setups REQ-FLOW-038's amendment names (`review/99`) keep their spawn guard.
-- REQ-FLOW-036 and REQ-FLOW-037: the residues the plan records as follow-up rows stay open — a user-hook entry edited in
-  `.claude/settings.json` instead of its definition stays beside the engine's rendering; after a lost manifest the
-  three allow rows a release rendered read as the owner's; a key an owner adds inside an engine Codex table makes the whole table
-  the owner's; and inside the bound a forged
-  record still proves a selected `[mcp_servers.<id>]` (`docs/plans/016-fork-distribution-00.md`, Follow-ups and the
-  2026-10-07 amendment of S16).
+  release that retires an artifact to say so in its CHANGELOG. The two 1.11.0 Cursor guards are the one exception,
+  recognised by the frozen 1.11.0 builder, and the two setups REQ-FLOW-038's amendment names (`review/99`) keep their
+  spawn guard.
+- REQ-FLOW-036 and REQ-FLOW-037: the residues the plan records as follow-up rows stay open — a user-hook entry edited
+  in `.claude/settings.json` instead of its definition stays beside the engine's rendering; after a lost manifest the
+  three allow rows a release rendered read as the owner's; a key an owner adds inside an engine Codex table makes the
+  whole table the owner's; and inside the bound a forged record still proves a selected `[mcp_servers.<id>]`
+  (`docs/plans/016-fork-distribution-00.md`, Follow-ups and the 2026-10-07 amendment of S16).

@@ -47,7 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A forged ledger row and hash alone no longer delete your file.** At an engine-named content
   file, a charter or instruction file, the Copilot workflow and hooks file, and Cursor's 1.11.0
   guard names, a delete needs bytes the engine renders (or, at those two names, the bytes 1.11.0
-  rendered for that setup). A copy no rendering proves is kept and named. At a charter or
+  rendered for that setup). A copy no rendering proves is kept and named. Two 1.11.0 setups keep
+  their old spawn guard and its entry, named, on the safe side: one whose plugin carried the agent
+  class but not the hooks, since 1.11.0 put its pack and override agents in the guard but recorded
+  no Cursor agent row for them, and a `sync` after a first `sync` that refused `.cursor/hooks.json`
+  once an agent has been added to or removed from the corpus since 1.11.0. At a charter or
   instruction file and at `.github/hooks/stamity.json`, an overwrite the engine's rendering does
   not prove keeps your previous content: in git history when the file is tracked and clean in the
   repository whose top level is the setup root (a notice names the file, no `.bak` is taken), and
