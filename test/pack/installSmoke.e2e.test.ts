@@ -503,12 +503,15 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
 
       // Ledger-driven uninstall: files gone, rows gone, everything else intact.
       // `clean --pack` also removes the copies `sync` projected from the pack
-      // into the clients' folders, the skill below included (REQ-PLUGIN-046);
-      // this case checks that copy only after the next sync, not here.
+      // into the clients' folders, the skill above included (REQ-PLUGIN-046).
       const clean = await fixture.run(["clean", "--pack", "ops", "-y"]);
       expect(clean.code, clean.stderr).toBe(0);
       expect(clean.stdout).toContain('Pack "ops" removed');
       expect(await exists(repoPath(fixture, packInstallDir("ops")))).toBe(false);
+      // TEST CHANGE, justified (2026-10-08, row 2026-10-08_maintainer-tooling/build/68):
+      // the projected copy is checked right after `clean --pack`, before any sync.
+      expect(await exists(projectedSkill), "pack copy removed by clean --pack itself").toBe(false);
+      expect(await exists(corpusSkill), "corpus skill survives the scoped clean").toBe(true);
       expect(await readLedgerRows(fixture, "pack:ops")).toEqual([]);
       expect(
         await exists(repoPath(fixture, `${packInstallDir("scaffold")}/receipt.json`)),
@@ -521,9 +524,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // leaves the corpus content in place.
       const syncAfterClean = await fixture.run(["sync"]);
       expect(syncAfterClean.code, syncAfterClean.stderr).toBe(0);
-      expect(await exists(projectedSkill), "pack projection reclaimed after clean+sync").toBe(
-        false,
-      );
+      expect(await exists(projectedSkill), "no pack copy after clean --pack and sync").toBe(false);
       expect(await exists(corpusSkill), "corpus skill survives the reclaim").toBe(true);
 
       // Converged state: re-install after clean succeeds and is byte-identical
