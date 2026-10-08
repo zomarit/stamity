@@ -91,8 +91,11 @@ bound the read), `questions[]`, `output_sections[]` (the named tables synthesis 
   more cited sites without executing anything; **low** — one weak signal. Medium and low name
   the unverified assumption in the same sentence.
   A medium or low claim takes one shape: the claim, its citations, its band, and the
-  unverified assumption, all inside the sentence that makes the claim. An assumption named in
-  a later sentence is dropped the moment someone quotes the claim on its own. A headline,
+  unverified assumption, all inside the sentence that makes the claim and before its full
+  stop — "Retries stop after three attempts (`src/http/retry.ts:41`,
+  `src/http/client.ts:88`), **medium**, assuming no caller overrides the limit." A band set
+  after the full stop, or an assumption opened as its own sentence ("This assumes …"), is
+  outside the claim: it is dropped the moment someone quotes the claim on its own. A headline,
   lead-in, or summary line that answers the question is a claim under this rule and takes that
   same shape — cited, banded, assumption in the sentence — or it carries no band and no answer
   and leaves both to the bullets beneath it.
