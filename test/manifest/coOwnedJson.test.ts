@@ -1450,20 +1450,25 @@ describe("planCoOwnedJson / reduceCoOwnedJson — edges", () => {
   // cover. The Arabic letter mark, the line and paragraph separators and the tag block passed
   // through, so a committed hooks or settings key could reorder or hide the entry a collision,
   // removal or rejected-hook diagnostic names.
-  it("drops every code point UNPRINTABLE_CHARS and UNICODE_TAG_CHARS cover, keeping the line-break-to-space form", () => {
-    const covered = (char: string): boolean =>
-      new RegExp(UNPRINTABLE_CHARS.source, "u").test(char) || new RegExp(UNICODE_TAG_CHARS.source, "u").test(char);
+  // review/101: and every default-ignorable code point — the variation selectors, the
+  // invisible operators, the soft hyphen — which can hide bytes after a visible character.
+  it("drops every code point UNPRINTABLE_CHARS, UNICODE_TAG_CHARS and Default_Ignorable_Code_Point cover, and keeps every other", () => {
+    const unprintable = new RegExp(UNPRINTABLE_CHARS.source, "u");
+    const tag = new RegExp(UNICODE_TAG_CHARS.source, "u");
+    const ignorable = /\p{Default_Ignorable_Code_Point}/u;
     let checked = 0;
-    for (let code = 0; code <= 0xe007f; code += 1) {
+    for (let code = 0; code <= 0xe0fff; code += 1) {
       if (code >= 0xd800 && code <= 0xdfff) continue;
       const char = String.fromCodePoint(code);
-      if (!covered(char)) continue;
-      checked += 1;
-      const expected = char === "\n" || char === "\r" || char === "\t" ? "A B" : "AB";
-      expect(printableName(`A${char}B`), `U+${code.toString(16).toUpperCase()}`).toBe(expected);
+      const covered = unprintable.test(char) || tag.test(char) || ignorable.test(char);
+      if (covered) checked += 1;
+      const expected = !covered ? `A${char}B` : char === "\n" || char === "\r" || char === "\t" ? "A B" : "AB";
+      if (printableName(`A${char}B`) !== expected) expect(printableName(`A${char}B`), `U+${code.toString(16).toUpperCase()}`).toBe(expected);
     }
-    expect(checked).toBeGreaterThan(128 + 32);
-    const named = [0x061c, 0x2028, 0x2029, 0xe0041, 0xe007f].map((code) => String.fromCodePoint(code)).join("");
+    expect(checked).toBeGreaterThan(4096);
+    const named = [0x061c, 0x2028, 0x2029, 0xe0041, 0xe007f, 0x00ad, 0x034f, 0x180e, 0xfe00, 0xfe0f, 0x2061, 0x2064, 0xe0100, 0xe01ef]
+      .map((code) => String.fromCodePoint(code))
+      .join("");
     const out = plan(doc({ hooks: { [`A${named}B`]: [OWNER_STOP] } }), noRow(), EMITTED_PLUGIN);
     expect(out.result.notice).toContain("hooks.AB ×1");
   });

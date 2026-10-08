@@ -1990,17 +1990,24 @@ describe("sanitizeLabel — what a label may not smuggle onto a terminal", () =>
   // Arabic letter mark, the line and paragraph separators and the tag block
   // included — and nothing else. Same output form: `\r`, `\n`, `\t` become a
   // space, every other covered code point is dropped.
-  it("drops every code point UNPRINTABLE_CHARS and UNICODE_TAG_CHARS cover, and keeps every other", () => {
+  // review/101: and every default-ignorable code point — the variation selectors
+  // (U+FE00–U+FE0F, U+E0100–U+E01EF), the invisible operators (U+2061–U+2064),
+  // the soft hyphen, the combining grapheme joiner, the Mongolian vowel
+  // separator — a channel for hiding bytes after a visible character.
+  it("drops every code point UNPRINTABLE_CHARS, UNICODE_TAG_CHARS and Default_Ignorable_Code_Point cover, and keeps every other", () => {
     const unprintable = new RegExp(UNPRINTABLE_CHARS.source, "u");
     const tag = new RegExp(UNICODE_TAG_CHARS.source, "u");
-    for (let code = 0; code <= 0xe007f; code += 1) {
+    const ignorable = /\p{Default_Ignorable_Code_Point}/u;
+    for (let code = 0; code <= 0xe0fff; code += 1) {
       if (code >= 0xd800 && code <= 0xdfff) continue;
       const char = String.fromCodePoint(code);
-      const covered = unprintable.test(char) || tag.test(char);
+      const covered = unprintable.test(char) || tag.test(char) || ignorable.test(char);
       const expected = !covered ? `A${char}B` : char === "\r" || char === "\n" || char === "\t" ? "A B" : "AB";
       if (sanitizeLabel(`A${char}B`) !== expected) expect(sanitizeLabel(`A${char}B`), `U+${code.toString(16).toUpperCase()}`).toBe(expected);
     }
-    const smuggled = [0x061c, 0x2028, 0x2029, 0xe0041, 0xe007f].map((code) => String.fromCodePoint(code)).join("");
+    const smuggled = [0x061c, 0x2028, 0x2029, 0xe0041, 0xe007f, 0x00ad, 0x034f, 0x180e, 0xfe00, 0xfe0f, 0x2061, 0x2064, 0xe0100, 0xe01ef]
+      .map((code) => String.fromCodePoint(code))
+      .join("");
     expect(sanitizeLabel(`core${smuggled}pack`)).toBe("corepack");
   });
 

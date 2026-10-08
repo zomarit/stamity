@@ -439,15 +439,24 @@ function parseObject(raw: string): ObjectParse {
  */
 const UNPRINTABLE = new RegExp(UNPRINTABLE_CHARS.source, "u");
 const UNICODE_TAG = new RegExp(UNICODE_TAG_CHARS.source, "u");
+/**
+ * Unicode's default-ignorable code points: the variation selectors, the
+ * invisible operators, the soft hyphen and the rest that render as nothing and
+ * can carry hidden bytes after a visible character (review/101). Display only:
+ * the drift renderer's sets stay as they are, because the emitted guard
+ * scripts embed them.
+ */
+const DEFAULT_IGNORABLE = /\p{Default_Ignorable_Code_Point}/u;
 
 /**
  * True for the code points a printed name must not carry: everything
  * `../runs/layout.ts` keeps out of a terminal (controls, the Arabic letter
  * mark, zero-width marks, line and paragraph separators, bidi controls, the
- * byte-order mark) and the Unicode tag block.
+ * byte-order mark), the Unicode tag block, and every default-ignorable code
+ * point.
  */
 function isUnprintable(char: string): boolean {
-  return UNPRINTABLE.test(char) || UNICODE_TAG.test(char);
+  return UNPRINTABLE.test(char) || UNICODE_TAG.test(char) || DEFAULT_IGNORABLE.test(char);
 }
 
 /**

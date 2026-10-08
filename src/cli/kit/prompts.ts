@@ -827,9 +827,13 @@ const clampToWidth = (line: string, columns: number): string => {
  * `UNICODE_TAG_CHARS`), as `printableName` strips them
  * (`../../manifest/coOwnedJson.ts`). That adds the Arabic letter mark, the line
  * and paragraph separators and the Unicode tag block, which carry no width and
- * can spell a hidden instruction (review/96).
+ * can spell a hidden instruction (review/96), and every default-ignorable code
+ * point — the variation selectors, the invisible operators, the soft hyphen —
+ * which can carry hidden bytes after a visible character (review/101). Display
+ * only: the drift renderer's sets stay as they are, because the emitted guard
+ * scripts embed them.
  */
-const LABEL_STRIP = new RegExp(`${UNPRINTABLE_CHARS.source}|${UNICODE_TAG_CHARS.source}`, "gu");
+const LABEL_STRIP = new RegExp(`${UNPRINTABLE_CHARS.source}|${UNICODE_TAG_CHARS.source}|\\p{Default_Ignorable_Code_Point}`, "gu");
 
 export function sanitizeLabel(label: string): string {
   return label.replace(/[\r\n\t]/gu, " ").replace(LABEL_STRIP, "");
