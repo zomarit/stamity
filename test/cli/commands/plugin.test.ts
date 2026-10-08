@@ -1041,7 +1041,12 @@ describe("plugin setup prints what the merge engine said about each file", () =>
     // TEST CHANGE, justified: REQ-FLOW-036 — the adoption notice is the per-entry
     // core's ("Merged into …: kept your 1 entry (enabledPlugins ×1)"); it read
     // "Adopted …" and listed top-level keys.
-    expect(adoption.stdout).toContain("Merged into .claude/settings.json");
+    // TEST CHANGE, justified (2026-10-08, build/30 and build/41): read "Merged into
+    // .claude/settings.json". Under a plugin that carries the hooks the engine
+    // writes no entry into this file, so the notice names the kept entry and
+    // claims no merge; the kept-entry count below is unchanged.
+    expect(adoption.stdout).toContain("Kept your 1 entry (enabledPlugins ×1) in .claude/settings.json");
+    expect(adoption.stdout).not.toContain("Merged into");
     expect(adoption.stdout).toContain("(enabledPlugins ×1)");
     // Inbox row 324: under a plugin that carries hooks the setup writes no
     // member of its own, so the client's key is the whole document.

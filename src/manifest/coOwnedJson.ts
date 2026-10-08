@@ -1145,9 +1145,15 @@ function mergeInto(
     if (tally.length > 0) {
       const total = tally.reduce((sum, item) => sum + item.count, 0);
       const listed = tally.map((item) => `${item.name} ×${item.count}`).join(", ");
+      // A rendering that places no entry and owns no member (Claude's settings
+      // under a plugin that carries the hooks) merges nothing, so the notice
+      // claims no merge (build/30, build/41).
+      const writesNone = Object.keys(elements).length === 0 && Object.keys(members).length === 0;
       notices.unshift(
-        `Merged into ${shown}: kept your ${total} ${entries(total)} (${listed}) beside the engine's; the ` +
-          `engine owns only the entries it wrote.`,
+        writesNone
+          ? `Kept your ${total} ${entries(total)} (${listed}) in ${shown}; the engine writes no entry of its own there.`
+          : `Merged into ${shown}: kept your ${total} ${entries(total)} (${listed}) beside the engine's; the ` +
+              `engine owns only the entries it wrote.`,
       );
     }
   }

@@ -248,6 +248,17 @@ describe("planCoOwnedJson — an owner's entries survive (REQ-FLOW-036)", () => 
     );
   });
 
+  // build/30, build/41: a rendering with nothing in it (Claude's settings under a plugin
+  // that carries the hooks) merges nothing, so the notice claims no merge.
+  it("names the owner's kept entries without a merge when the engine writes no entry of its own", () => {
+    const out = plan(doc({ enabledPlugins: { "stamity@stamity": true } }), noRow(), "{}\n");
+
+    expect(out.result.action).toBe("unchanged");
+    expect(out.result.notice).toBe(
+      `Kept your 1 entry (enabledPlugins ×1) in ${SHOWN}; the engine writes no entry of its own there.`,
+    );
+  });
+
   it("re-plans its own merge as unchanged and carries the record forward", () => {
     const out = plan(doc(MERGED), recorded(MERGED_RECORD));
     expect(out.result).toEqual({ path: FILE, action: "unchanged" });

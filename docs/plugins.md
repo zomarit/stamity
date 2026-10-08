@@ -156,7 +156,7 @@ hooks the setup writes no member of its own into this file, so a file holding on
 is left byte for byte:
 
 ```text
-  Merged into .claude/settings.json: kept your 1 entry (enabledPlugins ×1) beside the engine's; the engine owns only the entries it wrote.
+  Kept your 1 entry (enabledPlugins ×1) in .claude/settings.json; the engine writes no entry of its own there.
 ```
 
 The engine owns only the hook entries it wrote in this file, so the client's enablement — and the
