@@ -223,25 +223,19 @@ describe("repository hygiene over the Git index", () => {
   // same-directory neighbour and all of them must be refused. A map that names any path fails the
   // first expectation, and exemptedPaths still throws if the declaration moves.
   //
-  // TEST CHANGE, justified (2026-10-08, the 1.12.0 release): the 1.12.0 window opens one entry —
-  // run 42, the full 1.12.0 measure, FAIL only on one ungraded floor sample, whose summary the
-  // composed increment run 43 reads from the retention commit — so the expected list is that one
-  // path, and the case exercises it as d46367d6 did: the exempted path passes over budget while its
-  // same-directory neighbour is refused. The retirement proof is unchanged: every retired summary
-  // and its neighbour is still staged over budget and must be refused like any other file.
-  //
-  // TEST CHANGE, justified (2026-10-08, after run 42): the window holds a second entry. Run 43
-  // re-measured charter-floor-relaxation-refused, composed with run 42 and carried the other 112;
-  // run 43 is the 1.12.0 run of record. Its exported summary is 4047457 bytes, over the budget, and
-  // the next increment reads it from the retention commit. Run 42's summary stays, because run 43
-  // composes with it. Both summaries are pinned, and each one's same-directory neighbour is still
-  // refused; the retired summaries' refusals are unchanged.
-  it("exempts exactly the run 42 and run 43 summaries and refuses their neighbours and the retired run summaries", () => {
+  // TEST CHANGE, justified (2026-10-08, the 1.12.0 close): the case asserted the 1.12.0 window's two
+  // entries, run 42's and run 43's summaries; the 1.12.0 close archived both into
+  // evidence-archive-2026-10-08 and compacted them, so both entries retired and the expected list is
+  // empty again, as after the 1.9.0, 1.10.0 and 1.11.0 closes. The retirement proof grows by the
+  // pair: run 42's and run 43's summaries join the retired paths, each staged over budget beside its
+  // same-directory neighbour, and every one must be refused. exemptedPaths still throws if the
+  // declaration moves.
+  it("names no size exception and refuses the retired run summaries like any other file", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.12.0 window's run 42 and run 43 summaries").toEqual([
-      "evals/runs/2026-10-08-run-42/summary.json",
-      "evals/runs/2026-10-08-run-43/summary.json",
-    ]);
+    expect(
+      exempt,
+      "the size-exception map names a path; the 1.12.0 close retired both run-summary entries",
+    ).toEqual([]);
 
     const root = fixture();
     const retired = [
@@ -252,6 +246,8 @@ describe("repository hygiene over the Git index", () => {
       "evals/runs/2026-10-01-run-37/summary.json",
       "evals/runs/2026-10-01-run-38/summary.json",
       "evals/runs/2026-10-01-run-39/summary.json",
+      "evals/runs/2026-10-08-run-42/summary.json",
+      "evals/runs/2026-10-08-run-43/summary.json",
     ];
     const neighbours = [...exempt, ...retired].map((path) => path.replace(/[^/]+$/, "inputs.json"));
     const refused = [...retired, ...neighbours];
