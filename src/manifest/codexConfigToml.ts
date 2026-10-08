@@ -67,7 +67,7 @@ import { displayPath, hasLedgerDrift, toLedgerKey } from "../merge/safeWrite.ts"
 import type { CoOwnedReduction } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
-import type { CoOwnedOwnership, CoOwnedPlan } from "./coOwnedJson.ts";
+import { printableName, type CoOwnedOwnership, type CoOwnedPlan } from "./coOwnedJson.ts";
 import { MAX_CO_OWNED_POINTERS, memberPointer, type MemberSegments } from "./jsonMembers.ts";
 import { normaliseSegment, segmentTomlTables, tomlTableName, type TomlKeyLine, type TomlSegment } from "./tomlTables.ts";
 
@@ -143,7 +143,14 @@ function eolOf(raw: string): "\n" | "\r\n" {
 
 const withEol = (normalised: string, eol: string): string => (eol === "\n" ? normalised : normalised.replaceAll("\n", eol));
 
-const shownTable = (name: string): string => `[${name}]`;
+/**
+ * A table or key name as a message prints it: quoted as a header names it, then
+ * through `printableName`, since a quoted header decodes `\u` escapes and a
+ * literal-quoted one carries any code point (review/102). Every name a message
+ * prints goes through these two; the item's `name` stays the lookup key.
+ */
+const shownName = (key: readonly string[]): string => printableName(tomlTableName(key));
+const shownTable = (name: string): string => `[${printableName(name)}]`;
 
 /** One piece of the document: an owner's bytes, or a table of an engine name. */
 interface Item {
@@ -320,9 +327,9 @@ function redefinition(keys: readonly TomlKeyLine[], writes: readonly Item[]): { 
 function redefinitionFailure(shown: string, found: { at: TomlKeyLine; path: readonly string[]; header: readonly string[] }): string {
   const own = found.header.length <= found.path.length ? found.header : found.path;
   return (
-    `Skipped ${shown}: line ${found.at.line} defines \`${tomlTableName(found.path)}\` without a table header, where the engine ` +
-    `writes a [${tomlTableName(found.header)}] table, and TOML refuses a table defined twice. It was left untouched. Define ` +
-    `[${tomlTableName(own)}] under a header of your own instead (the engine then keeps your table and writes none of that ` +
+    `Skipped ${shown}: line ${found.at.line} defines \`${shownName(found.path)}\` without a table header, where the engine ` +
+    `writes a [${shownName(found.header)}] table, and TOML refuses a table defined twice. It was left untouched. Define ` +
+    `[${shownName(own)}] under a header of your own instead (the engine then keeps your table and writes none of that ` +
     `name), or remove that key, and re-run sync.`
   );
 }
@@ -350,10 +357,10 @@ function arrayRedefinition(segments: readonly TomlSegment[], writes: readonly It
 }
 
 function arrayRedefinitionFailure(shown: string, found: { line: number; path: readonly string[]; header: readonly string[] }): string {
-  const name = tomlTableName(found.path);
+  const name = shownName(found.path);
   return (
     `Skipped ${shown}: line ${found.line} declares [[${name}]], an array of tables, where the engine writes a ` +
-    `[${tomlTableName(found.header)}] table under that name, and TOML gives \`${name}\` one definition: Codex would read ` +
+    `[${shownName(found.header)}] table under that name, and TOML gives \`${name}\` one definition: Codex would read ` +
     `the engine's table inside your array, or refuse the file. It was left untouched. Rename your array, or define each ` +
     `of your servers as an [mcp_servers.<id>] table, and re-run sync.`
   );
@@ -394,9 +401,9 @@ function doubleDefinition(segments: readonly TomlSegment[], items: readonly Item
 
 function doubleDefinitionFailure(shown: string, found: { name: string; line: number; first: number }): string {
   return (
-    `Skipped ${shown}: line ${found.line} defines [${found.name}] a second time (line ${found.first} defines it first), and ` +
+    `Skipped ${shown}: line ${found.line} defines ${shownTable(found.name)} a second time (line ${found.first} defines it first), and ` +
     `TOML refuses a table defined twice, so Codex would load none of this file. It was left untouched. Merge the two ` +
-    `[${found.name}] tables into one and re-run sync.`
+    `${shownTable(found.name)} tables into one and re-run sync.`
   );
 }
 
@@ -423,8 +430,8 @@ function hooksOffKey(raw: string, keys: readonly TomlKeyLine[]): { line: number;
 }
 
 function hooksOffSentence(shown: string, found: { line: number; table: readonly string[]; key: readonly string[] }): string {
-  const key = tomlTableName(found.key);
-  const where = found.table.length === 0 ? "" : ` in [${tomlTableName(found.table)}]`;
+  const key = shownName(found.key);
+  const where = found.table.length === 0 ? "" : ` in [${shownName(found.table)}]`;
   return (
     `Codex runs no hook from .codex/hooks.json, the engine's guards included, while ${shown} sets \`${key} = false\`${where} ` +
     `(line ${found.line}): set \`${key} = true\`, or remove the key.`
@@ -673,7 +680,7 @@ export function reduceCodexConfigToml(
       kind: "untouched",
       refused: true,
       detail:
-        `This Codex configuration defines [${doubled.name}] twice outside the engine's tables (lines ${doubled.first} and ` +
+        `This Codex configuration defines ${shownTable(doubled.name)} twice outside the engine's tables (lines ${doubled.first} and ` +
         `${doubled.line}), and TOML refuses a table defined twice, so what is left once the engine's tables are out ` +
         `cannot be read. Nothing was removed and nothing was deleted — merge the two tables by hand.`,
     };

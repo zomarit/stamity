@@ -1152,6 +1152,33 @@ describe("a standard table defined twice in the kept file is a co-owned-shape co
     expect(reduction.detail).toContain("defined twice");
   });
 
+  // review/102, review/100: an owner's table name reaches a message — the planner's warning and
+  // collision, the reducer's detail that sync, clean and --json print — as printableName gives it.
+  // A quoted header's \U escapes decode to code points no terminal or agent should be handed raw,
+  // and a literal-quoted one carries them as they are.
+  it("names an owner's table without the bidi, tag, separator or default-ignorable code points its quoted header holds", () => {
+    const BS = String.fromCharCode(92);
+    const hidden = [0x202e, 0x2066, 0x0085, 0x2028, 0xe0041, 0xfe0f, 0xe0100, 0x2061];
+    const escaped = hidden.map((code) => `${BS}U${code.toString(16).padStart(8, "0")}`).join("");
+    const literal = hidden.filter((code) => code !== 0x0085 && code !== 0x2028).map((code) => String.fromCodePoint(code)).join("");
+    for (const header of [`["a${escaped}b"]`, `['a${literal}b']`]) {
+      const text = `${header}\nx = 1\n\n${header}\ny = 2\n`;
+      const planned = plan(text, ADOPTION);
+      expect(planned.collision).toBe(twice('"ab"', 4, 1));
+      expect(planned.result.warning).toBe(twice('"ab"', 4, 1));
+      const reduction = reduce(`${EMPTY}\n${text}`, { record: recordFor("features", "mcp_servers") });
+      expect(reduction.detail).toContain('defines ["ab"] twice');
+      for (const code of hidden) {
+        expect(planned.collision, `U+${code.toString(16)}`).not.toContain(String.fromCodePoint(code));
+        expect(reduction.detail, `U+${code.toString(16)}`).not.toContain(String.fromCodePoint(code));
+      }
+    }
+    // The key-without-a-header refusal names the owner's dotted key the same way.
+    const redefined = plan(`mcp_servers.team."a${escaped}b" = 1\n`, ADOPTION);
+    expect(redefined.collision).toContain('`mcp_servers.team."ab"`');
+    for (const code of hidden) expect(redefined.collision, `U+${code.toString(16)}`).not.toContain(String.fromCodePoint(code));
+  });
+
   it("init skips the file byte for byte, check exits 1 on it, and sync after an owner's edit skips it too", async () => {
     const root = await freshRepo();
     const owner = 'model = "o3"\n\n[features]\nweb_search = true\n\n[features]\nhooks = true\n';
