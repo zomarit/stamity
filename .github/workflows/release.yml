@@ -126,7 +126,7 @@ jobs:
       # Recheck that endpoint contract when GitHub changes the roster. The pinned
       # hardener also manages runner-service/cache endpoints; see release-egress.md.
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: block
           disable-sudo: true
@@ -576,7 +576,7 @@ jobs:
       # `registry.npmjs.org` is absent because this job installs nothing from npm, and the OIDC and
       # Sigstore hosts are absent for the reason they are absent from `gates`: no token lives here.
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: block
           disable-sudo: true
@@ -728,7 +728,7 @@ jobs:
       #   results-receiver.actions.githubusercontent.com,
       #   productionresultssa0..19.blob.core.windows.net — GitHub artifact storage
       - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: block
           disable-sudo: true
