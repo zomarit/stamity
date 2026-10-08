@@ -18,7 +18,7 @@ cannot be checked against the code is prose.
 Paragraphs headed "Amended 2026-10-06", the table row and the criteria marked
 "added 2026-10-06" come from the spec delta the unit `u5a-overlay-refusal`
 declared in run `2026-10-03_pack-engine-defects`, merged at its close. They cite
-the tree at `eb4f0727` and are not in a release yet.
+the tree at `eb4f0727` and shipped with 1.12.0.
 
 ## Intent
 

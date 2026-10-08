@@ -24,9 +24,9 @@ head once `sw17-touchpoints-as-shared-skills` had integrated. They are not in a 
 amendment dated 2026-10-01 to REQ-PROVE-020 was written at the 1.11.0 cut, on the release branch; it
 cites the tree at `108c57e0` and is not in a release yet. The amendment dated 2026-10-06 to REQ-PROVE-004 comes from
 the spec delta the unit `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at that run's
-close; it cites the tree at `eb4f0727` and is not in a release yet. The amendment dated 2026-10-08 to REQ-PROVE-016
+close; it cites the tree at `eb4f0727` and shipped with 1.12.0. The amendment dated 2026-10-08 to REQ-PROVE-016
 comes from the unit `e3-spec-status-written-ahead` in run `2026-10-07_release-1-12-0`; it cites the tree at
-`4589ace1` and is not in a release yet.
+`4589ace1` and shipped with 1.12.0.
 
 ## Intent
 

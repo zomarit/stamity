@@ -18,8 +18,8 @@ trigger on 2026-09-10.
 Every claim about existing behaviour below carries a `path:line` citation taken from the tree
 at `f62d526` (main after the 1.4.0 release and the post-release cleanup). The paragraphs headed
 "Amended 2026-10-06" come from the spec delta the unit `u5a-overlay-refusal` declared in run
-`2026-10-03_pack-engine-defects`, merged at its close; they cite `eb4f0727` and are not in a release
-yet. Those that name a review row (`review/60`, `review/66`) come from the same run's
+`2026-10-03_pack-engine-defects`, merged at its close; they cite `eb4f0727` and shipped with
+1.12.0. Those that name a review row (`review/60`, `review/66`) come from the same run's
 close review and cite the commit that carries them.
 
 ## Intent

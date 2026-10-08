@@ -321,8 +321,8 @@ patched version of either exists:
 - `braces` <= 3.0.3 (GHSA-vfj7-8cjw-p6xm, high, stack exhaustion through deeply nested patterns),
   alert #26, in the docs site's lockfile only: the published CLI does not reach it.
 
-Each lockfile moves once its advisory names a patched version. Before these, the one item recorded here as accepted was the documentation site's
-`image-size` dependency, reached through Docusaurus's MDX loader: two high-severity advisories
+Each lockfile moves once its advisory names a patched version. Before these, the one item recorded
+here as accepted was the documentation site's `image-size` dependency, reached through Docusaurus's MDX loader: two high-severity advisories
 described denial of service through infinite loops in its ICNS, JXL and HEIF parsers while no fixed
 version existed. Both advisories now name 2.0.3 as patched, the re-open trigger this page set, and
 the site's lockfile moved to 2.0.4 on 2026-09-28, from the same package and maintainer rather than a

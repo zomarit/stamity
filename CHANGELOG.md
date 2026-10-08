@@ -51,8 +51,8 @@ as its item below says.
   bytes still match what the ledger recorded. An old guard you edited is kept, and the sync report
   lists it among the files that are yours now. `check` and `sync --dry-run` show the deletion first.
 - **The shared files are owned entry by entry.** In `.claude/settings.json`, `.cursor/hooks.json`
-  and `.codex/hooks.json` the engine owns only the allow rows and hook entries it wrote, and in
-  `.codex/config.toml` only its own tables. Your `deny` and `ask` rules, your own rows, hook
+  and `.codex/hooks.json` the engine owns only the allow rows and hook entries it wrote, with
+  Cursor's `version` and Codex's `description`, and in `.codex/config.toml` only its own tables. Your `deny` and `ask` rules, your own rows, hook
   entries and tables, and keys such as `model`, `env` and `enabledPlugins` survive every `sync`
   and `clean`. At 1.11.0 a deny rule added after setup was removed by the next plain `sync`.
 - **`sync --force` no longer replaces an unparseable `.claude/settings.json`.** A settings file
