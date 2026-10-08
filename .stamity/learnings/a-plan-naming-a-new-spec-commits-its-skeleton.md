@@ -6,7 +6,7 @@ confidence: high
 reviewBy: 2027-04-29
 validatedAgainst: "npx vitest run test/records/specStatus.test.ts in a scratch copy of b28d6a6b with a probe plan naming a missing docs/specs/ path, then a skeleton without and with status: design, 2026-09-30"
 summary: "a plan naming a new docs/specs/ path turns test/records/specStatus.test.ts red until the same commit carries the spec skeleton with status: design (probed 2026-09-30)"
-integrity: sha256:6656537441b679b641379f90864c69d6b2b5192a0f286c9bccd4f1272c61245b
+integrity: sha256:35b783501650d1b6954e8a3da886fc751c8d157700e61370e833abf463f70bbc
 ---
 
 `test/records/specStatus.test.ts` reads every plan under `docs/plans/` and treats each
@@ -34,9 +34,11 @@ with a skeleton carrying no frontmatter it failed 1 of 10 on the vocabulary case
 frontmatter `status`"); with `status: design` in the head it passed (9 passed, 1 skipped: the
 shipped-spec case needs release tags, which that copy had no git history for). A `design` spec
 named by an unshipped plan is not a problem for the shipped-spec case, which fires only once the
-plan's `stamp:` commit is an ancestor of the newest `v*` tag. The requirement headings are not
-read by this test; they are what `content/skills/st-verify/scripts/spec-plan-coverage.mjs` reads
-as definitions when a plan's requirement ids are checked against the spec. Review horizon:
+plan's `stamp:` commit is an ancestor of the newest `v*` tag. Since 4589ace1 that case also reads
+the requirement ids the spec defines: a `design` spec named by a shipped plan passes while it
+defines ids and no file under `test/` cites one. The same headings are what
+`content/skills/st-verify/scripts/spec-plan-coverage.mjs` reads as definitions when a plan's
+requirement ids are checked against the spec. Review horizon:
 retire this if the gate starts accepting a forward reference (a plan naming a spec it will
 create), or if plans stop naming spec paths.
 

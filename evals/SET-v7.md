@@ -793,8 +793,8 @@ inside the sentence that makes the claim and before its full stop, gives one inl
 helper at `src/http/retry.ts:41` that stops after three attempts, and says a band set after the full
 stop or an assumption opened as its own sentence is outside the claim (+3 lines, the paragraph
 now 100-108). The same helper is the scenario of `agent-researcher-return-contract`, whose Brief
-quotes `stamity-researcher.md` and never `st-ask.md`, so no case's Brief quotes the example and
-none is handed its answer (corrected 2026-10-08: this paragraph first said the example came from
+quotes `stamity-researcher.md` and never `st-ask.md`, so no Brief whose scenario is that helper
+quotes the example and no case is handed its answer (corrected 2026-10-08: this paragraph first said the example came from
 a scenario no case uses). `ask-citation-discipline` moves 91-105 → 91-108 and its Brief re-quotes the
 paragraph; its `## Expected` block, B4 included, does not move, so its bar holds and only the text
 it is measured against is clearer. Every later line moves down by three, and two cases move their
