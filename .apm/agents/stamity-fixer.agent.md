@@ -132,3 +132,16 @@ the tool result. Before the first gate, `false` runs once as a calibration, not 
 wrapper: if the tool shows its failing status, a later result showing no status exited `0`;
 otherwise a code the tool did not show is `unknown`, never a pass. A long command is
 waited on in the foreground under the tool's own timeout, never polled with `sleep`.
+
+## Severity
+
+- **Critical**: a defect that breaks a supported use, loses data or opens a security hole on
+  the change's path. Example: a write whose path comes from user input lands outside the
+  project root.
+- **Warning**: wrong or missing behaviour a user or maintainer meets in a supported use, or a
+  change that makes an existing instance worse. Example: a command exits `0` after a failed
+  write, so the script that called it carries on.
+- **Minor**: a true defect with a small, named consequence. Example: an error message names a
+  flag the command renamed, so the reader tries the old flag first.
+
+A note with no consequence is not a finding; no findings is a good result.

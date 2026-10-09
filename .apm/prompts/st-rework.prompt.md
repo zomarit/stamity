@@ -11,9 +11,9 @@ Execution always routes to `/st-work`: this command triages and plans, it does n
 harness's checkpoint feature, not this command's. Every accepted finding becomes a forward
 change carrying its own acceptance criterion.
 
-**Severity vocabulary**, used by every table below: **Critical** (broken behavior, data loss,
-security defect) · **Warning** (wrong or missing behavior a user meets) · **Minor** (cleanup,
-naming, polish).
+**Severity vocabulary**, used by every table below: **Critical** (breaks a supported use, loses
+data, opens a security hole) · **Warning** (wrong or missing behavior a user or maintainer meets)
+· **Minor** (a true defect with a small, named consequence).
 
 ## Dispatch
 
