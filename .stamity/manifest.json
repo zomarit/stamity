@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T06:02:13.155Z",
+  "updatedAt": "2026-10-09T06:14:18.347Z",
   "tools": [
     "claude"
   ],
@@ -211,7 +211,7 @@
       "adapter": "claude",
       "artifactId": "injection-screening",
       "artifactType": "rule",
-      "contentHash": "c50f682aee1d6fda5cfb22d80fb2d5a49b0c73718f3e174be50760adec62c916",
+      "contentHash": "b2e787a49c12892c04a16ba0f7b2124d97d5c1aa9c76afc053ea2b25d7e553bc",
       "path": ".claude/rules/stamity-injection-screening.md"
     },
     {
