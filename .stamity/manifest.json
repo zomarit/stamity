@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T05:56:23.490Z",
+  "updatedAt": "2026-10-09T06:02:13.155Z",
   "tools": [
     "claude"
   ],
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "c0b82ab3f58e78741610df25137fc228bf0161fb1779fe6af6d1d20eb0f51fbd",
+      "contentHash": "1c4f02647e8a3b087c82fd9ef97f2e5640592923dde9b409add32c92b4106a6e",
       "path": ".claude/commands/st-plan.md"
     },
     {
