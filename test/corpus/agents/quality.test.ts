@@ -269,6 +269,36 @@ describe("test-runner — gate set", () => {
     expect(text).toMatch(/altered to pass has measured nothing/i);
     expect(text).toMatch(/no wrapper around it/i);
   });
+
+  // Added 2026-10-09 (plan 019 file 2, unit p3c-work-gates; REQ-FLOW-063): the runner maps a
+  // change's class onto the gates. `/st-work`'s Gates section points here for the mapping, so the
+  // full gates from `product` up, the CI condition and the `unknown`-provider rule are pinned on
+  // this body (`test/corpus/commands/work.test.ts` pins the orchestrator's half).
+  it("maps a class's checks onto the gates, the full gates from product up", async () => {
+    const gates = section(await load("agents/stamity-test-runner.md"), "Gate set").replace(/\s+/g, " ");
+
+    expect(gates).toContain("the change's class, its checks and its selected test files as `gate classify` named them");
+    expect(gates).toContain(
+      "`tests-selected` → `test` with the selected files appended, the whole suite when the selection reads `full`, and no row when it names none",
+    );
+    expect(gates).toContain("`lint` → `lint`; `typecheck` → `typecheck`");
+    expect(gates).toContain("`gates-all`, an `unclear` class, or a test command that takes no file list → `all`");
+    expect(gates).toContain("On the final tree a `product` or stronger class runs `all`.");
+    // The condition the narrowing rests on, stated as a condition (sign-off on `plan/51`).
+    expect(gates).toContain(
+      "The narrower gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger change and on a schedule.",
+    );
+    expect(gates).toContain("Where the charter's `CI provider` reads `unknown`, the final tree runs `all` whatever the class.");
+  });
+
+  // Added 2026-10-09 (plan 019 file 2, unit p3c-work-gates): a class's selected files are the one
+  // narrowing filter a brief supplies, so the narrow run is not an altered gate.
+  it("accepts a class's selected files as the brief's narrow run", async () => {
+    const text = flow(await load("agents/stamity-test-runner.md"));
+
+    expect(text).toContain("full suite, or the file set the brief scopes, such as a class's selected files");
+    expect(text).toMatch(/no filter narrowing the suite unless the brief supplied it; a class's selected files are such a filter/i);
+  });
 });
 
 describe("test-runner — structured result", () => {

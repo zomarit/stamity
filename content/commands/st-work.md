@@ -213,18 +213,21 @@ re-reading its transcript:
 
 ### Gates
 
-Each Prove pass spawns a dedicated test-runner sub-agent that runs each gate
-once, as the charter spells it (no wrapper, pipe, redirect or re-run), and
-reads the exit code from the tool: a code it cannot read is `unknown`, never
-a pass. It returns gate-by-gate pass/fail/unknown, the exact command run per
-gate, and verbatim failing excerpts. Bare pass/fail is not a result. A pass
-may cite this run's earlier result on a byte-identical tree (same HEAD, same
-diff, untracked files included); the final tree always gets a run of its own,
-and citing is never a lighter pass. Judgment-only passes (spec review, plan
-review) may run inline — they execute no commands.
-
-Gate commands are the charter's verification gates: `${STAMITY:VERIFY_GATE_ALL}`
-for the full pass, the narrow gates in the `test-runner` agent file for re-runs.
+Each Prove pass first runs `stamity gate scan --base <the run's base>`: a hit stops it, naming
+path, line and rule, never the value, never cleared by rewriting the value and scanning again; a
+hit on a deliberate fixture is the person's to settle. An `unscanned` list puts
+`secret scan: <n> files unscanned` under `Not done:`. `stamity gate classify` names the class:
+its checks run on the selected files in the build, its gates on the final tree, as `test-runner`
+maps them. With no base, the scan takes `HEAD` and the final tree runs
+`${STAMITY:VERIFY_GATE_ALL}` unclassified (`unclear`); committed work then lists
+`secret scan: not run` under `Not done:`, as do a CLI that cannot run and a scan naming a
+`reason`, both on the full gates. A class naming `review-once` gets one review pass: a Critical or
+Warning it raises is fixed and closure-reviewed once, and no further round runs. The test-runner
+runs each gate once and reads the exit code from the tool (`unknown`, never a pass), returning
+gate-by-gate pass/fail/unknown, commands and verbatim failing excerpts. Bare pass/fail is not a
+result. A pass may cite this run's earlier result on a byte-identical tree (same HEAD, diff,
+untracked files); the final tree always gets a run of its own, and citing is never a lighter
+pass. Judgment-only passes run inline.
 
 ### Review loop
 
@@ -329,8 +332,9 @@ none left, there is no ask.
 Every run ends with a proof block, machine- and human-readable, doubling as an
 audit record:
 
-- gate results — per gate: command, pass/fail/unknown, failing excerpt if
-  any, or the earlier result a byte-identical tree cites
+- gate results — the change's class as `gate classify` named it (`unclear`
+  when none ran), then per gate: command, pass/fail/unknown, failing excerpt
+  if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
 - QA rows — per row: `walked`, `auto-proven` with its pointer, or

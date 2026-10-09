@@ -6797,15 +6797,26 @@ acts on.
 ## Gate set
 
 Gate commands arrive already resolved from the charter's verification gates.
-The brief names which gates to run; \`all\` is the default for a Prove pass, and
-the three narrow gates are for a targeted re-run after a fix.
+The brief names which gates to run, or the change's class, its checks and its
+selected test files as \`gate classify\` named them; \`all\` is the default for a
+Prove pass, and the three narrow gates are for a targeted re-run after a fix.
 
 | Gate | Command | Use |
 |---|---|---|
-| test | \`npx vitest run\` | full suite, or the file set the brief scopes |
+| test | \`npx vitest run\` | full suite, or the file set the brief scopes, such as a class's selected files |
 | lint | \`npx eslint .\` | style and static rules |
 | typecheck | \`npx tsc --noEmit\` | type errors; on stacks with no separate step this resolves to the lint command |
 | all | \`npx tsc --noEmit && npx eslint . && npx vitest run\` | the chained pass: lint, then typecheck, then tests |
+
+A class's checks map to gates: \`tests-selected\` → \`test\` with the selected files
+appended, the whole suite when the selection reads \`full\`, and no row when it
+names none; \`lint\` → \`lint\`; \`typecheck\` → \`typecheck\`; \`gates-all\`, an
+\`unclear\` class, or a test command that takes no file list → \`all\`. The other
+checks are the orchestrator's. On the final tree a \`product\` or stronger class
+runs \`all\`. The narrower gates rest on one condition: the repository's CI runs
+the full matrix on every \`product\` or stronger change and on a schedule. Where
+the charter's \`CI provider\` reads \`unknown\`, the final tree runs \`all\` whatever
+the class.
 
 \`all\` is a \`&&\` chain and stops at the first failing link. A gate the chain
 never reached is reported \`not-run\`, not \`pass\` — reporting an unreached gate as
@@ -6815,7 +6826,8 @@ each requested gate runs once per pass, and never both ways over one tree.
 
 Run each command from the repository root exactly as resolved: no environment edits, no
 flag added to the resolved command, no wrapper around it, and no filter narrowing the suite
-unless the brief supplied it. A gate that is altered to pass has measured nothing.
+unless the brief supplied it; a class's selected files are such a filter. A gate that is
+altered to pass has measured nothing.
 
 ## Structured result
 
@@ -7221,18 +7233,21 @@ re-reading its transcript:
 
 ### Gates
 
-Each Prove pass spawns a dedicated test-runner sub-agent that runs each gate
-once, as the charter spells it (no wrapper, pipe, redirect or re-run), and
-reads the exit code from the tool: a code it cannot read is \`unknown\`, never
-a pass. It returns gate-by-gate pass/fail/unknown, the exact command run per
-gate, and verbatim failing excerpts. Bare pass/fail is not a result. A pass
-may cite this run's earlier result on a byte-identical tree (same HEAD, same
-diff, untracked files included); the final tree always gets a run of its own,
-and citing is never a lighter pass. Judgment-only passes (spec review, plan
-review) may run inline — they execute no commands.
-
-Gate commands are the charter's verification gates: \`npx tsc --noEmit && npx eslint . && npx vitest run\`
-for the full pass, the narrow gates in the \`test-runner\` agent file for re-runs.
+Each Prove pass first runs \`stamity gate scan --base <the run's base>\`: a hit stops it, naming
+path, line and rule, never the value, never cleared by rewriting the value and scanning again; a
+hit on a deliberate fixture is the person's to settle. An \`unscanned\` list puts
+\`secret scan: <n> files unscanned\` under \`Not done:\`. \`stamity gate classify\` names the class:
+its checks run on the selected files in the build, its gates on the final tree, as \`test-runner\`
+maps them. With no base, the scan takes \`HEAD\` and the final tree runs
+\`npx tsc --noEmit && npx eslint . && npx vitest run\` unclassified (\`unclear\`); committed work then lists
+\`secret scan: not run\` under \`Not done:\`, as do a CLI that cannot run and a scan naming a
+\`reason\`, both on the full gates. A class naming \`review-once\` gets one review pass: a Critical or
+Warning it raises is fixed and closure-reviewed once, and no further round runs. The test-runner
+runs each gate once and reads the exit code from the tool (\`unknown\`, never a pass), returning
+gate-by-gate pass/fail/unknown, commands and verbatim failing excerpts. Bare pass/fail is not a
+result. A pass may cite this run's earlier result on a byte-identical tree (same HEAD, diff,
+untracked files); the final tree always gets a run of its own, and citing is never a lighter
+pass. Judgment-only passes run inline.
 
 ### Review loop
 
@@ -7337,8 +7352,9 @@ none left, there is no ask.
 Every run ends with a proof block, machine- and human-readable, doubling as an
 audit record:
 
-- gate results — per gate: command, pass/fail/unknown, failing excerpt if
-  any, or the earlier result a byte-identical tree cites
+- gate results — the change's class as \`gate classify\` named it (\`unclear\`
+  when none ran), then per gate: command, pass/fail/unknown, failing excerpt
+  if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or \`effort: not settable\`
 - QA rows — per row: \`walked\`, \`auto-proven\` with its pointer, or

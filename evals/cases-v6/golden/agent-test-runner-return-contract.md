@@ -2,7 +2,7 @@
 id: agent-test-runner-return-contract
 class: golden
 claim: "A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch."
-source: content/agents/stamity-test-runner.md:14-17,42-136
+source: content/agents/stamity-test-runner.md:14-17,54-148
 metric: rubric
 ---
 

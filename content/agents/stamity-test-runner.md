@@ -19,15 +19,26 @@ acts on.
 ## Gate set
 
 Gate commands arrive already resolved from the charter's verification gates.
-The brief names which gates to run; `all` is the default for a Prove pass, and
-the three narrow gates are for a targeted re-run after a fix.
+The brief names which gates to run, or the change's class, its checks and its
+selected test files as `gate classify` named them; `all` is the default for a
+Prove pass, and the three narrow gates are for a targeted re-run after a fix.
 
 | Gate | Command | Use |
 |---|---|---|
-| test | `${STAMITY:VERIFY_GATE_TEST}` | full suite, or the file set the brief scopes |
+| test | `${STAMITY:VERIFY_GATE_TEST}` | full suite, or the file set the brief scopes, such as a class's selected files |
 | lint | `${STAMITY:VERIFY_GATE_LINT}` | style and static rules |
 | typecheck | `${STAMITY:VERIFY_GATE_TYPECHECK}` | type errors; on stacks with no separate step this resolves to the lint command |
 | all | `${STAMITY:VERIFY_GATE_ALL}` | the chained pass: lint, then typecheck, then tests |
+
+A class's checks map to gates: `tests-selected` → `test` with the selected files
+appended, the whole suite when the selection reads `full`, and no row when it
+names none; `lint` → `lint`; `typecheck` → `typecheck`; `gates-all`, an
+`unclear` class, or a test command that takes no file list → `all`. The other
+checks are the orchestrator's. On the final tree a `product` or stronger class
+runs `all`. The narrower gates rest on one condition: the repository's CI runs
+the full matrix on every `product` or stronger change and on a schedule. Where
+the charter's `CI provider` reads `unknown`, the final tree runs `all` whatever
+the class.
 
 `all` is a `&&` chain and stops at the first failing link. A gate the chain
 never reached is reported `not-run`, not `pass` — reporting an unreached gate as
@@ -37,7 +48,8 @@ each requested gate runs once per pass, and never both ways over one tree.
 
 Run each command from the repository root exactly as resolved: no environment edits, no
 flag added to the resolved command, no wrapper around it, and no filter narrowing the suite
-unless the brief supplied it. A gate that is altered to pass has measured nothing.
+unless the brief supplied it; a class's selected files are such a filter. A gate that is
+altered to pass has measured nothing.
 
 ## Structured result
 

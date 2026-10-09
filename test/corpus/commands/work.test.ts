@@ -736,6 +736,51 @@ describe("/st-work — Prove", () => {
     expect(raw).not.toMatch(/PIPESTATUS|\$\?/);
   });
 
+  // Added 2026-10-09 (plan 019 file 2, unit p3c-work-gates; REQ-FLOW-063, REQ-FLOW-066): the Prove
+  // pass scans the change against the run's base first, then takes the class's gates. The
+  // check-to-gate mapping, the full gates from `product` up and the CI condition live in the
+  // test-runner body (`test/corpus/agents/quality.test.ts` pins them); what stays here is the
+  // orchestrator's: the scan and its stop, the class step, the no-base rule and `review-once`.
+  it("scans against the run's base first, then runs the class's gates", async () => {
+    const gates = collapse(section(await body(), "### Gates"));
+    const scan = "Each Prove pass first runs `stamity gate scan --base <the run's base>`";
+    expect(gates).toContain(scan);
+    // A hit always stops, named by place and rule, never by value, and never cleared by a respell
+    // (sign-off on `plan/57`).
+    expect(gates).toContain("a hit stops it, naming path, line and rule, never the value");
+    expect(gates).toContain("never cleared by rewriting the value and scanning again");
+    expect(gates).toContain("a hit on a deliberate fixture is the person's to settle");
+    expect(gates).toContain("An `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`");
+    // The class step: the selected files during the build, the class's gates on the final tree.
+    const classify = "`stamity gate classify` names the class";
+    expect(gates).toContain(classify);
+    expect(gates).toContain("its checks run on the selected files in the build, its gates on the final tree");
+    expect(gates).toContain("as `test-runner` maps them");
+    // No nameable base (`plan/39`, `plan/56`), a CLI that cannot run (`plan/32`), and a scan that
+    // read nothing (p3b's rule) all take the full gates with the scan named as not run.
+    expect(gates).toContain(
+      `With no base, the scan takes \`HEAD\` and the final tree runs \`${VERIFY_GATE_ALL_TOKEN}\` unclassified (\`unclear\`)`,
+    );
+    expect(gates).toContain("committed work then lists `secret scan: not run` under `Not done:`");
+    expect(gates).toContain("as do a CLI that cannot run and a scan naming a `reason`, both on the full gates");
+    // One review pass for a `review-once` class (`plan/48`).
+    expect(gates).toContain(
+      "A class naming `review-once` gets one review pass: a Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs",
+    );
+    // The order is the pass's order: scan, classify, then the runner.
+    expect(gates.indexOf(scan)).toBeLessThan(gates.indexOf(classify));
+    expect(gates.indexOf(classify)).toBeLessThan(gates.indexOf("The test-runner runs each gate once"));
+  });
+
+  // Added 2026-10-09 (plan 019 file 2, unit p3c-work-gates; REQ-FLOW-015, `plan/40`): the gate line
+  // names the class the gates followed before the per-gate rows.
+  it("names the change's class on the proof block's gate line", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain(
+      "- gate results — the change's class as `gate classify` named it (`unclear` when none ran), then per gate: command, pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites",
+    );
+  });
+
   it("records gate results as pass/fail/unknown in the proof block", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("per gate: command, pass/fail/unknown");
