@@ -92,12 +92,19 @@ const CAPTURE_PINS: readonly CapturePin[] = [
       "A note with no consequence (wording, naming, style, comment drift, a tidier shape, a " +
       "\"might\" with no trigger) is not a finding: the report lists it and the digest counts it.",
   },
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, fix round 1 for review
+   * p8a–p8c (review/52, W-1, signed off). This pin held "is a `Minor` finding", which graded
+   * every note promoted to a finding `Minor`, so one with a Warning or security consequence never
+   * reached the human checkpoint or a fix round. It now holds the security lens's wording: the
+   * consequence sets the severity.
+   */
   {
     relPath: REVIEWER,
     section: "Rubric",
     phrase:
       "A note whose consequence shows once looked at, such as a misleading message a user acts " +
-      "on, is a `Minor` finding.",
+      "on, is a finding at the severity that consequence sets.",
   },
   {
     relPath: REVIEWER,
@@ -375,9 +382,11 @@ describe("capture by consequence — a finding names its consequence, a note is 
 
   it("(f) fails when the reviewer drops the `pre-existing:` lead or the notes count", async () => {
     const reviewer = await load(REVIEWER);
+    // TEST CHANGE, justified: 2026-10-09, review/52 rewrapped the Rubric paragraph, so the lead
+    // now sits on one line; the cut is the same words, matched where they now lie.
     const noLead = corpusFileOf(
       reviewer.relPath,
-      reviewer.raw.replace("its\n`summary` leading `pre-existing:`", "its `summary` as usual"),
+      reviewer.raw.replace("its `summary` leading `pre-existing:`", "its `summary` as usual"),
     );
     const noCount = corpusFileOf(
       reviewer.relPath,

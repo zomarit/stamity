@@ -1035,6 +1035,18 @@ removed, and no identical/moved count moves (both cases already differed from th
 copies). Under the incremental rule the two re-measure, because their case-file bytes moved. The
 dated citations above stay as they were.
 
+**No range moved and one reviewer Brief re-quoted, 2026-10-09 (plan 019 file 2, fix round 1 for
+the review of p8a–c, W-1).** A note whose consequence shows once looked at is now a finding at the
+severity that consequence sets, the security lens's wording, rather than always a `Minor` finding,
+so a note with a Warning or security consequence reaches the loop. In
+`content/agents/stamity-reviewer.md` the Rubric's capture paragraph is rewrapped in its own three
+lines (29-31, 0 lines), so no `source:` range moves. `agent-reviewer-return-contract` (29-31 inside
+14-31,100-197 → unchanged) re-quotes those three lines byte-identical from the landed file. No
+`## Expected` block moves: the scenario gives both Minors and their small consequences as fact, so
+B7's grading holds. `EXPECTED_MOVES` gains no row, its claim and case-index cell do not move, and
+no roster count moves. Under the incremental rule the case re-measures, because its case-file bytes
+moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
