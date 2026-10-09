@@ -114,6 +114,17 @@ from Step 4 as its inputs and produces the phase skeleton and rollback points,
 then `/st-work` executes that plan. Route there rather than splitting one sweep
 into a queue of scoped changes nobody sequenced.
 
+## Before the security lens
+
+`/st-work` runs this audit ahead of the `security` lens when the change's class
+names the `dependency-audit` check: a proven bump of dependency lockfiles alone,
+with no bumped package carrying an install script. The audit flags something
+when it reports an advisory at any severity, a licence flag (Step 3), or an
+update-risk class other than `patch` or `minor` (Step 4); a flag sends the
+change to the lens. A `partial` run, or an audit that cannot run, counts as a
+flag, so the bump never leaves with neither. The audit stays report-only in
+this role.
+
 ## Output artifact
 
 The report is the deliverable — returned to the caller, not written to a new

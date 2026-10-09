@@ -269,14 +269,17 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
 
 ### Specialist pass
 
-Three review lenses run beside the loop: `security`, `design-quality`,
-`performance`. A lens is pulled in by a changed path or by the task's topic —
-the trigger roster is the single source of those patterns and each specialist
-body names its surfaces, so no row is copied here. Deep runs the full pass;
-standard and light run the `security` lens on a trigger-path match; light runs
-no other lens. The charter's universal floor holds at every tier, so a tier
-that skipped the security lens outright made that floor false — a trigger-path
-match is the narrowest shape that keeps it true.
+Three review lenses run beside the loop: `security`, `design-quality`, `performance`. A lens is
+pulled in by a changed path or by the task's topic — the trigger roster is the single source of
+those patterns and each specialist body names its surfaces, so no row is copied here. Topic words
+may add a lens and never remove one. Deep runs the full pass; standard runs a lens on a trigger-path
+match. The `security` lens runs at every tier when `stamity gate classify` names the class
+`security-sensitive`, and on a trigger-path match; light runs no other lens. The charter's universal
+floor holds at every tier, so a tier that skipped the security lens outright made that floor false.
+When the class's checks name `dependency-audit` (a bump of dependency lockfiles alone, no bumped
+package carrying an install script), the dependency audit runs first, and the lens only if the audit
+flags something, as that skill defines it. A bump of a package with an install script, any other
+lockfile format, a parse failure, or an audit that cannot run keeps the lens.
 
 - **Read-only.** A specialist returns findings and edits nothing. Repair is the
   fixer's, so no lens answers its own finding in the following round.

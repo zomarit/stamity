@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T05:39:18.700Z",
+  "updatedAt": "2026-10-09T05:46:45.383Z",
   "tools": [
     "claude"
   ],
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "26fb31b32148d1b71a36d475ff0bcf89e62822d1d90a47b1f6201cc6f86f16cb",
+      "contentHash": "725c93897dc32510e047a968fadaea833168a6fdd4543778ecdb39ded851e763",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -309,7 +309,7 @@
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "eec8b04ca6e68a50ddb64ee0d3d9ac3dc55a7c415ca40628705420bf7389fc90",
+      "contentHash": "3757a78cc6c00d7c259f6c546700d0c31d4662c670dc026457308a194d2620a0",
       "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {
