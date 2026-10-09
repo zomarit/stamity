@@ -70,9 +70,12 @@ import type { GitRunner } from "../../workspace/git.ts";
  * project's {@link CLASS_FILE} is read as the base commit's blob, under the
  * project's prefix, and merged with the built-in rules; the head copy and the
  * work tree's are never read, so a change cannot lower its own checks through
- * the file, and a change to the file is at least `config` by a built-in rule. A
- * base with no file gives the built-ins alone. A base copy the validator refuses
- * gives no map at all and at least `product`, its first error named (plan/25).
+ * the file, and a change to the file is `security-sensitive` by a built-in rule
+ * (review/49). A base with no file gives the built-ins alone. A base copy the
+ * validator refuses gives at least `product`, its first error named (plan/25),
+ * and applies only its raising entries (`product`, `public-contract`,
+ * `security-sensitive`) that parse on their own, never a lowering one
+ * (review/48).
  * With no base, no class file is read (D5). `--paths` with `--base` reads the
  * base copy the same way, from the same project root.
  *
@@ -348,7 +351,10 @@ function resolveBase(runner: GitRunner, cwd: string, ref: string): string | null
 }
 
 /** The base commit's class file: absent, read and valid, or refused with its first error. */
-type BaseClassFile = { state: "absent" } | { state: "valid"; rules: ClassRule[] } | { state: "invalid"; error: string };
+type BaseClassFile =
+  | { state: "absent" }
+  | { state: "valid"; rules: ClassRule[] }
+  | { state: "invalid"; error: string; raising: ClassRule[] };
 
 /**
  * `<commit>:<prefix>.stamity/change-classes.json`, read as a raw blob (`cat-file
@@ -362,9 +368,10 @@ function readBaseClassFile(runner: GitRunner, root: ProjectRoot, commit: string)
   const type = baseEntryType(runner, root.dir, commit, path);
   if (type === null) return { state: "absent" };
   const spec = `${commit}:${path}`;
-  if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file` };
+  if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file`, raising: [] };
   const parsed = parseClassFile(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
-  return parsed.ok ? { state: "valid", rules: parsed.rules } : { state: "invalid", error: parsed.errors[0] ?? "refused" };
+  if (parsed.ok) return { state: "valid", rules: parsed.rules };
+  return { state: "invalid", error: parsed.errors[0] ?? "refused", raising: parsed.raising };
 }
 
 /** The rules a base's class file gives, and the reason clause it adds, if any. */
@@ -373,9 +380,13 @@ function rulesFrom(classFile: BaseClassFile): { rules: readonly ClassRule[]; rea
   if (classFile.state === "absent") {
     return { rules: BUILT_IN_RULES, reason: `the base holds no ${CLASS_FILE}, so only the built-in rules apply` };
   }
+  const invalid = `the base copy of ${CLASS_FILE} is invalid (${classFile.error})`;
+  if (classFile.raising.length === 0) {
+    return { rules: BUILT_IN_RULES, reason: `${invalid}: no map was read from it, so the class is at least product` };
+  }
   return {
-    rules: BUILT_IN_RULES,
-    reason: `the base copy of ${CLASS_FILE} is invalid (${classFile.error}): no map was read from it, so the class is at least product`,
+    rules: mergeRules(BUILT_IN_RULES, classFile.raising),
+    reason: `${invalid}: only its product, public-contract and security-sensitive entries were read, so the class is at least product`,
   };
 }
 

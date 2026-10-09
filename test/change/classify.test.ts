@@ -110,7 +110,9 @@ describe("classifyChange: the built-in rules", () => {
     [".stamity/handoffs/h.md", "records"],
     ["docs/guide.md", "docs"],
     ["CHANGELOG.md", "docs"],
-    [".stamity/change-classes.json", "config"],
+    // TEST CHANGE, justified: 2026-10-09, review/49 — the class file decides every later change's checks, so the
+    // built-in rule places it security-sensitive (was config).
+    [".stamity/change-classes.json", "security-sensitive"],
     [".stamity/manifest.json", "security-sensitive"],
     [".stamity/overrides/rules/x.md", "security-sensitive"],
   ];
@@ -123,6 +125,14 @@ describe("classifyChange: the built-in rules", () => {
       expect(result.checks).toEqual([...CLASS_CHECKS[cls]]);
     });
   }
+
+  // review/49: a change to the class file gets the security lens, in any case, whatever the repository's own file says.
+  it("places the class file security-sensitive with the lens, a case variant included", () => {
+    for (const path of [".stamity/change-classes.json", ".Stamity/Change-Classes.json"]) {
+      expect(given([path]), path).toMatchObject({ class: "security-sensitive", lenses: ["stamity-security"] });
+    }
+    expect(outsideSecurityRule(".stamity/change-classes.json")).toBe("built-in .stamity/change-classes.json");
+  });
 
   it("places plans and specs in docs, with one review pass", () => {
     for (const path of ["docs/plans/x.md", "docs/specs/x.md"]) {
@@ -713,6 +723,10 @@ describe("parseClassFile: what the class file may say", () => {
     ["a test input with no glob", '{"testInputs": [{"tests": "all"}]}', "testInputs[0].glob is not a non-empty string"],
     ["a test input with no tests", '{"testInputs": [{"glob": "docs/**"}]}', 'testInputs[0].tests is neither "all" nor a list'],
     ["a test input with an unknown key", '{"testInputs": [{"glob": "docs/**", "tests": "all", "why": 1}]}', '"why" is not a key of testInputs[0]'],
+    // review/50: a glob's matching cost is bounded by its length and its ** count.
+    ["a glob longer than 200 characters", JSON.stringify({ classes: { product: [`${"a".repeat(198)}/**`] } }), "classes.product[0] is longer than 200 characters"],
+    ["a glob with more than four **", '{"classes": {"security-sensitive": ["**/a/**/b/**/c/**/d/**"]}}', "classes.security-sensitive[0] holds more than four **"],
+    ["a test-input glob with more than four **", '{"testInputs": [{"glob": "**/**/**/**/**.md", "tests": "all"}]}', "testInputs[0].glob holds more than four **"],
   ])("refuses %s", (_label, text, error) => {
     expect(firstError(text)).toContain(error);
   });
@@ -732,6 +746,49 @@ describe("parseClassFile: what the class file may say", () => {
       }
     },
   );
+
+  it("keeps a glob of exactly 200 characters and one with four **", () => {
+    const long = `${"a".repeat(197)}/**`;
+    expect(long).toHaveLength(200);
+    expect(accepted({ classes: { product: [long, "**/a/**/b/**/c/**"] } }).rules[0]?.paths).toHaveLength(2);
+  });
+
+  // review/47: a glob that leaves something literal is kept, and the floors bound what it can lower.
+  it.each([["**/*.*"], ["**.*"]])(
+    "bounds %s below product: config and code are never records or docs, and code is tests only under a built-in test glob",
+    (glob) => {
+      for (const cls of ["docs", "records"] as const) {
+        const rules = withFile({ classes: { [cls]: [glob] } });
+        expect(classOf("notes/a.png", rules).class, cls).toBe(cls);
+        for (const path of [".github/workflows/ci.yml", "config/app.json", "settings.toml", "src/x.ts", ".env.local", "conf/x.env"]) {
+          expect(classOf(path, rules).class, `${cls} ${path}`).toBe("product");
+        }
+      }
+      const tests = withFile({ classes: { tests: [glob] } });
+      expect(classOf("src/x.ts", tests).class).toBe("product");
+      expect(classOf("src/x.ts", tests).reason).toContain("src/x.ts");
+      expect(classOf("test/x.test.ts", tests).class).toBe("tests");
+      expect(classOf("notes/a.png", tests).class).toBe("tests");
+    },
+  );
+
+  it("holds every config format out of records and docs, the .env family included", () => {
+    const rules = withFile({ classes: { docs: ["notes/**"] } });
+    for (const ext of ["json", "jsonc", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml", "properties", "env", "JSON"]) {
+      expect(classOf(`notes/a.${ext}`, rules).class, ext).toBe("product");
+    }
+    for (const name of [".env", ".env.production", ".ENV.local"]) expect(classOf(`notes/${name}`, rules).class, name).toBe("product");
+    expect(classOf("notes/a.md", rules).class).toBe("docs");
+    expect(classOf("notes/environment.md", rules).class).toBe("docs");
+  });
+
+  it("places a code file in tests by a class-file glob only under a built-in test glob", () => {
+    const rules = withFile({ classes: { tests: ["src/**", "test/**"] } });
+    expect(classOf("src/x.ts", rules).class).toBe("product");
+    expect(classOf("src/x.test.ts", rules).class).toBe("tests");
+    expect(classOf("test/helpers/x.ts", rules).class).toBe("tests");
+    expect(classOf("src/fixtures/x.json", rules).class).toBe("tests");
+  });
 
   it("keeps a glob that only looks wide: one with a literal segment, or a single *", () => {
     expect(accepted({ classes: { docs: ["*", "**/*.md", "notes/**"] } }).rules[0]?.paths).toEqual([
@@ -767,6 +824,35 @@ describe("parseClassFile: what the class file may say", () => {
     expect(firstError(JSON.stringify({ testInputs: [{ glob: "docs/**", tests: [entry] }] }))).toContain(
       "holds whitespace or a control character",
     );
+  });
+
+  // review/48: a refused file still raises by each entry that parses on its own; it lowers by none.
+  it("keeps each raising entry of a refused file that parses on its own, and no lowering entry", () => {
+    const parsed = parseClassFile(
+      JSON.stringify({
+        classes: { "security-sensitive": ["lib/**"], product: ["app/**", ""], records: ["**"], docs: ["website/**"] },
+        testInputs: {},
+      }),
+    );
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.raising.map((rule) => [rule.class, rule.paths, rule.foldCase])).toEqual([
+      ["security-sensitive", ["lib/**"], true],
+      ["product", ["app/**"], true],
+    ]);
+    const rules = mergeRules(BUILT_IN_RULES, parsed.raising);
+    expect(classOf("lib/x.ts", rules)).toMatchObject({ class: "security-sensitive", lenses: ["stamity-security"] });
+    expect(classOf("website/x.md", rules).class).toBe("product");
+  });
+
+  it.each([
+    ["text that does not parse", '{ "classes": { "security-sensitive": ["lib/**"] '],
+    ["a value that is no object", '["lib/**"]'],
+    ["classes that are no object", '{"classes": [["security-sensitive", "lib/**"]]}'],
+  ])("keeps no raising entry from %s", (_label, text) => {
+    const parsed = parseClassFile(text);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.raising).toEqual([]);
   });
 
   it("lists every error, the first one first", () => {
@@ -818,7 +904,8 @@ describe("mergeRules: a class file's globs join their class and never lower a pa
   it("names the floor, not a stronger rule, when only the floor kept a code file out of a weak glob's class", () => {
     const result = classOf("website/src/x.tsx", withFile({ classes: { docs: ["website/**"] } }));
     expect(result.class).toBe("product");
-    expect(result.reason).toContain("kept out of records and docs as code or an extensionless file: website/src/x.tsx");
+    expect(result.reason).toContain("kept out of records and docs as code, config or an extensionless file");
+    expect(result.reason).toContain("outside a built-in test glob: website/src/x.tsx");
     expect(result.reason).not.toContain("weaker globs do not lower");
     const tests = classOf("test/x.ts", withFile({ classes: { docs: ["test/**"] } }));
     expect(tests.class).toBe("tests");

@@ -908,7 +908,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).toContain("no map was read from it, so the class is at least product");
     });
 
-    it("applies the base copy's rules when the change edits the file, and the change is at least config", async () => {
+    // TEST CHANGE, justified: 2026-10-09, review/49 — the built-in rule now places the class file security-sensitive
+    // (it decides every later change's checks), so a change editing it is security-sensitive, not config.
+    it("applies the base copy's rules when the change edits the file, and the change is security-sensitive", async () => {
       const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["notes/**"] }), "notes/x.md": "base\n" });
       // The head copy drops the docs glob: read, it would leave notes/x.md unplaced (product).
       await getRoot().seedFiles({ [`repo/${CLASS_FILE}`]: fileOf({ records: ["notes/**"] }), "repo/notes/x.md": "changed\n" });
@@ -916,8 +918,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
       expect(classOfPath(doc, "notes/x.md")).toBe("docs");
-      expect(classOfPath(doc, CLASS_FILE)).toBe("config");
-      expect(doc["class"]).toBe("config");
+      expect(classOfPath(doc, CLASS_FILE)).toBe("security-sensitive");
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
     });
 
     it("reads built-ins only when the base holds no class file, whatever the head copy says", async () => {
@@ -927,7 +930,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
       expect(classOfPath(doc, "notes/x.md")).toBe("product");
-      expect(doc["class"]).toBe("product");
+      // TEST CHANGE, justified: 2026-10-09, review/49 — the change adds the class file, which the built-in rule now
+      // places security-sensitive (was config, so the change read product).
+      expect(doc["class"]).toBe("security-sensitive");
       expect(doc["reason"]).toContain(`the base holds no ${CLASS_FILE}, so only the built-in rules apply`);
     });
 
@@ -1002,6 +1007,24 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).toContain("git ls-tree failed");
     });
 
+    // review/48: a refused base copy still raises by its raising entries, and the class is at least product.
+    it("keeps a refused base copy's security entry beside a bad lowering entry, naming the invalid file", async () => {
+      const repo = await seedRepo("repo", {
+        [CLASS_FILE]: fileOf({ "security-sensitive": ["lib/**"], records: ["**"] }),
+        "lib/x.ts": "export {};\n",
+      });
+      await getRoot().seedFiles({ "repo/lib/x.ts": "export const x = 1;\n" });
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(classOfPath(doc, "lib/x.ts")).toBe("security-sensitive");
+      expect(doc["reason"]).toContain(`the base copy of ${CLASS_FILE} is invalid`);
+      expect(doc["reason"]).toContain("only its product, public-contract and security-sensitive entries were read");
+    });
+
     // p2a reviewer M-1: a folder or a submodule at the class file's path is refused, never read as absent.
     it.each([
       ["a folder", "tree"],
@@ -1012,8 +1035,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         await getRoot().seedFiles({ [`repo/${CLASS_FILE}/inner.json`]: "{}\n" });
         git(repo, ["add", "--", `${CLASS_FILE}/inner.json`]);
       } else {
-        const commit = git(repo, ["rev-parse", "HEAD"]).trim();
-        git(repo, ["update-index", "--add", "--cacheinfo", `160000,${commit},${CLASS_FILE}`]);
+        // A gitlink whose commit is not in this object store: ls-tree names it without reading it.
+        const missing = git(repo, ["rev-parse", "HEAD"]).trim().replace(/^./, (first) => (first === "0" ? "1" : "0"));
+        git(repo, ["update-index", "--add", "--cacheinfo", `160000,${missing},${CLASS_FILE}`]);
       }
       git(repo, ["commit", "-q", "-m", `a ${type} at the class file's path`]);
 

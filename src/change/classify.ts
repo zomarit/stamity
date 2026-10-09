@@ -11,11 +11,15 @@
  * narrows the gates a flow runs and the safe direction is always the full set.
  *
  * **The code-path floor.** No rule, built-in or a caller's, places a code file
- * (by {@link CODE_EXTENSIONS}) or an extensionless file (a Makefile, a shebang
- * script) in `records` or `docs`: those two classes skip lint, typecheck and
- * the full suite, so a script under `docs/` or a run folder would otherwise
- * ship unchecked. The extensionless doc names ({@link DOC_NAMES}) are exempt.
- * Such a file is `tests` when a test glob covers it, else keeps its next
+ * (by {@link CODE_EXTENSIONS}), an extensionless file (a Makefile, a shebang
+ * script) or a config-format file (by {@link CONFIG_EXTENSIONS}, and the
+ * `.env` family) in `records` or `docs`: those two classes skip lint,
+ * typecheck and the full suite, so a script or a workflow under `docs/` or a
+ * run folder would otherwise ship unchecked (review/47). The extensionless doc
+ * names ({@link DOC_NAMES}) are exempt. A rule places a code or extensionless
+ * file in `tests` only when a built-in test glob covers it too, so a wide
+ * `tests` glob cannot take product code off the full gates (review/47). Such a
+ * file is `tests` when a built-in test glob covers it, else keeps its next
  * placement, else is `product`.
  *
  * **The built-in rules are generic.** They name only the engine's own state
@@ -175,9 +179,11 @@ export const BUILT_IN_RULES: readonly ClassRule[] = [
     foldCase: true,
   },
   {
-    class: "config",
+    // review/49: the file decides every later change's checks, so a change to it gets the security lens.
+    class: "security-sensitive",
     paths: [CLASS_FILE],
     rationale: "the class file itself: a change to it changes what every later change runs",
+    foldCase: true,
   },
   {
     class: "security-sensitive",
@@ -187,8 +193,18 @@ export const BUILT_IN_RULES: readonly ClassRule[] = [
   },
 ];
 
-/** Classes no code file may take. */
+/** Classes no code, extensionless or config file may take. */
 const NOT_FOR_CODE: ReadonlySet<ChangeClass> = new Set(["records", "docs"]);
+
+/**
+ * Config formats the code-path floor holds out of `records` and `docs`
+ * (review/47), compared lower-cased; `.env` and `.env.<anything>` are matched by
+ * name in {@link isConfigPath}. Not {@link CODE_EXTENSIONS}: a config file may
+ * still be `tests` by a rule.
+ */
+const CONFIG_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".json", ".jsonc", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf", ".xml", ".properties", ".env",
+]);
 
 /** The extensionless names that are documentation, compared lower-cased; any other extensionless file is held as code. */
 const DOC_NAMES: ReadonlySet<string> = new Set(["license", "notice", "authors", "changelog", "copying", "readme"]);
@@ -292,6 +308,13 @@ function isCodePath(path: string): boolean {
   return CODE_EXTENSIONS.includes(extension);
 }
 
+/** A config-format file by extension, or a `.env` / `.env.<anything>` file: it configures what runs (review/47). */
+function isConfigPath(path: string): boolean {
+  const basename = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+  if (basename === ".env" || basename.startsWith(".env.")) return true;
+  return CONFIG_EXTENSIONS.has(posix.extname(basename));
+}
+
 function rank(cls: ChangeClass): number {
   return CLASS_ORDER.indexOf(cls);
 }
@@ -317,13 +340,16 @@ function classifyPath(
   securityRow: SpecialistTrigger | undefined,
 ): PathClass & { floored: boolean; unlowered: string[] } {
   const code = isCodePath(path);
+  const held = code || isConfigPath(path);
+  const builtInTest = code && BUILT_IN_TEST_GLOBS.some((glob) => matchRead(path, glob));
   let best: { class: ChangeClass; rule: string } | undefined;
   let floored = false;
   const fromFile: { class: ChangeClass; glob: string; refused: boolean }[] = [];
   for (const rule of rules) {
     const glob = rule.paths.find((candidate) => matchRead(path, candidate, rule.foldCase === true));
     if (glob === undefined) continue;
-    const refused = code && NOT_FOR_CODE.has(rule.class);
+    // The floor (review/47): no records or docs for code, config or extensionless files; tests for code only under a built-in test glob.
+    const refused = (held && NOT_FOR_CODE.has(rule.class)) || (code && rule.class === "tests" && !builtInTest);
     if (rule.origin === "class-file") fromFile.push({ class: rule.class, glob, refused });
     if (refused) {
       floored = true;
@@ -343,7 +369,7 @@ function classifyPath(
   }
   if (best === undefined) {
     best = floored
-      ? { class: "product", rule: "floor: a code or extensionless file is never records or docs" }
+      ? { class: "product", rule: "floor: a code, config or extensionless file is never records or docs, nor tests outside a built-in test glob" }
       : { class: "product", rule: UNPLACED };
   }
   const placed = best.class;
@@ -481,7 +507,9 @@ export function classifyChange(
   const unplaced = byPath.filter((entry) => entry.rule === UNPLACED).map((entry) => entry.path);
   if (unplaced.length > 0) reasons.push(`no rule places ${namePaths(unplaced)}, so it is product`);
   if (floored.length > 0) {
-    reasons.push(`kept out of records and docs as code or an extensionless file: ${namePaths(floored)}`);
+    reasons.push(
+      `kept out of records and docs as code, config or an extensionless file, and code out of tests outside a built-in test glob: ${namePaths(floored)}`,
+    );
   }
   if (unlowered.length > 0) {
     reasons.push(`the class file's weaker globs do not lower a path a stronger rule places: ${namePaths(unlowered)}`);
@@ -509,8 +537,19 @@ export function classifyChange(
 
 // ── The class file ───────────────────────────────────────────────────────────
 
-/** The classes whose rules raise a path, so they fold case (review/12); every other class matches with case. */
+/**
+ * The classes whose rules raise a path, so they fold case (review/12) and are
+ * the entries a refused file still applies (review/48); every other class
+ * matches with case and lowers.
+ */
 const FOLDS_CASE: ReadonlySet<ChangeClass> = new Set(["product", "public-contract", "security-sensitive"]);
+
+/** A glob's matching cost is bounded (review/50): at most this many characters, and this many `**`. */
+const GLOB_MAX_LENGTH = 200;
+const GLOB_MAX_DOUBLE_STARS = 4;
+
+/** Path shapes a match-all glob meets every one of (review/47): a name, a dotted name, a dotfile, at depth one and two. */
+const MATCH_ALL_PROBES: readonly string[] = ["a", "a.b", "a/b", "a/b.c", ".a", "a/.b"];
 
 /** The classes a glob matching every path may join: only one that raises a path (the sign-off on plan/8). */
 const MATCH_ALL_FLOOR: ChangeClass = "product";
@@ -525,23 +564,38 @@ export interface TestInput {
   tests: string[] | "all";
 }
 
-/** A class file read and validated, or the reasons it was refused, the first one first. */
+/**
+ * A class file read and validated, or the reasons it was refused, the first one
+ * first, with `raising`: the file's product, public-contract and
+ * security-sensitive entries that parse on their own, which a refused file
+ * still applies (review/48). Empty when the text is no JSON object or
+ * `classes` is no object.
+ */
 export type ClassFileParse =
   | { ok: true; rules: ClassRule[]; testGlobs: string[]; testInputs: TestInput[] }
-  | { ok: false; errors: string[] };
+  | { ok: false; errors: string[]; raising: ClassRule[] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
- * A glob made only of `*` segments with at least one `**` (or longer run) among
- * them: after the dots resolve it matches every path, or every path below some
- * depth, so it may not join a class that lowers a path.
+ * A glob that matches every path, so it may not join a class that lowers one:
+ * one meeting every shape of {@link MATCH_ALL_PROBES} (review/47), or one made
+ * only of `*` segments with at least one `**` (or longer run) among them, which
+ * after the dots resolve matches every path below some depth (plan/8).
  */
 function matchesEveryPath(glob: string): boolean {
+  if (MATCH_ALL_PROBES.every((probe) => matchGlob(probe, glob))) return true;
   const segments = normalizePath(glob).split("/");
   return segments.every((segment) => /^\*+$/.test(segment)) && segments.some((segment) => segment.length >= 2);
+}
+
+/** Why a glob costs too much to match, or `undefined` (review/50). */
+function globCostError(glob: string): string | undefined {
+  if (glob.length > GLOB_MAX_LENGTH) return `is longer than ${GLOB_MAX_LENGTH} characters`;
+  if ((glob.match(/\*\*/g) ?? []).length > GLOB_MAX_DOUBLE_STARS) return `holds more than four **`;
+  return undefined;
 }
 
 /** Whether a code point is a C0 control or DEL, by number, so no escape sits in this source. */
@@ -591,8 +645,10 @@ function readClasses(value: unknown, errors: string[]): Map<ChangeClass, string[
     const kept: string[] = [];
     globs.forEach((glob: unknown, at) => {
       const where = `classes.${key}[${at}]`;
+      const cost = typeof glob === "string" ? globCostError(glob) : undefined;
       if (typeof glob !== "string") errors.push(`${where} is not a string`);
       else if (glob === "") errors.push(`${where} is empty`);
+      else if (cost !== undefined) errors.push(`${where} ${cost}`);
       else if (rank(key) > rank(MATCH_ALL_FLOOR) && matchesEveryPath(glob)) {
         errors.push(
           `${where}: the glob ${JSON.stringify(glob)} matches every path, and only ${MATCH_ALL_FLOOR} or a stronger class may take every path`,
@@ -623,6 +679,10 @@ function readTestInputs(value: unknown, errors: string[]): TestInput[] {
     }
     const { glob, tests } = entry;
     if (typeof glob !== "string" || glob === "") errors.push(`${where}.glob is not a non-empty string`);
+    else {
+      const cost = globCostError(glob);
+      if (cost !== undefined) errors.push(`${where}.glob ${cost}`);
+    }
     if (tests !== "all" && !Array.isArray(tests)) errors.push(`${where}.tests is neither "all" nor a list of test files`);
     if (Array.isArray(tests)) {
       tests.forEach((test: unknown, index) => {
@@ -642,8 +702,10 @@ function readTestInputs(value: unknown, errors: string[]): TestInput[] {
  * that is not a JSON object, an unknown key, an unknown class, a glob that is
  * not a non-empty string, a glob that matches every path under a class weaker
  * than `product` (the sign-off on plan/8), and a test entry that is not a plain
- * repository-relative file path (plan/23). Every error is listed, the first one
- * first; a refused file yields no rules at all.
+ * repository-relative file path (plan/23), and a glob longer than 200
+ * characters or holding more than four `**` (review/50). Every error is listed,
+ * the first one first; a refused file yields no rules, only its raising entries
+ * (review/48).
  *
  * One rule per class, strongest first. A `product`, `public-contract` or
  * `security-sensitive` rule folds case and no other does (review/12), so a
@@ -656,9 +718,9 @@ export function parseClassFile(text: string): ClassFileParse {
   try {
     value = JSON.parse(text);
   } catch (err) {
-    return { ok: false, errors: [`not valid JSON: ${err instanceof Error ? err.message : String(err)}`] };
+    return { ok: false, errors: [`not valid JSON: ${err instanceof Error ? err.message : String(err)}`], raising: [] };
   }
-  if (!isRecord(value)) return { ok: false, errors: ["the file is not a JSON object"] };
+  if (!isRecord(value)) return { ok: false, errors: ["the file is not a JSON object"], raising: [] };
   const errors: string[] = [];
   for (const key of Object.keys(value)) {
     if (!CLASS_FILE_KEYS.includes(key)) {
@@ -667,7 +729,6 @@ export function parseClassFile(text: string): ClassFileParse {
   }
   const classes = readClasses(value["classes"], errors);
   const testInputs = readTestInputs(value["testInputs"], errors);
-  if (errors.length > 0) return { ok: false, errors };
 
   const rules: ClassRule[] = [];
   for (const cls of CLASS_ORDER) {
@@ -680,6 +741,7 @@ export function parseClassFile(text: string): ClassFileParse {
       ...(FOLDS_CASE.has(cls) ? { foldCase: true } : {}),
     });
   }
+  if (errors.length > 0) return { ok: false, errors, raising: rules.filter((rule) => FOLDS_CASE.has(rule.class)) };
   return { ok: true, rules, testGlobs: [...(classes.get("tests") ?? [])], testInputs };
 }
 
