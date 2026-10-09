@@ -163,14 +163,14 @@ ${discovery}
    \`\`\`
 
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
-   two commands in step 3, run deliberately.
+   three commands in step 3, run deliberately.
 
 3. When \`duplicates\` is non-empty, print every entry with the remedy beside it and STOP. A
    duplicate is a file two installs both claim, and which one goes is the operator's call. The
    three remedies below are what THE OPERATOR runs — they are reported, never performed here:
 
-   - a file this engine wrote: the operator runs \`${locate} -- clean -y\` and then
-     \`${locate} -- plugin setup --client ${client} -y${rootFlag}\` again. Do not run either yourself:
+   - a file this engine wrote: the operator runs \`${locate} -- sync\`, then \`${locate} -- clean -y\`,
+     then \`${locate} -- plugin setup --client ${client} -y${rootFlag}\` again. Do not run any of them yourself:
      \`clean -y\` takes no confirmation, removes ledger rows and the files they name, and deletes the
      whole \`.stamity/\` directory — learnings, handoffs, overrides, run records and packs — unless a
      hooks file it keeps still runs a script there. The operator copies out what to keep first;

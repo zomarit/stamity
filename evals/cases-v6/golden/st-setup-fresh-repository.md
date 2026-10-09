@@ -28,7 +28,7 @@ stop at the one that asks for the operator.
    repository's facts and gates, and the client configuration the plugin does not carry:
 
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
-   two commands in step 3, run deliberately.
+   three commands in step 3, run deliberately.
 
 3. When [...]duplicates[...] is non-empty, print every entry with the remedy beside it and STOP. A
    duplicate is a file two installs both claim, and which one goes is the operator's call. The

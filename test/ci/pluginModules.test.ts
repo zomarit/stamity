@@ -791,6 +791,25 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
     expect(body).toContain("APM dependency");
     expect(body).toContain(".stamity/overrides/");
 
+    // The route out of a generated setup is the one every CLI route prints (`cleanThenSetup` in
+    // `src/cli/commands/plugin.ts`, the install-mode step in `src/cli/commands/check.ts`): `sync`
+    // first, because after an upgrade `clean` refuses until this version has rewritten its files,
+    // then `clean -y`, then `plugin setup` (inbox build/75). Step 2 points at the same three.
+    // Whitespace is folded: the template wraps its prose, and a re-wrap is not a change of wording.
+    const route = body.replace(/\s+/g, " ");
+    expect(route).toContain("a job for the three commands in step 3, run deliberately");
+    expect(route).not.toContain("two commands in step 3");
+    expect(body).not.toMatch(/(?<!-- )\bstamity sync/);
+    expect(route).toContain(
+      `the operator runs \`${locate} -- sync\`, then \`${locate} -- clean -y\`, then ` +
+        `\`${locate} -- plugin setup --client ${client} -y${rootFlag}\` again.`,
+    );
+    const sync = route.indexOf(`${locate} -- sync`);
+    const clean = route.indexOf(`${locate} -- clean -y`);
+    expect(sync).toBeGreaterThan(-1);
+    expect(sync).toBeLessThan(clean);
+    expect(clean).toBeLessThan(route.indexOf(`${locate} -- plugin setup --client ${client} -y${rootFlag}\` again`));
+
     // TEST CHANGE, justified (SEC2-W1). Step 3 says to stop for the operator and then phrased
     // its three remedies as bare imperatives — "run ... clean -y, then ... plugin setup", "remove
     // that APM dependency", "remove it". The reader of this body is an AGENT, and an imperative
@@ -801,7 +820,12 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
     for (const remedy of ["the operator runs `", "the operator removes ", "the operator keeps "]) {
       expect(body, remedy).toContain(remedy);
     }
-    expect(body).toContain("Do not run either yourself");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p6-setup-route, inbox build/75):
+    // the pin was "Do not run either yourself", which counted two remedy commands. The first
+    // remedy now names three — `sync`, `clean -y`, `plugin setup` — so the prohibition covers
+    // all three; what moved is the route's length, not the stop this pin guards.
+    expect(body).toContain("Do not run any of them yourself");
+    expect(body).not.toContain("Do not run either yourself");
     expect(body).toContain("Remove no file yourself");
     // No bare imperative left in the remedy list: every `- a file ...` row names its subject.
     for (const row of body.split("\n").filter((line) => line.startsWith("   - a file "))) {
@@ -823,7 +847,11 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
       "`clean -y` takes no confirmation, removes ledger rows and the files they name, and deletes the whole " +
       "`.stamity/` directory — learnings, handoffs, overrides, run records and packs — unless a hooks file it " +
       "keeps still runs a script there.";
-    expect(prose).toContain(`Do not run either yourself: ${sentence} The operator copies out what to keep first;`);
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p6-setup-route, inbox build/75):
+    // the lead-in was "Do not run either yourself:", for a route of two commands. The route now
+    // leads with `sync` (three commands), so the lead-in reads "any of them"; the cost sentence
+    // itself and its place in the first remedy do not move.
+    expect(prose).toContain(`Do not run any of them yourself: ${sentence} The operator copies out what to keep first;`);
     // It belongs to the first remedy, the one that names `clean -y`, and not to a later row.
     expect(prose.indexOf("a file this engine wrote")).toBeLessThan(prose.indexOf(sentence));
     expect(prose.indexOf(sentence)).toBeLessThan(prose.indexOf("a file an APM dependency installed"));
