@@ -73,6 +73,80 @@ const governingBlocks = (bodyLines: readonly string[], sourcePath: string): Gove
   return blocks;
 };
 
+/** The case-side inputs the range anchor check reads, so a synthetic case can be held to it. */
+interface AnchoredCase {
+  readonly path: string;
+  readonly source: string;
+  readonly bodyLines: readonly string[];
+}
+
+/**
+ * True when a block line quoting with `[...]` elisions quotes this very corpus line: its opening
+ * fragment is the line's own start, and every later fragment follows in order. A quote that opens
+ * on an elision carries no start and anchors nothing — the elision is the verbatim gate's quote
+ * form, not a way around this check.
+ */
+const elidedQuoteOf = (quote: string, line: string): boolean => {
+  const [head = "", ...rest] = quote.split("[...]");
+  const opening = head.trimEnd();
+  if (opening.trim() === "" || !line.startsWith(opening)) return false;
+  let cursor = opening.length;
+  for (const part of rest) {
+    const fragment = part.trim();
+    if (fragment === "") continue;
+    const found = line.indexOf(fragment, cursor);
+    if (found === -1) return false;
+    cursor = found + fragment.length;
+  }
+  return true;
+};
+
+/**
+ * Every `source:` range has to start where the case says it does: the first non-blank line of
+ * each range must appear (a) in a governing block restricted to the case's own source path,
+ * (b) as a line of the case body once a leading `> ` is stripped — a scenario that blockquotes
+ * its governing fence — or (c), for a range that opens on a frontmatter `description:` line, as
+ * that description verbatim in the body. The verbatim gate above reads quoted blocks only, so a
+ * case with no restricted block could carry a stale range and stay green; this one reads every
+ * range of every case. Returns one message per unanchored range, each naming the case and range.
+ */
+const unanchoredRanges = (input: AnchoredCase, sourceLines: readonly string[]): string[] => {
+  const parsed = parseSource(input.source);
+  if (!parsed) return [`${input.path}: unparsable source \`${input.source}\``];
+  const restrictedLines = governingBlocks(input.bodyLines, parsed.path)
+    .filter((block) => block.restricted)
+    .flatMap((block) => block.body);
+  const restricted = new Set(restrictedLines);
+  const elided = restrictedLines.filter((line) => line.includes("[...]"));
+  const unquoted = new Set(input.bodyLines.map((line) => line.replace(/^> /, "")));
+  const bodyText = input.bodyLines.join("\n");
+  const frontmatterEnd = sourceLines[0] === "---" ? sourceLines.indexOf("---", 1) : -1;
+  const failures: string[] = [];
+  for (const [from, to] of parsed.ranges) {
+    let index = from - 1;
+    while (index < to && index < sourceLines.length && (sourceLines[index] ?? "").trim() === "") {
+      index += 1;
+    }
+    const first = index < to ? sourceLines[index] : undefined;
+    const label = `${parsed.path}:${from}-${to}`;
+    if (first === undefined) {
+      failures.push(`${input.path}: source range ${label} carries no non-blank line`);
+      continue;
+    }
+    if (restricted.has(first) || unquoted.has(first)) continue;
+    if (elided.some((quote) => elidedQuoteOf(quote, first))) continue;
+    const description = /^description:[ \t]*(.*)$/.exec(first);
+    if (description && index < frontmatterEnd) {
+      const value = (description[1] ?? "").trim().replace(/^(["'])(.*)\1$/, "$2");
+      if (value.length > 0 && bodyText.includes(value)) continue;
+    }
+    failures.push(
+      `${input.path}: source range ${label} opens on line ${index + 1}, ${JSON.stringify(first)}, which no restricted governing block, no body line and no quoted description carries`,
+    );
+  }
+  return failures;
+};
+
 describe("eval case locators — the roster is not vacuous", () => {
   it("reads case files out of every class directory", () => {
     expect(cases.length).toBeGreaterThanOrEqual(30);
@@ -91,6 +165,108 @@ describe("eval case locators — the roster is not vacuous", () => {
       return sum + governingBlocks(file.bodyLines, parsed.path).length;
     }, 0);
     expect(total, "no governing blocks were found — the heading parser has stopped matching").toBeGreaterThan(20);
+  });
+});
+
+/**
+ * The range anchor check against inline cases. A synthetic case stands in for a stale one
+ * because no real case may be stale at HEAD; it lives here as a string, never under `evals/`,
+ * so the roster and the case index never see it.
+ */
+describe("eval case locators — the range anchor check is not vacuous", () => {
+  const SOURCE_PATH = "content/commands/st-synthetic.md";
+  // The corpus file after a one-line insert above the governed text: the two governed lines
+  // moved from 3-4 to 4-5.
+  const SOURCE_LINES = [
+    "# Synthetic command",
+    "Intro line.",
+    "A line inserted above the governed text.",
+    "Run every gate before done.",
+    "Report each gate with its exit code.",
+    "",
+  ];
+  const BODY = [
+    "## Brief",
+    "",
+    `Governing text — \`${SOURCE_PATH}\`:`,
+    "",
+    "```text",
+    "Run every gate before done.",
+    "Report each gate with its exit code.",
+    "```",
+    "",
+  ].join("\n");
+  const synthetic = (source: string, body: string = BODY): AnchoredCase => ({
+    path: "synthetic/stale-range.md",
+    source,
+    bodyLines: body.split("\n"),
+  });
+
+  it("fails a range left one line off, naming the case and the range", () => {
+    const failures = unanchoredRanges(synthetic(`${SOURCE_PATH}:3-4`), SOURCE_LINES);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("synthetic/stale-range.md");
+    expect(failures[0]).toContain(`${SOURCE_PATH}:3-4`);
+  });
+
+  it("passes the same case once its range is re-anchored", () => {
+    expect(unanchoredRanges(synthetic(`${SOURCE_PATH}:4-5`), SOURCE_LINES)).toEqual([]);
+  });
+
+  it("fails only the stale range of a multi-range source", () => {
+    const failures = unanchoredRanges(synthetic(`${SOURCE_PATH}:4-5,2-2`), SOURCE_LINES);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("2-2");
+  });
+
+  it("anchors a range in a blockquoted fence once the leading `> ` is stripped", () => {
+    const quoted = [
+      "Scenario state:",
+      "",
+      "> ```text",
+      "> Run every gate before done.",
+      "> Report each gate with its exit code.",
+      "> ```",
+    ].join("\n");
+    expect(unanchoredRanges(synthetic(`${SOURCE_PATH}:4-5`, quoted), SOURCE_LINES)).toEqual([]);
+    expect(unanchoredRanges(synthetic(`${SOURCE_PATH}:3-4`, quoted), SOURCE_LINES)).toHaveLength(
+      1,
+    );
+  });
+
+  it("anchors a range whose first line a restricted block quotes with an elision", () => {
+    const elidedBlock = (line: string): string =>
+      [`Governing text — \`${SOURCE_PATH}\`:`, "", "```text", line, "```"].join("\n");
+    const anchored = elidedBlock("Run every [...] before done.");
+    expect(unanchoredRanges(synthetic(`${SOURCE_PATH}:4-5`, anchored), SOURCE_LINES)).toEqual([]);
+    // A quote that opens on the elision carries no line start.
+    const headless = elidedBlock("[...] gate before done.");
+    expect(unanchoredRanges(synthetic(`${SOURCE_PATH}:4-5`, headless), SOURCE_LINES)).toHaveLength(
+      1,
+    );
+    // The same elided quote does not anchor the line above it.
+    expect(unanchoredRanges(synthetic(`${SOURCE_PATH}:3-4`, anchored), SOURCE_LINES)).toHaveLength(
+      1,
+    );
+  });
+
+  it("anchors a frontmatter description line by its value, verbatim in the body", () => {
+    const skillPath = "content/skills/st-synthetic/SKILL.md";
+    const skill = [
+      "---",
+      "id: synthetic",
+      'description: "Checks one thing. Triggers when someone asks for it."',
+      "load: on-demand",
+      "---",
+      "",
+    ];
+    const surface = 'st-synthetic — "Checks one thing. Triggers when someone asks for it."';
+    expect(unanchoredRanges(synthetic(`${skillPath}:3-3`, surface), skill)).toEqual([]);
+    // One line off lands on the frontmatter's `load:` key, which no body carries.
+    expect(unanchoredRanges(synthetic(`${skillPath}:4-4`, surface), skill)).toHaveLength(1);
+    // A description the body no longer quotes verbatim does not anchor.
+    const reworded = 'st-synthetic — "Checks one thing."';
+    expect(unanchoredRanges(synthetic(`${skillPath}:3-3`, reworded), skill)).toHaveLength(1);
   });
 });
 
@@ -136,6 +312,18 @@ for (const file of cases) {
           `${file.path}: source range ${from}-${to} lies outside ${parsed.path} (${total} lines)`,
         ).toBe(true);
       }
+    });
+
+    it("anchors the first line of every source range in the case body", () => {
+      const source = file.frontmatter.get("source") ?? "";
+      const parsed = parseSource(source);
+      if (!parsed) return;
+      if (!existsSync(join(REPO_ROOT, ...parsed.path.split("/")))) return;
+      const failures = unanchoredRanges(
+        { path: file.path, source, bodyLines: file.bodyLines },
+        linesOf(parsed.path),
+      );
+      expect(failures, `${file.path}: source ranges the case body does not anchor`).toEqual([]);
     });
 
     it("quotes its governing text verbatim from the file its heading names", () => {
