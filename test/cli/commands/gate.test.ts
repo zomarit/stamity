@@ -711,7 +711,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   });
 
   // review/191 (signed off as option (b)): with no --base the read sees only the uncommitted change, so committed
-  // work HEAD holds and its upstream (or, with none, origin/HEAD) lacks raises the class to at least product.
+  // work HEAD holds and its upstream (or, with none, every remote-tracking ref) lacks raises the class to at least product.
   describe("committed work no base classified (review/191)", () => {
     /** A repository pushed once to a local bare remote with its upstream set, then a committed src/ change and an uncommitted docs edit. */
     async function aheadOfUpstream(): Promise<string> {
@@ -775,7 +775,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).not.toContain("HEAD holds");
     });
 
-    it("reads origin/HEAD for a branch with no upstream", async () => {
+    it("reads every remote-tracking ref for a branch with no upstream", async () => {
       const remote = getRoot().path("remote.git");
       git(getRoot().path(), ["init", "-q", "--bare", remote]);
       const seed = await seedRepo("seed", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
@@ -794,7 +794,86 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(code).toBe(0);
       expect(doc["class"]).toBe("product");
-      expect(doc["reason"]).toContain("HEAD holds 2 commits origin/HEAD lacks");
+      expect(doc["reason"]).toContain("HEAD holds 2 commits every remote-tracking ref lacks");
+    });
+
+    // review/197 (signed off): with no upstream every remote-tracking ref is the reference, so a remote not named
+    // origin, or a clone with no origin/HEAD, still floors unpushed work; review/196: a dangling origin/HEAD is one of
+    // those refs, never "no reference".
+    /** A repository pushed to a remote named `upstream` with no upstream set (so no origin/HEAD), then committed src/ work and a doc edit. */
+    async function aheadOfRemoteNamedUpstream(): Promise<string> {
+      const remote = getRoot().path("remote.git");
+      git(getRoot().path(), ["init", "-q", "--bare", remote]);
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
+      git(repo, ["remote", "add", "upstream", remote]);
+      git(repo, ["push", "-q", "upstream", "HEAD:refs/heads/main"]);
+      git(repo, ["fetch", "-q", "upstream"]);
+      git(repo, ["checkout", "-q", "-b", "feature"]);
+      await getRoot().seedFiles({ "repo/src/b.ts": "export const b = 1;\n" });
+      git(repo, ["commit", "-q", "-am", "product code"]);
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+      return repo;
+    }
+
+    it("floors at product with a remote not named origin and no origin/HEAD", async () => {
+      const repo = await aheadOfRemoteNamedUpstream();
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["paths"]).toEqual(["docs/a.md"]);
+      expect(doc["reason"]).toContain("HEAD holds 1 commit every remote-tracking ref lacks");
+      expect(doc["reason"]).toContain("--base");
+    });
+
+    it("keeps today's reading once that work is pushed to the remote not named origin", async () => {
+      const repo = await aheadOfRemoteNamedUpstream();
+      git(repo, ["push", "-q", "upstream", "HEAD:refs/heads/feature"]);
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("docs");
+      expect(doc["reason"]).not.toContain("HEAD holds");
+    });
+
+    it("floors at product when origin/HEAD dangles beside a live remote branch", async () => {
+      const repo = await aheadOfRemoteNamedUpstream();
+      git(repo, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/gone"]);
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("HEAD holds 1 commit every remote-tracking ref lacks");
+    });
+
+    it("floors at product when a dangling origin/HEAD is the only remote-tracking ref", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
+      git(repo, ["remote", "add", "origin", getRoot().path("nowhere.git")]);
+      git(repo, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/gone"]);
+      await getRoot().seedFiles({ "repo/src/b.ts": "export const b = 1;\n" });
+      git(repo, ["commit", "-q", "-am", "product code"]);
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("HEAD holds 2 commits every remote-tracking ref lacks");
+    });
+
+    it("floors at product, naming the failed read, when listing the remote-tracking refs fails", async () => {
+      const repo = await aheadOfRemoteNamedUpstream();
+      git(repo, ["push", "-q", "upstream", "HEAD:refs/heads/feature"]);
+      gitSpy.fault = { step: "refs/remotes", error: realFailure("process.exit(128)") };
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("the commits HEAD holds beyond every remote-tracking ref could not be read (git for-each-ref failed, exit 128)");
     });
 
     it("floors at product when the configured upstream does not resolve", async () => {

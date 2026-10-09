@@ -1517,8 +1517,10 @@ function shortRef(ref: string): string {
  * review/191 (signed off as option (b)): with no `--base` the read sees only
  * the uncommitted change against `HEAD`, so work already committed would be
  * classified by no run. The reference is the branch's upstream, or, with none
- * configured (a detached `HEAD` among them), the remote default branch
- * `origin/HEAD`; a repository with neither keeps the plain reading (`undefined`).
+ * configured (a detached `HEAD` among them), every remote-tracking ref
+ * (review/197); a repository with no remote-tracking ref keeps the plain
+ * reading (`undefined`). A dangling remote `HEAD` symref is one of those refs,
+ * never "no reference" (review/196).
  * When `HEAD` holds commits the reference lacks, the clause names them and
  * points to `--base`, and the class is raised to at least `product`. A
  * configured upstream that does not resolve, and any failed read here, raise it
@@ -1542,19 +1544,21 @@ function unclassifiedCommits(runner: GitRunner, cwd: string): string | undefined
         if (name === branch && merge !== undefined) upstream = merge;
       }
     }
-    let commit: string | null;
+    let range: string[];
     if (upstream !== "") {
       reference = shortRef(upstream);
-      commit = resolveBase(runner, cwd, upstream);
+      const commit = resolveBase(runner, cwd, upstream);
       if (commit === null) {
         return `its upstream ${reference} does not resolve, so the committed work HEAD holds could not be read and the class is at least product; ${POINT_TO_BASE}`;
       }
+      range = [`${commit}..HEAD`];
     } else {
-      reference = "origin/HEAD";
-      commit = resolveBase(runner, cwd, "refs/remotes/origin/HEAD");
-      if (commit === null) return undefined;
+      reference = "every remote-tracking ref";
+      if (!hasRemoteTrackingRef(runner, cwd)) return undefined;
+      // `--remotes` skips a dangling symref and reads every live remote-tracking branch.
+      range = ["HEAD", "--not", "--remotes"];
     }
-    const count = Number.parseInt(runGit(runner, cwd, "rev-list", ["rev-list", "--count", `${commit}..HEAD`, "--"]).trim(), 10);
+    const count = Number.parseInt(runGit(runner, cwd, "rev-list", ["rev-list", "--count", ...range, "--"]).trim(), 10);
     if (!Number.isInteger(count)) throw new GitReadError("rev-list", new Error("no count"), cwd);
     if (count === 0) return undefined;
     const commits = `${count} commit${count === 1 ? "" : "s"}`;
@@ -1563,6 +1567,27 @@ function unclassifiedCommits(runner: GitRunner, cwd: string): string | undefined
     if (!(err instanceof GitReadError)) throw err;
     return `the commits HEAD holds beyond ${reference} could not be read (${describeGitFailure(err)}), so the class is at least product; ${POINT_TO_BASE}`;
   }
+}
+
+/**
+ * Whether the repository holds any remote-tracking ref (review/197). `for-each-ref` leaves out a symref whose target
+ * is gone, so with none listed each remote's `HEAD` symref is asked for too: a dangling one still counts (review/196).
+ * A failed read throws {@link GitReadError}, which the caller raises on.
+ */
+function hasRemoteTrackingRef(runner: GitRunner, cwd: string): boolean {
+  const refs = runGit(runner, cwd, "for-each-ref", ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes"]);
+  if (refs.trim() !== "") return true;
+  const remotes = runGit(runner, cwd, "remote", ["remote"]).split(/\r?\n/).filter((name) => name !== "");
+  return remotes.some((name) => {
+    try {
+      runner(["symbolic-ref", "-q", `refs/remotes/${name}/HEAD`], cwd);
+      return true;
+    } catch (err) {
+      // `-q` exits 1, printing nothing, when the name is no symref.
+      if (gitSaidNo(err, 1)) return false;
+      throw new GitReadError("symbolic-ref", err, cwd);
+    }
+  });
 }
 
 /**
