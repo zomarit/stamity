@@ -2,7 +2,7 @@
 id: quick-string-rename-with-its-tests
 class: golden
 claim: "A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once — the secret scan, the class step, then one test-runner spawn of the class's gates, which with no class returned are the full gate — which a tool-free turn names and reports as not yet run or its result not yet returned, with no row green — never skipped, narrowed without a class, split per file, run inline or claimed as run."
-source: content/commands/st-quick.md:29-48,68-74,150-180
+source: content/commands/st-quick.md:29-48,68-74,150-184
 metric: rubric
 ---
 
@@ -70,7 +70,11 @@ The gate is three steps, in order, after the last item lands:
    checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
    batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report
    lists every applied item as ungated under `Not done:`. The refusal names the row and the rule
-   that placed the item. There is no size floor, and no lens runs inside the quick lane.
+   that placed the item. There is no size floor, and no lens runs inside the quick lane. With no
+   class — neither form runs, or the classify exits non-zero — a batch with a path the
+   `stamity-security` agent's `## Trigger` table names moves the same way, as for a
+   `security-sensitive` class; a batch whose paths that table does not name, a docs-only one among
+   them, stays.
 3. **Run.** Spawn `test-runner` with the changed-file list and the class's checks, each run once
    as the charter spells it: `tests-selected` → `${STAMITY:VERIFY_GATE_TEST}` with the selected
    files appended, or over the whole suite when `tests.full` is true; `lint` →

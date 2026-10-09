@@ -63,8 +63,10 @@ import type { GitRunner } from "../../workspace/git.ts";
  * **Fail-closed.** Every git call runs through {@link gitCheckRunner}, the
  * hardened construction the CLI's other git reads use. A directory outside a
  * work tree, no git binary, a timeout, an oversized output or any other git
- * failure gives `product` with the failure named; a base that does not resolve
- * gives at least `product` with the ref named. Never a narrower class: the
+ * failure gives `product` with the failure named. A `--base` that does not
+ * resolve, an unborn `HEAD` among them, gives no class: exit 1 and a `reason`
+ * naming the ref as a failed read, so a flow reads "no class" (review/182),
+ * never `product` over zero paths. Never a narrower class: the
  * class narrows the gates a flow runs, so an unread change takes the full set.
  *
  * **The project, not the repository.** The project is the nearest ancestor of
@@ -1174,11 +1176,11 @@ function readLockfiles(runner: GitRunner, root: ProjectRoot, commit: string | nu
  * The classification and the resolved base for one run. `--paths` alone reads
  * no git at all; anything else goes through the hardened runner.
  */
-function classify(cwd: string, listed: readonly string[] | undefined, ref: string | undefined): {
-  result: ClassifyResult;
-  base: string | null;
-  tests: TestPlan;
-} {
+function classify(
+  cwd: string,
+  listed: readonly string[] | undefined,
+  ref: string | undefined,
+): { result: ClassifyResult; base: string | null; tests: TestPlan } | { failed: string } {
   if (listed !== undefined && ref === undefined) {
     return { result: classifyChange({ paths: listed, base: "absent" }), base: null, tests: NO_MAP };
   }
@@ -1188,14 +1190,13 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
     // Read first: outside a work tree this is the call that fails, and says so.
     const cwdPrefix = readCwdPrefix(runner, cwd);
     const commit = ref === undefined ? null : resolveBase(runner, cwd, ref);
-    const baseState: BaseState = ref === undefined ? "absent" : commit === null ? "unresolved" : "given";
-    const reasons: string[] = [];
-    if (baseState === "unresolved") reasons.push(`the base ${ref ?? ""} does not resolve to a commit here`);
-
-    // An unresolved base leaves no class file to read and, without --paths, nothing to diff against.
-    if (baseState === "unresolved") {
-      return { result: withReasons(classifyChange({ paths: listed ?? [], base: baseState }), reasons), base: commit, tests: NO_MAP };
+    // review/182: a base that does not resolve (an unborn HEAD among them) leaves no class file and nothing to
+    // diff against, so it gives no class, never `product` over zero paths a flow would read as one.
+    if (ref !== undefined && commit === null) {
+      return { failed: `the base ${ref} could not be read: it does not resolve to a commit here, so no class is given` };
     }
+    const baseState: BaseState = commit === null ? "absent" : "given";
+    const reasons: string[] = [];
     const treeish = commit ?? "HEAD";
     const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
     // With no base no class file is read (D5); with one, only the base commit's copy is.
@@ -1254,6 +1255,12 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
   const listed = opts["paths"] as string[] | undefined;
   const ref = opts["base"] as string | undefined;
   const classified = classify(ctx.app.runtime.cwd, listed, ref);
+  if ("failed" in classified) {
+    // The ref is the caller's bytes: sanitised for the terminal and the JSON alike, as scan's failure is.
+    const reason = sanitizeLabel(classified.failed);
+    ctx.io.err(`classify failed: ${reason}\n`);
+    return { exitCode: 1, json: { subcommand: CLASSIFY, base: null, reason } };
+  }
   const { base } = classified;
   const result = applyNameFloor(classified.result);
   const tests = selectFor(classified.tests, result);

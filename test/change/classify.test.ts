@@ -775,6 +775,9 @@ describe("classifyChange: the S7 path rows of the security row (p5b, REQ-FLOW-06
       [".yarnrc.yml", ".yarnrc.yml"],
       [".pnpmfile.cjs", ".pnpmfile.cjs"],
       ["npm-shrinkwrap.json", "npm-shrinkwrap.json"],
+      // Added 2026-10-09 (run 2026-10-08_product-core, review/180, review/181 signed off).
+      [".codex/config.toml", ".codex/config.toml"],
+      [".config/stamity/hooks/guard.json", ".config/stamity/hooks/"],
     ];
     for (const [path, pattern] of cases) {
       const result = given([path]);
@@ -1995,6 +1998,42 @@ describe("classifyChange: a proven lockfile-only bump runs the dependency audit 
   it("proves a bump beside an unchanged entry whatever its source", () => {
     const git = { "node_modules/g": { version: "1.0.0", resolved: "git+https://github.com/x/g.git#0123abc" } };
     const result = bump([{ path: "package-lock.json", base: lock(3, { ...BASE, ...git }), head: lock(3, { ...HEAD, ...git }) }]);
+
+    expect(result.checks).toEqual(auditFirst);
+    expect(result.lenses).toEqual([]);
+  });
+
+  // review/183: a version move that is no upgrade (a rollback past a fix, or two versions semver cannot order) is
+  // no audit class's move, so it keeps the lens.
+  const NOT_UPGRADE = "moves a package to a version that is no semver upgrade of its base entry's";
+  it.each([
+    ["moves to a lower version", "1.4.2", "1.4.1"],
+    ["moves to a lower major", "2.0.0", "1.9.9"],
+    ["moves from a release to its own prerelease", "1.0.0", "1.0.0-rc.1"],
+    ["moves to a lower prerelease", "1.0.0-rc.2", "1.0.0-rc.1"],
+    ["moves to a numerically lower prerelease identifier", "1.0.0-rc.10", "1.0.0-rc.9"],
+    ["changes build metadata alone", "1.0.0+a", "1.0.0+b"],
+    ["moves from a version that is no semver", "1.0", "1.0.1"],
+    ["moves to a version that is no semver", "1.0.0", "1.0.1.2"],
+    ["moves to a version with a leading zero", "1.0.0", "1.01.0"],
+  ])("keeps the lens when a changed entry %s", (_label, from, to) => {
+    const result = twin({ "node_modules/a": entry("a", from) }, { "node_modules/a": entry("a", to) });
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).not.toContain(AUDIT_FIRST);
+    expect(result.reason).toContain(`the security lens stays: package-lock.json ${NOT_UPGRADE}`);
+  });
+
+  it.each([
+    ["a patch", "1.4.1", "1.4.2"],
+    ["a major", "1.9.9", "10.0.0"],
+    ["a prerelease to its release", "1.0.0-rc.1", "1.0.0"],
+    ["a numeric prerelease identifier to an alphanumeric one", "1.0.0-1", "1.0.0-alpha"],
+    ["a shorter prerelease to a longer one", "1.0.0-rc", "1.0.0-rc.1"],
+    ["a numerically higher prerelease identifier", "1.0.0-rc.9", "1.0.0-rc.10"],
+  ])("proves an upgrade by %s", (_label, from, to) => {
+    const result = twin({ "node_modules/a": entry("a", from) }, { "node_modules/a": entry("a", to) });
 
     expect(result.checks).toEqual(auditFirst);
     expect(result.lenses).toEqual([]);

@@ -1171,6 +1171,52 @@ function tarballTail(name: string, version: unknown): string | undefined {
 
 const OFF_SOURCE = "resolves a changed package from a source that is no https tarball on the origin its base entry resolves from";
 const OFF_TARBALL = "resolves a changed package from a tarball that is not its own name and version on its base entry's registry path";
+const NOT_UPGRADE = "moves a package to a version that is no semver upgrade of its base entry's";
+
+/** A semver 2.0.0 version: its core, its prerelease identifiers, and build metadata the order ignores. */
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*))?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i;
+
+/** Two digit strings with no leading zero, ordered by value. */
+function compareDigits(a: string, b: string): number {
+  return a.length === b.length ? (a < b ? -1 : a > b ? 1 : 0) : a.length - b.length;
+}
+
+/** Two prerelease identifiers in semver precedence: numeric below alphanumeric, each its own way. */
+function compareIdentifier(a: string, b: string): number {
+  const numeric = /^\d+$/;
+  if (numeric.test(a) && numeric.test(b)) return compareDigits(a, b);
+  if (numeric.test(a) !== numeric.test(b)) return numeric.test(a) ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Whether `to` is a higher semver version than `from` (review/183): a rollback, a move semver cannot order
+ * (either side no semver version) or one between versions of equal precedence is none. Written here, not
+ * imported: the CI `changes` job loads this module with no install (`scripts/ci/records-only.mjs`).
+ */
+function isUpgrade(from: unknown, to: unknown): boolean {
+  if (typeof from !== "string" || typeof to !== "string") return false;
+  const a = SEMVER.exec(from);
+  const b = SEMVER.exec(to);
+  if (a === null || b === null) return false;
+  for (const part of [1, 2, 3]) {
+    const order = compareDigits(b[part] ?? "", a[part] ?? "");
+    if (order !== 0) return order > 0;
+  }
+  const before = a[4]?.split(".");
+  const after = b[4]?.split(".");
+  // A release outranks its own prereleases.
+  if (before === undefined || after === undefined) return before !== undefined && after === undefined;
+  for (let index = 0; index < Math.max(before.length, after.length); index += 1) {
+    const x = before[index];
+    const y = after[index];
+    if (x === undefined || y === undefined) return x === undefined;
+    const order = compareIdentifier(y, x);
+    if (order !== 0) return order > 0;
+  }
+  return false;
+}
 
 /**
  * Why one entry that differs between the copies is no proven bump (review/157),
@@ -1181,7 +1227,8 @@ const OFF_TARBALL = "resolves a changed package from a tarball that is not its o
  * moved at an unchanged version, and — the base twin resolving a registry
  * tarball, `/<name>/-/<basename>-<version>.tgz` under some prefix — the head
  * path the same prefix and tarball for the entry's own name at its head
- * version (review/171). A base twin resolving anything else proves no head
+ * version (review/171), and a version that moves only to a higher semver
+ * version (review/183). A base twin resolving anything else proves no head
  * source. The project's own root entry (`""`) installs from no source. The
  * clauses name no key: the key is the change's own text.
  */
@@ -1206,6 +1253,8 @@ function entryRefusal(key: string, entry: Record<string, unknown>, before: Recor
   if (name !== entryName(key, before) || baseTail === undefined || headTail === undefined || !was.pathname.endsWith(baseTail)) return OFF_TARBALL;
   const prefix = was.pathname.slice(0, was.pathname.length - baseTail.length);
   if (url.pathname !== `${prefix}${headTail}` || url.search !== "" || url.hash !== "") return OFF_TARBALL;
+  // review/183: a rollback is no audit class's move, so a version that moves and is no upgrade keeps the lens.
+  if (before["version"] !== entry["version"] && !isUpgrade(before["version"], entry["version"])) return NOT_UPGRADE;
   return undefined;
 }
 

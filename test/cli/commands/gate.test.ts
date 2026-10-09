@@ -440,9 +440,12 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   it("keeps bidi and tag characters of an unresolved base out of the JSON reason", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
 
-    const { code, stdout, doc } = await classifyIn(repo, ["--base", "no\u202esuch\u{E0041}ref"]);
+    const { code, stdout, stderr, doc } = await classifyIn(repo, ["--base", "no\u202esuch\u{E0041}ref"]);
 
-    expect(code).toBe(0);
+    // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/182: a base that does not
+    // resolve now exits 1 with no class; the reason is sanitised on both streams as before.
+    expect(code).toBe(1);
+    expect(stderr).not.toContain("\u202e");
     expect(stdout).not.toContain("\u202e");
     expect(stdout).not.toContain("\u{E0041}");
     expect(doc["reason"]).toContain("nosuchref");
@@ -592,17 +595,46 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(doc["reason"]).toContain("names the report cannot show as they are, so the class is at least product: docs/ab.md");
   });
 
-  it("says at least product, naming the ref, for a base that does not resolve", async () => {
+  // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/182. The case read exit 0 and
+  // `product` over zero paths, which the flows read as a class, so their no-class rules never fired. A base
+  // that does not resolve now gives no class: exit 1, the reason naming the failed read, no `class` key.
+  it("exits 1 with no class, naming the ref as a failed read, for a base that does not resolve", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
 
-    const { code, doc } = await classifyIn(repo, ["--base", "no-such-ref"]);
+    const { code, doc, stderr } = await classifyIn(repo, ["--base", "no-such-ref"]);
 
-    expect(code).toBe(0);
-    expect(doc["class"]).toBe("product");
-    expect(doc["base"]).toBeNull();
-    expect(doc["reason"]).toContain("no-such-ref");
-    expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ ok: false, subcommand: "classify", base: null });
+    expect(doc).not.toHaveProperty("class");
+    expect(doc).not.toHaveProperty("checks");
+    expect(doc["reason"]).toContain("the base no-such-ref could not be read: it does not resolve to a commit here");
+    expect(stderr).toContain("classify failed:");
+  });
+
+  // review/182: `--paths` with a base that does not resolve reads no class file, so it gives no class either.
+  it("exits 1 with no class for --paths against a base that does not resolve", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+
+    const { code, doc } = await classifyIn(repo, ["--paths", "src/x.ts", "--base", "no-such-ref"]);
+
+    expect(code).toBe(1);
+    expect(doc).not.toHaveProperty("class");
+    expect(doc["reason"]).toContain("could not be read");
+  });
+
+  // review/182: a repository's first batch, `--base HEAD` on an unborn HEAD, gives no class rather than product.
+  it("exits 1 with no class for --base HEAD on an unborn HEAD", async () => {
+    const repo = getRoot().path("unborn");
+    await mkdir(repo, { recursive: true });
+    git(repo, ["init", "-q"]);
+    await getRoot().seedFiles({ "unborn/.github/workflows/ci.yml": "on: push\n" });
+
+    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+    expect(code).toBe(1);
+    expect(doc).not.toHaveProperty("class");
+    expect(doc["reason"]).toContain("the base HEAD could not be read");
   });
 
   it("says product, naming the cause, in a directory that is no git work tree", async () => {

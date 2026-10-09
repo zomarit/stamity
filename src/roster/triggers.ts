@@ -87,7 +87,11 @@ export interface SpecialistTrigger {
  * hooks, settings and MCP server files. Hook folders and `settings.json` are
  * named inside the client configuration folders only, because a bare `hooks/`
  * segment also holds front-end hooks (`src/hooks/useX.ts`); a repository whose
- * own hook code is security-relevant places it through its class file. A `*`
+ * own hook code is security-relevant places it through its class file. The
+ * manifest's hooks directory is named at `.stamity/hooks/` and
+ * `.config/stamity/hooks/`; a top-level `hooks/` folder, its third documented
+ * value, is not, since no form below anchors a segment to the root, so a
+ * repository using it places it through its class file too (review/181). A `*`
  * row would make it always-on outright, which is a second reviewer rather
  * than a specialist. Rows therefore match by directory segment, basename
  * suffix, prefix or exact basename, and folder-qualified basename only.
@@ -136,11 +140,13 @@ export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
       ".github/hooks/",
       ".stamity/hooks/",
       ".stamity/generated/hooks/",
+      ".config/stamity/hooks/",
       ".husky/",
       "hooks.json",
       ".claude/settings.json",
       "settings.local.json",
       ".vscode/settings.json",
+      ".codex/config.toml",
       ".mcp.json",
       "mcp.json",
     ],

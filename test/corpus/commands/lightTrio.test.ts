@@ -875,6 +875,13 @@ describe("quick — the guardrails are the command", () => {
     );
     expect(gates).toContain("The refusal names the row and the rule that placed the item.");
     expect(gates).toContain("There is no size floor, and no lens runs inside the quick lane.");
+    // Added 2026-10-09 (run 2026-10-08_product-core, the p5 group's fix round 2, `review/179`, signed off): with
+    // no class the quick lane fails closed on the security agent's paths, as `/st-work` does, and a batch the
+    // table does not name stays.
+    expect(gates).toContain(
+      "With no class — neither form runs, or the classify exits non-zero — a batch with a path the `stamity-security` agent's `## Trigger` table names moves the same way, as for a `security-sensitive` class;",
+    );
+    expect(gates).toContain("a batch whose paths that table does not name, a docs-only one among them, stays.");
   });
 
   it("maps the class's checks to the charter's gate tokens and runs all when unclear (REQ-FLOW-063)", async () => {

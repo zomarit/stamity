@@ -1046,6 +1046,12 @@ describe("/st-work — Prove", () => {
     expect(role).toContain("every changed lockfile the class's `byPath` names, nested ones included");
     expect(role).toContain("counts only the entries the bump adds or changes");
     expect(role).toContain("A standing condition on an entry the bump leaves alone is reported and does not flag");
+    // Added 2026-10-09 (the p5 group's fix round 2, `review/178`): the entries are found against the run's
+    // base, since units commit as they go and a comparison with `HEAD` would find none.
+    expect(role).toContain(
+      "An entry is the bump's own when it differs from the run's base, the `Base:` commit `gate classify` read, never from `HEAD`",
+    );
+    expect(role).toContain("a base the audit cannot read makes the run `partial`");
   });
 
   it("names the persisted home of the proof block and its ledger", async () => {
@@ -1576,6 +1582,14 @@ describe("/st-work — dials", () => {
     expect(intensityRow(dials, "standard")).toContain(
       "the `security` lens also on a `security-sensitive` class",
     );
+    // Added 2026-10-09 (run 2026-10-08_product-core, the p5 group's fix round 2, `review/177`): both rows also
+    // restate the Specialist pass's no-class rule and the lockfile match's wait for the audit's flag.
+    for (const tier of ["light", "standard"]) {
+      expect(intensityRow(dials, tier)).toContain("or with no class from `gate classify`");
+      expect(intensityRow(dials, tier)).toContain(
+        "a lockfile's own trigger-path match waiting for the audit's flag when the checks name `dependency-audit`",
+      );
+    }
   });
 
   it("places the whole-branch deep review inside Phase 4's own sub-section order", async () => {

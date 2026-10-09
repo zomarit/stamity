@@ -510,6 +510,19 @@ describe("the security row's client, CI and install-steering rows (build/63, rev
       expect(specialistsForPath(path), path).toEqual([]);
     }
   });
+
+  // Added 2026-10-09 (run 2026-10-08_product-core, review/180, review/181 signed off): Codex's MCP server file and
+  // the manifest's documented `.config/stamity/hooks` folder join the row. A top-level `hooks/` folder does not:
+  // the grammar has no root-anchored form, and the bare segment would take every front-end hook folder back, so a
+  // repository whose hooks directory is `hooks` places it through its class file.
+  it("pulls in security for Codex's config.toml and the .config/stamity/hooks folder, and names no bare hooks/ folder", () => {
+    for (const path of [".codex/config.toml", "apps/x/.codex/config.toml", ".Codex\\Config.TOML", ".config/stamity/hooks/guard.json", ".config/stamity/hooks/guard.mjs"]) {
+      expect(specialistsForPath(path), path).toEqual(["stamity-security"]);
+    }
+    for (const path of ["config.toml", "src/config.toml", "x.codex/config.toml", ".config/other/hooks/a.mjs", "hooks/guard.json", "hooks/guard.mjs"]) {
+      expect(specialistsForPath(path), path).toEqual([]);
+    }
+  });
 });
 
 /**
