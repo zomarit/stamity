@@ -20,7 +20,11 @@ the integration head `90710ba5`, where every citation of `content/commands/st-wo
 `content/agents/stamity-test-runner.md` in this file was re-pointed to the lines that hold its text; unreleased at that
 merge, so `status` does not move. REQ-FLOW-039 to 050 are held for plan 016's later files, 051 to 060 are unallocated
 and 068 to 071 are held for plan 019 file 3, so the ids leave gaps. The run's own eval cases land after this merge and
-are not cited here.
+are not cited here. The merge's second round re-read that text at `f3315229`, after the p5 group's fix round 2
+(`review/177` to `review/183`), and took the semantic review's `review/184` to `review/188`: it re-pointed every
+citation of `src/cli/commands/gate.ts`, `src/change/classify.ts`, `src/roster/triggers.ts`,
+`content/commands/st-quick.md` and `content/skills/st-dep-audit/SKILL.md`, restated the text that fix round changed,
+and found every other citation on the same text at both heads.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -858,12 +862,12 @@ bytes still hash to what the ledger recorded, inside the engine's bound; an edit
 ### REQ-FLOW-061 — A change gets the checks its class needs
 
 From the spec delta of run `2026-10-08_product-core`, as landed by the units `p1a-classifier-verb`,
-`p1c-classify-git-reads`, `p1d-classify-security-row`, `p2a-class-file` and `p5f-class-file-gate-config` and lane A's
-fix rounds; every `path:line` below reads at `90710ba5`.
+`p1c-classify-git-reads`, `p1d-classify-security-row`, `p2a-class-file` and `p5f-class-file-gate-config`, lane A's
+fix rounds and the p5 group's fix round 2; every `path:line` below reads at `f3315229`.
 
 `stamity gate classify` names one class for a change, the checks that class runs and the lenses it needs. It is the
 CLI's fourth hidden plumbing verb, beside `learn`, `handoff` and `ledger`, because its caller is the session running
-`/st-quick` or `/st-work` (`src/cli/commands/gate.ts:39-44`, `:1472-1499`). The seven classes, strongest first, are
+`/st-quick` or `/st-work` (`src/cli/commands/gate.ts:39-44`, `:1479-1506`). The seven classes, strongest first, are
 `security-sensitive`, `public-contract`, `product`, `config`, `tests`, `docs` and `records`
 (`src/change/classify.ts:96-115`). Each path takes the strongest class any rule gives it, a path no rule places is
 `product`, and the change takes its strongest path's class (`:5-11`, `:1045-1050`). Each class's checks
@@ -886,16 +890,16 @@ the full gates (`gates-all`) and the review loop. A `security-sensitive` class n
   under a built-in test glob, else takes its next placement, else is `product` (`:13-25`, `:567-581`, `:777-825`;
   `review/47`, `review/55`).
 - **A repository's own lists** live in `.stamity/change-classes.json` (`:521-522`), read only as the base commit's
-  blob under the project's prefix, never the head's copy or the work tree's (`src/cli/commands/gate.ts:84-96`,
-  `:932-954`). Its rules join the built-ins and only ever raise a path a built-in rule or the trigger roster's
+  blob under the project's prefix, never the head's copy or the work tree's (`src/cli/commands/gate.ts:86-97`,
+  `:934-956`). Its rules join the built-ins and only ever raise a path a built-in rule or the trigger roster's
   security row places; its `product`, `public-contract` and `security-sensitive` rules match without case
-  (`src/change/classify.ts:1295-1300`, `:1545-1568`). `parseClassFile` refuses text that is not a JSON object, an
+  (`src/change/classify.ts:1344-1349`, `:1594-1617`). `parseClassFile` refuses text that is not a JSON object, an
   unknown key or class, a glob that is not a non-empty string, a glob over 200 characters or holding more than four
   `**`, a glob matching every path for a class weaker than `product`, a `records` or `docs` glob whose extension holds
   a wildcard (`review/59`) or whose last segment holds a wildcard and names no concrete extension (`review/70`), and
-  a test entry that is not a plain repository-relative file path (`:1340-1456`, `:1493-1543`). A refused base copy
+  a test entry that is not a plain repository-relative file path (`:1389-1505`, `:1542-1592`). A refused base copy
   gives at least `product` and applies only its raising entries that parse on their own; JSON that does not parse
-  gives the built-ins alone (`src/cli/commands/gate.ts:956-970`, `:1225`; `review/48`). `check` adds a
+  gives the built-ins alone (`src/cli/commands/gate.ts:958-972`, `:1226`; `review/48`). `check` adds a
   `change-classes` row only when the file exists, failing with the first error (`src/cli/commands/check.ts:354-395`).
   This repository's file places `content/**` in `product`, the tool configurations in `config`, `test/**` and
   `evals/**` in `tests`, the site's content and assets by extension in `docs`, and the engine's state readers,
@@ -905,32 +909,46 @@ the full gates (`gates-all`) and the review loop. A `security-sensitive` class n
   configure gates: the operator's to edit, the class file read only from the base commit, so no change sets its own
   checks (`content/rules/stamity-injection-screening.md:87-92`).
 - **Where the paths come from.** `--paths <path>…` classifies listed paths by path rules alone, and without `--base`
-  reads no git at all (`src/cli/commands/gate.ts:1182-1184`); a listed path is read with a backslash both as a
+  reads no git at all (`src/cli/commands/gate.ts:1184-1186`); a listed path is read with a backslash both as a
   separator and as a filename character, the stronger class kept (`src/change/classify.ts:830-863`; `review/20`).
   Without `--paths` the change is read from git: the tracked changes, staged and unstaged, against the base, renames
   as renames, and every untracked file. Git's names are read literally, except on win32, where they are read both
-  ways (`src/cli/commands/gate.ts:50-61`, `:1210-1212`; `review/43`).
+  ways (`src/cli/commands/gate.ts:50-61`, `:1211-1213`; `review/43`).
 - **The base.** `--base <ref>` resolves once to a commit; a ref starting with `-` is refused with exit 2 before git
-  runs (`:143-147`, `:157-165`). With no `--base`, each known path takes its built-in class, no class file is read,
-  and the reason says no base was given (`src/change/classify.ts:987-989`). An unresolvable base, an empty path list or
-  a rename whose two sides classify differently makes the class at least `product` (`:990-1006`).
+  runs (`:145-149`, `:159-167`). With no `--base`, each known path takes its built-in class, no class file is read,
+  and the reason says no base was given (`src/change/classify.ts:987-989`). A `--base` that does not resolve to a
+  commit, an unborn `HEAD` among them, gives no class, with `--paths` as without: `classify` exits 1, and its JSON
+  carries `ok: false`, `subcommand`, `base: null` and a `reason` saying the ref could not be read, with no `class`,
+  `checks` or `lenses` (`src/cli/commands/gate.ts:1193-1197`, `:1258-1263`; `src/cli/kit/program.ts:353-363`). It gave
+  `product` over zero paths, which the flows read as a class, so their no-class rules never fired (`review/182`). An
+  empty path list or a rename whose two sides classify differently makes the class at least `product`
+  (`src/change/classify.ts:994-1006`).
 - **The project root** is the nearest ancestor of the working directory, up to the git top-level, whose `.stamity/`
   is in the base commit's tree (`HEAD`'s with no base), else the top-level; every git read runs from it, so a
-  `.stamity/` the change itself adds moves no boundary (`src/cli/commands/gate.ts:70-83`; `review/13`). A changed path
+  `.stamity/` the change itself adds moves no boundary (`src/cli/commands/gate.ts:72-84`; `review/13`). A changed path
   outside the project is left out and raises the class to at least `product`, or to `security-sensitive` when the
-  built-in security floor or the trigger roster's security row matches it (`:1071-1095`;
+  built-in security floor or the trigger roster's security row matches it (`:1073-1097`;
   `src/change/classify.ts:714-741`; `review/21`). A name that is not valid UTF-8, or one the report must sanitise,
-  raises it to at least `product` (`src/cli/commands/gate.ts:1096-1102`, `:1114-1127`; `review/36`).
-- **Fail-closed.** Every git call runs through the hardened runner, and any git failure gives `product` with the
-  failure named (`:63-68`, `:1242-1246`). Glob matching costs at most the glob's steps times the path's length,
-  whatever its wildcards (`src/change/classify.ts:646-697`; `review/50`).
+  raises it to at least `product` (`src/cli/commands/gate.ts:1098-1104`, `:1116-1129`; `review/36`).
+- **Fail-closed.** Every git call runs through the hardened runner. A git failure reading the change's paths — a
+  directory outside a work tree, no git binary, a timeout, an oversized output — gives `product` with the failure
+  named (`src/cli/commands/gate.ts:1243-1247`). Three reads fail closed their own way: a failed read of the changed
+  lines makes the class `security-sensitive`, the lens reading what no line rule could (`:831-839`, `:1105-1108`;
+  REQ-FLOW-065); a failed test-source read runs every test and keeps the class and lenses (`:1232-1239`;
+  REQ-FLOW-062); and a failed read of a changed `package-lock.json`'s base copy keeps the security lens, the reason
+  naming the failure (`:1153-1161`; `src/change/classify.ts:1278`). A base that does not resolve gives no class, as
+  above. Glob matching costs at most the glob's steps times the path's length, whatever its wildcards
+  (`src/change/classify.ts:646-697`; `review/50`).
 - **Output.** A terminal summary and one JSON document carrying `subcommand`, `base`, `paths`, `class`, `checks`,
-  `lenses`, `reason`, `byPath` and `tests`, every path and rule sanitised (`src/cli/commands/gate.ts:1253-1292`).
-  `classify` exits 0 for any verdict; an unknown subcommand or option exits 2 (`:1478-1499`).
+  `lenses`, `reason`, `byPath` and `tests`, every path and rule sanitised (`src/cli/commands/gate.ts:1264-1299`).
+  `classify` exits 0 for every class it names and 1 when it names none; an unknown subcommand or option exits 2
+  (`:1258-1263`, `:1281-1282`, `:1485-1506`).
 - **Expand/contract:** an added hidden verb and an optional file. A repository with no class file gets the built-in
   rules, and `check` prints no new row (`src/cli/commands/check.ts:354-363`). Rollback is a re-sync at the prior
   version. The consumers are `/st-quick`, `/st-work` and `/st-plan` (REQ-FLOW-063, REQ-FLOW-065, REQ-FLOW-067) and
-  `scripts/ci/records-only.mjs` (REQ-PROVE-031).
+  `scripts/ci/records-only.mjs` (REQ-PROVE-031). The exit 1 with no class for a base that does not resolve
+  (`review/182`) changed the verb's output inside the run, before any release; the three flows read it as no class,
+  and `scripts/ci/records-only.mjs` loads the classifier module, not the verb (REQ-PROVE-031).
 - **Proof:** `test/change/classify.test.ts`, `test/cli/commands/gate.test.ts`, `test/cli/commands/check.test.ts`,
   `test/cli/surface.e2e.test.ts`, `test/architecture/boundaries.test.ts`, `test/corpus/rules/security.test.ts`; QA.
 
@@ -940,8 +958,8 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p2
 `p2d-test-input-census` and `p2c-ci-lanes-from-map` and lane A's fix rounds 7 to 10.
 
 The class file's `testInputs` map lists globs over changed paths and the tests each selects, or `"all"`. It is read
-from the base commit's copy only, and only a valid copy gives one (`src/cli/commands/gate.ts:1227-1240`).
-`gate classify` adds a `tests` result, `{full, files, reason}` (`:1259`, `:1268`, `:1289`). Selection, in order
+from the base commit's copy only, and only a valid copy gives one (`src/cli/commands/gate.ts:1228-1241`).
+`gate classify` adds a `tests` result, `{full, files, reason}` (`:1266`, `:1275`, `:1296`). Selection, in order
 (`src/change/testInputs.ts:173-239`):
 
 - a `config` or stronger change runs every test (`review/60`);
@@ -954,9 +972,9 @@ from the base commit's copy only, and only a valid copy gives one (`src/cli/comm
 
 A test's reads are taken from its own text: each string literal naming a tracked non-code file, and each glob
 literal's tracked non-code matches; a glob literal over the class file's cost bound makes every test run
-(`src/change/testInputs.ts:1-29`, `:133-159`; `src/cli/commands/gate.ts:987-1026`). A failed test-source read runs
-every test and keeps the class and lenses (`:1231-1238`; `review/63`), and a selected file the work tree lacks runs
-every test (`:1028-1036`).
+(`src/change/testInputs.ts:1-29`, `:133-159`; `src/cli/commands/gate.ts:989-1028`). A failed test-source read runs
+every test and keeps the class and lenses (`:1232-1239`; `review/63`), and a selected file the work tree lacks runs
+every test (`:1030-1038`).
 
 - **This repository's map** gives `content/**` and `evals/**` every test, each CI lane path its lane's suites and the
   guard, a top-level `*.md` entry the suites that read those pages, and `test/**` the guard and the whole-tree
@@ -972,11 +990,11 @@ every test (`:1028-1036`).
 ### REQ-FLOW-063 — The gates follow the class
 
 From the spec delta of run `2026-10-08_product-core`, as landed by the units `p3a-charter-invariant-4`,
-`p3b-quick-gates` and `p3c-work-gates` and the p3 fix rounds.
+`p3b-quick-gates` and `p3c-work-gates`, the p3 fix rounds and the p5 group's fix round 2.
 
 Gates run on every batch, a one-line typo fix included (`content/commands/st-quick.md:150`). `/st-quick` gates the
 batch in three steps after the last item lands: the secret scan, `stamity gate classify --base HEAD --json`, then the
-class's checks in a `test-runner` spawn (`:155-180`). `/st-work`'s Prove pass scans with the run's base, then runs
+class's checks in a `test-runner` spawn (`:155-184`). `/st-work`'s Prove pass scans with the run's base, then runs
 `stamity gate classify --base <the run's base> --json`; the class's checks run on the selected files in the build and
 its gates on the final tree, as the test-runner maps them (`content/commands/st-work.md:216-228`). The run's base is
 the record head's `Base:` line (REQ-CTX-012).
@@ -986,15 +1004,21 @@ the record head's `Base:` line (REQ-CTX-012).
   `gates-all`, an `unclear` class, or a test command that takes no file list runs `all`. On the final tree a `product`
   or stronger class runs `all` (`content/agents/stamity-test-runner.md:33-39`). `/st-quick` spells the same mapping
   and honours `tests.full`; a `docs` class with zero selected tests runs the scan alone and names the class
-  (`content/commands/st-quick.md:170-180`; `review/109`).
+  (`content/commands/st-quick.md:174-184`; `review/109`).
 - **The condition.** Both flows state that the narrower gates rest on one condition: the repository's CI runs the
   full matrix on every `product` or stronger change and on a schedule (`content/commands/st-work.md:222-224`;
-  `content/commands/st-quick.md:182-184`). Where the charter's `CI provider` reads `unknown`, the final tree runs
-  `all` whatever the class (`content/commands/st-quick.md:183-184`; `content/agents/stamity-test-runner.md:38-39`).
-- **When no class can be read.** A `/st-work` run with no base runs `${STAMITY:VERIFY_GATE_ALL}` on the final tree
-  unclassified (`unclear`); a CLI that cannot run or has no `gate` verb, and a scan naming a `reason`, take the full
-  gates, and each lists `secret scan: not run` under `Not done:` (`content/commands/st-work.md:224-227`;
-  `content/commands/st-quick.md:152-153`, `:162-164`). `/st-quick`'s fallback still classifies (`review/113`).
+  `content/commands/st-quick.md:186-188`). Where the charter's `CI provider` reads `unknown`, the final tree runs
+  `all` whatever the class (`content/commands/st-quick.md:187-188`; `content/agents/stamity-test-runner.md:38-39`).
+- **When no class can be read.** A `/st-work` run with no base scans against `HEAD` and runs
+  `${STAMITY:VERIFY_GATE_ALL}` on the final tree unclassified (`unclear`). Such a scan reads no committed work, so a
+  run with committed work lists `secret scan: not run` under `Not done:`, and one whose work is all uncommitted is
+  scanned whole and lists nothing for it (`content/commands/st-work.md:224-226`; `src/cli/commands/gate.ts:1441`). In
+  either flow a CLI that cannot run or has no `gate` verb, and a scan naming a `reason`, take the full gates and list
+  `secret scan: not run` (`content/commands/st-work.md:226-227`; `content/commands/st-quick.md:152-153`,
+  `:162-164`). A `/st-quick` scan naming a `reason` still runs step 2's classify (`:162-164`; `review/113`). A
+  `gate classify` that exits 1 names no class (REQ-FLOW-061): `/st-quick` then moves a batch that touches a path the
+  security agent's `## Trigger` table names to `/st-work`, as for a `security-sensitive` class, and keeps any other
+  batch, a docs-only one among them (`:169-173`; `review/179`; REQ-FLOW-065).
 - **One review pass.** A class whose checks name `review-once` gets one review pass: a Critical or Warning it raises
   is fixed and closure-reviewed once, and no further round runs (`content/commands/st-work.md:227-228`).
 - **The charter.** Invariant 4 reads "Done means the gates `gate classify` names exit 0 (all if it did not run)", the
@@ -1044,23 +1068,27 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p1
 rounds.
 
 - **The path rows** live in one list, the trigger roster's security row, which the classifier reads: a path it
-  matches is `security-sensitive` whatever the class file says (`src/roster/triggers.ts:96-171`;
+  matches is `security-sensitive` whatever the class file says (`src/roster/triggers.ts:99-177`;
   `src/change/classify.ts:41-50`, `:802-805`). The run added the install-steering files (`.npmrc`, `.yarnrc`,
   `.yarnrc.yml`, `.pnpmfile.cjs`, `npm-shrinkwrap.json`; `review/159`), CI workflows and composite actions
   (`.github/workflows/`, `.github/actions/`, `action.yml`, `action.yaml`; `review/164`), shell and PowerShell scripts,
   container builds (`dockerfile`, `dockerfile.*`, `*.dockerfile`, `containerfile`; `review/169`), the client hook
   folders and settings named inside the client configuration folders (`.claude/hooks/`, `.cursor/hooks/`,
   `.codex/hooks/`, `.github/hooks/`, `.stamity/hooks/`, `.stamity/generated/hooks/`, `.husky/`, `hooks.json`,
-  `.claude/settings.json`, `settings.local.json`, `.vscode/settings.json`; `build/63`) and the MCP server files
-  (`.mcp.json`, `mcp.json`) (`src/roster/triggers.ts:115-145`). A bare `hooks/` segment is no row, so front-end hooks
-  stay out; a repository whose own hook code is security-relevant places it through its class file, as this one
-  places `src/hooks/**` (`:82-93`; `.stamity/change-classes.json:11`). Two pattern forms were added, a basename inside
-  a named folder and a basename prefix (`src/roster/triggers.ts:49-60`, `:281-294`).
+  `.claude/settings.json`, `settings.local.json`, `.vscode/settings.json`; `build/63`), the manifest's hooks directory
+  at `.config/stamity/hooks/` (`review/181`), Codex's `.codex/config.toml`, where its MCP servers are written
+  (`review/180`), and the MCP server files (`.mcp.json`, `mcp.json`) (`src/roster/triggers.ts:119-151`). A bare
+  `hooks/` segment is no row, so front-end hooks stay out; a repository whose own hook code is security-relevant
+  places it through its class file, as this one places `src/hooks/**`. A top-level `hooks/` folder, the manifest's
+  third documented hooks directory, is no row either, since no pattern form anchors a segment to the root, so a
+  repository using it places it through its class file too (`:82-98`; `.stamity/change-classes.json:11`;
+  `review/181`). Two pattern forms were added, a basename inside a named folder and a basename prefix
+  (`src/roster/triggers.ts:49-60`, `:287-300`).
 - **The Trigger table** of the security agent states the rows, adds "CI and release" and "Client hooks and settings",
   and says the classifier also places a change there by a changed code line (`content/agents/stamity-security.md:30-41`);
   a parity test holds table and row in both directions.
 - **Topic words** gain `workflow`, `release`, `hook`, `shell`, `file deletion` and `network call`
-  (`src/roster/triggers.ts:162-167`), and they may add a lens and never remove one
+  (`src/roster/triggers.ts:168-173`), and they may add a lens and never remove one
   (`content/commands/st-work.md:280-281`).
 - **The line rules** are four call-shape families — `process-spawn`, `delete-or-overwrite`, `network-or-registry`,
   `secret-name` — each word-bounded with its opening parenthesis; `secret-name` counts only where a name is assigned,
@@ -1070,39 +1098,50 @@ rounds.
   read by no line rule (`:225-235`, `:432-459`; `review/85`). Names a file binds to the spawning and network modules
   and members, by import or assignment, are collected from its first 64 KiB and its hunk lines (`:250-251`,
   `:315-330`; `review/124`, `review/145`, `review/175`). Added and removed lines count, context lines only in a hunk
-  that also removes one, and a hit names the rule and where, never the text (`:479-508`). A line past 256 KiB is not
-  read and makes the class `security-sensitive`, and so does a code file the read could not show (`:1007-1031`;
-  `review/123`, `review/125`, `review/138`) and a failed line read (`src/cli/commands/gate.ts:1103-1106`; `review/87`).
+  that also removes one, and a hit names the rule and where, never the text (`:479-508`). A line longer than 262,144
+  characters (`256 * 1024`, counted as string length, not bytes; `:248`) is not read and makes the class
+  `security-sensitive`, and so does a code file the read could not show (`:1007-1031`; `review/123`, `review/125`,
+  `review/138`) and a failed line read (`src/cli/commands/gate.ts:1105-1108`; `review/87`).
 - **The change read** unites the work tree's and the index's patch against the base (`review/89`) with every flag a
   configuration could turn pinned (`-U3`, `-W`, `--text`, no external diff, colour or textconv, fixed prefixes), names
   each section from the `-z` name list, reads every untracked file whole, leaves binaries out by a numstat pre-read,
-  and lets a NUL in a file's first 8,000 bytes alone decide binary (`:97-110`).
+  and lets a NUL in a file's first 8,000 bytes alone decide binary (`:99-111`).
 - **In the flow.** The `security` lens runs at every tier when `gate classify` names the class `security-sensitive`,
   and on a trigger-path match; with no class from `gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason`
-  naming a failed read, it runs at every tier as for `security-sensitive` (`content/commands/st-work.md:281-285`,
-  `:448-449`; `review/162`). In `/st-quick`, a `security-sensitive` class fires the `Security-sensitive surface` row:
-  the whole batch moves to `/st-work` as it stands, nothing reverted, every applied item reported ungated, and no
-  lens runs inside the quick lane (`content/commands/st-quick.md:165-169`; `review/116`). The lens reads
-  `git log <range>` only after its findings are formed (`content/agents/stamity-security.md:178-179`).
+  naming a failed read, which a classify that exits 1 carries (REQ-FLOW-061), it runs at every tier as for
+  `security-sensitive` (`content/commands/st-work.md:281-285`; `review/162`). `## Dials`' light and standard rows
+  state the same rule in their own cells, and that a lockfile's own trigger-path match waits for the audit's flag
+  when the checks name `dependency-audit` (`:448-449`; `review/177`). In `/st-quick`, a `security-sensitive` class
+  fires the `Security-sensitive surface` row: the whole batch moves to `/st-work` as it stands, nothing reverted,
+  every applied item reported ungated, and no lens runs inside the quick lane (`content/commands/st-quick.md:165-169`;
+  `review/116`). With no class — neither CLI form runs, or the classify exits non-zero — a batch with a path the
+  security agent's `## Trigger` table names moves the same way, and a batch whose paths that table does not name, a
+  docs-only one among them, stays (`:169-173`; `review/179`). The lens reads `git log <range>` only after its
+  findings are formed (`content/agents/stamity-security.md:178-179`).
 - **Audit first.** When every path the rules placed `security-sensitive` is a `package-lock.json` and no
   `package.json` changed, the checks gain `dependency-audit` and the lens leaves, the class staying
   `security-sensitive` and the reason reading `lockfile-only bump: dependency audit first`, only when each lockfile
-  proves the bump (`src/change/classify.ts:67-76`, `:1052-1057`, `:1074-1271`): its base and head copies parse at
+  proves the bump (`src/change/classify.ts:67-76`, `:1052-1057`, `:1074-1320`): its base and head copies parse at
   `lockfileVersion` 2 or 3; the index copy equals the work tree's byte for byte (`review/155`;
-  `src/cli/commands/gate.ts:1129-1171`); and every `packages` entry, and every legacy `dependencies` entry
+  `src/cli/commands/gate.ts:1131-1173`); and every `packages` entry, and every legacy `dependencies` entry
   (`review/158`), that differs between the copies carries no install script and no `link`, has a base twin (a package
   new to the graph refuses, a removal does not; `review/163`), resolves over `https` with no credentials from its base
-  twin's origin, moves no `resolved` or `integrity` at an unchanged version, and resolves the registry tarball of its
-  own name at its head version under its base twin's path (`review/157`, `review/171`). Any other format, a missing
-  base copy, a parse failure, a raise by an unread line or an unscanned code file keeps the lens, the reason saying
-  why, and a later raise puts it back (`src/change/classify.ts:1273-1291`; `src/cli/commands/gate.ts:1051-1061`).
+  twin's origin, moves no `resolved` or `integrity` at an unchanged version, resolves the registry tarball of its
+  own name at its head version under its base twin's path (`review/157`, `review/171`), and moves its version, if at
+  all, only to a higher semver version: a lower version, a release to its own prerelease, build metadata alone, or a
+  version on either side that is no semver version refuses (`src/change/classify.ts:1174-1219`, `:1256-1257`;
+  `review/183`). Any other format, a missing or unread base copy, a parse failure, a raise by an unread line or an
+  unscanned code file keeps the lens, the reason saying why, and a later raise puts it back
+  (`src/change/classify.ts:1278`, `:1322-1340`; `src/cli/commands/gate.ts:1053-1063`).
   `/st-work` then runs the audit first and the lens only if the audit flags something; the lockfiles' own
   trigger-path match waits for that flag (`content/commands/st-work.md:286-290`; `review/168`). The audit reads every
   changed lockfile the class's `byPath` names, nested ones included, and its flag counts only the entries the bump
   adds or changes: an advisory at any severity, a licence flag, or an update-risk class other than `patch` or `minor`
   for the bump's own version move; a standing condition on an entry the bump leaves alone is reported and does not
-  flag; a `partial` run or an audit that cannot run counts as a flag (`content/skills/st-dep-audit/SKILL.md:113-125`;
-  `review/160`, `review/166`).
+  flag; a `partial` run or an audit that cannot run counts as a flag. An entry is the bump's own when it differs from
+  the run's base, the `Base:` commit `gate classify` read, never from `HEAD` or the work tree, since the units commit
+  as they go; a base the audit cannot read makes the run `partial` (`content/skills/st-dep-audit/SKILL.md:113-128`;
+  `review/160`, `review/166`, `review/178`).
 - **State read back as authority** is placed by path: the built-in floor holds the engine's own state and the class
   file, and each repository's class file names the code that reads state back, here `src/merge/**`,
   `src/manifest/**`, `src/runs/ledgerStore.ts` and `src/cli/engine/gitStatus.ts` (`src/change/classify.ts:552-565`;
@@ -1118,10 +1157,10 @@ lane C's fix rounds.
 
 `stamity gate scan [--base <ref>]` reads the change's added lines from the project root by the read `classify` uses,
 plus the lines only the scan reads: files outside the project, named from the root with `../` first, and UTF-16 files,
-decoded (`src/cli/commands/gate.ts:123-141`, `:1369-1429`; `review/96`, `review/98`). With no base it reads the
+decoded (`src/cli/commands/gate.ts:125-143`, `:1376-1436`; `review/96`, `review/98`). With no base it reads the
 uncommitted change against `HEAD` and says so (`base: null`, `scope: "uncommitted"`); with one it reads everything
 since the base (`scope: "since-base"`) and the added lines of every commit since it, merges left out, so a value
-committed and removed again still stops the run, and such a hit names its commit (`:1294-1295`, `:1322-1367`;
+committed and removed again still stops the run, and such a hit names its commit (`:1301-1302`, `:1329-1374`;
 `review/112`).
 
 - **The patterns** are the shipped `scanValueForSecrets` ones, unchanged; each added line is first taken apart into
@@ -1132,18 +1171,21 @@ committed and removed again still stops the run, and such a hit names its commit
   its value no credential context; a comparison is no assignment (`:22-51`; `review/126`, `review/136`, `review/140`,
   `review/143`).
 - **A hit** names path, line and rule, and its commit when it came from the history, never the value; the scan has no
-  allow-list and no waiver (`:75-77`; `src/cli/commands/gate.ts:1446-1450`). A hit exits 1. A change the scan could
-  not read exits 1 with `ok: false` and the reason in place of hits. An added line past the 256 KiB hard cap is not
-  read, so the run exits 1 with a `reason` naming it beside its hits, never clean (`:1408-1416`, `:1431-1469`;
+  allow-list and no waiver (`:75-77`; `src/cli/commands/gate.ts:1453-1457`). A hit exits 1. A change the scan could
+  not read exits 1 with `ok: false` and the reason in place of hits. An added line longer than the hard cap of 262,144
+  characters (`256 * 1024`, counted as string length, not bytes; `src/change/scan.ts:112`) is not read, so the run
+  exits 1 with a `reason` naming it beside its hits, never clean (`src/cli/commands/gate.ts:1415-1423`, `:1438-1476`;
   `review/135`). A code file the read could not show is listed in `unscanned`, every other file left unread in
-  `skipped`; the exit stays 0 for either, and the flows read the lists (`:136-139`).
+  `skipped`; the exit stays 0 for either, and the flows read the lists (`:138-141`).
 - **In the flows.** Both run the scan first. A hit stops the batch or the pass, naming path, line and rule, and is
   never cleared by rewriting the value and scanning again; a hit on a deliberate fixture is the person's to settle. A
   non-empty `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A scan that
   names a `reason` did not read the whole change: a hit beside it still stops, and with none the full gates run and
   `secret scan: not run` is listed (`content/commands/st-quick.md:157-164`; `content/commands/st-work.md:216-220`,
   `:226-227`). A CLI that cannot run takes the full gates and lists `secret scan: not run`
-  (`content/commands/st-quick.md:153`; `content/commands/st-work.md:226`).
+  (`content/commands/st-quick.md:153`; `content/commands/st-work.md:226`). A `/st-work` run with no base scans against
+  `HEAD`, which reads no committed work, so it lists `secret scan: not run` only when it has committed work
+  (`content/commands/st-work.md:224-226`; REQ-FLOW-063).
 - **Proof:** `test/change/scan.test.ts`, `test/cli/commands/gate.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`.
 
@@ -1158,7 +1200,9 @@ trusts, one abuse case and the check that stops it, in at most five lines; absen
 (`content/commands/st-plan.md:353`). The table is followed by the shared "Running the CLI." paragraph, whose fallback
 reads that when neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed
 read, no unit's class can be read, so every unit carries the `threat` row (`:355-356`). The delta's fallback named
-only a CLI that cannot run; it was widened (`review/165`, `review/167`).
+only a CLI that cannot run; it was widened (`review/165`, `review/167`). A classify whose base does not resolve, an
+unborn `HEAD` among them, exits 1 with such a `reason` (`src/cli/commands/gate.ts:1195-1197`; REQ-FLOW-061), so
+there too every unit carries the row.
 
 - **Proof:** `test/corpus/commands/plan.test.ts`, `test/corpus/cliCallForm.test.ts`.
 
@@ -1625,9 +1669,11 @@ exists, it is the normative record for that requirement.
   `.stamity/runs/x/run.py` THEN the class is `product`; GIVEN `docs/a.test.ts` THEN `tests`.
 - GIVEN `docs/auth/AGENTS.md` or `.stamity/runs/x/claude.md` THEN the class is at least `product`; GIVEN
   `.Stamity/manifest.json` or `.stamity/change-classes.json` THEN `security-sensitive` with the security lens.
-- GIVEN an unplaced path, an empty path list, an unresolvable `--base`, or a rename from `docs/a.md` to `src/a.ts`
-  THEN the class is at least `product` and the reason names why; GIVEN a ref starting with `-` THEN the verb exits 2
-  and git never runs.
+- GIVEN an unplaced path, an empty path list, or a rename from `docs/a.md` to `src/a.ts` THEN the class is at least
+  `product` and the reason names why; GIVEN an unresolvable `--base`, or `--base HEAD` on an unborn `HEAD`, with or
+  without `--paths`, THEN the verb exits 1, its JSON carries `ok: false`, `base: null` and a `reason` saying the base
+  could not be read, and it has no `class` or `checks`; GIVEN a ref starting with `-` THEN the verb exits 2 and git
+  never runs.
 - GIVEN a change that edits `.stamity/change-classes.json` WHEN `gate classify --base <base>` runs THEN that path is
   `security-sensitive`, and every other path is placed by the base commit's copy, never the head's or the work
   tree's.
@@ -1638,7 +1684,11 @@ exists, it is the normative record for that requirement.
   classified project-relative, the class file is read under the project's prefix, and a changed path outside the
   project raises the class to at least `product`, or to `security-sensitive` when it is a lockfile, a workflow or the
   engine's own state.
-- GIVEN a git failure of any kind THEN the class is `product` and the reason names the failure.
+- GIVEN a git failure reading the change's paths (a directory outside a work tree, no git binary, a timeout) THEN the
+  class is `product` and the reason names the failure; GIVEN a failed read of the changed lines THEN the class is
+  `security-sensitive` with the security lens; GIVEN a failed test-source read THEN `tests.full` is true and the class
+  and lenses are those the change's paths and lines gave; GIVEN a failed read of a changed `package-lock.json`'s base
+  copy THEN the security lens stays and the reason names the failure.
 
 **REQ-FLOW-062**
 
@@ -1659,8 +1709,10 @@ exists, it is the normative record for that requirement.
 - GIVEN `/st-work`'s Prove pass THEN it scans and classifies with `--base` set to the record's `Base:` commit, and on
   the final tree a `product` or stronger class runs `${STAMITY:VERIFY_GATE_ALL}`.
 - GIVEN a charter whose `CI provider` reads `unknown` THEN the final tree runs `all` whatever the class.
-- GIVEN a run with no recorded base, a CLI with no `gate` verb, or a scan naming a `reason` THEN the full gates run and
-  `Not done:` lists `secret scan: not run`.
+- GIVEN a `/st-work` run with no recorded base and committed work, a CLI with no `gate` verb, or a scan naming a
+  `reason` THEN the full gates run and `Not done:` lists `secret scan: not run`; GIVEN a `/st-work` run with no
+  recorded base whose work is all uncommitted, and a scan against `HEAD` with no hit and no `reason`, THEN the final
+  tree runs `${STAMITY:VERIFY_GATE_ALL}` and `Not done:` lists no `secret scan: not run`.
 - GIVEN a class whose checks name `review-once` and a Warning it raises THEN the Warning is fixed and closure-reviewed
   once, and no further round runs.
 - GIVEN the charter THEN invariant 4 reads "Done means the gates `gate classify` names exit 0 (all if it did not run)."
@@ -1683,23 +1735,31 @@ exists, it is the normative record for that requirement.
 **REQ-FLOW-065**
 
 - GIVEN `.github/workflows/ci.yml`, `.claude/settings.json`, `.cursor/hooks.json`, `scripts/x.sh`,
-  `Dockerfile.prod` or `.npmrc` THEN the class is `security-sensitive` with the security lens; GIVEN
-  `src/hooks/useX.ts` in a repository whose class file does not place it THEN the class is `product`.
+  `Dockerfile.prod`, `.npmrc`, `.codex/config.toml` or `.config/stamity/hooks/guard.json` THEN the class is
+  `security-sensitive` with the security lens; GIVEN `src/hooks/useX.ts` in a repository whose class file does not
+  place it THEN the class is `product`; GIVEN a top-level `hooks/guard.mjs` THEN the security row does not match it.
 - GIVEN an added line `execSync(cmd)` in a TypeScript file outside the test globs THEN the class is
   `security-sensitive` and the reason names `process-spawn` and the path and line, never the line's text; GIVEN the
   same line in a test file THEN no line rule fires.
 - GIVEN a hunk that removes a guard around an existing `rmSync(` call THEN the context line counts and the class is
   `security-sensitive`.
-- GIVEN an npm lockfile v3 bump of one existing registry package, staged, with no install script, its `resolved` the
-  registry tarball of its own name and new version on its base twin's origin, and no `package.json` change THEN the
-  checks include `dependency-audit`, the lenses omit the security lens, and the class stays `security-sensitive`.
+- GIVEN an npm lockfile v3 bump of one existing registry package to a higher semver version, staged, with no install
+  script, its `resolved` the registry tarball of its own name and new version on its base twin's origin, and no
+  `package.json` change THEN the checks include `dependency-audit`, the lenses omit the security lens, and the class
+  stays `security-sensitive`.
 - GIVEN the same bump with `hasInstallScript: true`, a package new to the graph, a `git+` or other-host `resolved`, a
-  `resolved` or `integrity` moved at an unchanged version, an unstaged copy, a `pnpm-lock.yaml`, or a base copy that
-  does not parse THEN the security lens stays and the reason says why.
+  `resolved` or `integrity` moved at an unchanged version, a version moved to a lower one or to one that is no semver
+  version, an unstaged copy, a `pnpm-lock.yaml`, or a base copy that does not parse THEN the security lens stays and
+  the reason says why.
 - GIVEN `/st-work` at light intensity and a `security-sensitive` class THEN the security lens runs; GIVEN no class
-  from `gate classify` THEN it runs at every tier.
+  from `gate classify` THEN it runs at every tier; GIVEN `## Dials`' light and standard rows THEN each names the lens
+  with no class from `gate classify` and the lockfile's own trigger-path match waiting for the audit's flag.
+- GIVEN `st-dep-audit`'s `## Before the security lens` THEN it finds the bump's entries against the run's `Base:`
+  commit, never `HEAD` or the work tree, and a base it cannot read makes the run `partial`.
 - GIVEN `/st-quick` and a batch `gate classify` names `security-sensitive` THEN the whole batch moves to `/st-work` as
-  it stands, nothing reverted, every applied item listed ungated under `Not done:`.
+  it stands, nothing reverted, every applied item listed ungated under `Not done:`; GIVEN no class (neither CLI form
+  runs, or the classify exits non-zero) THEN a batch touching a path the security agent's `## Trigger` table names
+  moves the same way, and a docs-only batch stays.
 - GIVEN `test/corpus/agents/specialists.test.ts` THEN the security agent's Trigger table and the roster's security row
   agree in both directions.
 
@@ -1711,8 +1771,8 @@ exists, it is the normative record for that requirement.
   its commit.
 - GIVEN a lockfile bump whose added lines carry only `sha512-` integrity hashes THEN the scan exits 0.
 - GIVEN no `--base` THEN the JSON reads `base: null` and `scope: "uncommitted"`.
-- GIVEN any git failure THEN the scan exits 1 with `ok: false` and a `reason`, never 0; GIVEN an added line past 256 KiB
-  THEN it exits 1 with a `reason` naming the line.
+- GIVEN any git failure THEN the scan exits 1 with `ok: false` and a `reason`, never 0; GIVEN an added line longer than
+  262,144 characters (string length, not bytes) THEN it exits 1 with a `reason` naming the line.
 - GIVEN a tracked code file the read cannot show THEN it is listed in `unscanned`, and the flow lists
   `secret scan: 1 files unscanned` under `Not done:`, naming the path.
 - GIVEN a scan hit in either flow THEN the batch or the pass stops, and the value is never rewritten and scanned again.
@@ -1834,9 +1894,9 @@ exists, it is the normative record for that requirement.
   - **A backslash in a git name** (`review/43`). Off Windows, a name such as `.stamity\overrides\x.md` is one
     top-level Markdown file and reads `docs`, which is right for the file a POSIX checkout writes; on win32 git's
     names are read both ways and the stronger class kept, because a Windows checkout with `core.protectNTFS` off
-    writes that name into `.stamity/overrides/` (`src/cli/commands/gate.ts:54-58`, `:1210-1212`).
+    writes that name into `.stamity/overrides/` (`src/cli/commands/gate.ts:54-58`, `:1211-1213`).
   - **What a class file may lower** (`review/59`, `review/70`). A `records` or `docs` glob must end in a concrete
-    extension or name a file (`src/change/classify.ts:1352-1373`), so this repository's site globs name their
+    extension or name a file (`src/change/classify.ts:1401-1422`), so this repository's site globs name their
     extensions (`.stamity/change-classes.json:17-24`). A `tests` glob stays freer: a folder glob such as `**s/**` is
     accepted, and `"tests": ["**/*.*"]` would place config files in `tests`; code still reaches `tests` only under a
     built-in test glob. Any edit to the class file is `security-sensitive` and read from the base only.

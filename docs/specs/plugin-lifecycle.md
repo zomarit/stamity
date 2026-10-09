@@ -179,8 +179,8 @@ included, is copied byte-for-byte as a Buffer, so a binary companion survives th
 the engine's own emission lanes still read skill companions as utf-8 and corrupt a binary one,
 a pre-existing defect outside this package's file set, reported and not fixed here.
 
-Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p6-setup-route`; the inbox row the run folded in as its
-`build/75`). The remedy for a duplicate file this engine wrote is a three-command route the operator runs, in order:
+Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p6-setup-route`; the inbox row the run folded in,
+`2026-10-08_maintainer-tooling/build/75`). The remedy for a duplicate file this engine wrote is a three-command route the operator runs, in order:
 `sync`, then `clean -y`, then `plugin setup --client <client> -y` again, each through `runtime/locate.mjs`, and the
 body tells the model to run none of them itself; step 2's "a job for the three commands in step 3" names the same
 route (`scripts/plugins/setupCommand.mjs:165-166`, `:172-173`). It read "the operator runs `clean -y` and then
