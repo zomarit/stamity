@@ -129,6 +129,9 @@ const BOARD_PATH = "commands/st-board.md";
 /** The qa skill: owner of the QA row states the checkpoint's pointer names. */
 const QA_SKILL_PATH = "skills/st-qa/SKILL.md";
 
+/** The dependency audit skill: owner of what "the audit flags something" means in the Specialist pass. */
+const DEP_AUDIT_SKILL_PATH = "skills/st-dep-audit/SKILL.md";
+
 /** The census rule the Phase 2 → Phase 3 step runs. */
 const CENSUS_RULE_PATH = "rules/stamity-contract-census.md";
 
@@ -973,11 +976,54 @@ describe("/st-work — Prove", () => {
     // the floor true: light gains no lens it did not need, and loses none the
     // floor requires. Pinned per tier, plus the retired claim asserted absent.
     expect(pass).toContain("Deep runs the full pass");
-    expect(pass).toContain("standard and light run the `security` lens on a trigger-path match");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p5c, REQ-FLOW-065): the pin read
+    // "standard and light run the `security` lens on a trigger-path match". The lens now also runs
+    // at every tier when `gate classify` names the class `security-sensitive` (a changed code line
+    // the trigger paths never see places a change there), so the tier sentence names both sources.
+    expect(pass).toContain(
+      "The `security` lens runs at every tier when `stamity gate classify` names the class " +
+        "`security-sensitive`, and on a trigger-path match",
+    );
+    expect(pass).toContain("standard runs a lens on a trigger-path match");
     expect(pass).toContain("light runs no other lens");
     expect(pass).not.toContain("light runs none");
     // The reason travels with the rule, so a later trim reads it as load-bearing.
     expect(pass).toContain("universal floor holds at every tier");
+  });
+
+  it("lets topic words add a lens and never remove one (REQ-FLOW-065)", async () => {
+    const pass = collapse(section(await body(), "### Specialist pass"));
+    expect(pass).toContain("Topic words may add a lens and never remove one");
+  });
+
+  it("runs the dependency audit before the security lens only on a proven lockfile-only bump (REQ-FLOW-065)", async () => {
+    const pass = collapse(section(await body(), "### Specialist pass"));
+    // The shortcut is the class's own check, never the orchestrator's reading of the file list.
+    expect(pass).toContain("When the class's checks name `dependency-audit`");
+    expect(pass).toContain(
+      "the dependency audit runs first, and the lens only if the audit flags something",
+    );
+    // Every side the shortcut cannot prove keeps the lens, so the path never ends with neither.
+    expect(pass).toContain("A bump of a package with an install script");
+    expect(pass).toContain("any other lockfile format");
+    expect(pass).toContain("a parse failure");
+    expect(pass).toContain("an audit that cannot run keeps the lens");
+    // Described in words: a lockfile's file name is a trigger pattern, and the roster owns those.
+    expect(pass).toContain("dependency lockfiles");
+    expect(pass).not.toMatch(/[\w-]+[.-]lock(?:\.[a-z]+)?\b|\block\.(?:json|yaml)\b/i);
+  });
+
+  it("has the dependency audit skill define the flag the audit-first path reads (D7)", async () => {
+    const skill = (await corpusFile(DEP_AUDIT_SKILL_PATH)).parsed.body;
+    const role = collapse(section(skill, "## Before the security lens"));
+    expect(role).toContain("`/st-work`");
+    expect(role).toContain("`dependency-audit`");
+    // "Flags something" is the three outcomes the skill's own steps produce.
+    expect(role).toContain("an advisory at any severity");
+    expect(role).toContain("a licence flag");
+    expect(role).toContain("an update-risk class other than `patch` or `minor`");
+    // A run that could not cover the graph is not a clean audit, so the lens still runs.
+    expect(role).toContain("A `partial` run, or an audit that cannot run, counts as a flag");
   });
 
   it("names the persisted home of the proof block and its ledger", async () => {
