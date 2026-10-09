@@ -543,7 +543,12 @@ describe("decide — the lanes' suites from the base commit's map", () => {
  * since the `changes` job installs nothing.
  */
 function importClosure(entry: string): string[] {
-  const SPECIFIER = /\b(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g;
+  // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, step 2 fix round 1. The specifier excluded
+  // only quotes, so a string literal ending in the word `from` (src/change/classify.ts's OFF_SOURCE, lane A)
+  // paired its closing quote with the next line's opening one and read the code between as a bare import.
+  // No module specifier spans a line, so the specifier now stops at a line end; the plain-node copy run
+  // below still fails if the walk misses a real import.
+  const SPECIFIER = /\b(?:from|import)\s*\(?\s*(["'])([^"'\n]+)\1/g;
   const seen = new Set<string>([entry]);
   const queue = [entry];
   while (queue.length > 0) {

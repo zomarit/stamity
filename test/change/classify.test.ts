@@ -1639,8 +1639,16 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     expect(result.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
   });
 
-  // review/85: the rules read the languages their shapes are written for, and name the code files they cannot read.
-  it.each([["src/x.go"], ["scripts/clean.sh"], ["scripts/clean.ps1"], ["src/Main.java"]])(
+  /*
+   * review/85: the rules read the languages their shapes are written for, and name the code files they cannot read.
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, step 2 fix round 1, `build/82`. This case
+   * pinned `scripts/clean.sh` and `scripts/clean.ps1` to product. On the combined tree p5b's security row holds
+   * `*.sh` and `*.ps1` (S7), so those paths are security-sensitive by path, not by a line; the signed-off
+   * contract (review/85) is that another language is named as read by no line rule and shell and PowerShell
+   * are placed by path. The "another language" case moves to `.rb`, which no row places, and the two script
+   * paths are pinned to the row below.
+   */
+  it.each([["src/x.go"], ["lib/clean.rb"], ["src/Main.java"]])(
     "reads no line of %s, another language, and names it in the reason",
     (path) => {
       const result = withLines([hunk(path, { added: [RM_LINE, built("rm -r~f build")] })]);
@@ -1649,6 +1657,15 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
       expect(result.reason).toContain(`read by no line rule, as none covers its language: ${path}`);
     },
   );
+
+  it.each([
+    ["scripts/clean.sh", "*.sh"],
+    ["scripts/clean.ps1", "*.ps1"],
+  ])("places %s by path through the security row, not by a line rule", (path, pattern) => {
+    const result = withLines([hunk(path, { added: [RM_LINE, built("rm -r~f build")] })]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.byPath[0]?.rule).toBe(`the trigger roster's security row (${pattern})`);
+  });
 
   // The signed-off Python shapes: a requests verb, urlopen, os.popen and os.system.
   it.each([
