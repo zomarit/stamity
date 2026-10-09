@@ -73,6 +73,144 @@ const governingBlocks = (bodyLines: readonly string[], sourcePath: string): Gove
   return blocks;
 };
 
+/** The quote form for omitted text: a block line carrying it quotes fragments, not a whole line. */
+const ELISION = "[...]";
+
+/**
+ * The lines a governing block may quote, in file order: the declared ranges (or, for a block
+ * naming another file, that whole file), with four layout facts a ```text block cannot copy
+ * folded away. Code-fence delimiter lines go, because the block's own fence would close on them;
+ * a template line that is one `${name}` interpolation reads as a break, because what it renders
+ * to is not in the file; a run of blank lines reads as one; and two declared ranges meet at a
+ * paragraph break, since the lines between them are already declared out of the quote.
+ */
+const quotePool = (segments: readonly (readonly string[])[]): string[] => {
+  const pool: string[] = [];
+  const push = (line: string): void => {
+    const blank = line.trim() === "";
+    if (blank && (pool.length === 0 || (pool.at(-1) ?? "").trim() === "")) return;
+    pool.push(line);
+  };
+  for (const segment of segments) {
+    if (pool.length > 0) push("");
+    for (const line of segment) {
+      if (line.trimStart().startsWith("```")) continue;
+      push(/^\$\{[A-Za-z_]\w*\}$/.test(line.trim()) ? "" : line);
+    }
+  }
+  return pool;
+};
+
+/** A line that opens its own unit: blank, a list item, a heading, a table row or a blockquote. */
+const opensUnit = (line: string | undefined): boolean =>
+  line === undefined || line.trim() === "" || /^\s*(?:[-*]|\d+\.)\s|^\s*[#|>]/.test(line);
+
+/** A line whose text ends a sentence or a clause, closing marks after the stop allowed. */
+const endsSentence = (line: string): boolean => /[.!?:;]["'`)*_]*$/.test(line.trimEnd());
+
+/**
+ * Where a governing block stops being a faithful quote of its pool, or null when it is one.
+ * Its plain lines, between `[...]` lines, form runs; each run (blank lines at its edges belong to
+ * the elision beside them) must be one contiguous slice of the pool, and every run and every
+ * elided line's fragments must sit after the text quoted before them. A dropped, repeated or
+ * reordered line therefore breaks the run, and an omission is honest only as a `[...]` line. A
+ * block that opens or closes on a plain run must also start and end on a unit or sentence
+ * boundary, so a quote cut off mid-sentence is refused even when every line it keeps is in order.
+ */
+const quoteBreak = (body: readonly string[], pool: readonly string[]): string | null => {
+  const offsets: number[] = [];
+  let total = 0;
+  for (const line of pool) {
+    offsets.push(total);
+    total += line.length + 1;
+  }
+  const poolText = pool.join("\n");
+  const lineAtOffset = (at: number): number => {
+    let line = 0;
+    while (line + 1 < offsets.length && (offsets[line + 1] ?? Number.POSITIVE_INFINITY) <= at) {
+      line += 1;
+    }
+    return line;
+  };
+  /** The next pool line a piece must open on when no elision lets it skip ahead. */
+  const nextQuotable = (from: number): number => {
+    let line = from;
+    while (line < pool.length && (pool[line] ?? "").trim() === "") line += 1;
+    return line;
+  };
+  let cursor = 0;
+  let index = 0;
+  // The block's first piece may open anywhere; after that, only an elision lets a piece skip.
+  let maySkip = true;
+  const skipped = (piece: string): string =>
+    `the quote skips unquoted lines before ${JSON.stringify(piece)}; mark the omission with a ${ELISION} line`;
+  while (index < body.length) {
+    const line = body[index] ?? "";
+    if (line.includes(ELISION)) {
+      const fragments = line
+        .split(ELISION)
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+      let at = offsets[cursor] ?? poolText.length + 1;
+      for (const [position, fragment] of fragments.entries()) {
+        const found = poolText.indexOf(fragment, at);
+        if (found === -1) {
+          return `the elided line ${JSON.stringify(line)} carries ${JSON.stringify(fragment)}, which the file does not hold after the text quoted before it`;
+        }
+        if (position === 0 && !maySkip && !line.trimStart().startsWith(ELISION)) {
+          const expected = nextQuotable(cursor);
+          if (lineAtOffset(found) !== expected || !(pool[expected] ?? "").trim().startsWith(fragment)) {
+            return skipped(line);
+          }
+        }
+        at = found + fragment.length;
+      }
+      if (fragments.length > 0) cursor = lineAtOffset(at - 1) + 1;
+      maySkip = line.trimEnd().endsWith(ELISION);
+      index += 1;
+      continue;
+    }
+    const runOpensBlock = body.slice(0, index).every((before) => before.trim() === "");
+    const run: string[] = [];
+    while (index < body.length && !(body[index] ?? "").includes(ELISION)) {
+      run.push(body[index] ?? "");
+      index += 1;
+    }
+    while (run.length > 0 && (run[0] ?? "").trim() === "") run.shift();
+    while (run.length > 0 && (run.at(-1) ?? "").trim() === "") run.pop();
+    if (run.length === 0) continue;
+    let bestStart = -1;
+    let bestLength = 0;
+    for (let start = cursor; start < pool.length; start += 1) {
+      let length = 0;
+      while (length < run.length && pool[start + length] === run[length]) length += 1;
+      if (length > bestLength) {
+        bestStart = start;
+        bestLength = length;
+      }
+      if (length === run.length) break;
+    }
+    if (bestLength < run.length) {
+      const broken = JSON.stringify(run[bestLength]);
+      return bestLength === 0
+        ? `first line that is not verbatim after the text quoted before it: ${broken}`
+        : `the quote leaves the file's run of lines at ${broken}, after ${bestLength} contiguous lines — a dropped, repeated or reordered line, or an omission with no ${ELISION} line`;
+    }
+    const before = pool[bestStart - 1];
+    if (runOpensBlock && !opensUnit(run[0]) && !opensUnit(before) && !endsSentence(before ?? "")) {
+      return `the quote opens mid-sentence at ${JSON.stringify(run[0])}; start at a sentence or mark the cut with ${ELISION}`;
+    }
+    const last = run.at(-1) ?? "";
+    if (index >= body.length && !opensUnit(pool[bestStart + run.length]) && !endsSentence(last)) {
+      return `the quote ends mid-sentence at ${JSON.stringify(last)}; end at a sentence or mark the cut with ${ELISION}`;
+    }
+    if (!maySkip && bestStart !== nextQuotable(cursor)) return skipped(run[0] ?? "");
+    cursor = bestStart + run.length;
+    maySkip = false;
+  }
+  return null;
+};
+
 /** The case-side inputs the range anchor check reads, so a synthetic case can be held to it. */
 interface AnchoredCase {
   readonly path: string;
@@ -270,6 +408,63 @@ describe("eval case locators — the range anchor check is not vacuous", () => {
   });
 });
 
+/**
+ * The verbatim check against inline quotes. Membership alone let a Brief that repeated one
+ * landed line in place of another stay green; each shape below is one a scripted re-quote can
+ * produce, held here as strings so no case under `evals/` has to be broken to prove the check.
+ */
+describe("eval case locators — the verbatim check is not vacuous", () => {
+  const RANGE = [
+    "Run every gate before done.",
+    "Report each gate with its exit code,",
+    "and name each gap under Not done.",
+    "",
+    "- A red gate stops the run.",
+    "- A skipped gate is a gap.",
+  ];
+  const pool = quotePool([RANGE]);
+  const at = (...indexes: number[]): string[] => indexes.map((index) => RANGE[index] ?? "");
+
+  it("passes the range quoted whole, and a contiguous slice of it", () => {
+    expect(quoteBreak(RANGE, pool)).toBeNull();
+    expect(quoteBreak(at(4, 5), pool)).toBeNull();
+  });
+
+  it("fails a dropped line, a repeated line and a reordered pair", () => {
+    expect(quoteBreak(at(0, 2), pool)).toContain("after 1 contiguous lines");
+    expect(quoteBreak(at(0, 1, 1, 2), pool)).toContain("after 2 contiguous lines");
+    expect(quoteBreak(at(5, 4), pool)).not.toBeNull();
+  });
+
+  it("fails a quote cut off mid-sentence at either end", () => {
+    expect(quoteBreak(at(0, 1), pool)).toContain("ends mid-sentence");
+    expect(quoteBreak(at(2), pool)).toContain("opens mid-sentence");
+  });
+
+  it("accepts an omission marked with an elision line, its pieces in order", () => {
+    expect(quoteBreak([...at(0), "", "[...]", "", ...at(5)], pool)).toBeNull();
+    expect(quoteBreak(["Run every [...] exit code,", ...at(2)], pool)).toBeNull();
+    expect(quoteBreak([...at(5), "[...]", ...at(0)], pool)).not.toBeNull();
+    expect(quoteBreak(["[...] gate is a gap.", ...at(0)], pool)).not.toBeNull();
+  });
+
+  it("fails an unmarked skip next to an in-line elision, and passes it once marked", () => {
+    // An in-line elision cuts inside its own line only; the lines it jumps are still omitted.
+    expect(quoteBreak([...at(0), "- A skipped [...] a gap."], pool)).toContain("skips unquoted");
+    expect(quoteBreak(["Run every [...] done.", ...at(4)], pool)).toContain("skips unquoted");
+    expect(quoteBreak([...at(0), "[...]", "- A skipped [...] a gap."], pool)).toBeNull();
+    expect(quoteBreak(["Run every gate [...]", ...at(4)], pool)).toBeNull();
+  });
+
+  it("joins declared ranges at a paragraph break and drops code-fence lines", () => {
+    const joined = quotePool([at(0), ["```bash", "stamity gate", "```", "", "", ...at(4)]]);
+    expect(joined).toEqual([...at(0), "", "stamity gate", "", ...at(4)]);
+    // A lone template interpolation renders to text the file does not hold: it reads as a break.
+    expect(quotePool([[...at(0), "${discovery}", ...at(4)]])).toEqual([...at(0), "", ...at(4)]);
+    expect(quoteBreak([...at(0), "", "stamity gate", "", ...at(4)], joined)).toBeNull();
+  });
+});
+
 for (const file of cases) {
   describe(`eval case ${file.basename}`, () => {
     it("carries exactly the contract's frontmatter keys, indent-free", () => {
@@ -337,34 +532,17 @@ for (const file of cases) {
         const targetLines = linesOf(block.target);
         // A block headed with the case's own source path is held to the declared
         // range; one naming another corpus file is held to that whole file.
-        const pool = block.restricted
-          ? parsed.ranges.flatMap(([from, to]) => targetLines.slice(from - 1, to))
-          : targetLines;
-        const poolSet = new Set(pool);
-        const poolText = pool.join("\n");
+        const pool = quotePool(
+          block.restricted
+            ? parsed.ranges.map(([from, to]) => targetLines.slice(from - 1, to))
+            : [targetLines],
+        );
         const scope = block.restricted ? ` within ${file.frontmatter.get("source")}` : "";
-        for (const line of block.body) {
-          if (line.includes("[...]")) {
-            // An elision marker: whatever survives on either side of it still has to
-            // be text the corpus carries, so the surviving fragments are checked as
-            // substrings rather than as whole lines.
-            const fragments = line
-              .split("[...]")
-              .map((part) => part.trim())
-              .filter((part) => part.length > 0);
-            const missing = fragments.find((fragment) => !poolText.includes(fragment));
-            expect(
-              missing,
-              `${file.path}: block at line ${block.fenceLine} quoting ${block.target}${scope} — this fragment is not in the file: ${JSON.stringify(missing)}`,
-            ).toBeUndefined();
-            continue;
-          }
-          expect(
-            poolSet.has(line),
-            `${file.path}: block at line ${block.fenceLine} quoting ${block.target}${scope} — first line that is not verbatim: ${JSON.stringify(line)}`,
-          ).toBe(true);
-          if (!poolSet.has(line)) return;
-        }
+        const broken = quoteBreak(block.body, pool);
+        expect(
+          broken,
+          `${file.path}: block at line ${block.fenceLine} quoting ${block.target}${scope} — ${broken}`,
+        ).toBeNull();
       }
     });
   });
