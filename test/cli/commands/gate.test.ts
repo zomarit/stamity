@@ -484,17 +484,49 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(doc["reason"]).toContain("docs/\uFFFD.md");
   });
 
-  /** Commits `names` (raw bytes, no file-system name needed) and leaves them out of the work tree: each reads as deleted. */
+  /**
+   * Commits `names`, each holding `docs/a.md`'s blob, and leaves them out of the index and the work tree: each
+   * reads as deleted. The trees are built with `git mktree` and committed with `commit-tree`, never through the
+   * index or the file system: Git for Windows refuses a backslash in an index path, so an index route committed
+   * nothing there (prove/1, CI windows-1), and no such name can be a file on Windows.
+   */
   function commitNamesOnly(repo: string, names: readonly string[]): void {
-    const blob = git(repo, ["hash-object", "-w", "--", "docs/a.md"]).trim();
-    execFileSync("git", ["update-index", "-z", "--index-info"], {
-      cwd: repo,
-      input: Buffer.concat(names.map((name) => Buffer.from(`100644 ${blob}\t${name}\0`))),
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, ...SEED_ENV },
-    });
-    git(repo, ["commit", "-q", "-m", "names only"]);
+    const blob = git(repo, ["rev-parse", "HEAD:docs/a.md"]).trim();
+    const mktree = (entries: readonly string[]): string =>
+      execFileSync("git", ["mktree", "-z"], {
+        cwd: repo,
+        input: entries.map((entry) => `${entry}\0`).join(""),
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, ...SEED_ENV },
+      }).trim();
+    /** `tree` with a blob entry at `segments`, the folders on the way made or rebuilt. */
+    const insert = (tree: string | undefined, segments: readonly string[]): string => {
+      const [name = "", ...rest] = segments;
+      const entries = tree === undefined ? [] : git(repo, ["ls-tree", "-z", tree]).split("\0").filter((entry) => entry !== "");
+      const nameOf = (entry: string): string => entry.slice(entry.indexOf("\t") + 1);
+      const folder = entries.find((entry) => nameOf(entry) === name && entry.includes(" tree "));
+      const added =
+        rest.length === 0 ? `100644 blob ${blob}\t${name}` : `040000 tree ${insert(folder?.split(" ")[2]?.split("\t")[0], rest)}\t${name}`;
+      return mktree([...entries.filter((entry) => nameOf(entry) !== name), added]);
+    };
+    let tree = git(repo, ["rev-parse", "HEAD^{tree}"]).trim();
+    for (const name of names) tree = insert(tree, name.split("/"));
+    git(repo, ["update-ref", "HEAD", git(repo, ["commit-tree", tree, "-p", "HEAD", "-m", "names only"]).trim()]);
   }
+
+  // prove/1: Git for Windows refuses a backslash in an index path, so the names must never pass through the index.
+  it("commits backslash git names as tree objects, never through the index", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+    commitNamesOnly(repo, ["docs/a\\b.md", "x\\y.md"]);
+
+    const tree = git(repo, ["ls-tree", "-r", "-z", "--name-only", "HEAD"]).split("\0");
+    const index = git(repo, ["ls-files", "-z"]).split("\0");
+
+    expect(tree).toEqual(expect.arrayContaining(["docs/a\\b.md", "x\\y.md"]));
+    expect(index).not.toContain("docs/a\\b.md");
+    expect(index).not.toContain("x\\y.md");
+  });
 
   // review/20 (a): git never separates on a backslash, so its name is read and reported as it is.
   it("reports a git name holding a backslash as git names it, read literally", async () => {
