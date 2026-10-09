@@ -447,7 +447,7 @@ interface ChangeLines {
    * untracked regular code files left unread for their size or a NUL (review/138).
    */
   unscanned: string[];
-  /** The unscanned files a covered shebang, not an extension, makes code (review/138, review/146). */
+  /** The unscanned files a covered shebang or, unread, the executable mode, not an extension, makes code (review/138, review/146, review/200). */
   unscannedCode: string[];
   scan: ScanLines;
 }
@@ -496,6 +496,8 @@ interface SideRead {
   outside: Set<string>;
   skipped: Set<string>;
   unscanned: string[];
+  /** The unscanned files a covered shebang or the executable mode, not an extension, makes code (review/200). */
+  unscannedCode: string[];
   /** The scan's view, by the paths it names: lines outside the project and decoded, and what stayed unread. */
   scan: { hunks: Hunk[]; skipped: Set<string>; unscanned: Set<string> };
 }
@@ -510,8 +512,11 @@ const DIFF_PINS: readonly string[] = ["--no-relative", "--no-ext-diff", "--no-co
  * whose work-tree copy the NUL sniff also finds binary, or cannot read (a
  * deletion), is left out of the text read by an exclude pathspec, so its bytes
  * never reach the one bounded read; a code file left out is `unscanned`, any
- * other `skipped`. Git's verdict only nominates: an attribute or a `binary`
- * driver that hides a text file's lines from numstat never hides them here.
+ * other `skipped`. A file with no code extension is code when its head opens
+ * with a shebang the line rules cover, or, with no head to read, when git
+ * records it executable on either side (review/200). Git's verdict only
+ * nominates: an attribute or a `binary` driver that hides a text file's lines
+ * from numstat never hides them here.
  *
  * The text read pins `-U3`, `-W` (the whole enclosing function as context, so
  * a guard removed far from its call still shows the call, review/88) and
@@ -572,14 +577,29 @@ function readSide(
     outside: new Set(),
     skipped: new Set(),
     unscanned: [],
+    unscannedCode: [],
     scan: { hunks: [], skipped: new Set(), unscanned: new Set() },
+  };
+  // review/200: whether git records the file executable (mode 100755) on either side of this side's diff.
+  const executable = (name: string): boolean => {
+    const raw = runGit(runner, root.dir, `${label} --raw`, ["diff", ...staged, "--raw", "-z", ...DIFF_PINS, commit, "--", `:(top,literal)${name}`]);
+    return raw.split("\0").some((field) => field.startsWith(":") && field.slice(1).split(" ", 2).includes("100755"));
+  };
+  // A file with no code extension: code by a covered shebang in its head, or, with no head to read, by its mode.
+  const script = (name: string, shown: string): boolean => {
+    const start = readRegular(join(root.topLevel, name), SHEBANG_BYTES);
+    if (start === undefined) return executable(name);
+    const first = start.toString("utf8").split("\n", 1)[0] ?? "";
+    return first.startsWith("#!") && lineRulesCover(shown, "git", first);
   };
   const notRead = (name: string, path: string | null): void => {
     const shown = path ?? away(name);
-    const code = hasCodeExtension(shown);
+    const extension = hasCodeExtension(shown);
+    const code = extension || script(name, shown);
     if (path !== null) {
       if (code) read.unscanned.push(path);
       else read.skipped.add(path);
+      if (code && !extension) read.unscannedCode.push(path);
     }
     // The scan decodes a UTF-16 work-tree file whole (review/98), standing in for the index's copy too; a
     // staged copy the work tree has changed again is not decoded, and stays named only when the tree's was not.
@@ -668,7 +688,7 @@ function readLines(
   const scanSkipped = new Set([...work.scan.skipped, ...index.scan.skipped]);
   const scanUnscanned = new Set([...work.scan.unscanned, ...index.scan.unscanned]);
   const outside = new Set([...work.outside, ...index.outside]);
-  const unscannedCode: string[] = [];
+  const unscannedCode: string[] = [...work.unscannedCode, ...index.unscannedCode];
   const notShown = (path: string | null, shown: string, code: boolean): void => {
     if (path !== null) unscanned.push(path);
     if (path !== null && code && !hasCodeExtension(path)) unscannedCode.push(path);

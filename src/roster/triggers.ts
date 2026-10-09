@@ -134,6 +134,8 @@ export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
       "dockerfile.*",
       "*.dockerfile",
       "containerfile",
+      "containerfile.*",
+      "*.containerfile",
       ".claude/hooks/",
       ".cursor/hooks/",
       ".codex/hooks/",

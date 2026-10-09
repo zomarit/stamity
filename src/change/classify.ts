@@ -188,7 +188,8 @@ interface LineRule {
  * module as, by {@link fileNames}), or a call of a name the file binds
  * one of the module's spawning members to (review/124), or assigns a spawning
  * or network member to, Python's import aliases included (review/145), never a
- * RegExp's `exec` method; a secret name counts only where it is assigned, or is an object key given, a
+ * RegExp's `exec` method; a network or filesystem member counts under the name an
+ * import binds it or its module to (review/199); a secret name counts only where it is assigned, or is an object key given, a
  * string literal or an environment value, and never a literal that is wholly
  * one `${…}` template placeholder (build/47, review/92). The shapes are
  * JavaScript, TypeScript and Python APIs, so they read only the files of
@@ -285,17 +286,54 @@ const CHILD_PROCESS_MEMBER_BINDING =
 /** The child_process members that run a command. */
 const SPAWNING_MEMBERS: ReadonlySet<string> = new Set(["exec", "execSync", "execFile", "execFileSync", "spawn", "spawnSync", "fork"]);
 
+/**
+ * The whole-module and the member bindings of a JavaScript module other than
+ * child_process, `module` an alternation of its specifiers, in the forms of
+ * {@link CHILD_PROCESS_BINDING} and {@link CHILD_PROCESS_MEMBER_BINDING} (review/199).
+ */
+const jsBindings = (module: string): { whole: RegExp; members: RegExp } => {
+  const from = `["'](?:node:)?(?:${module})["']`;
+  return {
+    whole: new RegExp(
+      `\\bimport\\s+(?:\\*\\s*as\\s+)?([A-Za-z_$][\\w$]*)\\s*(?:,\\s*\\{[^}]*\\}\\s*)?from\\s*${from}|\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:await\\s+)?(?:require|import)\\s*\\(\\s*${from}|\\bimport\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*require\\s*\\(\\s*${from}`,
+      "g",
+    ),
+    members: new RegExp(
+      `\\bimport\\s+(?:[A-Za-z_$][\\w$]*\\s*,\\s*)?\\{([^}]{0,1024})\\}\\s*from\\s*${from}|\\b(?:const|let|var)\\s*\\{([^}]{0,1024})\\}\\s*=\\s*(?:await\\s+)?(?:require|import)\\s*\\(\\s*${from}`,
+      "g",
+    ),
+  };
+};
+/** The fs module (and fs/promises), whose delete and overwrite members a named import may rebind (review/199). */
+const FS_BINDINGS = jsBindings("fs|fs/promises");
+/** The fs members the `delete-or-overwrite` rule names. */
+const FS_MEMBERS: ReadonlySet<string> = new Set([
+  "rmSync", "rm", "unlink", "unlinkSync", "rmdir", "rmdirSync", "writeFile", "writeFileSync", "createWriteStream",
+  "copyFile", "copyFileSync", "cp", "cpSync", "rename", "renameSync", "truncate",
+]);
+/** The http and https modules, whose `request` and `get` the `network-or-registry` rule names (review/199). */
+const HTTP_BINDINGS = jsBindings("https?");
+const HTTP_MEMBERS: ReadonlySet<string> = new Set(["request", "get"]);
+/** The axios module, imported under another name (review/199). */
+const AXIOS_BINDINGS = jsBindings("axios");
+
 /** A Python `import` line's items, `subprocess as sp`, read for the aliases of the modules the rules name (review/145). */
 const PY_IMPORT = /^[ \t]*import[ \t]+([^\n#]{1,1024})/gm;
 /** A Python `from <module> import` of a module the rules name, its items parenthesised over lines or on one (review/145). */
-const PY_FROM_IMPORT = /^[ \t]*from[ \t]+(subprocess|os|urllib\.request|urllib)[ \t]+import[ \t]+(?:\(([^)]{0,1024})\)|([^\n#]{0,1024}))/gm;
+const PY_FROM_IMPORT = /^[ \t]*from[ \t]+(subprocess|os|urllib\.request|urllib|requests|shutil)[ \t]+import[ \t]+(?:\(([^)]{0,1024})\)|([^\n#]{0,1024}))/gm;
 /** One import item: a dotted name and its `as` alias. */
 const PY_ITEM = /^([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?$/;
-/** The spawning members of Python's `subprocess` and `os`, and the network one of `urllib.request`. */
-const PY_MEMBERS: Readonly<Record<string, { spawn: readonly string[]; network: readonly string[] }>> = {
-  subprocess: { spawn: ["run", "call", "check_output", "check_call", "Popen"], network: [] },
-  os: { spawn: ["system", "popen"], network: [] },
-  "urllib.request": { spawn: [], network: ["urlopen"] },
+/**
+ * The spawning members of Python's `subprocess` and `os`, the network ones of
+ * `urllib.request` and `requests`, and the delete ones of `os` and `shutil`
+ * (review/199).
+ */
+const PY_MEMBERS: Readonly<Record<string, { spawn: readonly string[]; network: readonly string[]; delete: readonly string[] }>> = {
+  subprocess: { spawn: ["run", "call", "check_output", "check_call", "Popen"], network: [], delete: [] },
+  os: { spawn: ["system", "popen"], network: [], delete: ["remove"] },
+  "urllib.request": { spawn: [], network: ["urlopen"], delete: [] },
+  requests: { spawn: [], network: ["get", "post", "put", "patch", "delete", "head", "options", "request"], delete: [] },
+  shutil: { spawn: [], network: [], delete: ["rmtree"] },
 };
 
 /** The names a file binds to the modules and members the spawn and network rules read. */
@@ -305,9 +343,15 @@ interface FileNames {
   pySubprocess: string[];
   pyOs: string[];
   pyRequest: string[];
-  /** Names a call of which spawns, or leaves the machine. */
+  /** Names of Python's `requests` and `shutil`, of the http and https modules, and of axios (review/199). */
+  pyRequests: string[];
+  pyShutil: string[];
+  http: string[];
+  axios: string[];
+  /** Names a call of which spawns, leaves the machine, or deletes or overwrites a file. */
   spawn: string[];
   network: string[];
+  delete: string[];
 }
 
 const alternation = (names: Iterable<string>): string => [...names].map((name) => name.replaceAll("$", "\\$")).join("|");
@@ -319,16 +363,43 @@ const alternation = (names: Iterable<string>): string => [...names].map((name) =
  * `const { execSync: run } = require(…)`; Python's aliases and from-imports of
  * `subprocess`, `os` and `urllib.request`; and, read after those, each name
  * assigned a spawning or network member, or `promisify` of one, `execAsync` in
- * `const execAsync = promisify(exec)` (review/145). A member passed on, or
- * bound in another file, is not followed.
+ * `const execAsync = promisify(exec)` (review/145); and the names an import
+ * binds the delete and overwrite members of fs, Python's `os` and `shutil`, the
+ * network members of http, https and Python's `requests`, or those modules and
+ * axios themselves, to (review/199). A member passed on, or bound in another
+ * file, is not followed.
  */
 function fileNames(texts: readonly string[]): FileNames {
   const heads = texts.map((text) => text.slice(0, HEAD_MAX_CHARS));
   const modules = new Set<string>();
   const spawn = new Set<string>();
   const network = new Set<string>();
-  const py = { subprocess: new Set<string>(), os: new Set<string>(), "urllib.request": new Set<string>() };
+  const remove = new Set<string>();
+  const http = new Set<string>();
+  const axios = new Set<string>();
+  const py = {
+    subprocess: new Set<string>(),
+    os: new Set<string>(),
+    "urllib.request": new Set<string>(),
+    requests: new Set<string>(),
+    shutil: new Set<string>(),
+  };
+  // A named import or destructuring's items, each `member as name` or `member: name`, or a member under its own name.
+  const boundMembers = (items: string, members: ReadonlySet<string>, into: Set<string>): void => {
+    for (const part of items.split(",")) {
+      const bound = /^\s*([A-Za-z_$][\w$]*)\s*(?:(?:\bas\b|:)\s*([A-Za-z_$][\w$]*))?\s*$/.exec(part);
+      if (bound?.[1] !== undefined && members.has(bound[1])) into.add(bound[2] ?? bound[1]);
+    }
+  };
   for (const head of heads) {
+    for (const [bindings, into] of [[HTTP_BINDINGS, http], [AXIOS_BINDINGS, axios]] as const) {
+      for (const match of head.matchAll(bindings.whole)) {
+        const name = match[1] ?? match[2] ?? match[3];
+        if (name !== undefined) into.add(name);
+      }
+    }
+    for (const match of head.matchAll(FS_BINDINGS.members)) boundMembers(match[1] ?? match[2] ?? "", FS_MEMBERS, remove);
+    for (const match of head.matchAll(HTTP_BINDINGS.members)) boundMembers(match[1] ?? match[2] ?? "", HTTP_MEMBERS, network);
     for (const match of head.matchAll(CHILD_PROCESS_BINDING)) {
       const name = match[1] ?? match[2] ?? match[3];
       if (name !== undefined) modules.add(name);
@@ -356,6 +427,7 @@ function fileNames(texts: readonly string[]): FileNames {
         if (from === "urllib" && name === "request") py["urllib.request"].add(bound);
         if (PY_MEMBERS[from]?.spawn.includes(name) === true) spawn.add(bound);
         if (PY_MEMBERS[from]?.network.includes(name) === true) network.add(bound);
+        if (PY_MEMBERS[from]?.delete.includes(name) === true) remove.add(bound);
       }
     }
   }
@@ -368,10 +440,10 @@ function fileNames(texts: readonly string[]): FileNames {
     `(?:${members}${spawn.size === 0 ? "" : `|${alternation(spawn)}`})`,
   ].join("|");
   const networkSource = [
-    "https?\\.(?:request|get)",
+    `(?:https?${http.size === 0 ? "" : `|${alternation(http)}`})\\.(?:request|get)`,
     "fetch",
-    "axios(?:\\.\\w+)?",
-    "requests\\.(?:get|post|put|patch|delete|head|options|request)",
+    `(?:axios${axios.size === 0 ? "" : `|${alternation(axios)}`})(?:\\.\\w+)?`,
+    `(?:requests${py.requests.size === 0 ? "" : `|${alternation(py.requests)}`})\\.(?:${alternation(PY_MEMBERS["requests"]?.network ?? [])})`,
     `(?:urllib\\.request${py["urllib.request"].size === 0 ? "" : `|${alternation(py["urllib.request"])}`})\\.urlopen`,
     ...(network.size === 0 ? [] : [`(?:${alternation(network)})`]),
   ].join("|");
@@ -390,8 +462,13 @@ function fileNames(texts: readonly string[]): FileNames {
     pySubprocess: [...py.subprocess],
     pyOs: [...py.os],
     pyRequest: [...py["urllib.request"]],
+    pyRequests: [...py.requests],
+    pyShutil: [...py.shutil],
+    http: [...http],
+    axios: [...axios],
     spawn: [...spawn],
     network: [...network],
+    delete: [...remove],
   };
 }
 
@@ -399,8 +476,11 @@ function fileNames(texts: readonly string[]): FileNames {
  * The calls through a file's own names, per rule: `process-spawn` the `exec`
  * call on one of its child_process names, a member call on its aliases of
  * Python's `subprocess` or `os`, and the bare call of a name bound to a
- * spawning member; `network-or-registry` `urlopen` on its aliases of
- * `urllib.request` and the bare call of a name bound to a network member.
+ * spawning member; `delete-or-overwrite` `rmtree` and `remove` on its aliases
+ * of Python's `shutil` and `os` and the bare call of a name bound to a delete
+ * or overwrite member; `network-or-registry` `urlopen` on its aliases of
+ * `urllib.request`, a request on its aliases of `requests`, http, https and
+ * axios, and the bare call of a name bound to a network member.
  */
 function aliasCalls(names: FileNames): ReadonlyMap<string, RegExp> {
   const calls = new Map<string, RegExp>();
@@ -413,8 +493,16 @@ function aliasCalls(names: FileNames): ReadonlyMap<string, RegExp> {
     ...(names.pyOs.length === 0 ? [] : [`(?:${alternation(names.pyOs)})\\.(?:system|popen)\\(`]),
     ...(names.spawn.length === 0 ? [] : [`(?:${alternation(names.spawn)})\\(`]),
   ]);
+  add("delete-or-overwrite", [
+    ...(names.pyShutil.length === 0 ? [] : [`(?:${alternation(names.pyShutil)})\\.rmtree\\(`]),
+    ...(names.pyOs.length === 0 ? [] : [`(?:${alternation(names.pyOs)})\\.remove\\(`]),
+    ...(names.delete.length === 0 ? [] : [`(?:${alternation(names.delete)})\\(`]),
+  ]);
   add("network-or-registry", [
     ...(names.pyRequest.length === 0 ? [] : [`(?:${alternation(names.pyRequest)})\\.urlopen\\(`]),
+    ...(names.pyRequests.length === 0 ? [] : [`(?:${alternation(names.pyRequests)})\\.(?:${alternation(PY_MEMBERS["requests"]?.network ?? [])})\\(`]),
+    ...(names.http.length === 0 ? [] : [`(?:${alternation(names.http)})\\.(?:request|get)\\(`]),
+    ...(names.axios.length === 0 ? [] : [`(?:${alternation(names.axios)})(?:\\.\\w+)?\\(`]),
     ...(names.network.length === 0 ? [] : [`(?:${alternation(names.network)})\\(`]),
   ]);
   return calls;
@@ -878,7 +966,7 @@ export interface ClassifyInput {
    * least `product`, and a code one `security-sensitive` (review/125).
    */
   unscanned?: readonly string[];
-  /** Those of `unscanned` the reader knows are code though no extension says so: a covered shebang (review/138, review/146). */
+  /** Those of `unscanned` the reader knows are code though no extension says so: a covered shebang, or an unread file git records executable (review/138, review/146, review/200). */
   unscannedCode?: readonly string[];
   /** The changed npm lockfiles' two copies, for the audit-first rule; `base` is `null` when no base copy was read. */
   lockfiles?: readonly Lockfile[];

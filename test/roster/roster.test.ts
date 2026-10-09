@@ -494,6 +494,9 @@ describe("the security row's client, CI and install-steering rows (build/63, rev
       "deploy/Dockerfile.prod",
       "api.Dockerfile",
       "Containerfile",
+      // Added 2026-10-09 (run 2026-10-08_product-core, review/198): suffixed Containerfiles, as the Dockerfile forms.
+      "deploy/Containerfile.prod",
+      "api.Containerfile",
       ".github/actions/setup/action.yml",
       "action.yml",
       "tools/release/action.yaml",
@@ -506,7 +509,7 @@ describe("the security row's client, CI and install-steering rows (build/63, rev
     ]) {
       expect(specialistsForPath(path), path).toEqual(["stamity-security"]);
     }
-    for (const path of ["docs/actions.md", "dockerfiles/readme.txt", "src/npmrc.ts"]) {
+    for (const path of ["docs/actions.md", "dockerfiles/readme.txt", "src/npmrc.ts", "containerfiles/readme.txt"]) {
       expect(specialistsForPath(path), path).toEqual([]);
     }
   });

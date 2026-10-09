@@ -1617,6 +1617,62 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).toContain("1 changed file not read line by line");
     });
 
+    // review/200: a tracked extensionless file whose diff reads as binary is code by a node or python shebang, or,
+    // with no head to read, by the executable mode git records; such a file is unscanned and raises, never skipped.
+    it("counts a tracked extensionless node or python script with a NUL unscanned by its shebang, and skips other data", async () => {
+      const repo = await seedRepo("repo", {
+        "tools/run": "#!/usr/bin/env node\nconsole.log(1);\n",
+        "bin/job": "#!/usr/bin/env python3\nprint(1)\n",
+        "tools/build": "#!/bin/sh\necho 1\n",
+        "data/blob": "plain\n",
+      });
+      await getRoot().seedFiles({
+        "repo/tools/run": `#!/usr/bin/env node\n\0${RM}`,
+        "repo/bin/job": "#!/usr/bin/env python3\n\0print(2)\n",
+        "repo/tools/build": "#!/bin/sh\n\0echo 2\n",
+        "repo/data/blob": "a\0b\n",
+      });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain(
+        "2 changed code files the read could not show are unscanned, so the class is security-sensitive and its lens reads them: bin/job, tools/run",
+      );
+      expect(doc["reason"]).toContain("2 changed files not read line by line");
+    });
+
+    it("counts a deleted tracked extensionless file git records executable unscanned, and skips a deleted plain one", async () => {
+      const repo = await seedRepo("repo", { "tools/old": "#!/usr/bin/env node\n\0x\n", "data/old": "a\0b\n" });
+      git(repo, ["update-index", "--chmod=+x", "--", "tools/old"]);
+      git(repo, ["commit", "-q", "-m", "executable"]);
+      await rm(join(repo, "tools", "old"));
+      await rm(join(repo, "data", "old"));
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain(
+        "1 changed code file the read could not show is unscanned, so the class is security-sensitive and its lens reads it: tools/old",
+      );
+      expect(doc["reason"]).toContain("1 changed file not read line by line");
+    });
+
+    it("skips a tracked executable extensionless binary whose readable head names no covered interpreter", async () => {
+      const repo = await seedRepo("repo", { "bin/tool": "\u007fELF\0one\n" });
+      git(repo, ["update-index", "--chmod=+x", "--", "bin/tool"]);
+      git(repo, ["commit", "-q", "-m", "executable"]);
+      await getRoot().seedFiles({ "repo/bin/tool": "\u007fELF\0two\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).not.toBe("security-sensitive");
+      expect(doc["reason"]).not.toContain("unscanned");
+      expect(doc["reason"]).toContain("1 changed file not read line by line");
+    });
+
     it.skipIf(process.platform === "win32")("reads past a type change: the walk keeps its names in order", async () => {
       const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", "src/y.ts": "export {};\n", "src/z.ts": "export {};\n" });
       await rm(join(repo, "src", "y.ts"));

@@ -1468,6 +1468,17 @@ moves. No `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no claim
 count, threshold or roster count moves. Under the incremental rule the ten re-measure, because
 their case-file bytes moved. The dated citations above stay as they were.
 
+**No range moved and two Briefs re-quoted, 2026-10-09 (run 2026-10-08_product-core, the review
+bot's fix batch, ledger row `review/198`).** The security body's `## Trigger` table names suffixed
+Containerfiles, `containerfile.*` and `*.containerfile`, beside the Dockerfile forms in its "CI and
+release" row, rewritten in place at `stamity-security.md` 36. No line count moves, so no `source:`
+range or case-index cell moves. `work-security-lens-auth-path-change` and
+`work-security-lens-light-tier-file-deletion` re-quote that row by script, byte-identical to the
+landed line. Neither scenario touches a container build, so no `## Expected` block moves.
+`EXPECTED_MOVES` gains no row, and no claim, identical/moved count, threshold or roster count
+moves. Under the incremental rule the two re-measure, because their case-file bytes moved. The
+dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

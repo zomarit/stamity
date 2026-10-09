@@ -770,6 +770,9 @@ describe("classifyChange: the S7 path rows of the security row (p5b, REQ-FLOW-06
       ["deploy/Dockerfile.prod", "dockerfile.*"],
       ["api.Dockerfile", "*.dockerfile"],
       ["Containerfile", "containerfile"],
+      // Added 2026-10-09 (run 2026-10-08_product-core, review/198).
+      ["deploy/Containerfile.prod", "containerfile.*"],
+      ["api.Containerfile", "*.containerfile"],
       [".npmrc", ".npmrc"],
       [".yarnrc", ".yarnrc"],
       [".yarnrc.yml", ".yarnrc.yml"],
@@ -1634,6 +1637,50 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     ["app/x.py", "import shutil as sp\n", "    sp.run(cmd)"],
     ["app/x.py", "from urllib.parse import urlparse as urlopen\n", "    urlopen(url)"],
   ])("does not bind a name %s gives no spawning or network member: %s", (path, head, call) => {
+    expect(withLines([hunk(path, { added: [built(call)], head: built(head) })]).class).toBe("product");
+  });
+
+  // review/199: an import alias of a network or filesystem member the rules name, in JavaScript, TypeScript or
+  // Python, is read as the call it binds; a namespace or default import of http, https or axios too.
+  it.each([
+    ["src/x.ts", 'import { writeFi~le as save } from "node:fs";\n', "  save(path, data);", "delete-or-overwrite"],
+    ["src/x.ts", 'import { readFile, rm~Sync as wipe } from "fs";\n', "  wipe(dir, { recursive: true });", "delete-or-overwrite"],
+    ["src/x.ts", 'import { writeFi~le as save } from "node:fs/promises";\n', "  await save(path, data);", "delete-or-overwrite"],
+    ["src/x.js", 'const { unli~nk: drop } = require("fs/promises");\n', "  await drop(path);", "delete-or-overwrite"],
+    ["src/x.ts", 'import h from "node:https";\n', "  h.get(url, onResponse);", "network-or-registry"],
+    ["src/x.ts", 'import * as web from "http";\n', "  web.request(options);", "network-or-registry"],
+    ["src/x.js", 'const h = require("https");\n', "  h.request(options);", "network-or-registry"],
+    ["src/x.ts", 'import { request as send } from "node:http";\n', "  send(options);", "network-or-registry"],
+    ["src/x.ts", 'import ax from "axios";\n', "  await ax.post(url, body);", "network-or-registry"],
+    ["src/x.ts", 'import ax from "axios";\n', "  await ax(url);", "network-or-registry"],
+    ["app/x.py", "import requests as r\n", "    r.get(url)", "network-or-registry"],
+    ["app/x.py", "from requests import get as g\n", "    g(url)", "network-or-registry"],
+    ["app/x.py", "from requests import (\n    Session,\n    post,\n)\n", "    post(url, json=body)", "network-or-registry"],
+    ["app/x.py", "import shutil as sh\n", "    sh.rmtree(path)", "delete-or-overwrite"],
+    ["app/x.py", "from shutil import rmtree\n", "    rmtree(path)", "delete-or-overwrite"],
+    ["app/x.py", "import os as o\n", "    o.remove(path)", "delete-or-overwrite"],
+    ["app/x.py", "from os import remove as drop\n", "    drop(path)", "delete-or-overwrite"],
+  ])("hits an added call through a network or filesystem alias %s binds by its head: %s", (path, head, call, id) => {
+    const bound = withLines([hunk(path, { added: [built(call)], head: built(head) })]);
+    const unbound = withLines([hunk(path, { added: [built(call)], head: "x = 1\n" })]);
+    // A one-line import is read from the hunk's own lines too; hunk lines are read one by one, as for review/145.
+    const oneLine = built(head).trimEnd();
+    const inHunk = oneLine.includes("\n") ? undefined : withLines([hunk(path, { context: [oneLine], added: [built(call)] })]);
+
+    expect(bound.byPath[0]?.rule).toBe(`line rule ${id} at ${path}:10`);
+    if (inHunk !== undefined) expect(inHunk.byPath[0]?.rule).toBe(`line rule ${id} at ${path}:10`);
+    expect(unbound.class).toBe("product");
+  });
+
+  it.each([
+    ["src/x.ts", 'import { readFile as load } from "node:fs";\n', "  load(path);"],
+    ["src/x.ts", 'import { writeFile as save } from "./store";\n', "  save(path, data);"],
+    ["src/x.ts", 'import h from "./https";\n', "  h.get(url);"],
+    ["src/x.ts", 'import { request as send } from "./client";\n', "  send(options);"],
+    ["app/x.py", "from requests import Session as S\n", "    S()"],
+    ["app/x.py", "import shutil as sh\n", "    sh.copy(a, b)"],
+    ["app/x.py", "from myrequests import get as g\n", "    g(url)"],
+  ])("does not bind a name %s gives no network or filesystem member: %s", (path, head, call) => {
     expect(withLines([hunk(path, { added: [built(call)], head: built(head) })]).class).toBe("product");
   });
 
