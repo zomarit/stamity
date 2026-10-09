@@ -235,35 +235,111 @@ function resolveDots(path: string): string {
   return normalized === "." ? "" : normalized;
 }
 
-const REGEXP_SPECIAL = /[.*+?^${}()|[\]\\]/g;
-const globCache = new Map<string, RegExp>();
+/** `*`: any run of characters inside one segment. */
+const STAR = 0;
+/** `**` not followed by `/`: any run of characters but a line terminator, across segments. */
+const ANY = 1;
+/** `**` followed by `/`: any run of whole segments, none included, each with its `/`. */
+const SEGMENTS = 2;
+
+/** One step of a compiled glob: a wildcard, or one literal UTF-16 code unit (canonical when folding case). */
+type GlobStep = typeof STAR | typeof ANY | typeof SEGMENTS | string;
+
+const globCache = new Map<string, readonly GlobStep[]>();
+
+/** A code unit compared without case, by the rule a non-Unicode `i` regular expression applies. */
+function canonical(unit: string): string {
+  const upper = unit.toUpperCase();
+  if (upper.length !== 1) return unit;
+  return unit.charCodeAt(0) >= 128 && upper.charCodeAt(0) < 128 ? unit : upper;
+}
+
+/** What `.` in a regular expression refuses, by number so no escape sits in this source: LF, CR, LS and PS. */
+const LINE_TERMINATORS: ReadonlySet<number> = new Set([0x0a, 0x0d, 0x2028, 0x2029]);
+
+function isLineTerminator(unit: string): boolean {
+  return LINE_TERMINATORS.has(unit.charCodeAt(0));
+}
 
 /** `**` spans segments (`**` followed by `/` spans none too), `*` stays in one, the rest is literal. */
-function globRegExp(glob: string, foldCase = false): RegExp {
+function compileGlob(glob: string, foldCase: boolean): readonly GlobStep[] {
   const key = `${foldCase ? "i" : "-"}${glob}`;
   const cached = globCache.get(key);
   if (cached !== undefined) return cached;
   const source = normalizePath(glob);
-  let pattern = "";
+  const steps: GlobStep[] = [];
   let index = 0;
   while (index < source.length) {
     if (source.startsWith("**/", index)) {
-      pattern += "(?:[^/]*/)*";
+      steps.push(SEGMENTS);
       index += 3;
     } else if (source.startsWith("**", index)) {
-      pattern += ".*";
+      steps.push(ANY);
       index += 2;
     } else if (source[index] === "*") {
-      pattern += "[^/]*";
+      steps.push(STAR);
       index += 1;
     } else {
-      pattern += (source[index] ?? "").replace(REGEXP_SPECIAL, "\\$&");
+      const unit = source[index] ?? "";
+      steps.push(foldCase ? canonical(unit) : unit);
       index += 1;
     }
   }
-  const compiled = new RegExp(`^${pattern}$`, foldCase ? "i" : "");
-  globCache.set(key, compiled);
-  return compiled;
+  globCache.set(key, steps);
+  return steps;
+}
+
+/**
+ * Whether `path` meets the compiled `steps` (review/50). Every possible position
+ * in the glob is carried forward together, one path character at a time, so the
+ * cost is at most the glob's steps times the path's length and nothing
+ * backtracks, whatever the glob's wildcards. `at[i]` is "before step i";
+ * `inside[i]` is "inside one segment of the `**` + `/` at step i, before its `/`".
+ */
+function globMatches(steps: readonly GlobStep[], path: string, foldCase: boolean): boolean {
+  const size = steps.length + 1;
+  let at = new Uint8Array(size);
+  let inside = new Uint8Array(size);
+  let nextAt = new Uint8Array(size);
+  let nextInside = new Uint8Array(size);
+  // A wildcard may match nothing, so being before one is also being after it.
+  const skipEmpty = (state: Uint8Array): void => {
+    for (let i = 0; i < steps.length; i += 1) if (state[i] === 1 && typeof steps[i] === "number") state[i + 1] = 1;
+  };
+  at[0] = 1;
+  skipEmpty(at);
+  for (let k = 0; k < path.length; k += 1) {
+    const unit = path[k] ?? "";
+    const read = foldCase ? canonical(unit) : unit;
+    nextAt.fill(0);
+    nextInside.fill(0);
+    let live = false;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (at[i] === 1) {
+        if (step === STAR) {
+          if (unit !== "/") nextAt[i] = 1;
+        } else if (step === ANY) {
+          if (!isLineTerminator(unit)) nextAt[i] = 1;
+        } else if (step === SEGMENTS) {
+          if (unit === "/") nextAt[i] = 1;
+          else nextInside[i] = 1;
+        } else if (step === read) {
+          nextAt[i + 1] = 1;
+        }
+      }
+      if (inside[i] === 1) {
+        if (unit === "/") nextAt[i] = 1;
+        else nextInside[i] = 1;
+      }
+    }
+    skipEmpty(nextAt);
+    for (let i = 0; i < size && !live; i += 1) live = nextAt[i] === 1 || nextInside[i] === 1;
+    [at, nextAt] = [nextAt, at];
+    [inside, nextInside] = [nextInside, inside];
+    if (!live) return false;
+  }
+  return at[steps.length] === 1;
 }
 
 /**
@@ -273,12 +349,12 @@ function globRegExp(glob: string, foldCase = false): RegExp {
  */
 export function matchGlob(path: string, glob: string, options: { literal?: boolean; foldCase?: boolean } = {}): boolean {
   const read = options.literal === true ? path : normalizePath(path);
-  return globRegExp(glob, options.foldCase === true).test(read);
+  return matchRead(read, glob, options.foldCase === true);
 }
 
 /** Whether an already-read `path` matches `glob`: no second separator rewrite, so a literal backslash stays one. */
 function matchRead(path: string, glob: string, foldCase = false): boolean {
-  return globRegExp(glob, foldCase).test(path);
+  return globMatches(compileGlob(glob, foldCase), path, foldCase);
 }
 
 /**
@@ -556,7 +632,10 @@ export function classifyChange(
  */
 const FOLDS_CASE: ReadonlySet<ChangeClass> = new Set(["product", "public-contract", "security-sensitive"]);
 
-/** A glob's matching cost is bounded (review/50): at most this many characters, and this many `**`. */
+/**
+ * Input limits on a class file's glob: at most this many characters, and this many `**`. They bound the size of
+ * what is read, not the matching cost; that bound is the matcher's own ({@link globMatches}, review/50).
+ */
 const GLOB_MAX_LENGTH = 200;
 const GLOB_MAX_DOUBLE_STARS = 4;
 
@@ -603,7 +682,19 @@ function matchesEveryPath(glob: string): boolean {
   return segments.every((segment) => /^\*+$/.test(segment)) && segments.some((segment) => segment.length >= 2);
 }
 
-/** Why a glob costs too much to match, or `undefined` (review/50). */
+/**
+ * Whether a glob's last segment has an extension holding a wildcard (`**\/*.*`, `*.*`, `.*`, `x.m*`), so no
+ * floor's extension list can say which file types it reaches (review/59). A last segment with no `.` names no
+ * extension of its own, as `notes/**` and `*` do, and is not this shape.
+ */
+function hasWildcardExtension(glob: string): boolean {
+  const normalized = normalizePath(glob);
+  const last = normalized.slice(normalized.lastIndexOf("/") + 1);
+  const dot = last.lastIndexOf(".");
+  return dot !== -1 && last.slice(dot + 1).includes("*");
+}
+
+/** Why a glob is over the input limits, or `undefined` (review/50). */
 function globCostError(glob: string): string | undefined {
   if (glob.length > GLOB_MAX_LENGTH) return `is longer than ${GLOB_MAX_LENGTH} characters`;
   if ((glob.match(/\*\*/g) ?? []).length > GLOB_MAX_DOUBLE_STARS) return `holds more than four **`;
@@ -665,6 +756,10 @@ function readClasses(value: unknown, errors: string[]): Map<ChangeClass, string[
         errors.push(
           `${where}: the glob ${JSON.stringify(glob)} matches every path, and only ${MATCH_ALL_FLOOR} or a stronger class may take every path`,
         );
+      } else if (NOT_FOR_CODE.has(key) && hasWildcardExtension(glob)) {
+        errors.push(
+          `${where}: the glob ${JSON.stringify(glob)} has a wildcard extension, and a ${key} glob's extension must be concrete, such as *.md`,
+        );
       } else kept.push(glob);
     });
     classes.set(key, kept);
@@ -713,7 +808,8 @@ function readTestInputs(value: unknown, errors: string[]): TestInput[] {
  * "tests": ["<test file>", …] | "all" }] }`, both keys optional. Refused: text
  * that is not a JSON object, an unknown key, an unknown class, a glob that is
  * not a non-empty string, a glob that matches every path under a class weaker
- * than `product` (the sign-off on plan/8), and a test entry that is not a plain
+ * than `product` (the sign-off on plan/8), a `records` or `docs` glob whose
+ * extension holds a wildcard (review/59), a test entry that is not a plain
  * repository-relative file path (plan/23), and a glob longer than 200
  * characters or holding more than four `**` (review/50). Every error is listed,
  * the first one first; a refused file yields no rules, only its raising entries

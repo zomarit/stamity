@@ -101,6 +101,46 @@ describe("matchGlob", () => {
   it("matches a Windows-separated path as its POSIX twin", () => {
     expect(matchGlob("docs\\x.md", "docs/**")).toBe(true);
   });
+
+  it("reads **/ as whole segments, none included, and a run of three stars as ** then *", () => {
+    expect(matchGlob("a/b", "a/**/b")).toBe(true);
+    expect(matchGlob("a/x/y/b", "a/**/b")).toBe(true);
+    expect(matchGlob("ax/y/b", "a**/b")).toBe(true);
+    expect(matchGlob("a/xb", "a/**/b")).toBe(false);
+    expect(matchGlob("x/y.md", "***")).toBe(true);
+    expect(matchGlob("x/y/", "x/**/")).toBe(true);
+    expect(matchGlob("x/y", "x/**/")).toBe(false);
+  });
+
+  it("folds case only when asked", () => {
+    expect(matchGlob("LIB/X.ts", "lib/*.ts", { foldCase: true })).toBe(true);
+    expect(matchGlob("LIB/X.ts", "lib/*.ts")).toBe(false);
+  });
+
+  // review/50: matching is linear in the path, whatever wildcards the glob holds, so no glob stalls `gate classify`.
+  it.each([
+    ["an alternating-star glob, 8 stars, against 40 letters", `${"*a".repeat(8)}*b`, "a".repeat(40)],
+    ["an alternating-star glob, 20 stars, against 20,000 letters", `${"*a".repeat(20)}*b`, "a".repeat(20_000)],
+    ["four ** between letters against a deep path", "**a**a**a**a*b", `${"a/".repeat(5_000)}a`],
+    ["four **/ against a deep path", "**/a/**/a/**/a/**/a/*b", `${"a/".repeat(5_000)}a`],
+  ])("matches %s well under a second", (_label, glob, path) => {
+    const started = performance.now();
+    expect(matchGlob(path, glob)).toBe(false);
+    expect(matchGlob(path, glob, { foldCase: true })).toBe(false);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it("classifies a long name against a hostile glob a class file accepts, well under a second (review/50)", () => {
+    const glob = `${"*a".repeat(20)}*b`;
+    expect(glob.length).toBeLessThanOrEqual(200);
+    const parsed = parseClassFile(JSON.stringify({ classes: { "security-sensitive": [glob], tests: [glob] } }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const started = performance.now();
+    const result = classifyChange({ paths: [`${"a".repeat(20_000)}.md`], base: "given" }, mergeRules(BUILT_IN_RULES, parsed.rules));
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(result.class).toBe("docs");
+  });
 });
 
 describe("classifyChange: the built-in rules", () => {
@@ -772,17 +812,17 @@ describe("parseClassFile: what the class file may say", () => {
     expect(accepted({ classes: { product: [long, "**/a/**/b/**/c/**"] } }).rules[0]?.paths).toHaveLength(2);
   });
 
-  // review/47: a glob that leaves something literal is kept, and the floors bound what it can lower.
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/59 (W, security). This case
+   * pinned `**\/*.*` and `**.*` as accepted under docs and records, bounded only by the floors. Those
+   * floors are extension allowlists, so a wildcard extension still lowered every unlisted file type
+   * (Terraform, SQL, Gradle, `*.mk`). review/59 refuses a wildcard extension for those two classes, so
+   * that half of the case moves to the refusal cases below; the tests half is unchanged.
+   */
+  // review/47: a glob that leaves something literal is kept under tests, and the floors bound what it can lower.
   it.each([["**/*.*"], ["**.*"]])(
-    "bounds %s below product: config and code are never records or docs, and code is tests only under a built-in test glob",
+    "bounds %s under tests: code is tests only under a built-in test glob",
     (glob) => {
-      for (const cls of ["docs", "records"] as const) {
-        const rules = withFile({ classes: { [cls]: [glob] } });
-        expect(classOf("notes/a.png", rules).class, cls).toBe(cls);
-        for (const path of [".github/workflows/ci.yml", "config/app.json", "settings.toml", "src/x.ts", ".env.local", "conf/x.env"]) {
-          expect(classOf(path, rules).class, `${cls} ${path}`).toBe("product");
-        }
-      }
       const tests = withFile({ classes: { tests: [glob] } });
       expect(classOf("src/x.ts", tests).class).toBe("product");
       expect(classOf("src/x.ts", tests).reason).toContain("src/x.ts");
@@ -790,6 +830,39 @@ describe("parseClassFile: what the class file may say", () => {
       expect(classOf("notes/a.png", tests).class).toBe("tests");
     },
   );
+
+  // review/59: the floors are extension allowlists, so records and docs take only a concrete extension.
+  it.each([["**/*.*"], ["*.*"], [".*"], ["**.*"], ["notes/*.m*"], ["notes/x.*"], ["./notes/**/*.*"]])(
+    "refuses the wildcard-extension glob %s for docs and records, naming it",
+    (glob) => {
+      for (const cls of ["docs", "records"] as const) {
+        const error = firstError(JSON.stringify({ classes: { [cls]: [glob] } }));
+        expect(error).toContain(`classes.${cls}[0]`);
+        expect(error).toContain(JSON.stringify(glob));
+        expect(error).toContain("wildcard extension");
+      }
+      for (const cls of ["tests", "config", "product", "security-sensitive"] as const) {
+        expect(parseClassFile(JSON.stringify({ classes: { [cls]: [glob] } })).ok, cls).toBe(true);
+      }
+    },
+  );
+
+  it("keeps a docs or records glob with a concrete extension, a literal file name or no extension of its own", () => {
+    const globs = ["**/*.md", "*.md", "notes/**/*.html", "**/*.*.md", "notes/README", ".gitkeep", "notes/**", "*"];
+    for (const cls of ["docs", "records"] as const) {
+      expect(accepted({ classes: { [cls]: globs } }).rules[0]?.paths, cls).toEqual(globs);
+    }
+  });
+
+  it("lowers no unlisted file type through a wildcard extension: a refused file keeps none of its records globs", () => {
+    const parsed = parseClassFile(JSON.stringify({ classes: { records: ["**/*.*"], "security-sensitive": ["lib/**"] } }));
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    const rules = mergeRules(BUILT_IN_RULES, parsed.raising);
+    for (const path of ["infra/main.tf", "db/001_init.sql", "build.gradle", "rules.mk"]) {
+      expect(classOf(path, rules).class, path).toBe("product");
+    }
+  });
 
   it("holds every config format out of records and docs, the .env family included", () => {
     const rules = withFile({ classes: { docs: ["notes/**"] } });
