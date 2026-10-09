@@ -341,6 +341,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // sit below the composition root that wires it and the wave-14 verb that calls it.
   "src/change/classify.ts": { unit: "p1a-classifier-verb", wave: 2 },
   // wave 3
+  // Test selection (plan 019 file 2, unit p2b): reads the wave-2 classifier's
+  // globs and code extensions, under the wave-14 verb that calls it.
+  "src/change/testInputs.ts": { unit: "p2b-test-inputs", wave: 3 },
   "src/detect/stackSupport.ts": { unit: "p1-19", wave: 3 },
   "src/detect/verificationGates.ts": { unit: "p1-19", wave: 3 },
   "src/merge/atomicWrite.ts": { unit: "p1-23", wave: 3 },

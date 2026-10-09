@@ -1,5 +1,5 @@
-import { existsSync, realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
   BUILT_IN_RULES,
@@ -15,7 +15,16 @@ import {
   type ClassifyResult,
   type ClassRule,
   type PathSource,
+  type TestInput,
 } from "../../change/classify.ts";
+import {
+  extractReadPaths,
+  isTestSource,
+  selectTests,
+  type TestSelection,
+  type TestSelectionInput,
+  type TestSource,
+} from "../../change/testInputs.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -78,6 +87,12 @@ import type { GitRunner } from "../../workspace/git.ts";
  * (review/48).
  * With no base, no class file is read (D5). `--paths` with `--base` reads the
  * base copy the same way, from the same project root.
+ *
+ * **The tests a change selects** (REQ-FLOW-062) come from the base copy's
+ * test-input map and the tracked test sources of the work tree, through
+ * `../../change/testInputs.ts`. No map, a base copy that is refused, a change
+ * that could not be read, a test source that is not one readable file, or a
+ * selected test the work tree lacks runs every test, the cause named.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -353,7 +368,7 @@ function resolveBase(runner: GitRunner, cwd: string, ref: string): string | null
 /** The base commit's class file: absent, read and valid, or refused with its first error. */
 type BaseClassFile =
   | { state: "absent" }
-  | { state: "valid"; rules: ClassRule[] }
+  | { state: "valid"; rules: ClassRule[]; testInputs: TestInput[]; testGlobs: string[] }
   | { state: "invalid"; error: string; raising: ClassRule[] };
 
 /**
@@ -370,7 +385,7 @@ function readBaseClassFile(runner: GitRunner, root: ProjectRoot, commit: string)
   const spec = `${commit}:${path}`;
   if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file`, raising: [] };
   const parsed = parseClassFile(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
-  if (parsed.ok) return { state: "valid", rules: parsed.rules };
+  if (parsed.ok) return { state: "valid", rules: parsed.rules, testInputs: parsed.testInputs, testGlobs: parsed.testGlobs };
   return { state: "invalid", error: parsed.errors[0] ?? "refused", raising: parsed.raising };
 }
 
@@ -388,6 +403,62 @@ function rulesFrom(classFile: BaseClassFile): { rules: readonly ClassRule[]; rea
     rules: mergeRules(BUILT_IN_RULES, classFile.raising),
     reason: `${invalid}: only its product, public-contract and security-sensitive entries were read, so the class is at least product`,
   };
+}
+
+/**
+ * What the test selection reads beside the final class and paths, and the
+ * project directory its selected files must exist in; or why every test runs.
+ */
+type TestPlan = { select: Omit<TestSelectionInput, "paths" | "class">; dir: string | null } | { every: string };
+
+/** No map was read, so the selection runs every test (S4); the test globs still name helpers. */
+const NO_MAP: TestPlan = { select: { testGlobs: [] }, dir: null };
+
+/** A test source larger than this is not read as one, and every test runs. */
+const TEST_SOURCE_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * The project's tracked test sources (code files under a test glob, from `git
+ * ls-files` run at the project root, so project-relative) with the paths each
+ * names, read from the work tree; the tracked files and the changed paths are
+ * the names a read may match. A source deleted in the work tree reads nothing.
+ * One that is not a regular file, or is too large, makes every test run, named.
+ */
+function readTestSources(
+  runner: GitRunner,
+  root: ProjectRoot,
+  testGlobs: readonly string[],
+  changed: readonly string[],
+): TestSource[] | { every: string } {
+  const tracked = runGit(runner, root.dir, "ls-files --cached", ["ls-files", "--cached", "-z"])
+    .split("\0")
+    .filter((path) => path !== "");
+  const known = new Set([...tracked, ...changed]);
+  const sources: TestSource[] = [];
+  for (const test of tracked.filter((path) => isTestSource(path, testGlobs))) {
+    const file = join(root.dir, test);
+    if (!existsSync(file)) continue;
+    let text: string | undefined;
+    try {
+      const stat = lstatSync(file);
+      if (stat.isFile() && stat.size <= TEST_SOURCE_MAX_BYTES) text = readFileSync(file, "utf8");
+    } catch {
+      text = undefined;
+    }
+    if (text === undefined) return { every: `the test source ${test} is not one readable file, so every test runs` };
+    sources.push({ test, reads: extractReadPaths(text, known) });
+  }
+  return sources;
+}
+
+/** The selection for the final class and paths: every test when a selected file is not in the work tree. */
+function selectFor(plan: TestPlan, result: ClassifyResult): TestSelection {
+  if ("every" in plan) return { full: true, files: [], reason: plan.every };
+  const selection = selectTests({ ...plan.select, paths: result.byPath.map((entry) => entry.path), class: result.class });
+  const { dir } = plan;
+  const missing = dir === null ? [] : selection.files.filter((file) => !existsSync(join(dir, file)));
+  if (missing.length === 0) return selection;
+  return { full: true, files: [], reason: `the selected ${namePaths(missing)} is not in the work tree, so every test runs` };
 }
 
 /** The verdict for a change git could not read: `product`, the failure named. */
@@ -476,8 +547,11 @@ function applyNameFloor(result: ClassifyResult): ClassifyResult {
 function classify(cwd: string, listed: readonly string[] | undefined, ref: string | undefined): {
   result: ClassifyResult;
   base: string | null;
+  tests: TestPlan;
 } {
-  if (listed !== undefined && ref === undefined) return { result: classifyChange({ paths: listed, base: "absent" }), base: null };
+  if (listed !== undefined && ref === undefined) {
+    return { result: classifyChange({ paths: listed, base: "absent" }), base: null, tests: NO_MAP };
+  }
 
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
   try {
@@ -490,7 +564,7 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
 
     // An unresolved base leaves no class file to read and, without --paths, nothing to diff against.
     if (baseState === "unresolved") {
-      return { result: withReasons(classifyChange({ paths: listed ?? [], base: baseState }), reasons), base: commit };
+      return { result: withReasons(classifyChange({ paths: listed ?? [], base: baseState }), reasons), base: commit, tests: NO_MAP };
     }
     const treeish = commit ?? "HEAD";
     const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
@@ -514,10 +588,19 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
       );
     }
     if (classFile?.state === "invalid") result = raiseTo(result, "product");
-    return { result: withReasons(result, reasons), base: commit };
+
+    // The map is the base copy's alone, and only a valid copy gives one (S4); an empty map is no map.
+    let tests: TestPlan = NO_MAP;
+    if (classFile?.state === "valid" && classFile.testInputs.length > 0) {
+      const { testGlobs, testInputs: map } = classFile;
+      const sources = readTestSources(runner, root, testGlobs, result.byPath.map((entry) => entry.path));
+      tests = Array.isArray(sources) ? { select: { map, testSources: sources, testGlobs }, dir: root.dir } : sources;
+    }
+    return { result: withReasons(result, reasons), base: commit, tests };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
-    return { result: failClosed(`${describeGitFailure(err)}, so the class is product`), base: null };
+    const reason = `${describeGitFailure(err)}, so the class is product`;
+    return { result: failClosed(reason), base: null, tests: { every: "the change could not be read, so every test runs" } };
   }
 }
 
@@ -531,6 +614,7 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
   const classified = classify(ctx.app.runtime.cwd, listed, ref);
   const { base } = classified;
   const result = applyNameFloor(classified.result);
+  const tests = selectFor(classified.tests, result);
 
   // Paths, rules and refs are the caller's or the repository's bytes: sanitised
   // where they meet the terminal and, the same way, in the JSON an agent reads
@@ -539,6 +623,7 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
     `class: ${result.class}`,
     `checks: ${list(result.checks)}`,
     `lenses: ${list(result.lenses)}`,
+    sanitizeLabel(`tests: ${tests.full ? "all" : list(tests.files)} (${tests.reason})`),
     `reason: ${sanitizeLabel(result.reason)}`,
     ...result.byPath.map((entry) => sanitizeLabel(`  ${entry.path}  ${entry.class}  (${entry.rule})`)),
   ];
@@ -559,6 +644,7 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
         class: entry.class,
         rule: sanitizeLabel(entry.rule),
       })),
+      tests: { full: tests.full, files: tests.files.map((file) => sanitizeLabel(file)), reason: sanitizeLabel(tests.reason) },
     },
   };
 }

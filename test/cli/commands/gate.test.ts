@@ -94,6 +94,9 @@ describe("stamity gate classify --paths", () => {
       lenses: [],
       reason: expect.stringContaining("no base was given") as string,
       byPath: [{ path: "docs/x.md", class: "docs", rule: "docs/**" }],
+      // TEST CHANGE, justified: 2026-10-09, p2b-test-inputs — the document gains `tests`, the selection
+      // (REQ-FLOW-062); with no base no map is read, so every test runs (S4).
+      tests: { full: true, files: [], reason: expect.stringContaining("no test-input map") as string },
     });
   });
 
@@ -114,6 +117,8 @@ describe("stamity gate classify --paths", () => {
     expect(result.stdout).toContain("class: product");
     expect(result.stdout).toContain("checks: scan, gates-all, review");
     expect(result.stdout).toContain("lenses: none");
+    // TEST CHANGE, justified: 2026-10-09, p2b-test-inputs — the person's lines gain the selection; no map, so all.
+    expect(result.stdout).toContain("tests: all (");
     expect(result.stdout).toContain("reason: ");
     expect(result.stdout).toMatch(/^ {2}docs\/x\.md {2}docs {2}\(docs\/\*\*\)$/m);
     expect(result.stdout).toMatch(/^ {2}src\/x\.ts {2}product /m);
@@ -1057,6 +1062,77 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(given.doc["class"]).toBe("docs");
       expect(given.doc["checks"]).toEqual(["scan", "tests-selected", "review-once"]);
       expect(bare.doc["class"]).toBe("product");
+    });
+
+    // p2b-test-inputs (REQ-FLOW-062): the base copy's test-input map and the work tree's test sources.
+    describe("the test selection", () => {
+      const mapOf = (testInputs: unknown[]): string => `${JSON.stringify({ testInputs })}\n`;
+      const MAP = mapOf([{ glob: "docs/guide.md", tests: ["test/guide.test.ts"] }]);
+      const SOURCES = {
+        "test/guide.test.ts": 'it("reads", () => read("docs/guide.md"));\n',
+        "test/other.test.ts": 'it("reads", () => read("docs/other.md"));\n',
+        "test/unrelated.test.ts": 'it("reads", () => read("docs/third.md"));\n',
+      };
+      const PAGES = { "docs/guide.md": "base\n", "docs/other.md": "base\n", "docs/third.md": "base\n" };
+
+      it("selects the map's tests and the tests whose source names a changed page", async () => {
+        const repo = await seedRepo("repo", { [CLASS_FILE]: MAP, ...SOURCES, ...PAGES });
+        await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n", "repo/docs/other.md": "changed\n" });
+
+        const { code, doc, stdout } = await classifyIn(repo, ["--base", "HEAD"]);
+
+        expect(code).toBe(0);
+        expect(doc["class"]).toBe("docs");
+        expect(doc["tests"]).toMatchObject({ full: false, files: ["test/guide.test.ts", "test/other.test.ts"] });
+        expect(stdout).not.toContain("test/unrelated.test.ts");
+      });
+
+      it("runs every test when the base holds no map, whatever the head copy says", async () => {
+        const repo = await seedRepo("repo", { ...SOURCES, ...PAGES });
+        await getRoot().seedFiles({ [`repo/${CLASS_FILE}`]: MAP, "repo/docs/guide.md": "changed\n" });
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+        expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+        expect((doc["tests"] as { reason: string }).reason).toContain("no test-input map");
+      });
+
+      it("runs every test when a selected test is not in the work tree, naming it", async () => {
+        const repo = await seedRepo("repo", { [CLASS_FILE]: mapOf([{ glob: "docs/**", tests: ["test/gone.test.ts"] }]), ...PAGES });
+        await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n" });
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+        expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+        expect((doc["tests"] as { reason: string }).reason).toContain("test/gone.test.ts");
+      });
+
+      it("runs every test when a test source is no regular file, naming it", async () => {
+        const repo = await seedRepo("repo", { [CLASS_FILE]: MAP, ...SOURCES, ...PAGES });
+        // Tracked as a file, a folder in the work tree: the read refuses what it cannot read as one file.
+        const blob = git(repo, ["hash-object", "-w", "--", "docs/guide.md"]).trim();
+        git(repo, ["update-index", "--add", "--cacheinfo", `100644,${blob},test/dir.test.ts`]);
+        await mkdir(join(repo, "test", "dir.test.ts"));
+        await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n" });
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+        expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+        expect((doc["tests"] as { reason: string }).reason).toContain("test/dir.test.ts");
+      });
+
+      it("says product and runs every test when the tracked-file read fails", async () => {
+        const repo = await seedRepo("repo", { [CLASS_FILE]: MAP, ...SOURCES, ...PAGES });
+        await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n" });
+
+        gitSpy.fault = { step: "--cached", error: realFailure("process.exit(3)") };
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+        gitSpy.fault = undefined;
+
+        expect(doc["class"]).toBe("product");
+        expect(doc["reason"]).toContain("git ls-files --cached failed, exit 3");
+        expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+      });
     });
 
     // plan/61, plan/63: the file is read under the project's prefix, from the project root found by `.stamity/`.
