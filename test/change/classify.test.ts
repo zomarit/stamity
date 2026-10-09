@@ -393,11 +393,23 @@ describe("classifyChange: the code-path floor", () => {
     ];
     expect(given(["website/x.md"], rules).class).toBe("docs");
     expect(given(["website/src/x.tsx"], rules).class).toBe("product");
-    expect(given(["notes/x.sh"], rules).class).toBe("product");
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, p5b-security-trigger-rows.
+     * This pinned `notes/x.sh` to product. The security row now holds `*.sh` (S7), so that path is
+     * security-sensitive, a stronger class; the code floor under a caller's records rule is still the
+     * behaviour this case reads, so it moves to a script extension no trigger row holds.
+     */
+    expect(given(["notes/x.py"], rules).class).toBe("product");
   });
 
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, p5b-security-trigger-rows.
+   * This pinned `docs/BUILD.SH` to product. The security row now holds `*.sh` and matches without case,
+   * so that path is security-sensitive (pinned in the S7 path-row describe); the floor's case-insensitive
+   * extension read moves to an upper-case extension no trigger row holds.
+   */
   it("reads the extension case-insensitively, so an upper-case script is still code", () => {
-    expect(given(["docs/BUILD.SH"]).class).toBe("product");
+    expect(given(["docs/BUILD.PY"]).class).toBe("product");
   });
 
   it("keeps an extensionless file out of docs and records: it may be an executable (build/7)", () => {
@@ -722,6 +734,59 @@ describe("classifyChange: the trigger roster's security row (p1d, REQ-FLOW-065)"
     });
     expect(result.class).toBe("security-sensitive");
     expect(result.lenses).toEqual(["stamity-security"]);
+  });
+});
+
+describe("classifyChange: the S7 path rows of the security row (p5b, REQ-FLOW-065)", () => {
+  it("places CI workflows, scripts, container builds and client hooks and settings in security-sensitive", () => {
+    const cases: readonly (readonly [string, string])[] = [
+      [".github/workflows/ci.yml", ".github/workflows/"],
+      ["packages/a/.github/workflows/release.yaml", ".github/workflows/"],
+      ["plugin/hooks/pre-tool.js", "hooks/"],
+      ["scripts/x.sh", "*.sh"],
+      ["scripts/x.bash", "*.bash"],
+      ["scripts/x.zsh", "*.zsh"],
+      ["scripts/x.ps1", "*.ps1"],
+      ["scripts/Module.psm1", "*.psm1"],
+      ["Dockerfile", "dockerfile"],
+      ["services/api-gw/Dockerfile", "dockerfile"],
+      [".cursor/hooks.json", "hooks.json"],
+      [".claude/settings.json", "settings.json"],
+      [".claude/settings.local.json", "settings.local.json"],
+    ];
+    for (const [path, pattern] of cases) {
+      const result = given([path]);
+      expect(result.class, path).toBe("security-sensitive");
+      expect(result.lenses, path).toEqual(["stamity-security"]);
+      expect(result.checks, path).toEqual([...CLASS_CHECKS["security-sensitive"]]);
+      expect(result.byPath[0]?.rule, path).toBe(`the trigger roster's security row (${pattern})`);
+    }
+  });
+
+  it("matches the new rows without case, as the row's matcher does (record.md:88)", () => {
+    for (const path of [".GitHub/Workflows/ci.yml", "scripts/BUILD.SH", "Scripts/Deploy.PS1", ".Claude/Settings.JSON"]) {
+      const result = given([path]);
+      expect(result.class, path).toBe("security-sensitive");
+      expect(result.lenses, path).toEqual(["stamity-security"]);
+    }
+  });
+
+  it("lifts what a weaker rule placed, and leaves near-miss names where they were", () => {
+    // A records rule over notes/** would place a script there in records; the row is stronger.
+    const records: readonly ClassRule[] = [{ class: "records", paths: ["notes/**"], rationale: "fixture: notes" }];
+    expect(given(["notes/x.md"], records).class).toBe("records");
+    expect(given(["notes/x.sh"], records).class).toBe("security-sensitive");
+    // Not the names the row holds: a page about hooks, a workflows folder outside .github, a doc on settings.
+    for (const path of ["docs/hooks.md", "docs/workflows/ci.md", "docs/settings.md"]) {
+      const result = given([path]);
+      expect(result.class, path).toBe("docs");
+      expect(result.lenses, path).toEqual([]);
+    }
+  });
+
+  it("names the security row for an outside path on the new rows", () => {
+    expect(outsideSecurityRule("../.github/workflows/ci.yml")).toBe("security row .github/workflows/");
+    expect(outsideSecurityRule("../tools/x.ps1")).toBe("security row *.ps1");
   });
 });
 
@@ -1186,9 +1251,15 @@ describe("mergeRules: a class file's globs join their class and never lower a pa
     expect(notes.byPath[0]?.rule).not.toBe("notes/*.md");
   });
 
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, p5b-security-trigger-rows.
+   * The fixture's file named `guides/settings.json`. The security row now holds the basename
+   * `settings.json` (S7), which lifts that path past both of the file's classes; the case reads the
+   * stronger of two class-file classes, so its fixture moves to a basename no trigger row holds.
+   */
   it("gives a path the file lists under two classes the stronger one", () => {
-    const rules = withFile({ classes: { docs: ["guides/*.md", "guides/*.json"], config: ["guides/settings.json"] } });
-    expect(classOf("guides/settings.json", rules).class).toBe("config");
+    const rules = withFile({ classes: { docs: ["guides/*.md", "guides/*.json"], config: ["guides/options.json"] } });
+    expect(classOf("guides/options.json", rules).class).toBe("config");
     expect(classOf("guides/a.md", rules).class).toBe("docs");
   });
 

@@ -74,10 +74,12 @@ export interface SpecialistTrigger {
  * `test/roster/roster.test.ts`.
  *
  * `*` is deliberately absent. The security row is always-on-MATCH, which scopes
- * it to the authentication, cryptography, input and dependency surfaces below;
- * a `*` row would make it always-on outright, which is a second reviewer rather
- * than a specialist. Rows therefore match by directory segment, basename
- * suffix, and exact basename only.
+ * it to the authentication, cryptography, input and dependency surfaces below,
+ * and to the surfaces that run with the developer's or the pipeline's rights:
+ * CI workflows, shell and PowerShell scripts, container builds, and the client
+ * hooks and settings files. A `*` row would make it always-on outright, which
+ * is a second reviewer rather than a specialist. Rows therefore match by
+ * directory segment, basename suffix, and exact basename only.
  */
 export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
   {
@@ -99,6 +101,17 @@ export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
       "go.mod",
       "cargo.toml",
       "gemfile",
+      ".github/workflows/",
+      "*.sh",
+      "*.bash",
+      "*.zsh",
+      "*.ps1",
+      "*.psm1",
+      "dockerfile",
+      "hooks/",
+      "hooks.json",
+      "settings.json",
+      "settings.local.json",
     ],
     triggerKeywords: [
       "authentication",
@@ -115,6 +128,12 @@ export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
       "dependency",
       "advisory",
       "supply chain",
+      "workflow",
+      "release",
+      "hook",
+      "shell",
+      "file deletion",
+      "network call",
     ],
     rationale:
       "Authentication, cryptography, trust boundaries and the dependency set are where a missed defect is paid for after release rather than in review.",

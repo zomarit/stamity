@@ -483,6 +483,30 @@ describe("security — always-on-match, not always-on", () => {
     expect(rosterRow("security").triggerPaths as readonly string[]).not.toContain("*");
   });
 
+  // p5b-security-trigger-rows (REQ-FLOW-065): the Topics column names every topic the row holds, D8's words included,
+  // and the classifier's line rules are stated in plain words, never as a backticked pattern the row does not hold.
+  it("names every topic of its roster row and states the line rules without a pattern", async () => {
+    const trigger = section(await load("agents/stamity-security.md"), "Trigger").replace(/\s+/g, " ");
+
+    for (const keyword of rosterRow("security").triggerKeywords) {
+      expect(trigger, `Trigger omits roster topic ${keyword}`).toContain(keyword);
+    }
+    expect(trigger).toMatch(/\| CI and release \|/);
+    expect(trigger).toMatch(/\| Client hooks and settings \|/);
+    expect(trigger).toContain(
+      "The classifier also places a change here by a changed code line: a process spawn, a recursive delete or a file overwrite, a registry or network call, a token or secret name.",
+    );
+  });
+
+  // p5b-security-trigger-rows (plan/46): a commit message states intent, so it is read after the findings are formed.
+  it("reads git log only after its findings are formed", async () => {
+    const reading = section(await load("agents/stamity-security.md"), "Reading the change").replace(/\s+/g, " ");
+
+    expect(reading).toContain(
+      "This role reads `git log <range>` only after its findings are formed: a commit message states intent, not behaviour, and read first it would frame the diff it is checked against.",
+    );
+  });
+
   it("carries the resource-level census and the boundary map the lens does not", async () => {
     const beyond = section(
       await load("agents/stamity-security.md"),

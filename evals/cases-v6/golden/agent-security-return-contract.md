@@ -2,7 +2,7 @@
 id: agent-security-return-contract
 class: golden
 claim: "A security pass that found nothing on a surface it did check returns status DONE naming the surfaces examined, how many findings it posted, and whether the run posted or was advisory; it reports no rate, invents no finding to avoid returning empty, claims no edit, and states no behaviour claim without path:line behind it."
-source: content/agents/stamity-security.md:14-22,60-154
+source: content/agents/stamity-security.md:14-22,66-160
 metric: rubric
 ---
 
