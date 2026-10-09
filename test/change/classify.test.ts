@@ -224,6 +224,25 @@ describe("classifyChange: the code-path floor", () => {
     expect(given([".stamity/runs/2026-10-08_x/probe.mjs"]).class).toBe("product");
   });
 
+  // review/55: the config floor binds a class file's rules and the built-in docs rule, never the built-in records rule.
+  it("keeps a data file under the engine's own record paths in records, and code there on the floor", () => {
+    const fileRules = mergeRules(BUILT_IN_RULES, [{ class: "docs", paths: ["notes/**"], rationale: "fixture" }]);
+    for (const rules of [BUILT_IN_RULES, fileRules]) {
+      for (const path of [".stamity/runs/x/qa-evidence.json", ".stamity/runs/x/ci.yml", ".stamity/handoffs/h.json"]) {
+        const result = given([path], rules);
+        expect(result.class, path).toBe("records");
+        expect(result.reason, path).not.toContain("kept out of records");
+      }
+      expect(given([".stamity/runs/x/probe.mjs"], rules).class).toBe("product");
+      expect(given([".stamity/runs/x/hook"], rules).class).toBe("product");
+      expect(given(["docs/x.json"], rules).class).toBe("product");
+    }
+    expect(given(["notes/x.json"], fileRules).class).toBe("product");
+    // A caller's records rule over the same globs is not the built-in one, so the floor binds it.
+    const copied: readonly ClassRule[] = [{ class: "records", paths: [".stamity/runs/**"], rationale: "fixture" }];
+    expect(given([".stamity/runs/x/qa-evidence.json"], copied).class).toBe("product");
+  });
+
   it("binds a caller's rules as well as the built-ins", () => {
     const rules: readonly ClassRule[] = [
       { class: "docs", paths: ["website/**"], rationale: "fixture: the site" },

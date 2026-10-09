@@ -4588,7 +4588,29 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     const verdict = row(doc, "change-classes");
     expect(verdict.status).toBe("fail");
     expect(verdict.detail).toContain(`${CLASS_FILE} is invalid: classes.records[0]: the glob "**" matches every path`);
-    expect(verdict.detail).toContain("gate classify reads no map from a base holding this copy");
+    // TEST CHANGE, justified: 2026-10-09, review/54 — since review/48 a refused copy still applies its raising
+    // entries, so the row no longer says "reads no map"; it says what gate classify applies.
+    expect(verdict.detail).toContain(
+      "gate classify applies only its product, public-contract and security-sensitive entries, no lowering entry, " +
+        "and gives every change at least product",
+    );
+    expect(verdict.detail).not.toContain("no map");
+  });
+
+  // review/54: the row says what a base holding the copy gives, raising entries included.
+  it("says a refused copy's raising entries still apply from a base, and no lowering one does", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: { [CLASS_FILE]: '{"classes": {"security-sensitive": ["lib/**"], "records": ["**"]}}' },
+    });
+
+    const verdict = row((await runJson(root)).doc, "change-classes");
+
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain('the glob "**" matches every path');
+    expect(verdict.detail).toContain(
+      "from a base holding this copy, gate classify applies only its product, public-contract and " +
+        "security-sensitive entries, no lowering entry, and gives every change at least product",
+    );
   });
 
   it("fails a malformed class file, naming the error, and says how many more there are", async () => {

@@ -357,7 +357,8 @@ async function checkLearnings(
  * is absent, so a repository without one keeps its fifteen rows. This reads the
  * work tree's copy, the one the next pull request lands as a base: it passes
  * when the validator accepts it, and fails naming the first error, since a base
- * holding a refused copy gives every change at least `product`.
+ * holding a refused copy has `gate classify` apply only its raising entries
+ * (review/48) and give every change at least `product`.
  */
 async function checkChangeClasses(rootDir: string): Promise<DoctorCheck | null> {
   const id = "change-classes";
@@ -386,8 +387,9 @@ async function checkChangeClasses(rootDir: string): Promise<DoctorCheck | null> 
     status: "fail",
     // The error quotes the file's own bytes, so it is sanitised before it meets a terminal.
     detail:
-      `${CLASS_FILE} is invalid: ${sanitizeLabel(first)}${more} — gate classify reads no map from a base ` +
-      `holding this copy and gives every change at least product; fix the entry the error names`,
+      `${CLASS_FILE} is invalid: ${sanitizeLabel(first)}${more} — from a base holding this copy, gate classify ` +
+      `applies only its product, public-contract and security-sensitive entries, no lowering entry, and gives ` +
+      `every change at least product; fix the entry the error names`,
   };
 }
 

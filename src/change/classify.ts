@@ -16,7 +16,9 @@
  * `.env` family) in `records` or `docs`: those two classes skip lint,
  * typecheck and the full suite, so a script or a workflow under `docs/` or a
  * run folder would otherwise ship unchecked (review/47). The extensionless doc
- * names ({@link DOC_NAMES}) are exempt. A rule places a code or extensionless
+ * names ({@link DOC_NAMES}) are exempt, and so is a config file under the
+ * engine's own record paths, which the built-in `records` rule keeps there as
+ * the data the engine writes (review/55). A rule places a code or extensionless
  * file in `tests` only when a built-in test glob covers it too, so a wide
  * `tests` glob cannot take product code off the full gates (review/47). Such a
  * file is `tests` when a built-in test glob covers it, else keeps its next
@@ -158,13 +160,21 @@ export interface ClassRule {
 /** Where a repository keeps its own class lists and test-input map, relative to the project root. */
 export const CLASS_FILE = ".stamity/change-classes.json";
 
+/**
+ * The engine's own record paths. The one rule the config floor does not bind
+ * (review/55): a data file the engine writes there (a ledger, a QA evidence
+ * file) stays `records`. Matched by identity, so a caller's rule with the same
+ * globs is bound as any other; code and extensionless files there keep the floor.
+ */
+const RECORDS_RULE: ClassRule = {
+  class: "records",
+  paths: [".stamity/runs/**", ".stamity/inbox.md", ".stamity/handoffs/**"],
+  rationale: "work-run records, the inbox and handoffs: read back as data, never as authority",
+};
+
 /** The generic rules every repository gets, before its own class file. */
 export const BUILT_IN_RULES: readonly ClassRule[] = [
-  {
-    class: "records",
-    paths: [".stamity/runs/**", ".stamity/inbox.md", ".stamity/handoffs/**"],
-    rationale: "work-run records, the inbox and handoffs: read back as data, never as authority",
-  },
+  RECORDS_RULE,
   {
     class: "docs",
     paths: ["docs/**", "*.md"],
@@ -198,7 +208,7 @@ const NOT_FOR_CODE: ReadonlySet<ChangeClass> = new Set(["records", "docs"]);
 
 /**
  * Config formats the code-path floor holds out of `records` and `docs`
- * (review/47), compared lower-cased; `.env` and `.env.<anything>` are matched by
+ * (review/47), the built-in records rule excepted (review/55), compared lower-cased; `.env` and `.env.<anything>` are matched by
  * name in {@link isConfigPath}. Not {@link CODE_EXTENSIONS}: a config file may
  * still be `tests` by a rule.
  */
@@ -340,7 +350,7 @@ function classifyPath(
   securityRow: SpecialistTrigger | undefined,
 ): PathClass & { floored: boolean; unlowered: string[] } {
   const code = isCodePath(path);
-  const held = code || isConfigPath(path);
+  const config = !code && isConfigPath(path);
   const builtInTest = code && BUILT_IN_TEST_GLOBS.some((glob) => matchRead(path, glob));
   let best: { class: ChangeClass; rule: string } | undefined;
   let floored = false;
@@ -349,7 +359,9 @@ function classifyPath(
     const glob = rule.paths.find((candidate) => matchRead(path, candidate, rule.foldCase === true));
     if (glob === undefined) continue;
     // The floor (review/47): no records or docs for code, config or extensionless files; tests for code only under a built-in test glob.
-    const refused = (held && NOT_FOR_CODE.has(rule.class)) || (code && rule.class === "tests" && !builtInTest);
+    // A config file under the engine's own record paths stays records (review/55).
+    const heldOut = NOT_FOR_CODE.has(rule.class) && (code || (config && rule !== RECORDS_RULE));
+    const refused = heldOut || (code && rule.class === "tests" && !builtInTest);
     if (rule.origin === "class-file") fromFile.push({ class: rule.class, glob, refused });
     if (refused) {
       floored = true;
