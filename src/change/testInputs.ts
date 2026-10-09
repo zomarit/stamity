@@ -6,24 +6,36 @@
  * fixture, a run record) is invisible to a selection by imports, so a test's
  * reads are taken from its own text ({@link extractReadPaths}): every string
  * literal that names a tracked non-code file, and every glob literal, which
- * names each tracked non-code file it matches. A path built at run time is not
- * seen; the full run on a schedule and "unclear means product" back that up.
+ * names each tracked non-code file it matches. A glob literal over the class
+ * file's cost bound gives no reads and is refused, so every test runs. A path
+ * built at run time is not seen; the full run on a schedule and "unclear means
+ * product" back that up. Code files are not reads, and no selection follows
+ * imports: a test reaching a changed code file runs through the map or the
+ * full run only.
  *
  * **Selection** ({@link selectTests}) only ever widens toward every test. A
- * changed helper or fixture under a test glob, a missing or empty map (S4), a
- * map entry that says `"all"`, or a helper whose source names a changed path
- * runs every test, since no list of its importers exists here. Otherwise the
- * selection is the union of the map's matching entries, the tests whose source
- * names a changed path (which only adds), and the changed test files; for a
- * `records` or `docs` change zero stays zero, and for any other class zero
- * selected runs every test.
+ * `config` or stronger change (the full gates), a changed helper or fixture
+ * under a built-in test glob, a missing or empty map (S4), a map entry that
+ * says `"all"`, or a helper whose source names a changed path runs every test,
+ * since no list of its importers exists here. Otherwise the selection is the
+ * union of the map's matching entries, the tests whose source names a changed
+ * path (which only adds), and the changed test files; for a `records` or
+ * `docs` change zero stays zero, and for a `tests` change zero selected runs
+ * every test. A selected name a runner could misread runs every test.
  *
  * Pure: no filesystem, no git, and one internal import, the classifier
  * (`./classify.ts`, wave 2). The verb in `../cli/commands/gate.ts` reads the
  * map from the base commit and the test sources from the work tree.
  */
 import { posix } from "node:path";
-import { BUILT_IN_TEST_GLOBS, CODE_EXTENSIONS, matchGlob, type ChangeClass } from "./classify.ts";
+import {
+  BUILT_IN_TEST_GLOBS,
+  CODE_EXTENSIONS,
+  globCostError,
+  matchGlob,
+  testEntryError,
+  type ChangeClass,
+} from "./classify.ts";
 
 /** One map entry: a glob over changed paths and the tests it selects, or every test. */
 export interface TestInputEntry {
@@ -43,8 +55,6 @@ export interface TestSelectionInput {
   /** The base commit's test-input map; absent or empty runs every test (S4). */
   map?: readonly TestInputEntry[];
   testSources?: readonly TestSource[];
-  /** The class file's `tests` globs; the built-in ones are always added. */
-  testGlobs: readonly string[];
 }
 
 export interface TestSelection {
@@ -52,9 +62,6 @@ export interface TestSelection {
   files: string[];
   reason: string;
 }
-
-/** A glob literal is at most this long and holds no whitespace, so prose with a `*` is no pattern. */
-const GLOB_LITERAL_MAX = 200;
 
 /** The test-file names the runners pick up: `<name>.test.<ext>` and `<name>.spec.<ext>`. */
 const TEST_FILE_GLOBS: readonly string[] = ["**/*.test.*", "**/*.spec.*"];
@@ -75,6 +82,12 @@ function matchesEither(path: string, glob: string): boolean {
 
 function underAny(path: string, globs: readonly string[]): boolean {
   return globs.some((glob) => matchesEither(path, glob));
+}
+
+/** A glob literal over the class file's cost bound (review/62): `error` says which limit it passes. */
+export interface RefusedLiteral {
+  refused: string;
+  error: string;
 }
 
 /** A test file a runner runs: a code file named `*.test.*` or `*.spec.*`. Any other file under a test glob is a helper or a fixture. */
@@ -122,9 +135,11 @@ function onlyWildcards(glob: string): boolean {
  * string literal that is a tracked path, read with its leading `./` and `../`
  * dropped, and each glob literal's tracked matches. A literal no tracked file
  * has (a scratch repository's `"content/x.md"`) is no read, and neither is a
- * code file, which the import graph reaches, nor a path a comment line names.
+ * code file nor a path a comment line names. A glob literal holds no
+ * whitespace (prose with a `*` is no pattern); one over the class file's cost
+ * bound is returned as refused, since skipping it could narrow (review/62).
  */
-export function extractReadPaths(testSource: string, tracked: ReadonlySet<string>): string[] {
+export function extractReadPaths(testSource: string, tracked: ReadonlySet<string>): string[] | RefusedLiteral {
   let readable: string[] | undefined;
   const reads = new Set<string>();
   for (const span of quotedSpans(testSource)) {
@@ -134,7 +149,9 @@ export function extractReadPaths(testSource: string, tracked: ReadonlySet<string
       if (tracked.has(path)) reads.add(path);
       continue;
     }
-    if (path.length > GLOB_LITERAL_MAX || /\s/.test(path) || onlyWildcards(path)) continue;
+    if (/\s/.test(path) || onlyWildcards(path)) continue;
+    const error = globCostError(path);
+    if (error !== undefined) return { refused: path, error };
     readable ??= [...tracked].filter((candidate) => !isCodeFile(candidate));
     for (const candidate of readable) if (matchGlob(candidate, path, { literal: true })) reads.add(candidate);
   }
@@ -153,24 +170,30 @@ function everyTest(reason: string): TestSelection {
   return { full: true, files: [], reason: `${reason}, so every test runs` };
 }
 
+/** Classes a selection may narrow (review/60): from `config` up every class runs the full gates, so every test. */
+const NARROWS: ReadonlySet<ChangeClass> = new Set(["records", "docs", "tests"]);
+
 /** Classes whose zero selected tests stay zero: their suites are the ones that read them. */
 const ZERO_STAYS_ZERO: ReadonlySet<ChangeClass> = new Set(["records", "docs"]);
 
 /**
- * The tests a change needs (S4), in this order: a changed helper or fixture
- * under a test glob runs every test (`plan/41`); no map, or an empty one, runs
- * every test; then the union of the map's entries whose glob matches a changed
+ * The tests a change needs (S4), in this order: a `config` or stronger change
+ * runs every test (review/60); a changed helper or fixture under a built-in
+ * test glob runs every test (`plan/41`, review/66: a path only the class file
+ * places in `tests` follows the map); no map, or an empty one, runs every
+ * test; then the union of the map's entries whose glob matches a changed
  * path (an `"all"` entry runs every test), the test sources naming a changed
  * path (`plan/3`; a helper among them runs every test), and the changed test
  * files (`plan/24`). Zero selected stays zero for `records` and `docs` and runs
- * every test for any other class.
+ * every test for `tests`. A selected name that fails the map entries' argument
+ * check runs every test, naming it (review/61).
  */
 export function selectTests(input: TestSelectionInput): TestSelection {
-  const testGlobs = [...BUILT_IN_TEST_GLOBS, ...input.testGlobs];
-  const helpers = input.paths.filter((path) => underAny(path, testGlobs) && !isTestFile(path));
+  if (!NARROWS.has(input.class)) return everyTest(`a ${input.class} change runs the full gates`);
+  const helpers = input.paths.filter((path) => underAny(path, BUILT_IN_TEST_GLOBS) && !isTestFile(path));
   if (helpers.length > 0) return everyTest(`a changed helper or fixture under a test glob: ${namePaths(helpers)}`);
   const map = input.map ?? [];
-  if (map.length === 0) return everyTest("the base holds no test-input map");
+  if (map.length === 0) return everyTest("no test-input map was read from the base");
 
   const selected = new Set<string>();
   const counts = { map: 0, sources: 0, changed: 0 };
@@ -202,6 +225,10 @@ export function selectTests(input: TestSelectionInput): TestSelection {
     return { full: false, files: [], reason: `no test reads the changed ${input.class} paths` };
   }
   const files = [...selected].toSorted();
+  for (const file of files) {
+    const problem = testEntryError(file);
+    if (problem !== undefined) return everyTest(`the selected name ${JSON.stringify(file)} ${problem}, which a runner may misread`);
+  }
   return {
     full: false,
     files,

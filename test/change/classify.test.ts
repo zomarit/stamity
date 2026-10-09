@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_RULES,
@@ -110,6 +111,96 @@ describe("matchGlob", () => {
     expect(matchGlob("x/y.md", "***")).toBe(true);
     expect(matchGlob("x/y/", "x/**/")).toBe(true);
     expect(matchGlob("x/y", "x/**/")).toBe(false);
+  });
+
+  // review/71: a bare ** matches any character, a line terminator included, as * and **/ already did.
+  it.each([0x0a, 0x0d, 0x2028, 0x2029])("lets a bare ** match the line terminator %i", (point) => {
+    const name = `.stamity/overrides/a${String.fromCharCode(point)}b.md`;
+    expect(matchGlob(name, ".stamity/overrides/**")).toBe(true);
+    expect(matchGlob(name, ".stamity/overrides/**", { literal: true })).toBe(true);
+    expect(given([name])).toMatchObject({ class: "security-sensitive", lenses: ["stamity-security"] });
+    expect(outsideSecurityRule(name)).toBe("built-in .stamity/overrides/**");
+  });
+
+  it("lets a single * match a line terminator inside one segment, and never a /", () => {
+    for (const point of [0x0a, 0x0d, 0x2028, 0x2029]) {
+      const name = `a${String.fromCharCode(point)}b.md`;
+      expect(matchGlob(name, "*.md", { literal: true }), String(point)).toBe(true);
+      expect(matchGlob(`docs/${name}`, "docs/*", { literal: true }), String(point)).toBe(true);
+    }
+    expect(matchGlob("a/b.md", "*.md")).toBe(false);
+  });
+
+  /*
+   * The matcher's equivalence evidence (review/50, review/71): a seeded run compares it with a reference built on
+   * a regular expression, the shape the matcher replaced, over generated glob and path pairs with and without case
+   * folding. `**` is `[\s\S]*` here, since review/71 lets it match a line terminator. Half the paths are drawn from
+   * their glob, so matches are exercised as well as misses.
+   */
+  it("decides as a reference regular expression does over seeded glob and path pairs", () => {
+    const units = [
+      "a", "b", "A", ".", "/",
+      ...[0x0a, 0x0d, 0x2028, 0x2029, 0xe9, 0xc9, 0x17f, 0x212a, 0x6b, 0x4b, 0xdf].map((point) => String.fromCharCode(point)),
+    ];
+    const tokens = [...units, "*", "**", "**/"];
+    let seed = 0x5eed;
+    const random = (): number => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const pick = <T,>(list: readonly T[]): T => list[Math.floor(random() * list.length)] as T;
+    const run = (from: readonly string[], max: number): string => {
+      let text = "";
+      for (let n = Math.floor(random() * (max + 1)); n > 0; n -= 1) text += pick(from);
+      return text;
+    };
+    const noSlash = units.filter((unit) => unit !== "/");
+    const reference = (glob: string, foldCase: boolean): RegExp => {
+      const normalized = posix.normalize(glob.replaceAll("\\", "/"));
+      const source = normalized === "." ? "" : normalized;
+      let pattern = "";
+      for (let at = 0; at < source.length; ) {
+        if (source.startsWith("**/", at)) [pattern, at] = [`${pattern}(?:[^/]*/)*`, at + 3];
+        else if (source.startsWith("**", at)) [pattern, at] = [`${pattern}[\\s\\S]*`, at + 2];
+        else if (source[at] === "*") [pattern, at] = [`${pattern}[^/]*`, at + 1];
+        else [pattern, at] = [pattern + (source[at] ?? "").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"), at + 1];
+      }
+      return new RegExp(`^${pattern}$`, foldCase ? "i" : "");
+    };
+
+    let compared = 0;
+    let matched = 0;
+    const differences: string[] = [];
+    for (let pair = 0; pair < 3_000; pair += 1) {
+      const globTokens = Array.from({ length: Math.floor(random() * 8) }, () => pick(tokens));
+      const glob = globTokens.join("");
+      const path =
+        random() < 0.5
+          ? run(units, 10)
+          : globTokens
+              .map((token) => {
+                if (token === "*") return run(noSlash, 3);
+                if (token === "**") return run(units, 4);
+                if (token === "**/") return Array.from({ length: Math.floor(random() * 3) }, () => `${run(noSlash, 2)}/`).join("");
+                return random() < 0.2 ? pick(units) : token;
+              })
+              .join("");
+      for (const foldCase of [false, true]) {
+        const expected = reference(glob, foldCase).test(path);
+        compared += 1;
+        if (expected) matched += 1;
+        if (matchGlob(path, glob, { literal: true, foldCase }) !== expected) {
+          differences.push(JSON.stringify({ glob, path, foldCase, expected }));
+        }
+      }
+    }
+
+    expect(differences).toEqual([]);
+    expect(compared).toBe(6_000);
+    expect(matched).toBeGreaterThan(600);
+    expect(compared - matched).toBeGreaterThan(600);
   });
 
   it("folds case only when asked", () => {

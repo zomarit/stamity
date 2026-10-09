@@ -411,18 +411,22 @@ function rulesFrom(classFile: BaseClassFile): { rules: readonly ClassRule[]; rea
  */
 type TestPlan = { select: Omit<TestSelectionInput, "paths" | "class">; dir: string | null } | { every: string };
 
-/** No map was read, so the selection runs every test (S4); the test globs still name helpers. */
-const NO_MAP: TestPlan = { select: { testGlobs: [] }, dir: null };
+/** No map was read, so the selection runs every test (S4). */
+const NO_MAP: TestPlan = { select: {}, dir: null };
 
 /** A test source larger than this is not read as one, and every test runs. */
 const TEST_SOURCE_MAX_BYTES = 8 * 1024 * 1024;
+
+/** At most this many characters of a refused glob literal are quoted in a reason; the length is given beside. */
+const LITERAL_QUOTED = 60;
 
 /**
  * The project's tracked test sources (code files under a test glob, from `git
  * ls-files` run at the project root, so project-relative) with the paths each
  * names, read from the work tree; the tracked files and the changed paths are
  * the names a read may match. A source deleted in the work tree reads nothing.
- * One that is not a regular file, or is too large, makes every test run, named.
+ * One that is not a regular file, is too large, or holds a glob literal over
+ * the cost bound (review/62) makes every test run, named.
  */
 function readTestSources(
   runner: GitRunner,
@@ -446,7 +450,13 @@ function readTestSources(
       text = undefined;
     }
     if (text === undefined) return { every: `the test source ${test} is not one readable file, so every test runs` };
-    sources.push({ test, reads: extractReadPaths(text, known) });
+    const reads = extractReadPaths(text, known);
+    if (!Array.isArray(reads)) {
+      const quoted = JSON.stringify(reads.refused.slice(0, LITERAL_QUOTED));
+      const length = reads.refused.length > LITERAL_QUOTED ? ` (${reads.refused.length} characters)` : "";
+      return { every: `the test source ${test} holds the glob literal ${quoted}${length}, which ${reads.error}, so every test runs` };
+    }
+    sources.push({ test, reads });
   }
   return sources;
 }
@@ -593,8 +603,15 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
     let tests: TestPlan = NO_MAP;
     if (classFile?.state === "valid" && classFile.testInputs.length > 0) {
       const { testGlobs, testInputs: map } = classFile;
-      const sources = readTestSources(runner, root, testGlobs, result.byPath.map((entry) => entry.path));
-      tests = Array.isArray(sources) ? { select: { map, testSources: sources, testGlobs }, dir: root.dir } : sources;
+      // The read serves the selection alone: its failure runs every test and keeps the class and lenses (review/63).
+      let sources: ReturnType<typeof readTestSources>;
+      try {
+        sources = readTestSources(runner, root, testGlobs, result.byPath.map((entry) => entry.path));
+      } catch (err) {
+        if (!(err instanceof GitReadError)) throw err;
+        sources = { every: `${describeGitFailure(err)}, so every test runs` };
+      }
+      tests = Array.isArray(sources) ? { select: { map, testSources: sources }, dir: root.dir } : sources;
     }
     return { result: withReasons(result, reasons), base: commit, tests };
   } catch (err) {

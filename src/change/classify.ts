@@ -237,7 +237,7 @@ function resolveDots(path: string): string {
 
 /** `*`: any run of characters inside one segment. */
 const STAR = 0;
-/** `**` not followed by `/`: any run of characters but a line terminator, across segments. */
+/** `**` not followed by `/`: any run of characters, a line terminator included, across segments (review/71). */
 const ANY = 1;
 /** `**` followed by `/`: any run of whole segments, none included, each with its `/`. */
 const SEGMENTS = 2;
@@ -252,13 +252,6 @@ function canonical(unit: string): string {
   const upper = unit.toUpperCase();
   if (upper.length !== 1) return unit;
   return unit.charCodeAt(0) >= 128 && upper.charCodeAt(0) < 128 ? unit : upper;
-}
-
-/** What `.` in a regular expression refuses, by number so no escape sits in this source: LF, CR, LS and PS. */
-const LINE_TERMINATORS: ReadonlySet<number> = new Set([0x0a, 0x0d, 0x2028, 0x2029]);
-
-function isLineTerminator(unit: string): boolean {
-  return LINE_TERMINATORS.has(unit.charCodeAt(0));
 }
 
 /** `**` spans segments (`**` followed by `/` spans none too), `*` stays in one, the rest is literal. */
@@ -320,7 +313,7 @@ function globMatches(steps: readonly GlobStep[], path: string, foldCase: boolean
         if (step === STAR) {
           if (unit !== "/") nextAt[i] = 1;
         } else if (step === ANY) {
-          if (!isLineTerminator(unit)) nextAt[i] = 1;
+          nextAt[i] = 1;
         } else if (step === SEGMENTS) {
           if (unit === "/") nextAt[i] = 1;
           else nextInside[i] = 1;
@@ -694,8 +687,8 @@ function hasWildcardExtension(glob: string): boolean {
   return dot !== -1 && last.slice(dot + 1).includes("*");
 }
 
-/** Why a glob is over the input limits, or `undefined` (review/50). */
-function globCostError(glob: string): string | undefined {
+/** Why a glob is over the input limits, or `undefined` (review/50); a test source's glob literal meets it too (review/62). */
+export function globCostError(glob: string): string | undefined {
   if (glob.length > GLOB_MAX_LENGTH) return `is longer than ${GLOB_MAX_LENGTH} characters`;
   if ((glob.match(/\*\*/g) ?? []).length > GLOB_MAX_DOUBLE_STARS) return `holds more than four **`;
   return undefined;
@@ -711,9 +704,9 @@ function isControl(char: string): boolean {
  * Why a test entry is not a plain repository-relative file path, or
  * `undefined` when it is (plan/23). An entry reaches a test runner as an
  * argument, so a leading `-` would be an option and a glob would select more
- * than it names.
+ * than it names. Every name a test selection emits meets it too (review/61).
  */
-function testEntryError(entry: string): string | undefined {
+export function testEntryError(entry: string): string | undefined {
   if (entry === "") return "is empty";
   if (entry.startsWith("-")) return "starts with '-'";
   if (/\s/.test(entry) || [...entry].some(isControl)) return "holds whitespace or a control character";

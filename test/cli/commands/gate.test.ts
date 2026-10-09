@@ -1094,7 +1094,10 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
         expect(doc["tests"]).toMatchObject({ full: true, files: [] });
-        expect((doc["tests"] as { reason: string }).reason).toContain("no test-input map");
+        // TEST CHANGE, justified: 2026-10-09, review/60 (signed off) — the change adds the class file, so it is
+        // security-sensitive and runs every test by its class before any map is looked for; the reason names the class.
+        expect(doc["class"]).toBe("security-sensitive");
+        expect((doc["tests"] as { reason: string }).reason).toContain("a security-sensitive change runs the full gates");
       });
 
       it("runs every test when a selected test is not in the work tree, naming it", async () => {
@@ -1121,7 +1124,12 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         expect((doc["tests"] as { reason: string }).reason).toContain("test/dir.test.ts");
       });
 
-      it("says product and runs every test when the tracked-file read fails", async () => {
+      /*
+       * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/63 (signed off). This pinned
+       * `product` for a failed tracked-file read. That read serves the selection only, so its failure now runs
+       * every test and keeps the class the change was given (here docs), with the failure named in the tests reason.
+       */
+      it("keeps the class and runs every test when the tracked-file read fails", async () => {
         const repo = await seedRepo("repo", { [CLASS_FILE]: MAP, ...SOURCES, ...PAGES });
         await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n" });
 
@@ -1129,9 +1137,36 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
         gitSpy.fault = undefined;
 
-        expect(doc["class"]).toBe("product");
-        expect(doc["reason"]).toContain("git ls-files --cached failed, exit 3");
+        expect(doc["class"]).toBe("docs");
         expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+        expect((doc["tests"] as { reason: string }).reason).toContain("git ls-files --cached failed, exit 3");
+      });
+
+      it("keeps a security-sensitive class and its lens when the tracked-file read fails (review/63)", async () => {
+        const repo = await seedRepo("repo", { [CLASS_FILE]: MAP, ...SOURCES, ...PAGES, ".stamity/manifest.json": "{}\n" });
+        await getRoot().seedFiles({ "repo/.stamity/manifest.json": "{ }\n" });
+
+        gitSpy.fault = { step: "--cached", error: realFailure("process.exit(3)") };
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+        gitSpy.fault = undefined;
+
+        expect(doc["class"]).toBe("security-sensitive");
+        expect(doc["lenses"]).toEqual(["stamity-security"]);
+        expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+        expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+      });
+
+      it("runs every test when a test source holds a glob literal over the cost bound, naming it (review/62)", async () => {
+        // Built at run time, so this file's own text holds no literal over the bound, which would widen every selection.
+        const hostile = `it("reads", () => glob("${["docs", "a", "b", "c", "d"].join("/**/")}/**/*.md"));\n`;
+        const repo = await seedRepo("repo", { [CLASS_FILE]: MAP, ...SOURCES, ...PAGES, "test/glob.test.ts": hostile });
+        await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n" });
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+        expect(doc["class"]).toBe("docs");
+        expect(doc["tests"]).toMatchObject({ full: true, files: [] });
+        expect((doc["tests"] as { reason: string }).reason).toContain("test/glob.test.ts");
       });
     });
 
