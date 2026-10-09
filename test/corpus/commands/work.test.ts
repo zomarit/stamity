@@ -609,6 +609,10 @@ describe("/st-work — Frame and Plan", () => {
     expect(frame).toContain("`Plan: <path>`");
     expect(frame).toContain("`Invocation: <this command line, verbatim>`");
     expect(frame).toContain("among its first 15");
+    // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/115`): the head records the
+    // run's base, which the Gates read for the scan and the class (sign-off: the run's branch point).
+    expect(frame).toContain("with four lines among its first 15");
+    expect(frame).toContain("`Base: <commit>`, the run's branch point (`HEAD` at Frame)");
     // The reports folder is created beside the record and ignored by git.
     expect(frame).toContain("`reports/` folder");
     expect(frame).toContain("whose one line is `*`");
@@ -747,12 +751,28 @@ describe("/st-work — Prove", () => {
     expect(gates).toContain(scan);
     // A hit always stops, named by place and rule, never by value, and never cleared by a respell
     // (sign-off on `plan/57`).
-    expect(gates).toContain("a hit stops it, naming path, line and rule, never the value");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, the orchestrator's
+    // note on p5e's scan output): this pinned "a hit stops it, naming path, line and rule, never the
+    // value"; a hit in a commit's added lines since the base carries that commit, named too.
+    expect(gates).toContain(
+      "a hit stops it, naming path, line and rule, and the commit when the hit is in the branch's history, never the value",
+    );
     expect(gates).toContain("never cleared by rewriting the value and scanning again");
     expect(gates).toContain("a hit on a deliberate fixture is the person's to settle");
-    expect(gates).toContain("An `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/120`): this
+    // pinned "An `unscanned` list puts …", which dropped the paths and read as covering an empty
+    // list; the line now matches the common rule and `/st-quick`.
+    expect(gates).toContain(
+      "A non-empty `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths.",
+    );
+    // Added 2026-10-09 (the p3 fix round, `review/115`): the base is the record's `Base:` line.
+    expect(gates).toContain("`stamity gate scan --base <the run's base>` (the record's `Base:` line)");
     // The class step: the selected files during the build, the class's gates on the final tree.
-    const classify = "`stamity gate classify` names the class";
+    // TEST CHANGE, justified (2026-10-09, the p3 fix round, `review/110`, `review/114`): this
+    // pinned the bare "`stamity gate classify` names the class". With no `--base` the CLI reads only
+    // the uncommitted paths and no class file, so a run whose units are committed classed as
+    // `records`; the call now carries the scan's base, and `--json` as `/st-quick`'s does.
+    const classify = "`stamity gate classify --base <the run's base> --json` names the class";
     expect(gates).toContain(classify);
     expect(gates).toContain("its checks run on the selected files in the build, its gates on the final tree");
     expect(gates).toContain("as `test-runner` maps them");
@@ -762,7 +782,17 @@ describe("/st-work — Prove", () => {
       `With no base, the scan takes \`HEAD\` and the final tree runs \`${VERIFY_GATE_ALL_TOKEN}\` unclassified (\`unclear\`)`,
     );
     expect(gates).toContain("committed work then lists `secret scan: not run` under `Not done:`");
-    expect(gates).toContain("as do a CLI that cannot run and a scan naming a `reason`, both on the full gates");
+    // TEST CHANGE, justified (2026-10-09, the p3 fix round, `review/121`): this pinned "as do a CLI
+    // that cannot run and a scan naming a `reason`, …"; an installed copy that predates `gate` now
+    // takes the same line.
+    expect(gates).toContain(
+      "as do a CLI that cannot run or has no `gate` verb and a scan naming a `reason`, both on the full gates",
+    );
+    // Added 2026-10-09 (the p3 fix round, `review/119`): the maintainer's opening answer 2 puts
+    // the CI condition in `/st-work`'s Gates text; it moved here from the test-runner body.
+    expect(gates).toContain(
+      "The narrower gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger change and on a schedule.",
+    );
     // One review pass for a `review-once` class (`plan/48`).
     expect(gates).toContain(
       "A class naming `review-once` gets one review pass: a Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs",
@@ -776,8 +806,12 @@ describe("/st-work — Prove", () => {
   // names the class the gates followed before the per-gate rows.
   it("names the change's class on the proof block's gate line", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/117`,
+    // `build/62`): the class rides the "Gate results" label line itself. A class line of its own
+    // between the label and the table became the table's lead in `src/cli/docs/measurements.ts`
+    // (`labelledTables`), which then excluded the run as "gates in prose only".
     expect(proof).toContain(
-      "- gate results — the change's class as `gate classify` named it (`unclear` when none ran), then per gate: command, pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites",
+      "- gate results — the change's class as `gate classify` named it (`unclear` when none ran), on the `Gate results` label line itself, then per gate: command, pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites",
     );
   });
 

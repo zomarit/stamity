@@ -284,10 +284,11 @@ describe("test-runner — gate set", () => {
     expect(gates).toContain("`lint` → `lint`; `typecheck` → `typecheck`");
     expect(gates).toContain("`gates-all`, an `unclear` class, or a test command that takes no file list → `all`");
     expect(gates).toContain("On the final tree a `product` or stronger class runs `all`.");
-    // The condition the narrowing rests on, stated as a condition (sign-off on `plan/51`).
-    expect(gates).toContain(
-      "The narrower gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger change and on a schedule.",
-    );
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/119`,
+    // `build/60`): the CI-condition sentence (sign-off on `plan/51`) moved back to `/st-work`'s
+    // Gates, where the maintainer's opening answer 2 put it (`work.test.ts` pins it there); the
+    // runner keeps the mapping, the full gates from `product` up and the `unknown`-provider rule.
+    expect(gates).not.toContain("The narrower gates rest on one condition");
     expect(gates).toContain("Where the charter's `CI provider` reads `unknown`, the final tree runs `all` whatever the class.");
   });
 

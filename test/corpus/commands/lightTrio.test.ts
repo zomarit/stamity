@@ -829,7 +829,13 @@ describe("quick — the guardrails are the command", () => {
   it("stops the batch on a scan hit, never clears one by rescanning, and lists unscanned files (REQ-FLOW-066)", async () => {
     const gates = section(await load(QUICK), "Quality gates").replace(/\s+/g, " ");
 
-    expect(gates).toContain("A hit stops the batch: the report names path, line and rule, never the value.");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, the orchestrator's note
+    // on p5e's scan output): this pinned "A hit stops the batch: the report names path, line and rule,
+    // never the value."; with `--base` a hit in a commit's added lines carries that commit, so the
+    // report names it too.
+    expect(gates).toContain(
+      "A hit stops the batch: the report names path, line and rule, and the commit when the hit is in the branch's history, never the value.",
+    );
     expect(gates).toContain("A hit is never cleared by rewriting the value and scanning again");
     expect(gates).toContain("a hit on a deliberate fixture is the person's to settle");
     expect(gates).toContain(
@@ -838,6 +844,14 @@ describe("quick — the guardrails are the command", () => {
     // A scan that could not read the change is not a clean scan: it is a scan not run.
     expect(gates).toContain("A scan that names a `reason` instead of hits did not read the change");
     expect(gates).toContain("`secret scan: not run` under `Not done:`");
+    // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/113`): a failed scan still
+    // classifies, so a security-sensitive class still refuses the batch.
+    expect(gates).toContain(
+      "did not read the change: step 2 still runs, step 3 runs `${STAMITY:VERIFY_GATE_ALL}`, and the report lists `secret scan: not run` under `Not done:`.",
+    );
+    // Added 2026-10-09 (the p3 fix round, `review/121`): an installed copy that predates `gate`
+    // takes the same fallback as no copy at all.
+    expect(gates).toContain("An installed copy with no `gate` verb counts as neither form running.");
   });
 
   it("refuses a security-sensitive class by the threshold row, with no size floor and no lens (REQ-FLOW-065)", async () => {
@@ -847,8 +861,14 @@ describe("quick — the guardrails are the command", () => {
     // The class fires the existing row; the table itself does not move.
     expect(section(file, "Thresholds and refusal")).toContain("| Security-sensitive surface |");
     expect(gates).toContain("A `security-sensitive` class fires the `Security-sensitive surface` row");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/116`): this
+    // pinned "the items whose files `byPath` places there, or whose lines a rule hit, are reverted
+    // and move to `/st-work` with the rest of the batch, as Mid-run re-escalation moves an item.",
+    // which left the other applied items neither gated nor reverted. The orchestrator's sign-off:
+    // the whole batch moves as it stands, nothing reverted, every applied item reported ungated, and
+    // the quick lane's gates do not run.
     expect(gates).toContain(
-      "the items whose files `byPath` places there, or whose lines a rule hit, are reverted and move to `/st-work` with the rest of the batch, as Mid-run re-escalation moves an item.",
+      "the whole batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report lists every applied item as ungated under `Not done:`.",
     );
     expect(gates).toContain("The refusal names the row and the rule that placed the item.");
     expect(gates).toContain("There is no size floor, and no lens runs inside the quick lane.");
@@ -872,7 +892,16 @@ describe("quick — the guardrails are the command", () => {
       "Where the charter's `CI provider` reads `unknown`, the batch runs `${STAMITY:VERIFY_GATE_ALL}` whatever its class.",
     );
     // A docs batch with no selected tests still gets its scan, and the report says which class it was.
-    expect(text).toContain("A `docs` class with no selected tests runs the scan alone, and the report names the class.");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/109`,
+    // `review/118`): this pinned "A `docs` class with no selected tests runs the scan alone", which
+    // read an empty `tests.files` as no tests even when `tests.full` is true (no test-input map, so
+    // every test runs). The scan runs alone only when the selection is not `full`.
+    expect(text).toContain(
+      "A `docs` class whose `tests.full` is false and whose `tests.files` is empty runs the scan alone, and the report names the class.",
+    );
+    expect(text).toContain(
+      "`tests-selected` → `${STAMITY:VERIFY_GATE_TEST}` with the selected files appended, or over the whole suite when `tests.full` is true;",
+    );
     // The corpus names the charter's tokens, never a repository's own script.
     expect(gates).not.toMatch(/npm run|node scripts\/|scripts\/ci|\.mjs\b|vitest/);
   });

@@ -2,7 +2,7 @@
 id: work-proof-block-fields
 class: golden
 claim: "Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row."
-source: content/commands/st-work.md:287-293,330-393
+source: content/commands/st-work.md:290-296,333-396
 metric: rubric
 ---
 
@@ -20,9 +20,9 @@ Governing text — `content/commands/st-work.md`, "Proof block":
 Every run ends with a proof block, machine- and human-readable, doubling as an
 audit record:
 
-- gate results — the change's class as `gate classify` named it (`unclear`
-  when none ran), then per gate: command, pass/fail/unknown, failing excerpt
-  if any, or the earlier result a byte-identical tree cites
+- gate results — the change's class as `gate classify` named it (`unclear` when none
+  ran), on the `Gate results` label line itself, then per gate: command, pass/fail/unknown,
+  failing excerpt if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
 - QA rows — per row: `walked`, `auto-proven` with its pointer, or

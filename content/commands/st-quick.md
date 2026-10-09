@@ -150,32 +150,33 @@ of 5 growing past a threshold stops the batch there:
 Gates run on every batch, a one-line typo fix included.
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `${STAMITY:CLI} <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
-When neither form runs, the batch runs `${STAMITY:VERIFY_GATE_ALL}` and the report lists `secret scan: not run` under `Not done:`.
+When neither form runs, the batch runs `${STAMITY:VERIFY_GATE_ALL}` and the report lists `secret scan: not run` under `Not done:`. An installed copy with no `gate` verb counts as neither form running.
 
 The gate is three steps, in order, after the last item lands:
 
-1. **Scan.** `stamity gate scan --base HEAD` reads the batch's added lines and untracked files
-   for secrets. A hit stops the batch: the report names path, line and rule, never the value.
-   A hit is never cleared by rewriting the value and scanning again, and a hit on a deliberate
-   fixture is the person's to settle. A non-empty `unscanned` list puts
-   `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A scan that names a
-   `reason` instead of hits did not read the change, so the batch takes the fallback line above.
+1. **Scan.** `stamity gate scan --base HEAD` reads the batch's added lines and untracked files for
+   secrets. A hit stops the batch: the report names path, line and rule, and the commit when the hit
+   is in the branch's history, never the value. A hit is never cleared by rewriting the value and
+   scanning again, and a hit on a deliberate fixture is the person's to settle. A non-empty
+   `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A
+   scan that names a `reason` instead of hits did not read the change: step 2 still runs, step 3
+   runs `${STAMITY:VERIFY_GATE_ALL}`, and the report lists `secret scan: not run` under `Not done:`.
 2. **Classify.** `stamity gate classify --base HEAD --json` names the batch's class and its
-   checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the items
-   whose files `byPath` places there, or whose lines a rule hit, are reverted and move to
-   `/st-work` with the rest of the batch, as Mid-run re-escalation moves an item. The refusal
-   names the row and the rule that placed the item. There is no size floor, and no lens runs
-   inside the quick lane.
+   checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
+   batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report
+   lists every applied item as ungated under `Not done:`. The refusal names the row and the rule
+   that placed the item. There is no size floor, and no lens runs inside the quick lane.
 3. **Run.** Spawn `test-runner` with the changed-file list and the class's checks, each run once
    as the charter spells it: `tests-selected` → `${STAMITY:VERIFY_GATE_TEST}` with the selected
-   files appended; `lint` → `${STAMITY:VERIFY_GATE_LINT}`; `typecheck` →
-   `${STAMITY:VERIFY_GATE_TYPECHECK}`; `gates-all`, an unclear class, or a test command that
-   takes no file list → `${STAMITY:VERIFY_GATE_ALL}`. `review`, `review-once` and
-   `dependency-audit` add nothing here: quick runs no review loop, and the `Dependencies` row
-   refuses a lockfile change before this step. A `docs` class with no selected tests runs the
-   scan alone, and the report names the class. The runner returns a gate-by-gate result: exact
-   commands, verbatim failing excerpts, never a bare pass/fail. A row whose exit code the runner
-   could not read is `unknown`, and an unknown row is never green.
+   files appended, or over the whole suite when `tests.full` is true; `lint` →
+   `${STAMITY:VERIFY_GATE_LINT}`; `typecheck` → `${STAMITY:VERIFY_GATE_TYPECHECK}`; `gates-all`,
+   an unclear class, or a test command that takes no file list → `${STAMITY:VERIFY_GATE_ALL}`.
+   `review`, `review-once` and `dependency-audit` add nothing here: quick runs no review loop,
+   and the `Dependencies` row refuses a lockfile change before this step. A `docs` class whose
+   `tests.full` is false and whose `tests.files` is empty runs the scan alone, and the report
+   names the class. The runner returns a gate-by-gate result: exact commands, verbatim failing
+   excerpts, never a bare pass/fail. A row whose exit code the runner could not read is
+   `unknown`, and an unknown row is never green.
 
 The narrower gates rest on one condition: the repository's CI runs the full matrix on every
 `product` or stronger change and on a schedule. Where the charter's `CI provider` reads

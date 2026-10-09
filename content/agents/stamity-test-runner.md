@@ -35,10 +35,8 @@ appended, the whole suite when the selection reads `full`, and no row when it
 names none; `lint` → `lint`; `typecheck` → `typecheck`; `gates-all`, an
 `unclear` class, or a test command that takes no file list → `all`. The other
 checks are the orchestrator's. On the final tree a `product` or stronger class
-runs `all`. The narrower gates rest on one condition: the repository's CI runs
-the full matrix on every `product` or stronger change and on a schedule. Where
-the charter's `CI provider` reads `unknown`, the final tree runs `all` whatever
-the class.
+runs `all`. Where the charter's `CI provider` reads `unknown`, the final tree
+runs `all` whatever the class.
 
 `all` is a `&&` chain and stops at the first failing link. A gate the chain
 never reached is reported `not-run`, not `pass` — reporting an unreached gate as
