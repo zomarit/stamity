@@ -7,6 +7,7 @@ import {
   CODE_EXTENSIONS,
   classifyChange,
   matchGlob,
+  outsideSecurityRule,
   type ChangeClass,
   type ClassRule,
 } from "../../src/change/classify.ts";
@@ -580,5 +581,38 @@ describe("classifyChange: the trigger table is an input (review/23)", () => {
     expect(result.byPath.map((entry) => entry.class)).toEqual(["product", "security-sensitive", "product"]);
     expect(result.byPath[1]?.rule).toBe("the trigger roster's security row (vault/)");
     expect(result.lenses).toEqual(["stamity-security", "stamity-performance"]);
+  });
+});
+
+// review/37: the outside-path security check lives in the classifier, so the trigger roster keeps one src/ reader.
+describe("outsideSecurityRule: the security rule a path outside the project meets", () => {
+  it("names the built-in security floor first, matched without case", () => {
+    expect(outsideSecurityRule(".stamity/manifest.json")).toBe("built-in .stamity/manifest.json");
+    expect(outsideSecurityRule(".Stamity/Overrides/x.md")).toBe("built-in .stamity/overrides/**");
+  });
+
+  it("reads the name literally against the built-in floor, so a backslash is a filename character", () => {
+    expect(outsideSecurityRule(".stamity/overrides/a\\..\\..\\..\\docs\\x.md")).toBe("built-in .stamity/overrides/**");
+    expect(outsideSecurityRule(".stamity\\manifest.json")).toBeUndefined();
+  });
+
+  it("names the shipped security row's pattern when no built-in rule matches", () => {
+    expect(outsideSecurityRule("package-lock.json")).toBe("security row package-lock.json");
+    expect(outsideSecurityRule("lib/auth/session.ts")).toBe("security row auth/");
+  });
+
+  it("names nothing for a path neither the floor nor the row matches", () => {
+    expect(outsideSecurityRule("docs/guide.md")).toBeUndefined();
+    expect(outsideSecurityRule("src/components/a.tsx")).toBeUndefined();
+  });
+
+  it("reads a caller's table for the row, and an empty table leaves only the built-in floor", () => {
+    const fixtureTable: readonly SpecialistTrigger[] = [
+      { specialist: "stamity-security", triggerPaths: ["vault/"], triggerKeywords: [], rationale: "fixture: a vault" },
+    ];
+    expect(outsideSecurityRule("src/vault/key.ts", fixtureTable)).toBe("security row vault/");
+    expect(outsideSecurityRule("lib/auth/session.ts", fixtureTable)).toBeUndefined();
+    expect(outsideSecurityRule("lib/auth/session.ts", [])).toBeUndefined();
+    expect(outsideSecurityRule(".stamity/manifest.json", [])).toBe("built-in .stamity/manifest.json");
   });
 });

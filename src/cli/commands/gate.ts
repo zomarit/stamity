@@ -2,16 +2,14 @@ import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
-  BUILT_IN_RULES,
   CLASS_CHECKS,
   CLASS_ORDER,
   classifyChange,
-  matchGlob,
+  outsideSecurityRule,
   type BaseState,
   type ChangeClass,
   type ClassifyResult,
 } from "../../change/classify.ts";
-import { findSpecialistTrigger, specialistsForPath } from "../../roster/triggers.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -342,29 +340,6 @@ const PATHS_NAMED = 5;
 function namePaths(paths: readonly string[]): string {
   const named = paths.slice(0, PATHS_NAMED).join(", ");
   return paths.length > PATHS_NAMED ? `${named} and ${paths.length - PATHS_NAMED} more` : named;
-}
-
-/** The trigger roster's security row: its patterns still read a path the project's class file never sees. */
-const SECURITY_ROW = findSpecialistTrigger(SECURITY_LENS);
-
-/**
- * The security rule an outside path meets, named for the reason, or `undefined`:
- * the built-in `security-sensitive` floor (never the project's class file, which
- * belongs to the project), matched against git's name literally (review/20),
- * then each pattern of the roster's security row, each matched by the roster's
- * own matcher over a one-pattern row.
- */
-function outsideSecurityRule(path: string): string | undefined {
-  for (const rule of BUILT_IN_RULES) {
-    if (rule.class !== "security-sensitive") continue;
-    const glob = rule.paths.find((candidate) => matchGlob(path, candidate, { literal: true, foldCase: rule.foldCase === true }));
-    if (glob !== undefined) return `built-in ${glob}`;
-  }
-  if (SECURITY_ROW === undefined) return undefined;
-  const pattern = SECURITY_ROW.triggerPaths.find(
-    (candidate) => specialistsForPath(path, [{ ...SECURITY_ROW, triggerPaths: [candidate] }]).length > 0,
-  );
-  return pattern === undefined ? undefined : `security row ${pattern}`;
 }
 
 /**

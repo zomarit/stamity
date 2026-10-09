@@ -34,6 +34,9 @@
  * lenses are every trigger row its paths match, plus the security lens when the
  * class is `security-sensitive` by any rule. The table is an input that defaults
  * to the shipped one, so a trimmed or empty roster is reachable (review/23).
+ * The same row, after the built-in security floor, decides
+ * {@link outsideSecurityRule}, which the git read calls for a path outside the
+ * project, so this module stays the roster's one `src/` reader.
  *
  * **Where a path came from decides how it is read** (review/20). A name git
  * gave is read literally: git never separates on `\`, so a backslash there is a
@@ -240,6 +243,28 @@ export function matchGlob(path: string, glob: string, options: { literal?: boole
 /** Whether an already-read `path` matches `glob`: no second separator rewrite, so a literal backslash stays one. */
 function matchRead(path: string, glob: string, foldCase = false): boolean {
   return globRegExp(glob, foldCase).test(path);
+}
+
+/**
+ * The security rule a path outside the project meets, named for the reason, or
+ * `undefined` (review/21). First the built-in `security-sensitive` floor (never
+ * a project's class file, which belongs to the project), matched against git's
+ * name literally (review/20); then each pattern of the trigger roster's security
+ * row, each matched by the roster's own matcher over a one-pattern row. The
+ * check lives here so the roster keeps one `src/` reader; the git read in
+ * `../cli/commands/gate.ts` calls it for each outside path.
+ */
+export function outsideSecurityRule(
+  path: string,
+  triggers: readonly SpecialistTrigger[] = SPECIALIST_TRIGGER_TABLE,
+): string | undefined {
+  for (const rule of BUILT_IN_RULES) {
+    if (rule.class !== "security-sensitive") continue;
+    const glob = rule.paths.find((candidate) => matchGlob(path, candidate, { literal: true, foldCase: rule.foldCase === true }));
+    if (glob !== undefined) return `built-in ${glob}`;
+  }
+  const pattern = securityRowPattern(path, findSpecialistTrigger(SECURITY_LENS, triggers));
+  return pattern === undefined ? undefined : `security row ${pattern}`;
 }
 
 /** A code file by extension, or an extensionless file that is not a doc name: either may be run. */
