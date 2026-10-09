@@ -1150,38 +1150,62 @@ function resolvedUrl(entry: Record<string, unknown> | undefined): URL | undefine
   }
 }
 
-/** The registry hosts a copy's entries already resolve tarballs from: each `https` `resolved` URL's host, port included. */
-function registryHosts(copy: LockCopy): Set<string> {
-  const hosts = new Set<string>();
-  for (const entry of [...copy.packages.values(), ...copy.legacy.values()]) {
-    const url = resolvedUrl(entry);
-    if (url?.protocol === "https:") hosts.add(url.host);
-  }
-  return hosts;
+/** An npm package name as a registry path carries it, scoped or not; anything else proves no tarball. */
+const PACKAGE_NAME = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[a-z0-9~-][a-z0-9._~-]*$/i;
+/** A version as a registry tarball's file name carries it: no separator, no escape, no dot segment. */
+const TARBALL_VERSION = /^[0-9a-z][0-9a-z.+-]*$/i;
+
+/** The package an entry installs: its `name` (an npm alias) or its key's last `node_modules/` segment. */
+function entryName(key: string, entry: Record<string, unknown>): string {
+  const name = entry["name"];
+  if (typeof name === "string") return name;
+  const at = key.lastIndexOf("node_modules/");
+  return at < 0 ? key : key.slice(at + "node_modules/".length);
 }
+
+/** A registry tarball path's tail for `name` at `version`: `/<name>/-/<basename>-<version>.tgz`, or `undefined` for a shape that proves none. */
+function tarballTail(name: string, version: unknown): string | undefined {
+  if (!PACKAGE_NAME.test(name) || typeof version !== "string" || !TARBALL_VERSION.test(version)) return undefined;
+  return `/${name}/-/${name.slice(name.indexOf("/") + 1)}-${version}.tgz`;
+}
+
+const OFF_SOURCE = "resolves a changed package from a source that is no https tarball on the origin its base entry resolves from";
+const OFF_TARBALL = "resolves a changed package from a tarball that is not its own name and version on its base entry's registry path";
 
 /**
  * Why one entry that differs between the copies is no proven bump (review/157),
- * or `undefined`: no install script, no link, a `resolved` that is an `https`
- * URL on a host the base copy already uses (never `git+`, `file:`, `github:` or
- * another source), and no `resolved` or `integrity` moved at an unchanged
- * version. The project's own root entry (`""`) installs from no source. The
+ * or `undefined`: no install script, no link, a base twin (a package new to the
+ * graph refuses, review/163), a `resolved` that is an `https` URL with no
+ * credentials, query or fragment on the same origin as its base twin's (never
+ * `git+`, `file:`, `github:` or another host), no `resolved` or `integrity`
+ * moved at an unchanged version, and — the base twin resolving a registry
+ * tarball, `/<name>/-/<basename>-<version>.tgz` under some prefix — the head
+ * path the same prefix and tarball for the entry's own name at its head
+ * version (review/171). A base twin resolving anything else proves no head
+ * source. The project's own root entry (`""`) installs from no source. The
  * clauses name no key: the key is the change's own text.
  */
-function entryRefusal(key: string, entry: Record<string, unknown>, before: Record<string, unknown> | undefined, hosts: ReadonlySet<string>): string | undefined {
+function entryRefusal(key: string, entry: Record<string, unknown>, before: Record<string, unknown> | undefined): string | undefined {
   const script = entry["hasInstallScript"];
   if (script !== undefined && script !== false) return "bumps a package with an install script";
   const link = entry["link"];
   if (link !== undefined && link !== false) return "links a package";
   if (key === "") return undefined;
+  if (before === undefined) return NEW_PACKAGE;
   const url = resolvedUrl(entry);
-  if (url?.protocol !== "https:" || !hosts.has(url.host) || url.username !== "" || url.password !== "") {
-    return "resolves a changed package from a source that is no https tarball on a registry host its base copy uses";
+  const was = resolvedUrl(before);
+  if (url?.protocol !== "https:" || was === undefined || url.origin !== was.origin || url.username !== "" || url.password !== "") {
+    return OFF_SOURCE;
   }
-  const moved = before !== undefined && before["version"] === entry["version"];
-  if (moved && (before["resolved"] !== entry["resolved"] || before["integrity"] !== entry["integrity"])) {
+  if (before["version"] === entry["version"] && (before["resolved"] !== entry["resolved"] || before["integrity"] !== entry["integrity"])) {
     return "moves a package's resolved or integrity at an unchanged version";
   }
+  const name = entryName(key, entry);
+  const baseTail = tarballTail(entryName(key, before), before["version"]);
+  const headTail = tarballTail(name, entry["version"]);
+  if (name !== entryName(key, before) || baseTail === undefined || headTail === undefined || !was.pathname.endsWith(baseTail)) return OFF_TARBALL;
+  const prefix = was.pathname.slice(0, was.pathname.length - baseTail.length);
+  if (url.pathname !== `${prefix}${headTail}` || url.search !== "" || url.hash !== "") return OFF_TARBALL;
   return undefined;
 }
 
@@ -1209,14 +1233,12 @@ function lockfileRefusal(path: string, lockfiles: readonly Lockfile[]): string |
   if (typeof base === "string") return `${path}'s base copy ${base}`;
   const head = lockCopy(lockfile.head);
   if (typeof head === "string") return `${path}'s head copy ${head}`;
-  const hosts = registryHosts(base);
   const changed = (entry: Record<string, unknown>, before: Record<string, unknown> | undefined): boolean =>
     JSON.stringify(entry) !== JSON.stringify(before);
   for (const [key, entry] of head.packages) {
     const before = base.packages.get(key);
-    const why = changed(entry, before) ? entryRefusal(key, entry, before, hosts) : undefined;
+    const why = changed(entry, before) ? entryRefusal(key, entry, before) : undefined;
     if (why !== undefined) return `${path} ${why}`;
-    if (before === undefined && key !== "") return `${path} ${NEW_PACKAGE}`;
   }
   for (const [key, entry] of head.legacy) {
     const before = base.legacy.get(key);
@@ -1224,9 +1246,8 @@ function lockfileRefusal(path: string, lockfiles: readonly Lockfile[]): string |
     if (head.packages.get(key)?.["version"] !== entry["version"]) {
       return `${path} holds a legacy dependencies entry with no packages twin at its version`;
     }
-    const why = entryRefusal(key, entry, before, hosts);
+    const why = entryRefusal(key, entry, before);
     if (why !== undefined) return `${path} ${why}`;
-    if (before === undefined) return `${path} ${NEW_PACKAGE}`;
   }
   return undefined;
 }

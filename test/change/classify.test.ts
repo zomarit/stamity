@@ -1940,6 +1940,41 @@ describe("classifyChange: a proven lockfile-only bump runs the dependency audit 
     expect(result.reason).toContain(`the security lens stays: package-lock.json ${why}`);
   });
 
+  // review/171 (security): a changed entry keeps its base twin's origin and, from a registry tarball, its own tarball path.
+  const OFF_SOURCE = "resolves a changed package from a source that is no https tarball on the origin its base entry resolves from";
+  const OFF_TARBALL = "resolves a changed package from a tarball that is not its own name and version on its base entry's registry path";
+  const CODELOAD = { "node_modules/g": { version: "1.0.0", resolved: "https://codeload.github.com/x/g/tar.gz/0123abc", integrity: "sha512-g" } };
+  const twin = (base: Packages, head: Packages) => bump([{ path: "package-lock.json", base: lock(3, { ...BASE, ...base }), head: lock(3, { ...HEAD, ...head }) }]);
+  it.each([
+    ["moves to another package's tarball on the same registry", {}, { "node_modules/a": entry("a", "1.0.1", { resolved: `${REGISTRY}/evil/-/evil-1.0.1.tgz` }) }, OFF_TARBALL],
+    ["moves to a tarball on a host only another base entry uses", CODELOAD, { ...CODELOAD, "node_modules/a": entry("a", "1.0.1", { resolved: "https://codeload.github.com/attacker/a/tar.gz/deadbeef" }) }, OFF_SOURCE],
+    ["moves to its own name's tarball under another registry path", {}, { "node_modules/a": entry("a", "1.0.1", { resolved: `${REGISTRY}/mirror/a/-/a-1.0.1.tgz` }) }, OFF_TARBALL],
+    ["keeps its tarball path but adds a query", {}, { "node_modules/a": entry("a", "1.0.1", { resolved: `${REGISTRY}/a/-/a-1.0.1.tgz?x=1` }) }, OFF_TARBALL],
+    ["names a version that is no tarball file name", {}, { "node_modules/a": entry("a", "1.0.1/../../evil/-/evil-1.0.1") }, OFF_TARBALL],
+    ["moves a scoped package to another scope's tarball", { "node_modules/@s/b": entry("@s/b", "1.0.0", { resolved: `${REGISTRY}/@s/b/-/b-1.0.0.tgz` }) }, { "node_modules/@s/b": entry("@s/b", "1.1.0", { resolved: `${REGISTRY}/@t/b/-/b-1.1.0.tgz` }) }, OFF_TARBALL],
+    ["renames an alias's target", { "node_modules/a": entry("a", "1.0.0", { name: "a" }) }, { "node_modules/a": entry("evil", "1.0.1", { name: "evil" }) }, OFF_TARBALL],
+    ["bumps an entry whose base twin resolves no registry tarball", CODELOAD, { "node_modules/g": { ...CODELOAD["node_modules/g"], version: "1.0.1" } }, OFF_TARBALL],
+  ])("keeps the lens when a changed entry %s", (_label, base, head, why) => {
+    const result = twin(base, head);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).not.toContain(AUDIT_FIRST);
+    expect(result.reason).toContain(`the security lens stays: package-lock.json ${why}`);
+  });
+
+  it.each([
+    ["a scoped package", { "node_modules/@s/b": entry("@s/b", "1.0.0", { resolved: `${REGISTRY}/@s/b/-/b-1.0.0.tgz` }) }, { "node_modules/@s/b": entry("@s/b", "1.1.0", { resolved: `${REGISTRY}/@s/b/-/b-1.1.0.tgz` }) }],
+    ["a nested scoped package", { "node_modules/a/node_modules/@s/b": entry("@s/b", "1.0.0", { resolved: `${REGISTRY}/@s/b/-/b-1.0.0.tgz` }) }, { "node_modules/a/node_modules/@s/b": entry("@s/b", "2.0.0-rc.1", { resolved: `${REGISTRY}/@s/b/-/b-2.0.0-rc.1.tgz` }) }],
+    ["an npm alias", { "node_modules/alias": entry("real", "1.0.0", { name: "real" }) }, { "node_modules/alias": entry("real", "1.0.1", { name: "real" }) }],
+    ["a registry under a path prefix", { "node_modules/p": entry("p", "1.0.0", { resolved: "https://npm.example/api/npm/p/-/p-1.0.0.tgz" }) }, { "node_modules/p": entry("p", "1.0.1", { resolved: "https://npm.example/api/npm/p/-/p-1.0.1.tgz" }) }],
+  ])("proves a bump of %s to its own tarball on its base origin", (_label, base, head) => {
+    const result = twin(base, head);
+
+    expect(result.checks).toEqual(auditFirst);
+    expect(result.lenses).toEqual([]);
+  });
+
   it("proves a bump beside an unchanged entry whatever its source", () => {
     const git = { "node_modules/g": { version: "1.0.0", resolved: "git+https://github.com/x/g.git#0123abc" } };
     const result = bump([{ path: "package-lock.json", base: lock(3, { ...BASE, ...git }), head: lock(3, { ...HEAD, ...git }) }]);
@@ -2027,10 +2062,17 @@ describe("classifyChange: a proven lockfile-only bump runs the dependency audit 
     expect(result.reason).toContain("the security lens stays: package-lock.json adds a package new to the graph");
   });
 
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/171 (security): a changed entry with no
+   * base twin now refuses as new to the graph before its source is read, so the nested `b` exists at base on the
+   * registry and the bump moves it to another host; the case still pins that the nested legacy entry is checked.
+   */
   it("checks a nested legacy entry whose packages twin is nested too", () => {
-    const nested: Packages = { ...HEAD, "node_modules/a/node_modules/b": entry("b", "1.0.0", { resolved: "https://evil.example/b-1.0.0.tgz" }) };
-    const legacy = { ...legacyOf(HEAD), a: { ...entry("a", "1.0.1"), dependencies: { b: entry("b", "1.0.0", { resolved: "https://evil.example/b-1.0.0.tgz" }) } } };
-    const result = v2(legacy, nested);
+    const nestedBase: Packages = { ...BASE, "node_modules/a/node_modules/b": entry("b", "1.0.0") };
+    const baseLegacy = { ...legacyOf(BASE), a: { ...entry("a", "1.0.0"), dependencies: { b: entry("b", "1.0.0") } } };
+    const nested: Packages = { ...HEAD, "node_modules/a/node_modules/b": entry("b", "1.0.1", { resolved: "https://evil.example/b-1.0.1.tgz" }) };
+    const legacy = { ...legacyOf(HEAD), a: { ...entry("a", "1.0.1"), dependencies: { b: entry("b", "1.0.1", { resolved: "https://evil.example/b-1.0.1.tgz" }) } } };
+    const result = bump([{ path: "package-lock.json", base: lock2(nestedBase, baseLegacy), head: lock2(nested, legacy) }]);
 
     expect(result.lenses).toEqual(["stamity-security"]);
     expect(result.reason).toContain("the security lens stays: package-lock.json resolves a changed package");
