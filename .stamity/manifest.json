@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T01:26:43.756Z",
+  "updatedAt": "2026-10-09T01:42:16.668Z",
   "tools": [
     "claude"
   ],
@@ -78,14 +78,14 @@
       "adapter": "claude",
       "artifactId": "fixer",
       "artifactType": "agent",
-      "contentHash": "78d5d5f31bd2a5103218ca3805761d35663f5d1b230384014fc18b40b45f68d0",
+      "contentHash": "442a502bc3989a4e27ad58a71da58cd5454102e534f51e41c6952eafb3081a50",
       "path": ".claude/agents/stamity-fixer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "ffff01b2e1634e55d17b75b5e1c874b2c7ceaff36d528a5f17e8ddb4acd11d54",
+      "contentHash": "dc85962ac7fb775f6312589e3156d6e1fd0effd044b0de9f9f0c9998766fb483",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {
@@ -176,7 +176,7 @@
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "2fe088de0a600c1f9f73a28c644437d51982a87f9a158d9f2ee0e67442f3e5aa",
+      "contentHash": "7b33a6a388e3e7eb09485733538685ea2edd2d9a535ef5ecc1533bc82e63e180",
       "path": ".claude/commands/st-rework.md"
     },
     {

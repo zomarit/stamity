@@ -102,10 +102,10 @@ Open question: *"What did you test, and where did it not behave the way it shoul
 | tests | scenarios the user cares about that the suite does not assert |
 
 **Severity inference.** Read severity from the user's own words instead of asking for a rating:
-"blocker", "broken", "cannot ship" → Critical; "wrong", "missing", "confusing" → Warning;
-"nit", "polish", "cosmetic" → Minor. **Declared default: Warning** — when the words carry no
-severity signal the finding enters triage as Warning and the phase-4 table shows it there, so a
-wrong default costs one table correction instead of one more question.
+"blocker", "broken", "cannot ship" → Critical; "wrong", "missing", "confusing" → Warning; "nit",
+"polish", "cosmetic" → Minor with a named consequence, else a note. **Declared default: Warning**
+— when the words carry no severity signal the finding enters triage as Warning and the phase-4
+table shows it there, so a wrong default costs one table correction instead of one more question.
 
 **Emotional-only feedback** ("this is all wrong", "I hate it") is a real signal without an
 address. Do not press for a rating and do not ask the user to be more constructive. Replay the
@@ -117,23 +117,23 @@ without a plan rather than inventing findings.
 ## 3. Leftover scan — 13 categories
 
 Runs over the diff's files regardless of what the interview produced: implementation residue is
-usually invisible to the person testing the feature.
+usually invisible to the person testing the feature. A note is not a finding and is never routed.
 
 | # | Category | Signal | Default |
 |---|---|---|---|
-| 1 | Dead code | branches and functions the change introduced with no caller | Minor |
-| 2 | TODO markers | `TODO`/`FIXME`/`HACK` with no issue reference | Minor |
+| 1 | Dead code | branches and functions the change introduced with no caller | Minor with a named consequence, else a note |
+| 2 | TODO markers | `TODO`/`FIXME`/`HACK` with no issue reference | Minor with a named consequence, else a note |
 | 3 | Escape hatches | `any`, type-suppression comments, non-null assertions, unexplained casts | Warning |
 | 4 | Empty catches | caught errors that are swallowed, re-logged, or replaced by a generic message | Warning |
-| 5 | Stray logs | debug prints and console output left on a shipped path | Minor |
+| 5 | Stray logs | debug prints and console output left on a shipped path | Minor with a named consequence, else a note |
 | 6 | Lint and type errors | `npm run lint` and `npm run typecheck` | Warning |
 | 7 | Test gaps | new branches with no covering assertion; a gating test weakened in the same change | Critical when a gating test was weakened, else Warning |
-| 8 | Unused exports | exported symbols with no importer — public surface added by accident | Minor |
-| 9 | Commented-out blocks | code parked in comments instead of deleted | Minor |
-| 10 | Magic values | inline literals duplicating a named constant or a config value | Minor |
+| 8 | Unused exports | exported symbols with no importer — public surface added by accident | Minor with a named consequence, else a note |
+| 9 | Commented-out blocks | code parked in comments instead of deleted | Minor with a named consequence, else a note |
+| 10 | Magic values | inline literals duplicating a named constant or a config value | Minor with a named consequence, else a note |
 | 11 | Missing error paths | unhandled rejection, absent timeout, no failure branch on an I/O call | Warning |
 | 12 | Stale docs | README, spec, or doc comment contradicting the new behavior | Warning |
-| 13 | Orphaned fixtures | fixtures, snapshots, and seed data no test references | Minor |
+| 13 | Orphaned fixtures | fixtures, snapshots, and seed data no test references | Minor with a named consequence, else a note |
 
 Each hit records `file:line`, its category, a severity, and a one-line remedy. Categories with
 nothing to report print nothing: the scan reports hits, not a checklist of clean rows.
