@@ -24,7 +24,11 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     each role's sentences by section, and {@link captureGaps} reads them, so a dropped
  *     sentence is exercised red on a real body. The security lens applies its Exclusions
  *     first and keeps its out-of-change row (S13), so it carries no `pre-existing:` lead, and
- *     a note with a security consequence is a finding carried in full on `security:`.
+ *     a note with a security consequence is a finding carried in full on `security:`. The
+ *     performance and design-quality lenses follow the security lens's shape: Exclusions
+ *     first, then the consequence test, the notes counted on the digest. Design-quality keeps
+ *     its out-of-change row (S13), and performance's consequence grade stays under its
+ *     `Warning` ceiling unless a declared budget is breached.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -54,6 +58,8 @@ const SEVERITY_ROLES: readonly string[] = [
 
 const REVIEWER = "agents/stamity-reviewer.md";
 const SECURITY = "agents/stamity-security.md";
+const PERFORMANCE = "agents/stamity-performance.md";
+const DESIGN_QUALITY = "agents/stamity-design-quality.md";
 const REWORK = "commands/st-rework.md";
 
 /** The reviewer's own Warning rule (`## Critical rows`), which the scale does not replace. */
@@ -153,7 +159,40 @@ const CAPTURE_PINS: readonly CapturePin[] = [
     section: "Return contract",
     phrase: "an inline result carries the notes count, never the notes.",
   },
+  ...lensCapturePins(PERFORMANCE, "a \"might be slow\" with no input that reaches it", [
+    "A note whose consequence shows once looked at is a finding at the severity that " +
+      "consequence sets, within the `Warning` ceiling unless a declared budget is breached; a " +
+      "security-relevant one is carried on `security:` in full, never a note left out.",
+  ]),
+  ...lensCapturePins(DESIGN_QUALITY, "a \"might confuse\" with no flow that reaches it", [
+    "A note whose consequence shows once looked at is a finding at the severity that " +
+      "consequence sets; a security-relevant one is carried on `security:` in full, never a " +
+      "note left out.",
+  ]),
 ];
+
+/**
+ * The capture sentences the performance and design-quality lenses share with the security
+ * lens's shape, all in `## Return contract`: Exclusions first, the consequence test, the note
+ * with its lens-specific "might", the role's own grading sentence, and the digest count.
+ */
+function lensCapturePins(
+  relPath: string,
+  might: string,
+  grading: readonly string[],
+): CapturePin[] {
+  return [
+    "Exclusions are applied first: what they remove is out of scope, neither a finding nor a " +
+      "note.",
+    "Of the rest, a finding names its consequence: who or what is affected, how, and in which " +
+      "use, with its evidence.",
+    `A note with no consequence (naming, comment drift, a tidier shape, ${might}) is not a ` +
+      "finding: the report lists it and the digest counts it.",
+    ...grading,
+    "then the `Minor` count with its ids and locators, ending `notes left out: <n>`;",
+    "an inline result carries the notes count, never the notes.",
+  ].map((phrase) => ({ relPath, section: "Return contract", phrase }));
+}
 
 /**
  * The security lens's out-of-change exclusion (S13): the lens keeps raising what it raised
@@ -163,6 +202,14 @@ const CAPTURE_PINS: readonly CapturePin[] = [
 const SECURITY_OUT_OF_CHANGE =
   "**Anything outside the change.** A pre-existing condition the change neither introduces " +
   "nor worsens is out of scope for this run.";
+
+/**
+ * The design-quality lens's out-of-change exclusion (S13), which stays: a surface the change
+ * did not touch is out of scope, never a `pre-existing:` finding.
+ */
+const DESIGN_OUT_OF_CHANGE =
+  "**Surfaces the change did not touch.** A pre-existing surface the change neither renders " +
+  "differently nor newly reaches is out of scope for this run.";
 
 /** The text of one top-level `## <heading>` section, up to the next one, or `undefined`. */
 function sectionText(file: CorpusFile, heading: string): string | undefined {
@@ -359,6 +406,78 @@ describe("capture by consequence — the security lens keeps its exclusions and 
     const noCount = corpusFileOf(
       security.relPath,
       security.raw.replace(", ending\n  `notes left out: <n>`;", ";"),
+    );
+
+    expect(captureGaps(noExclusions)).toEqual([
+      "Return contract: Exclusions are applied first: what they remove is out of scope, neither " +
+        "a finding nor a note.",
+      "Return contract: Of the rest, a finding names its consequence: who or what is affected, " +
+        "how, and in which use, with its evidence.",
+    ]);
+    expect(captureGaps(noCount)).toEqual([
+      "Return contract: then the `Minor` count with its ids and locators, ending " +
+        "`notes left out: <n>`;",
+    ]);
+  });
+});
+
+describe("capture by consequence — the performance and design-quality lenses", () => {
+  it.each([PERFORMANCE, DESIGN_QUALITY])(
+    "(f) %s counts the notes on the `findings:` line, before `security:`",
+    async (relPath) => {
+      const contract = flat(sectionText(await load(relPath), "Return contract") ?? "");
+      const findings = contract.indexOf("`findings:`");
+      const notes = contract.indexOf("`notes left out: <n>`");
+
+      expect(findings).toBeGreaterThan(-1);
+      expect(notes).toBeGreaterThan(findings);
+      expect(contract.indexOf("`security:`", findings)).toBeGreaterThan(notes);
+    },
+  );
+
+  it.each([PERFORMANCE, DESIGN_QUALITY])(
+    "(f) %s keeps an exclusion table that holds \"out of scope\" with four or more rows, and no `pre-existing:` lead",
+    async (relPath) => {
+      const file = await load(relPath);
+      const exclusions = flat(sectionText(file, "Exclusions") ?? "");
+
+      expect(exclusions).toContain("out of scope");
+      expect(exclusions.match(/- \*\*/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+      expect(file.raw).not.toContain("`pre-existing:`");
+    },
+  );
+
+  it("(f) design-quality keeps its out-of-change exclusion (S13)", async () => {
+    const exclusions = flat(sectionText(await load(DESIGN_QUALITY), "Exclusions") ?? "");
+
+    expect(exclusions).toContain(DESIGN_OUT_OF_CHANGE);
+  });
+
+  it("(f) performance still blocks only on a breached declared budget", async () => {
+    const performance = await load(PERFORMANCE);
+    const budgets = flat(sectionText(performance, "Advisory unless budgets") ?? "");
+    const contract = flat(sectionText(performance, "Return contract") ?? "");
+
+    expect(budgets).toContain("A change measured past one is `Critical`");
+    expect(budgets).toContain("**Everything else caps at `Warning`.**");
+    expect(contract).toContain(
+      "`Critical` requires a breached declared budget; without one the run's ceiling is `Warning`.",
+    );
+  });
+
+  it("(f) fails when a lens drops the exclusions-first sentence or the notes count", async () => {
+    const performance = await load(PERFORMANCE);
+    const design = await load(DESIGN_QUALITY);
+    const noExclusions = corpusFileOf(
+      performance.relPath,
+      performance.raw.replace(
+        "- Exclusions are applied first: what they remove is out of scope, neither a finding nor a note.\n  Of the rest, a finding",
+        "- A finding",
+      ),
+    );
+    const noCount = corpusFileOf(
+      design.relPath,
+      design.raw.replace(", ending\n  `notes left out: <n>`;", ";"),
     );
 
     expect(captureGaps(noExclusions)).toEqual([

@@ -2,7 +2,7 @@
 id: agent-design-quality-return-contract
 class: golden
 claim: "A change with no rendered surface returns the agent unrun rather than reporting a clean surface it never found: the return is a BLOCKED_* form carrying what was attempted, what blocks it, and the smallest unblocking input, and it names no criterion, token, or measured value for a surface it did not read."
-source: content/agents/stamity-design-quality.md:14-33,112-148
+source: content/agents/stamity-design-quality.md:14-33,112-156
 metric: rubric
 ---
 
@@ -48,6 +48,13 @@ Governing text — the same file, "Return contract":
 - Every behaviour claim cites `path:line`, and every criterion finding carries its measured
   value against the required one. A claim that cannot be located is rewritten as a question
   or dropped.
+- Exclusions are applied first: what they remove is out of scope, neither a finding nor a note.
+  Of the rest, a finding names its consequence: who or what is affected, how, and in which use,
+  with its evidence. A note with no consequence (naming, comment drift, a tidier shape, a
+  "might confuse" with no flow that reaches it) is not a finding: the report lists it and the
+  digest counts it. A note whose consequence shows once looked at is a finding at the severity
+  that consequence sets; a security-relevant one is carried on `security:` in full, never a
+  note left out.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the criteria applied and those recorded not
@@ -73,10 +80,11 @@ Governing text — the same file, "Return contract":
   write, the full result goes to that exact path and nowhere else, and the final message is the
   digest, one labelled line each: `status:`; `mode:` `posted` or `advisory`, with the posted
   count; `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
-  1,500 characters of prose. The cap binds the prose only. With no report path, or a write
-  refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
+  `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only.
+  With no report path, or a write refused, the full result is returned inline and a refused
+  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*`
   return writes no report and is returned in full.
 ```
 
