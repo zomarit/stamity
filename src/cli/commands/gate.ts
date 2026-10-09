@@ -1,12 +1,17 @@
-import { realpathSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
+  BUILT_IN_RULES,
   CLASS_CHECKS,
+  CLASS_ORDER,
   classifyChange,
+  matchGlob,
   type BaseState,
+  type ChangeClass,
   type ClassifyResult,
 } from "../../change/classify.ts";
+import { findSpecialistTrigger, specialistsForPath } from "../../roster/triggers.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -38,12 +43,17 @@ import type { GitRunner } from "../../workspace/git.ts";
  * class narrows the gates a flow runs, so an unread change takes the full set.
  *
  * **The project, not the repository.** The project is the nearest ancestor of
- * the directory the verb runs in, up to the git top-level, that holds a
- * `.stamity/` folder, or the top-level when none does; every git read runs
- * from it ({@link findProjectRoot}). Each changed path is classified by its
- * project-relative form ({@link toProjectPath}), so the rules read the
- * project's own layout; a path outside the project is left out and counted in
- * the reason.
+ * the directory the verb runs in, up to the git top-level, whose `.stamity/`
+ * folder is in the base commit's tree (`HEAD`'s with no base), or the
+ * top-level when none is; every git read runs from it ({@link findProjectRoot}).
+ * A `.stamity/` the change itself adds is no root, so a change cannot move the
+ * boundary it is read through (review/13). Each changed path is classified by
+ * its project-relative form ({@link toProjectPath}), so the rules read the
+ * project's own layout. A path outside the project is left out, counted in the
+ * reason, and raises the class to at least `product`; one the built-in security
+ * floor or the trigger roster's security row matches raises it to
+ * `security-sensitive` (review/21). A name that is not valid UTF-8 raises it to
+ * at least `product` too, since nothing can open it by the name read back.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -59,8 +69,9 @@ const GATE_GIT_TIMEOUT_MS = 60_000;
 const GATE_GIT_MAX_BUFFER = 64 * 1024 * 1024;
 
 /**
- * A ref git would read as an option is refused before git runs: `--end-of-options`
- * already guards the resolve, and this keeps the refusal at the parser, exit 2.
+ * A ref git would read as an option is refused before git runs, exit 2. This is
+ * the guard: the resolve passes no `--end-of-options`, which `rev-parse` takes
+ * only from git 2.43, so a base resolves on an older git too (review/15).
  */
 function parseBaseRef(value: string): string {
   if (value.startsWith("-")) throw new InvalidArgumentError("a base ref never starts with '-'.");
@@ -153,7 +164,8 @@ function parseNameStatus(output: string): { paths: string[]; renames: Rename[] }
 interface ChangeRead {
   paths: string[];
   renames: Rename[];
-  outside: number;
+  /** Top-level-relative paths left out because they sit outside the project. */
+  outside: string[];
 }
 
 /**
@@ -173,6 +185,8 @@ function readChange(runner: GitRunner, cwd: string, prefix: string, commit: stri
       "--no-ext-diff",
       "--no-color",
       "--no-textconv",
+      // A committed `.gitmodules` or a local setting must not hide a submodule bump (review/14).
+      "--ignore-submodules=none",
       commit,
       "--",
     ]),
@@ -207,7 +221,7 @@ function readChange(runner: GitRunner, cwd: string, prefix: string, commit: stri
     else if (from !== null) paths.push(from);
     else if (to !== null) paths.push(to);
   }
-  return { paths, renames, outside: outside.size };
+  return { paths, renames, outside: [...outside] };
 }
 
 /** The project a run reads: its directory, and its prefix below the git top-level. */
@@ -216,27 +230,41 @@ interface ProjectRoot {
   prefix: string;
 }
 
-function holdsStateFolder(dir: string): boolean {
+/** A git error carrying an exit status and no spawn code: git ran and answered no. */
+function gitSaidNo(err: unknown, status?: number): boolean {
+  const { code, status: exit } = err as { code?: unknown; status?: unknown };
+  return code === undefined && typeof exit === "number" && (status === undefined || exit === status);
+}
+
+/**
+ * Whether `<treeish>:<prefix>.stamity` is a folder in that commit's tree. Git
+ * answering no (the path is not there) is `false`; a timeout, an output bound
+ * or a missing binary is a failed read, never a quiet "no".
+ */
+function baseHoldsStateFolder(runner: GitRunner, cwd: string, treeish: string, prefix: string): boolean {
   try {
-    return statSync(join(dir, ".stamity")).isDirectory();
-  } catch {
-    return false;
+    return runner(["cat-file", "-t", `${treeish}:${prefix}.stamity`], cwd).trim() === "tree";
+  } catch (err) {
+    if (gitSaidNo(err)) return false;
+    throw new GitReadError("cat-file -t", err);
   }
+}
+
+/** The cwd's path below the git top-level (`git rev-parse --show-prefix`); outside a work tree this call fails. */
+function readCwdPrefix(runner: GitRunner, cwd: string): string {
+  return runGit(runner, cwd, "rev-parse --show-prefix", ["rev-parse", "--show-prefix"]).replace(/\r?\n$/, "");
 }
 
 /**
  * The project root: the nearest ancestor of `cwd`, up to the git top-level,
- * that holds a `.stamity/` folder, or the top-level when none does (re-review
- * r3, `plan/63`). A run started in a subfolder, a run folder under
- * `.stamity/runs/` included, so still reads every changed path of its project.
- * The walk follows `git rev-parse --show-prefix` up from the real cwd, so it
- * never leaves the work tree git answered for.
+ * whose `.stamity/` folder is in `treeish`'s tree, or the top-level when none
+ * is (re-review r3, `plan/63`; review/13). A run started in a subfolder, a run
+ * folder under `.stamity/runs/` included, so still reads every changed path of
+ * its project, and a `.stamity/` the change plants, untracked or staged, is not
+ * a root. The walk follows `git rev-parse --show-prefix` up from the real cwd,
+ * so it never leaves the work tree git answered for.
  */
-function findProjectRoot(runner: GitRunner, cwd: string): ProjectRoot {
-  const cwdPrefix = runGit(runner, cwd, "rev-parse --show-prefix", ["rev-parse", "--show-prefix"]).replace(
-    /\r?\n$/,
-    "",
-  );
+function findProjectRoot(runner: GitRunner, cwd: string, cwdPrefix: string, treeish: string): ProjectRoot {
   const segments = cwdPrefix.split("/").filter((segment) => segment !== "");
   let start = cwd;
   try {
@@ -245,8 +273,10 @@ function findProjectRoot(runner: GitRunner, cwd: string): ProjectRoot {
     // git answered from this cwd, so it exists; the lexical form walks the same steps.
   }
   for (let depth = segments.length; depth > 0; depth -= 1) {
-    const dir = resolve(start, ...Array.from({ length: segments.length - depth }, () => ".."));
-    if (holdsStateFolder(dir)) return { dir, prefix: `${segments.slice(0, depth).join("/")}/` };
+    const prefix = `${segments.slice(0, depth).join("/")}/`;
+    if (baseHoldsStateFolder(runner, cwd, treeish, prefix)) {
+      return { dir: resolve(start, ...Array.from({ length: segments.length - depth }, () => "..")), prefix };
+    }
   }
   return { dir: resolve(start, ...Array.from({ length: segments.length }, () => "..")), prefix: "" };
 }
@@ -254,14 +284,23 @@ function findProjectRoot(runner: GitRunner, cwd: string): ProjectRoot {
 /** A full object id, SHA-1 or SHA-256. */
 const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
-/** `<ref>` as a commit id, or `null` when it does not resolve to a commit. */
+/**
+ * `<ref>` as a commit id, or `null` when it does not resolve to a commit:
+ * `--verify --quiet` exits 1, printing nothing, for a name that is no commit.
+ * Any other failure (a timeout, the output bound, no binary, another exit) is
+ * a failed read, named as such (review/17). No `--end-of-options`: the parser's
+ * refusal of a `-`-led ref is the guard ({@link parseBaseRef}).
+ */
 function resolveBase(runner: GitRunner, cwd: string, ref: string): string | null {
+  let output: string;
   try {
-    const id = runner(["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`], cwd).trim();
-    return OBJECT_ID.test(id) ? id : null;
-  } catch {
-    return null;
+    output = runner(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd);
+  } catch (err) {
+    if (gitSaidNo(err, 1)) return null;
+    throw new GitReadError("rev-parse --verify", err);
   }
+  const id = output.trim();
+  return OBJECT_ID.test(id) ? id : null;
 }
 
 /** The verdict for a change git could not read: `product`, the failure named. */
@@ -272,6 +311,78 @@ function failClosed(reason: string): ClassifyResult {
 function withReasons(result: ClassifyResult, reasons: readonly string[]): ClassifyResult {
   if (reasons.length === 0) return result;
   return { ...result, reason: [...reasons, result.reason].filter((part) => part !== "").join("; ") };
+}
+
+/** The security lens, as the classifier names it for a `security-sensitive` change. */
+const SECURITY_LENS = "stamity-security";
+
+/** `result` raised to at least `floor`; a lens it already had stays, and `security-sensitive` adds its lens first. */
+function raiseTo(result: ClassifyResult, floor: ChangeClass): ClassifyResult {
+  if (CLASS_ORDER.indexOf(result.class) <= CLASS_ORDER.indexOf(floor)) return result;
+  const lenses =
+    floor === "security-sensitive" ? [SECURITY_LENS, ...result.lenses.filter((lens) => lens !== SECURITY_LENS)] : result.lenses;
+  return { ...result, class: floor, checks: [...CLASS_CHECKS[floor]], lenses };
+}
+
+/** At most this many paths are named in one reason clause; the rest are counted. */
+const PATHS_NAMED = 5;
+
+function namePaths(paths: readonly string[]): string {
+  const named = paths.slice(0, PATHS_NAMED).join(", ");
+  return paths.length > PATHS_NAMED ? `${named} and ${paths.length - PATHS_NAMED} more` : named;
+}
+
+/** The trigger roster's security row: its patterns still read a path the project's class file never sees. */
+const SECURITY_ROW = findSpecialistTrigger(SECURITY_LENS);
+
+/**
+ * The security rule an outside path meets, named for the reason, or `undefined`:
+ * the built-in `security-sensitive` floor (never the project's class file, which
+ * belongs to the project), then each pattern of the roster's security row, each
+ * matched by the roster's own matcher over a one-pattern row.
+ */
+function outsideSecurityRule(path: string): string | undefined {
+  for (const rule of BUILT_IN_RULES) {
+    if (rule.class !== "security-sensitive") continue;
+    const read = rule.foldCase === true ? path.toLowerCase() : path;
+    const glob = rule.paths.find((candidate) => matchGlob(read, rule.foldCase === true ? candidate.toLowerCase() : candidate));
+    if (glob !== undefined) return `built-in ${glob}`;
+  }
+  if (SECURITY_ROW === undefined) return undefined;
+  const pattern = SECURITY_ROW.triggerPaths.find(
+    (candidate) => specialistsForPath(path, [{ ...SECURITY_ROW, triggerPaths: [candidate] }]).length > 0,
+  );
+  return pattern === undefined ? undefined : `security row ${pattern}`;
+}
+
+/**
+ * The floors the git read adds over the path rules: a path outside the project
+ * raises the class to at least `product` (review/13), or to `security-sensitive`
+ * when the security floor or row matches it (review/21); a name that is not
+ * valid UTF-8, decoded to U+FFFD, raises it to at least `product` (review/19).
+ */
+function applyReadFloors(result: ClassifyResult, change: ChangeRead): ClassifyResult {
+  let raised = result;
+  const reasons: string[] = [];
+  if (change.outside.length > 0) {
+    const count = change.outside.length;
+    reasons.push(`${count} changed path${count === 1 ? "" : "s"} outside the project left out, so the class is at least product`);
+    raised = raiseTo(raised, "product");
+    for (const path of change.outside) {
+      const rule = outsideSecurityRule(path);
+      if (rule === undefined) continue;
+      reasons.push(`${path} outside the project matches ${rule}, so the class is security-sensitive`);
+      raised = raiseTo(raised, "security-sensitive");
+    }
+  }
+  const unreadable = [...change.paths, ...change.renames.flatMap((rename) => [rename.from, rename.to])].filter((path) =>
+    path.includes("\uFFFD"),
+  );
+  if (unreadable.length > 0) {
+    reasons.push(`not valid UTF-8, so unreadable by name and the class is at least product: ${namePaths(unreadable)}`);
+    raised = raiseTo(raised, "product");
+  }
+  return withReasons(raised, reasons);
 }
 
 /**
@@ -287,8 +398,8 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
   try {
     // Read first: outside a work tree this is the call that fails, and says so.
-    const root = findProjectRoot(runner, cwd);
-    const commit = ref === undefined ? null : resolveBase(runner, root.dir, ref);
+    const cwdPrefix = readCwdPrefix(runner, cwd);
+    const commit = ref === undefined ? null : resolveBase(runner, cwd, ref);
     const baseState: BaseState = ref === undefined ? "absent" : commit === null ? "unresolved" : "given";
     const reasons: string[] = [];
     if (baseState === "unresolved") reasons.push(`the base ${ref ?? ""} does not resolve to a commit here`);
@@ -297,15 +408,14 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
       return { result: withReasons(classifyChange({ paths: listed, base: baseState }), reasons), base: commit };
     }
     // An unresolved base leaves nothing to diff against: no path is read, and the class is at least product.
-    const change =
-      baseState === "unresolved"
-        ? { paths: [], renames: [], outside: 0 }
-        : readChange(runner, root.dir, root.prefix, commit ?? "HEAD");
-    if (change.outside > 0) {
-      reasons.push(`${change.outside} changed path${change.outside === 1 ? "" : "s"} outside the project left out`);
+    if (baseState === "unresolved") {
+      return { result: withReasons(classifyChange({ paths: [], base: baseState }), reasons), base: commit };
     }
+    const treeish = commit ?? "HEAD";
+    const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
+    const change = readChange(runner, root.dir, root.prefix, treeish);
     const result = classifyChange({ paths: change.paths, renames: change.renames, base: baseState });
-    return { result: withReasons(result, reasons), base: commit };
+    return { result: withReasons(applyReadFloors(result, change), reasons), base: commit };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
     return { result: failClosed(`${describeGitFailure(err)}, so the class is product`), base: null };
@@ -321,7 +431,9 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
   const ref = opts["base"] as string | undefined;
   const { result, base } = classify(ctx.app.runtime.cwd, listed, ref);
 
-  // Paths and refs are the caller's bytes: sanitised where they meet the terminal.
+  // Paths, rules and refs are the caller's or the repository's bytes: sanitised
+  // where they meet the terminal and, the same way, in the JSON an agent reads
+  // (review/10). `base` is a validated object id or null, so it carries none.
   const lines = [
     `class: ${result.class}`,
     `checks: ${list(result.checks)}`,
@@ -336,12 +448,16 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
     json: {
       subcommand: CLASSIFY,
       base,
-      paths: result.byPath.map((entry) => entry.path),
+      paths: result.byPath.map((entry) => sanitizeLabel(entry.path)),
       class: result.class,
       checks: result.checks,
       lenses: result.lenses,
-      reason: result.reason,
-      byPath: result.byPath,
+      reason: sanitizeLabel(result.reason),
+      byPath: result.byPath.map((entry) => ({
+        path: sanitizeLabel(entry.path),
+        class: entry.class,
+        rule: sanitizeLabel(entry.rule),
+      })),
     },
   };
 }

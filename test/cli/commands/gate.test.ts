@@ -1,8 +1,9 @@
+import type * as ChildProcessModule from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { gateCommand, toProjectPath } from "../../../src/cli/commands/gate.ts";
 import { gitCheckRunner } from "../../../src/cli/engine/gitStatus.ts";
 import { runInProcess } from "../../support/inProcess.ts";
@@ -18,7 +19,48 @@ import { useTempDir } from "../../support/tempDir.ts";
  * p1c-classify-git-reads: without `--paths` the verb reads the change from git.
  * Those cases run real git in scratch repositories, never a scripted runner:
  * the hardened runner and the NUL-separated parse are the thing under test.
+ *
+ * One seam watches that git: every argv the verb's runner hands `execFileSync`
+ * is recorded (so a test can pin what never reaches git), and a test can make
+ * one step fail with a real Node error — a 60-second timeout and a 64 MiB
+ * output are out of a unit test's reach, the reason each produces is not.
  */
+
+/** The verb's git calls (the runner's `-c safe.bareRepository=explicit` marks them), and one planted failure. */
+const gitSpy = vi.hoisted(() => ({
+  calls: [] as string[][],
+  fault: undefined as { step: string; error: unknown } | undefined,
+}));
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcessModule>();
+  const original = actual.execFileSync as unknown as (...args: unknown[]) => unknown;
+  return {
+    ...actual,
+    execFileSync: (...args: unknown[]): unknown => {
+      if (args[0] === "git" && Array.isArray(args[1]) && args[1][1] === "safe.bareRepository=explicit") {
+        const argv = args[1].map(String);
+        gitSpy.calls.push(argv);
+        const { fault } = gitSpy;
+        if (fault !== undefined && argv.includes(fault.step)) {
+          gitSpy.fault = undefined;
+          throw fault.error;
+        }
+      }
+      return original(...args);
+    },
+  };
+});
+
+/** The error Node really throws for a child that fails this way: a timeout, an output bound, an exit status. */
+function realFailure(script: string, bounds: { timeout?: number; maxBuffer?: number } = {}): unknown {
+  try {
+    execFileSync(process.execPath, ["-e", script], { stdio: ["ignore", "pipe", "ignore"], ...bounds });
+  } catch (err) {
+    return err;
+  }
+  throw new Error("the child was meant to fail");
+}
 
 const run = (argv: readonly string[], opts?: { cwd?: string }) =>
   runInProcess([gateCommand], ["gate", ...argv], opts);
@@ -71,6 +113,19 @@ describe("stamity gate classify --paths", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).not.toContain("\u001b");
+  });
+
+  // review/10: the JSON document is read by an agent session, so it carries what the terminal lines carry.
+  it("keeps C1, bidi and tag characters out of every JSON string field", async () => {
+    const hostile = "docs/a\u009b31m\u202egnp\u{E0041}\u2066.md";
+    const result = await run(["classify", "--paths", hostile, "--json"]);
+
+    expect(result.code).toBe(0);
+    for (const char of ["\u009b", "\u202e", "\u{E0041}", "\u2066"]) expect(result.stdout).not.toContain(char);
+    const doc = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(doc["paths"]).toEqual(["docs/a31mgnp.md"]);
+    expect(doc["byPath"]).toEqual([{ path: "docs/a31mgnp.md", class: "docs", rule: "docs/**" }]);
+    expect(doc["reason"]).toContain("docs/a31mgnp.md");
   });
 
   it("exits 2 on an unknown subcommand", async () => {
@@ -290,6 +345,102 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(existsSync(join(repo, "x"))).toBe(false);
   });
 
+  // review/15: the parser's refusal is the guard, so `rev-parse` runs without
+  // `--end-of-options`, which git before 2.43 refuses for every ref.
+  it("never hands git a ref that starts with '-', and resolves a base without --end-of-options", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+
+    gitSpy.calls.length = 0;
+    const refused = await classifyIn(repo, ["--base", "-x"]);
+    expect(refused.code).toBe(2);
+    expect(gitSpy.calls).toEqual([]);
+
+    const resolved = await classifyIn(repo, ["--base", "HEAD"]);
+    const verify = gitSpy.calls.find((argv) => argv.includes("--verify"));
+    expect(resolved.code).toBe(0);
+    expect(verify).toBeDefined();
+    expect(verify).not.toContain("--end-of-options");
+    expect(verify?.at(-1)).toBe("HEAD^{commit}");
+  });
+
+  // review/17, review/18: a failed read names its cause, never "does not resolve".
+  it.each([
+    ["a timeout", "--verify", () => realFailure("setTimeout(() => {}, 10000)", { timeout: 200 }), "git rev-parse --verify did not finish within 60 seconds"],
+    ["the output bound", "--verify", () => realFailure("process.stdout.write('x'.repeat(4096))", { maxBuffer: 16 }), "git rev-parse --verify printed more than 64 MiB"],
+    ["a git failure", "--verify", () => realFailure("process.exit(128)"), "git rev-parse --verify failed, exit 128"],
+    ["a timeout on the diff", "diff", () => realFailure("setTimeout(() => {}, 10000)", { timeout: 200 }), "git diff --name-status did not finish within 60 seconds"],
+    ["the output bound on the diff", "diff", () => realFailure("process.stdout.write('x'.repeat(4096))", { maxBuffer: 16 }), "git diff --name-status printed more than 64 MiB"],
+  ])("says product and names %s as the cause", async (_label, step, failure, cause) => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+    await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+
+    gitSpy.fault = { step, error: failure() };
+    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+    gitSpy.fault = undefined;
+
+    expect(code).toBe(0);
+    expect(doc["class"]).toBe("product");
+    expect(doc["base"]).toBeNull();
+    expect(doc["reason"]).toContain(cause);
+    expect(doc["reason"]).not.toContain("does not resolve");
+  });
+
+  it("keeps bidi and tag characters of an unresolved base out of the JSON reason", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+
+    const { code, stdout, doc } = await classifyIn(repo, ["--base", "no\u202esuch\u{E0041}ref"]);
+
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("\u202e");
+    expect(stdout).not.toContain("\u{E0041}");
+    expect(doc["reason"]).toContain("nosuchref");
+  });
+
+  // review/14: a committed `.gitmodules` or a local setting must not hide a submodule bump.
+  it("lists a submodule pointer change whatever the submodule ignore settings say", async () => {
+    const repo = await seedRepo("repo", { "docs/x.md": "base\n" });
+    const before = "1".repeat(40);
+    const after = "2".repeat(40);
+    await getRoot().seedFiles({
+      "repo/.gitmodules": '[submodule "lib"]\n\tpath = vendor/lib\n\turl = ./lib\n\tignore = all\n',
+    });
+    await mkdir(join(repo, "vendor", "lib"), { recursive: true });
+    git(repo, ["update-index", "--add", "--cacheinfo", `160000,${before},vendor/lib`]);
+    git(repo, ["add", "--", ".gitmodules"]);
+    git(repo, ["commit", "-q", "-m", "a submodule marked ignore = all"]);
+    git(repo, ["config", "diff.ignoreSubmodules", "all"]);
+    git(repo, ["update-index", "--cacheinfo", `160000,${after},vendor/lib`]);
+    await getRoot().seedFiles({ "repo/docs/x.md": "changed\n" });
+
+    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+    expect(code).toBe(0);
+    expect((doc["paths"] as string[]).toSorted()).toEqual(["docs/x.md", "vendor/lib"]);
+    expect(doc["class"]).not.toBe("docs");
+  });
+
+  // review/19: git's -z names are bytes; one that is not UTF-8 cannot be read back by name.
+  it("says at least product and names the path when a changed file name is not valid UTF-8", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+    const blob = git(repo, ["hash-object", "-w", "--", "docs/a.md"]).trim();
+    execFileSync("git", ["update-index", "-z", "--index-info"], {
+      cwd: repo,
+      input: Buffer.concat([Buffer.from(`100644 ${blob}\tdocs/`), Buffer.from([0xff]), Buffer.from(".md\0")]),
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ...SEED_ENV },
+    });
+    git(repo, ["commit", "-q", "-m", "a name that is not UTF-8"]);
+    // The work tree never held the file, so the diff against HEAD reads it as deleted.
+
+    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+    expect(code).toBe(0);
+    expect(doc["paths"]).toEqual(["docs/\uFFFD.md"]);
+    expect(doc["class"]).toBe("product");
+    expect(doc["reason"]).toContain("not valid UTF-8");
+    expect(doc["reason"]).toContain("docs/\uFFFD.md");
+  });
+
   it("says at least product, naming the ref, for a base that does not resolve", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
@@ -390,6 +541,27 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(fromRun.doc["reason"]).not.toContain("outside the project");
   });
 
+  // review/13 (a): a `.stamity/` the change itself adds under the working
+  // directory is no project root, so it cannot leave the real root's paths out.
+  it.each([["untracked"], ["staged"]])(
+    "ignores a %s .stamity/ planted under the working directory when choosing the project root",
+    async (how) => {
+      const repo = await seedRepo("repo", { ".stamity/manifest.json": "{}\n", "work/a.md": "base\n" });
+      await getRoot().seedFiles({
+        "repo/.stamity/manifest.json": '{"changed":true}\n',
+        "repo/work/.stamity/runs/note.md": "planted\n",
+      });
+      if (how === "staged") git(repo, ["add", "--", "work/.stamity/runs/note.md"]);
+
+      const { code, doc } = await classifyIn(join(repo, "work"), ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect((doc["paths"] as string[]).toSorted()).toEqual([".stamity/manifest.json", "work/.stamity/runs/note.md"]);
+      expect(doc["reason"]).not.toContain("outside the project");
+    },
+  );
+
   it("takes the git top-level as the project when no ancestor holds .stamity/", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
     await getRoot().seedFiles({ "repo/docs/a.md": "changed\n", "repo/src/b.ts": "export const b = 1;\n" });
@@ -434,6 +606,42 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect((before.doc["paths"] as string[]).toSorted()).toEqual(["docs/x.md", "new.md"]);
       expect(after.doc["paths"]).toEqual(before.doc["paths"]);
       expect(after.doc["class"]).toBe("docs");
+    });
+
+    // review/13 (c): a change spanning projects runs this project's full gates.
+    it("says at least product when a path outside the project changed beside a docs edit", async () => {
+      const repo = await seedRepo("repo", PROJECT_FILES);
+      await getRoot().seedFiles({ "repo/app/docs/x.md": "changed\n", "repo/other/x.ts": "export const x = 1;\n" });
+
+      const { code, doc } = await classifyIn(join(repo, "app"), ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["paths"]).toEqual(["docs/x.md"]);
+      expect(doc["class"]).toBe("product");
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+      expect(doc["reason"]).toContain("1 changed path outside the project left out, so the class is at least product");
+    });
+
+    // review/21: the project's class file never reads an outside path, but the
+    // built-in security floor and the trigger roster's security row still do.
+    it.each([
+      ["a workspace-root lockfile bump", "package-lock.json", "security row package-lock.json"],
+      ["a top-level engine state file", ".stamity/manifest.json", "built-in .stamity/manifest.json"],
+    ])("says security-sensitive with the lens for %s outside the project", async (_label, outsidePath, rule) => {
+      const repo = await seedRepo("repo", {
+        "packages/app/.stamity/manifest.json": "{}\n",
+        "packages/app/docs/x.md": "base\n",
+        [outsidePath]: "{}\n",
+      });
+      await getRoot().seedFiles({ [`repo/${outsidePath}`]: '{"changed":true}\n' });
+
+      const { code, doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["paths"]).toEqual([]);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain(`${outsidePath} outside the project matches ${rule}`);
     });
 
     it("says at least product when only paths outside the project changed", async () => {
