@@ -1,11 +1,25 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { CLASS_FILE, parseClassFile } from "../../src/change/classify.ts";
+import { selectTests, type TestInputEntry } from "../../src/change/testInputs.ts";
 // @ts-expect-error — import-safe native ESM CI helper, outside the product package.
-import { decide, isRecordsPath, LANE_PATHS, LANE_SUITES, laneOf, RECORDS_PATHS, RECORDS_SUITES } from "../../scripts/ci/records-only.mjs";
+import * as lanesModule from "../../scripts/ci/records-only.mjs";
+
+const { decide, isRecordsPath, LANE_PATHS, laneOf, RECORDS_PATHS } = lanesModule as Record<string, unknown>;
 
 // Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
 const INBOX = [".stamity", "inbox.md"].join("/");
@@ -37,15 +51,82 @@ interface Decision {
   readonly recordsOnly: boolean;
   readonly reason: string;
 }
-const decideTyped = decide as (input: {
+interface DecideInput {
   event: string | undefined;
   base: string | undefined;
   paths: readonly string[];
-}) => Decision;
+  // `undefined` too: one case passes it explicitly, as a caller leaving the argument out does.
+  map?: readonly TestInputEntry[] | null | undefined;
+}
+const decideRaw = decide as (input: DecideInput) => Decision;
 const isRecords = isRecordsPath as (path: string) => boolean;
 const laneOfTyped = laneOf as (path: string) => string | null;
 const lanePaths = LANE_PATHS as Readonly<Record<string, readonly string[]>>;
-const laneSuites = LANE_SUITES as Readonly<Record<string, readonly string[]>>;
+
+/**
+ * The census map: this repository's own class file, parsed the way the script parses the base
+ * commit's copy. Read from the work tree here, since the pure half takes the map as an argument.
+ */
+const CENSUS_TEXT = readFileSync(join(REPO_ROOT, CLASS_FILE), "utf8");
+const CENSUS = parseClassFile(CENSUS_TEXT);
+const CENSUS_MAP: readonly TestInputEntry[] | null = CENSUS.ok ? CENSUS.testInputs : null;
+
+/**
+ * TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+ * `decide` takes the base commit's test-input map (`map`), and every case written before it is
+ * called with the census map unless it passes its own, so each answer it pinned is held unchanged
+ * against the map that replaced `LANE_SUITES`.
+ */
+function decideTyped(input: DecideInput): Decision {
+  return decideRaw({ map: CENSUS_MAP, ...input });
+}
+
+/** What `selectTests` selects for these paths from the census map: the union the lanes must equal. */
+function mapSelection(paths: readonly string[]): string[] {
+  const selection = selectTests({ paths, class: "records", map: CENSUS_MAP ?? [] });
+  expect(selection.full, selection.reason).toBe(false);
+  return selection.files;
+}
+
+/**
+ * The floor: the suites `LANE_SUITES` (with `RECORDS_SUITES` as the records lane) listed on
+ * 2026-10-08, the last day the classifier spelled them. The map may add to a lane, never drop one.
+ */
+const RECORDS_FLOOR: readonly string[] = [
+  "test/records",
+  "test/docsPages.test.ts",
+  "test/cli/docs/measurements.test.ts",
+  "test/authoring/specPlanCoverage.test.ts",
+  "test/ci/leakGate.test.ts",
+];
+const LANE_FLOOR: Readonly<Record<string, readonly string[]>> = {
+  records: RECORDS_FLOOR,
+  specs: [...RECORDS_FLOOR, "test/records/specStatus.test.ts", "test/ci/docsRoster.test.ts"],
+  learnings: ["test/learnings/repoLearnings.test.ts", "test/ci/leakGate.test.ts"],
+  website: [
+    "test/ci/docsSite.test.ts",
+    "test/ci/docsRoster.test.ts",
+    "test/ci/tableHeaderScope.test.ts",
+    "test/docsPages.test.ts",
+    "test/ci/workflow.test.ts",
+    "test/ci/leakGate.test.ts",
+    "test/cli/docs/cliReference.test.ts",
+    "test/cli/docs/configReference.test.ts",
+    "test/cli/docs/measurements.test.ts",
+    "test/cli/docs/referencePages.test.ts",
+    "test/cli/docs/llmsIndex.test.ts",
+    "test/cli/commands/check.test.ts",
+    "test/content/invariantsVersion.test.ts",
+    "test/emit/capabilityMatrix.test.ts",
+    "test/corpus/invariants.test.ts",
+    "test/ci/packSigningRehearsal.test.ts",
+  ],
+};
+
+/** A path strictly beneath a lane pattern, built from the pattern so no literal names a tracked file. */
+function sampleUnder(pattern: string): string {
+  return pattern.endsWith("/**") ? `${pattern.slice(0, -2)}p2c-sample/probe.md` : pattern;
+}
 
 /** The CLI's `key=value` lines as a map, so a case reads the one answer it is about. */
 function outputsOf(stdout: string): Record<string, string> {
@@ -112,15 +193,18 @@ describe("the records list", () => {
     // measurements page rendered from the committed runs, the plan-coverage check over two real
     // plans, and the two leak-gate runs over the whole tree (docsPages and leakGate). The
     // leak-gate evasion and hygiene suites run on scratch trees and are not in the list.
-    expect(RECORDS_SUITES).toEqual([
-      "test/records",
-      "test/docsPages.test.ts",
-      "test/cli/docs/measurements.test.ts",
-      "test/authoring/specPlanCoverage.test.ts",
-      "test/ci/leakGate.test.ts",
-    ]);
-    for (const suite of RECORDS_SUITES as readonly string[]) {
-      expect(existsSync(join(REPO_ROOT, suite)), suite).toBe(true);
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+    // `RECORDS_SUITES` left the classifier; the records suites are what the census map gives the
+    // four record locations. The pinned list moved here as `RECORDS_FLOOR`, which the map's answer
+    // for each location must hold, and the answer is the census's own records suites.
+    expect(lanesModule).not.toHaveProperty("RECORDS_SUITES");
+    for (const pattern of RECORDS_PATHS as readonly string[]) {
+      const path = sampleUnder(pattern);
+      const decision = decideTyped({ event: "pull_request", base: SHA, paths: [path] });
+      expect(decision, path).toMatchObject({ full: false, lanes: ["records"], recordsOnly: true });
+      expect(decision.suites, path).toEqual(expect.arrayContaining([...RECORDS_FLOOR]));
+      expect(decision.suites, path).toEqual(mapSelection([path]));
+      for (const suite of decision.suites) expect(existsSync(join(REPO_ROOT, suite)), suite).toBe(true);
     }
   });
 });
@@ -200,8 +284,10 @@ describe("the lanes — website, specs and learnings beside the records", () => 
     expect(lanePaths["specs"]).toEqual([["docs/specs", "**"].join("/")]);
     expect(lanePaths["learnings"]).toEqual([[".stamity/learnings", "**"].join("/")]);
     expect(lanePaths["website"]).toEqual([["website", "**"].join("/"), ["docs", "**"].join("/")]);
-    expect(Object.keys(laneSuites)).toEqual(ALL_LANES);
-    expect(laneSuites["records"]).toEqual(RECORDS_SUITES);
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+    // `LANE_SUITES` left the classifier, so where this case pinned its keys it now pins its absence;
+    // the lanes' suites come from the base commit's map (the next case).
+    expect(lanesModule).not.toHaveProperty("LANE_SUITES");
   });
 
   it("names, per lane, the suites that read that lane's committed paths, and each exists", () => {
@@ -211,44 +297,34 @@ describe("the lanes — website, specs and learnings beside the records", () => 
     // docs/ every page, roster, generated-page and site suite, plus two the census added beyond
     // the plan's list — the corpus invariants (docs/capability-matrix.md) and the pack signing
     // rehearsal (docs/packs-and-trust.md).
-    expect(laneSuites["specs"]).toEqual([
-      ...(RECORDS_SUITES as readonly string[]),
-      "test/records/specStatus.test.ts",
-      "test/ci/docsRoster.test.ts",
-    ]);
-    expect(laneSuites["learnings"]).toEqual(["test/learnings/repoLearnings.test.ts", "test/ci/leakGate.test.ts"]);
-    expect(laneSuites["website"]).toEqual([
-      "test/ci/docsSite.test.ts",
-      "test/ci/docsRoster.test.ts",
-      "test/ci/tableHeaderScope.test.ts",
-      "test/docsPages.test.ts",
-      "test/ci/workflow.test.ts",
-      "test/ci/leakGate.test.ts",
-      "test/cli/docs/cliReference.test.ts",
-      "test/cli/docs/configReference.test.ts",
-      "test/cli/docs/measurements.test.ts",
-      "test/cli/docs/referencePages.test.ts",
-      "test/cli/docs/llmsIndex.test.ts",
-      "test/cli/commands/check.test.ts",
-      "test/content/invariantsVersion.test.ts",
-      "test/emit/capabilityMatrix.test.ts",
-      "test/corpus/invariants.test.ts",
-      "test/ci/packSigningRehearsal.test.ts",
-    ]);
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map,
+    // review/77 signed off as the union): the per-lane lists moved out of `LANE_SUITES` into the
+    // census map. The lists this case pinned are `LANE_FLOOR` now, and each lane's answer for a
+    // path under each of its patterns must hold its floor. The answer may be larger than the old
+    // list, since a path takes every matching entry's suites (a `docs/specs/` path also matches
+    // `docs/**`), the same answer `selectTests` gives for it.
     for (const lane of ALL_LANES) {
-      const suites = laneSuites[lane] ?? [];
-      expect(new Set(suites).size, `${lane} lists a suite twice`).toBe(suites.length);
-      for (const suite of suites) expect(existsSync(join(REPO_ROOT, suite)), `${lane}: ${suite}`).toBe(true);
+      for (const pattern of lanePaths[lane] ?? []) {
+        const path = sampleUnder(pattern);
+        const decision = decideTyped({ event: "pull_request", base: SHA, paths: [path] });
+        expect(decision, `${lane}: ${path}`).toMatchObject({ full: false, lanes: [lane] });
+        expect(decision.suites, `${lane}: ${path}`).toEqual(expect.arrayContaining([...(LANE_FLOOR[lane] ?? [])]));
+        expect(new Set(decision.suites).size, `${lane} lists a suite twice`).toBe(decision.suites.length);
+        for (const suite of decision.suites) expect(existsSync(join(REPO_ROOT, suite)), `${lane}: ${suite}`).toBe(true);
+      }
     }
   });
 
   it("names each lane alone for a diff of that lane's paths alone", () => {
     for (const lane of ALL_LANES) {
-      const decision = decideTyped({ event: "pull_request", base: SHA, paths: [SAMPLE[lane] as string] });
+      const path = SAMPLE[lane] as string;
+      const decision = decideTyped({ event: "pull_request", base: SHA, paths: [path] });
       expect(decision, lane).toMatchObject({
         full: false,
         lanes: [lane],
-        suites: laneSuites[lane],
+        // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+        // the suites were `LANE_SUITES[lane]`; they are the census map's selection for the path.
+        suites: mapSelection([path]),
         siteBuild: lane === "website",
         cliCheck: lane === "learnings",
         recordsOnly: lane === "records",
@@ -264,8 +340,11 @@ describe("the lanes — website, specs and learnings beside the records", () => 
     });
     expect(decision.full).toBe(false);
     expect(decision.lanes).toEqual(["records", "specs"]);
-    // The specs lane carries every records suite, so the union is the specs list, once each.
-    expect(decision.suites).toEqual(laneSuites["specs"]);
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+    // the union was `LANE_SUITES.specs`, which carried every records suite; it is now the union of
+    // every census entry either path matches, the selection `selectTests` makes for the two.
+    expect(decision.suites).toEqual(mapSelection(["docs/specs/x.md", ".stamity/runs/r/record.md"]));
+    expect(decision.suites).toEqual(expect.arrayContaining([...(LANE_FLOOR["specs"] ?? []), ...RECORDS_FLOOR]));
     expect(new Set(decision.suites).size).toBe(decision.suites.length);
     expect(decision.recordsOnly).toBe(false);
     const everything = decideTyped({ event: "push", base: SHA, paths: Object.values(SAMPLE) });
@@ -361,15 +440,174 @@ describe("the lanes — website, specs and learnings beside the records", () => 
   });
 });
 
-// ── the CLI, against real scratch repositories ───────────────────────────────
+/** `<folder>/**`, built at run time so this file's text holds no glob literal over tracked files. */
+function under(folder: string): string {
+  return [folder, "**"].join("/");
+}
+
+// ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (REQ-FLOW-062, REQ-PROVE-031):
+// the lanes' suites come from the base commit's test-input map. The direction of risk is the same
+// as above: a path the map cannot answer for, an "all" entry, or no map at all is full CI.
+describe("decide — the lanes' suites from the base commit's map", () => {
+  const RUNS = under(".stamity/runs");
+  const DOCS = under("docs");
+  const SITE = under("website");
+
+  it("unions every entry a lane path matches, and leaves out an entry no changed path matches", () => {
+    const map = [
+      { glob: RUNS, tests: ["test/a.test.ts", "test/b.test.ts"] },
+      { glob: DOCS, tests: ["test/b.test.ts", "test/c.test.ts"] },
+      { glob: SITE, tests: ["test/w.test.ts"] },
+    ];
+    const paths = [".stamity/runs/x/record.md", "docs/plans/001-x.md"];
+    const decision = decideRaw({ event: "pull_request", base: SHA, paths, map });
+    expect(decision).toMatchObject({
+      full: false,
+      lanes: ["records"],
+      suites: ["test/a.test.ts", "test/b.test.ts", "test/c.test.ts"],
+      recordsOnly: true,
+    });
+    // The same union `selectTests` gives for these paths and this map (review/77).
+    expect(decision.suites).toEqual(selectTests({ paths, class: "records", map }).files);
+  });
+
+  it("names the census's records suites for a records-only diff", () => {
+    const paths = [".stamity/runs/x/record.md", INBOX];
+    const decision = decideTyped({ event: "push", base: SHA, paths });
+    expect(decision).toMatchObject({ full: false, lanes: ["records"], recordsOnly: true });
+    expect(decision.suites).toEqual(mapSelection(paths));
+    // The census lists its own guard on every records entry, which `RECORDS_SUITES` never did.
+    expect(decision.suites).toContain("test/ci/testInputsGuard.test.ts");
+  });
+
+  it("gives each lane the suites selectTests gives for that lane's paths", () => {
+    for (const [lane, patterns] of Object.entries(lanePaths)) {
+      const paths = patterns.map(sampleUnder);
+      const decision = decideTyped({ event: "pull_request", base: SHA, paths });
+      expect(decision.full, lane).toBe(false);
+      expect(decision.suites, lane).toEqual(mapSelection(paths));
+      expect(decision.suites.length, lane).toBeGreaterThan(0);
+    }
+  });
+
+  it("reads full with no map, an empty one, or the argument left out, building the site only for a site path", () => {
+    for (const map of [null, [], undefined]) {
+      const records = decideRaw({ event: "pull_request", base: SHA, paths: [".stamity/runs/x/record.md"], map });
+      expect(records, String(map)).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: false, recordsOnly: false });
+      const site = decideRaw({ event: "pull_request", base: SHA, paths: ["website/x.md"], map });
+      expect(site, String(map)).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true });
+    }
+    expect(decideRaw({ event: "push", base: SHA, paths: ["docs/x.md"], map: null }).reason).toMatch(/map/);
+  });
+
+  it("reads full when one lane path matches no entry, naming it", () => {
+    const map = [{ glob: RUNS, tests: ["test/a.test.ts"] }];
+    const decision = decideRaw({ event: "pull_request", base: SHA, paths: [".stamity/runs/x/record.md", "website/x.md"], map });
+    expect(decision).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true });
+    expect(decision.reason).toContain("website/x.md");
+  });
+
+  it("reads full when a matching entry says all, naming the entry", () => {
+    const map = [
+      { glob: RUNS, tests: ["test/a.test.ts"] },
+      { glob: DOCS, tests: "all" as const },
+    ];
+    const decision = decideRaw({ event: "push", base: SHA, paths: [".stamity/runs/x/record.md", "docs/plans/1.md"], map });
+    expect(decision).toMatchObject({ full: true, lanes: [], suites: [] });
+    expect(decision.reason).toContain(DOCS);
+    // An "all" entry no changed path matches selects nothing.
+    expect(decideRaw({ event: "push", base: SHA, paths: [".stamity/runs/x/record.md"], map })).toMatchObject({
+      full: false,
+      suites: ["test/a.test.ts"],
+    });
+  });
+
+  it("reads full when a selected name could reach the runner as an option or a pattern", () => {
+    // `parseClassFile` refuses these at the base; the pure half refuses them again, since the
+    // workflow passes the list to `npx vitest run` unquoted.
+    for (const name of ["--reporter=json", "test/a b.test.ts", "test/x/*.test.ts", "../outside.test.ts"]) {
+      const map = [{ glob: RUNS, tests: ["test/a.test.ts", name] }];
+      const decision = decideRaw({ event: "push", base: SHA, paths: [".stamity/runs/x/record.md"], map });
+      expect(decision, name).toMatchObject({ full: true, lanes: [], suites: [] });
+      expect(decision.reason, name).toContain(JSON.stringify(name));
+    }
+  });
+});
+
+/**
+ * The classifier's import closure: the script and every module it reaches through relative
+ * imports, as repository paths. A bare specifier other than a `node:` built-in fails the walk,
+ * since the `changes` job installs nothing.
+ */
+function importClosure(entry: string): string[] {
+  const SPECIFIER = /\b(?:from|import)\s*\(?\s*(["'])([^"']+)\1/g;
+  const seen = new Set<string>([entry]);
+  const queue = [entry];
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    for (const match of readFileSync(join(REPO_ROOT, file), "utf8").matchAll(SPECIFIER)) {
+      const specifier = match[2] ?? "";
+      if (specifier.startsWith("node:")) continue;
+      expect(specifier, `${file} imports a package the changes job has not installed`).toMatch(/^\.{1,2}\//);
+      const target = posix.normalize(posix.join(posix.dirname(file), specifier));
+      expect(existsSync(join(REPO_ROOT, target)), `${file} imports ${target}`).toBe(true);
+      if (!seen.has(target)) {
+        seen.add(target);
+        queue.push(target);
+      }
+    }
+  }
+  return [...seen].toSorted();
+}
+
+const SCRIPT_PATH = "scripts/ci/records-only.mjs";
+
+// ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (the sign-off on review/8): the
+// classifier runs from the pull request's head, so a change to it or to a module it imports
+// decides its own routing. No lane may hold those paths, and a diff touching one is full CI.
+describe("the lanes' own decision code", () => {
+  const closure = importClosure(SCRIPT_PATH);
+  // The cell names both modules; the walk adds what they import, so a new import joins the check.
+  const decisionCode = [...new Set([...closure, "src/change/classify.ts", "src/change/testInputs.ts"])].toSorted();
+
+  it("walks the script into the change classifier", () => {
+    expect(closure).toContain(SCRIPT_PATH);
+    expect(closure).toContain("src/change/classify.ts");
+    expect(closure.length).toBeGreaterThan(2);
+  });
+
+  it("gives a diff touching any of it full CI, alone or beside records, and no lane pattern holds it", () => {
+    for (const path of decisionCode) {
+      expect(laneOfTyped(path), path).toBeNull();
+      // Read as the classifier reads a pattern: `/**` holds every path beneath its folder, any
+      // other pattern one exact path.
+      for (const pattern of Object.values(lanePaths).flat()) {
+        const holds = pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : path === pattern;
+        expect(holds, `${pattern} holds ${path}`).toBe(false);
+      }
+      for (const paths of [[path], [".stamity/runs/x/record.md", path], [path, INBOX, "docs/plans/1.md"]]) {
+        const decision = decideTyped({ event: "pull_request", base: SHA, paths });
+        expect(decision, paths.join(" ")).toMatchObject({ full: true, lanes: [], suites: [] });
+        expect(decision.reason, paths.join(" ")).toContain(path);
+      }
+    }
+  });
+});
 
 const scratches: string[] = [];
 afterEach(() => {
   for (const dir of scratches.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-/** A throwaway repository with one base commit holding a code file and a record. */
-function repository(): { root: string; commit: (message: string) => string; write: (path: string, body: string) => void } {
+/**
+ * A throwaway repository with one base commit holding a code file, a record and the census map.
+ * TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+ * the base commit now carries the class file, since the script reads its lanes' suites from the
+ * base's map and answers full CI with none; every case below keeps the answer it had.
+ */
+function repository(
+  classFile: string | null = CENSUS_TEXT,
+): { root: string; commit: (message: string) => string; write: (path: string, body: string) => void } {
   const root = mkdtempSync(join(tmpdir(), "stamity-records-only-"));
   scratches.push(root);
   const git = (...args: string[]) =>
@@ -391,15 +629,16 @@ function repository(): { root: string; commit: (message: string) => string; writ
   write("src/cli.ts", "export {};\n");
   write(".stamity/runs/r1/record.md", "# record\n");
   write(INBOX, "# inbox\n");
+  if (classFile !== null) write(CLASS_FILE, classFile);
   commit("base");
   return { root, commit, write };
 }
 
-function run(root: string, args: readonly string[], env: Record<string, string> = {}) {
+function run(root: string, args: readonly string[], env: Record<string, string> = {}, script = SCRIPT) {
   const inherited = { ...process.env };
   delete inherited.GITHUB_OUTPUT;
   delete inherited.GITHUB_EVENT_NAME;
-  return spawnSync(process.execPath, [SCRIPT, ...args], {
+  return spawnSync(process.execPath, [script, ...args], {
     cwd: root,
     encoding: "utf8",
     env: { ...inherited, ...env },
@@ -488,12 +727,17 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     expect(result.status, result.stderr).toBe(0);
     // TEST CHANGE, justified (2026-10-08, unit a2-ci-lanes): the runner's file now receives the
     // six outputs, in the order the job maps them, after what an earlier step wrote.
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+    // the suites line was `RECORDS_SUITES`; it is the base map's selection for the plan, which the
+    // pure half computes from the same census map the scratch base commits.
+    const suites = decideTyped({ event: "push", base: SHA, paths: ["docs/plans/001-x.md"] }).suites;
+    expect(suites).toEqual(expect.arrayContaining([...RECORDS_FLOOR]));
     expect(readFileSync(output, "utf8")).toBe(
       [
         "earlier=1",
         "full=false",
         'lanes=["records"]',
-        `suites=${(RECORDS_SUITES as readonly string[]).join(" ")}`,
+        `suites=${suites.join(" ")}`,
         "site_build=false",
         "cli_check=false",
         "records_only=true",
@@ -514,7 +758,9 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     expect(outputsOf(result.stdout)).toEqual({
       full: "false",
       lanes: '["website"]',
-      suites: (laneSuites["website"] ?? []).join(" "),
+      // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
+      // the suites were `LANE_SUITES.website`; they are the base map's selection for the lockfile.
+      suites: mapSelection(["website/package-lock.json"]).join(" "),
       site_build: "true",
       cli_check: "false",
       records_only: "false",
@@ -556,5 +802,63 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     const result = run(repo.root, ["--bsae", "HEAD"], { GITHUB_EVENT_NAME: "push" });
     expect(result.status).toBe(2);
     expect(result.stdout).toBe("");
+  });
+
+  // ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map: the map is read from the base
+  // commit only. A change to the class file is in no lane, so a head that edits it runs full CI;
+  // the checked-out copy, which is the head's in CI, is never read.
+  it("reads the base commit's map, not the checked-out copy, when the head's drops a suite", () => {
+    const classFile = (tests: readonly string[]) => JSON.stringify({ testInputs: [{ glob: under(".stamity/runs"), tests }] });
+    const repo = repository(classFile(["test/records", "test/ci/leakGate.test.ts"]));
+    const base = repo.commit("noop");
+    repo.write(".stamity/runs/x/record.md", "# new record\n");
+    repo.commit("a record");
+    // The work tree's copy drops the leak gate, as a head commit would; git's diff never sees it.
+    repo.write(CLASS_FILE, classFile(["test/records"]));
+    const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "pull_request" });
+    expect(result.status, result.stderr).toBe(0);
+    expect(outputsOf(result.stdout)).toMatchObject({ full: "false", lanes: '["records"]', suites: "test/ci/leakGate.test.ts test/records" });
+  });
+
+  it("runs full CI when the base commit has no class file, or one the parser refuses", () => {
+    const refused = JSON.stringify({ testInputs: [{ glob: under(".stamity/runs"), tests: ["--reporter=json"] }] });
+    for (const classFile of [null, refused, "{ not json"]) {
+      const repo = repository(classFile);
+      const base = repo.commit("noop");
+      repo.write(".stamity/runs/x/record.md", "# new record\n");
+      repo.commit("a record");
+      const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "push" });
+      expect(result.status, result.stderr).toBe(0);
+      expect(outputsOf(result.stdout), String(classFile)).toMatchObject({ full: "true", lanes: "[]", suites: "", records_only: "false" });
+      expect(result.stderr, String(classFile)).toMatch(/map/);
+    }
+  });
+
+  // ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (plan/26): the `changes` job
+  // runs the script on Node 24 with no install, so every module it imports must load by type
+  // stripping alone. A module using syntax stripping cannot erase (an enum, a parameter property)
+  // fails here rather than in CI.
+  it("runs from a copy of its import closure with plain node and no node_modules", () => {
+    // The real path: the script's main-module check compares its argv path with its own URL,
+    // which Node resolves through a symlinked temp folder (macOS's /var), so the copy would not run.
+    const copy = realpathSync(mkdtempSync(join(tmpdir(), "stamity-records-only-closure-")));
+    scratches.push(copy);
+    for (const file of importClosure(SCRIPT_PATH)) {
+      mkdirSync(dirname(join(copy, file)), { recursive: true });
+      copyFileSync(join(REPO_ROOT, file), join(copy, file));
+    }
+    expect(existsSync(join(copy, "node_modules"))).toBe(false);
+    expect(existsSync(join(copy, "package.json"))).toBe(false);
+    const repo = repository();
+    const base = repo.commit("noop");
+    repo.write(".stamity/runs/x/record.md", "# new record\n");
+    repo.commit("a record");
+    const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "pull_request" }, join(copy, SCRIPT_PATH));
+    expect(result.status, result.stderr).toBe(0);
+    expect(outputsOf(result.stdout)).toMatchObject({
+      full: "false",
+      lanes: '["records"]',
+      suites: mapSelection([".stamity/runs/x/record.md"]).join(" "),
+    });
   });
 });

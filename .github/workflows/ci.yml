@@ -44,8 +44,9 @@
 #   - `lanes`, one leg, and ONLY when `changes` said `full=false` and no push was proven. It stands
 #     in for `check`, `apm-install` and `plugin-route`, which skip. No lane's paths feed the package
 #     build or a published byte, so what a change can break is what reads them: the suites that
-#     open the lanes' committed paths (`LANE_SUITES` in the classifier, the union of the lanes the
-#     change fell in), the generate-and-diff step, the leak gate, and on pull requests the hygiene
+#     open the lanes' committed paths (the union of every entry a changed path matches in the
+#     test-input map of the BASE commit's `.stamity/change-classes.json`, never the head's), the
+#     generate-and-diff step, the leak gate, and on pull requests the hygiene
 #     scan. The `learnings` lane adds the CLI build and its dogfood `check` (the session hook reads
 #     the learnings); the `website` lane adds the docs site build and the root typecheck (a test
 #     imports a `website/` module). The aggregator asserts which side ran, so a lanes pass can
@@ -761,9 +762,9 @@ jobs:
 
   # The short side, for a push or pull request whose every changed path falls in a lane. It
   # replaces `check`, `apm-install` and `plugin-route` rather than running beside them, so its
-  # steps are exactly what a lane's paths can break: the suites that read them (the classifier's
-  # `LANE_SUITES`, the union for the lanes the change fell in, arriving as data through `env:` —
-  # the classifier is the one source of the lists), the generate-and-diff step — the measurements
+  # steps are exactly what a lane's paths can break: the suites that read them (the union the base
+  # commit's test-input map gives the changed paths, arriving as data through `env:` — that map
+  # is the one source of the lists), the generate-and-diff step — the measurements
   # page renders from the committed runs and the reference pages live under `docs/`, and the
   # generators need no build — the leak gate over the whole tree, and on pull requests the same
   # hygiene scan the `check` LTS leg runs. Then, only for the lanes that ask: the CLI build and its
@@ -804,8 +805,9 @@ jobs:
           HYGIENE_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: node scripts/repo-hygiene.mjs --base "$HYGIENE_BASE_REF"
 
-      # Unquoted on purpose: the list is space-joined suite paths from the classifier's constants,
-      # never a path from the diff, and each word is one vitest filter.
+      # Unquoted on purpose: the list is space-joined suite paths from the base commit's class file,
+      # validated by `parseClassFile` (no whitespace, no leading `-`, no glob character), never
+      # from the diff, and each word is one vitest filter.
       - name: Lane suites
         env:
           SUITES: ${{ needs.changes.outputs.suites }}

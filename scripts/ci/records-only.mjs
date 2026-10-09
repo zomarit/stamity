@@ -11,9 +11,14 @@
 //
 // It fails closed. `full=false` needs all of: a push or pull_request event (read from
 // `GITHUB_EVENT_NAME`), a base that is a non-zero hex commit id git can resolve, a non-empty diff,
-// and EVERY path in `git diff --name-only --no-renames <base> HEAD` inside some lane. Any other
-// answer — a schedule, a dispatch, a new branch's all-zero base, a base git cannot find, one path
-// in no lane — is `full=true`, which is full CI. `site_build=true` whenever the diff touches a
+// EVERY path in `git diff --name-only --no-renames <base> HEAD` inside some lane, and a valid
+// test-input map at the base commit (`git show <base>:.stamity/change-classes.json`, validated by
+// `parseClassFile`) with an entry matching every changed path and none of those saying "all". The
+// suites are the union of the `tests` of every entry a changed path matches (REQ-FLOW-062). The
+// checked-out copy of the map is never read: in CI it is the head's, which the change could edit.
+// Any other answer — a schedule, a dispatch, a new branch's all-zero base, a base git cannot find,
+// one path in no lane, no map or a refused one at the base, a path no entry matches — is
+// `full=true`, which is full CI. `site_build=true` whenever the diff touches a
 // website path, on a full answer too (the full side's LTS leg builds the site then), and whenever
 // the diff could not be read; an empty diff builds no site. `records_only=true` still means every
 // path is a record; it is derived from the lanes, nothing in ci.yml reads it, and it is kept for
@@ -21,40 +26,30 @@
 // merges.
 // Exit 2 is reserved for an argument this script does not know, so a typo in the workflow is red
 // rather than quietly full.
+//
+// `src/change/classify.ts`, and what it imports, load by Node's type stripping: the `changes` job
+// runs Node 24 with no install, so that closure must stay erasable TypeScript over Node built-ins
+// (`test/ci/recordsOnly.test.ts` runs a copy of it with plain `node`, and gives a change to any
+// module in it full CI).
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { CLASS_FILE, matchGlob, parseClassFile, testEntryError } from '../../src/change/classify.ts'
 
 /**
  * The record locations: run records, the deferral inbox, handoffs, and plans. What they share is
  * that no build, no emitted file and no published byte reads them; the suites that DO read the
- * committed copies are `RECORDS_SUITES`, which the records lane runs instead of the full matrix.
- * `.stamity/learnings/` is deliberately absent: it feeds the session hook and the troubleshooting
- * count, so it is its own lane, which also builds the CLI and runs its `check`.
+ * committed copies are the ones the base commit's test-input map lists for them, which the records
+ * lane runs instead of the full matrix. `.stamity/learnings/` is deliberately absent: it feeds the
+ * session hook and the troubleshooting count, so it is its own lane, which also builds the CLI and
+ * runs its `check`.
  */
 export const RECORDS_PATHS = Object.freeze([
   '.stamity/runs/**',
   '.stamity/inbox.md',
   '.stamity/handoffs/**',
   'docs/plans/**',
-])
-
-/**
- * The suites that read the REAL repository-root copies of the record locations, confirmed by
- * reading each suite on 2026-09-30: the ledgers and the spec-status plan walk (`test/records`),
- * the plan-coverage check over two committed plans, the measurements page rendered from the
- * committed runs, and the two suites that run the leak gate over the whole tree. It is the records
- * lane's list in `LANE_SUITES`, and the specs lane's starts with it. The `lanes` job in
- * `.github/workflows/ci.yml` runs the `suites` output this script prints, so the workflow spells
- * no list of its own; `test/ci/recordsOnly.test.ts` pins this one.
- */
-export const RECORDS_SUITES = Object.freeze([
-  'test/records',
-  'test/docsPages.test.ts',
-  'test/cli/docs/measurements.test.ts',
-  'test/authoring/specPlanCoverage.test.ts',
-  'test/ci/leakGate.test.ts',
 ])
 
 /**
@@ -68,39 +63,6 @@ export const LANE_PATHS = Object.freeze({
   specs: Object.freeze(['docs/specs/**']),
   learnings: Object.freeze(['.stamity/learnings/**']),
   website: Object.freeze(['website/**', 'docs/**']),
-})
-
-/**
- * The suites each lane runs: those that read that lane's REAL repository-root copies, confirmed on
- * 2026-10-08 by reading every test that opens such a path. Specs: every records suite (a plan
- * naming a new spec lands in both), the spec-status walk, the plan-coverage check and the site
- * roster's exclusion of `docs/specs/`. Learnings: the learnings suite and the whole-tree leak gate;
- * the session hook's read of them is what the lane's `check` step proves. Website: the site, roster
- * and table-header suites over `website/`, every suite reading a `docs/` page or regenerating one,
- * and the leak gate.
- */
-export const LANE_SUITES = Object.freeze({
-  records: RECORDS_SUITES,
-  specs: Object.freeze([...RECORDS_SUITES, 'test/records/specStatus.test.ts', 'test/ci/docsRoster.test.ts']),
-  learnings: Object.freeze(['test/learnings/repoLearnings.test.ts', 'test/ci/leakGate.test.ts']),
-  website: Object.freeze([
-    'test/ci/docsSite.test.ts',
-    'test/ci/docsRoster.test.ts',
-    'test/ci/tableHeaderScope.test.ts',
-    'test/docsPages.test.ts',
-    'test/ci/workflow.test.ts',
-    'test/ci/leakGate.test.ts',
-    'test/cli/docs/cliReference.test.ts',
-    'test/cli/docs/configReference.test.ts',
-    'test/cli/docs/measurements.test.ts',
-    'test/cli/docs/referencePages.test.ts',
-    'test/cli/docs/llmsIndex.test.ts',
-    'test/cli/commands/check.test.ts',
-    'test/content/invariantsVersion.test.ts',
-    'test/emit/capabilityMatrix.test.ts',
-    'test/corpus/invariants.test.ts',
-    'test/ci/packSigningRehearsal.test.ts',
-  ]),
 })
 
 /** The events whose diff can take a lane. Everything else is full CI. */
@@ -149,10 +111,43 @@ function fullCi(reason, siteBuild) {
 }
 
 /**
- * The classification, with no I/O: `{ full, lanes, suites, siteBuild, cliCheck, recordsOnly,
- * reason }`. `lanes` is sorted; `suites` is the union in `LANE_SUITES` order, each suite once.
+ * Whether `path` matches `glob` by either reading of `\`, as `selectTests` matches a map entry, so
+ * a lane's suites are the same union `selectTests` gives for its paths (review/77).
  */
-export function decide({ event, base, paths }) {
+function entryMatches(path, glob) {
+  return matchGlob(path, glob) || matchGlob(path, glob, { literal: true })
+}
+
+/**
+ * The suites the map gives `paths`, or the reason it cannot answer narrow: the union of the
+ * `tests` of every entry a path matches, sorted. A path no entry matches, a matching `"all"`
+ * entry, or a selected name a runner could misread (`testEntryError`; the workflow passes the list
+ * unquoted) is a reason. No class enters: a lane asks which suites read a path, not which gates
+ * its class needs.
+ */
+function suitesFromMap(paths, map) {
+  const suites = new Set()
+  for (const path of paths) {
+    const entries = map.filter(entry => entryMatches(path, entry.glob))
+    if (entries.length === 0) return { reason: `${path} matches no entry of the base commit's test-input map` }
+    const every = entries.find(entry => entry.tests === 'all')
+    if (every !== undefined) return { reason: `the test-input entry ${every.glob} selects every test and matches ${path}` }
+    for (const entry of entries) for (const test of entry.tests) suites.add(test)
+  }
+  for (const suite of suites) {
+    const problem = testEntryError(suite)
+    if (problem !== undefined) return { reason: `the selected name ${JSON.stringify(suite)} ${problem}` }
+  }
+  return { suites: [...suites].toSorted() }
+}
+
+/**
+ * The classification, with no I/O: `{ full, lanes, suites, siteBuild, cliCheck, recordsOnly,
+ * reason }`. `map` is the base commit's parsed `testInputs`, or `null` when it has none or a
+ * refused one; `null` and an absent `map` are full CI. `lanes` is sorted; `suites` is the sorted
+ * union of every map entry a changed path matches, each suite once.
+ */
+export function decide({ event, base, paths, map = null }) {
   if (!DIFF_EVENTS.has(event ?? '')) return fullCi(`event "${event ?? ''}" always runs full CI`, true)
   const verdict = baseProblem(base)
   if (verdict !== null) return fullCi(verdict, true)
@@ -165,8 +160,11 @@ export function decide({ event, base, paths }) {
     else hit.add(lane)
   }
   if (outside !== null) return fullCi(`${outside} is in no lane`, hit.has('website'))
+  if (map === null) return fullCi('no valid test-input map at the base commit names the lanes\' suites', hit.has('website'))
+  const selection = suitesFromMap(paths, map)
+  if (selection.suites === undefined) return fullCi(selection.reason, hit.has('website'))
   const lanes = [...hit].toSorted()
-  const suites = [...new Set(Object.keys(LANE_SUITES).filter(lane => hit.has(lane)).flatMap(lane => LANE_SUITES[lane]))]
+  const suites = selection.suites
   return {
     full: false,
     lanes,
@@ -211,6 +209,27 @@ function changedPaths(base, cwd) {
   }
 }
 
+/**
+ * The base commit's test-input map, or null when the base has no class file or one
+ * `parseClassFile` refuses. Read with `git show <base>:<path>` only: the checked-out copy is the
+ * head's, which the change itself could have edited.
+ */
+function loadBaseMap(base, cwd = process.cwd()) {
+  let text
+  try {
+    text = execFileSync('git', ['show', `${base}:${CLASS_FILE}`], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  } catch {
+    return null
+  }
+  const parsed = parseClassFile(text)
+  return parsed.ok ? parsed.testInputs : null
+}
+
 function parseArgs(argv) {
   const args = { base: undefined }
   for (let index = 0; index < argv.length; index += 1) {
@@ -239,7 +258,7 @@ function main(argv) {
   if (DIFF_EVENTS.has(event ?? '') && baseProblem(args.base) === null) {
     const paths = changedPaths(args.base, process.cwd())
     decision = Array.isArray(paths)
-      ? decide({ event, base: args.base, paths })
+      ? decide({ event, base: args.base, paths, map: loadBaseMap(args.base) })
       : fullCi(`git could not diff against the base: ${paths.failure}`, true)
   }
   const lines = outputLines(decision)

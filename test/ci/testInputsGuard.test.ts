@@ -345,25 +345,58 @@ describe("this repository's test-input map", () => {
     expect([...gaps].toSorted()).toEqual([]);
   });
 
-  const laneSuites = (lanes as Record<string, unknown>)["LANE_SUITES"] as Record<string, readonly string[]> | undefined;
-  const lanePaths = (lanes as Record<string, unknown>)["LANE_PATHS"] as Record<string, readonly string[]>;
+  const laneOf = (lanes as Record<string, unknown>)["laneOf"] as (path: string) => string | null;
+  const decide = (lanes as Record<string, unknown>)["decide"] as (input: {
+    event: string;
+    base: string;
+    paths: readonly string[];
+    map: readonly TestInputEntry[] | null;
+  }) => { full: boolean; suites: readonly string[]; reason: string };
 
-  // While records-only.mjs still spells its lanes' suites, the map gives each lane path that lane's suites, so CI's
-  // lanes keep theirs when they read the map (p2c). After p2c the map is the one list, and there is nothing to compare.
-  it.runIf(laneSuites !== undefined)("gives every lane path an entry listing that lane's suites", () => {
+  // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map, build/45): this case
+  // compared each lane pattern's entry with `LANE_SUITES` and ran only while the classifier exported it, so p2c's removal
+  // would have skipped it silently. The map is now the one list CI's lanes read, so the case reads the map through the
+  // lanes' own `decide`: every tracked path in a lane takes a narrow answer (an entry matches it and none says "all"),
+  // and its suites are the ones `selectTests` gives it (review/77, the union). The per-lane floor of the suites
+  // `LANE_SUITES` listed is pinned in `recordsOnly.test.ts`.
+  it("gives every tracked lane path a narrow lane answer from the map, the suites selectTests gives it", () => {
     const gaps: string[] = [];
-    for (const [lane, patterns] of Object.entries(lanePaths)) {
-      for (const pattern of patterns) {
-        const entry = map.find((candidate) => candidate.glob === pattern);
-        if (entry === undefined) {
-          gaps.push(`${lane}: no entry for ${pattern}`);
-          continue;
-        }
-        for (const suite of laneSuites?.[lane] ?? []) {
-          if (!covers(entry, suite)) gaps.push(`${lane}: ${pattern} does not list ${suite}`);
-        }
+    let laned = 0;
+    for (const path of tracked) {
+      if (laneOf(path) === null) continue;
+      laned += 1;
+      const decision = decide({ event: "pull_request", base: "a".repeat(40), paths: [path], map });
+      if (decision.full) {
+        gaps.push(`${path}: ${decision.reason}`);
+        continue;
+      }
+      const selected = selectTests({ paths: [path], class: "records", map }).files;
+      if (decision.suites.join(" ") !== selected.join(" ")) gaps.push(`${path}: lanes ${decision.suites.join(" ")} != ${selected.join(" ")}`);
+    }
+
+    expect(laned).toBeGreaterThan(100);
+    expect(gaps).toEqual([]);
+  });
+
+  // ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (the close-list notes of p2d-security-r1 and
+  // lanea-security-r5): the leak gate walks the whole tree, so `extractReadPaths` cannot derive it and a regenerated map
+  // could drop it with the census still green. Every entry a records or docs path matches carries both whole-tree
+  // leak-gate suites, so neither a narrow local selection nor a CI lane skips the gate on such a change.
+  it("lists both whole-tree leak-gate suites on every entry a records or docs path matches", () => {
+    const leakGate = ["test/ci/leakGate.test.ts", "test/docsPages.test.ts"];
+    const rules = parsed.ok ? mergeRules(BUILT_IN_RULES, parsed.rules) : BUILT_IN_RULES;
+    const gaps = new Set<string>();
+    const entries = new Set<string>();
+    for (const path of tracked) {
+      const cls = classifyChange({ paths: [path], base: "given" }, rules).class;
+      if (cls !== "records" && cls !== "docs") continue;
+      for (const entry of map.filter((candidate) => matchGlob(path, candidate.glob))) {
+        entries.add(entry.glob);
+        for (const suite of leakGate) if (!covers(entry, suite)) gaps.add(`${entry.glob} does not list ${suite}`);
       }
     }
-    expect(gaps).toEqual([]);
+
+    expect(entries.size).toBeGreaterThan(3);
+    expect([...gaps].toSorted()).toEqual([]);
   });
 });
