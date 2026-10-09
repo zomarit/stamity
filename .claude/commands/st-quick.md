@@ -143,10 +143,38 @@ of 5 growing past a threshold stops the batch there:
 
 Gates run on every batch, a one-line typo fix included.
 
-- Spawn `test-runner` with the changed-file list. It runs `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` once,
-  as the charter spells it, and returns a gate-by-gate result: exact commands, verbatim failing
-  excerpts, never a bare pass/fail. A row whose exit code the runner could not read is `unknown`,
-  and an unknown row is never green.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.12.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+When neither form runs, the batch runs `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` and the report lists `secret scan: not run` under `Not done:`.
+
+The gate is three steps, in order, after the last item lands:
+
+1. **Scan.** `stamity gate scan --base HEAD` reads the batch's added lines and untracked files
+   for secrets. A hit stops the batch: the report names path, line and rule, never the value.
+   A hit is never cleared by rewriting the value and scanning again, and a hit on a deliberate
+   fixture is the person's to settle. A non-empty `unscanned` list puts
+   `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A scan that names a
+   `reason` instead of hits did not read the change, so the batch takes the fallback line above.
+2. **Classify.** `stamity gate classify --base HEAD --json` names the batch's class and its
+   checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the items
+   whose files `byPath` places there, or whose lines a rule hit, are reverted and move to
+   `/st-work` with the rest of the batch, as Mid-run re-escalation moves an item. The refusal
+   names the row and the rule that placed the item. There is no size floor, and no lens runs
+   inside the quick lane.
+3. **Run.** Spawn `test-runner` with the changed-file list and the class's checks, each run once
+   as the charter spells it: `tests-selected` → `node scripts/ci/test-run.mjs --coverage` with the selected
+   files appended; `lint` → `npm run lint`; `typecheck` →
+   `npm run typecheck`; `gates-all`, an unclear class, or a test command that
+   takes no file list → `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`. `review`, `review-once` and
+   `dependency-audit` add nothing here: quick runs no review loop, and the `Dependencies` row
+   refuses a lockfile change before this step. A `docs` class with no selected tests runs the
+   scan alone, and the report names the class. The runner returns a gate-by-gate result: exact
+   commands, verbatim failing excerpts, never a bare pass/fail. A row whose exit code the runner
+   could not read is `unknown`, and an unknown row is never green.
+
+The narrower gates rest on one condition: the repository's CI runs the full matrix on every
+`product` or stronger change and on a schedule. Where the charter's `CI provider` reads
+`unknown`, the batch runs `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` whatever its class.
+
 - No flag, tier, or batch size turns this step off. A batch whose gates are red is not done —
   fix inside the same Tier-1 envelope, or revert the batch and escalate. Reporting a red gate
   as done is a contract breach.
