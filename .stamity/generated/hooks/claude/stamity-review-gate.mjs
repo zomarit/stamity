@@ -3,7 +3,7 @@
 // stamity — work-scoped review gate.
 //
 // Holds a run's completion while its review loop has an open round, up to
-// round 4. At the cap the gate opens: the run's ladder ends it as
+// round 3. At the cap the gate opens: the run's ladder ends it as
 // BLOCKED_FAILURE with the open findings attached, and a hook that kept
 // blocking past its own cap would be the unbounded gate this design avoids.
 //
@@ -49,7 +49,7 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity","review-gate.json"];
 const MAX_STATE_BYTES = 131072;
-const MAX_ROUNDS = 4;
+const MAX_ROUNDS = 3;
 const MAX_RUN_AGE_MS = 604800000;
 const MAX_RUNS = 200;
 const MAX_ID_CHARS = 128;

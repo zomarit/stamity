@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T00:18:48.871Z",
+  "updatedAt": "2026-10-09T00:20:04.729Z",
   "tools": [
     "claude"
   ],
@@ -526,7 +526,7 @@
       "adapter": "claude",
       "artifactId": "claude-review-gate",
       "artifactType": "infra",
-      "contentHash": "484205da3f598551e7ea16e6ca63cf9c3d555d4de52f0ff051e42d5d785dd2fc",
+      "contentHash": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7",
       "path": ".stamity/generated/hooks/claude/stamity-review-gate.mjs"
     },
     {
@@ -540,7 +540,7 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "f04d76ee1542003b1c03e1b0507350422e0dac25cc5254307934c819ad4ed355",
+      "contentHash": "9458a9dbc9b69ad5621538e2636c61e976322a7ad06c2711cba6ea9e54d90091",
       "path": "AGENTS.md",
       "stampedVersion": "1.12.0"
     },

@@ -24,7 +24,7 @@ Run before declaring any change done.
 - Full gate: `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -39,7 +39,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a `Not done:` list naming each open gap.
 5. **Learnings first.** Read `.stamity/learnings/` before project-specific work;
    repeating a recorded failure is a process defect.
