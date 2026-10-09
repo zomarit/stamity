@@ -26,7 +26,9 @@ import * as lanes from "../../scripts/ci/records-only.mjs";
  * glob matches it. Covered means an entry whose glob matches the path lists the test, lists a
  * folder holding it, or says `"all"`. A helper's reads count for every test file that imports it,
  * directly or through other helpers, since the map can only name test files. A path under a
- * built-in test glob needs no entry: a change to it runs every test (rule (1), review/66). A glob
+ * built-in test glob needs no entry of its own: a changed helper or fixture there runs every test
+ * (rule (1), review/66), and a changed test file runs itself plus the `test/**` entry, which lists
+ * this guard and the whole-tree scanners that read test files at run time (p2d security W-1). A glob
  * literal over the cost bound gives no declarable reads and fails here, naming it (review/62,
  * review/75: the tests globs come from the class file, not from this file).
  *
@@ -305,6 +307,21 @@ describe("this repository's test-input map", () => {
     const guard = "test/ci/testInputsGuard.test.ts";
 
     expect(map.some((entry) => matchGlob("test/x/new.test.ts", entry.glob) && covers(entry, guard))).toBe(true);
+  });
+
+  // p2d security W-1: a tests change selects only itself and the test/** entry, so the scanners that walk the whole
+  // tree (private-layer ids, reserved names, emails, canonical literals) ride on that entry, and an evals change keeps them.
+  it("selects the whole-tree scanners for a change under test/ or evals/", () => {
+    const scanners = ["test/ci/leakGate.test.ts", "test/docsPages.test.ts", "test/ci/forkIdentity.test.ts"];
+    for (const path of ["test/x/new.test.ts", "evals/x/new.md"]) {
+      const matching = map.filter((entry) => matchGlob(path, entry.glob));
+      for (const scanner of scanners) {
+        expect(
+          matching.some((entry) => covers(entry, scanner)),
+          `${scanner} for ${path}`,
+        ).toBe(true);
+      }
+    }
   });
 
   // p2d W-1 (option a): the census reads the tracked set, so a records or docs change that adds a file an existing

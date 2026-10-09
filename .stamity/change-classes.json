@@ -220,10 +220,14 @@
         "test/worktree/policy.test.ts"
       ]
     },
+    { "glob": "evals/**", "tests": "all" },
     {
       "glob": "test/**",
       "tests": [
-        "test/ci/testInputsGuard.test.ts"
+        "test/ci/forkIdentity.test.ts",
+        "test/ci/leakGate.test.ts",
+        "test/ci/testInputsGuard.test.ts",
+        "test/docsPages.test.ts"
       ]
     }
   ]
