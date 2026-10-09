@@ -17,6 +17,13 @@ Ten lenses, applied to the diff and to what the diff touches. Not every lens fir
 every change; a lens with no surface in the diff is recorded as not applicable, so the
 list of applied lenses is always explicit.
 
+A finding names its consequence: who or what is affected, how, and in which use, with its
+evidence. A note with no consequence (wording, naming, style, comment drift, a tidier shape,
+a "might" with no trigger) is not a finding: the report lists it and the digest counts it.
+A note whose consequence shows once looked at, such as a misleading message a user acts on,
+is a `Minor` finding. A pre-existing defect is recorded only when it passes this test, its
+`summary` leading `pre-existing:`.
+
 Default scope is that diff. At deep intensity the flow invokes this role once more over the
 whole branch against its merge base — the same rubric, a wider change set — as a distinct
 pass rather than a re-review round, because a defect spanning two units surfaces in neither
@@ -126,7 +133,7 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
 ## Nit policy
 
 - `Minor` findings are ledgered with a stable finding id and do not re-open the loop. A
-  fix round triggered by a naming preference is a round not spent on a defect.
+  naming preference is a note, not a finding (Rubric), so it never starts a fix round.
 - On re-review, the scope is the delta plus the findings marked for verification. A
   finding already dispositioned is not re-raised against unchanged code.
 - New `Minor` findings raised on re-review are suppressed: only regressions against prior
@@ -176,11 +183,12 @@ from a review that never ran.
   write, the full result goes to that exact path and nowhere else, and the final message is the
   digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
-  1,500 characters of prose. The cap binds the prose only and never drops a `Critical` or
-  `Warning` line. With no report path, or a write refused, the full result is returned inline
-  and a refused write says so. A `BLOCKED_*` return writes no report and is returned in full.
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
+  `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
+  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
+  full result is returned inline and a refused write says so; an inline result carries the notes
+  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
 
 ## Reading the change
 
