@@ -15,8 +15,9 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     with one example, then the no-findings sentence.
  *   - **(d) What stays.** The reviewer's own Warning rule in `## Critical rows` stays word
  *     for word, and `/st-rework`'s severity vocabulary keeps its three lines (20–22). Its
- *     severity inference and its leftover scan's cleanup rows grade a nit Minor only with a
- *     named consequence, a note otherwise, in the lines they held.
+ *     severity inference grades a person's nit Minor, never a note, and its leftover scan's
+ *     cleanup rows grade one Minor only with a named consequence, a note otherwise; the notes
+ *     are listed under the routing table and counted in the proof block, in the lines they held.
  *   - **(e) Red checks.** The checker is pure over a {@link CorpusFile}, so a reworded,
  *     missing or misplaced section is exercised on real bodies with one edit each.
  *   - **(f) Capture by consequence** (REQ-FLOW-072, REQ-CTX-002). A role records a finding
@@ -439,29 +440,60 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
    * interview's severity inference and the leftover scan's cleanup rows grade by the same scale,
    * a Minor only with a named consequence and a note otherwise, each in the lines it held, so no
    * eval range after them moves.
+   *
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, fix round 2 for the p8
+   * Minors fix (review/72, W-1, both options signed off). The pin held the interview's "nit",
+   * "polish", "cosmetic" → "Minor with a named consequence, else a note", which made a person's
+   * own nit a note, and notes reached no plan unit, no inbox row, no table and no proof block. A
+   * person's item is never a note, since their ask is its consequence, so it stays Minor. The
+   * scan's seven cleanup rows keep their default; the notes they yield are recorded as such,
+   * listed under the routing table, counted in the proof block, and named in the routing preamble
+   * as the one thing outside the table, so its totality claim stays true. Every line is rewritten
+   * in place, so the routing, deferral-protocol and proof-block ranges the eval cases quote hold.
    */
-  it("(d) grades /st-rework's nits and cleanup rows by the scale, in the lines they held", async () => {
+  it("(d) grades a person's nit Minor and lists and counts scan notes, in the lines they held", async () => {
     const rework = await load(REWORK);
     const lines = rework.raw.split("\n");
     const inference = lines.findIndex((line) => line.startsWith("**Severity inference.**"));
     const scan = lines.findIndex((line) => line.startsWith("## 3. Leftover scan"));
     const routing = lines.findIndex((line) => line.startsWith("## 4. Routing"));
+    const protocol = lines.findIndex((line) => line.startsWith("### Critical Deferral Protocol"));
+    const proof = lines.findIndex((line) => line.startsWith("Close with this run's proof block:"));
     const scanText = lines.slice(scan, routing);
     const defaults = scanText
       .filter((line) => /^\| \d+ \|/.test(line))
       .map((line) => line.split("|").at(-2)?.trim());
+    const preamble = flat(lines.slice(routing + 2, routing + 7).join("\n"));
 
-    expect(flat(lines.slice(inference, inference + 5).join("\n"))).toContain(
-      "\"nit\", \"polish\", \"cosmetic\" → Minor with a named consequence, else a note.",
+    const inferenceText = flat(lines.slice(inference, inference + 5).join("\n"));
+    expect(inferenceText).toContain(
+      "\"nit\", \"polish\", \"cosmetic\" → Minor, never a note: their ask is its consequence.",
     );
+    expect(inferenceText).not.toContain("else a note");
     expect(lines[inference + 5]).toBe("");
     expect(rework.raw).not.toContain("\"cosmetic\" → Minor.");
     expect(flat(scanText.join("\n"))).toContain("A note is not a finding and is never routed.");
+    expect(flat(scanText.join("\n"))).toContain("its category, a severity or `note`, and a one-line remedy.");
     expect(defaults).toHaveLength(13);
     expect(defaults).not.toContain("Minor");
     expect(defaults.filter((cell) => cell === "Minor with a named consequence, else a note")).toHaveLength(7);
-    // The routing section the eval cases quote opens where it did before this fix.
+    // The routing preamble names notes as the one thing outside the table, which keeps it total.
+    expect(preamble).not.toContain("the leftover scan defaulting each category to a severity");
+    expect(preamble).toContain("the table is total — no finding leaves phase 4 as neither a plan unit nor an inbox row.");
+    expect(preamble).toContain(
+      "A scan note is the one thing outside it: it is listed under the presented table as " +
+        "`note · file:line · category · remedy` and counted, never routed.",
+    );
+    expect(lines[routing + 7]).toBe("");
+    // The proof block counts the notes beside the findings by severity.
+    expect(flat(lines.slice(proof, proof + 4).join("\n"))).toContain(
+      "findings by severity plus the notes count, REVISE/DEFER counts,",
+    );
+    expect(lines[proof + 4]).toBe("");
+    // The sections the eval cases quote open where they did before this fix.
     expect(routing + 1).toBe(154);
+    expect(protocol + 1).toBe(187);
+    expect(proof + 1).toBe(267);
   });
 
   it("(e) fails when one word of the section is reworded", async () => {

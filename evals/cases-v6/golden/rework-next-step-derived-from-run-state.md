@@ -15,10 +15,10 @@ in the live session.
 Governing text — `content/commands/st-rework.md`, "Plan handoff":
 
 ```text
-Close with this run's proof block: baseline source (proof record, or `no proof record`),
-findings by severity, REVISE/DEFER counts, validation verdicts with confidence, plan-lint per
-check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`, the plan
-path, and the inbox rows added.
+Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
+by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
+plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`,
+the plan path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what

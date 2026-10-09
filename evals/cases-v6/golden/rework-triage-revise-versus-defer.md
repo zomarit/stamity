@@ -30,9 +30,9 @@ Governing text — `content/commands/st-rework.md`, "4. Routing — REVISE or DE
 
 Rows are read top to bottom and the first match wins. The last three are catch-alls, one per
 severity: a finding reaches one only when no specific scope above it matched, so they shadow
-nothing. With every severity carrying a catch-all and the leftover scan defaulting each category
-to a severity, the table is total — no finding leaves phase 4 as neither a plan unit nor an
-inbox row.
+nothing. With every severity carrying a catch-all, the table is total — no finding leaves phase 4
+as neither a plan unit nor an inbox row. A scan note is the one thing outside it: it is listed
+under the presented table as `note · file:line · category · remedy` and counted, never routed.
 
 | Severity | Scope | Route |
 |---|---|---|
