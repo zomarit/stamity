@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T04:58:38.288Z",
+  "updatedAt": "2026-10-09T05:11:06.313Z",
   "tools": [
     "claude"
   ],
@@ -127,7 +127,7 @@
       "adapter": "claude",
       "artifactId": "test-runner",
       "artifactType": "agent",
-      "contentHash": "5c94bb50438bd3919354d2ea0c0afda58bc2e9c18f2521cdf9f9f3dd0df6e7a2",
+      "contentHash": "bce06d7d61b54a7b0291919cf8c61b18c1cd25fb28924435d4396d8a8106a66a",
       "path": ".claude/agents/stamity-test-runner.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "8e112b2bc7dd4c599777f0de133e96e5eea1b94cb03ee9b6a11ac14d40ece6e0",
+      "contentHash": "55bedf4402a470e36c8b893998fe05c406c66cfa9cc4e0419fc766164d8f325d",
       "path": ".claude/commands/st-work.md"
     },
     {
