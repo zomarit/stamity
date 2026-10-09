@@ -707,6 +707,124 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(doc["reason"]).toContain("no base was given");
   });
 
+  // review/191 (signed off as option (b)): with no --base the read sees only the uncommitted change, so committed
+  // work HEAD holds and its upstream (or, with none, origin/HEAD) lacks raises the class to at least product.
+  describe("committed work no base classified (review/191)", () => {
+    /** A repository pushed once to a local bare remote with its upstream set, then a committed src/ change and an uncommitted docs edit. */
+    async function aheadOfUpstream(): Promise<string> {
+      const remote = getRoot().path("remote.git");
+      git(getRoot().path(), ["init", "-q", "--bare", remote]);
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
+      git(repo, ["remote", "add", "origin", remote]);
+      git(repo, ["push", "-q", "-u", "origin", "HEAD"]);
+      await getRoot().seedFiles({ "repo/src/b.ts": "export const b = 1;\n" });
+      git(repo, ["commit", "-q", "-am", "product code"]);
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+      return repo;
+    }
+
+    it("floors at product, naming the commit and --base, when HEAD holds a commit its upstream lacks", async () => {
+      const repo = await aheadOfUpstream();
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["base"]).toBeNull();
+      expect(doc["checks"]).toContain("gates-all");
+      expect(doc["paths"]).toEqual(["docs/a.md"]);
+      expect(doc["reason"]).toContain("HEAD holds 1 commit origin/master lacks");
+      expect(doc["reason"]).toContain("so the class is at least product");
+      expect(doc["reason"]).toContain("--base");
+    });
+
+    it("keeps today's reading once the commit is pushed", async () => {
+      const repo = await aheadOfUpstream();
+      git(repo, ["push", "-q"]);
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("docs");
+      expect(doc["reason"]).not.toContain("HEAD holds");
+    });
+
+    it("leaves an explicit --base unaffected", async () => {
+      const repo = await aheadOfUpstream();
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("docs");
+      expect(doc["reason"]).not.toContain("HEAD holds");
+    });
+
+    it("keeps today's reading in a repository with no remote", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/b.ts": "export const b = 1;\n" });
+      git(repo, ["commit", "-q", "-am", "product code"]);
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("docs");
+      expect(doc["reason"]).not.toContain("HEAD holds");
+    });
+
+    it("reads origin/HEAD for a branch with no upstream", async () => {
+      const remote = getRoot().path("remote.git");
+      git(getRoot().path(), ["init", "-q", "--bare", remote]);
+      const seed = await seedRepo("seed", { "docs/a.md": "base\n", "src/b.ts": "export {};\n" });
+      git(seed, ["push", "-q", remote, "HEAD:refs/heads/master"]);
+      const clone = getRoot().path("clone");
+      git(getRoot().path(), ["clone", "-q", remote, clone]);
+      git(clone, ["checkout", "-q", "-b", "feature"]);
+      await getRoot().seedFiles({ "clone/src/b.ts": "export const b = 1;\n", "clone/src/c.ts": "export {};\n" });
+      git(clone, ["add", "-A"]);
+      git(clone, ["commit", "-q", "-m", "one"]);
+      await getRoot().seedFiles({ "clone/src/c.ts": "export const c = 1;\n" });
+      git(clone, ["commit", "-q", "-am", "two"]);
+      await getRoot().seedFiles({ "clone/docs/a.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(clone, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("HEAD holds 2 commits origin/HEAD lacks");
+    });
+
+    it("floors at product when the configured upstream does not resolve", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      git(repo, ["config", "branch.master.remote", "origin"]);
+      git(repo, ["config", "branch.master.merge", "refs/heads/master"]);
+      git(repo, ["config", "remote.origin.url", getRoot().path("nowhere.git")]);
+      git(repo, ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"]);
+      git(repo, ["checkout", "-q", "-B", "master"]);
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("its upstream origin/master does not resolve");
+      expect(doc["reason"]).toContain("--base");
+    });
+
+    it("floors at product, naming the failed read, when counting the commits fails", async () => {
+      const repo = await aheadOfUpstream();
+      git(repo, ["push", "-q"]);
+      gitSpy.fault = { step: "--count", error: realFailure("process.exit(128)") };
+
+      const { code, doc } = await classifyIn(repo, []);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["paths"]).toEqual(["docs/a.md"]);
+      expect(doc["reason"]).toContain("the commits HEAD holds beyond origin/master could not be read (git rev-list failed, exit 128)");
+    });
+  });
+
   it("classifies --paths against a resolved --base, reading no diff", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     await getRoot().seedFiles({ "repo/src/b.ts": "untracked\n" });

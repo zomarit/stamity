@@ -916,7 +916,11 @@ the full gates (`gates-all`) and the review loop. A `security-sensitive` class n
   ways (`src/cli/commands/gate.ts:50-61`, `:1211-1213`; `review/43`).
 - **The base.** `--base <ref>` resolves once to a commit; a ref starting with `-` is refused with exit 2 before git
   runs (`:145-149`, `:159-167`). With no `--base`, each known path takes its built-in class, no class file is read,
-  and the reason says no base was given (`src/change/classify.ts:987-989`). A `--base` that does not resolve to a
+  and the reason says no base was given (`src/change/classify.ts:987-989`); since that read sees only the uncommitted
+  change, a `HEAD` holding commits its upstream lacks (with no upstream, `origin/HEAD`) makes the class at least
+  `product`, the reason naming the commits and pointing to `--base`, and a failed read of those refs does the same; a
+  repository with neither ref keeps the plain reading (`src/cli/commands/gate.ts:1220`, `floorUnclassified`;
+  `review/191`). A `--base` that does not resolve to a
   commit, an unborn `HEAD` among them, gives no class, with `--paths` as without: `classify` exits 1, and its JSON
   carries `ok: false`, `subcommand`, `base: null` and a `reason` saying the ref could not be read, with no `class`,
   `checks` or `lenses` (`src/cli/commands/gate.ts:1193-1197`, `:1258-1263`; `src/cli/kit/program.ts:353-363`). It gave

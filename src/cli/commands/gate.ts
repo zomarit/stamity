@@ -57,8 +57,8 @@ import type { GitRunner } from "../../workspace/git.ts";
  * both ways and the stronger class kept, as `--paths` are (review/43); the
  * project's prefix and the outside rules read them both ways too. `--base
  * <ref>` names the base, resolved once to a commit id every later call uses;
- * with no `--base` the reads run against `HEAD` and the reason says no base
- * was given.
+ * with no `--base` the reads run against `HEAD`, the reason says no base was
+ * given, and unpushed commits raise the class ({@link floorUnclassified}).
  *
  * **Fail-closed.** Every git call runs through {@link gitCheckRunner}, the
  * hardened construction the CLI's other git reads use. A directory outside a
@@ -1217,11 +1217,11 @@ function classify(
           ? {}
           : { hunks: change.lines.hunks, unscanned: change.lines.unscanned, unscannedCode: change.lines.unscannedCode };
       const lockfiles = readLockfiles(runner, root, commit, change.paths);
-      result = applyReadFloors(
+      result = floorUnclassified(runner, root.dir, commit, applyReadFloors(
         classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source, ...lines, lockfiles }, rules),
         change,
         source,
-      );
+      ));
     }
     if (classFile?.state === "invalid") result = raiseTo(result, "product");
 
@@ -1504,3 +1504,72 @@ export const gateCommand: CommandModule = {
     return Promise.resolve(args[0] === SCAN ? runScan(ctx, opts) : runClassify(ctx, opts));
   },
 };
+
+/** The pointer a reason gives for committed work no base classified (review/191). */
+const POINT_TO_BASE = "pass --base <the commit the work started from> to classify it";
+
+/** A ref's name as a person reads it: `refs/remotes/` or `refs/heads/` dropped. */
+function shortRef(ref: string): string {
+  return ref.replace(/^refs\/(?:remotes|heads)\//, "");
+}
+
+/**
+ * review/191 (signed off as option (b)): with no `--base` the read sees only
+ * the uncommitted change against `HEAD`, so work already committed would be
+ * classified by no run. The reference is the branch's upstream, or, with none
+ * configured (a detached `HEAD` among them), the remote default branch
+ * `origin/HEAD`; a repository with neither keeps the plain reading (`undefined`).
+ * When `HEAD` holds commits the reference lacks, the clause names them and
+ * points to `--base`, and the class is raised to at least `product`. A
+ * configured upstream that does not resolve, and any failed read here, raise it
+ * too: this read only ever raises, never lowers.
+ */
+function unclassifiedCommits(runner: GitRunner, cwd: string): string | undefined {
+  let reference = "its upstream";
+  try {
+    let branch: string | null = null;
+    try {
+      branch = runner(["symbolic-ref", "-q", "HEAD"], cwd).trim();
+    } catch (err) {
+      // `-q` exits 1, printing nothing, for a detached HEAD: it has no upstream.
+      if (!gitSaidNo(err, 1)) throw new GitReadError("symbolic-ref", err, cwd);
+    }
+    let upstream = "";
+    if (branch !== null && branch !== "") {
+      const rows = runGit(runner, cwd, "for-each-ref", ["for-each-ref", "--format=%(refname)%00%(upstream)", branch]);
+      for (const row of rows.split(/\r?\n/)) {
+        const [name, merge] = row.split("\0");
+        if (name === branch && merge !== undefined) upstream = merge;
+      }
+    }
+    let commit: string | null;
+    if (upstream !== "") {
+      reference = shortRef(upstream);
+      commit = resolveBase(runner, cwd, upstream);
+      if (commit === null) {
+        return `its upstream ${reference} does not resolve, so the committed work HEAD holds is unread and the class is at least product; ${POINT_TO_BASE}`;
+      }
+    } else {
+      reference = "origin/HEAD";
+      commit = resolveBase(runner, cwd, "refs/remotes/origin/HEAD");
+      if (commit === null) return undefined;
+    }
+    const count = Number.parseInt(runGit(runner, cwd, "rev-list", ["rev-list", "--count", `${commit}..HEAD`, "--"]).trim(), 10);
+    if (!Number.isInteger(count)) throw new GitReadError("rev-list", new Error("no count"), cwd);
+    if (count === 0) return undefined;
+    const commits = `${count} commit${count === 1 ? "" : "s"}`;
+    return `HEAD holds ${commits} ${reference} lacks, committed work no base classified, so the class is at least product; ${POINT_TO_BASE}`;
+  } catch (err) {
+    if (!(err instanceof GitReadError)) throw err;
+    return `the commits HEAD holds beyond ${reference} could not be read (${describeGitFailure(err)}), so the class is at least product; ${POINT_TO_BASE}`;
+  }
+}
+
+/**
+ * `result` raised to at least `product`, the clause of {@link unclassifiedCommits} added, when no base was given and
+ * that read finds committed work no run classified; a resolved base, or no such work, leaves it as it is (review/191).
+ */
+function floorUnclassified(runner: GitRunner, cwd: string, commit: string | null, result: ClassifyResult): ClassifyResult {
+  const unread = commit === null ? unclassifiedCommits(runner, cwd) : undefined;
+  return unread === undefined ? result : withReasons(raiseTo(result, "product"), [unread]);
+}
