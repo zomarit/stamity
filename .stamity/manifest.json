@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-08T23:55:35.096Z",
+  "updatedAt": "2026-10-09T00:18:48.871Z",
   "tools": [
     "claude"
   ],
@@ -78,7 +78,7 @@
       "adapter": "claude",
       "artifactId": "fixer",
       "artifactType": "agent",
-      "contentHash": "603792d40ae87c2867727ae00a65e61eef0e050bf4f7ff3cc5009d856f936fab",
+      "contentHash": "52b395536cad4a4a5d21c7b3b62e28837ce66abee0e4b57c62dacc28c674b9d3",
       "path": ".claude/agents/stamity-fixer.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "bfd0b2d119ab0f5fad7ade4445999d6ce6888604bf96cc86144066fcc510e157",
+      "contentHash": "ad0f09c0373b369920230d5d941975395938efc1e2640d142d804025a01b0e7c",
       "path": ".claude/commands/st-work.md"
     },
     {

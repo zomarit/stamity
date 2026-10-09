@@ -232,19 +232,22 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   The review-gate hook still refuses an approval the reviewer rated `low`.
 - Iteration cap: 3 rounds by default (2 at light), operator-configurable
   within 1..10 — the engine clamps to that band, and this text stays
-  lockstepped with its default.
+  lockstepped with its default; a review-gate hook that cannot see the tier
+  may hold a light run to the engine cap until it counts per tier, so a
+  light run there can see a third round.
 - Escalation: a finding whose ledger row carries two `re-review not-fixed`
-  notes, a gate red after a fix, or a finding still open at the cap round goes
-  to a fresh fixer spawn — never the resumed one — on the same model at one
-  effort level above the fixer's declared one where the client's dispatch
-  accepts an effort setting; where it accepts none, the fresh spawn is the
-  escalation and the proof block records `effort: not settable`. A finding
-  that fixer leaves open stops the run as BLOCKED_FAILURE to the human with
-  the open findings attached. No round past the cap runs; an operator who
-  raises the cap within the band buys further rounds and adds no new stage.
-- Escape before the cap: an at-confidence approval exits; an unchanged finding
-  set across two consecutive rounds, or findings oscillating between two states,
-  exit as diverged (BLOCKED_FAILURE), not burning the remaining rounds.
+  notes, a gate red after a fix, or a finding still open entering the cap round
+  goes to a fresh fixer spawn — never the resumed one — with the round history
+  attached, on the same model at one effort level above the fixer's declared
+  one where the client's dispatch accepts an effort setting; where it accepts
+  none, the fresh spawn is the escalation and the proof block records
+  `effort: not settable`. A finding that fixer leaves open stops the run as
+  BLOCKED_FAILURE to the human with the open findings attached. No round past
+  the cap runs; an operator who raises the cap within the band buys further
+  rounds and adds no new stage.
+- Escape before the cap: an approval exits, a below-gate one named; an unchanged
+  finding set across two consecutive rounds, or findings oscillating between two
+  states, exit as diverged (BLOCKED_FAILURE), not burning the remaining rounds.
 - Minor/nit findings are ledgered, never loop-triggering; on re-review new
   nits are suppressed, as the reviewer's nit policy states.
 - Each re-review is a fresh reviewer spawn, never a resumed one; its brief
@@ -320,7 +323,8 @@ audit record:
 
 - gate results — per gate: command, pass/fail/unknown, failing excerpt if
   any, or the earlier result a byte-identical tree cites
-- review verdicts + confidence, per round
+- review verdicts + confidence, per round, naming an approval below the gate,
+  and each escalation's effort step or `effort: not settable`
 - QA rows — per row: `walked`, `auto-proven` with its pointer, or
   `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
 - decisions trace — every gate decision, ASK outcome, and deferral with its
