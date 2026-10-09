@@ -216,7 +216,7 @@ fixture is the person's to settle. A non-empty `unscanned` list puts
 selected files in the build, its gates on the final tree, as `test-runner` maps them. The narrower
 gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger
 change and on a schedule. With no base, the scan takes `HEAD` and the final tree runs
-`npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` unclassified (`unclear`); committed work then lists
+`npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` unclassified (`unclear`), as after a classify exiting 1; committed work then lists
 `secret scan: not run` under `Not done:`, as do a CLI that cannot run or has no `gate` verb and a
 scan naming a `reason`, both on the full gates. A class naming `review-once` gets one review pass: a
 Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs. The

@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T07:25:41.850Z",
+  "updatedAt": "2026-10-09T07:33:05.218Z",
   "tools": [
     "claude"
   ],
@@ -169,7 +169,7 @@
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "c69bb5b252c578a7c79ff020764fb22538eeeca76a83057e2bbb9049f2945a29",
+      "contentHash": "913f35e09b8f59ad399fb976388bc5178040336d8c25053fb94ed0e73515d5fc",
       "path": ".claude/commands/st-quick.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "170cfcd6163e4acfc02975d0ef7431e1eefae934f96ca7be08ab7bb999004b31",
+      "contentHash": "074120a5588743953bfe905a4691eaceff7d0a535c2bce102ca96a3e59b7899e",
       "path": ".claude/commands/st-work.md"
     },
     {
