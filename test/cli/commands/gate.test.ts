@@ -889,7 +889,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       (doc["byPath"] as { path: string; class: string }[]).find((entry) => entry.path === path)?.class;
 
     it("places a path by the base's class file, and keeps the floor for code under its glob", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70 — a docs folder glob is now refused,
+      // so the base copy names the .md and .tsx extensions; the floor still holds website/src/x.tsx at product.
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**/*.md", "website/**/*.tsx"] }), "website/x.md": "base\n" });
       await getRoot().seedFiles({ "repo/website/x.md": "changed\n", "repo/website/src/x.tsx": "export {};\n" });
 
       const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
@@ -916,7 +918,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     // TEST CHANGE, justified: 2026-10-09, review/49 — the built-in rule now places the class file security-sensitive
     // (it decides every later change's checks), so a change editing it is security-sensitive, not config.
     it("applies the base copy's rules when the change edits the file, and the change is security-sensitive", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["notes/**"] }), "notes/x.md": "base\n" });
+      // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70 — a docs folder glob is now refused,
+      // so the base copy names the .md extension; the paths and classes asserted are unchanged.
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["notes/*.md"] }), "notes/x.md": "base\n" });
       // The head copy drops the docs glob: read, it would leave notes/x.md unplaced (product).
       await getRoot().seedFiles({ [`repo/${CLASS_FILE}`]: fileOf({ records: ["notes/**"] }), "repo/notes/x.md": "changed\n" });
 
@@ -1054,7 +1058,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     });
 
     it("reads the base copy for --paths with --base too", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }) });
+      // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70 — a docs folder glob is now refused,
+      // so the base copy names the .md extension; the paths and classes asserted are unchanged.
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**/*.md"] }) });
 
       const given = await classifyIn(repo, ["--base", "HEAD", "--paths", "website/x.md"]);
       const bare = await classifyIn(repo, ["--paths", "website/x.md"]);

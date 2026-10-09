@@ -681,10 +681,27 @@ function matchesEveryPath(glob: string): boolean {
  * extension of its own, as `notes/**` and `*` do, and is not this shape.
  */
 function hasWildcardExtension(glob: string): boolean {
-  const normalized = normalizePath(glob);
-  const last = normalized.slice(normalized.lastIndexOf("/") + 1);
+  const last = lastSegment(glob);
   const dot = last.lastIndexOf(".");
   return dot !== -1 && last.slice(dot + 1).includes("*");
+}
+
+/**
+ * Whether a glob's last segment holds a wildcard and ends in no concrete extension (`notes/**`, `*`, `**\/m*`,
+ * `**\/*tf`, `*.`), so it reaches every file type below it and no floor's extension list bounds it (review/70).
+ * A last segment with no `*` names one file and is not this shape.
+ */
+function lacksConcreteExtension(glob: string): boolean {
+  const last = lastSegment(glob);
+  if (!last.includes("*")) return false;
+  const dot = last.lastIndexOf(".");
+  return dot === -1 || dot === last.length - 1;
+}
+
+/** The last `/`-separated segment of a glob, read as {@link compileGlob} reads it. */
+function lastSegment(glob: string): string {
+  const normalized = normalizePath(glob);
+  return normalized.slice(normalized.lastIndexOf("/") + 1);
 }
 
 /** Why a glob is over the input limits, or `undefined` (review/50); a test source's glob literal meets it too (review/62). */
@@ -753,6 +770,10 @@ function readClasses(value: unknown, errors: string[]): Map<ChangeClass, string[
         errors.push(
           `${where}: the glob ${JSON.stringify(glob)} has a wildcard extension, and a ${key} glob's extension must be concrete, such as *.md`,
         );
+      } else if (NOT_FOR_CODE.has(key) && lacksConcreteExtension(glob)) {
+        errors.push(
+          `${where}: the glob ${JSON.stringify(glob)} names no concrete extension, and a ${key} glob must end in one, such as **/*.md, or name a file`,
+        );
       } else kept.push(glob);
     });
     classes.set(key, kept);
@@ -802,7 +823,8 @@ function readTestInputs(value: unknown, errors: string[]): TestInput[] {
  * that is not a JSON object, an unknown key, an unknown class, a glob that is
  * not a non-empty string, a glob that matches every path under a class weaker
  * than `product` (the sign-off on plan/8), a `records` or `docs` glob whose
- * extension holds a wildcard (review/59), a test entry that is not a plain
+ * extension holds a wildcard (review/59) or whose last segment holds a wildcard
+ * and ends in no concrete extension (review/70), a test entry that is not a plain
  * repository-relative file path (plan/23), and a glob longer than 200
  * characters or holding more than four `**` (review/50). Every error is listed,
  * the first one first; a refused file yields no rules, only its raising entries

@@ -13,6 +13,13 @@
     "product": ["content/**"],
     "config": ["tsconfig*.json", "vitest.config.ts", ".oxlintrc.json", "eslint.config.*", "knip.*"],
     "tests": ["test/**", "evals/**"],
-    "docs": ["website/**"]
+    "docs": [
+      "website/**/*.md",
+      "website/**/*.css",
+      "website/**/*.svg",
+      "website/**/*.png",
+      "website/**/*.woff2",
+      "website/**/*.txt"
+    ]
   }
 }

@@ -818,9 +818,17 @@ describe("parseClassFile: what the class file may say", () => {
     expect(CLASS_FILE).toBe(".stamity/change-classes.json");
   });
 
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70 (Minor, signed off). A records
+   * or docs glob now ends in a concrete extension or names a file, so the fixtures that used a folder glob
+   * there (`website/**`, `notes/**`, `${cls}/**`) take an extension glob such as `website/**\/*.md`, and the
+   * two keep-cases drop `notes/**` and `*` for docs and records (the second moves to config, whose match-all
+   * check it pins). The config-format floor case builds its notes/** rule by hand through mergeRules, since
+   * the floor binds a hand-built rule as it binds a file's. What each case asserts is unchanged.
+   */
   it("reads one rule per class, the tests globs and the test inputs", () => {
     const parsed = accepted({
-      classes: { docs: ["website/**"], tests: ["evals/**"], "security-sensitive": ["src/merge/**"] },
+      classes: { docs: ["website/**/*.md"], tests: ["evals/**"], "security-sensitive": ["src/merge/**"] },
       testInputs: [
         { glob: "docs/**", tests: ["test/docsPages.test.ts"] },
         { glob: "content/**", tests: "all" },
@@ -830,7 +838,7 @@ describe("parseClassFile: what the class file may say", () => {
     expect(parsed.rules.map((rule) => [rule.class, rule.paths])).toEqual([
       ["security-sensitive", ["src/merge/**"]],
       ["tests", ["evals/**"]],
-      ["docs", ["website/**"]],
+      ["docs", ["website/**/*.md"]],
     ]);
     expect(parsed.testGlobs).toEqual(["evals/**"]);
     expect(parsed.testInputs).toEqual([
@@ -846,7 +854,7 @@ describe("parseClassFile: what the class file may say", () => {
   // review/12: a rule that raises a path folds case; a weaker one never does, so a case variant never lowers a path.
   it("folds case on the product, public-contract and security-sensitive rules and on no other", () => {
     const parsed = accepted({
-      classes: Object.fromEntries(CLASS_ORDER.map((cls) => [cls, [`${cls}/**`]])),
+      classes: Object.fromEntries(CLASS_ORDER.map((cls) => [cls, [`${cls}/**/*.md`]])),
     });
     const folded = Object.fromEntries(parsed.rules.map((rule) => [rule.class, rule.foldCase === true]));
     expect(folded).toEqual({
@@ -868,7 +876,7 @@ describe("parseClassFile: what the class file may say", () => {
     ["an unknown class key", '{"classes": {"librarian": ["x/**"]}}', '"librarian" is not a change class'],
     ["a class whose globs are no list", '{"classes": {"docs": "website/**"}}', "classes.docs is not a list of globs"],
     ["a glob that is no string", '{"classes": {"docs": [3]}}', "classes.docs[0] is not a string"],
-    ["an empty glob", '{"classes": {"docs": ["website/**", ""]}}', "classes.docs[1] is empty"],
+    ["an empty glob", '{"classes": {"docs": ["website/**/*.md", ""]}}', "classes.docs[1] is empty"],
     ["test inputs that are no list", '{"testInputs": {}}', "testInputs is not a list"],
     ["a test input with no glob", '{"testInputs": [{"tests": "all"}]}', "testInputs[0].glob is not a non-empty string"],
     ["a test input with no tests", '{"testInputs": [{"glob": "docs/**"}]}', 'testInputs[0].tests is neither "all" nor a list'],
@@ -939,8 +947,34 @@ describe("parseClassFile: what the class file may say", () => {
     },
   );
 
-  it("keeps a docs or records glob with a concrete extension, a literal file name or no extension of its own", () => {
-    const globs = ["**/*.md", "*.md", "notes/**/*.html", "**/*.*.md", "notes/README", ".gitkeep", "notes/**", "*"];
+  // review/70: a records or docs glob ends in a concrete extension or names a file, so no unlisted type lowers.
+  it.each([["notes/**"], ["website/**"], ["**/m*"], ["**/*tf"], ["**s/**"], ["*"], ["*."], ["notes/*.md/**"]])(
+    "refuses the docs and records glob %s, which names no concrete extension, naming it",
+    (glob) => {
+      for (const cls of ["docs", "records"] as const) {
+        const error = firstError(JSON.stringify({ classes: { [cls]: [glob] } }));
+        expect(error).toContain(`classes.${cls}[0]`);
+        expect(error).toContain(JSON.stringify(glob));
+        expect(error).toContain("names no concrete extension");
+      }
+      for (const cls of ["tests", "config", "product", "security-sensitive"] as const) {
+        expect(parseClassFile(JSON.stringify({ classes: { [cls]: [glob] } })).ok, cls).toBe(true);
+      }
+    },
+  );
+
+  it("lowers no unlisted file type through a folder glob: a refused file keeps none of its docs globs", () => {
+    const parsed = parseClassFile(JSON.stringify({ classes: { docs: ["infra/**"], "security-sensitive": ["lib/**"] } }));
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    const rules = mergeRules(BUILT_IN_RULES, parsed.raising);
+    for (const path of ["infra/main.tf", "infra/001_init.sql", "infra/build.gradle", "infra/rules.mk"]) {
+      expect(classOf(path, rules).class, path).toBe("product");
+    }
+  });
+
+  it("keeps a docs or records glob with a concrete extension or a literal file name", () => {
+    const globs = ["**/*.md", "*.md", "notes/**/*.html", "**/*.*.md", "notes/README", ".gitkeep", "x*.md", "**.md"];
     for (const cls of ["docs", "records"] as const) {
       expect(accepted({ classes: { [cls]: globs } }).rules[0]?.paths, cls).toEqual(globs);
     }
@@ -957,7 +991,7 @@ describe("parseClassFile: what the class file may say", () => {
   });
 
   it("holds every config format out of records and docs, the .env family included", () => {
-    const rules = withFile({ classes: { docs: ["notes/**"] } });
+    const rules = mergeRules(BUILT_IN_RULES, [{ class: "docs", paths: ["notes/**"], rationale: "hand-built" }]);
     for (const ext of ["json", "jsonc", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml", "properties", "env", "JSON"]) {
       expect(classOf(`notes/a.${ext}`, rules).class, ext).toBe("product");
     }
@@ -975,7 +1009,7 @@ describe("parseClassFile: what the class file may say", () => {
   });
 
   it("keeps a glob that only looks wide: one with a literal segment, or a single *", () => {
-    expect(accepted({ classes: { docs: ["*", "**/*.md", "notes/**"] } }).rules[0]?.paths).toEqual([
+    expect(accepted({ classes: { config: ["*", "**/*.md", "notes/**"] } }).rules[0]?.paths).toEqual([
       "*",
       "**/*.md",
       "notes/**",
@@ -1049,11 +1083,18 @@ describe("parseClassFile: what the class file may say", () => {
 });
 
 describe("mergeRules: a class file's globs join their class and never lower a path", () => {
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70 (Minor, signed off). A records
+   * or docs folder glob is now refused, so each docs or records fixture below names the extensions or the
+   * files its case reaches (`website/**\/*.md` beside `website/**\/*.tsx` for the code floor, `notes/Makefile`
+   * and `keep/.gitkeep` for the extensionless floor, `guides/*.json` for the two-class case). Every path each
+   * case classifies, and the class it expects, is unchanged.
+   */
   it("keeps every built-in rule and adds the file's, marked as the file's", () => {
-    const merged = withFile({ classes: { docs: ["website/**"] } });
+    const merged = withFile({ classes: { docs: ["website/**/*.md"] } });
     expect(merged.slice(0, BUILT_IN_RULES.length)).toEqual(BUILT_IN_RULES);
     expect(merged.slice(BUILT_IN_RULES.length)).toEqual([
-      expect.objectContaining({ class: "docs", paths: ["website/**"], origin: "class-file" }),
+      expect.objectContaining({ class: "docs", paths: ["website/**/*.md"], origin: "class-file" }),
     ]);
   });
 
@@ -1067,15 +1108,15 @@ describe("mergeRules: a class file's globs join their class and never lower a pa
   });
 
   it("places a docs page by the file and keeps the floor for code under the same glob", () => {
-    const rules = withFile({ classes: { docs: ["website/**"] } });
+    const rules = withFile({ classes: { docs: ["website/**/*.md", "website/**/*.tsx"] } });
     expect(classOf("website/x.md", rules).class).toBe("docs");
     expect(classOf("website/src/x.tsx", rules).class).toBe("product");
     expect(classOf("website/x.md", BUILT_IN_RULES).class).toBe("product");
   });
 
   it.each([
-    ["src/auth/x.ts", "docs", "src/**", "security-sensitive"],
-    ["docs/x.md", "records", "docs/**", "docs"],
+    ["src/auth/x.ts", "docs", "src/**/*.ts", "security-sensitive"],
+    ["docs/x.md", "records", "docs/**/*.md", "docs"],
     [".stamity/manifest.json", "records", ".stamity/*.json", "security-sensitive"],
   ])("does not narrow %s by a %s glob, and names the glob", (path, cls, glob, expected) => {
     const result = classOf(path, withFile({ classes: { [cls]: [glob] } }));
@@ -1086,31 +1127,31 @@ describe("mergeRules: a class file's globs join their class and never lower a pa
 
   // p2a reviewer M-2: where the code-path floor decided, the floor clause names it; no stronger rule is claimed.
   it("names the floor, not a stronger rule, when only the floor kept a code file out of a weak glob's class", () => {
-    const result = classOf("website/src/x.tsx", withFile({ classes: { docs: ["website/**"] } }));
+    const result = classOf("website/src/x.tsx", withFile({ classes: { docs: ["website/**/*.tsx"] } }));
     expect(result.class).toBe("product");
     expect(result.reason).toContain("kept out of records and docs as code, config or an extensionless file");
     expect(result.reason).toContain("outside a built-in test glob: website/src/x.tsx");
     expect(result.reason).not.toContain("weaker globs do not lower");
-    const tests = classOf("test/x.ts", withFile({ classes: { docs: ["test/**"] } }));
+    const tests = classOf("test/x.ts", withFile({ classes: { docs: ["test/**/*.ts"] } }));
     expect(tests.class).toBe("tests");
     expect(tests.reason).not.toContain("weaker globs do not lower");
   });
 
   it("names no ignored glob when the file's glob decides the path", () => {
-    expect(classOf("website/x.md", withFile({ classes: { docs: ["website/**"] } })).reason).not.toContain(
+    expect(classOf("website/x.md", withFile({ classes: { docs: ["website/**/*.md"] } })).reason).not.toContain(
       "weaker globs do not lower",
     );
   });
 
   it("keeps an agent instruction file and an extensionless file at least product under a docs glob", () => {
-    const rules = withFile({ classes: { docs: ["**/AGENTS.md", "notes/**"] } });
+    const rules = withFile({ classes: { docs: ["**/AGENTS.md", "notes/Makefile", "notes/*.md"] } });
     expect(classOf("notes/AGENTS.md", rules).class).toBe("product");
     expect(classOf("notes/Makefile", rules).class).toBe("product");
     expect(classOf("notes/x.md", rules).class).toBe("docs");
   });
 
   it("keeps a dotfile under a records glob at product (review/11)", () => {
-    const rules = withFile({ classes: { records: ["keep/**"] } });
+    const rules = withFile({ classes: { records: ["keep/.gitkeep", "keep/*.md"] } });
     expect(classOf("keep/.gitkeep", rules).class).toBe("product");
     expect(classOf("keep/x.md", rules).class).toBe("records");
   });
@@ -1121,19 +1162,19 @@ describe("mergeRules: a class file's globs join their class and never lower a pa
       class: "security-sensitive",
       lenses: ["stamity-security"],
     });
-    const notes = classOf("NOTES/x.md", withFile({ classes: { docs: ["notes/**"] } }));
+    const notes = classOf("NOTES/x.md", withFile({ classes: { docs: ["notes/*.md"] } }));
     expect(notes.class).toBe("product");
-    expect(notes.byPath[0]?.rule).not.toBe("notes/**");
+    expect(notes.byPath[0]?.rule).not.toBe("notes/*.md");
   });
 
   it("gives a path the file lists under two classes the stronger one", () => {
-    const rules = withFile({ classes: { docs: ["guides/**"], config: ["guides/settings.json"] } });
+    const rules = withFile({ classes: { docs: ["guides/*.md", "guides/*.json"], config: ["guides/settings.json"] } });
     expect(classOf("guides/settings.json", rules).class).toBe("config");
     expect(classOf("guides/a.md", rules).class).toBe("docs");
   });
 
   it("keeps a glob that matches nothing, with no error", () => {
-    const rules = withFile({ classes: { docs: ["nowhere/**"] } });
+    const rules = withFile({ classes: { docs: ["nowhere/*.md"] } });
     expect(classOf("docs/x.md", rules).class).toBe("docs");
   });
 });
@@ -1163,6 +1204,10 @@ describe("this repository's class file", () => {
   it.each([
     ["content/commands/st-work.md", "product"],
     ["website/index.md", "docs"],
+    ["website/static/img/mark.svg", "docs"],
+    ["website/src/css/custom.css", "docs"],
+    ["website/src/pages/index.tsx", "product"],
+    ["website/static/CNAME", "product"],
     ["test/change/classify.test.ts", "tests"],
     ["evals/cases-v6/golden/x.md", "tests"],
     ["vitest.config.ts", "config"],

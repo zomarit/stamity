@@ -4560,7 +4560,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
-          classes: { docs: ["website/**"], tests: ["test/**", "evals/**"] },
+          classes: { docs: ["website/**/*.svg"], tests: ["test/**", "evals/**"] }, // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70: a docs folder glob is refused, so the docs glob names an extension; still 3 globs
           testInputs: [{ glob: "content/**", tests: "all" }],
         }),
       },
