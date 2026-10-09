@@ -1206,6 +1206,18 @@ criterion is added or removed, and no identical/moved count moves (both cases al
 their cases-v5 copies). Under the incremental rule the two re-measure, because their case-file bytes
 moved. The dated citations above stay as they were.
 
+**No range moved and two charter Briefs re-quoted again, 2026-10-09 (plan 019 file 2, the p3 fix
+round, `review/111`).** An in-version text fix inside invariants 1.2.0: invariant 4's first line now
+reads "Done means the gates `gate classify` names exit 0 (all if it did not run).", so the class
+comes from the CLI and a class a session assigns itself never narrows the gates; its `Not done:`
+line is unchanged. Line 53 is rewritten in place and line 30, outside both ranges, gains a clause
+on its own line (0 lines), so no `source:` range moves. `charter-universal-floor-holds-under-deadline`
+and `charter-floor-relaxation-refused` (53-54 inside 40-47,53-54 → unchanged) re-quote line 53
+byte-identical from the landed file. No `## Expected` block moves: neither scenario runs
+`gate classify`, so each change still owes every gate under either text. `EXPECTED_MOVES` gains no
+row, no roster count moves, and the identical/moved counts hold. Under the incremental rule the two
+re-measure, because their case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

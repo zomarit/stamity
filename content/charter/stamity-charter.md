@@ -27,7 +27,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: `${STAMITY:VERIFY_GATE_TEST}`
 - Lint: `${STAMITY:VERIFY_GATE_LINT}`
@@ -50,7 +50,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates `gate classify` names exit 0 (all if it did not run).
    Anything less ships with a `Not done:` list naming each open gap.
 5. **Learnings first.** Read `.stamity/learnings/` before project-specific work;
    repeating a recorded failure is a process defect.

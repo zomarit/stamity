@@ -48,7 +48,12 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // Appended 2026-10-09 (plan 019 file 2, unit p3a-charter-invariant-4; S5 as amended): invariant 4
   // now says done means the gates the change's class names exit 0, all of them if the class is
   // unclear. The `Not done:` line is unchanged. The 1.1.0 row above stays as the record.
-  "1.2.0": "b5b5788557346a7027855e2e55a94bc821d148a3e72d9aff63f70b92f328672e",
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/111`): an
+  // in-version text fix, b5b57885… -> efbef859…. Invariant 4's first line now takes the class from
+  // `gate classify` and runs all gates when it did not run, so a class a session assigns itself
+  // never narrows them. No release or tag carries the earlier 1.2.0 text (it landed in 51667e43 on
+  // the same unreleased branch), so no repository ran it and this row moves instead of a 1.2.1.
+  "1.2.0": "efbef8592774130142de7f98bc237a7fa8829ce257474649dab22cd5f30664fa",
 };
 
 /** The rendered version line, template form and emitted form alike. */

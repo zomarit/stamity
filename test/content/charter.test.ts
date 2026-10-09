@@ -255,6 +255,26 @@ describe("corpus charter", () => {
     expect(lineCount).toBeLessThanOrEqual(CHARTER_MAX_LINES);
   });
 
+  // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/111`, `review/122`): invariant 4
+  // takes the class from the CLI's classification, so a class a session assigns itself never
+  // narrows the gates, and the Verification gates line defers to it instead of naming a second
+  // done condition.
+  it("binds invariant 4's class to `gate classify`, and the gate list defers to it", async () => {
+    const { body } = await readCharterTemplate(CORPUS_ROOT);
+    const invariant4 = body.split("\n").filter((line) => line.startsWith("4. **No green, no done.**"));
+
+    expect(invariant4).toEqual([
+      "4. **No green, no done.** Done means the gates `gate classify` names exit 0 (all if it did not run).",
+    ]);
+    // The `Not done:` line is unchanged and still the invariant's second line.
+    expect(body).toContain(
+      `${invariant4[0]}\n   Anything less ships with a \`Not done:\` list naming each open gap.\n`,
+    );
+    expect(sectionOf(body, "Repo facts")).toContain(
+      "Run before declaring any change done; invariant 4 says which of them.",
+    );
+  });
+
   it("declares the three invariants keys, read typed off the frontmatter", async () => {
     const charter = await readCharterTemplate(CORPUS_ROOT);
     const invariants = shippedInvariants(charter);

@@ -25,7 +25,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
 [...]
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates `gate classify` names exit 0 (all if it did not run).
    Anything less ships with a `Not done:` list naming each open gap.
 ```
 

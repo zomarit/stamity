@@ -186,6 +186,27 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-09, plan 019 file 2, the p3 fix round (run
+  //     2026-10-08_product-core; review/111, review/122; invariants 1.2.0, an
+  //     in-version text fix). The charter moved, plus the manifest rows that
+  //     record it. No emitted path was added or removed.
+  //
+  //     CHANGED every emitted charter (`AGENTS.md`, and the monorepo
+  //       `packages/alpha/AGENTS.md` and `packages/beta/AGENTS.md`) by +35
+  //       bytes at an unchanged line count, 5328 -> 5363, and
+  //       `AGENTS.override.md` in the codex and all-four selections by the
+  //       same +35, 25358 -> 25393. Invariant 4's first line takes the class
+  //       from `gate classify` and runs all gates when it did not run (+3), and
+  //       the Verification gates line defers to invariant 4 (+32).
+  //       `ALWAYS_ON_SHARED_BYTES_WITH_CODEX`, `..._WITHOUT_CODEX`,
+  //       `ALWAYS_ON_CODEX_OVERRIDE_BYTES` and `docs/capability-matrix.md`
+  //       moved with the figures.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: every agent, rule, skill, touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
   //   - 2026-10-09, plan 019 file 2, unit p3a-charter-invariant-4 (run
   //     2026-10-08_product-core; invariants 1.2.0). The charter moved, plus
   //     the manifest rows that record it. No emitted path was added or removed.

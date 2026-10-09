@@ -671,7 +671,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -694,7 +694,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -756,7 +756,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -779,7 +779,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1136,7 +1136,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -1159,7 +1159,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1221,7 +1221,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -1244,7 +1244,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1499,18 +1499,18 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "2b22483ace613e5c1e980dc7a652cd71f81bf7d915ca11078994be864b727e57 80774 bytes",
+  ".stamity/manifest.json": "c5dfcee6c2e49872907fbd9fe2d2bc51b3bbb8b33b38d8e025d8a9f9b832995b 80774 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
-  "AGENTS.override.md": "8826204d1ad043a5725fc6bb6cebf9787c67ae4187f1a1fa64a2e27069051692 25358 bytes",
+  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "AGENTS.override.md": "a1c2f625c1011b2fbb646b030d22c1db54fb0a3ee2cb1c7ea02d5d5ad7999036 25393 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "packages/alpha/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "packages/beta/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1636,7 +1636,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -1659,7 +1659,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1783,8 +1783,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6cd1ce51a19814f8ad2509f123e9e1485214ca9829fedab17df02c7eb35852bc 19286 bytes",
-  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  ".stamity/manifest.json": "7b15fac5bfbd1439ea1454bef70e81817336c2b274b024ab54548a87ba39ffe3 19286 bytes",
+  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1909,7 +1909,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -1932,7 +1932,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1994,7 +1994,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -2017,7 +2017,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2370,7 +2370,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -2393,7 +2393,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2455,7 +2455,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -2478,7 +2478,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2604,15 +2604,15 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d5c22c159a31334733b30c6bfeb3c310664de22bfeeffcc78c09554fb1c5db4f 21208 bytes",
-  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
-  "AGENTS.override.md": "8826204d1ad043a5725fc6bb6cebf9787c67ae4187f1a1fa64a2e27069051692 25358 bytes",
+  ".stamity/manifest.json": "d2f8438d1fb75f331a5adaf23f235e7c3ebcaf2ab5dcefff5f4e1e6023b50dcc 21208 bytes",
+  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "AGENTS.override.md": "a1c2f625c1011b2fbb646b030d22c1db54fb0a3ee2cb1c7ea02d5d5ad7999036 25393 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "packages/alpha/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "packages/beta/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2744,7 +2744,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -2767,7 +2767,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2887,10 +2887,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "4d66eeb88b4bed3c6e69a66ef0a6d0843cf8ac912b554829a64660441043da21 19055 bytes",
+  ".stamity/manifest.json": "c5dea0210f4d05d771297959f877a1dc853acb9aaeb5b88fc6b90ee35314e52f 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3287,7 +3287,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 
 ### Verification gates
 
-Run before declaring any change done.
+Run before declaring any change done; invariant 4 says which of them.
 
 - Tests: \`pnpm run test\`
 - Lint: \`pnpm run lint\`
@@ -3310,7 +3310,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
+4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -3441,8 +3441,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "20a5a71db7fbe32bd7073cb724ab2f014286b50ce183f791e719195c5fddfa94 21863 bytes",
-  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  ".stamity/manifest.json": "f42dfceec56eadcc31e31464f0595759f0269b7cce9f18bcae43ce0f8191c574 21863 bytes",
+  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

@@ -316,7 +316,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // on the one line, so no line count moved (the version line and the amended
 // date keep their widths). The same +24 lands in the charter-alone figure
 // below and in ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_328;
+// 5_328 -> 5_363 on 2026-10-09, plan 019 file 2, the p3 fix round (review/111,
+// review/122): invariant 4 takes the class from `gate classify` and runs all
+// gates when it did not run, +3 bytes on its first line, and the Verification
+// gates line defers to invariant 4, +32 bytes on its one line, so no line count
+// moved. The same +35 lands in the charter-alone figure below and in
+// ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_363;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -344,7 +350,10 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_328;
 // Touchpoints sentence's two skill spellings, the same +8 as above.
 // 5_304 -> 5_328 on 2026-10-09, unit p3a-charter-invariant-4: invariant 4's
 // class-named gates (invariants 1.2.0), the same +24 as above.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_328;
+// 5_328 -> 5_363 on 2026-10-09, the p3 fix round (review/111, review/122):
+// invariant 4 names `gate classify` and the gate list defers to it, the same
+// +35 as above.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_363;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -369,7 +378,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_328;
 // charter half of the override carries the Touchpoints sentence's +8 bytes.
 // 25_334 -> 25_358 on 2026-10-09, unit p3a-charter-invariant-4: the charter
 // half of the override carries invariant 4's +24 bytes (invariants 1.2.0).
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_358;
+// 25_358 -> 25_393 on 2026-10-09, the p3 fix round (review/111, review/122): the
+// charter half of the override carries the same +35 bytes.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_393;
 
 /**
  * The composite always-on line count one client pays for a plan under a

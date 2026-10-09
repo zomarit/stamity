@@ -210,7 +210,7 @@ bump and a row below.
 | — (`33e13a1`) | 2026-09-13 | 1 | MINOR-equivalent | the `Not done:` report is the whole exit — no context block, no closing summary beside it; recorded, no bump — versioning begins at 1.0.0 |
 | 1.0.0 | 2026-08-31 | all seven | ratification | ratified 2026-08-31, versioned 2026-09-15: from that day the version line is rendered in every client's charter; hash pinned in `test/content/invariantsVersion.test.ts` |
 | 1.1.0 | 2026-09-27 | 2 | MINOR | ask exactly one question, and make no second request in the same turn; a repository picks it up on its next `stamity sync`, and one that never re-syncs keeps the 1.0.0 wording, which left a second request unnamed |
-| 1.2.0 | 2026-10-09 | 4 | MINOR | done names the gates the change's class names, and a change whose class is unclear runs all of them; the `Not done:` line is unchanged; a repository that never re-syncs keeps the 1.1.0 wording, which runs every gate on every change, a superset of the new floor |
+| 1.2.0 | 2026-10-09 | 4 | MINOR | done names the gates `gate classify` names for the change, and a change it did not classify runs all of them, so a class a session assigns itself never narrows them; the `Not done:` line is unchanged; a repository that never re-syncs keeps the 1.1.0 wording, which runs every gate on every change, a superset of the new floor |
 
 The block ratified at 1.0.0 is the 2026-08-31 text plus the four unversioned amendments above.
 Nothing was reworded to ratify it, which is why the first version records no diff of its own.

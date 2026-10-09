@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T05:21:05.174Z",
+  "updatedAt": "2026-10-09T05:30:28.508Z",
   "tools": [
     "claude"
   ],
@@ -540,7 +540,7 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "9458a9dbc9b69ad5621538e2636c61e976322a7ad06c2711cba6ea9e54d90091",
+      "contentHash": "dcea2508f8a0835591da147dff04ba845e9d4da86a5c7d28640dfb17f5800231",
       "path": "AGENTS.md",
       "stampedVersion": "1.12.0"
     },
