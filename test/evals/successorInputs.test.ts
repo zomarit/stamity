@@ -125,7 +125,16 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "exactly what `content/agents/stamity-reviewer.md:14-18` and its Reading the change section require. B8 now " +
     "refuses a claimed edit, fix, stage or commit, a gate, and any mutating command, and admits a read-only git read; " +
     "the claim's \"no command\" clause moves with it. What B8 now admits is exactly the five read-only git reads the " +
-    "role's grant names; every mutation it refused before, it still refuses. No other row moves.",
+    "role's grant names; every mutation it refused before, it still refuses. No other row moves. " +
+    "Expectation amended 2026-10-09 (plan 019 file 2, unit p8b-capture-reviewer; REQ-FLOW-072): the reviewer now " +
+    "records a finding only when it names a consequence, and a note with none is counted as `notes left out: <n>` " +
+    "(`content/agents/stamity-reviewer.md`, the Rubric's capture paragraph and the Return contract's digest). The " +
+    "scenario's two Minors were a naming preference and a stale comment, which that text makes notes, so the Brief " +
+    "gives both Minors a named consequence and adds the naming preference as a thing noticed with no consequence. " +
+    "B7 adds that the note is not recorded as a finding and is counted as `notes left out: 1`; A1 and A2 add that " +
+    "it is no row and gets no id, and that the inline result carries its count, never the note. B7 still refuses " +
+    "everything it refused before; what it now also refuses is a no-consequence note raised as a finding. No other " +
+    "row moves.",
   "agent-test-runner-return-contract":
     "Expectation re-synced 2026-09-30 to the landed corpus (plan 013, unit sw15-agent-shell-discipline): the " +
     "structured result's `status` field gains `unknown` (`content/agents/stamity-test-runner.md:52`), so B3's " +

@@ -17,6 +17,12 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     for word, and `/st-rework`'s severity vocabulary keeps its three lines (20–22).
  *   - **(e) Red checks.** The checker is pure over a {@link CorpusFile}, so a reworded,
  *     missing or misplaced section is exercised on real bodies with one edit each.
+ *   - **(f) Capture by consequence** (REQ-FLOW-072, REQ-CTX-002). A role records a finding
+ *     only when it names a consequence; a note with none is listed in the report and counted
+ *     on the digest's `findings:` line as `notes left out: <n>`; a pre-existing defect that
+ *     passes the test leads its `summary` with `pre-existing:`. {@link CAPTURE_PINS} holds
+ *     each role's sentences by section, and {@link captureGaps} reads them, so a dropped
+ *     sentence is exercised red on a real body.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -52,6 +58,77 @@ const REVIEWER_WARNING_RULE =
   "These fail a review on their own, whatever the lens weighting says. Each is a blocking " +
   "finding when it appears in the change, and a `Warning` when the change makes an existing " +
   "instance worse without introducing it:";
+
+/** One capture sentence a role carries, whitespace-collapsed, inside one `## ` section. */
+interface CapturePin {
+  readonly relPath: string;
+  readonly section: string;
+  readonly phrase: string;
+}
+
+/** The capture-by-consequence sentences, by role and section (check (f)). */
+const CAPTURE_PINS: readonly CapturePin[] = [
+  {
+    relPath: REVIEWER,
+    section: "Rubric",
+    phrase:
+      "A finding names its consequence: who or what is affected, how, and in which use, with " +
+      "its evidence.",
+  },
+  {
+    relPath: REVIEWER,
+    section: "Rubric",
+    phrase:
+      "A note with no consequence (wording, naming, style, comment drift, a tidier shape, a " +
+      "\"might\" with no trigger) is not a finding: the report lists it and the digest counts it.",
+  },
+  {
+    relPath: REVIEWER,
+    section: "Rubric",
+    phrase:
+      "A note whose consequence shows once looked at, such as a misleading message a user acts " +
+      "on, is a `Minor` finding.",
+  },
+  {
+    relPath: REVIEWER,
+    section: "Rubric",
+    phrase:
+      "A pre-existing defect is recorded only when it passes this test, its `summary` leading " +
+      "`pre-existing:`.",
+  },
+  {
+    relPath: REVIEWER,
+    section: "Nit policy",
+    phrase: "A naming preference is a note, not a finding (Rubric), so it never starts a fix round.",
+  },
+  {
+    relPath: REVIEWER,
+    section: "Return contract",
+    phrase: "then the `Minor` count with its ids and locators, ending `notes left out: <n>`;",
+  },
+  {
+    relPath: REVIEWER,
+    section: "Return contract",
+    phrase: "an inline result carries the notes count, never the notes.",
+  },
+];
+
+/** The text of one top-level `## <heading>` section, up to the next one, or `undefined`. */
+function sectionText(file: CorpusFile, heading: string): string | undefined {
+  const marker = `\n## ${heading}\n`;
+  const start = file.raw.indexOf(marker);
+  if (start === -1) return undefined;
+  const rest = file.raw.slice(start + marker.length);
+  const end = rest.indexOf("\n## ");
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+/** Every capture pin of `file`'s role its body lacks, as `<section>: <phrase>`; empty when whole. */
+function captureGaps(file: CorpusFile): string[] {
+  return CAPTURE_PINS.filter((pin) => pin.relPath === file.relPath)
+    .filter((pin) => !flat(sectionText(file, pin.section) ?? "").includes(pin.phrase))
+    .map((pin) => `${pin.section}: ${pin.phrase}`);
+}
 
 /** One walk for the whole suite; the corpus does not change under it. */
 const corpus = walkAllMarkdown();
@@ -157,5 +234,44 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
       `${reviewer.relPath}: "## Severity" is not the last section`,
     );
     expect(severityDefect(twice)).toBe(`${reviewer.relPath}: 2 "## Severity" sections`);
+  });
+});
+
+describe("capture by consequence — a finding names its consequence, a note is counted", () => {
+  const roles = [...new Set(CAPTURE_PINS.map((pin) => pin.relPath))];
+
+  it.each(roles)("(f) %s carries every capture sentence in its section", async (relPath) => {
+    expect(captureGaps(await load(relPath))).toEqual([]);
+  });
+
+  it("(f) the reviewer's digest counts the notes on the `findings:` line, before `security:`", async () => {
+    const contract = flat(sectionText(await load(REVIEWER), "Return contract") ?? "");
+    const findings = contract.indexOf("`findings:`");
+    const notes = contract.indexOf("`notes left out: <n>`");
+
+    expect(findings).toBeGreaterThan(-1);
+    expect(notes).toBeGreaterThan(findings);
+    expect(contract.indexOf("`security:`", findings)).toBeGreaterThan(notes);
+  });
+
+  it("(f) fails when the reviewer drops the `pre-existing:` lead or the notes count", async () => {
+    const reviewer = await load(REVIEWER);
+    const noLead = corpusFileOf(
+      reviewer.relPath,
+      reviewer.raw.replace("its\n`summary` leading `pre-existing:`", "its `summary` as usual"),
+    );
+    const noCount = corpusFileOf(
+      reviewer.relPath,
+      reviewer.raw.replace(", ending\n  `notes left out: <n>`;", ";"),
+    );
+
+    expect(captureGaps(noLead)).toEqual([
+      "Rubric: A pre-existing defect is recorded only when it passes this test, its `summary` " +
+        "leading `pre-existing:`.",
+    ]);
+    expect(captureGaps(noCount)).toEqual([
+      "Return contract: then the `Minor` count with its ids and locators, ending " +
+        "`notes left out: <n>`;",
+    ]);
   });
 });

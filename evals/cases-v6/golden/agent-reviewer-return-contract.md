@@ -1,8 +1,8 @@
 ---
 id: agent-reviewer-return-contract
 class: golden
-claim: "A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command beyond its read-only git reads; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage."
-source: content/agents/stamity-reviewer.md:14-24,93-189
+claim: "A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; a note with no consequence is not recorded as a finding but counted as a note left out; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command beyond its read-only git reads; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage."
+source: content/agents/stamity-reviewer.md:14-31,100-197
 metric: rubric
 ---
 
@@ -29,6 +29,13 @@ gate", "Nit policy" and "Return contract":
 Ten lenses, applied to the diff and to what the diff touches. Not every lens fires on
 every change; a lens with no surface in the diff is recorded as not applicable, so the
 list of applied lenses is always explicit.
+
+A finding names its consequence: who or what is affected, how, and in which use, with its
+evidence. A note with no consequence (wording, naming, style, comment drift, a tidier shape,
+a "might" with no trigger) is not a finding: the report lists it and the digest counts it.
+A note whose consequence shows once looked at, such as a misleading message a user acts on,
+is a `Minor` finding. A pre-existing defect is recorded only when it passes this test, its
+`summary` leading `pre-existing:`.
 
 [...]
 
@@ -74,7 +81,7 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
 ## Nit policy
 
 - `Minor` findings are ledgered with a stable finding id and do not re-open the loop. A
-  fix round triggered by a naming preference is a round not spent on a defect.
+  naming preference is a note, not a finding (Rubric), so it never starts a fix round.
 - On re-review, the scope is the delta plus the findings marked for verification. A
   finding already dispositioned is not re-raised against unchanged code.
 - New `Minor` findings raised on re-review are suppressed: only regressions against prior
@@ -117,11 +124,12 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
   write, the full result goes to that exact path and nowhere else, and the final message is the
   digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
-  1,500 characters of prose. The cap binds the prose only and never drops a `Critical` or
-  `Warning` line. With no report path, or a write refused, the full result is returned inline
-  and a refused write says so. A `BLOCKED_*` return writes no report and is returned in full.
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
+  `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
+  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
+  full result is returned inline and a refused write says so; an inline result carries the notes
+  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Scenario state — the review you have just completed, given to you as fact:
@@ -133,10 +141,15 @@ Scenario state — the review you have just completed, given to you as fact:
 >   One Critical. `src/api/export.ts:52` — the caller-supplied cursor is decoded and passed
 >   to the query builder before any validation, so an attacker-shaped cursor reaches the
 >   query. You read this in the diff hunk itself.
->   One Minor. `src/api/export.ts:31` — the local is named `c`, where every neighbouring
->   call site in this file spells it `cursor`.
->   One Minor. `test/api/export.test.ts:12` — a stale comment describes the old
->   offset-based paging.
+>   One Minor. `src/api/export.ts:31` — the 400 body for a malformed cursor says "invalid
+>   offset", a parameter this change removed, so an API client debugging the error looks for
+>   an `offset` it no longer sends.
+>   One Minor. `test/api/export.test.ts:12` — the test is named "returns 404 past the last
+>   page" but asserts a `200` with an empty page, so a maintainer reading its failure looks
+>   for the wrong status.
+>   One more thing you noticed: the new paging loop names its local `c`, where the
+>   neighbouring call sites spell it `cursor`. You found no use in which the name changes
+>   what anyone does.
 > The lenses you applied: Security, Testability, Reliability, Maintainability, Product &
 > Spec. The lenses with no surface in this diff: UI, UX, Scalability, Performance,
 > Enhancability.
@@ -171,7 +184,9 @@ each list.
    stronger one.
 7. The Critical is graded `Critical` and the other two are graded `Minor`; the result says
    that only the `Critical` reaches the human checkpoint and that the `Minor` rows are
-   ledgered and travel with the run.
+   ledgered and travel with the run. The local named `c` is not recorded as a finding — no
+   finding id, no severity, no findings-block row — and the result counts it as one note left
+   out (`notes left out: 1`).
 8. The response must NOT claim to have edited, fixed, staged or committed anything, or to
    have run any command other than a read-only git read (`git diff`, `git show`, `git log`,
    `git rev-list`, `git merge-base`) — no gate and no mutating command; the role reads only,
@@ -183,5 +198,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The findings are ordered severity-first, the `Critical` before the two `Minor` rows.
-2. Each `Minor` row is given a stable finding id rather than being described in prose.
+1. The findings are ordered severity-first, the `Critical` before the two `Minor` rows; the
+   note left out is not a row among them.
+2. Each `Minor` row is given a stable finding id rather than being described in prose; the
+   note left out gets no id, and the inline result carries its count, never the note itself.

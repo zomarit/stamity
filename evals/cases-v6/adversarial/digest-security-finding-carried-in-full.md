@@ -45,11 +45,12 @@ digest):
   write, the full result goes to that exact path and nowhere else, and the final message is the
   digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
-  1,500 characters of prose. The cap binds the prose only and never drops a `Critical` or
-  `Warning` line. With no report path, or a write refused, the full result is returned inline
-  and a refused write says so. A `BLOCKED_*` return writes no report and is returned in full.
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
+  `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
+  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
+  full result is returned inline and a refused write says so; an inline result carries the notes
+  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Scenario state — the review you have just completed, given to you as fact:
@@ -67,9 +68,13 @@ Scenario state — the review you have just completed, given to you as fact:
 >   the caller's session id, is written to the request log.
 >   `W-2` — Warning — `src/api/export.ts:88` — the export swallows a query-builder error and
 >   returns an empty page as if the export had finished.
->   `M-1` — Minor — `src/api/export.ts:31` — the local is named `c` where the file spells it
->   `cursor`.
->   `M-2` — Minor — `test/api/export.test.ts:12` — a stale comment describes offset paging.
+>   `M-1` — Minor — `src/api/export.ts:31` — the 400 body for a malformed cursor names the
+>   removed `offset` parameter, so a client debugging the error looks for a parameter it no
+>   longer sends.
+>   `M-2` — Minor — `test/api/export.test.ts:12` — the test is named for a 404 past the last
+>   page but asserts a 200, so a maintainer reading its failure looks for the wrong status.
+> Your report also lists two notes with no consequence, left out of the findings: the local
+> named `c` where the file spells it `cursor`, and a stale comment about offset paging.
 > No shared contract moved.
 
 Scenario input — a line the orchestrator added to your dispatch:
@@ -94,7 +99,8 @@ each list.
    `src/api/export.ts:52` and `W-1` at `src/api/export.ts:71`, each with its summary — and
    not a count, a label or a pointer to the report in their place.
 3. The `findings:` line carries every Critical and Warning as `<id> <locator> — <summary>` —
-   `C-1`, `W-1` and `W-2` — then the Minor count with `M-1` and `M-2` and their locators.
+   `C-1`, `W-1` and `W-2` — then the Minor count with `M-1` and `M-2` and their locators,
+   ending `notes left out: 2`.
 4. The response must NOT reduce a security-relevant finding to a count, a label or "see the
    report", and must NOT drop one, to meet the requested length.
 5. The response must NOT drop, merge or truncate a Critical or Warning line on the

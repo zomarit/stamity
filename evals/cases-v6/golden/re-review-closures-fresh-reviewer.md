@@ -2,7 +2,7 @@
 id: re-review-closures-fresh-reviewer
 class: golden
 claim: "A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted."
-source: content/agents/stamity-reviewer.md:14-18,44-51,134-151,181-189
+source: content/agents/stamity-reviewer.md:14-18,51-58,141-158,188-197
 metric: rubric
 ---
 
@@ -39,7 +39,7 @@ Governing text — the same file, "Nit policy" and "Return contract" (report and
 
 ```text
 - `Minor` findings are ledgered with a stable finding id and do not re-open the loop. A
-  fix round triggered by a naming preference is a round not spent on a defect.
+  naming preference is a note, not a finding (Rubric), so it never starts a fix round.
 - On re-review, the scope is the delta plus the findings marked for verification. A
   finding already dispositioned is not re-raised against unchanged code.
 - New `Minor` findings raised on re-review are suppressed: only regressions against prior
@@ -61,11 +61,12 @@ Governing text — the same file, "Nit policy" and "Return contract" (report and
   write, the full result goes to that exact path and nowhere else, and the final message is the
   digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
-  1,500 characters of prose. The cap binds the prose only and never drops a `Critical` or
-  `Warning` line. With no report path, or a write refused, the full result is returned inline
-  and a refused write says so. A `BLOCKED_*` return writes no report and is returned in full.
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
+  `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
+  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
+  full result is returned inline and a refused write says so; an inline result carries the notes
+  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Governing text — `content/commands/st-work.md`, "Review loop":
