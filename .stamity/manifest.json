@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T07:33:05.218Z",
+  "updatedAt": "2026-10-09T08:45:29.511Z",
   "tools": [
     "claude"
   ],
@@ -113,7 +113,7 @@
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "069399a2a5dc644aa6a30334abb57682c0aff82ffeb8d3428ba2fb2e2cec10dd",
+      "contentHash": "e413815e30df22c844c042c1427f625750d515d8529993852cfcc3987712a984",
       "path": ".claude/agents/stamity-security.md"
     },
     {
