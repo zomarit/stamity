@@ -29,9 +29,9 @@ readable without opening the engine.
 | Authentication and authorization | `auth/`, `middleware/` | authentication, authorization, session, permission |
 | Cryptography | `crypto/`, `*.pem`, `*.key` | encryption, signing, hashing |
 | Trust boundaries | `api/`, `routes/`, `handlers/` | input validation, injection, deserialization, upload |
-| Dependency set | `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `requirements.txt`, `go.mod`, `cargo.toml`, `gemfile` | dependency, advisory, supply chain |
-| CI and release | `.github/workflows/`, `*.sh`, `*.bash`, `*.zsh`, `*.ps1`, `*.psm1`, `dockerfile` | workflow, release, shell |
-| Client hooks and settings | `hooks/`, `hooks.json`, `settings.json`, `settings.local.json` | hook |
+| Dependency set | `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `requirements.txt`, `go.mod`, `cargo.toml`, `gemfile`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.pnpmfile.cjs`, `npm-shrinkwrap.json` | dependency, advisory, supply chain |
+| CI and release | `.github/workflows/`, `.github/actions/`, `action.yml`, `action.yaml`, `*.sh`, `*.bash`, `*.zsh`, `*.ps1`, `*.psm1`, `dockerfile`, `dockerfile.*`, `*.dockerfile`, `containerfile` | workflow, release, shell |
+| Client hooks and settings | `.claude/hooks/`, `.cursor/hooks/`, `.codex/hooks/`, `.github/hooks/`, `.stamity/hooks/`, `.stamity/generated/hooks/`, `.husky/`, `hooks.json`, `.claude/settings.json`, `settings.local.json`, `.vscode/settings.json`, `.mcp.json`, `mcp.json` | hook |
 
 The classifier also places a change here by a changed code line: a process spawn, a recursive
 delete or a file overwrite, a registry or network call, a token or secret name. The topics file

@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T06:14:18.347Z",
+  "updatedAt": "2026-10-09T06:35:05.138Z",
   "tools": [
     "claude"
   ],
@@ -113,7 +113,7 @@
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "289c558f52f612ebc44f4e82617b764623b90c758e060fd5a41ef5661f9259ec",
+      "contentHash": "efc123b1320b0e8df1cbb0d8da16d6886cbdf1f69673e9a69ed73c8d0404648e",
       "path": ".claude/agents/stamity-security.md"
     },
     {
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "1c4f02647e8a3b087c82fd9ef97f2e5640592923dde9b409add32c92b4106a6e",
+      "contentHash": "639e01fd3e9fa83f4993e1e7256540fe1cd0ecee1faee078fbc44a1dcd2f028a",
       "path": ".claude/commands/st-plan.md"
     },
     {
@@ -169,7 +169,7 @@
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "04886eea294480eeffd4c932d622d85bc6db9d4206a40e8f11e8789333bda5ec",
+      "contentHash": "83bf0484241c80f9b8f93e5ef03255ba11f4ac6875176fec59e5c24eb1ca015e",
       "path": ".claude/commands/st-quick.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "4f002713dcca74ca1fc92824ae43e4dc5364e9ea72faaa7d5a022ca6bfb84da6",
+      "contentHash": "3ebf4578411bebf994bab6dde6741750f37ed437369815007a619dd29be6b373",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -309,7 +309,7 @@
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "3757a78cc6c00d7c259f6c546700d0c31d4662c670dc026457308a194d2620a0",
+      "contentHash": "f6e00ceff557165f305b658219477e93ecc19dc1ff63201b289b79f3983f06c7",
       "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {
