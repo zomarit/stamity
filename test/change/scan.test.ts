@@ -129,6 +129,92 @@ describe("scanAddedLines", () => {
     expect(scanAddedLines([file("dist/x.min.js", [line])])).toEqual([{ path: "dist/x.min.js", line: 1, rule: "github-token" }]);
   });
 
+  // review/95: the joined name and value meet the two inline-assignment patterns for a quoted value or a config file.
+  describe("a credential-named assignment of a short value", () => {
+    const SHORT = body(10, 41);
+    const HEX_KEY = body(32, 43).toLowerCase().replace(/[^0-9a-f]/g, "a");
+    const UPPER = PASS.toUpperCase();
+
+    it.each([
+      ["a quoted value in code", "src/db.ts", `const DB_${UPPER} = "${SHORT}";`, "inline-password-assignment"],
+      ["a quoted 32-hex key in code", "src/client.ts", `export const ${KEY.toUpperCase()} = "${HEX_KEY}";`, "inline-api-key-assignment"],
+      ["an unquoted .env entry", ".env.production", `DB_${UPPER}=${SHORT}`, "inline-password-assignment"],
+      ["an unquoted YAML entry", "compose.yaml", `      ${PASS}: ${SHORT}`, "inline-password-assignment"],
+      ["a JSON key", "config/app.json", `  "${PASS}": "${SHORT}",`, "inline-password-assignment"],
+      ["an INI entry", "settings.ini", `${PASS} = ${SHORT}`, "inline-password-assignment"],
+      ["a properties entry", "app.properties", `db.${PASS}=${SHORT}`, "inline-password-assignment"],
+    ])("hits %s", (_label, path, line, rule) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule }]);
+    });
+
+    it.each([
+      ["an unquoted value in code", "src/db.ts", `const ${PASS} = options.${PASS};`],
+      ["a placeholder in YAML", "compose.yaml", `      ${PASS}: ${"$"}{{ secrets.DB }}`],
+      ["a placeholder in .env", ".env", `DB_${UPPER}=${"$"}{DB_${UPPER}}`],
+      ["a quoted placeholder in JSON", "config/app.json", `  "${PASS}": "${"$"}{DB}",`],
+      ["an empty quoted value", "src/db.ts", `const ${PASS} = "";`],
+      ["a JSON null", "config/app.json", `  "${PASS}": null,`],
+      // The 500-commit measurement's two new hits: a code span closing after the key is no quoted value.
+      ["a Markdown code span ending in a key", "docs/plan.md", `holding a literal \`${["api", "_key"].join("")}:\` line, **then** exit 0, \`a.bak\` holds`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+  });
+
+  // review/100: a comparison is not an assignment.
+  it.each([
+    ["a strict comparison", "src/auth.ts", `  if (${PASS} === confirm) return;`],
+    ["a loose comparison with null", "src/auth.ts", `  if (${KEY} == null) throw new Error("missing");`],
+    ["a negated comparison", "src/auth.ts", `  return ${KEY} !== undefined && ${PASS} != "";`],
+    ["a Python comparison", "app/auth.py", `    if ${PASS} == confirm_${PASS}:`],
+  ])("passes %s of a credential-named variable", (_label, path, line) => {
+    expect(scanAddedLines([file(path, [line])])).toEqual([]);
+  });
+
+  // review/101: a name the pair extraction takes is scanned bare too.
+  it("finds a source-forge token used as the user name of an unquoted URL", () => {
+    const line = `git clone https://${FORGE_TOKEN}:x-oauth-basic@github.com/org/repo.git`;
+
+    expect(scanAddedLines([file("scripts/clone.sh", [line])])).toEqual([{ path: "scripts/clone.sh", line: 1, rule: "github-token" }]);
+  });
+
+  // review/97: a quoted header string is split at its separator before matching.
+  it("finds a bearer token inside a quoted header argument", () => {
+    const header = ["Authori", "zation: ", "Bear", "er ", body(30, 47)].join("");
+
+    expect(scanAddedLines([file("scripts/call.sh", [`curl -H "${header}" https://api.example.test/v1`])])).toEqual([
+      { path: "scripts/call.sh", line: 1, rule: "bearer-token" },
+    ]);
+  });
+
+  // review/99: yarn v1 and go.sum record content digests in their own line shapes.
+  describe("lockfile digests outside the JSON and YAML shapes", () => {
+    const GO_SUM_DIGEST = ["h", "1:", body(43, 53), "="].join("");
+
+    it.each([
+      ["yarn v1's integrity line", "yarn.lock", `  integrity ${INTEGRITY_512}`],
+      ["a go.sum module line", "go.sum", `example.com/mod v1.2.3 ${GO_SUM_DIGEST}`],
+      ["a go.sum go.mod line", "go.sum", `example.com/mod v1.2.3/go.mod ${GO_SUM_DIGEST}`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    it("scans a go.sum digest one character off its length as any other value", () => {
+      const offByOne = ["h", "1:", body(45, 53), "="].join("");
+
+      expect(scanAddedLines([file("go.sum", [`example.com/mod v1.2.3 ${offByOne}`])])).toEqual([
+        { path: "go.sum", line: 1, rule: "high-entropy-string" },
+      ]);
+    });
+  });
+
+  // review/112: a line read from a commit since the base carries that commit.
+  it("names the commit a history line came from", () => {
+    expect(scanAddedLines([{ path: "src/a.ts", commit: "0123456789ab", added: [{ line: 4, text: `const t = "${FORGE_TOKEN}";` }] }])).toEqual([
+      { path: "src/a.ts", line: 4, rule: "github-token", commit: "0123456789ab" },
+    ]);
+  });
+
   it("finds nothing in an empty change or in blank lines", () => {
     expect(scanAddedLines([])).toEqual([]);
     expect(scanAddedLines([file("src/a.ts", ["", "   "])])).toEqual([]);

@@ -1569,7 +1569,8 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
           { path: "src/new.ts", line: 1, rule: "github-token" },
         ],
         scanned: 2,
-        skipped: 0,
+        // TEST CHANGE, justified: 2026-10-09, review/98 — `skipped` names each file by path instead of counting it.
+        skipped: [],
         outside: 0,
         unscanned: [],
       });
@@ -1595,7 +1596,8 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         scope: "uncommitted",
         hits: [],
         scanned: 1,
-        skipped: 0,
+        // TEST CHANGE, justified: 2026-10-09, review/98 — `skipped` names each file by path instead of counting it.
+        skipped: [],
         outside: 0,
         unscanned: [],
       });
@@ -1627,8 +1629,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(code).toBe(0);
       expect(doc["hits"]).toEqual([]);
-      // git lists no FIFO as untracked, so the binary and the oversized file are the two counted; the FIFO is never opened.
-      expect(doc["skipped"]).toBe(2);
+      // git lists no FIFO as untracked, so the binary and the oversized file are the two named; the FIFO is never opened.
+      // TEST CHANGE, justified: 2026-10-09, review/98 — `skipped` names each file by path instead of counting it.
+      expect(doc["skipped"]).toEqual(["src/big.ts", "src/bin.ts"]);
       expect(doc["scanned"]).toBe(0);
     });
 
@@ -1733,15 +1736,105 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["hits"]).toEqual([{ path: "src/x.ts", line: 2, rule: "github-token" }]);
     });
 
-    it("names hits by project path and leaves out, counted, the lines outside the project", async () => {
+    // TEST CHANGE, justified: 2026-10-09, review/96 and review/104 — the scan reads the lines outside the project too,
+    // naming them from the project root, and `outside` counts the files outside it (it counted hunks before).
+    it("names hits by project path, and the lines outside the project from the project root, counting those files", async () => {
       const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", "app/src/x.ts": "export {};\n", "other/y.ts": "export {};\n" });
-      await getRoot().seedFiles({ "repo/app/src/x.ts": `export {};\n${LINE}`, "repo/other/y.ts": `export {};\n${LINE}` });
+      await getRoot().seedFiles({
+        "repo/app/src/x.ts": `export {};\n${LINE}`,
+        "repo/other/y.ts": `export {};\n${LINE}`,
+        "repo/ci/new.yml": `token: "${TOKEN}"\n`,
+      });
 
       const { code, doc } = await gateIn(join(repo, "app"), ["scan", "--json"]);
 
       expect(code).toBe(1);
-      expect(doc["hits"]).toEqual([{ path: "src/x.ts", line: 2, rule: "github-token" }]);
-      expect(doc["outside"]).toBe(1);
+      expect(doc["hits"]).toEqual([
+        { path: "src/x.ts", line: 2, rule: "github-token" },
+        { path: "../other/y.ts", line: 2, rule: "github-token" },
+        { path: "../ci/new.yml", line: 1, rule: "github-token" },
+      ]);
+      expect(doc["outside"]).toBe(2);
+      expect(doc["scanned"]).toBe(3);
+    });
+
+    it("names the skipped files outside the project from the project root", async () => {
+      const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", "app/src/x.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/assets/logo.png": "\0PNG\n", "repo/app/img.png": "\0PNG\n" });
+
+      const { code, doc } = await gateIn(join(repo, "app"), ["scan", "--json"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ hits: [], skipped: ["img.png", "../assets/logo.png"], outside: 1 });
+    });
+
+    // review/98: a UTF-16 text file is decoded by its byte-order mark, never skipped as a binary.
+    it("decodes and scans a tracked UTF-16LE file and an untracked UTF-16BE one, by their byte-order marks", async () => {
+      const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
+      const utf16be = (text: string): Buffer => Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, "utf16le").swap16()]);
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await writeFile(join(repo, "settings.json"), utf16le("{}\r\n"));
+      git(repo, ["add", "--", "settings.json"]);
+      git(repo, ["commit", "-q", "-m", "a UTF-16 file"]);
+      await writeFile(join(repo, "settings.json"), utf16le(`{}\r\n${LINE}`));
+      await writeFile(join(repo, "export.txt"), utf16be(`first\n${LINE}`));
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([
+        { path: "settings.json", line: 2, rule: "github-token" },
+        { path: "export.txt", line: 2, rule: "github-token" },
+      ]);
+      expect(doc["skipped"]).toEqual([]);
+    });
+
+    // review/112: with a base, every commit since it is read too, so a value committed and then removed still stops.
+    it("names the commit that added a token a later commit removed, with --base and never without", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      const root = git(repo, ["rev-parse", "HEAD"]).trim();
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+      git(repo, ["commit", "-q", "-am", "add"]);
+      const added = git(repo, ["rev-parse", "HEAD"]).trim();
+      await getRoot().seedFiles({ "repo/src/a.ts": "export {};\n" });
+      git(repo, ["commit", "-q", "-am", "remove"]);
+
+      const sinceBase = await gateIn(repo, ["scan", "--base", root, "--json"]);
+      const human = await gateIn(repo, ["scan", "--base", root]);
+      const uncommitted = await gateIn(repo, ["scan", "--json"]);
+
+      expect(sinceBase.code).toBe(1);
+      expect(sinceBase.doc["hits"]).toEqual([{ path: "src/a.ts", line: 2, rule: "github-token", commit: added.slice(0, 12) }]);
+      expect(human.stdout).toContain(`src/a.ts:2 (commit ${added.slice(0, 12)})  github-token`);
+      expectNoFragment(sinceBase.stdout, human.stdout, human.stderr);
+      expect(uncommitted.code).toBe(0);
+    });
+
+    it("reads a token still in the tree once, from the tree, not again from the commit that added it", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      const root = git(repo, ["rev-parse", "HEAD"]).trim();
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+      git(repo, ["commit", "-q", "-am", "add"]);
+
+      const { code, doc } = await gateIn(repo, ["scan", "--base", root, "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "src/a.ts", line: 2, rule: "github-token" }]);
+    });
+
+    it("exits 1 with the reason when a commit since the base cannot be read", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      const root = git(repo, ["rev-parse", "HEAD"]).trim();
+      await getRoot().seedFiles({ "repo/src/a.ts": "export {};\nexport const b = 1;\n" });
+      git(repo, ["commit", "-q", "-am", "work"]);
+
+      gitSpy.fault = { step: "diff-tree", error: realFailure("process.exit(3)") };
+      const { code, doc } = await gateIn(repo, ["scan", "--base", root, "--json"]);
+      gitSpy.fault = undefined;
+
+      expect(code).toBe(1);
+      expect(doc["reason"]).toContain("git diff-tree");
+      expect(doc).not.toHaveProperty("hits");
     });
 
     it.each([

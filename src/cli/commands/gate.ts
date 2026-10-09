@@ -27,7 +27,7 @@ import {
   type TestSelectionInput,
   type TestSource,
 } from "../../change/testInputs.ts";
-import { scanAddedLines, type ScanHit } from "../../change/scan.ts";
+import { scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -114,10 +114,18 @@ import type { GitRunner } from "../../workspace/git.ts";
  * path, line and rule, never the value. With no `--base` it reads the
  * uncommitted change against `HEAD` and says so (`base: null`, `scope:
  * "uncommitted"`); with one, everything since it (`scope: "since-base"`,
- * plan/56). A hit exits 1; so does a change it could not read, with `ok: false`
- * and the reason in place of the hits, so a failed read never exits 0. A
- * file the read cannot show is listed in `unscanned`, never read as clean
- * (plan/62, review/94); the exit stays 0 for it and the flows read the list.
+ * plan/56), and then the added lines of every commit since it too, merges left
+ * out, so a value committed and removed again still stops the run; such a hit
+ * names its commit (review/112). It reads the whole change: a file outside the
+ * project is scanned and named from the project root, `../` first, and
+ * `outside` counts those files (review/96, review/104); a file that opens with
+ * a UTF-16 byte-order mark is decoded and scanned (review/98). The classifier
+ * reads neither. A hit exits 1; so does a change it could not read, with
+ * `ok: false` and the reason in place of the hits, so a failed read never
+ * exits 0. A code file the read cannot show is listed in `unscanned`, never
+ * read as clean (plan/62, review/94), and every other file left unread is
+ * named in `skipped` (review/98); the exit stays 0 for either and the flows
+ * read the lists.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -350,9 +358,49 @@ function readsAsText(file: string): boolean {
   return start !== undefined && !start.includes(0);
 }
 
+/**
+ * A file's text by its UTF-16 byte-order mark, little- or big-endian, or
+ * `undefined` for a file with none (review/98): its ASCII bytes carry NULs, so
+ * the sniff alone would call it binary.
+ */
+function decodeUtf16(body: Buffer): string | undefined {
+  if (body[0] === 0xff && body[1] === 0xfe) return body.subarray(2).toString("utf16le");
+  if (body[0] !== 0xfe || body[1] !== 0xff) return undefined;
+  const swapped = Buffer.from(body.subarray(2, body.length - (body.length % 2)));
+  return swapped.swap16().toString("utf16le");
+}
+
+/** A regular file's text when it opens with a UTF-16 byte-order mark and fits the untracked bound; two bytes are read first. */
+function readUtf16(file: string): string | undefined {
+  const mark = readRegular(file, 2);
+  if (mark === undefined || decodeUtf16(mark) === undefined) return undefined;
+  const body = readRegular(file, UNTRACKED_MAX_BYTES, UNTRACKED_MAX_BYTES);
+  return body === undefined ? undefined : decodeUtf16(body);
+}
+
+/** A whole file's text as one hunk of added lines from line 1. */
+function wholeFile(path: string, text: string): Hunk {
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return { path, added: lines.map((line, at) => ({ line: at + 1, text: line })), removed: [], context: [] };
+}
+
 /** Whether lines, joined, hold a NUL in their first {@link SNIFF_BYTES} characters. */
 function holdsNul(lines: readonly string[]): boolean {
   return lines.join("\n").slice(0, SNIFF_BYTES).includes("\0");
+}
+
+/**
+ * What only the scan reads, under the paths it names (review/96, review/98):
+ * the lines of files outside the project, named from the project root (`../`
+ * first), the lines of UTF-16 files decoded, every file left unread by path,
+ * and the files outside the project counted. The classifier never reads these.
+ */
+interface ScanLines {
+  hunks: Hunk[];
+  skipped: string[];
+  unscanned: string[];
+  outside: number;
 }
 
 /** The changed lines in project-relative hunks, and what the read could not show. */
@@ -360,13 +408,12 @@ interface ChangeLines {
   hunks: Hunk[];
   /** Files whose lines were not read: binary and not code, untracked over 1 MiB, or not a regular file. */
   skipped: number;
-  /** Hunks left out because their file sits outside the project. */
-  outside: number;
   /**
    * Files the read could not show (plan/62): tracked code files the sniff marks
    * binary, and untracked files past the total read cap (review/94).
    */
   unscanned: string[];
+  scan: ScanLines;
 }
 
 /** One `diff --numstat -z` row: its old and new names, and whether git printed `-` counts (a binary to git). */
@@ -409,10 +456,12 @@ type Side = "work tree" | "index";
 /** One side's read: its hunks, the section names it listed, and what it could not show. */
 interface SideRead {
   hunks: Hunk[];
-  /** Top-level-relative names, each with the hunks left out because it sits outside the project. */
-  outside: Map<string, number>;
+  /** Top-level-relative names of the files outside the project. */
+  outside: Set<string>;
   skipped: Set<string>;
   unscanned: string[];
+  /** The scan's view, by the paths it names: lines outside the project and decoded, and what stayed unread. */
+  scan: { hunks: Hunk[]; skipped: Set<string>; unscanned: Set<string> };
 }
 
 /** The flags every diff of the line read pins against config: no external diff, colour or textconv, every submodule. */
@@ -443,6 +492,7 @@ function readSide(
   side: Side,
   workSections: readonly Section[],
   inside: (name: string) => string | null,
+  away: (name: string) => string,
 ): SideRead {
   const staged = side === "index" ? ["--staged"] : [];
   const label = side === "index" ? "diff --staged" : "diff";
@@ -481,26 +531,46 @@ function readSide(
     "--",
     ...pathspec,
   ]);
-  const read: SideRead = { hunks: [], outside: new Map(), skipped: new Set(), unscanned: [] };
-  const notRead = (name: string, path: string | null, hunks: number): void => {
-    if (path === null) read.outside.set(name, (read.outside.get(name) ?? 0) + hunks);
-    else if (hasCodeExtension(path)) read.unscanned.push(path);
-    else read.skipped.add(path);
+  const read: SideRead = {
+    hunks: [],
+    outside: new Set(),
+    skipped: new Set(),
+    unscanned: [],
+    scan: { hunks: [], skipped: new Set(), unscanned: new Set() },
   };
-  for (const row of binaries) notRead(row.to, inside(row.to), 1);
+  const notRead = (name: string, path: string | null): void => {
+    const shown = path ?? away(name);
+    const code = hasCodeExtension(shown);
+    if (path !== null) {
+      if (code) read.unscanned.push(path);
+      else read.skipped.add(path);
+    }
+    // The scan decodes a UTF-16 work-tree file whole (review/98), standing in for the index's copy too; a
+    // staged copy the work tree has changed again is not decoded, and stays named only when the tree's was not.
+    const text = side === "work tree" ? readUtf16(join(root.topLevel, name)) : undefined;
+    if (text !== undefined) read.scan.hunks.push(wholeFile(shown, text));
+    else if (code) read.scan.unscanned.add(shown);
+    else read.scan.skipped.add(shown);
+  };
+  for (const row of binaries) {
+    if (inside(row.to) === null) read.outside.add(row.to);
+    notRead(row.to, inside(row.to));
+  }
   parsePatch(patch, sections).forEach((section, index) => {
     const name = sections[index]?.to ?? "";
     const path = inside(name);
-    if (path === null) {
-      notRead(name, null, section.hunks.length);
-      return;
-    }
+    if (path === null) read.outside.add(name);
     // The head side: the work-tree file (standing in for the index's copy too), or a deletion's removed lines.
     const file = section.deleted ? undefined : readRegular(join(root.topLevel, name), HEAD_BYTES);
     const lines = section.hunks.flatMap((hunk) => (section.deleted ? hunk.removed : hunk.added.map((line) => line.text)));
     const sniffed = side === "work tree" ? file : undefined;
     if (section.unshown || (sniffed === undefined ? holdsNul(lines) : sniffed.subarray(0, SNIFF_BYTES).includes(0))) {
-      notRead(name, path, section.hunks.length);
+      notRead(name, path);
+      return;
+    }
+    // A file outside the project is the scan's alone (review/96), named from the project root.
+    if (path === null) {
+      for (const hunk of section.hunks) read.scan.hunks.push({ path: away(name), ...hunk });
       return;
     }
     const head = file !== undefined ? file.toString("utf8") : section.deleted ? lines.join("\n").slice(0, HEAD_BYTES) : undefined;
@@ -525,10 +595,10 @@ function readLines(
   untracked: readonly string[],
   windows: boolean,
 ): ChangeLines {
-  const inside = (name: string): string | null =>
-    toProjectPath(root.prefix, name) ?? (windows ? toProjectPath(root.prefix, name.replaceAll("\\", "/")) : null);
-  const work = readSide(runner, root, commit, "work tree", sections, inside);
-  const index = readSide(runner, root, commit, "index", sections, inside);
+  const inside = insideOf(root.prefix, windows);
+  const away = awayFrom(root.prefix);
+  const work = readSide(runner, root, commit, "work tree", sections, inside, away);
+  const index = readSide(runner, root, commit, "index", sections, inside, away);
 
   const seen = (pick: (hunk: Hunk) => readonly string[]): Map<string, Set<string>> => {
     const byPath = new Map<string, Set<string>>();
@@ -546,38 +616,77 @@ function readLines(
   const hunks = [...work.hunks, ...indexOnly];
   const skipped = new Set([...work.skipped, ...index.skipped]);
   const unscanned = [...work.unscanned, ...index.unscanned];
-  let outside = [...work.outside.values(), ...[...index.outside].filter(([name]) => !work.outside.has(name)).map(([, count]) => count)].reduce(
-    (sum, count) => sum + count,
-    0,
-  );
+  // The scan's view: the index's outside lines as the index's inside ones, read once beside the work tree's.
+  const outsideAdded = new Set(work.scan.hunks.flatMap((hunk) => hunk.added.map((line) => `${hunk.path}\0${line.text}`)));
+  const scanHunks = [
+    ...work.scan.hunks,
+    ...index.scan.hunks.flatMap((hunk): Hunk[] => {
+      const added = hunk.added.filter((line) => !outsideAdded.has(`${hunk.path}\0${line.text}`));
+      return added.length === 0 ? [] : [{ ...hunk, added }];
+    }),
+  ];
+  const scanSkipped = new Set([...work.scan.skipped, ...index.scan.skipped]);
+  const scanUnscanned = new Set([...work.scan.unscanned, ...index.scan.unscanned]);
+  const outside = new Set([...work.outside, ...index.outside]);
+  const pastCap = (path: string | null, shown: string): void => {
+    if (path !== null) unscanned.push(path);
+    scanUnscanned.add(shown);
+  };
   let untrackedBytes = 0;
   for (const name of untracked) {
     const path = inside(name);
-    if (path === null) {
-      outside += 1;
-      continue;
-    }
+    const shown = path ?? away(name);
+    if (path === null) outside.add(name);
     if (untrackedBytes >= UNTRACKED_TOTAL_BYTES) {
-      unscanned.push(path);
+      pastCap(path, shown);
       continue;
     }
     const body = readRegular(join(root.topLevel, name), UNTRACKED_MAX_BYTES, UNTRACKED_MAX_BYTES);
-    if (body === undefined || body.subarray(0, SNIFF_BYTES).includes(0)) {
-      skipped.add(path);
+    const decoded = body === undefined ? undefined : decodeUtf16(body);
+    if (body === undefined || (decoded === undefined && body.subarray(0, SNIFF_BYTES).includes(0))) {
+      if (path !== null) skipped.add(path);
+      scanSkipped.add(shown);
       continue;
     }
     if (untrackedBytes + body.length > UNTRACKED_TOTAL_BYTES) {
       untrackedBytes = UNTRACKED_TOTAL_BYTES;
-      unscanned.push(path);
+      pastCap(path, shown);
       continue;
     }
     untrackedBytes += body.length;
+    // A UTF-16 file is the scan's alone (review/98): the classifier still counts it skipped, as before.
+    if (decoded !== undefined) {
+      if (path !== null) skipped.add(path);
+      scanHunks.push(wholeFile(shown, decoded));
+      continue;
+    }
     const text = body.toString("utf8");
-    const lines = text.split("\n");
-    if (lines.at(-1) === "") lines.pop();
-    hunks.push({ path, added: lines.map((line, at) => ({ line: at + 1, text: line })), removed: [], context: [], head: text.slice(0, HEAD_BYTES) });
+    if (path === null) scanHunks.push(wholeFile(shown, text));
+    else hunks.push({ ...wholeFile(path, text), head: text.slice(0, HEAD_BYTES) });
   }
-  return { hunks, skipped: skipped.size, outside, unscanned: [...new Set(unscanned)] };
+  const read = new Set(scanHunks.map((hunk) => hunk.path));
+  return {
+    hunks,
+    skipped: skipped.size,
+    unscanned: [...new Set(unscanned)],
+    scan: {
+      hunks: scanHunks,
+      skipped: [...scanSkipped].filter((path) => !read.has(path)),
+      unscanned: [...new Set([...unscanned, ...scanUnscanned])].filter((path) => !read.has(path)),
+      outside: outside.size,
+    },
+  };
+}
+
+/** A top-level-relative name in the project's layout, or `null` outside it; on win32 a `\\` read as a separator too. */
+function insideOf(prefix: string, windows: boolean): (name: string) => string | null {
+  return (name) => toProjectPath(prefix, name) ?? (windows ? toProjectPath(prefix, name.replaceAll("\\", "/")) : null);
+}
+
+/** A top-level-relative name as the scan names a file outside the project: from the project root, `../` first. */
+function awayFrom(prefix: string): (name: string) => string {
+  const up = "../".repeat(prefix.split("/").filter((part) => part !== "").length);
+  return (name) => `${up}${name}`;
 }
 
 /** What the git read hands the classifier, in project-relative paths. */
@@ -1068,14 +1177,74 @@ type ScanScope = "uncommitted" | "since-base";
 
 /** The scan of one run: its hits and what the read could not show, or why the change could not be read. */
 type ScanOutcome =
-  | { base: string | null; scope: ScanScope; hits: ScanHit[]; scanned: number; skipped: number; outside: number; unscanned: string[] }
+  | { base: string | null; scope: ScanScope; hits: ScanHit[]; scanned: number; skipped: string[]; outside: number; unscanned: string[] }
   | { base: string | null; scope: ScanScope; failed: string };
+
+/** A commit is named in a hit by this many characters of its id. */
+const SHORT_COMMIT = 12;
+
+/** What the history since a base adds to the scan: each commit's added lines, and the files no read could show. */
+interface HistoryLines {
+  files: ScanFile[];
+  skipped: string[];
+  unscanned: string[];
+}
+
+/**
+ * The added lines of every commit since `base`, merges left out, oldest first
+ * (review/112): a value committed and removed again before the scan stays in
+ * the history a push sends. Each commit is two `diff-tree` reads through the
+ * same runner and bounds, with the line read's pins (`--text`, no external
+ * diff, colour or textconv, fixed prefixes), its sections named by the `-z`
+ * name list. A file whose added lines hold a NUL is named, never read.
+ */
+function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
+  const inside = insideOf(root.prefix, windows);
+  const away = awayFrom(root.prefix);
+  const commits = runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", `${base}..HEAD`, "--"])
+    .split("\n")
+    .filter((line) => line !== "");
+  const history: HistoryLines = { files: [], skipped: [], unscanned: [] };
+  for (const commit of commits) {
+    const pins = ["-r", "--root", "--no-commit-id", "-M", ...DIFF_PINS];
+    const { sections } = parseNameStatus(
+      runGit(runner, root.dir, "diff-tree --name-status", ["diff-tree", ...pins, "--name-status", "-z", commit, "--"]),
+    );
+    const patch = runGit(runner, root.dir, "diff-tree --text", [
+      "-c",
+      "core.quotePath=false",
+      "diff-tree",
+      ...pins,
+      "-p",
+      "-U0",
+      "--text",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+      "--inter-hunk-context=0",
+      "--submodule=short",
+      commit,
+      "--",
+    ]);
+    parsePatch(patch, sections).forEach((section, index) => {
+      const name = sections[index]?.to ?? "";
+      const shown = inside(name) ?? away(name);
+      const added = section.hunks.flatMap((hunk) => hunk.added);
+      if (section.unshown || holdsNul(added.map((line) => line.text))) {
+        (hasCodeExtension(shown) ? history.unscanned : history.skipped).push(shown);
+      } else if (added.length > 0) history.files.push({ path: shown, commit: commit.slice(0, SHORT_COMMIT), added });
+    });
+  }
+  return history;
+}
 
 /**
  * The added lines of the change, read as `classify` reads them ({@link
- * readChange}, from {@link findProjectRoot}), through the secret scan. Every
- * git failure, a failed line read and a base that does not resolve are a
- * `failed` outcome, never a clean one.
+ * readChange}, from {@link findProjectRoot}), with the lines only the scan
+ * reads (outside the project, UTF-16), through the secret scan. With a base,
+ * the added lines of every commit since it are read too ({@link readHistory}),
+ * less those the change still adds to the same file, each hit naming its
+ * commit. Every git failure, a failed line or history read and a base that
+ * does not resolve are a `failed` outcome, never a clean one.
  */
 function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
   const scope: ScanScope = ref === undefined ? "uncommitted" : "since-base";
@@ -1088,16 +1257,33 @@ function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
     }
     const treeish = commit ?? "HEAD";
     const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
-    const { lines } = readChange(runner, root, treeish, process.platform === "win32");
+    const windows = process.platform === "win32";
+    const { lines } = readChange(runner, root, treeish, windows);
     if ("failed" in lines) return { base: commit, scope, failed: `the changed lines could not be read (${lines.failed})` };
+    const current: ScanFile[] = [...lines.hunks, ...lines.scan.hunks];
+    let history: HistoryLines = { files: [], skipped: [], unscanned: [] };
+    try {
+      if (commit !== null) history = readHistory(runner, root, commit, windows);
+    } catch (err) {
+      if (!(err instanceof GitReadError) && !(err instanceof PatchError)) throw err;
+      const why = err instanceof GitReadError ? describeGitFailure(err) : err.message;
+      return { base: commit, scope, failed: `the commits since the base could not be read (${why})` };
+    }
+    // A line the change still adds to that file is reported once, from the change.
+    const added = new Set(current.flatMap((file) => file.added.map((line) => `${file.path}\0${line.text}`)));
+    const past = history.files.flatMap((file): ScanFile[] => {
+      const left = file.added.filter((line) => !added.has(`${file.path}\0${line.text}`));
+      return left.length === 0 ? [] : [{ ...file, added: left }];
+    });
+    const files = [...current, ...past];
     return {
       base: commit,
       scope,
-      hits: scanAddedLines(lines.hunks),
-      scanned: new Set(lines.hunks.map((hunk) => hunk.path)).size,
-      skipped: lines.skipped,
-      outside: lines.outside,
-      unscanned: lines.unscanned,
+      hits: scanAddedLines(files),
+      scanned: new Set(files.map((file) => file.path)).size,
+      skipped: [...new Set([...lines.scan.skipped, ...history.skipped])],
+      outside: lines.scan.outside,
+      unscanned: [...new Set([...lines.scan.unscanned, ...history.unscanned])],
     };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
@@ -1116,19 +1302,21 @@ function runScan(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
     return { exitCode: 1, json: { subcommand: SCAN, base, scope, reason } };
   }
   const hits = outcome.hits.map((hit) => ({ ...hit, path: sanitizeLabel(hit.path) }));
+  const skipped = outcome.skipped.map((path) => sanitizeLabel(path));
   const unscanned = outcome.unscanned.map((path) => sanitizeLabel(path));
   ctx.io.out(
     `${[
       scopeLine,
       `hits: ${hits.length === 0 ? "none" : String(hits.length)}`,
-      ...hits.map((hit) => `  ${hit.path}:${hit.line}  ${hit.rule}`),
-      `scanned: ${outcome.scanned}; skipped: ${outcome.skipped}; outside: ${outcome.outside}`,
+      ...hits.map((hit) => `  ${hit.path}:${hit.line}${hit.commit === undefined ? "" : ` (commit ${hit.commit})`}  ${hit.rule}`),
+      `scanned: ${outcome.scanned}; outside the project: ${outcome.outside}`,
+      `skipped: ${list(skipped)}`,
       `unscanned: ${list(unscanned)}`,
     ].join("\n")}\n`,
   );
   return {
     exitCode: hits.length === 0 ? 0 : 1,
-    json: { subcommand: SCAN, base, scope, hits, scanned: outcome.scanned, skipped: outcome.skipped, outside: outcome.outside, unscanned },
+    json: { subcommand: SCAN, base, scope, hits, scanned: outcome.scanned, skipped, outside: outcome.outside, unscanned },
   };
 }
 
