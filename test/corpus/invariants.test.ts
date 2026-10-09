@@ -200,7 +200,7 @@ interface VendorTokenAllowance {
 }
 
 /**
- * The complete allowance. Two rows, and each names its class: without an
+ * The complete allowance. Three rows, and each names its class: without an
  * explicit allowance the invariant fires on correct files, which is how a
  * corpus-wide vendor check gets weakened into a per-suite one.
  */
@@ -214,6 +214,12 @@ const VENDOR_TOKEN_ALLOWANCES: readonly VendorTokenAllowance[] = [
     relPath: "skills/st-verify/references/scalability.md",
     tokens: ["cursor"],
     why: "homograph: a pagination cursor in the `scale-unbounded-read` check, not the client. The token family is matched on the word, so the English word needs the same declaration a real client mention would.",
+  },
+  {
+    // Added 2026-10-09 (plan 019 file 2, the p5 group's fix round 1, `build/63`).
+    relPath: "agents/stamity-security.md",
+    tokens: ["claude", "cursor", "codex"],
+    why: "adapter-facing: the `## Trigger` table states the trigger roster's path patterns byte for byte (the two-way parity in `test/corpus/agents/specialists.test.ts`), and the client-hooks row names the client configuration folders the classifier matches (`.claude/hooks/` and its siblings). The patterns cannot be stated without their folder names, and no sentence there instructs the model.",
   },
 ];
 

@@ -2,7 +2,7 @@
 id: quick-string-rename-with-its-tests
 class: golden
 claim: "A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once — the secret scan, the class step, then one test-runner spawn of the class's gates, which with no class returned are the full gate — which a tool-free turn names and reports as not yet run or its result not yet returned, with no row green — never skipped, narrowed without a class, split per file, run inline or claimed as run."
-source: content/commands/st-quick.md:29-48,68-74,150-179
+source: content/commands/st-quick.md:29-48,68-74,150-180
 metric: rubric
 ---
 
@@ -63,8 +63,9 @@ The gate is three steps, in order, after the last item lands:
    is in the branch's history, never the value. A hit is never cleared by rewriting the value and
    scanning again, and a hit on a deliberate fixture is the person's to settle. A non-empty
    `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A
-   scan that names a `reason` instead of hits did not read the change: step 2 still runs, step 3
-   runs `${STAMITY:VERIFY_GATE_ALL}`, and the report lists `secret scan: not run` under `Not done:`.
+   scan that names a `reason` did not read the whole change, and a hit beside it still stops the
+   batch; with no hit, step 2 still runs, step 3 runs `${STAMITY:VERIFY_GATE_ALL}`, and the report
+   lists `secret scan: not run` under `Not done:`.
 2. **Classify.** `stamity gate classify --base HEAD --json` names the batch's class and its
    checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
    batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report

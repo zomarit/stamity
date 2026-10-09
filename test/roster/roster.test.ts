@@ -425,6 +425,91 @@ describe("specialistsForPath matching semantics", () => {
     expect(specialistsForPath("src/app/page.tsx", padded)).toEqual(["padded-reviewer"]);
     expect(specialistsForPath("src/app/page.ts", padded)).toEqual([]);
   });
+
+  // Added 2026-10-09 (plan 019 file 2, the p5 group's fix round 1, `build/63`, `review/169`): two
+  // more forms, so a row can name one file inside one folder and a basename's prefix.
+  it("matches a folder-qualified basename as the path's last segments, never a substring", () => {
+    const qualified: readonly SpecialistTrigger[] = [
+      {
+        specialist: "client-reviewer",
+        triggerPaths: [".claude/settings.json"],
+        triggerKeywords: [],
+        rationale: "A file named inside one folder.",
+      },
+    ];
+    for (const path of [".claude/settings.json", "apps/web/.claude/settings.json", ".Claude\\Settings.JSON"]) {
+      expect(specialistsForPath(path, qualified), path).toEqual(["client-reviewer"]);
+    }
+    for (const path of ["settings.json", "src/settings.json", "x.claude/settings.json", ".claude/settings.json.bak"]) {
+      expect(specialistsForPath(path, qualified), path).toEqual([]);
+    }
+  });
+
+  it("matches a basename prefix ending `.*`, and only on the basename", () => {
+    const prefixed: readonly SpecialistTrigger[] = [
+      {
+        specialist: "build-reviewer",
+        triggerPaths: ["dockerfile.*"],
+        triggerKeywords: [],
+        rationale: "A basename's prefix.",
+      },
+    ];
+    for (const path of ["Dockerfile.prod", "services/api/dockerfile.dev"]) {
+      expect(specialistsForPath(path, prefixed), path).toEqual(["build-reviewer"]);
+    }
+    for (const path of ["Dockerfile", "dockerfile.", "src/mydockerfile.prod", "dockerfile.prod/readme.md"]) {
+      expect(specialistsForPath(path, prefixed), path).toEqual([]);
+    }
+  });
+});
+
+describe("the security row's client, CI and install-steering rows (build/63, review/159, review/164, review/169)", () => {
+  it("pulls in security for client hooks and settings only inside client configuration folders", () => {
+    for (const path of [
+      ".claude/hooks/pre-tool.js",
+      ".cursor/hooks/audit.mjs",
+      ".codex/hooks/stop.py",
+      ".github/hooks/policy.json",
+      ".stamity/hooks/guard.mjs",
+      ".stamity/generated/hooks/pre-tool-use.mjs",
+      ".husky/pre-commit",
+      "plugin/hooks/hooks.json",
+      ".claude/settings.json",
+      ".claude/settings.local.json",
+      ".vscode/settings.json",
+      ".mcp.json",
+      ".cursor/mcp.json",
+    ]) {
+      expect(specialistsForPath(path), path).toEqual(["stamity-security"]);
+    }
+    // A front-end hook folder and a settings file outside a client folder are not client configuration.
+    for (const path of ["src/hooks/useAuth.ts", "test/hooks/scripts.test.ts", "web/hooks/useCart.js", "config/settings.json"]) {
+      expect(specialistsForPath(path), path).toEqual([]);
+    }
+  });
+
+  it("pulls in security for container builds, composite actions and install-steering files", () => {
+    for (const path of [
+      "Dockerfile",
+      "deploy/Dockerfile.prod",
+      "api.Dockerfile",
+      "Containerfile",
+      ".github/actions/setup/action.yml",
+      "action.yml",
+      "tools/release/action.yaml",
+      ".npmrc",
+      "web/.npmrc",
+      ".yarnrc",
+      ".yarnrc.yml",
+      ".pnpmfile.cjs",
+      "npm-shrinkwrap.json",
+    ]) {
+      expect(specialistsForPath(path), path).toEqual(["stamity-security"]);
+    }
+    for (const path of ["docs/actions.md", "dockerfiles/readme.txt", "src/npmrc.ts"]) {
+      expect(specialistsForPath(path), path).toEqual([]);
+    }
+  });
 });
 
 /**

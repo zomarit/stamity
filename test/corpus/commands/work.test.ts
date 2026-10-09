@@ -994,6 +994,12 @@ describe("/st-work — Prove", () => {
     expect(pass).toContain("standard runs a lens on a trigger-path match");
     expect(pass).toContain("light runs no other lens");
     expect(pass).not.toContain("light runs none");
+    // Added 2026-10-09 (plan 019 file 2, the p5 group's fix round 1, `review/162`): with no class to read,
+    // the lens fails closed, at every tier, as for `security-sensitive`.
+    expect(pass).toContain(
+      "With no class from `gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason` naming a failed " +
+        "read, the lens runs at every tier as for `security-sensitive`.",
+    );
     // The reason travels with the rule, so a later trim reads it as load-bearing.
     expect(pass).toContain("universal floor holds at every tier");
   });
@@ -1015,6 +1021,9 @@ describe("/st-work — Prove", () => {
     expect(pass).toContain("any other lockfile format");
     expect(pass).toContain("a parse failure");
     expect(pass).toContain("an audit that cannot run keeps the lens");
+    // Added 2026-10-09 (the p5 group's fix round 1, `review/168`): the audit-first rule takes precedence
+    // over the lockfiles' own trigger-path match, which would otherwise call the lens first.
+    expect(pass).toContain("the lockfiles' own trigger-path match waits for that flag");
     // Described in words: a lockfile's file name is a trigger pattern, and the roster owns those.
     expect(pass).toContain("dependency lockfiles");
     expect(pass).not.toMatch(/[\w-]+[.-]lock(?:\.[a-z]+)?\b|\block\.(?:json|yaml)\b/i);
@@ -1031,6 +1040,12 @@ describe("/st-work — Prove", () => {
     expect(role).toContain("an update-risk class other than `patch` or `minor`");
     // A run that could not cover the graph is not a clean audit, so the lens still runs.
     expect(role).toContain("A `partial` run, or an audit that cannot run, counts as a flag");
+    // Added 2026-10-09 (the p5 group's fix round 1, `review/166`, `review/160`): the flag reads only what
+    // the bump changes, in every changed lockfile, so a standing condition elsewhere in the graph does not
+    // send every bump to the lens, and a nested lockfile is not left unaudited.
+    expect(role).toContain("every changed lockfile the class's `byPath` names, nested ones included");
+    expect(role).toContain("counts only the entries the bump adds or changes");
+    expect(role).toContain("A standing condition on an entry the bump leaves alone is reported and does not flag");
   });
 
   it("names the persisted home of the proof block and its ledger", async () => {

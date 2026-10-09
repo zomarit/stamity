@@ -97,7 +97,7 @@ Sections, in order:
 | `threat` | for a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise |
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `${STAMITY:CLI} <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
-When neither form runs, no unit's class can be read, so every unit carries the `threat` row.
+When neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed read, no unit's class can be read, so every unit carries the `threat` row.
 
 4. **Risks** — each with a severity: `Critical` blocks handoff · `Warning` proceeds with a named
    mitigation · `Minor` recorded, not gating.

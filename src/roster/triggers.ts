@@ -47,11 +47,17 @@ export interface SpecialistTrigger {
   /** Specialist agent id. */
   specialist: string;
   /**
-   * Path patterns, always authored posix-style. Four accepted forms:
+   * Path patterns, always authored posix-style. Six accepted forms:
    * - `routes/` — directory-segment glob; matches any path having `routes` as
-   *   a path segment (`src/server/routes/auth.ts`, `routes/index.ts`).
+   *   a path segment (`src/server/routes/auth.ts`, `routes/index.ts`). Several
+   *   segments work the same way (`.github/workflows/`).
    * - `*.tsx` — basename suffix.
    * - `package.json` — exact basename.
+   * - `.claude/settings.json` — a basename inside a named folder: the path's
+   *   last segments, so `apps/web/.claude/settings.json` matches and
+   *   `src/settings.json` does not.
+   * - `dockerfile.*` — basename prefix, the part before `*` ending in `.`, so
+   *   `Dockerfile.prod` matches and `Dockerfile` does not.
    * - `*` — matches every path. This is the one supported spelling for a row
    *   that triggers on any change at all, so an always-on specialist needs no
    *   separate mode flag on the row. Any other pattern that would match
@@ -76,10 +82,15 @@ export interface SpecialistTrigger {
  * `*` is deliberately absent. The security row is always-on-MATCH, which scopes
  * it to the authentication, cryptography, input and dependency surfaces below,
  * and to the surfaces that run with the developer's or the pipeline's rights:
- * CI workflows, shell and PowerShell scripts, container builds, and the client
- * hooks and settings files. A `*` row would make it always-on outright, which
- * is a second reviewer rather than a specialist. Rows therefore match by
- * directory segment, basename suffix, and exact basename only.
+ * CI workflows and composite actions, shell and PowerShell scripts, container
+ * builds, the install-steering files of the package managers, and the client
+ * hooks, settings and MCP server files. Hook folders and `settings.json` are
+ * named inside the client configuration folders only, because a bare `hooks/`
+ * segment also holds front-end hooks (`src/hooks/useX.ts`); a repository whose
+ * own hook code is security-relevant places it through its class file. A `*`
+ * row would make it always-on outright, which is a second reviewer rather
+ * than a specialist. Rows therefore match by directory segment, basename
+ * suffix, prefix or exact basename, and folder-qualified basename only.
  */
 export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
   {
@@ -101,17 +112,37 @@ export const SPECIALIST_TRIGGER_TABLE: readonly SpecialistTrigger[] = [
       "go.mod",
       "cargo.toml",
       "gemfile",
+      ".npmrc",
+      ".yarnrc",
+      ".yarnrc.yml",
+      ".pnpmfile.cjs",
+      "npm-shrinkwrap.json",
       ".github/workflows/",
+      ".github/actions/",
+      "action.yml",
+      "action.yaml",
       "*.sh",
       "*.bash",
       "*.zsh",
       "*.ps1",
       "*.psm1",
       "dockerfile",
-      "hooks/",
+      "dockerfile.*",
+      "*.dockerfile",
+      "containerfile",
+      ".claude/hooks/",
+      ".cursor/hooks/",
+      ".codex/hooks/",
+      ".github/hooks/",
+      ".stamity/hooks/",
+      ".stamity/generated/hooks/",
+      ".husky/",
       "hooks.json",
-      "settings.json",
+      ".claude/settings.json",
       "settings.local.json",
+      ".vscode/settings.json",
+      ".mcp.json",
+      "mcp.json",
     ],
     triggerKeywords: [
       "authentication",
@@ -247,8 +278,20 @@ function matchesPattern(normalizedPath: string, pattern: string): boolean {
     return normalizedPath.startsWith(needle) || normalizedPath.includes(`/${needle}`);
   }
 
+  // Folder-qualified basename: the path's last segments, never a substring, so
+  // `.claude/settings.json` does not match `x.claude/settings.json`.
+  if (needle.includes("/")) {
+    return normalizedPath === needle || normalizedPath.endsWith(`/${needle}`);
+  }
+
   const basename = basenameOf(normalizedPath);
-  return needle.startsWith(MATCH_ALL) ? basename.endsWith(needle.slice(1)) : basename === needle;
+  if (needle.startsWith(MATCH_ALL)) return basename.endsWith(needle.slice(1));
+  // Basename prefix: `dockerfile.*` needs at least one character after the dot.
+  if (needle.endsWith(`.${MATCH_ALL}`)) {
+    const prefix = needle.slice(0, -1);
+    return basename.length > prefix.length && basename.startsWith(prefix);
+  }
+  return basename === needle;
 }
 
 /**

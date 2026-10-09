@@ -8,6 +8,7 @@
       "src/change/**",
       "src/cli/commands/gate.ts",
       "src/roster/triggers.ts",
+      "src/hooks/**",
       "scripts/ci/**"
     ],
     "product": ["content/**"],

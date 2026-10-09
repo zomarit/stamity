@@ -516,8 +516,11 @@ describe("/st-plan — plan artifact shape", () => {
     // The paragraph is two physical lines: the shared sentence, then the fallback.
     const paragraph = shape.slice(running + 2, risks).trimEnd().split("\n");
     expect(paragraph).toHaveLength(2);
+    // TEST CHANGE, justified: 2026-10-09, plan 019 file 2, the p5 group's fix round 1, `review/167`, `review/165`.
+    // The fallback named only "neither form runs"; an installed copy with no `gate` verb and a classify that
+    // could not read the change leave the class unread too, so the line names both.
     expect(paragraph[1]).toBe(
-      "When neither form runs, no unit's class can be read, so every unit carries the `threat` row.",
+      "When neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed read, no unit's class can be read, so every unit carries the `threat` row.",
     );
   });
 

@@ -842,12 +842,15 @@ describe("quick — the guardrails are the command", () => {
       "A non-empty `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths.",
     );
     // A scan that could not read the change is not a clean scan: it is a scan not run.
-    expect(gates).toContain("A scan that names a `reason` instead of hits did not read the change");
+    // TEST CHANGE, justified: 2026-10-09, plan 019 file 2, the p5 group's fix round 1, `review/144`. The pin
+    // read "names a `reason` instead of hits"; since lane A's fix round 11 a `reason` can sit beside hits,
+    // and a hit still stops the batch.
+    expect(gates).toContain("A scan that names a `reason` did not read the whole change, and a hit beside it still stops the batch");
     expect(gates).toContain("`secret scan: not run` under `Not done:`");
     // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/113`): a failed scan still
     // classifies, so a security-sensitive class still refuses the batch.
     expect(gates).toContain(
-      "did not read the change: step 2 still runs, step 3 runs `${STAMITY:VERIFY_GATE_ALL}`, and the report lists `secret scan: not run` under `Not done:`.",
+      "with no hit, step 2 still runs, step 3 runs `${STAMITY:VERIFY_GATE_ALL}`, and the report lists `secret scan: not run` under `Not done:`.",
     );
     // Added 2026-10-09 (the p3 fix round, `review/121`): an installed copy that predates `gate`
     // takes the same fallback as no copy at all.

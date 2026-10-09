@@ -84,11 +84,12 @@ const CALL_SITES: readonly CallSite[] = [
   },
   {
     // The plan's `threat` row runs `gate classify --paths` over a unit's files (unit p5d-threat-note);
-    // with neither form no unit's class can be read, so every unit carries the row.
+    // with neither form, no `gate` verb or a failed read, no unit's class can be read, so every unit carries
+    // the row (2026-10-09, the p5 group's fix round 1, `review/167`, `review/165`).
     relPath: "commands/st-plan.md",
     label: RUNNING_CLI_LABEL,
     fallback:
-      "When neither form runs, no unit's class can be read, so every unit carries the `threat` row.",
+      "When neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed read, no unit's class can be read, so every unit carries the `threat` row.",
   },
 ];
 

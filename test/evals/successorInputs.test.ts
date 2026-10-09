@@ -172,6 +172,13 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "is counted as `notes left out: 1`, and, the result being returned inline, travels as that count, never the " +
     "note; the claim moves with it. B8 still refuses a claimed unification and an edit to `src/api/report.ts`; what " +
     "it no longer admits is the encoder carried as a deferral. No other row moves.",
+  "plan-artifact-head-and-units-shape":
+    "Expectation re-synced 2026-10-09 to the landed corpus (plan 019 file 2, the p5 group's fix round 1, " +
+    "`build/68`): `/st-plan`'s unit table gained a conditional ninth row, `threat` (unit p5d-threat-note), so " +
+    "B6 and the claim stop saying the table lists eight fields. B6 still grades the eight required fields by name " +
+    "and adds one sentence: the ninth row is conditional, and its presence or its absence does not fail the " +
+    "criterion. What B6 now admits is a unit carrying a `threat` row, or none; a unit missing any of the eight " +
+    "still fails it. No other row moves.",
 };
 
 const markdown = (directory: string): string[] =>

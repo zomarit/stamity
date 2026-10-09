@@ -742,7 +742,10 @@ describe("classifyChange: the S7 path rows of the security row (p5b, REQ-FLOW-06
     const cases: readonly (readonly [string, string])[] = [
       [".github/workflows/ci.yml", ".github/workflows/"],
       ["packages/a/.github/workflows/release.yaml", ".github/workflows/"],
-      ["plugin/hooks/pre-tool.js", "hooks/"],
+      // TEST CHANGE, justified: 2026-10-09, plan 019 file 2, the p5 group's fix round 1, `build/63`. The row read
+      // `plugin/hooks/pre-tool.js` by the bare segment `hooks/`, which also placed every front-end hook folder
+      // here; the segment narrows to client configuration folders, so the case names one of them.
+      [".claude/hooks/pre-tool.js", ".claude/hooks/"],
       ["scripts/x.sh", "*.sh"],
       ["scripts/x.bash", "*.bash"],
       ["scripts/x.zsh", "*.zsh"],
@@ -751,8 +754,25 @@ describe("classifyChange: the S7 path rows of the security row (p5b, REQ-FLOW-06
       ["Dockerfile", "dockerfile"],
       ["services/api-gw/Dockerfile", "dockerfile"],
       [".cursor/hooks.json", "hooks.json"],
-      [".claude/settings.json", "settings.json"],
+      [".claude/settings.json", ".claude/settings.json"],
       [".claude/settings.local.json", "settings.local.json"],
+      // Added 2026-10-09 (the p5 group's fix round 1, `build/63`, `review/159`, `review/164`, `review/169`).
+      [".stamity/hooks/guard.mjs", ".stamity/hooks/"],
+      [".stamity/generated/hooks/pre-tool-use.mjs", ".stamity/generated/hooks/"],
+      [".husky/pre-commit", ".husky/"],
+      [".vscode/settings.json", ".vscode/settings.json"],
+      [".mcp.json", ".mcp.json"],
+      [".cursor/mcp.json", "mcp.json"],
+      [".github/actions/setup/action.yml", ".github/actions/"],
+      ["action.yaml", "action.yaml"],
+      ["deploy/Dockerfile.prod", "dockerfile.*"],
+      ["api.Dockerfile", "*.dockerfile"],
+      ["Containerfile", "containerfile"],
+      [".npmrc", ".npmrc"],
+      [".yarnrc", ".yarnrc"],
+      [".yarnrc.yml", ".yarnrc.yml"],
+      [".pnpmfile.cjs", ".pnpmfile.cjs"],
+      ["npm-shrinkwrap.json", "npm-shrinkwrap.json"],
     ];
     for (const [path, pattern] of cases) {
       const result = given([path]);
@@ -780,6 +800,16 @@ describe("classifyChange: the S7 path rows of the security row (p5b, REQ-FLOW-06
     for (const path of ["docs/hooks.md", "docs/workflows/ci.md", "docs/settings.md"]) {
       const result = given([path]);
       expect(result.class, path).toBe("docs");
+      expect(result.lenses, path).toEqual([]);
+    }
+  });
+
+  // Added 2026-10-09 (the p5 group's fix round 1, `build/63`): a front-end hook folder and a settings file outside
+  // a client folder are not client configuration, so the row leaves them to the other rules.
+  it("leaves a front-end hook folder and a non-client settings file to the other rules", () => {
+    for (const path of ["src/hooks/useAuth.ts", "web/hooks/useCart.js", "config/settings.json"]) {
+      const result = given([path]);
+      expect(result.class, path).not.toBe("security-sensitive");
       expect(result.lenses, path).toEqual([]);
     }
   });
@@ -1287,6 +1317,9 @@ describe("this repository's class file", () => {
     ["src/manifest/manifest.ts"],
     ["src/runs/ledgerStore.ts"],
     ["src/cli/engine/gitStatus.ts"],
+    // Added 2026-10-09 (the p5 group's fix round 1, `build/63`): the engine's own hook code, which the
+    // narrowed client-hooks row no longer reaches.
+    ["src/hooks/userHooks.ts"],
   ])("places %s security-sensitive with the lens", (path) => {
     expect(classOf(path, rules)).toMatchObject({ class: "security-sensitive", lenses: ["stamity-security"] });
   });

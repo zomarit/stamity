@@ -1,7 +1,7 @@
 ---
 id: plan-artifact-head-and-units-shape
 class: golden
-claim: "The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries all eight fields the command lists — requirements never blank, interfaces inline, at least one edge case."
+claim: "The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries the eight required fields of the command's nine-row table, the ninth (threat) conditional — requirements never blank, interfaces inline, at least one edge case."
 source: content/commands/st-plan.md:313-370
 metric: rubric
 ---
@@ -105,9 +105,10 @@ each list.
    optional key is a valid head.
 5. The artifact path is under `docs/plans/`, takes the next free number `003`, and is
    given as `docs/plans/003-<slug>.md` with a slug rather than as a placeholder.
-6. The unit carries all eight fields the table lists: `id`, `requirements`, `files`,
-   `interfaces`, `testCriteria`, `edgeCases`, `depends_on` (with `none` where the unit
-   depends on nothing), and `verify`.
+6. The unit carries the eight required fields the table lists: `id`, `requirements`,
+   `files`, `interfaces`, `testCriteria`, `edgeCases`, `depends_on` (with `none` where the
+   unit depends on nothing), and `verify`. The table's ninth row, `threat`, is conditional:
+   its presence or its absence does not fail this criterion.
 7. `requirements` is not blank: it names `REQ-cli-140`. It must NOT read `spec carries no
    ids`, because the scenario states the spec carries one.
 8. `interfaces` is filled inline from the facts above — the flag's declared shape (`--json`,
