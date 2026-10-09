@@ -172,18 +172,26 @@ function expandsDollar(path: string): boolean {
 const MASK = String.raw`(?:[*•]+|[xX]+|REDACTED|\[REDACTED\]|<REDACTED>|\(REDACTED\)|\{REDACTED\})`;
 
 /**
- * A value with no literal in it: empty, a null, wholly a `${…}` or a
- * `{{ … }}` placeholder (build/47's recorded default, review/136), or wholly
- * a mask (review/143).
+ * A value with no literal in it: empty, a null, or wholly a `${…}` or a
+ * `{{ … }}` placeholder (build/47's recorded default, review/136).
  */
-const NO_LITERAL = new RegExp(String.raw`^(?:|null|~|\$\{\{?[^{}]*\}\}?|\{\{[^{}]*\}\}|${MASK})$`, "i");
+const NO_LITERAL = /^(?:|null|~|\$\{\{?[^{}]*\}\}?|\{\{[^{}]*\}\})$/i;
+/**
+ * A value wholly a mask (review/143). A bare run is cut at a separator or a
+ * bracket, so it is a mask only when {@link LINE_ENDS} reads what follows it
+ * (review/161): `x(…` is a credential's first run, not a mask.
+ */
+const WHOLLY_MASK = new RegExp(`^${MASK}$`, "i");
+/** Nothing, or whitespace and a comment, after a value to the line's end. */
+const LINE_ENDS = /^(?:\s*$|\s+(?:#|\/\/|;))/;
 
 /**
  * An assignment's separator and a masked value, quoted or not, ending the
  * value (review/143): the two inline-assignment patterns read it masked out,
- * so a quoted `NAME=****` in prose is no assignment.
+ * so a quoted `NAME=****` in prose is no assignment. A closing `,;)]}` ends it
+ * only before whitespace or the end, so `=x,<rest>` is no mask (review/161).
  */
-const MASKED_ASSIGNMENT = new RegExp(String.raw`[:=]\s*\\?["'` + "`" + String.raw`]?${MASK}\\?["'` + "`" + String.raw`]?(?=$|[\s,;)\]}])`, "gi");
+const MASKED_ASSIGNMENT = new RegExp(String.raw`[:=]\s*\\?["'` + "`" + String.raw`]?${MASK}\\?["'` + "`" + String.raw`]?(?=$|\s|[,;)\]}](?:\s|$))`, "gi");
 
 /** A `{{ … }}` template placeholder (Jinja, Ansible, Helm, Go templates, Mustache), cut from the rest of a line (review/136). */
 const TEMPLATE_PLACEHOLDER = /\{\{[^{}]*\}\}/g;
@@ -238,9 +246,11 @@ function cut(text: string, ranges: readonly (readonly [number, number])[]): stri
 /** The shipped patterns' ids one added line of `path` hits, each once, in the order found. */
 function rulesOf(path: string, line: string): string[] {
   const rules = new Set<string>();
-  const scan = (name: string, value: string): void => {
+  // `unmasked`: a joined pair whose bare mask run the line goes on after, so no mask may hide it again (review/161).
+  const scan = (name: string, value: string, unmasked = false): void => {
     if (INTEGRITY_HASH.test(value.trim())) return;
-    const masked = value.replace(COMPARISON, " ~ ").replace(MASKED_ASSIGNMENT, " ~ ");
+    const compared = value.replace(COMPARISON, " ~ ");
+    const masked = unmasked ? compared : compared.replace(MASKED_ASSIGNMENT, " ~ ");
     for (const { patternId } of scanValueForSecrets(name, value)) {
       if (masked === value || !INLINE_ASSIGNMENT_RULES.has(patternId)) rules.add(patternId);
     }
@@ -275,13 +285,16 @@ function rulesOf(path: string, line: string): string[] {
         scan("", name);
         // A bare value stops at a brace, so `${…}` reads as `$`: the text after it says it is a placeholder.
         const placeholder = raw === "$" && text[valueAt + 1] === "{";
-        // review/132, review/140: where `$` expands, outside single quotes a value opening with it is an expansion (`$1`, `$(…)`, `$NAME`).
-        const expansion = dollarExpands && value.startsWith("$") && !raw.startsWith("'");
+        // review/132, review/140: where `$` expands, outside single quotes a value opening with it is an expansion (`$1`, `$(…)`, `$NAME`);
+        // bash's ANSI-C quoting, `$'…'`, is a literal.
+        const expansion = dollarExpands && value.startsWith("$") && !raw.startsWith("'") && !raw.startsWith("$'");
+        // review/161: a bare mask run is a mask only where the line ends after it.
+        const masked = WHOLLY_MASK.test(value.trim()) && (/^["'`]/.test(raw) || LINE_ENDS.test(text.slice(valueAt + raw.length)));
         // A back quote before the name and one opening the value close a Markdown code span: what follows is prose.
         const spanClose = raw.startsWith("`") && text[match.index - 1] === "`";
         const literal =
-          !pathName && !placeholder && !expansion && !spanClose && !NO_LITERAL.test(value.trim()) && !INTEGRITY_HASH.test(value.trim());
-        if (literal && (joinAll || /^["'`]/.test(raw))) scan("", `${name}=${value}`);
+          !pathName && !placeholder && !expansion && !spanClose && !masked && !NO_LITERAL.test(value.trim()) && !INTEGRITY_HASH.test(value.trim());
+        if (literal && (joinAll || /^["'`]/.test(raw))) scan("", `${name}=${value}`, WHOLLY_MASK.test(value.trim()));
       }
     }
     readLiterals(text);
@@ -297,7 +310,9 @@ function rulesOf(path: string, line: string): string[] {
     const value = /^(["'`]).*\1$/s.test(raw) ? unquote(raw) : raw;
     scan(name, value);
     const expansion = value.startsWith("$") && !raw.startsWith("'");
-    if (!expansion && !NO_LITERAL.test(value.trim()) && !INTEGRITY_HASH.test(value.trim())) scan("", `${name}=${value}`);
+    if (!expansion && !NO_LITERAL.test(value.trim()) && !WHOLLY_MASK.test(value.trim()) && !INTEGRITY_HASH.test(value.trim())) {
+      scan("", `${name}=${value}`);
+    }
   }
   if (text.length <= PAIR_LINE_BOUND) {
     readPairs(text);

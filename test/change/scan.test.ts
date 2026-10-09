@@ -283,6 +283,32 @@ describe("scanAddedLines", () => {
       expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule }]);
     });
 
+    // review/161 (security): a bare mask run is a mask only when nothing but whitespace or a comment follows it.
+    it.each([
+      ["a mask letter then a bracket in .env", ".env", `DB_${UPPER}=x(${SHORT}`],
+      ["a mask then a word in YAML", "compose.yaml", `      ${PASS}: * ${SHORT}`],
+      ["a mask word then a semicolon in a Dockerfile ENV line", "Dockerfile", `ENV DB_${UPPER}=REDACTED;${SHORT}`],
+      ["a mask run then a word in INI", "settings.ini", `${PASS} = X ${SHORT}`],
+      ["a mask letter then a comma in a shell assignment", "scripts/deploy.sh", `export DB_${UPPER}=x,${SHORT}`],
+      ["a flag whose value opens with a mask letter and a comma, in a code literal", "src/cli.ts", `const args = ["--${PASS}=x,${SHORT}"];`],
+    ])("hits %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
+    });
+
+    it.each([
+      ["a mask then a comment in .env", ".env", `DB_${UPPER}=******** # rotated`],
+      ["a mask then a comment in YAML", "compose.yaml", `      ${PASS}: XXXX  # placeholder`],
+      ["a bracketed mask then prose punctuation", "docs/run.md", `the log showed \`${PASS}=[REDACTED]\`, then stopped`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    // ANSI-C quoting, `$'…'`, is a literal in the shell, not an expansion, so it joins its name.
+    it("hits an ANSI-C quoted value in a shell script", () => {
+      const line = `export DB_${UPPER}=${"$"}'${SHORT}'`;
+      expect(scanAddedLines([file("scripts/deploy.sh", [line])])).toEqual([{ path: "scripts/deploy.sh", line: 1, rule: "inline-password-assignment" }]);
+    });
+
     // review/140: the `$` rule binds only where `$` expands; elsewhere a quoted value opening with `$` is a literal.
     it.each([
       ["a quoted value in code", "src/db.ts", `const DB_${UPPER} = "${"$"}${SHORT.toLowerCase()}";`],
