@@ -31,7 +31,7 @@ mistake.
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, and print its resume card (plumbing) |
-| `stamity gate` | plumbing | reads only | classify a change by its paths: the class, its checks and its lenses (plumbing) |
+| `stamity gate` | plumbing | reads only | classify a change by its paths, or scan its added lines for secrets (plumbing) |
 
 ## What every command shares
 
@@ -323,7 +323,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 ## `stamity gate`
 
-classify a change by its paths: the class, its checks and its lenses (plumbing)
+classify a change by its paths, or scan its added lines for secrets (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity gate --help` prints
@@ -334,7 +334,7 @@ Reads only. Nothing is written, so there is no preview mode to need.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which gate action to run — one of `classify` |
+| `<subcommand>` | which gate action to run — one of `classify`, `scan` |
 
 | Flag | What it does | Default |
 |---|---|---|

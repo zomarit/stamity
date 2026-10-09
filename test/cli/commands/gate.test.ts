@@ -283,14 +283,19 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
    * process's environment, so the overrides go there for the run's duration.
    */
   async function classifyIn(cwd: string, argv: readonly string[], env: Record<string, string> = {}): Promise<Classified> {
+    return gateIn(cwd, ["classify", ...argv, "--json"], env);
+  }
+
+  /** Runs `gate <argv>` in `cwd` under the same isolation; the document is parsed when stdout holds one. */
+  async function gateIn(cwd: string, argv: readonly string[], env: Record<string, string> = {}): Promise<Classified> {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string> = { HOME: home, XDG_CONFIG_HOME: home, ...env };
     const previous = new Map(Object.keys(overrides).map((key) => [key, process.env[key]]));
     Object.assign(process.env, overrides);
     try {
-      const result = await run(["classify", ...argv, "--json"], { cwd });
-      const doc = result.stdout === "" ? {} : (JSON.parse(result.stdout) as Record<string, unknown>);
+      const result = await run(argv, { cwd });
+      const doc = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
       return { ...result, doc };
     } finally {
       for (const [key, value] of previous) {
@@ -1355,6 +1360,219 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(read).toEqual(
         expect.arrayContaining(["core.quotePath=false", "-U3", "-M", "--no-relative", "--no-ext-diff", "--no-color", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--inter-hunk-context=0", "--submodule=short", "--ignore-submodules=none"]),
       );
+    });
+  });
+
+  /**
+   * p5e-secret-scan (REQ-FLOW-066; plan/56, plan/57, plan/62, plan/63): `gate
+   * scan` over p5a's one hardened read. The token is built at run time from
+   * fragments (the sign-off on plan/57), so no line of this file carries one.
+   */
+  describe("gate scan (p5e)", () => {
+    const PARTS = ["Q7ZK4M2T", "W9XRB3NH", "C6VJ8PDL", "F5YG2S7A", "KE4U"];
+    const TOKEN = ["gh", "p", "_", ...PARTS].join("");
+    const LINE = `export const t = "${TOKEN}";\n`;
+    /** Every six-character run of the token's body: none may reach any output. */
+    const FRAGMENTS = Array.from({ length: PARTS.join("").length - 5 }, (_, at) => PARTS.join("").slice(at, at + 6));
+    const expectNoFragment = (...outputs: string[]): void => {
+      for (const output of outputs) for (const fragment of FRAGMENTS) expect(output).not.toContain(fragment);
+    };
+
+    it("stops on a staged token and its twin in a new untracked file, naming rule, path and line, and no fragment of it", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}`, "repo/src/new.ts": LINE });
+      git(repo, ["add", "--", "src/a.ts"]);
+
+      const json = await gateIn(repo, ["scan", "--json"]);
+      const human = await gateIn(repo, ["scan"]);
+
+      expect(json.code).toBe(1);
+      expect(json.doc).toEqual({
+        ok: false,
+        command: "gate",
+        version: expect.any(String) as string,
+        subcommand: "scan",
+        base: null,
+        scope: "uncommitted",
+        hits: [
+          { path: "src/a.ts", line: 2, rule: "github-token" },
+          { path: "src/new.ts", line: 1, rule: "github-token" },
+        ],
+        scanned: 2,
+        skipped: 0,
+        outside: 0,
+        unscanned: [],
+      });
+      expect(human.code).toBe(1);
+      expect(human.stdout).toContain("src/a.ts:2  github-token");
+      expect(human.stdout).toContain("src/new.ts:1  github-token");
+      expectNoFragment(json.stdout, json.stderr, human.stdout, human.stderr);
+    });
+
+    it("exits 0 with the whole document for a change with no hit", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(0);
+      expect(doc).toEqual({
+        ok: true,
+        command: "gate",
+        version: expect.any(String) as string,
+        subcommand: "scan",
+        base: null,
+        scope: "uncommitted",
+        hits: [],
+        scanned: 1,
+        skipped: 0,
+        outside: 0,
+        unscanned: [],
+      });
+    });
+
+    it("finds a staged token whatever diff.external says", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}`, "external-diff.sh": "#!/bin/sh\nexit 0\n" });
+      git(repo, ["add", "--", "src/a.ts"]);
+      const script = getRoot().path("external-diff.sh");
+      await chmod(script, 0o755);
+      git(repo, ["config", "diff.external", script.replaceAll("\\", "/")]);
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "src/a.ts", line: 2, rule: "github-token" }]);
+    });
+
+    it.skipIf(process.platform === "win32")("skips and counts an untracked binary, a file over 1 MiB and a FIFO, without a hang", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({
+        "repo/src/bin.ts": `\0${LINE}`,
+        "repo/src/big.ts": `${"// pad\n".repeat(160_000)}${LINE}`,
+      });
+      execFileSync("mkfifo", [join(repo, "src", "pipe.ts")]);
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(0);
+      expect(doc["hits"]).toEqual([]);
+      // git lists no FIFO as untracked, so the binary and the oversized file are the two counted; the FIFO is never opened.
+      expect(doc["skipped"]).toBe(2);
+      expect(doc["scanned"]).toBe(0);
+    });
+
+    it("exits 1 with ok false and the reason when the line read fails, never 0", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+
+      gitSpy.fault = { step: "--text", error: realFailure("process.exit(3)") };
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+      gitSpy.fault = undefined;
+
+      expect(code).toBe(1);
+      expect(doc["ok"]).toBe(false);
+      expect(doc["reason"]).toContain("git diff --text failed, exit 3");
+      expect(doc).not.toHaveProperty("hits");
+    });
+
+    it("exits 1 with the reason in a directory that is no git work tree, and for a base that does not resolve", async () => {
+      const plain = getRoot().path("plain");
+      await mkdir(plain, { recursive: true });
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+
+      const outside = await gateIn(plain, ["scan", "--json"]);
+      const unresolved = await gateIn(repo, ["scan", "--base", "no-such-ref", "--json"]);
+
+      expect(outside.code).toBe(1);
+      expect(outside.doc["reason"]).toContain("no git work tree was found here");
+      expect(unresolved.code).toBe(1);
+      expect(unresolved.doc).toMatchObject({ ok: false, base: null, scope: "since-base" });
+      expect(unresolved.doc["reason"]).toContain("the base no-such-ref does not resolve to a commit here");
+    });
+
+    it("reads only the uncommitted change with no --base, and the committed work since the base with one", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      const branchPoint = git(repo, ["rev-parse", "HEAD"]).trim();
+      git(repo, ["switch", "-q", "-c", "work"]);
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+      git(repo, ["commit", "-q", "-am", "work"]);
+
+      const uncommitted = await gateIn(repo, ["scan", "--json"]);
+      const sinceBase = await gateIn(repo, ["scan", "--base", branchPoint, "--json"]);
+
+      expect(uncommitted.code).toBe(0);
+      expect(uncommitted.doc).toMatchObject({ base: null, scope: "uncommitted", hits: [] });
+      expect(sinceBase.code).toBe(1);
+      expect(sinceBase.doc).toMatchObject({
+        base: branchPoint,
+        scope: "since-base",
+        hits: [{ path: "src/a.ts", line: 2, rule: "github-token" }],
+      });
+    });
+
+    it("finds a token in a tracked code file a committed -diff attribute marks binary", async () => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", ".gitattributes": "*.ts -diff\n" });
+      await getRoot().seedFiles({ "repo/src/x.ts": `export {};\n${LINE}` });
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "src/x.ts", line: 2, rule: "github-token" }]);
+    });
+
+    it("lists a tracked code file whose head side holds a NUL as unscanned, and exits 0", async () => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/x.ts": `export {};\0\n${LINE}` });
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ hits: [], unscanned: ["src/x.ts"] });
+    });
+
+    it.skipIf(process.platform === "win32")("names a hit in a file git would quote by its real name", async () => {
+      const repo = await seedRepo("repo", { 'a"b.ts': "export {};\n" });
+      await getRoot().seedFiles({ 'repo/a"b.ts': `export {};\n${LINE}` });
+
+      const { doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(doc["hits"]).toEqual([{ path: 'a"b.ts', line: 2, rule: "github-token" }]);
+    });
+
+    it("scans the whole project from a run folder under .stamity/", async () => {
+      const repo = await seedRepo("repo", { ".stamity/manifest.json": "{}\n", ".stamity/runs/x/record.md": "run\n", "src/x.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/x.ts": `export {};\n${LINE}` });
+
+      const { code, doc } = await gateIn(join(repo, ".stamity", "runs", "x"), ["scan", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "src/x.ts", line: 2, rule: "github-token" }]);
+    });
+
+    it("names hits by project path and leaves out, counted, the lines outside the project", async () => {
+      const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", "app/src/x.ts": "export {};\n", "other/y.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/app/src/x.ts": `export {};\n${LINE}`, "repo/other/y.ts": `export {};\n${LINE}` });
+
+      const { code, doc } = await gateIn(join(repo, "app"), ["scan", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "src/x.ts", line: 2, rule: "github-token" }]);
+      expect(doc["outside"]).toBe(1);
+    });
+
+    it.each([
+      ["--paths, which only classify takes", ["scan", "--paths", "src/x.ts", "--json"]],
+      ["a base that starts with '-'", ["scan", "--base", "-x", "--json"]],
+    ])("exits 2 on %s, before git runs", async (_label, argv) => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+
+      gitSpy.calls.length = 0;
+      const { code, stdout } = await gateIn(repo, argv);
+
+      expect(code).toBe(2);
+      expect(stdout).toBe("");
+      expect(gitSpy.calls).toEqual([]);
     });
   });
 });

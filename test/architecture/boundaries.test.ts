@@ -340,6 +340,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // today, and wave 2 so it may read the wave-1 trigger roster (unit p1d) and
   // sit below the composition root that wires it and the wave-14 verb that calls it.
   "src/change/classify.ts": { unit: "p1a-classifier-verb", wave: 2 },
+  // The secret scan of added lines (plan 019 file 2, unit p5e): reads the
+  // wave-1 shipped secret patterns, under the wave-14 verb that calls it.
+  "src/change/scan.ts": { unit: "p5e-secret-scan", wave: 2 },
   // wave 3
   // Test selection (plan 019 file 2, unit p2b): reads the wave-2 classifier's
   // globs and code extensions, under the wave-14 verb that calls it.

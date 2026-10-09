@@ -27,6 +27,7 @@ import {
   type TestSelectionInput,
   type TestSource,
 } from "../../change/testInputs.ts";
+import { scanAddedLines, type ScanHit } from "../../change/scan.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -106,6 +107,16 @@ import type { GitRunner } from "../../workspace/git.ts";
  * that could not be read, a test source that is not one readable file, or a
  * selected test the work tree lacks runs every test, the cause named.
  *
+ * **`gate scan`** (REQ-FLOW-066) runs `../../change/scan.ts` over the added
+ * lines of the same read, from the same project root, and names each hit by
+ * path, line and rule, never the value. With no `--base` it reads the
+ * uncommitted change against `HEAD` and says so (`base: null`, `scope:
+ * "uncommitted"`); with one, everything since it (`scope: "since-base"`,
+ * plan/56). A hit exits 1; so does a change it could not read, with `ok: false`
+ * and the reason in place of the hits, so a failed read never exits 0. A
+ * tracked code file the read cannot show is listed in `unscanned`, never read
+ * as clean (plan/62); the exit stays 0 for it and the flows read the list.
+ *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
  * the action it registers on THIS command, and a commander sub-command would run
@@ -114,6 +125,7 @@ import type { GitRunner } from "../../workspace/git.ts";
  */
 
 const CLASSIFY = "classify";
+const SCAN = "scan";
 
 /** A change's diff can outgrow a status probe, so `gate` widens the runner's bounds. */
 const GATE_GIT_TIMEOUT_MS = 60_000;
@@ -895,25 +907,100 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
   };
 }
 
+/** What the scan read: no base and only the uncommitted change, or everything since a base (plan/56). */
+type ScanScope = "uncommitted" | "since-base";
+
+/** The scan of one run: its hits and what the read could not show, or why the change could not be read. */
+type ScanOutcome =
+  | { base: string | null; scope: ScanScope; hits: ScanHit[]; scanned: number; skipped: number; outside: number; unscanned: string[] }
+  | { base: string | null; scope: ScanScope; failed: string };
+
+/**
+ * The added lines of the change, read as `classify` reads them ({@link
+ * readChange}, from {@link findProjectRoot}), through the secret scan. Every
+ * git failure, a failed line read and a base that does not resolve are a
+ * `failed` outcome, never a clean one.
+ */
+function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
+  const scope: ScanScope = ref === undefined ? "uncommitted" : "since-base";
+  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
+  try {
+    const cwdPrefix = readCwdPrefix(runner, cwd);
+    const commit = ref === undefined ? null : resolveBase(runner, cwd, ref);
+    if (ref !== undefined && commit === null) {
+      return { base: null, scope, failed: `the base ${ref} does not resolve to a commit here` };
+    }
+    const treeish = commit ?? "HEAD";
+    const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
+    const { lines } = readChange(runner, root, treeish, process.platform === "win32");
+    if ("failed" in lines) return { base: commit, scope, failed: `the changed lines could not be read (${lines.failed})` };
+    return {
+      base: commit,
+      scope,
+      hits: scanAddedLines(lines.hunks),
+      scanned: new Set(lines.hunks.map((hunk) => hunk.path)).size,
+      skipped: lines.skipped,
+      outside: lines.outside,
+      unscanned: lines.unscanned,
+    };
+  } catch (err) {
+    if (!(err instanceof GitReadError)) throw err;
+    return { base: null, scope, failed: describeGitFailure(err) };
+  }
+}
+
+function runScan(ctx: CliContext, opts: Record<string, unknown>): CommandResult {
+  const outcome = scanChange(ctx.app.runtime.cwd, opts["base"] as string | undefined);
+  const { base, scope } = outcome;
+  const scopeLine = scope === "uncommitted" ? "scope: uncommitted (no base given: committed work is not scanned)" : `scope: since-base ${base ?? ""}`;
+  if ("failed" in outcome) {
+    // Paths and refs are the caller's or the repository's bytes: sanitised for the terminal and the JSON alike.
+    const reason = sanitizeLabel(outcome.failed);
+    ctx.io.err(`${scopeLine}\nscan failed: ${reason}\n`);
+    return { exitCode: 1, json: { subcommand: SCAN, base, scope, reason } };
+  }
+  const hits = outcome.hits.map((hit) => ({ ...hit, path: sanitizeLabel(hit.path) }));
+  const unscanned = outcome.unscanned.map((path) => sanitizeLabel(path));
+  ctx.io.out(
+    `${[
+      scopeLine,
+      `hits: ${hits.length === 0 ? "none" : String(hits.length)}`,
+      ...hits.map((hit) => `  ${hit.path}:${hit.line}  ${hit.rule}`),
+      `scanned: ${outcome.scanned}; skipped: ${outcome.skipped}; outside: ${outcome.outside}`,
+      `unscanned: ${list(unscanned)}`,
+    ].join("\n")}\n`,
+  );
+  return {
+    exitCode: hits.length === 0 ? 0 : 1,
+    json: { subcommand: SCAN, base, scope, hits, scanned: outcome.scanned, skipped: outcome.skipped, outside: outcome.outside, unscanned },
+  };
+}
+
 export const gateCommand: CommandModule = {
   name: "gate",
-  summary: "classify a change by its paths: the class, its checks and its lenses (plumbing)",
+  summary: "classify a change by its paths, or scan its added lines for secrets (plumbing)",
   hidden: true,
   mutating: false,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which gate action to run").choices([CLASSIFY]))
+      .addArgument(new Argument("<subcommand>", "which gate action to run").choices([CLASSIFY, SCAN]))
       .addOption(
         new Option("--base <ref>", "the base the change is read against (default: HEAD, reported as no base)").argParser(
           parseBaseRef,
         ),
       )
-      .option("--paths <path...>", "classify these paths by path rules instead of reading the change from git");
+      .option("--paths <path...>", "classify these paths by path rules instead of reading the change from git")
+      // A usage error, so exit 2 before the action and before git runs: `scan` always reads the change from git.
+      .hook("preAction", (command) => {
+        if (command.processedArgs[0] === SCAN && command.opts()["paths"] !== undefined) {
+          command.error("error: --paths applies to classify only; scan reads the change from git", { exitCode: 2 });
+        }
+      });
   },
 
-  run(ctx, opts): Promise<CommandResult> {
+  run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    return Promise.resolve(runClassify(ctx, opts));
+    return Promise.resolve(args[0] === SCAN ? runScan(ctx, opts) : runClassify(ctx, opts));
   },
 };

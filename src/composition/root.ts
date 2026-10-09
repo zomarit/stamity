@@ -136,6 +136,7 @@ import * as modelLadder from "../roster/modelLadder.ts";
 import * as pluginCapabilityFile from "../plugins/capabilityFile.ts";
 import * as changeClassify from "../change/classify.ts";
 import * as changeTestInputs from "../change/testInputs.ts";
+import * as changeScan from "../change/scan.ts";
 
 /**
  * Every engine module, grouped by feature. Fields are concrete module namespace
@@ -357,12 +358,14 @@ export interface EngineRegistry {
   /**
    * The change classifier: one class per change from its paths, and the checks
    * and lenses that class needs (REQ-FLOW-061), and the tests a change selects
-   * from the declared test inputs (REQ-FLOW-062). Their caller is the hidden
-   * `gate` verb (`../cli/commands/gate.ts`).
+   * from the declared test inputs (REQ-FLOW-062), and the secret scan of a
+   * change's added lines (REQ-FLOW-066). Their caller is the hidden `gate`
+   * verb (`../cli/commands/gate.ts`).
    */
   readonly change: {
     readonly classify: typeof changeClassify;
     readonly testInputs: typeof changeTestInputs;
+    readonly scan: typeof changeScan;
   };
 }
 
@@ -477,7 +480,7 @@ export function createEngine(): EngineRegistry {
     roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder },
     plugins: { capabilityFile: pluginCapabilityFile },
     config: { parse: configParse },
-    change: { classify: changeClassify, testInputs: changeTestInputs },
+    change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan },
   });
 }
 
