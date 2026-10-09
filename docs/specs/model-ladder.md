@@ -1,6 +1,6 @@
 ---
 id: model-ladder
-# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
 status: shipped-with-1.9.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
 ---
@@ -123,9 +123,39 @@ effective-identity check (`content/commands/st-work.md:466-469`) still applies. 
 `work.test.ts` case pins the no-fallback sentence. The class a build role actually ran at is
 checked against the proof block: `judgment: reviewer`.
 
+Amended 2026-10-09 (run `2026-10-08_product-core`, units `p4a-review-cap` and
+`p4b-fixer-escalation`, and the p4 fix round; every `path:line` in this paragraph reads at
+`90710ba5`). The review loop no longer escalates to a fresh fixer on a stronger class at round 4.
+Its escalation is a fresh fixer spawn on the same model at one effort level above the fixer's
+declared one, where the client's dispatch takes an effort setting; where it takes none, the fresh
+spawn is the escalation and the proof block records `effort: not settable`
+(`content/commands/st-work.md:251-260`; `content/agents/stamity-fixer.md:74-85`). So, in the
+paragraph above, "the fresh fixer spawned on a stronger class" now reads "the escalation fixer",
+which still never falls back to a weaker class, and the build role "the fixer on rounds 1–3"
+now reads "the fixer before an escalation" (`content/commands/st-work.md:140-146`). The
+per-action attribution sits at `:353`, and the effective-identity check at `:480-482`. The header
+of `src/roster/modelLadder.ts` still counts two flow placements no row records: the first is now
+the escalation's effort step (`:36-48`), the second the capacity rung's one-class drop
+(`:50-58`); the class rows and the `TWO FLOW PLACEMENTS` pin are unchanged
+(`test/roster/modelLadder.test.ts`).
+
 ## References
 
 - `docs/plans/008-plugin-lifecycle-02.md` — unit C9.
 - `docs/configuration.md` — the `effort.*` keys as rendered.
 - `docs/plans/009-orchestrator-context-economy-01.md` — the capacity rung and the no-downgrade rule (REQ-LADDER-002, REQ-LADDER-003). The line citations in those two requirements and in the capacity paragraph above are to the tree at `d227ca57`, the 1.10.0 release candidate. On 2026-09-27 each was read at the tree it was first written against (`fed39ac` for the `content/commands/st-work.md` and `test/corpus/commands/work.test.ts` ones, before the body reorder and its tests moved them; the spec merge `12d8f20e` for the rest) and found again, with the same text, at `d227ca57`. The "Findings ledger" bullet is cited by name, because its text changed after `fed39ac`: it now says each event is appended as a one-row findings block on `--stdin`.
 - `content/commands/st-work.md` — the Dispatch contract's capacity bullet, after "Findings ledger".
+- `.stamity/runs/2026-10-08_product-core/plan.md` and its `record.md` — the escalation's sign-offs
+  and the p4 review rounds the paragraph dated 2026-10-09 cites.
+
+## Concerns
+
+- **A placement neither count names** (`review/31`, carried to this merge). The closure re-review
+  after an escalation runs once on a stronger class (`content/commands/st-work.md:244`;
+  `content/agents/stamity-reviewer.md:118-119`): a reviewer placement above the reviewer's
+  declared class that no row records, that the header's two placements leave out
+  (`src/roster/modelLadder.ts:36-58`), and that `/st-work`'s Model ladder paragraph does not name
+  either; that paragraph also leaves out the escalation's effort step (`:484-489`). Recorded as
+  observed: the plan kept the header at two placements, so naming a third moves the header, its
+  pin and that paragraph together, and is left to the change that decides it. An agent checking
+  the re-reviewer's class against the table finds no row for it.

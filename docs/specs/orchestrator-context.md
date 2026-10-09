@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
@@ -41,6 +41,11 @@ from the spec deltas of `docs/plans/013-optimization-sweep-02.md` (B) and `docs/
 census and sign-offs. They shipped with 1.11.0; `status` still names 1.10.0, the release this spec first shipped with.
 Their `path:line` citations are to the package head `b855876a`; where the built code and a delta differed, the text
 states what the code does.
+
+The paragraphs and criteria marked "amended 2026-10-09" under REQ-CTX-002, REQ-CTX-012 and REQ-CTX-018 come from the
+spec delta of run `2026-10-08_product-core` (plan 019 file 2, re-planned in that run) and its sign-offs, merged by its
+unit `p9-spec-merge`. They cite the integration head `90710ba5`, as do REQ-CTX-018's re-pointed citations; they are
+unreleased, and `status` does not move.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -238,6 +243,15 @@ names whether a declared budget was breached (amendment A4).
 A red test-runner's excerpts are ledger evidence (`content/commands/st-work.md:376`). The
 security exemption restates the existing rule (`content/commands/st-work.md:148-151`) for the
 new return shape.
+
+Amended 2026-10-09 (run `2026-10-08_product-core`, units `p8b-capture-reviewer` to `p8f-capture-work-digest`;
+REQ-FLOW-072). The `findings:` line of the reviewer, each lens, the implementer and the fixer ends
+`notes left out: <n>`, the count of the notes with no consequence its report lists, and an inline result carries the
+count, never the notes (`content/commands/st-work.md:198-200`; `content/agents/stamity-reviewer.md:192-197`;
+`content/agents/stamity-security.md:155-159`; `content/agents/stamity-performance.md:176-177`;
+`content/agents/stamity-design-quality.md:151-152`; `content/agents/stamity-implementer.md:127-132`;
+`content/agents/stamity-fixer.md:138-143`). A note with a security consequence is a finding, carried on `security:` in
+full. The spec-author's digest and the test-runner's green digest do not change.
 
 Implements C4.
 
@@ -463,6 +477,13 @@ The first 15 lines of `.stamity/runs/<run-id>/record.md` carry:
 - `Invocation: <the exact /st-work command line>`.
 
 The two new lines are written at Frame.
+
+Amended 2026-10-09 (run `2026-10-08_product-core`, the p3 fix rounds for `review/115` and `review/133`). The head
+carries four lines among its first 15: `Status:`, `Plan:`, `Base: <commit>` and `Invocation:`. `Base:` is the run's
+branch point, recorded as the commit id `git rev-parse HEAD` gives at Frame, never the word `HEAD`, which would
+resolve later and narrow the Prove pass's scan and class (`content/commands/st-work.md:33-39`). The Prove pass reads
+it as the base of `gate scan` and `gate classify` (`:216`, `:221`), and the proof block's `Gate results` label line
+names it (`:343-344`; `review/137`). A run with no `Base:` line runs the full gates unclassified (REQ-FLOW-063).
 
 Implements C5 (D6, D7).
 
@@ -955,16 +976,23 @@ Added 2026-09-30 (plan 013 file 3, unit `sw08-fresh-re-reviewer`).
 
 - **Fresh dispatch.** Each re-review is a fresh reviewer spawn, never a resumed one. Its brief is the Verdict
   dispatch's (REQ-CTX-017), plus the ledger ids and each finding's locator at HEAD, and no fixer claim
-  (`content/commands/st-work.md:264-271`). The reviewer body says a fixer's summary in the brief is not evidence: the
-  re-review reads the findings' lines and the fix delta (`content/agents/stamity-reviewer.md:141-151`).
+  (`content/commands/st-work.md:267-274`). The reviewer body says a fixer's summary in the brief is not evidence: the
+  re-review reads the findings' lines and the fix delta (`content/agents/stamity-reviewer.md:148-158`).
 - **The confidence gate.** The gate is the one the run record declares, `Confidence gate: <value>`. An approval below it
-  re-reviews once on a stronger class before it counts. With no gate declared, an approval counts as given and no
-  extra round runs; the review-gate hook still refuses an approval the reviewer rated `low`
-  (`content/commands/st-work.md:245-251`; `content/agents/stamity-reviewer.md:108-112`).
+  counts, and the proof block's review line names it below the gate; confidence alone starts no round. The re-review
+  after an escalation runs once on a stronger class. The review-gate hook still refuses an approval the reviewer
+  rated `low` (`content/commands/st-work.md:239-245`, `:346-347`; `content/agents/stamity-reviewer.md:115-119`).
+  Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p4c-confidence-no-round`): the stronger-class re-review keys
+  on what the run shows — a finding not fixed twice, a gate red after a fix, or a finding open entering the cap round,
+  each of which escalates (REQ-FLOW-064) — not on declared confidence. It read "An approval below it re-reviews once on
+  a stronger class before it counts. With no gate declared, an approval counts as given and no extra round runs".
 
 As built: the measurements page still reads an undeclared gate as 0.8, and reads a declared gate only as a decimal, so
 a record declaring `Confidence gate: high` falls to 0.8 there (ledger `build/110`, the plan's intended difference;
-`review/117`, open).
+`review/117`, open). Amended 2026-10-09: that page's merge-ready rule still counts only an approval at or above the
+gate, stricter than the flow on purpose, so a run that closes on a below-gate approval lands in the published rate's
+denominator and not its numerator (`src/cli/docs/measurements.ts:590-595`; `review/26`). Whether a holding client's
+`low` refusal counts as a round is a product choice left open (`review/33`).
 
 **Proof:** `test/corpus/commands/work.test.ts`; new case `re-review-closures-fresh-reviewer`; must-holds
 `agent-reviewer-return-contract` and `agent-fixer-return-contract`; QA.
@@ -1018,7 +1046,10 @@ this section grows; do not count by eye.
   prose", a `findings:` line carrying every Critical and Warning (the fixer's: one disposition
   per handed ledger id, then every new Critical and Warning), a `security:` line carrying every
   security-relevant finding in full, and a `contract delta:` line carrying the census rows in
-  full or `none`, so the cap attaches to the prose alone; and GIVEN
+  full or `none`, so the cap attaches to the prose alone, the reviewer's, each lens's, the
+  implementer's and the fixer's `findings:` line ending `notes left out: <n>` and the
+  spec-author's carrying none (amended 2026-10-09, REQ-FLOW-072; it read "so the cap attaches
+  to the prose alone"); and GIVEN
   `content/agents/stamity-test-runner.md` WHEN read THEN it digests only a `green` verdict, one
   in which every requested gate reported `pass`, and returns a `red` one in full.
 - GIVEN every digest in the changed-shape replay runs WHEN compared with the `stamity-findings`
@@ -1300,9 +1331,11 @@ this section grows; do not count by eye.
 **REQ-CTX-012**
 
 - GIVEN `content/commands/st-work.md` WHEN its Frame phase is read THEN it instructs writing
-  `Plan: <path>` (the `/st-plan` artifact, or the run's own `plan.md` once Phase 2 writes it)
+  `Plan: <path>` (the `/st-plan` artifact, or the run's own `plan.md` once Phase 2 writes it),
+  `Base: <commit>` (the commit id `git rev-parse HEAD` gives at Frame, never the word `HEAD`)
   and `Invocation: <this command line, verbatim>` among the first 15 lines of the run record,
-  beside `Status:`.
+  beside `Status:` (amended 2026-10-09, `review/115`, `review/133`; it named `Plan:` and
+  `Invocation:` only).
 - GIVEN every changed-shape replay run WHEN its Frame phase has ended THEN:
   - the first 15 lines of `.stamity/runs/<run-id>/record.md` hold exactly one line each
     beginning `Status:`, `Plan:` and `Invocation:`;
@@ -1578,6 +1611,10 @@ frozen files.").
   fixer claim is passed.
 - GIVEN a run whose record declares no confidence gate WHEN the reviewer approves at medium
   confidence THEN no further review round is dispatched; GIVEN a record declaring
-  `Confidence gate: 0.8` and a medium approval THEN one stronger-class round runs.
+  `Confidence gate: 0.8` and a medium approval THEN no round runs, the approval counts, and the
+  proof block's review line names it below the gate; GIVEN an escalation fixer's change THEN its
+  closure re-review runs once on a stronger class (amended 2026-10-09, unit
+  `p4c-confidence-no-round`; it read "GIVEN a record declaring `Confidence gate: 0.8` and a medium
+  approval THEN one stronger-class round runs").
 - GIVEN a re-review THEN it returns exactly one closure per handed id and only new Critical or
   Warning findings.

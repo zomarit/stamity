@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -33,6 +33,9 @@ that names run `2026-10-08_maintainer-tooling` under REQ-PROVE-009, REQ-PROVE-01
 come from that run's spec deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it
 and read against the integration head `47acb16e`; they are unreleased. The ids REQ-PROVE-023 to 025 belong to
 `docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap; REQ-PROVE-026 to 029 are unallocated.
+The amendment dated 2026-10-09 to REQ-PROVE-031 comes from the spec delta of run `2026-10-08_product-core` (plan 019
+file 2), unit `p2c-ci-lanes-from-map`, merged by its unit `p9-spec-merge`; it cites the integration head `90710ba5`
+and is unreleased.
 
 ## Intent
 
@@ -790,8 +793,8 @@ Every push-only workflow runs as before.
 `scripts/ci/records-only.mjs` classifies a change into lanes (`LANE_PATHS`): `records` (`.stamity/runs/**`,
 `.stamity/handoffs/**`, `.stamity/inbox.md`, `docs/plans/**`), `specs` (`docs/specs/**`), `learnings`
 (`.stamity/learnings/**`) and `website` (`website/**` and every other `docs/**` path). A change whose every path sits
-in lanes runs the union of their suites (`LANE_SUITES`, printed as the classifier's `suites` output, so the workflow
-spells no list) in one `lanes` job; the `website` lane also builds the docs site and runs the root typecheck, and the
+in lanes runs the union of the suites the base commit's test-input map gives its paths (printed as the classifier's
+`suites` output, so the workflow spells no list; amended 2026-10-09, below) in one `lanes` job; the `website` lane also builds the docs site and runs the root typecheck, and the
 `learnings` lane builds the CLI and runs `node dist/cli.js check`, each build after the lane suites. A change touching
 a `website` path that takes the full matrix (a path in no lane beside it), and any run whose diff the classifier cannot
 read, builds the docs site on the full side's LTS leg, so `all-ci-checks` never passes a website change whose site
@@ -801,6 +804,34 @@ empty diff runs the full matrix. `README.md` is not in a lane: it ships in the p
 
 **Expand/contract:** the classifier still prints `records_only`, which nothing in `ci.yml` reads; it leaves at the
 first release after this change merges, with the classifier's line that prints it (`ci.yml`'s `changes` outputs).
+
+Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p2c-ci-lanes-from-map`; REQ-FLOW-062). `LANE_SUITES` and
+`RECORDS_SUITES` are gone: the lanes take their suites from the base commit's test-input map. `full=false` now also
+needs a valid map at the base, read with `git show <base>:.stamity/change-classes.json` and validated by
+`parseClassFile`, never the checked-out copy, which in CI is the head's (`scripts/ci/records-only.mjs:12-21`,
+`:212-231`). The suites are the sorted union of the `tests` of every map entry a changed path matches, matched by
+either reading of `\` as `selectTests` matches (`review/77`), still printed as the `suites` output
+(`:113-142`, `:163-167`). A missing or refused map at the base, a changed path no entry matches, a matching entry that
+selects all tests, or a selected name a runner could misread runs the full matrix (`:132-139`, `:163-165`). The
+script loads `src/change/classify.ts` by Node's type stripping, with no install (`:30-38`;
+`.github/workflows/ci.yml:185-186`), and a change to the lane classifier's own code or its import closure runs the
+full matrix, since no lane holds those paths (`scripts/ci/records-only.mjs:61-66`; `review/8`). The workflow's
+comments name the base map as the one source of the lists (`.github/workflows/ci.yml:47-49`, `:766-768`,
+`:810-812`). It read "runs the union of their suites (`LANE_SUITES`, printed as the classifier's `suites` output, so
+the workflow spells no list)".
+
+- **Expand/contract:** a base commit with no class file, every base before this change merged, runs full CI, the
+  fail-closed side. The consumers of the removed constants are `test/ci/recordsOnly.test.ts`, which pins a floor of the
+  lists `LANE_SUITES` held and that every records and docs map entry carries the leak gate and `docsPages`, and
+  `test/ci/testInputsGuard.test.ts`; no other file under `scripts/`, `src/` or `.github/` names them (a `-G` census
+  of the tree at `90710ba5`). Rollback is a revert of the unit; the map stays valid input to `gate classify`.
+- **Residual:** the script and its import closure run from the pull request's head, so a change to them decides its
+  own routing until review reads it; REQ-FLOW-061's concerns carry it.
+- GIVEN a lanes-only change and a base whose map holds an entry for each changed path THEN the lanes job runs the union
+  of those entries' suites; GIVEN no class file at the base, a refused one, a path no entry matches or a matching
+  `"all"` entry THEN the full matrix runs. GIVEN a head that edits the map to narrow its own suites THEN the base copy
+  decides. GIVEN a change to `scripts/ci/records-only.mjs` or `src/change/classify.ts` THEN the full matrix runs. Test
+  evidence: `test/ci/recordsOnly.test.ts`, `test/ci/testInputsGuard.test.ts`.
 
 - GIVEN a change whose every path is in a lane WHEN `ci.yml` runs THEN the lanes job runs the union of those lanes'
   suites and build steps and the full matrix skips; GIVEN one path outside every lane THEN the full matrix runs and the

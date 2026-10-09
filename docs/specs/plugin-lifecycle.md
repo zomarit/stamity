@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
 status: shipped-with-1.12.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -41,6 +41,10 @@ The paragraphs headed "Amended 2026-10-08" that name run `2026-10-08_maintainer-
 deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
 integration head `47acb16e`; lane D's, under REQ-PLUGIN-045 and REQ-PLUGIN-046, against `dbd54fc7`. They are
 unreleased, and `status` does not move.
+
+The paragraph headed "Amended 2026-10-09" under REQ-PLUGIN-003 comes from run `2026-10-08_product-core` (plan 019
+file 2), unit `p6-setup-route` and its ledger row `build/42`, merged by the unit `p9-spec-merge`; it cites the
+integration head `90710ba5` and is unreleased.
 
 ## Intent
 
@@ -174,6 +178,14 @@ the codex root and its README states the manual route instead. Companion travel 
 included, is copied byte-for-byte as a Buffer, so a binary companion survives the plugin lane —
 the engine's own emission lanes still read skill companions as utf-8 and corrupt a binary one,
 a pre-existing defect outside this package's file set, reported and not fixed here.
+
+Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p6-setup-route`; the inbox row the run folded in as its
+`build/75`). The remedy for a duplicate file this engine wrote is a three-command route the operator runs, in order:
+`sync`, then `clean -y`, then `plugin setup --client <client> -y` again, each through `runtime/locate.mjs`, and the
+body tells the model to run none of them itself; step 2's "a job for the three commands in step 3" names the same
+route (`scripts/plugins/setupCommand.mjs:165-166`, `:172-173`). It read "the operator runs `clean -y` and then
+`plugin setup --client <client> -y` again. Do not run either yourself", and "the two commands in step 3". A test pins
+the route, its order and step 2's wording for each client the body is rendered for (`test/ci/pluginModules.test.ts`).
 
 ### REQ-PLUGIN-004 Charter-reference substitution of tokens in plugin bodies
 
