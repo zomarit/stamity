@@ -1273,6 +1273,27 @@ no row, no roster count moves, and the identical/moved counts hold (the case alr
 its cases-v5 copy). Under the incremental rule the case re-measures, because its case-file bytes
 moved. The dated citations above stay as they were.
 
+**Three `/st-plan` ranges moved and two Briefs re-quoted, 2026-10-09 (plan 019 file 2, unit
+`p5d-threat-note`).** `/st-plan`'s `## Plan artifact shape` unit table gains a conditional ninth
+row after `verify`: `threat`, written for a unit whose files `stamity gate classify --base HEAD
+--paths <its files>` places `security-sensitive` (its trust boundary, what it trusts, one abuse
+case and the check that stops it, in at most five lines), absent otherwise (+1 line). After the
+table the shared "Running the CLI." paragraph lands as two physical lines with its fallback (no
+unit's class can be read, so every unit carries the `threat` row), preceded by a blank line (+3
+lines). The body grows by 4 lines (407 → 411), all after line 352. Each move lands in the case file
+and its case-index row: `plan-artifact-head-and-units-shape` 313-366 → 313-370 and its Brief
+re-quotes the unit table with the `threat` row, byte-identical from the landed file (the
+paragraph stays under the existing elision); `plan-semantic-ambiguity-survives-structural-pass`
+274-407 → 274-411 and its Brief re-quotes the row and the paragraph byte-identical in place;
+`plan-lint-three-fails-returns-blocked-ambiguity` 274-311,388-398 → 274-311,392-402,
+byte-identical at its new lines (checked against the parent commit). `plugin-mode-invocation`
+(88-97,166-168,287-292) holds: its ranges end above every insertion. No `## Expected` block moves:
+`plan-artifact-head-and-units-shape` B6 still grades the eight required fields, and its scenario's
+unit names no security-sensitive file. `EXPECTED_MOVES` gains no row, no roster count moves, and the
+identical/moved counts hold (the three already differed from their cases-v5 copies). Under the
+incremental rule the three re-measure, because their case-file bytes moved. The dated citations
+above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1447,9 +1468,9 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `learnings-curation-merge-and-promotion` | golden · rubric | 7 / 2 | Two notes on one topic consolidate into the higher-confidence one, which records the id it absorbed; a confidence band moves only on a verified outcome with the run named, so frequent consultation promotes nothing; and general programming knowledge does not earn a file. | `content/rules/stamity-learnings-schema.md:23-33,44-47` |
 | `migration-elapsed-window-does-not-prove-backfill` | golden · rubric | 4 / 0 | An elapsed migration window cannot substitute for verified backfill completion before a destructive contract step. | `content/rules/stamity-migrations.md:12-80` |
 | `onboard-exhausted-budget-keeps-required-gates` | golden · rubric *(floor)* | 5 / 0 | An exhausted onboarding timer never turns touched-test success into completion while required gates are missing. | `content/skills/st-onboard/SKILL.md:12-170` |
-| `plan-artifact-head-and-units-shape` | golden · rubric | 9 / 0 | The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries all eight fields the command lists — requirements never blank, interfaces inline, at least one edge case. | `content/commands/st-plan.md:313-366` |
-| `plan-lint-three-fails-returns-blocked-ambiguity` | golden · rubric | 6 / 1 | Three consecutive plan-lint passes failing the same check stop the run: it returns BLOCKED_AMBIGUITY naming the check and the unit that keeps failing, and the blocked write means no plan artifact is persisted. | `content/commands/st-plan.md:274-311,388-398` |
-| `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:274-407` |
+| `plan-artifact-head-and-units-shape` | golden · rubric | 9 / 0 | The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries all eight fields the command lists — requirements never blank, interfaces inline, at least one edge case. | `content/commands/st-plan.md:313-370` |
+| `plan-lint-three-fails-returns-blocked-ambiguity` | golden · rubric | 6 / 1 | Three consecutive plan-lint passes failing the same check stop the run: it returns BLOCKED_AMBIGUITY naming the check and the unit that keeps failing, and the blocked write means no plan artifact is persisted. | `content/commands/st-plan.md:274-311,392-402` |
+| `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:274-411` |
 | `plugin-mode-invocation` | golden · rubric | 6 / 1 | Running as the Claude Code plugin invoked at `/stamity:st-plan`, a plan run fans its research out under the namespaced agent form `@stamity:stamity-researcher`, reaches its coverage pass through the skill form `/stamity:st-verify` inside the root, keeps itself the single writer of the artifact, and cites the charter-reference phrase the root renders rather than an unresolved gate token. | `content/commands/st-plan.md:88-97,166-168,287-292` |
 | `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:311-328` |
 | `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:50-52,57-61,94-132` |

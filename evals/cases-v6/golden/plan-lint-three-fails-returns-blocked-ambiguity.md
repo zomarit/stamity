@@ -2,7 +2,7 @@
 id: plan-lint-three-fails-returns-blocked-ambiguity
 class: golden
 claim: "Three consecutive plan-lint passes failing the same check stop the run: it returns BLOCKED_AMBIGUITY naming the check and the unit that keeps failing, and the blocked write means no plan artifact is persisted."
-source: content/commands/st-plan.md:274-311,388-398
+source: content/commands/st-plan.md:274-311,392-402
 metric: rubric
 ---
 

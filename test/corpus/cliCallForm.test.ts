@@ -82,6 +82,14 @@ const CALL_SITES: readonly CallSite[] = [
     fallback:
       "When neither form runs, the batch runs `${STAMITY:VERIFY_GATE_ALL}` and the report lists `secret scan: not run` under `Not done:`.",
   },
+  {
+    // The plan's `threat` row runs `gate classify --paths` over a unit's files (unit p5d-threat-note);
+    // with neither form no unit's class can be read, so every unit carries the row.
+    relPath: "commands/st-plan.md",
+    label: RUNNING_CLI_LABEL,
+    fallback:
+      "When neither form runs, no unit's class can be read, so every unit carries the `threat` row.",
+  },
 ];
 
 /** The one column whose cells may keep the defined `stamity <verb>` shorthand. */

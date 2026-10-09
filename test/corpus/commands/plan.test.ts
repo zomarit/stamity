@@ -485,6 +485,42 @@ describe("/st-plan — plan artifact shape", () => {
     expect(shape).toMatch(phrase("without opening another document"));
   });
 
+  it("adds a conditional `threat` row for a unit `gate classify` places security-sensitive (REQ-FLOW-067)", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+    const rows = shape.split("\n").filter((line) => line.startsWith("| `"));
+
+    // The eight required fields keep their order; the ninth row is conditional,
+    // written only for a unit whose files the classifier places security-sensitive.
+    expect(rows.map((row) => /^\| (`[A-Za-z_]+`) \|/.exec(row)?.[1])).toEqual([
+      ...UNIT_FIELDS,
+      "`threat`",
+    ]);
+    const threat = rows.at(-1) ?? "";
+    // `--paths` classifies files that are not yet a diff, so the check runs at plan time.
+    expect(threat).toContain("`stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`");
+    expect(threat).toMatch(
+      phrase("its trust boundary, what it trusts, one abuse case and the check that stops it"),
+    );
+    expect(threat).toMatch(phrase("in at most five lines; absent otherwise"));
+  });
+
+  it("defines the CLI shorthand right after the unit table, before the Risks section", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+    const threatRow = shape.indexOf("| `threat` |");
+    const running = shape.indexOf("\n\n**Running the CLI.** ");
+    const risks = shape.indexOf("4. **Risks**");
+
+    expect(threatRow).toBeGreaterThan(0);
+    expect(running).toBeGreaterThan(threatRow);
+    expect(risks).toBeGreaterThan(running);
+    // The paragraph is two physical lines: the shared sentence, then the fallback.
+    const paragraph = shape.slice(running + 2, risks).trimEnd().split("\n");
+    expect(paragraph).toHaveLength(2);
+    expect(paragraph[1]).toBe(
+      "When neither form runs, no unit's class can be read, so every unit carries the `threat` row.",
+    );
+  });
+
   it("carries the requirement id per unit, with the same honest fallback the implementer states", () => {
     const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
 
