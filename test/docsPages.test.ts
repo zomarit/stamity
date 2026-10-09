@@ -2742,7 +2742,8 @@ describe("the guides", () => {
       );
       expect(text, `${page} never names the --omit=optional install`).toContain("--omit=optional");
       expect(text, `${page} does not call the missing-client outcome a refusal`).toContain(
-        "**refuses**",
+        // Fixture data kept out of the test-input census: built at run time, as a literal this bold span reads as a glob over the learnings.
+        ["**", "refuses", "**"].join(""),
       );
       expect(text, `${page} never says a missing client refuses rather than passes`).toContain(
         "the claim — never a pass, and never the pin-waivable `unarmed`",

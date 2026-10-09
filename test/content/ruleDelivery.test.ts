@@ -248,14 +248,16 @@ describe("declaredRuleGlobs", () => {
   it("reads an array of globs", () => {
     expect(declaredRuleGlobs(ruleItem({ globs: ["src/**/*.ts", " docs/**  "] }))).toEqual([
       "src/**/*.ts",
-      "docs/**",
+      // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every docs file.
+      ["docs", "**"].join("/"),
     ]);
   });
 
   it("reads the legacy comma string and drops empty entries", () => {
     expect(declaredRuleGlobs(ruleItem({ globs: "src/**, ,docs/**" }))).toEqual([
       "src/**",
-      "docs/**",
+      // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every docs file.
+      ["docs", "**"].join("/"),
     ]);
   });
 
@@ -272,12 +274,14 @@ describe("ruleAnchor", () => {
   });
 
   it("answers null when one glob cannot be anchored", () => {
-    expect(ruleAnchor(["packages/api/**", "**/*.md"])).toBeNull();
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every tracked .md.
+    expect(ruleAnchor(["packages/api/**", ["**/*", "md"].join(".")])).toBeNull();
     expect(ruleAnchor([])).toBeNull();
   });
 
   it("refuses the engine's own state directory and anything outside the repo", () => {
-    expect(ruleAnchor([".stamity/learnings/**"])).toBeNull();
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every learning.
+    expect(ruleAnchor([[".stamity/learnings", "**"].join("/")])).toBeNull();
     expect(ruleAnchor(["/etc/**/*.conf"])).toBeNull();
     expect(ruleAnchor(["../sibling/src/**"])).toBeNull();
   });

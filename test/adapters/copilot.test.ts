@@ -336,12 +336,14 @@ describe("rules → .github/instructions", () => {
   });
 
   it("emits a single glob with no separator at all", () => {
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every learning.
+    const glob = [".stamity/learnings", "**"].join("/");
     const output = buildInstructionsFile(
-      itemOf({ type: "rule", id: "learnings-schema", frontmatter: { globs: [".stamity/learnings/**"] } }),
+      itemOf({ type: "rule", id: "learnings-schema", frontmatter: { globs: [glob] } }),
       asIs,
     );
 
-    expect(frontmatterValue(output.content, "applyTo")).toBe('".stamity/learnings/**"');
+    expect(frontmatterValue(output.content, "applyTo")).toBe(`"${glob}"`);
     expect(frontmatterValue(output.content, "applyTo")).not.toContain(",");
   });
 

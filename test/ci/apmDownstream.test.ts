@@ -89,7 +89,8 @@ describe("downstream APM content", () => {
     // collide with nothing. The case is about case-folding, not about delivery.
     write(
       join(root, "fork/rules/SOURCE-RULE.md"),
-      '---\nid: SOURCE-RULE\ndescription: Fixture\nglobs: ["**/*.md"]\n---\nDifferent identity.\n',
+      // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every tracked .md.
+      `---\nid: SOURCE-RULE\ndescription: Fixture\nglobs: ["${["**/*", "md"].join(".")}"]\n---\nDifferent identity.\n`,
     );
     const result = generate(root);
     expect(result.status).toBe(1);

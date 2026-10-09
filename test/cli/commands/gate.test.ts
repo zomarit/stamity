@@ -10,6 +10,11 @@ import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
+// Fixture data kept out of the test-input census: these globs are built at run time, as literals they name this repository's docs, site and top-level .md files.
+const DOCS_GLOB = ["docs", "**"].join("/");
+const SITE_GLOB = ["website", "**"].join("/");
+const TOP_MD_GLOB = ["*", "md"].join(".");
+
 /**
  * p1a-classifier-verb (REQ-FLOW-061): `stamity gate classify --paths`, through
  * the in-process funnel, so each case also covers the 0/1/2 exit contract and
@@ -93,7 +98,7 @@ describe("stamity gate classify --paths", () => {
       checks: ["scan", "tests-selected", "review-once"],
       lenses: [],
       reason: expect.stringContaining("no base was given") as string,
-      byPath: [{ path: "docs/x.md", class: "docs", rule: "docs/**" }],
+      byPath: [{ path: "docs/x.md", class: "docs", rule: DOCS_GLOB }],
       // TEST CHANGE, justified: 2026-10-09, p2b-test-inputs — the document gains `tests`, the selection
       // (REQ-FLOW-062); with no base no map is read, so every test runs (S4).
       tests: { full: true, files: [], reason: expect.stringContaining("no test-input map") as string },
@@ -140,7 +145,7 @@ describe("stamity gate classify --paths", () => {
     for (const char of ["\u009b", "\u202e", "\u{E0041}", "\u2066"]) expect(result.stdout).not.toContain(char);
     const doc = JSON.parse(result.stdout) as Record<string, unknown>;
     expect(doc["paths"]).toEqual(["docs/a31mgnp.md"]);
-    expect(doc["byPath"]).toEqual([{ path: "docs/a31mgnp.md", class: "docs", rule: "docs/**" }]);
+    expect(doc["byPath"]).toEqual([{ path: "docs/a31mgnp.md", class: "docs", rule: DOCS_GLOB }]);
     expect(doc["reason"]).toContain("docs/a31mgnp.md");
   });
 
@@ -495,7 +500,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
     expect(code).toBe(0);
     expect((doc["paths"] as string[]).toSorted()).toEqual(["docs/a\\b.md", "docs\\..\\.stamity\\manifest.json"].toSorted());
-    expect(doc["byPath"]).toContainEqual({ path: "docs/a\\b.md", class: "docs", rule: "docs/**" });
+    expect(doc["byPath"]).toContainEqual({ path: "docs/a\\b.md", class: "docs", rule: DOCS_GLOB });
     expect(doc["class"]).toBe("product");
   });
 
@@ -515,7 +520,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     ]);
     expect(posix.code).toBe(0);
     expect(posix.doc["class"]).toBe("docs");
-    expect(posix.doc["byPath"]).toEqual([{ path: ".stamity\\overrides\\x.md", class: "docs", rule: "*.md" }]);
+    expect(posix.doc["byPath"]).toEqual([{ path: ".stamity\\overrides\\x.md", class: "docs", rule: TOP_MD_GLOB }]);
   });
 
   // review/36: the report strips these code points, so the name it prints is no longer the file's own.
@@ -528,7 +533,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
     expect(code).toBe(0);
     expect(doc["paths"]).toEqual(["docs/ab.md"]);
-    expect(doc["byPath"]).toEqual([{ path: "docs/ab.md", class: "docs", rule: "docs/**" }]);
+    expect(doc["byPath"]).toEqual([{ path: "docs/ab.md", class: "docs", rule: DOCS_GLOB }]);
     expect(doc["class"]).toBe("product");
     expect(doc["reason"]).toContain("names the report cannot show as they are, so the class is at least product: docs/ab.md");
   });
@@ -946,7 +951,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     });
 
     it("reads no class file with no base, as D5 says", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: [SITE_GLOB] }), "website/x.md": "base\n" });
       await getRoot().seedFiles({ "repo/website/x.md": "changed\n" });
 
       const { doc } = await classifyIn(repo, []);
@@ -956,7 +961,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     });
 
     it("never reads the class file from the head or the work tree: only the base commit's blob", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: [SITE_GLOB] }), "website/x.md": "base\n" });
       const head = git(repo, ["rev-parse", "HEAD"]).trim();
       await getRoot().seedFiles({ "repo/website/x.md": "changed\n" });
       gitSpy.calls.length = 0;
@@ -973,7 +978,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     });
 
     it("says product, naming the failure, when the class file read fails", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: [SITE_GLOB] }), "website/x.md": "base\n" });
       await getRoot().seedFiles({ "repo/website/x.md": "changed\n" });
 
       gitSpy.fault = { step: "blob", error: realFailure("process.exit(3)") };
@@ -994,7 +999,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
     // p2a M-2 (reviewer W-1): only git's clean "nothing there" answer is an absent file; any other failure fails closed.
     it("says product, naming the failed read, when the base tree holding the class file is corrupt", async () => {
-      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "docs/x.md": "base\n" });
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: [SITE_GLOB] }), "docs/x.md": "base\n" });
       await corruptObject(repo, git(repo, ["rev-parse", "HEAD:.stamity"]).trim());
 
       const { code, doc } = await classifyIn(repo, ["--base", "HEAD", "--paths", "docs/x.md"]);
@@ -1107,7 +1112,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       });
 
       it("runs every test when a selected test is not in the work tree, naming it", async () => {
-        const repo = await seedRepo("repo", { [CLASS_FILE]: mapOf([{ glob: "docs/**", tests: ["test/gone.test.ts"] }]), ...PAGES });
+        const repo = await seedRepo("repo", { [CLASS_FILE]: mapOf([{ glob: DOCS_GLOB, tests: ["test/gone.test.ts"] }]), ...PAGES });
         await getRoot().seedFiles({ "repo/docs/guide.md": "changed\n" });
 
         const { doc } = await classifyIn(repo, ["--base", "HEAD"]);

@@ -1488,7 +1488,8 @@ describe("the guard's path-scoped report write", () => {
     // the key: this document is what a hand edit or an older emitter leaves.
     const document = JSON.stringify({
       schema: AGENT_TOOL_POLICIES_SCHEMA,
-      policies: [{ agentId: "stamity-reviewer", allow: ["read"], writePaths: ["../*.md"], rationale: "x" }],
+      // Fixture data kept out of the test-input census: the pattern is built at run time, as a literal it names every top-level .md.
+      policies: [{ agentId: "stamity-reviewer", allow: ["read"], writePaths: [["../", "*", ".md"].join("")], rationale: "x" }],
     });
     const guard = await placeWriteGuard({ document });
 
@@ -1504,7 +1505,8 @@ describe("the guard's path-scoped report write", () => {
     // (`WRITE_PATH_DENIED`, since `src/app.ts` matches none); an invalid one
     // leaves the category refusal.
     const candidates: unknown[] = [
-      ".stamity/*.md",
+      // Fixture data kept out of the test-input census: the pattern is built at run time, as a literal it names the inbox.
+      [".stamity/", "*", ".md"].join(""),
       "a".repeat(200),
       "a".repeat(201),
       Array.from({ length: 16 }, () => "a").join("/"),

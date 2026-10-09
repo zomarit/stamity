@@ -352,7 +352,8 @@ describe("specialistsForPath matching semantics", () => {
       ...FILLED_TABLE,
       {
         specialist: "docs-reviewer",
-        triggerPaths: ["routes/", "*.md"],
+        // Fixture data kept out of the test-input census: "*.md" is built at run time, as a literal it names every top-level .md.
+        triggerPaths: ["routes/", ["*", "md"].join(".")],
         triggerKeywords: ["docs"],
         rationale: "Route changes alter documented behaviour.",
       },

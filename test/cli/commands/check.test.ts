@@ -1598,7 +1598,8 @@ describe("check — a drift gate that cannot run", () => {
     "load: on-demand",
     "obsolete_when: fixture trigger",
     "scope: conditional",
-    'globs: ["**/*.md"]',
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every tracked .md.
+    `globs: ["${["**/*", "md"].join(".")}"]`,
     "---",
     "",
     "# House",
@@ -4560,7 +4561,8 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
-          classes: { docs: ["website/**/*.svg"], tests: ["test/**", "evals/**"] }, // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70: a docs folder glob is refused, so the docs glob names an extension; still 3 globs
+          // Fixture data kept out of the test-input census: the docs glob is built at run time, as a literal it names the site's svgs.
+          classes: { docs: [["website/", "**/*", ".svg"].join("")], tests: ["test/**", "evals/**"] }, // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/70: a docs folder glob is refused, so the docs glob names an extension; still 3 globs
           testInputs: [{ glob: "content/**", tests: "all" }],
         }),
       },

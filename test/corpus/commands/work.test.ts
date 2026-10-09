@@ -501,7 +501,8 @@ describe("/st-work — Frame and Plan", () => {
     // The phase spoke of a persisted artifact and named no path, so
     // there was nothing to discover it with. Glob, selection rule, and the
     // not-found branch all have to be stated for the hand-off to be runnable.
-    expect(plan).toContain("docs/plans/*.md");
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every plan.
+    expect(plan).toContain(["docs/plans/", "*", ".md"].join(""));
     expect(plan).toContain("newest `stamp:`");
     expect(plan).toContain("Nothing found is a normal outcome");
   });

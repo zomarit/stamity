@@ -146,7 +146,8 @@ const WRITE_CLAIMS: readonly { path: string; command: string; claim: string }[] 
   { path: "spec/**", command: "auth-scaffold", claim: "`spec/`" },
   { path: "config/**", command: "auth-scaffold", claim: "under `config/`" },
   { path: ".env.example", command: "auth-scaffold", claim: "`.env.example`" },
-  { path: "docs/**", command: "design-system-create", claim: "`docs/design.md`" },
+  // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every docs file.
+  { path: ["docs", "**"].join("/"), command: "design-system-create", claim: "`docs/design.md`" },
   { path: "tokens/**", command: "design-system-create", claim: "`tokens/`" },
   { path: "styles/**", command: "design-system-create", claim: "under `styles/`" },
   { path: "slo/**", command: "slo-scaffold", claim: "`slo/`" },

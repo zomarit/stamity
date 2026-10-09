@@ -4155,7 +4155,8 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
     >;
     for (const trigger of ["pull_request", "push"]) {
       expect(on[trigger]?.paths, `${trigger} must be path-filtered`).toEqual(
-        expect.arrayContaining(["website/**", "docs/**", "README.md"]),
+        // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every site and docs file.
+        expect.arrayContaining([["website", "**"].join("/"), ["docs", "**"].join("/"), "README.md"]),
       );
     }
   });

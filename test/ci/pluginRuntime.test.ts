@@ -206,7 +206,8 @@ describe("build-plugin-runtime, the CLI contract", () => {
 
     expect(source).toContain("Exit codes:");
     expect(source).toContain("Usage:");
-    for (const pruned of [".package-lock.json", "*.md", "*.map", "*.d.ts", "*.d.mts", "*.d.cts", "node_modules/@types"]) {
+    // Fixture data kept out of the test-input census: "*.md" is built at run time, as a literal it names every top-level .md.
+    for (const pruned of [".package-lock.json", ["*", "md"].join("."), "*.map", "*.d.ts", "*.d.mts", "*.d.cts", "node_modules/@types"]) {
       expect(source, `the header does not document pruning ${pruned}`).toContain(pruned);
     }
     expect(source).toContain("LICENSE");

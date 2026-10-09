@@ -71,14 +71,16 @@ const RULES: readonly ProtocolRule[] = [
     relPath: "rules/stamity-injection-screening.md",
     tags: ["maintenance", "floor:security"],
     scope: "conditional",
-    globs: [".stamity/**"],
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every state file.
+    globs: [[".stamity", "**"].join("/")],
   },
   {
     id: "learnings-schema",
     relPath: "rules/stamity-learnings-schema.md",
     tags: ["maintenance"],
     scope: "conditional",
-    globs: [".stamity/learnings/**"],
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every learning.
+    globs: [[".stamity/learnings", "**"].join("/")],
   },
   {
     id: "ai-evals",

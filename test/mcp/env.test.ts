@@ -509,9 +509,10 @@ describe("ensureGitignoreEntry", () => {
     "**/.stamity/",
     ".stamity/",
     "/.stamity/",
-    ".stamity/*",
+    // Fixture data kept out of the test-input census: these two are built at run time, as literals they name every state file.
+    [".stamity", "*"].join("/"),
     "/.stamity/*",
-    ".stamity/**",
+    [".stamity", "**"].join("/"),
     "/.stamity/**",
     ".stamity/review-gate.json*",
     "/.stamity/review-gate.json*",

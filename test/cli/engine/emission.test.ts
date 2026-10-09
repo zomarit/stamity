@@ -32,6 +32,9 @@ import { EngineError } from "../../../src/types/errors.ts";
 import type { ImportDecision, SetupManifest } from "../../../src/types/manifest.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
+// Fixture data kept out of the test-input census: the fixture rules' glob is built at run time, as a literal it names every tracked .md.
+const MD_GLOBS_LINE = `globs: ["${["**/*", "md"].join(".")}"]`;
+
 /**
  * The emission seam is pure by contract — planning never touches the working
  * tree — so every planner test here runs on data alone (the real planner's
@@ -410,7 +413,7 @@ describe("override content layer", () => {
       // rule outright, and codex routes an anchored rule into that directory's
       // own AGENTS.md instead of the root appendix.
       "scope: conditional",
-      'globs: ["**/*.md"]',
+      MD_GLOBS_LINE,
       "---",
       "",
       USER_MARKER,
@@ -604,7 +607,7 @@ describe("override content layer", () => {
         "load: on-demand",
         "obsolete_when: the deploy pipeline enforces it",
         "scope: conditional",
-        'globs: ["**/*.md"]',
+        MD_GLOBS_LINE,
         "---",
         "",
         "Watch the rollout counters before declaring the deploy done.",
@@ -725,7 +728,7 @@ describe("override content layer", () => {
       // always-applied rule is refused by cursor and re-homed by codex.
       ".stamity/overrides/rules/stamity-house-rule.md": head("house-rule", "rule", [
         "scope: conditional",
-        'globs: ["**/*.md"]',
+        MD_GLOBS_LINE,
       ]),
       ".stamity/overrides/commands/stamity-house-command.md": head("house-command", "command"),
       ".stamity/overrides/skills/stamity-house-skill/SKILL.md": head("house-skill", "skill"),
@@ -1430,7 +1433,7 @@ describe("overlay content layer", () => {
         "load: on-demand",
         "obsolete_when: the deploy pipeline enforces it",
         "scope: conditional",
-        'globs: ["**/*.md"]',
+        MD_GLOBS_LINE,
         "---",
         "",
         "Watch the rollout counters before declaring the deploy done.",
@@ -1510,7 +1513,7 @@ describe("overlay content layer", () => {
         "load: on-demand",
         "obsolete_when: the deploy pipeline enforces it",
         "scope: conditional",
-        'globs: ["**/*.md"]',
+        MD_GLOBS_LINE,
         "---",
         "",
         "Watch the rollout counters before declaring the deploy done.",
@@ -1834,7 +1837,7 @@ function ruleWith(id: string, marker: string): string {
     "load: on-demand",
     "obsolete_when: the repository's own linter enforces it",
     "scope: conditional",
-    'globs: ["**/*.md"]',
+    MD_GLOBS_LINE,
     "---",
     "",
     marker,

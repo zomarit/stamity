@@ -31,7 +31,8 @@ export const FORK_REPOSITORY = `https://github.com/${FORK_PUBLISHER}/${FORK_REPO
  */
 export const document = (id: string, type: string, body: string): string =>
   `---\nid: ${id}\ntype: ${type}\ndescription: Fixture ${type}\ntags: [fixture]\nload: on-demand\n${
-    type === "rule" ? 'globs: ["**/*.md"]\n' : ""
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every tracked .md.
+    type === "rule" ? `globs: ["${["**/*", "md"].join(".")}"]\n` : ""
   }---\n\n${body}\n`;
 
 /** Authoring inputs only. Expected delivered paths/bodies below are stated independently. */

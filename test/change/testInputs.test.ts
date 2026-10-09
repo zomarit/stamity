@@ -52,7 +52,9 @@ describe("extractReadPaths", () => {
   });
 
   it("reads a glob literal as every tracked non-code file it matches", () => {
-    expect(extractReadPaths(`for (const page of glob("docs/**/*.md")) check(page);`, TRACKED)).toEqual([
+    // Fixture data kept out of the test-input census: the glob is built at run time, as a literal it names every docs page.
+    const glob = ["docs/", "**/*", ".md"].join("");
+    expect(extractReadPaths(`for (const page of glob("${glob}")) check(page);`, TRACKED)).toEqual([
       "docs/guide.md",
       "docs/specs/flow.md",
     ]);
@@ -101,8 +103,9 @@ describe("isTestSource", () => {
 // globs (rule (1) binds the built-in ones only), so the cases pass the input as it is, with no helper filling them.
 describe("selectTests", () => {
   const MAP = [
-    { glob: "docs/**", tests: ["test/docsPages.test.ts"] },
-    { glob: "website/**", tests: ["test/site.test.ts", "test/docsPages.test.ts"] },
+    // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every docs and site file.
+    { glob: ["docs", "**"].join("/"), tests: ["test/docsPages.test.ts"] },
+    { glob: ["website", "**"].join("/"), tests: ["test/site.test.ts", "test/docsPages.test.ts"] },
   ];
 
   it("selects the tests the map lists for a changed docs page, not zero", () => {

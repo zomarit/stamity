@@ -55,10 +55,11 @@ function outputsOf(stdout: string): Record<string, string> {
 describe("the records list", () => {
   it("is the four record locations and nothing else", () => {
     expect(RECORDS_PATHS).toEqual([
-      ".stamity/runs/**",
+      // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every record.
+      [".stamity/runs", "**"].join("/"),
       ".stamity/inbox.md",
-      ".stamity/handoffs/**",
-      "docs/plans/**",
+      [".stamity/handoffs", "**"].join("/"),
+      ["docs/plans", "**"].join("/"),
     ]);
   });
 
@@ -190,9 +191,10 @@ describe("the lanes — website, specs and learnings beside the records", () => 
   it("names four lanes, the records lane's paths unchanged", () => {
     expect(Object.keys(lanePaths)).toEqual(ALL_LANES);
     expect(lanePaths["records"]).toEqual(RECORDS_PATHS);
-    expect(lanePaths["specs"]).toEqual(["docs/specs/**"]);
-    expect(lanePaths["learnings"]).toEqual([".stamity/learnings/**"]);
-    expect(lanePaths["website"]).toEqual(["website/**", "docs/**"]);
+    // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every lane file.
+    expect(lanePaths["specs"]).toEqual([["docs/specs", "**"].join("/")]);
+    expect(lanePaths["learnings"]).toEqual([[".stamity/learnings", "**"].join("/")]);
+    expect(lanePaths["website"]).toEqual([["website", "**"].join("/"), ["docs", "**"].join("/")]);
     expect(Object.keys(laneSuites)).toEqual(ALL_LANES);
     expect(laneSuites["records"]).toEqual(RECORDS_SUITES);
   });

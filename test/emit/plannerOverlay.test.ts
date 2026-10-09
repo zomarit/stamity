@@ -18,6 +18,9 @@ import type { Tool } from "../../src/types/core.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
+// Fixture data kept out of the test-input census: the fixture rules' glob is built at run time, as a literal it names every tracked .md.
+const MD_GLOBS_LINE = `globs: ["${["**/*", "md"].join(".")}"]`;
+
 /**
  * What an INSTALLED PACK does to the rest of the emission — the two seams in
  * `src/emit/planner.ts` that only a pack-having repo reaches, and that a
@@ -97,7 +100,7 @@ function packRule(id: string): string {
     "load: on-demand",
     "obsolete_when: the deploy pipeline enforces it",
     "scope: conditional",
-    'globs: ["**/*.md"]',
+    MD_GLOBS_LINE,
     "---",
     "",
     "Watch the rollout counters before declaring the deploy done.",
@@ -117,7 +120,7 @@ function override(id: string): string {
     "load: on-demand",
     "obsolete_when: the repository's own linter enforces it",
     "scope: conditional",
-    'globs: ["**/*.md"]',
+    MD_GLOBS_LINE,
     "---",
     "",
     USER_MARKER,
