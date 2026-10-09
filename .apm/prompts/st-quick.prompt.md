@@ -160,7 +160,11 @@ The gate is three steps, in order, after the last item lands:
    checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
    batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report
    lists every applied item as ungated under `Not done:`. The refusal names the row and the rule
-   that placed the item. There is no size floor, and no lens runs inside the quick lane.
+   that placed the item. There is no size floor, and no lens runs inside the quick lane. With no
+   class — neither form runs, or the classify exits non-zero — a batch with a path the
+   `stamity-security` agent's `## Trigger` table names moves the same way, as for a
+   `security-sensitive` class; a batch whose paths that table does not name, a docs-only one among
+   them, stays.
 3. **Run.** Spawn `test-runner` with the changed-file list and the class's checks, each run once
    as the charter spells it: `tests-selected` → `${STAMITY:VERIFY_GATE_TEST}` with the selected
    files appended, or over the whole suite when `tests.full` is true; `lint` →
