@@ -74,6 +74,14 @@ const CALL_SITES: readonly CallSite[] = [
     fallback:
       "When neither form runs, the orchestrator, still the one writer, edits `ledger.jsonl` by hand in the row grammar under Proof block and records `ledger: by hand (no CLI)`.",
   },
+  {
+    // The quick lane's gate runs `gate scan` and `gate classify` (unit p3b-quick-gates); with
+    // neither form, the batch takes the full gate and says the scan did not run.
+    relPath: "commands/st-quick.md",
+    label: RUNNING_CLI_LABEL,
+    fallback:
+      "When neither form runs, the batch runs `${STAMITY:VERIFY_GATE_ALL}` and the report lists `secret scan: not run` under `Not done:`.",
+  },
 ];
 
 /** The one column whose cells may keep the defined `stamity <verb>` shorthand. */

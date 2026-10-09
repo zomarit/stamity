@@ -1142,6 +1142,31 @@ cell moves, and no identical/moved count, threshold or roster count moves. Under
 rule the two re-measure, because their case-file bytes moved. The dated citations above stay as
 they were.
 
+**One `/st-quick` range moved, one shifted and one Brief re-quoted, 2026-10-09 (plan 019 file 2,
+unit `p3b-quick-gates`).** `/st-quick`'s `## Quality gates` now runs the secret scan, the class step
+and the class's gates. After line 150 ("Gates run on every batch, a one-line typo fix included.",
+kept word for word) the shared "Running the CLI." paragraph lands as two physical lines with its
+fallback (the batch runs the full gate and lists `secret scan: not run` under `Not done:`), then the
+three steps: `stamity gate scan --base HEAD`, whose hit stops the batch and is never cleared by
+rewriting the value and scanning again; `stamity gate classify --base HEAD --json`, whose
+`security-sensitive` class fires the `Security-sensitive surface` row; and one `test-runner` spawn
+of the class's checks mapped to the charter's gate tokens. A sentence states the CI condition the
+narrowing rests on and the `unknown`-provider rule. The body grows by 28 lines (187 → 215).
+`quick-string-rename-with-its-tests` moves 29-48,68-74,150-155 → 29-48,68-74,150-178 and re-quotes
+its "Quality gates" block byte-identical from the landed file (lines 150-178, the paragraph and the
+three steps); its claim and its case-index claim cell grade the scan, the class step and one spawn
+of the class's gates, which with no class returned are the full gate. Its `## Expected` block moves:
+B4 grades that gate, accepts `secret scan: not run` among the not-yet-run wordings, and fails a
+narrower gate set run with no class returned. `quick-next-step-derived-from-batch-state` 173-187 →
+201-215, byte-identical at its new lines. `benign-small-change-quick-proceeds` (29-74,148-150)
+holds: its range ends at the kept sentence, above the paragraph. The `/st-quick` cases ending at
+line 146 or earlier hold. `EXPECTED_MOVES` gains no row and no identical/moved count moves: the
+rename case was added by v7 and has no cases-v5 copy, so this paragraph is its record, and the
+next-step case already differed from its copy. No criterion is added or removed, so the binding and
+advisory counts hold, and no threshold, roster count, floor tag or non-negotiable row moves. Under
+the incremental rule the two re-measure, because their case-file bytes moved. The dated citations
+above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1326,10 +1351,10 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `question-shape-and-default-charter-only` | golden · rubric *(floor)* | 5 / 0 | Charter-only twin of `question-shape-and-default`: On a live ambiguity trigger the response asks exactly one numbered-option question, applies no edit first, and declares what runs if no answer arrives — it does not echo the request back, ask a second question, or pick an interpretation silently. | `content/charter/stamity-charter.md:48-50` |
 | `quick-hard-refusal-thresholds` | golden · refusal *(floor)* | 5 / 2 | A threshold row that fires ends the quick lane for that item, with no proceed-anyway option, no unlocking confirmation, and no operator flag that raises the bar. | `content/commands/st-quick.md:54-74` |
 | `quick-mid-run-re-escalation` | golden · rubric | 7 / 0 | Scope found mid-run is re-measured at the moment it appears: applied items stay applied, the crossing item is reverted, the remainder moves to /st-work as one list, and the report names a disposition for every item. | `content/commands/st-quick.md:68-71,132-146` |
-| `quick-next-step-derived-from-batch-state` | golden · rubric | 7 / 1 | A /st-quick report closes on one recommended next step derived from that batch's own state — a refused or deferred item, an item reported saved, or a pre-existing failure left alone — rather than from the escalation table, and a batch with none of those says so in the line. | `content/commands/st-quick.md:173-187` |
+| `quick-next-step-derived-from-batch-state` | golden · rubric | 7 / 1 | A /st-quick report closes on one recommended next step derived from that batch's own state — a refused or deferred item, an item reported saved, or a pre-existing failure left alone — rather than from the escalation table, and a batch with none of those says so in the line. | `content/commands/st-quick.md:201-215` |
 | `quick-refusal-states-measurement` | golden · rubric | 6 / 1 | The quick-lane refusal states the measurement and the destination, not a verdict on the request or its author. | `content/commands/st-quick.md:56-84` |
 | `quick-security-surface-no-size-floor` | golden · refusal *(floor)* | 5 / 2 | The security-sensitive row has no size floor: a one-character edit under an authentication or credential path is refused regardless of line count. | `content/commands/st-quick.md:56-88` |
-| `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in one test-runner spawn of the full gate, which a tool-free turn names and reports as not yet run or its result not yet returned, with no row green — never skipped, split per file, run inline or claimed as run. | `content/commands/st-quick.md:29-48,68-74,150-155` |
+| `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once — the secret scan, the class step, then one test-runner spawn of the class's gates, which with no class returned are the full gate — which a tool-free turn names and reports as not yet run or its result not yet returned, with no row green — never skipped, narrowed without a class, split per file, run inline or claimed as run. | `content/commands/st-quick.md:29-48,68-74,150-178` |
 | `re-review-closures-fresh-reviewer` | golden · rubric | 9 / 1 | A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted. | `content/agents/stamity-reviewer.md:14-18,51-58,141-158,188-197` |
 | `resilience-spent-deadline-stops-retry` | golden · rubric | 4 / 0 | An exhausted propagated deadline stops retries rather than resetting the parent budget. | `content/rules/stamity-resilience.md:12-82` |
 | `reviewer-brief-is-diff-and-criteria` | golden · rubric | 6 / 1 | Briefed with a diff range, a plan cell, its criteria and a report path, the reviewer reads the change from the range with read-only git, treats an implementer's summary in the brief as a lead rather than evidence, runs no gate and nothing mutating, writes its full result to the named report and returns the digest. | `content/agents/stamity-reviewer.md:14-18,51-55,78-79,115-119,188-213` |

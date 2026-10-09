@@ -802,12 +802,79 @@ describe("quick — the guardrails are the command", () => {
   it("runs the gate once and never counts an unknown exit code as green", async () => {
     const text = flow(await load("commands/st-quick.md"));
 
-    // The runner runs the charter's full gate once, as spelled, not a second time to confirm.
-    expect(text).toMatch(/runs `\$\{STAMITY:VERIFY_GATE_ALL\}` once, as the charter spells it/);
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p3b-quick-gates): this pinned
+    // "runs `${STAMITY:VERIFY_GATE_ALL}` once, as the charter spells it". The runner now runs
+    // the gates the batch's class names (REQ-FLOW-063), the full gate only for `gates-all` or an
+    // unclear class, so the pin moves to the class's checks; "once, as the charter spells it"
+    // still binds every check it runs.
+    expect(text).toMatch(/the class's checks, each run once as the charter spells it/);
     // Edge case: a tool result with no exit status reads as an `unknown` row, which is not
     // green, so the batch it belongs to cannot be reported done.
     expect(text).toMatch(/a row whose exit code the runner could not read is `unknown`/i);
     expect(text).toMatch(/an unknown row is never green/i);
+  });
+
+  it("gates every batch, a one-line typo fix included, scan first, class second, runner last", async () => {
+    const gates = section(await load(QUICK), "Quality gates");
+
+    expect(gates.split("\n")[1]).toBe("Gates run on every batch, a one-line typo fix included.");
+    const scan = gates.indexOf("`stamity gate scan --base HEAD`");
+    const classify = gates.indexOf("`stamity gate classify --base HEAD --json`");
+    const runner = gates.indexOf("Spawn `test-runner` with the changed-file list and the class's checks");
+    expect(scan).toBeGreaterThan(0);
+    expect(classify).toBeGreaterThan(scan);
+    expect(runner).toBeGreaterThan(classify);
+  });
+
+  it("stops the batch on a scan hit, never clears one by rescanning, and lists unscanned files (REQ-FLOW-066)", async () => {
+    const gates = section(await load(QUICK), "Quality gates").replace(/\s+/g, " ");
+
+    expect(gates).toContain("A hit stops the batch: the report names path, line and rule, never the value.");
+    expect(gates).toContain("A hit is never cleared by rewriting the value and scanning again");
+    expect(gates).toContain("a hit on a deliberate fixture is the person's to settle");
+    expect(gates).toContain(
+      "A non-empty `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths.",
+    );
+    // A scan that could not read the change is not a clean scan: it is a scan not run.
+    expect(gates).toContain("A scan that names a `reason` instead of hits did not read the change");
+    expect(gates).toContain("`secret scan: not run` under `Not done:`");
+  });
+
+  it("refuses a security-sensitive class by the threshold row, with no size floor and no lens (REQ-FLOW-065)", async () => {
+    const file = await load(QUICK);
+    const gates = section(file, "Quality gates").replace(/\s+/g, " ");
+
+    // The class fires the existing row; the table itself does not move.
+    expect(section(file, "Thresholds and refusal")).toContain("| Security-sensitive surface |");
+    expect(gates).toContain("A `security-sensitive` class fires the `Security-sensitive surface` row");
+    expect(gates).toContain(
+      "the items whose files `byPath` places there, or whose lines a rule hit, are reverted and move to `/st-work` with the rest of the batch, as Mid-run re-escalation moves an item.",
+    );
+    expect(gates).toContain("The refusal names the row and the rule that placed the item.");
+    expect(gates).toContain("There is no size floor, and no lens runs inside the quick lane.");
+  });
+
+  it("maps the class's checks to the charter's gate tokens and runs all when unclear (REQ-FLOW-063)", async () => {
+    const gates = section(await load(QUICK), "Quality gates");
+    const text = gates.replace(/\s+/g, " ");
+
+    expect(text).toContain("`tests-selected` → `${STAMITY:VERIFY_GATE_TEST}` with the selected files appended");
+    expect(text).toContain("`lint` → `${STAMITY:VERIFY_GATE_LINT}`");
+    expect(text).toContain("`typecheck` → `${STAMITY:VERIFY_GATE_TYPECHECK}`");
+    expect(text).toContain(
+      "`gates-all`, an unclear class, or a test command that takes no file list → `${STAMITY:VERIFY_GATE_ALL}`",
+    );
+    // The narrowing rests on CI, and a repository with no known CI gets no narrowing.
+    expect(text).toContain(
+      "The narrower gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger change and on a schedule.",
+    );
+    expect(text).toContain(
+      "Where the charter's `CI provider` reads `unknown`, the batch runs `${STAMITY:VERIFY_GATE_ALL}` whatever its class.",
+    );
+    // A docs batch with no selected tests still gets its scan, and the report says which class it was.
+    expect(text).toContain("A `docs` class with no selected tests runs the scan alone, and the report names the class.");
+    // The corpus names the charter's tokens, never a repository's own script.
+    expect(gates).not.toMatch(/npm run|node scripts\/|scripts\/ci|\.mjs\b|vitest/);
   });
 
   it("fixes the commit prefix and differs from work by contract", async () => {
