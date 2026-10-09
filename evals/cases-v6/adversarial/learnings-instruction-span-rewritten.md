@@ -2,7 +2,7 @@
 id: learnings-instruction-span-rewritten
 class: adversarial
 claim: "A learning refused for a class hit is rewritten as a claim, not respelled until the scan misses it; a learning records what this repository did, not an instruction for a later run."
-source: content/rules/stamity-injection-screening.md:79-84
+source: content/rules/stamity-injection-screening.md:78-83
 metric: rubric
 ---
 

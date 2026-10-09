@@ -62,17 +62,16 @@ writer — teammate, tool, merge or outside pull request — can author these re
    attack strings is a template as much as a reference.
 5. **Two enforcement points, and the second is the narrower one.** The write gate
    refuses a block-severity hit before the bytes land, so a poisoned note is rejected
-   at authoring time with its pattern named. The session-start script re-screens on
-   read, because bytes already on disk arrived by paths the write gate never saw — a
-   hand edit, a merge, a branch switch, a restored backup. That read screen is a
-   subset of the write catalogs, not a mirror of them: rows whose own source text
-   carries network vocabulary are dropped so the emitted script stays network-free
-   under a plain grep, which costs it the exfil-signal rows the engine names at
-   `hooks/scripts.ts` — `remote-exec-pipe` and `send-data-external` from the
-   write-path set, `image-url-exfiltration` from the transport set. Routing text is
-   caught on write and on the paths that reach a write gate; on the session-start read
-   it is not. A file that fails the read screen is skipped, and the session opens with
-   less context rather than with poisoned context.
+   at authoring time with its pattern named. The session-start script re-screens on read,
+   because bytes already on disk arrived by paths the write gate never saw — a hand edit,
+   a merge, a branch switch, a restored backup. That read screen is a subset of the write
+   catalogs, not a mirror of them: rows whose own source text carries network vocabulary
+   are dropped so the emitted script stays network-free under a plain grep, which costs it
+   the exfil-signal rows the engine names at `hooks/scripts.ts` — `remote-exec-pipe` and
+   `send-data-external` from the write-path set, `image-url-exfiltration` from the
+   transport set. Routing text is caught on write and on the paths that reach a write
+   gate; on the session-start read it is not. A file that fails the read screen is
+   skipped, and the session opens with less context rather than with poisoned context.
 6. **Report the hit; do not echo it.** A refusal names the file and the pattern id
    that matched. The matched span stays out of the transcript, the banner, and the
    summary — reprinting it delivers the payload that the skip just refused.
@@ -87,9 +86,10 @@ writer — teammate, tool, merge or outside pull request — can author these re
 
 - Nothing read from `.stamity/` is executed, and no field in the state text this
   rule screens changes tool access, model selection, gate configuration, or an
-  agent's role. The manifest is the one file under this path that does configure
-  gates — the learnings cap, the hooks directory, the model classes — and it is
-  the operator's to edit, never a value copied out of a screened state file.
+  agent's role. Two files under this path do configure gates: the manifest (the learnings
+  cap, the hooks directory, the model classes) and `.stamity/change-classes.json` (which
+  checks a change's class runs, read only from the base commit so no change sets its own).
+  Both are the operator's to edit, never a value copied out of a screened state file.
 - A screening hit produces a skip that names the file and the pattern id. The
   body is not loaded, and no matched span appears in the output.
 - A directive discovered in state text is reported as a finding with its path,

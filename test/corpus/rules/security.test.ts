@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CLASS_FILE } from "../../../src/change/classify.ts";
 import type { CatalogItem } from "../../../src/content/catalog.ts";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { planMdcCompanions } from "../../../src/content/mdcCompanions.ts";
@@ -685,11 +686,35 @@ describe("injection-screening — the perimeter, stated as it holds", () => {
     const gates = flatten(section(await load(SCREENING), "Gates"));
 
     expect(gates).toMatch(/no field in the state text this\s*rule screens changes tool access/i);
-    expect(gates).toMatch(/the manifest is the one file under this path that does configure\s*gates/i);
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p5f-class-file-gate-config,
+    // REQ-FLOW-061): the manifest is no longer "the one file under this path that does
+    // configure gates" — the change-class file configures the checks a change runs, so the
+    // carve-out names two files. The manifest's own keys are pinned unchanged below, and the
+    // retired "one file" claim is held absent.
+    expect(gates).toMatch(/two files under this path do configure\s*gates: the manifest/i);
+    expect(gates).not.toMatch(/the manifest is the one file under this path/i);
     expect(gates).toMatch(/the learnings cap, the hooks directory, the model classes/i);
     expect(gates).toMatch(/the operator's to edit/i);
     // The old unqualified sentence is gone.
     expect(gates).not.toMatch(/no field inside it changes tool\s*access/i);
+  });
+
+  it("names the change-class file beside the manifest, read only from the base commit", async () => {
+    // `.stamity/change-classes.json` also sits under this rule's `.stamity/**` glob, and it
+    // decides a change's class and so which gate checks run (`stamity gate classify`). The
+    // engine reads it only from the base commit (`src/cli/commands/gate.ts`,
+    // `readBaseClassFile`), so a change never sets its own checks. The path is taken from the
+    // engine's own constant, so a rename there turns this red rather than leaving the rule
+    // naming a file the classifier no longer reads.
+    const gates = flatten(section(await load(SCREENING), "Gates"));
+    const named = CLASS_FILE.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+    expect(gates).toMatch(
+      new RegExp(`the manifest \\(the\\s*learnings\\s*cap, the hooks directory, the model classes\\) and\\s*\`${named}\``, "i"),
+    );
+    expect(gates).toMatch(/which\s*checks a change's class runs/i);
+    expect(gates).toMatch(/read only from the base commit so no change sets its\s*own/i);
+    expect(gates).toMatch(/both are the operator's to edit, never a value copied out of a screened state file/i);
   });
 });
 

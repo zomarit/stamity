@@ -380,7 +380,12 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_363;
 // half of the override carries invariant 4's +24 bytes (invariants 1.2.0).
 // 25_358 -> 25_393 on 2026-10-09, the p3 fix round (review/111, review/122): the
 // charter half of the override carries the same +35 bytes.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_393;
+// 25_393 -> 25_504 on 2026-10-09, unit p5f-class-file-gate-config: the rules
+// appendix carries the injection-screening rule's +111 bytes — its first Gates
+// bullet names `.stamity/change-classes.json` beside the manifest. The line
+// count holds at 407: the bullet's extra line is paid back by rewrapping Floor
+// item 5 of the same rule at the file's widest line, same words.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_504;
 
 /**
  * The composite always-on line count one client pays for a plan under a

@@ -186,6 +186,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-09, plan 019 file 2, unit p5f-class-file-gate-config (run
+  //     2026-10-08_product-core; REQ-FLOW-061). The injection-screening rule
+  //     moved, plus the manifest rows that record it. No emitted path was added
+  //     or removed.
+  //
+  //     CHANGED the rule's emitted copy in every selection that carries it
+  //       (`.claude/rules/`, `.cursor/rules/` and `.github/instructions/`) by
+  //       +111 bytes, and the rules appendix of `AGENTS.override.md` in the
+  //       codex and all-four selections by the same +111, 25393 -> 25504, at
+  //       an unchanged line count. The first Gates bullet names
+  //       `.stamity/change-classes.json` beside the manifest (+1 line); Floor
+  //       item 5's tail is rewrapped at the file's widest line, same words
+  //       (-1 line). `ALWAYS_ON_CODEX_OVERRIDE_BYTES` and
+  //       `docs/capability-matrix.md` moved with the figure.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, every other rule, skill,
+  //       touchpoint, companion, hook script, guard and policy document.
+  //
   //   - 2026-10-09, plan 019 file 2, the p3 fix round (run
   //     2026-10-08_product-core; review/111, review/122; invariants 1.2.0, an
   //     in-version text fix). The charter moved, plus the manifest rows that
