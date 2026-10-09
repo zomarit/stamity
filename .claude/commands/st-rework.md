@@ -103,7 +103,7 @@ Open question: *"What did you test, and where did it not behave the way it shoul
 
 **Severity inference.** Read severity from the user's own words instead of asking for a rating:
 "blocker", "broken", "cannot ship" → Critical; "wrong", "missing", "confusing" → Warning; "nit",
-"polish", "cosmetic" → Minor with a named consequence, else a note. **Declared default: Warning**
+"polish", "cosmetic" → Minor, never a note: their ask is its consequence. **Declared default: Warning**
 — when the words carry no severity signal the finding enters triage as Warning and the phase-4
 table shows it there, so a wrong default costs one table correction instead of one more question.
 
@@ -135,7 +135,7 @@ usually invisible to the person testing the feature. A note is not a finding and
 | 12 | Stale docs | README, spec, or doc comment contradicting the new behavior | Warning |
 | 13 | Orphaned fixtures | fixtures, snapshots, and seed data no test references | Minor with a named consequence, else a note |
 
-Each hit records `file:line`, its category, a severity, and a one-line remedy. Categories with
+Each hit records `file:line`, its category, a severity or `note`, and a one-line remedy. Categories with
 nothing to report print nothing: the scan reports hits, not a checklist of clean rows.
 
 **Category 6 is whole-project.** The lint and typecheck gates carry no changed-file selector —
@@ -149,9 +149,9 @@ nobody scoped.
 
 Rows are read top to bottom and the first match wins. The last three are catch-alls, one per
 severity: a finding reaches one only when no specific scope above it matched, so they shadow
-nothing. With every severity carrying a catch-all and the leftover scan defaulting each category
-to a severity, the table is total — no finding leaves phase 4 as neither a plan unit nor an
-inbox row.
+nothing. With every severity carrying a catch-all, the table is total — no finding leaves phase 4
+as neither a plan unit nor an inbox row. A scan note is the one thing outside it: it is listed
+under the presented table as `note · file:line · category · remedy` and counted, never routed.
 
 | Severity | Scope | Route |
 |---|---|---|
@@ -258,10 +258,10 @@ A plan carrying a `[NEEDS CLARIFICATION]` marker has no execute-now default. The
 `show the plan first (default) / resolve marker n / stop`, and the handoff stays blocked until
 the last marker clears — which is what makes the low-confidence marking of phase 5 a gate.
 
-Close with this run's proof block: baseline source (proof record, or `no proof record`),
-findings by severity, REVISE/DEFER counts, validation verdicts with confidence, plan-lint per
-check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`, the plan
-path, and the inbox rows added.
+Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
+by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
+plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`,
+the plan path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
