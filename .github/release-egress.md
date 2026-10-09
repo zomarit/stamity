@@ -29,7 +29,7 @@ OIDC and Sigstore TUF endpoints, including paths a warmed cache may not contact.
 No npm or signing endpoints are added to the isolated APM job; no signing endpoints or
 publishing identity are added to the build job.
 
-The [pinned hardener](https://github.com/step-security/harden-runner/tree/e14015d583714f6e62063499dc959a02595150a1)
+The [pinned hardener](https://github.com/step-security/harden-runner/tree/351661ca32ac09a36dc5ee2d536e3128f2a3c8ed)
 also manages its telemetry and GitHub runner/cache endpoints using the current service
 metadata. Thus the YAML workload list is not a claim that the runner itself contacts
 only those hosts. [StepSecurity recommendations](https://docs.stepsecurity.io/harden-runner/workflow-runs)
