@@ -58,9 +58,9 @@
  * longer one makes the class at least `product` (review/93). Added and removed
  * lines count, and context lines only in a hunk that also removes one, so
  * removing the guard around an existing dangerous call still classifies. The
- * reason names the rule id and where, never the line's text (plan/17). A tracked
- * code file the read could not show is `unscanned`, and makes the class at
- * least `product` (plan/62).
+ * reason names the rule id and where, never the line's text (plan/17). A file
+ * the read could not show is `unscanned`, and makes the class at least
+ * `product` (plan/62).
  *
  * **Where a path came from decides how it is read** (review/20). A name git
  * gave is read literally: git never separates on `\`, so a backslash there is a
@@ -695,7 +695,7 @@ export interface ClassifyInput {
   source?: PathSource;
   /** The change's diff hunks, for the security line rules; a hunk's path is placed too. */
   hunks?: readonly Hunk[];
-  /** Tracked code files the read could not show; any makes the class at least `product` (plan/62). */
+  /** Files the read could not show (plan/62, review/94); any makes the class at least `product`. */
   unscanned?: readonly string[];
 }
 
@@ -809,7 +809,7 @@ export function classifyChange(
   if (unscanned.length > 0) {
     const one = unscanned.length === 1;
     reasons.push(
-      `${unscanned.length} tracked code file${one ? "" : "s"} the read could not show ${one ? "is" : "are"} unscanned, so the class is at least product: ${namePaths(unscanned)}`,
+      `${unscanned.length} changed file${one ? "" : "s"} the read could not show ${one ? "is" : "are"} unscanned, so the class is at least product: ${namePaths(unscanned)}`,
     );
     atLeastProduct.push("product");
   }

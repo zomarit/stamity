@@ -1540,7 +1540,9 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     expect(docsOnly.class).toBe("docs");
     const result = withLines([hunk("docs/x.md", { added: ["text"] })], { unscanned: ["src/x.ts"] });
     expect(result.class).toBe("product");
-    expect(result.reason).toContain("1 tracked code file the read could not show is unscanned, so the class is at least product: src/x.ts");
+    // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/94 (signed off): untracked files past
+    // the total read cap are unscanned too, of any type, so the clause says "changed file", not "tracked code file".
+    expect(result.reason).toContain("1 changed file the read could not show is unscanned, so the class is at least product: src/x.ts");
   });
 
   // review/86, review/90: `exec` on the imported child_process module counts under whatever name the file gives it.

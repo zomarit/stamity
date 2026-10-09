@@ -91,15 +91,17 @@ import type { GitRunner } from "../../workspace/git.ts";
  * With no base, no class file is read (D5). `--paths` with `--base` reads the
  * base copy the same way, from the same project root.
  *
- * **The changed lines** (REQ-FLOW-065, plan/59, plan/62) come from one more
- * read through the same runner: the patch against the base with every flag
- * that config could turn pinned (`-U3`, `--text`, no external diff, colour or
- * textconv, fixed prefixes), each file section named by its place in the
- * `-z` name list rather than by its header, plus every untracked file read
- * whole as added lines. A NUL byte in a file's first 8,000 bytes alone decides
+ * **The changed lines** (REQ-FLOW-065, plan/59, plan/62) come from more reads
+ * through the same runner: the work tree's patch and the index's against the
+ * base, their lines united (review/89), with every flag that config could turn
+ * pinned (`-U3`, `-W`, `--text`, no external diff, colour or textconv, fixed
+ * prefixes), each file section named by its place in the `-z` name list rather
+ * than by its header, plus every untracked file read whole as added lines, up
+ * to a total cap (review/94). A numstat read first leaves binaries out of the
+ * text read (review/87). A NUL byte in a file's first 8,000 bytes alone decides
  * binary; a tracked code file it marks is `unscanned`, so the class is at least
- * `product`. A failed line read keeps the path classes and says at least
- * `product`, never narrower.
+ * `product`. A failed line read keeps the path classes and makes the class
+ * `security-sensitive`, so the lens reads what no line rule could (review/87).
  *
  * **The tests a change selects** (REQ-FLOW-062) come from the base copy's
  * test-input map and the tracked test sources of the work tree, through
@@ -114,8 +116,8 @@ import type { GitRunner } from "../../workspace/git.ts";
  * "uncommitted"`); with one, everything since it (`scope: "since-base"`,
  * plan/56). A hit exits 1; so does a change it could not read, with `ok: false`
  * and the reason in place of the hits, so a failed read never exits 0. A
- * tracked code file the read cannot show is listed in `unscanned`, never read
- * as clean (plan/62); the exit stays 0 for it and the flows read the list.
+ * file the read cannot show is listed in `unscanned`, never read as clean
+ * (plan/62, review/94); the exit stays 0 for it and the flows read the list.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -311,8 +313,12 @@ function parsePatch(output: string, sections: readonly Section[]): PatchSection[
 
 /** The binary sniff reads this many bytes from a file's start (plan/62). */
 const SNIFF_BYTES = 8_000;
+/** A changed file's head is read this far: the sniff, and the classifier's shebang and import reads. */
+const HEAD_BYTES = 64 * 1024;
 /** An untracked file larger than this is not read (plan/19). */
 const UNTRACKED_MAX_BYTES = 1024 * 1024;
+/** The untracked reads stop at this many bytes in all; each file past it is unscanned, never read (review/94). */
+const UNTRACKED_TOTAL_BYTES = 16 * 1024 * 1024;
 
 /**
  * Up to `limit` bytes of a regular file, or `undefined` for anything else (a
@@ -338,6 +344,17 @@ function readRegular(file: string, limit: number, whole?: number): Buffer | unde
   }
 }
 
+/** Whether a file is regular and holds no NUL in its first {@link SNIFF_BYTES}: text by the one rule that decides (plan/62). */
+function readsAsText(file: string): boolean {
+  const start = readRegular(file, SNIFF_BYTES);
+  return start !== undefined && !start.includes(0);
+}
+
+/** Whether lines, joined, hold a NUL in their first {@link SNIFF_BYTES} characters. */
+function holdsNul(lines: readonly string[]): boolean {
+  return lines.join("\n").slice(0, SNIFF_BYTES).includes("\0");
+}
+
 /** The changed lines in project-relative hunks, and what the read could not show. */
 interface ChangeLines {
   hunks: Hunk[];
@@ -345,31 +362,108 @@ interface ChangeLines {
   skipped: number;
   /** Hunks left out because their file sits outside the project. */
   outside: number;
-  /** Tracked code files the sniff marks binary, so the read could not show them (plan/62). */
+  /**
+   * Files the read could not show (plan/62): tracked code files the sniff marks
+   * binary, and untracked files past the total read cap (review/94).
+   */
   unscanned: string[];
 }
 
+/** One `diff --numstat -z` row: its old and new names, and whether git printed `-` counts (a binary to git). */
+interface NumstatRow extends Rename {
+  binary: boolean;
+}
+
+/** `git diff --numstat -z` rows: `<added>\t<deleted>\t<path>`, or for a rename the two names in the next fields. */
+function parseNumstat(output: string): NumstatRow[] {
+  const fields = output.split("\0");
+  const rows: NumstatRow[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const field = fields[index] ?? "";
+    if (field === "") {
+      index += 1;
+      continue;
+    }
+    const row = /^(-|\d+)\t(-|\d+)\t([\s\S]*)$/.exec(field);
+    if (row === null) throw new GitReadError("diff --numstat", new Error("a row did not parse"), "");
+    const binary = row[1] === "-";
+    const path = row[3] ?? "";
+    if (path !== "") {
+      rows.push({ from: path, to: path, binary });
+      index += 1;
+      continue;
+    }
+    const from = fields[index + 1];
+    const to = fields[index + 2];
+    if (from === undefined || to === undefined) throw new GitReadError("diff --numstat", new Error("truncated row"), "");
+    rows.push({ from, to, binary });
+    index += 3;
+  }
+  return rows;
+}
+
+/** Which copy the patch reads against the base: the work tree's, or the index's (review/89). */
+type Side = "work tree" | "index";
+
+/** One side's read: its hunks, the section names it listed, and what it could not show. */
+interface SideRead {
+  hunks: Hunk[];
+  /** Top-level-relative names, each with the hunks left out because it sits outside the project. */
+  outside: Map<string, number>;
+  skipped: Set<string>;
+  unscanned: string[];
+}
+
+/** The flags every diff of the line read pins against config: no external diff, colour or textconv, every submodule. */
+const DIFF_PINS: readonly string[] = ["--no-relative", "--no-ext-diff", "--no-color", "--no-textconv", "--ignore-submodules=none"];
+
 /**
- * The patch against `commit` (staged and unstaged) and every untracked file,
- * as hunks under project-relative names (plan/59). `-U3` and
- * `--inter-hunk-context=0` pin the context whatever `diff.context` says;
- * `--text` keeps an attribute or a `binary` diff driver from hiding a code
- * file's lines; `--submodule=short` keeps a submodule one section. Section
- * names come from `sections`, the name list's order (plan/62).
+ * One side's patch against `commit`, as hunks under project-relative names.
+ *
+ * A `--numstat` read comes first (review/87): each file it shows as binary
+ * whose work-tree copy the NUL sniff also finds binary, or cannot read (a
+ * deletion), is left out of the text read by an exclude pathspec, so its bytes
+ * never reach the one bounded read; a code file left out is `unscanned`, any
+ * other `skipped`. Git's verdict only nominates: an attribute or a `binary`
+ * driver that hides a text file's lines from numstat never hides them here.
+ *
+ * The text read pins `-U3`, `-W` (the whole enclosing function as context, so
+ * a guard removed far from its call still shows the call, review/88) and
+ * `--inter-hunk-context=0` whatever `diff.context` says; `--text` keeps an
+ * attribute from hiding a code file's lines; `--submodule=short` keeps a
+ * submodule one section. Section names come from the name list in the same
+ * order (plan/62): `workSections` for the work tree when nothing is left out,
+ * else a name list read with the same pathspec.
  */
-function readLines(
+function readSide(
   runner: GitRunner,
   root: ProjectRoot,
   commit: string,
-  sections: readonly Section[],
-  untracked: readonly string[],
-  windows: boolean,
-): ChangeLines {
-  const patch = runGit(runner, root.dir, "diff --text", [
+  side: Side,
+  workSections: readonly Section[],
+  inside: (name: string) => string | null,
+): SideRead {
+  const staged = side === "index" ? ["--staged"] : [];
+  const label = side === "index" ? "diff --staged" : "diff";
+  const numstat = parseNumstat(
+    runGit(runner, root.dir, `${label} --numstat`, ["diff", ...staged, "--numstat", "-M", "-z", ...DIFF_PINS, commit, "--"]),
+  );
+  const binaries = numstat.filter((row) => row.binary && !readsAsText(join(root.topLevel, row.to)));
+  const pathspec = [...new Set(binaries.flatMap((row) => [row.from, row.to]))].map((name) => `:(top,literal,exclude)${name}`);
+  const sections =
+    side === "work tree" && pathspec.length === 0
+      ? workSections
+      : parseNameStatus(
+          runGit(runner, root.dir, `${label} --name-status`, ["diff", ...staged, "--name-status", "-M", "-z", ...DIFF_PINS, commit, "--", ...pathspec]),
+        ).sections;
+  const patch = runGit(runner, root.dir, `${label} --text`, [
     "-c",
     "core.quotePath=false",
     "diff",
+    ...staged,
     "-U3",
+    "-W",
     "-M",
     "--text",
     "--no-relative",
@@ -385,44 +479,105 @@ function readLines(
     "--ignore-submodules=none",
     commit,
     "--",
+    ...pathspec,
   ]);
-  const read: ChangeLines = { hunks: [], skipped: 0, outside: 0, unscanned: [] };
-  const inside = (name: string): string | null =>
-    toProjectPath(root.prefix, name) ?? (windows ? toProjectPath(root.prefix, name.replaceAll("\\", "/")) : null);
-  const holdsNul = (lines: readonly string[]): boolean => lines.join("\n").slice(0, SNIFF_BYTES).includes("\0");
+  const read: SideRead = { hunks: [], outside: new Map(), skipped: new Set(), unscanned: [] };
+  const notRead = (name: string, path: string | null, hunks: number): void => {
+    if (path === null) read.outside.set(name, (read.outside.get(name) ?? 0) + hunks);
+    else if (hasCodeExtension(path)) read.unscanned.push(path);
+    else read.skipped.add(path);
+  };
+  for (const row of binaries) notRead(row.to, inside(row.to), 1);
   parsePatch(patch, sections).forEach((section, index) => {
     const name = sections[index]?.to ?? "";
     const path = inside(name);
     if (path === null) {
-      read.outside += section.hunks.length;
+      notRead(name, null, section.hunks.length);
       return;
     }
-    // The head side: the work-tree file, or for a deletion or a non-regular file the section's own lines.
-    const head = section.deleted ? undefined : readRegular(join(root.topLevel, name), SNIFF_BYTES);
-    const sniffed = section.hunks.flatMap((hunk) => (section.deleted ? hunk.removed : hunk.added.map((line) => line.text)));
-    if (section.unshown || (head === undefined ? holdsNul(sniffed) : head.includes(0))) {
-      if (hasCodeExtension(path)) read.unscanned.push(path);
-      else read.skipped += 1;
+    // The head side: the work-tree file (standing in for the index's copy too), or a deletion's removed lines.
+    const file = section.deleted ? undefined : readRegular(join(root.topLevel, name), HEAD_BYTES);
+    const lines = section.hunks.flatMap((hunk) => (section.deleted ? hunk.removed : hunk.added.map((line) => line.text)));
+    const sniffed = side === "work tree" ? file : undefined;
+    if (section.unshown || (sniffed === undefined ? holdsNul(lines) : sniffed.subarray(0, SNIFF_BYTES).includes(0))) {
+      notRead(name, path, section.hunks.length);
       return;
     }
-    for (const hunk of section.hunks) read.hunks.push({ path, ...hunk });
+    const head = file !== undefined ? file.toString("utf8") : section.deleted ? lines.join("\n").slice(0, HEAD_BYTES) : undefined;
+    for (const hunk of section.hunks) read.hunks.push({ path, ...hunk, ...(head === undefined ? {} : { head }) });
   });
+  return read;
+}
+
+/**
+ * The change's lines against `commit` (plan/59): the work tree's patch and the
+ * index's, united (review/89), so a staged line the work tree has since
+ * reverted is read as `git commit` would record it, plus every untracked file
+ * read whole as added lines, up to {@link UNTRACKED_TOTAL_BYTES} in all
+ * (review/94). An index line the work tree also adds to that file is read once,
+ * from the work tree; an index hunk left with nothing new is dropped.
+ */
+function readLines(
+  runner: GitRunner,
+  root: ProjectRoot,
+  commit: string,
+  sections: readonly Section[],
+  untracked: readonly string[],
+  windows: boolean,
+): ChangeLines {
+  const inside = (name: string): string | null =>
+    toProjectPath(root.prefix, name) ?? (windows ? toProjectPath(root.prefix, name.replaceAll("\\", "/")) : null);
+  const work = readSide(runner, root, commit, "work tree", sections, inside);
+  const index = readSide(runner, root, commit, "index", sections, inside);
+
+  const seen = (pick: (hunk: Hunk) => readonly string[]): Map<string, Set<string>> => {
+    const byPath = new Map<string, Set<string>>();
+    for (const hunk of work.hunks) for (const text of pick(hunk)) byPath.set(hunk.path, (byPath.get(hunk.path) ?? new Set()).add(text));
+    return byPath;
+  };
+  const workAdded = seen((hunk) => hunk.added.map((line) => line.text));
+  const workRemoved = seen((hunk) => hunk.removed);
+  const indexOnly = index.hunks.flatMap((hunk): Hunk[] => {
+    const added = hunk.added.filter((line) => workAdded.get(hunk.path)?.has(line.text) !== true);
+    const removedAnew = hunk.removed.some((text) => workRemoved.get(hunk.path)?.has(text) !== true);
+    return added.length === 0 && !removedAnew ? [] : [{ ...hunk, added }];
+  });
+
+  const hunks = [...work.hunks, ...indexOnly];
+  const skipped = new Set([...work.skipped, ...index.skipped]);
+  const unscanned = [...work.unscanned, ...index.unscanned];
+  let outside = [...work.outside.values(), ...[...index.outside].filter(([name]) => !work.outside.has(name)).map(([, count]) => count)].reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  let untrackedBytes = 0;
   for (const name of untracked) {
     const path = inside(name);
     if (path === null) {
-      read.outside += 1;
+      outside += 1;
+      continue;
+    }
+    if (untrackedBytes >= UNTRACKED_TOTAL_BYTES) {
+      unscanned.push(path);
       continue;
     }
     const body = readRegular(join(root.topLevel, name), UNTRACKED_MAX_BYTES, UNTRACKED_MAX_BYTES);
     if (body === undefined || body.subarray(0, SNIFF_BYTES).includes(0)) {
-      read.skipped += 1;
+      skipped.add(path);
       continue;
     }
-    const lines = body.toString("utf8").split("\n");
+    if (untrackedBytes + body.length > UNTRACKED_TOTAL_BYTES) {
+      untrackedBytes = UNTRACKED_TOTAL_BYTES;
+      unscanned.push(path);
+      continue;
+    }
+    untrackedBytes += body.length;
+    const text = body.toString("utf8");
+    const lines = text.split("\n");
     if (lines.at(-1) === "") lines.pop();
-    read.hunks.push({ path, added: lines.map((text, at) => ({ line: at + 1, text })), removed: [], context: [] });
+    hunks.push({ path, added: lines.map((line, at) => ({ line: at + 1, text: line })), removed: [], context: [], head: text.slice(0, HEAD_BYTES) });
   }
-  return { ...read, unscanned: [...new Set(read.unscanned)] };
+  return { hunks, skipped: skipped.size, outside, unscanned: [...new Set(unscanned)] };
 }
 
 /** What the git read hands the classifier, in project-relative paths. */
@@ -766,8 +921,9 @@ function applyReadFloors(result: ClassifyResult, change: ChangeRead, source: Pat
     raised = raiseTo(raised, "product");
   }
   if ("failed" in change.lines) {
-    reasons.push(`the changed lines could not be read (${change.lines.failed}), so the class is at least product`);
-    raised = raiseTo(raised, "product");
+    // review/87: no line rule could read the lines, so the lens reads them instead.
+    reasons.push(`the changed lines could not be read (${change.lines.failed}), so the class is security-sensitive and its lens reads them`);
+    raised = raiseTo(raised, "security-sensitive");
   } else if (change.lines.skipped > 0) {
     const { skipped } = change.lines;
     reasons.push(`${skipped} changed file${skipped === 1 ? "" : "s"} not read line by line (binary, over 1 MiB, or not a regular file)`);

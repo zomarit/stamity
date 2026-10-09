@@ -31,10 +31,14 @@ const TOP_MD_GLOB = ["*", "md"].join(".");
  * output are out of a unit test's reach, the reason each produces is not.
  */
 
-/** The verb's git calls (the runner's `-c safe.bareRepository=explicit` marks them), and one planted failure. */
+/**
+ * The verb's git calls (the runner's `-c safe.bareRepository=explicit` marks them), one planted failure, and one
+ * planted rewrite of a call's real output (review/91: a patch git would never print, to reach the walk's refusals).
+ */
 const gitSpy = vi.hoisted(() => ({
   calls: [] as string[][],
   fault: undefined as { step: string; error: unknown } | undefined,
+  rewrite: undefined as { step: string; map: (output: string) => string } | undefined,
 }));
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -50,6 +54,11 @@ vi.mock("node:child_process", async (importOriginal) => {
         if (fault !== undefined && argv.includes(fault.step)) {
           gitSpy.fault = undefined;
           throw fault.error;
+        }
+        const { rewrite } = gitSpy;
+        if (rewrite !== undefined && argv.includes(rewrite.step)) {
+          gitSpy.rewrite = undefined;
+          return rewrite.map(String(original(...args)));
         }
       }
       return original(...args);
@@ -1315,7 +1324,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(doc["class"]).toBe("product");
       expect(ruleOf(doc, "src/x.ts")).toBe("unplaced");
-      expect(doc["reason"]).toContain("1 tracked code file the read could not show is unscanned, so the class is at least product: src/x.ts");
+      // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/94 (signed off): untracked files past
+      // the total read cap are unscanned too, of any type, so the clause says "changed file", not "tracked code file".
+      expect(doc["reason"]).toContain("1 changed file the read could not show is unscanned, so the class is at least product: src/x.ts");
       expect(doc["reason"]).toContain("1 changed file not read line by line (binary, over 1 MiB, or not a regular file)");
     });
 
@@ -1345,21 +1356,29 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).not.toContain("could not be read");
     });
 
-    it.each([
-      ["docs/a.md", "product"],
-      [".stamity/manifest.json", "security-sensitive"],
-    ])("keeps the path class of %s and says at least product when the line read fails", async (path, cls) => {
-      const repo = await seedRepo("repo", { [path]: "{}\n" });
-      await getRoot().seedFiles({ [`repo/${path}`]: '{"changed":true}\n' });
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/87 (signed off): a failed line read
+     * raised the class to at least product, so docs/a.md read product and no security lens ran. The rules could not
+     * read the lines, so the class is now security-sensitive and the lens reads them; the paths read still stand.
+     */
+    it.each([["docs/a.md"], [".stamity/manifest.json"]])(
+      "keeps the paths of %s and says security-sensitive when the line read fails",
+      async (path) => {
+        const repo = await seedRepo("repo", { [path]: "{}\n" });
+        await getRoot().seedFiles({ [`repo/${path}`]: '{"changed":true}\n' });
 
-      gitSpy.fault = { step: "--text", error: realFailure("process.exit(3)") };
-      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
-      gitSpy.fault = undefined;
+        gitSpy.fault = { step: "--text", error: realFailure("process.exit(3)") };
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+        gitSpy.fault = undefined;
 
-      expect(doc["class"]).toBe(cls);
-      expect(doc["paths"]).toEqual([path]);
-      expect(doc["reason"]).toContain("the changed lines could not be read (git diff --text failed, exit 3), so the class is at least product");
-    });
+        expect(doc["class"]).toBe("security-sensitive");
+        expect(doc["lenses"]).toContain("stamity-security");
+        expect(doc["paths"]).toEqual([path]);
+        expect(doc["reason"]).toContain(
+          "the changed lines could not be read (git diff --text failed, exit 3), so the class is security-sensitive",
+        );
+      },
+    );
 
     it.skipIf(process.platform === "win32")("reads a quoted name by its real name, from the project in app/", async () => {
       const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", 'app/a"b.ts': "export {};\n" });
@@ -1392,6 +1411,125 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(read).toEqual(
         expect.arrayContaining(["core.quotePath=false", "-U3", "-M", "--no-relative", "--no-ext-diff", "--no-color", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--inter-hunk-context=0", "--submodule=short", "--ignore-submodules=none"]),
       );
+      // review/88: function context, so a guard removed far from its call still shows the call.
+      expect(read).toContain("-W");
+    });
+
+    // review/88: the read carries the whole enclosing function as context, so removing a guard far above the call hits.
+    it("reads the call of a guard removed more than three lines above it, as function context", async () => {
+      const far = (guarded: boolean): string =>
+        built(
+          `export function clean(dir: string): void {\n${guarded ? "  if (!dir.startsWith(root)) return;\n" : ""}` +
+            "  const a = 1;\n  const b = 2;\n  const c = 3;\n  const d = 4;\n  const e = 5;\n  rm~Sync(dir);\n}\n",
+        );
+      const repo = await seedRepo("repo", { "src/x.ts": far(true) });
+      await getRoot().seedFiles({ "repo/src/x.ts": far(false) });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts, a context line of a hunk that removes one");
+    });
+
+    // review/89: the index and the work tree are both read, so a staged line the work tree has since reverted counts.
+    it("hits a staged line the work tree has reverted, and reads a line staged and unchanged once", async () => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", "src/y.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/x.ts": `export {};\n${RM}`, "repo/src/y.ts": `export {};\n${RM}` });
+      git(repo, ["add", "--", "src/x.ts", "src/y.ts"]);
+      await getRoot().seedFiles({ "repo/src/x.ts": "export {};\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts:2");
+      expect(ruleOf(doc, "src/y.ts")).toBe("line rule delete-or-overwrite at src/y.ts:2");
+      // Read once: the index's copy of the line is the work tree's, so the hits name src/y.ts one time.
+      expect(doc["reason"]).toContain("the security line rules hit: delete-or-overwrite at src/y.ts:2, delete-or-overwrite at src/x.ts:2;");
+    });
+
+    // review/87: a binary git's numstat finds is left out of the text read by an exclude pathspec, so its bytes never
+    // reach the one bounded read; a code file it finds and the NUL sniff confirms is unscanned.
+    it("leaves a binary out of the text read, counted, and still reads the code beside it", async () => {
+      const repo = await seedRepo("repo", { "assets/a.bin": "a\0\n", "src/b.ts": "export {};\n", "src/c.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/assets/a.bin": "a\0b\n", "repo/src/b.ts": `export {};\n${RM}`, "repo/src/c.ts": "\0\n" });
+
+      gitSpy.calls.length = 0;
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+      const workRead = gitSpy.calls.find((argv) => argv.includes("--text"));
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/b.ts")).toBe("line rule delete-or-overwrite at src/b.ts:2");
+      expect(doc["reason"]).toContain("1 changed file the read could not show is unscanned, so the class is at least product: src/c.ts");
+      expect(doc["reason"]).toContain("1 changed file not read line by line");
+      // The first is the work tree's read; the index holds no change here, so its read leaves nothing out.
+      expect(workRead).toEqual(expect.arrayContaining([":(top,literal,exclude)assets/a.bin", ":(top,literal,exclude)src/c.ts"]));
+    });
+
+    // review/91: each refusal of the patch walk fails the read closed, never as an empty read.
+    it.each([
+      ["more sections than the name list", (out: string) => `${out}diff --git a/z.ts b/z.ts\n`, "the patch holds more sections than the name list"],
+      ["a header naming another file", (out: string) => out.replace("diff --git a/src/x.ts b/src/x.ts", "diff --git a/src/y.ts b/src/y.ts"), "a patch section's header does not name the file the name list gives in its place"],
+      ["a hunk header that does not parse", (out: string) => out.replace(/^@@ .*$/m, "@@ nonsense @@"), "a hunk header did not parse"],
+      ["a hunk cut short", (out: string) => out.replace(/\+const a = 1;\n$/, ""), "a hunk ended before its header's line counts"],
+      ["a line its counts do not allow", (out: string) => out.replace("+const a = 1;", " const a = 1;"), "a hunk line does not fit its header's line counts"],
+      ["fewer sections than the name list", () => "", "the patch holds fewer sections than the name list"],
+    ])("fails the line read closed on %s", async (_label, map, message) => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/x.ts": "export {};\nconst a = 1;\n" });
+
+      gitSpy.rewrite = { step: "--text", map };
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+      gitSpy.rewrite = undefined;
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["reason"]).toContain(`the changed lines could not be read (${message}), so the class is security-sensitive`);
+    });
+
+    // review/91: a rename's section is named by its new side, and its header is checked against both names.
+    it("names a hit in a renamed file by its new name", async () => {
+      const body = Array.from({ length: 8 }, (_, at) => `export const v${at} = ${at};\n`).join("");
+      const repo = await seedRepo("repo", { "src/a.ts": body });
+      git(repo, ["mv", "src/a.ts", "src/b.ts"]);
+      await getRoot().seedFiles({ "repo/src/b.ts": `${body}${RM}` });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/b.ts")).toBe("line rule delete-or-overwrite at src/b.ts:9");
+      expect(doc["reason"]).not.toContain("could not be read");
+    });
+
+    // review/94: the untracked reads stop at a total byte cap; every file past it is unscanned, never read.
+    it("counts untracked files past the total read cap as unscanned", async () => {
+      const filler = `${"x".repeat(1023)}\n`.repeat(1023);
+      const files = Object.fromEntries(Array.from({ length: 17 }, (_, at) => [`repo/data/f${String(at).padStart(2, "0")}.txt`, filler]));
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ ...files, "repo/src/z.ts": RM });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("product");
+      expect(ruleOf(doc, "src/z.ts")).toBe("unplaced");
+      expect(doc["reason"]).toContain("2 changed files the read could not show are unscanned, so the class is at least product: data/f16.txt, src/z.ts");
+    });
+
+    // review/86, build/52 through the read: the file's head names the child_process module, and a shebang makes code.
+    it("hits exec on the module's name from the file's unchanged head, and reads a node script by its shebang", async () => {
+      // The import sits further above the added call than any context the read carries, so only the head names it.
+      const pad = Array.from({ length: 5 }, (_, at) => `export const p${at} = ${at};\n`).join("");
+      const head = built(`import * as run from "node:child~_process";\n${pad}`);
+      const repo = await seedRepo("repo", { "src/x.ts": head });
+      await getRoot().seedFiles({
+        "repo/src/x.ts": `${head}${built("run.ex~ec(cmd);\n")}`,
+        "repo/bin/tool": `#!/usr/bin/env node\n${RM}`,
+        "repo/bin/clean.sh": built("#!/bin/sh\nr~m -rf build\n"),
+      });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(ruleOf(doc, "src/x.ts")).toBe("line rule process-spawn at src/x.ts:7");
+      expect(ruleOf(doc, "bin/tool")).toBe("line rule delete-or-overwrite at bin/tool:2");
+      expect(doc["reason"]).toContain("read by no line rule, as none covers its language: bin/clean.sh");
     });
   });
 
@@ -1541,6 +1679,19 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         scope: "since-base",
         hits: [{ path: "src/a.ts", line: 2, rule: "github-token" }],
       });
+    });
+
+    // review/89: the scan reads the index too, so a staged token the work tree has reverted still stops it.
+    it("finds a staged token the work tree has since reverted", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+      git(repo, ["add", "--", "src/a.ts"]);
+      await getRoot().seedFiles({ "repo/src/a.ts": "export {};\n" });
+
+      const { code, doc } = await gateIn(repo, ["scan", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "src/a.ts", line: 2, rule: "github-token" }]);
     });
 
     it("finds a token in a tracked code file a committed -diff attribute marks binary", async () => {
