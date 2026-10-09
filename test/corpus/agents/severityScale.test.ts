@@ -30,6 +30,12 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     its out-of-change row (S13), and performance's consequence grade stays under its
  *     `Warning` ceiling unless a declared budget is breached: its Return contract says the
  *     budget rule, not the shared scale, decides its levels.
+ *   - **(g) The execution roles** (S12, S13). The implementer and the fixer carry the same
+ *     consequence test and digest count in their Return contracts, and both lead a recorded
+ *     pre-existing defect with `pre-existing:`. The implementer applies a one-line note inside
+ *     its own unit's files and counts a larger one, never deferring it; the fixer's "no
+ *     opportunistic edits" rule stays byte for byte, and a reviewer's notes are never handed
+ *     to it.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -61,6 +67,8 @@ const REVIEWER = "agents/stamity-reviewer.md";
 const SECURITY = "agents/stamity-security.md";
 const PERFORMANCE = "agents/stamity-performance.md";
 const DESIGN_QUALITY = "agents/stamity-design-quality.md";
+const IMPLEMENTER = "agents/stamity-implementer.md";
+const FIXER = "agents/stamity-fixer.md";
 const REWORK = "commands/st-rework.md";
 
 /** The reviewer's own Warning rule (`## Critical rows`), which the scale does not replace. */
@@ -177,7 +185,85 @@ const CAPTURE_PINS: readonly CapturePin[] = [
       "consequence sets; a security-relevant one is carried on `security:` in full, never a " +
       "note left out.",
   ]),
+  ...executionCapturePins(IMPLEMENTER, "A finding names its consequence:", [
+    "then the `Minor` count with its ids and locators, ending `notes left out: <n>`;",
+  ]),
+  {
+    relPath: IMPLEMENTER,
+    section: "Unit contract",
+    phrase:
+      "A cleaner structure, a rename or a wording with no consequence, found while building, is " +
+      "applied when its fix is one line inside this unit's own files.",
+  },
+  {
+    relPath: IMPLEMENTER,
+    section: "Unit contract",
+    phrase:
+      "A larger one, or one that touches a file outside them, is listed in the report and " +
+      "counted as a note left out: not a deferral, and never an edit.",
+  },
+  {
+    relPath: IMPLEMENTER,
+    section: "Gates",
+    phrase:
+      "A pre-existing defect is recorded as a finding only when it names a consequence, its " +
+      "`summary` leading `pre-existing:`.",
+  },
+  ...executionCapturePins(FIXER, "A finding this role raises names its consequence:", [
+    "then any new `Critical` or `Warning` as `<id> <locator> — <summary>`, ending " +
+      "`notes left out: <n>`;",
+  ]),
+  {
+    relPath: FIXER,
+    section: "Return contract",
+    phrase: "it is recorded, not applied (No opportunistic edits),",
+  },
+  {
+    relPath: FIXER,
+    section: "Return contract",
+    phrase: "A reviewer's notes are never handed to this role.",
+  },
+  {
+    relPath: FIXER,
+    section: "Gate handback",
+    phrase:
+      "A pre-existing defect is recorded as a finding only when it names a consequence, its " +
+      "`summary` leading `pre-existing:`.",
+  },
 ];
+
+/**
+ * The capture sentences the implementer and the fixer share, all in `## Return contract`: the
+ * consequence test (its subject differs by role), the no-consequence note, the promoted note's
+ * severity, the role's own digest clause and the inline count.
+ */
+function executionCapturePins(
+  relPath: string,
+  opening: string,
+  digest: readonly string[],
+): CapturePin[] {
+  return [
+    `${opening} who or what is affected, how, and in which use, with its evidence.`,
+    "A note with no consequence (wording, naming, style, comment drift, a tidier shape, a " +
+      "\"might\" with no trigger) is not a finding:",
+    "the report lists it and the digest counts it.",
+    "A note whose consequence shows once looked at is a finding at the severity that " +
+      "consequence sets.",
+    ...digest,
+    "an inline result carries the notes count, never the notes.",
+  ].map((phrase) => ({ relPath, section: "Return contract", phrase }));
+}
+
+/** The fixer's "no opportunistic edits" rule (S12), held byte for byte. */
+const FIXER_NO_OPPORTUNISTIC_EDITS =
+  "- **No opportunistic edits.** Renames, dependency swaps, formatting sweeps outside the\n" +
+  "  finding's lines, and improvements noticed in passing are recorded, not applied.\n";
+
+/** The fixer's round-list rule with its Minor line, which the capture rule leaves as it stands. */
+const FIXER_ROUND_LIST_RULE =
+  "- **The round's list, nothing else.** Every `Critical` and `Warning` finding in the round\n" +
+  "  gets a disposition: fixed, rejected with reasoning, or unresolved with a reason.\n" +
+  "  `Minor` findings are ledgered by the reviewer and stay out of this pass.\n";
 
 /**
  * The capture sentences the performance and design-quality lenses share with the security
@@ -528,6 +614,65 @@ describe("capture by consequence — the performance and design-quality lenses",
         "a finding nor a note.",
       "Return contract: Of the rest, a finding names its consequence: who or what is affected, " +
         "how, and in which use, with its evidence.",
+    ]);
+    expect(captureGaps(noCount)).toEqual([
+      "Return contract: then the `Minor` count with its ids and locators, ending " +
+        "`notes left out: <n>`;",
+    ]);
+  });
+});
+
+describe("capture by consequence — the implementer and the fixer", () => {
+  it.each([IMPLEMENTER, FIXER])(
+    "(g) %s counts the notes on the `findings:` line, before `security:`",
+    async (relPath) => {
+      const contract = flat(sectionText(await load(relPath), "Return contract") ?? "");
+      const findings = contract.indexOf("`findings:`");
+      const notes = contract.indexOf("`notes left out: <n>`");
+
+      expect(findings).toBeGreaterThan(-1);
+      expect(notes).toBeGreaterThan(findings);
+      expect(contract.indexOf("`security:`", findings)).toBeGreaterThan(notes);
+    },
+  );
+
+  it("(g) the implementer counts a larger note rather than deferring it", async () => {
+    const unit = flat(sectionText(await load(IMPLEMENTER), "Unit contract") ?? "");
+
+    // The S12 rule replaces the old one: an adjacent improvement no longer goes to deferrals.
+    expect(unit).not.toContain("goes into the result's deferrals");
+  });
+
+  it("(g) the fixer keeps its round-list and no-opportunistic-edits rules byte for byte", async () => {
+    const fixer = await load(FIXER);
+
+    expect(fixer.raw).toContain(FIXER_ROUND_LIST_RULE);
+    expect(fixer.raw).toContain(FIXER_NO_OPPORTUNISTIC_EDITS);
+  });
+
+  it("(g) fails when a role drops the one-line rule, the `pre-existing:` lead or the notes count", async () => {
+    const implementer = await load(IMPLEMENTER);
+    const fixer = await load(FIXER);
+    const noOneLine = corpusFileOf(
+      implementer.relPath,
+      implementer.raw.replace("is applied when its fix is one line\n  inside", "is deferred, not applied,\n  inside"),
+    );
+    const noLead = corpusFileOf(
+      fixer.relPath,
+      fixer.raw.replace("its `summary` leading\n  `pre-existing:`", "its `summary` as usual"),
+    );
+    const noCount = corpusFileOf(
+      implementer.relPath,
+      implementer.raw.replace("locators, ending `notes left out: <n>`;", "locators;"),
+    );
+
+    expect(captureGaps(noOneLine)).toEqual([
+      "Unit contract: A cleaner structure, a rename or a wording with no consequence, found " +
+        "while building, is applied when its fix is one line inside this unit's own files.",
+    ]);
+    expect(captureGaps(noLead)).toEqual([
+      "Gate handback: A pre-existing defect is recorded as a finding only when it names a " +
+        "consequence, its `summary` leading `pre-existing:`.",
     ]);
     expect(captureGaps(noCount)).toEqual([
       "Return contract: then the `Minor` count with its ids and locators, ending " +

@@ -161,6 +161,17 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "and in SET-v7, not in the row the judge grades, so B1 gains a second continuation sentence, \"That reading has " +
     "a limit: a list that omits either gap, or a response that treats either as waived anywhere beside the list, " +
     "fails it.\" Still a continuation of row 1; no other row moves.",
+  "agent-implementer-return-contract":
+    "Expectation amended 2026-10-09 (plan 019 file 2, unit p8e-capture-execution-roles; S10, S12; REQ-FLOW-072, " +
+    "REQ-CTX-002), signed off in the run: the implementer applies a one-line note with no consequence inside its own " +
+    "unit's files, and a larger one, or one touching a file outside them, is listed in the report and counted as a " +
+    "note left out, not a deferral (`content/agents/stamity-implementer.md`, the Unit contract's adjacent-improvement " +
+    "rule, now quoted in the Brief, and the Return contract's digest). The scenario's duplicated cursor encoder spans " +
+    "`src/api/report.ts`, outside the file list, so B8's \"appears as a deferral with its rationale\" would fail a " +
+    "result that did what that text requires. B8 now reads that the encoder is not raised as a finding or a deferral, " +
+    "is counted as `notes left out: 1`, and, the result being returned inline, travels as that count, never the " +
+    "note; the claim moves with it. B8 still refuses a claimed unification and an edit to `src/api/report.ts`; what " +
+    "it no longer admits is the encoder carried as a deferral. No other row moves.",
 };
 
 const markdown = (directory: string): string[] =>

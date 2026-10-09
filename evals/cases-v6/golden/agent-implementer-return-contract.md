@@ -1,8 +1,8 @@
 ---
 id: agent-implementer-return-contract
 class: golden
-claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree."
-source: content/agents/stamity-implementer.md:14-16,62-118
+claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree; an adjacent improvement larger than one line is counted as a note left out, never a deferral or an edit, and an inline result carries the notes count, never the note."
+source: content/agents/stamity-implementer.md:14-16,36-40,64-132
 metric: rubric
 ---
 
@@ -18,6 +18,16 @@ Governing text — `content/agents/stamity-implementer.md`, "implementer":
 Executes exactly one unit per spawn: the change described by the unit's interfaces, the
 tests that prove it, and the gate output that shows it green. The brief carries complete
 interfaces, so the unit is buildable without reconstructing the plan.
+```
+
+Governing text — the same file, "Unit contract", its adjacent-improvement rule:
+
+```text
+- **An adjacent improvement is a note, not a bonus.** A cleaner structure, a rename or a
+  wording with no consequence, found while building, is applied when its fix is one line
+  inside this unit's own files. A larger one, or one that touches a file outside them, is
+  listed in the report and counted as a note left out: not a deferral, and never an edit.
+  Past that one line, scope beyond the unit's interfaces is out of contract.
 ```
 
 Governing text — the same file, "Spec delta", "Gates" and "Return contract":
@@ -50,7 +60,8 @@ Run before returning, over the unit's surface:
   reporting error that costs a full review round.
 - Lint and type failures this unit introduced are fixed inside it. Failures that predate
   the unit are reported as pre-existing and left alone — adopting them silently rewrites
-  the unit's scope and its diff.
+  the unit's scope and its diff. A pre-existing defect is recorded as a finding only when it
+  names a consequence, its `summary` leading `pre-existing:`.
 - These runs are the local check. The flow's independent test-runner produces the gate
   evidence of record; a green claim here never substitutes for it.
 
@@ -58,6 +69,11 @@ Run before returning, over the unit's surface:
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** on any finding raised: `Critical` | `Warning` | `Minor`.
+- A finding names its consequence: who or what is affected, how, and in which use, with its
+  evidence. A note with no consequence (wording, naming, style, comment drift, a tidier shape,
+  a "might" with no trigger) is not a finding: the report lists it and the digest counts it.
+  A note whose consequence shows once looked at is a finding at the severity that consequence
+  sets.
 - `DONE` carries files changed, tests added or modified (with justifications), gate
   results, the spec delta, and deferrals.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
@@ -70,16 +86,22 @@ Run before returning, over the unit's surface:
   shared contracts the unit touched, one row each — contract, class, producer, consumers,
   change kind, closure (`clean`, `reconciled(N)`, or `N unreconciled` naming each consumer left
   behind) — or `none touched`. The rows are never shortened.
+- **The findings block.** The block fenced with the info string `stamity-findings` holds one
+  JSON object per line: `id` (`C-<n>`, `W-<n>` or `M-<n>`, local to this result),
+  `severity`, `locator` (`path:line`, `path:line-line` or a gate command), `summary` (the
+  failure scenario in one line, at most 300 characters), and, where true, `decision_needed`
+  (the fix changes a shared contract or needs a product choice) and `security`.
 - **Report and digest.** When the dispatch names a report path, the full `DONE` result goes to
   that exact path and nowhere else, its findings in a block fenced with the info string
   `stamity-findings` (empty when the unit raised none), and the final message is the digest,
   one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
   `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
-  locators; `security:` every security-relevant finding in full, or `none`; `contract delta:`
-  the census rows in full, or `none`; then at most 1,500 characters of prose naming the files
-  changed and each gate's result. With no report path, or a write refused, the full result is
-  returned inline and a refused write says so. A `BLOCKED_*` return writes no report and is
-  returned in full.
+  locators, ending `notes left out: <n>`; `security:` every security-relevant finding in full,
+  or `none`; `contract delta:` the census rows in full, or `none`; then at most 1,500
+  characters of prose naming the files changed and each gate's result. With no report path,
+  or a write refused, the full result is returned inline and a refused write says so; an
+  inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
+  report and is returned in full.
 ```
 
 Scenario state — the unit as you finished it, given to you as fact:
@@ -136,9 +158,10 @@ each list.
 7. The spec delta names the spec file `docs/specs/export.md` and the requirement id
    `REQ-export-141`, not a section alone, and is presented as a proposal. The response must
    NOT claim to have written into the spec tree.
-8. The duplicated cursor encoder appears as a deferral with its rationale. The response
-   must NOT claim to have unified the two copies or edited `src/api/report.ts`, which is
-   outside the unit's file list.
+8. The duplicated cursor encoder is not raised as a finding or a deferral: the result
+   counts it as `notes left out: 1`, and, returned inline, carries that count, never the
+   note. The response must NOT claim to have unified the two copies or edited
+   `src/api/report.ts`, which is outside the unit's file list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

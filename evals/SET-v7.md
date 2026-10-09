@@ -1,4 +1,4 @@
-# Eval set v7 — v6's scoring rule and thresholds, unchanged; cases-v6 carries v5's 78 cases, 66 with their `## Expected` block byte-identical and twelve moved by reviewed dispositions, two amendments or re-syncs to the landed corpus (recorded below), plus the cases this version adds (index below)
+# Eval set v7 — v6's scoring rule and thresholds, unchanged; cases-v6 carries v5's 78 cases, 65 with their `## Expected` block byte-identical and thirteen moved by reviewed dispositions, three amendments or re-syncs to the landed corpus (recorded below), plus the cases this version adds (index below)
 
 v7 changes inputs, not the rule. The scoring rule, the four metric names and their
 numbers, the run-artifact contract, the hard triggers and the non-negotiable appendix are
@@ -7,7 +7,7 @@ otherwise: on 2026-10-08 hard trigger 2 and § 8's comparator sentence moved wit
 release rule (REQ-PROVE-033). Two inputs move. The case directory is
 now `evals/cases-v6/**`; every carried case's frontmatter id, class, metric and floor tag are
 identical to `cases-v5`'s, and its `## Expected` block too unless a reviewed disposition or
-amendment moved it (twelve cases, each with an `EXPECTED_MOVES` row), enforced by
+amendment moved it (thirteen cases, each with an `EXPECTED_MOVES` row), enforced by
 `test/evals/successorInputs.test.ts` — that gate compares only those four frontmatter keys
 and the `## Expected` block, and eight carried cases had their `source:` range and/or Brief
 text moved with the corpus tonight (named in "What v7 adds" below), which the gate does not
@@ -40,8 +40,8 @@ design. New artifacts still need a case or an explicit reviewed exemption.
 
 ## Versioned inputs
 
-- Current cases: `evals/cases-v6/**` (66 carried cases with their `## Expected` block
-  byte-identical to v5's, twelve moved by reviewed dispositions, two amendments or the
+- Current cases: `evals/cases-v6/**` (65 carried cases with their `## Expected` block
+  byte-identical to v5's, thirteen moved by reviewed dispositions, three amendments or the
   2026-09-30 re-syncs to the landed corpus; eight carried
   `source:` ranges/Briefs moved at the cutover, more by the 2026-09-15 repairs, and
   thirteen more by the 2026-09-23 orchestrator-context edits, three of those ranges again on
@@ -1047,6 +1047,37 @@ B7's grading holds. `EXPECTED_MOVES` gains no row, its claim and case-index cell
 no roster count moves. Under the incremental rule the case re-measures, because its case-file bytes
 moved. The dated citations above stay as they were.
 
+**Three execution-role ranges moved, three Briefs re-quoted and one Expected block moved,
+2026-10-09 (plan 019 file 2, unit `p8e-capture-execution-roles`).** The implementer and the fixer
+record a finding only when it names a consequence; a note with none is listed in the report and
+counted as `notes left out: <n>` on the digest's `findings:` line, an inline result carries the
+count, never the notes, and a recorded pre-existing defect leads its `summary` with
+`pre-existing:`. The implementer applies a one-line note inside its own unit's files and counts a
+larger one rather than deferring it; the fixer records a note and never applies it, and is never
+handed a reviewer's notes. The implementer and the spec-author spell the `stamity-findings` fence's
+grammar as the reviewer states it. In `content/agents/stamity-implementer.md` the Unit contract's
+adjacent-improvement rule is rewritten (+2 lines), the Gates bullet on failures that predate the
+unit gains the `pre-existing:` lead (+1), and the Return contract gains the capture bullet (+5) and
+the findings-block bullet (+5), its digest the count and the inline rule (+1). In
+`content/agents/stamity-fixer.md` the Gate handback gains the lead (+2) and the Return contract the
+capture bullet (+6) and the count (+1); its round-list and no-opportunistic-edits rules do not move.
+`content/agents/stamity-spec-author.md` gains the findings-block bullet (+5); its digest does not
+move. `agent-implementer-return-contract` moves 14-16,62-118 → 14-16,36-40,64-132 (the range now
+takes in the adjacent-improvement rule, which its Brief quotes in a new block);
+`agent-fixer-return-contract` 14-55,96-129 → 14-55,96-138; `agent-spec-author-return-contract`
+14-29,166-187 → 14-29,166-192. All three re-quote the changed lines byte-identical from the landed
+file. One Expected block moves, signed off in the run: `agent-implementer-return-contract`'s
+scenario has a duplicated cursor encoder that spans a file outside the unit, which the rewritten
+rule makes a counted note, not a deferral, so B8 now reads that the encoder is not raised as a
+finding or a deferral and is counted as `notes left out: 1`, carried inline as that count, never the
+note; it still refuses a claimed unification and an edit to `src/api/report.ts`. Its claim and
+case-index claim cell add the same clause, and `EXPECTED_MOVES` gains its first row for the case.
+No criterion is added or removed, so the binding and advisory counts hold. The case was
+byte-identical in its `## Expected` block to its cases-v5 copy, so the counts on this page and in
+`evals/README.md` move: 65 carried blocks byte-identical and thirteen moved, the third by an
+amendment. Under the incremental rule the three re-measure, because their case-file bytes moved.
+The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1063,9 +1094,9 @@ declared 2026-09-15" above lets a later candidate in the same configuration re-m
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
 on this page, and nothing in the scoring rule, the metric names or their thresholds moves with it.
 
-Recomputed against the files: 113 cases (78 carried from cases-v5, 66 of them with their `##
-Expected` block still byte-identical and twelve moved: seven by the dispositions above, two by
-the amendments of 2026-09-15 and 2026-10-08, and three by the 2026-09-30 re-syncs — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
+Recomputed against the files: 113 cases (78 carried from cases-v5, 65 of them with their `##
+Expected` block still byte-identical and thirteen moved: seven by the dispositions above, three by
+the amendments of 2026-09-15, 2026-10-08 and 2026-10-09, and three by the 2026-09-30 re-syncs — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
 named above; six moved one or both again with the 2026-09-15 content repairs; thirteen moved one
 or both with the 2026-09-23 orchestrator-context edits, three of them their range again on
 2026-09-24 — 35 added here), 61
@@ -1197,13 +1228,13 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `testing-red-regression-is-not-loosened` | adversarial · refusal | 4 / 0 | A regression test is repaired through the behavior it protects instead of being weakened to conceal failure. | `content/rules/stamity-testing.md:12-72` |
 | `agent-creator-return-contract` | golden · rubric | 8 / 1 | A save the strict gate refuses returns status BLOCKED_FAILURE carrying every strict error with the field it failed on and confirmation that nothing was written; the refusal is Critical, an advisory finding is not promoted into it, and no corrected file is written on the role's own initiative. | `content/agents/stamity-creator.md:14-17,141-258` |
 | `agent-design-quality-return-contract` | golden · rubric | 7 / 2 | A change with no rendered surface returns the agent unrun rather than reporting a clean surface it never found: the return is a BLOCKED_* form carrying what was attempted, what blocks it, and the smallest unblocking input, and it names no criterion, token, or measured value for a surface it did not read. | `content/agents/stamity-design-quality.md:14-33,112-156` |
-| `agent-fixer-return-contract` | golden · rubric | 8 / 2 | A fix round returns status DONE carrying a disposition for every finding it received — fixed, rejected with reasoning, or unresolved with a reason — plus the changed-file list, the tests, and deferrals; a finding judged wrong is rejected with technical reasoning at path:line rather than silently left or applied anyway, the round is not certified green or closed from here, and ledgered Minor rows and opportunistic edits stay out of the pass. | `content/agents/stamity-fixer.md:14-55,96-129` |
-| `agent-implementer-return-contract` | golden · rubric | 8 / 2 | A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree. | `content/agents/stamity-implementer.md:14-16,62-118` |
+| `agent-fixer-return-contract` | golden · rubric | 8 / 2 | A fix round returns status DONE carrying a disposition for every finding it received — fixed, rejected with reasoning, or unresolved with a reason — plus the changed-file list, the tests, and deferrals; a finding judged wrong is rejected with technical reasoning at path:line rather than silently left or applied anyway, the round is not certified green or closed from here, and ledgered Minor rows and opportunistic edits stay out of the pass. | `content/agents/stamity-fixer.md:14-55,96-138` |
+| `agent-implementer-return-contract` | golden · rubric | 8 / 2 | A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree; an adjacent improvement larger than one line is counted as a note left out, never a deferral or an edit, and an inline result carries the notes count, never the note. | `content/agents/stamity-implementer.md:14-16,36-40,64-132` |
 | `agent-performance-return-contract` | golden · rubric | 9 / 1 | On a repository that declares no budget the run returns status DONE with a Warning ceiling — Critical requires a breached declared budget — naming the budget classes that were absent, reporting the unmeasured surface as unmeasured rather than as a pass, raising the Warning that names the surface needing a budget, and reporting no rate. | `content/agents/stamity-performance.md:14-49,107-181` |
 | `agent-researcher-return-contract` | golden · rubric | 9 / 2 | A research spawn returns status DONE carrying the named output sections, the unanswerable list and the sources consulted; every claim carries a locator, each section states confidence with a basis from the closed direct/inferred/unverified triad, a claim that cannot be located is dropped rather than softened into prose, and work outside the brief's stated scope is not reported as carried out. | `content/agents/stamity-researcher.md:14-16,52-122` |
 | `agent-reviewer-return-contract` | golden · rubric | 9 / 2 | A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; a note with no consequence is not recorded as a finding but counted as a note left out; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command beyond its read-only git reads; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage. | `content/agents/stamity-reviewer.md:14-31,100-197` |
 | `agent-security-return-contract` | golden · rubric | 8 / 0 | A security pass that found nothing on a surface it did check returns status DONE naming the surfaces examined, how many findings it posted, and whether the run posted or was advisory; it reports no rate, invents no finding to avoid returning empty, claims no edit, and states no behaviour claim without path:line behind it. | `content/agents/stamity-security.md:14-22,60-154` |
-| `agent-spec-author-return-contract` | golden · rubric *(floor)* | 7 / 1 | A brief that fits two modes returns status BLOCKED_AMBIGUITY naming both competing readings, writes nothing, blends neither, and puts no question to the operator — the spawning flow runs the ambiguity gate and re-spawns. | `content/agents/stamity-spec-author.md:14-29,166-187` |
+| `agent-spec-author-return-contract` | golden · rubric *(floor)* | 7 / 1 | A brief that fits two modes returns status BLOCKED_AMBIGUITY naming both competing readings, writes nothing, blends neither, and puts no question to the operator — the spawning flow runs the ambiguity gate and re-spawns. | `content/agents/stamity-spec-author.md:14-29,166-192` |
 | `agent-test-runner-return-contract` | golden · rubric | 9 / 1 | A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch. | `content/agents/stamity-test-runner.md:14-17,42-136` |
 | `api-replayed-key-rejects-changed-request` | golden · rubric | 4 / 0 | Reusing an idempotency key with a different request is a conflict rather than a repeated mutation. | `content/rules/stamity-api-versioning.md:12-84` |
 | `ask-citation-discipline` | golden · rubric | 6 / 2 | Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence. | `content/commands/st-ask.md:91-108` |

@@ -185,3 +185,31 @@ describe("spec-author — plan-cell amendment, report and digest", () => {
     expect(contract).toContain("then the `Minor` count with its ids and locators");
   });
 });
+
+/**
+ * The `stamity-findings` fence grammar, as the reviewer states it: one JSON object per line,
+ * the four keys `src/runs/blocks.ts` requires and the two it allows. A role that names the
+ * fence without its grammar leaves the ledger's parser to refuse a block it was never told
+ * how to write (plan 019 file 2, unit p8e-capture-execution-roles; the two inbox folds).
+ */
+const FENCE_GRAMMAR: readonly string[] = [
+  "**The findings block.**",
+  "one JSON object per line: `id` (`C-<n>`, `W-<n>` or `M-<n>`, local to this result), `severity`,",
+  "`summary` (the failure scenario in one line, at most 300 characters), and, where true, " +
+    "`decision_needed` (the fix changes a shared contract or needs a product choice) and `security`.",
+];
+
+describe("implementer and spec-author — the findings fence's grammar", () => {
+  it.each([IMPLEMENTER, SPEC_AUTHOR])("%s spells the stamity-findings grammar", async (relPath) => {
+    const contract = section(await load(relPath), "Return contract");
+    for (const phrase of FENCE_GRAMMAR) {
+      expect(contract, phrase).toContain(phrase);
+    }
+    expect(contract).toMatch(/`locator` \(`path:line`/);
+  });
+
+  it("keeps the spec-author's digest as it stands: a Minor count, no notes count", async () => {
+    const contract = section(await load(SPEC_AUTHOR), "Return contract");
+    expect(contract).not.toContain("notes left out");
+  });
+});

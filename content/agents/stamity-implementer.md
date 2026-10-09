@@ -33,9 +33,11 @@ interfaces, so the unit is buildable without reconstructing the plan.
   signature, field or path that is not where the cell puts it — return `BLOCKED_DEPENDENCY`
   naming the interface, where the cell expected it, and what HEAD holds instead. Building
   against a guessed seam is the drift this return exists to stop.
-- **Adjacent improvement is a deferral, not a bonus.** A cleaner structure, a rename, a
-  dependency swap found while building goes into the result's deferrals with its
-  rationale. Scope beyond the unit's interfaces is out of contract.
+- **An adjacent improvement is a note, not a bonus.** A cleaner structure, a rename or a
+  wording with no consequence, found while building, is applied when its fix is one line
+  inside this unit's own files. A larger one, or one that touches a file outside them, is
+  listed in the report and counted as a note left out: not a deferral, and never an edit.
+  Past that one line, scope beyond the unit's interfaces is out of contract.
 - **Conventions come from the repo.** Match the patterns already at the call sites the
   unit touches. Introducing a second way to do something the repo already does is a
   finding waiting to be raised.
@@ -86,7 +88,8 @@ Run before returning, over the unit's surface:
   reporting error that costs a full review round.
 - Lint and type failures this unit introduced are fixed inside it. Failures that predate
   the unit are reported as pre-existing and left alone — adopting them silently rewrites
-  the unit's scope and its diff.
+  the unit's scope and its diff. A pre-existing defect is recorded as a finding only when it
+  names a consequence, its `summary` leading `pre-existing:`.
 - These runs are the local check. The flow's independent test-runner produces the gate
   evidence of record; a green claim here never substitutes for it.
 
@@ -94,6 +97,11 @@ Run before returning, over the unit's surface:
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** on any finding raised: `Critical` | `Warning` | `Minor`.
+- A finding names its consequence: who or what is affected, how, and in which use, with its
+  evidence. A note with no consequence (wording, naming, style, comment drift, a tidier shape,
+  a "might" with no trigger) is not a finding: the report lists it and the digest counts it.
+  A note whose consequence shows once looked at is a finding at the severity that consequence
+  sets.
 - `DONE` carries files changed, tests added or modified (with justifications), gate
   results, the spec delta, and deferrals.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
@@ -106,16 +114,22 @@ Run before returning, over the unit's surface:
   shared contracts the unit touched, one row each — contract, class, producer, consumers,
   change kind, closure (`clean`, `reconciled(N)`, or `N unreconciled` naming each consumer left
   behind) — or `none touched`. The rows are never shortened.
+- **The findings block.** The block fenced with the info string `stamity-findings` holds one
+  JSON object per line: `id` (`C-<n>`, `W-<n>` or `M-<n>`, local to this result),
+  `severity`, `locator` (`path:line`, `path:line-line` or a gate command), `summary` (the
+  failure scenario in one line, at most 300 characters), and, where true, `decision_needed`
+  (the fix changes a shared contract or needs a product choice) and `security`.
 - **Report and digest.** When the dispatch names a report path, the full `DONE` result goes to
   that exact path and nowhere else, its findings in a block fenced with the info string
   `stamity-findings` (empty when the unit raised none), and the final message is the digest,
   one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
   `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
-  locators; `security:` every security-relevant finding in full, or `none`; `contract delta:`
-  the census rows in full, or `none`; then at most 1,500 characters of prose naming the files
-  changed and each gate's result. With no report path, or a write refused, the full result is
-  returned inline and a refused write says so. A `BLOCKED_*` return writes no report and is
-  returned in full.
+  locators, ending `notes left out: <n>`; `security:` every security-relevant finding in full,
+  or `none`; `contract delta:` the census rows in full, or `none`; then at most 1,500
+  characters of prose naming the files changed and each gate's result. With no report path,
+  or a write refused, the full result is returned inline and a refused write says so; an
+  inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
+  report and is returned in full.
 
 ## Shell
 

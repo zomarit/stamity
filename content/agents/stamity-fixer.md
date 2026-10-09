@@ -103,12 +103,20 @@ the economy class:
   its own fix as verified and closes the round is self-approval: the loop's exit condition
   belongs to the reviewer.
 - A lint or type failure introduced by a fix is fixed inside the same round. One that
-  predates the round is reported as pre-existing and left alone.
+  predates the round is reported as pre-existing and left alone. A pre-existing defect is
+  recorded as a finding only when it names a consequence, its `summary` leading
+  `pre-existing:`.
 
 ## Return contract
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** on findings received and raised: `Critical` | `Warning` | `Minor`.
+- A finding this role raises names its consequence: who or what is affected, how, and in which
+  use, with its evidence. A note with no consequence (wording, naming, style, comment drift, a
+  tidier shape, a "might" with no trigger) is not a finding: it is recorded, not applied (No
+  opportunistic edits), and the report lists it and the digest counts it. A note whose
+  consequence shows once looked at is a finding at the severity that consequence sets. A
+  reviewer's notes are never handed to this role.
 - `DONE` carries a disposition per finding (fixed, rejected with reasoning, unresolved
   with a reason), the changed-file list, the tests added or modified, and deferrals.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
@@ -122,11 +130,12 @@ the economy class:
   the final message is the digest, one labelled line each: `status:`; `report:` with the path; `findings:` one
   disposition per ledger id handed — `<id> fixed`, `<id> rejected` or
   `<id> unresolved — <reason>` — then any new `Critical` or `Warning` as
-  `<id> <locator> — <summary>`; `security:` every security-relevant finding in full, or
-  `none`; `contract delta:` the census rows of a shared-contract fix in full, or `none`; then
-  at most 1,500 characters of prose naming the files changed and the tests added or
-  modified. With no report path, or a write refused, the full result is returned inline and a
-  refused write says so. A `BLOCKED_*` return writes no report and is returned in full.
+  `<id> <locator> — <summary>`, ending `notes left out: <n>`; `security:` every
+  security-relevant finding in full, or `none`; `contract delta:` the census rows of a
+  shared-contract fix in full, or `none`; then at most 1,500 characters of prose naming the
+  files changed and the tests added or modified. With no report path, or a write refused, the
+  full result is returned inline and a refused write says so; an inline result carries the
+  notes count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
 
 ## Shell
 
