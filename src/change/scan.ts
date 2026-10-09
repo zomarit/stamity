@@ -21,14 +21,21 @@ import { scanValueForSecrets } from "../mcp/secretScan.ts";
  *
  * **The name beside its value** (review/95). For a pair whose value is a
  * quoted literal, or any pair in a config file (`.env`, `.envrc`, YAML, JSON,
- * TOML, INI, properties, `.cnf`, `.conf`), a shell script's `export` line or a
- * Dockerfile's `ENV` or `ARG` line (review/132), the joined `name=value` text
- * goes to the patterns too, so the two inline-assignment patterns meet a short
- * credential assigned to a credential-named key. A value with no literal in it
- * (empty, `null`, `~`, a `${…}` or a `{{ … }}` placeholder, the default
- * recorded for build/47 and review/136, or an expansion opening with `$`
- * outside single quotes, review/132) is not joined, and a `{{ … }}`
- * placeholder is cut from the rest of the line before it is read. A name that
+ * TOML, INI, properties, `.cfg`, `.cnf`, `.conf`), a shell assignment line in
+ * a shell script or a shell rc or profile file (plain or after `export`,
+ * `readonly`, `local`, `declare` or `typeset`, review/132 and review/147) or a
+ * Dockerfile's `ENV` or `ARG` line, the legacy `ENV NAME value` form included
+ * (review/141), the joined `name=value` text goes to the patterns too, so the
+ * two inline-assignment patterns meet a short credential assigned to a
+ * credential-named key. A value with no literal in it (empty, `null`, `~`, a
+ * `${…}` or a `{{ … }}` placeholder, the default recorded for build/47 and
+ * review/136; wholly a mask, review/143; or, in a shell file, a Dockerfile, a
+ * `.env` or `.envrc`, where `$` expands, an expansion opening with `$` outside
+ * single quotes, review/132 and review/140) is not joined, and a `{{ … }}`
+ * placeholder is cut from the rest of the line before it is read. A mask is a
+ * value made wholly of `*` and `•`, an `x` or `X` run, or `REDACTED` bare or
+ * alone in one pair of brackets; an assignment of one is masked out of every
+ * text the two inline-assignment patterns read. A name that
  * is a file path (it follows a `/` or `\`, or ends in a file extension) gives
  * its value no credential context and is not joined (review/126): a digest
  * keyed by a file whose name holds a credential word is no credential.
@@ -59,7 +66,9 @@ import { scanValueForSecrets } from "../mcp/secretScan.ts";
  * **A long line keeps its pairs** (review/135): past {@link PAIR_LINE_BOUND}
  * characters the pairs, literals and remainder are read in overlapping windows,
  * so a credential name or an anchor past that column still gives its value
- * context, and the whole line is read once more as a value. A line past
+ * context, and the whole line is read once more as a value. A window after the
+ * first may open inside a string, so its literals are read once more at the
+ * other parity of each quote (review/148). A line past
  * {@link SCAN_LINE_MAX_CHARS} is not read at all; {@link linesPastCap} names
  * it, so the caller fails closed rather than reporting it clean.
  *
@@ -128,24 +137,53 @@ const INLINE_ASSIGNMENT_RULES: ReadonlySet<string> = new Set(["inline-api-key-as
 const COMPARISON = /\s*[!=]==?\s*/g;
 
 /** A config file by its name: its pairs are read with the name beside the value, quoted or not (review/95, review/132). */
-const CONFIG_FILE = /(?:^|\/)(?:\.env(?:\.[^/]*)?|\.envrc|[^/]*\.(?:env|ya?ml|json|toml|ini|properties|cnf|conf))$/i;
+const CONFIG_FILE = /(?:^|\/)(?:\.env(?:\.[^/]*)?|\.envrc|[^/]*\.(?:env|ya?ml|json|toml|ini|properties|cfg|cnf|conf))$/i;
 
-/** A shell script and its `export` line, and a Dockerfile and its `ENV` or `ARG` line, read as a config file is (review/132). */
-const SHELL_FILE = /\.(?:sh|bash|zsh)$/i;
-const EXPORT_LINE = /^\s*export\s/;
+/**
+ * A shell script or a shell rc or profile file, and its assignment line
+ * (plain, or after `export`, `readonly`, `local`, `declare` or `typeset` and
+ * their flags), and a Dockerfile and its `ENV` or `ARG` line, read as a config
+ * file is (review/132, review/147).
+ */
+const SHELL_FILE =
+  /(?:\.(?:sh|bash|zsh)|(?:^|\/)\.(?:bashrc|bash_profile|bash_login|bash_logout|bash_aliases|zshrc|zshenv|zprofile|zlogin|zlogout|profile|kshrc))$/i;
+const SHELL_ASSIGNMENT_LINE = /^\s*(?:(?:export|readonly|local|declare|typeset)(?:\s+-\w+)*\s+)?[A-Za-z_]\w*=/;
 const DOCKERFILE = /(?:^|\/)(?:(?:Docker|Container)file(?:\.[^/]*)?|[^/]*\.(?:docker|container)file)$/i;
 const DOCKER_ASSIGNMENT_LINE = /^\s*(?:ENV|ARG)\s/i;
+/** Dockerfile's legacy space form, `ENV NAME value`: one pair, the value the rest of the line (review/141). */
+const DOCKER_ENV_SPACE_FORM = /^\s*ENV\s+([A-Za-z_][\w.-]*)\s+(\S.*?)\s*$/i;
+/** A `.env` file or `.envrc`, where `$` expands as in the shell (review/140). */
+const ENV_FILE = /(?:^|\/)(?:\.env(?:\.[^/]*)?|\.envrc|[^/]*\.env)$/i;
 
 /** Whether every pair of this line is read with its name beside its value, quoted or not. */
 function joinsEveryPair(path: string, line: string): boolean {
-  return CONFIG_FILE.test(path) || (SHELL_FILE.test(path) && EXPORT_LINE.test(line)) || (DOCKERFILE.test(path) && DOCKER_ASSIGNMENT_LINE.test(line));
+  return CONFIG_FILE.test(path) || (SHELL_FILE.test(path) && SHELL_ASSIGNMENT_LINE.test(line)) || (DOCKERFILE.test(path) && DOCKER_ASSIGNMENT_LINE.test(line));
+}
+
+/** Whether `$` expands in this file, so a value opening with it is an expansion: a shell script, a Dockerfile, a `.env` or `.envrc` (review/140). */
+function expandsDollar(path: string): boolean {
+  return SHELL_FILE.test(path) || DOCKERFILE.test(path) || ENV_FILE.test(path);
 }
 
 /**
- * A value with no literal in it: empty, a null, or wholly a `${…}` or a
- * `{{ … }}` placeholder (build/47's recorded default, review/136).
+ * A value made wholly of mask characters (review/143): `*` and `•`, an `x` or
+ * `X` run, or the word `REDACTED` bare or alone in one pair of brackets.
  */
-const NO_LITERAL = /^(?:|null|~|\$\{\{?[^{}]*\}\}?|\{\{[^{}]*\}\})$/i;
+const MASK = String.raw`(?:[*•]+|[xX]+|REDACTED|\[REDACTED\]|<REDACTED>|\(REDACTED\)|\{REDACTED\})`;
+
+/**
+ * A value with no literal in it: empty, a null, wholly a `${…}` or a
+ * `{{ … }}` placeholder (build/47's recorded default, review/136), or wholly
+ * a mask (review/143).
+ */
+const NO_LITERAL = new RegExp(String.raw`^(?:|null|~|\$\{\{?[^{}]*\}\}?|\{\{[^{}]*\}\}|${MASK})$`, "i");
+
+/**
+ * An assignment's separator and a masked value, quoted or not, ending the
+ * value (review/143): the two inline-assignment patterns read it masked out,
+ * so a quoted `NAME=****` in prose is no assignment.
+ */
+const MASKED_ASSIGNMENT = new RegExp(String.raw`[:=]\s*\\?["'` + "`" + String.raw`]?${MASK}\\?["'` + "`" + String.raw`]?(?=$|[\s,;)\]}])`, "gi");
 
 /** A `{{ … }}` template placeholder (Jinja, Ansible, Helm, Go templates, Mustache), cut from the rest of a line (review/136). */
 const TEMPLATE_PLACEHOLDER = /\{\{[^{}]*\}\}/g;
@@ -202,7 +240,7 @@ function rulesOf(path: string, line: string): string[] {
   const rules = new Set<string>();
   const scan = (name: string, value: string): void => {
     if (INTEGRITY_HASH.test(value.trim())) return;
-    const masked = value.replace(COMPARISON, " ~ ");
+    const masked = value.replace(COMPARISON, " ~ ").replace(MASKED_ASSIGNMENT, " ~ ");
     for (const { patternId } of scanValueForSecrets(name, value)) {
       if (masked === value || !INLINE_ASSIGNMENT_RULES.has(patternId)) rules.add(patternId);
     }
@@ -210,6 +248,16 @@ function rulesOf(path: string, line: string): string[] {
     for (const { patternId } of scanValueForSecrets(name, masked)) if (INLINE_ASSIGNMENT_RULES.has(patternId)) rules.add(patternId);
   };
   const joinAll = joinsEveryPair(path, line);
+  const dollarExpands = expandsDollar(path);
+  /** One text's string literals, each read as a value, and as a header split at its separator. */
+  const readLiterals = (text: string): void => {
+    for (const match of text.matchAll(LITERAL)) {
+      const content = match[1] ?? match[2] ?? match[3] ?? "";
+      scan("", content);
+      const header = HEADER.exec(content);
+      if (header !== null) scan(header[1] ?? "", header[2] ?? "");
+    }
+  };
   /** One text's pairs, string literals and remainder, each read as a value. */
   const readPairs = (text: string): void => {
     const names: [number, number][] = [];
@@ -227,8 +275,8 @@ function rulesOf(path: string, line: string): string[] {
         scan("", name);
         // A bare value stops at a brace, so `${…}` reads as `$`: the text after it says it is a placeholder.
         const placeholder = raw === "$" && text[valueAt + 1] === "{";
-        // review/132: outside single quotes, a value opening with `$` is an expansion (`$1`, `$(…)`, `$NAME`).
-        const expansion = value.startsWith("$") && !raw.startsWith("'");
+        // review/132, review/140: where `$` expands, outside single quotes a value opening with it is an expansion (`$1`, `$(…)`, `$NAME`).
+        const expansion = dollarExpands && value.startsWith("$") && !raw.startsWith("'");
         // A back quote before the name and one opening the value close a Markdown code span: what follows is prose.
         const spanClose = raw.startsWith("`") && text[match.index - 1] === "`";
         const literal =
@@ -236,16 +284,21 @@ function rulesOf(path: string, line: string): string[] {
         if (literal && (joinAll || /^["'`]/.test(raw))) scan("", `${name}=${value}`);
       }
     }
-    for (const match of text.matchAll(LITERAL)) {
-      const content = match[1] ?? match[2] ?? match[3] ?? "";
-      scan("", content);
-      const header = HEADER.exec(content);
-      if (header !== null) scan(header[1] ?? "", header[2] ?? "");
-    }
+    readLiterals(text);
     scan("", cut(text, names).replace(TEMPLATE_PLACEHOLDER, " ").trim());
   };
   if (line.length > SCAN_LINE_MAX_CHARS) return [];
   const text = withoutDigest(path, line);
+  // review/141: Dockerfile's `ENV NAME value` is read as `ENV NAME=value` is.
+  const spaceForm = DOCKERFILE.test(path) ? DOCKER_ENV_SPACE_FORM.exec(text) : null;
+  if (spaceForm !== null) {
+    const name = spaceForm[1] ?? "";
+    const raw = spaceForm[2] ?? "";
+    const value = /^(["'`]).*\1$/s.test(raw) ? unquote(raw) : raw;
+    scan(name, value);
+    const expansion = value.startsWith("$") && !raw.startsWith("'");
+    if (!expansion && !NO_LITERAL.test(value.trim()) && !INTEGRITY_HASH.test(value.trim())) scan("", `${name}=${value}`);
+  }
   if (text.length <= PAIR_LINE_BOUND) {
     readPairs(text);
     return [...rules];
@@ -253,7 +306,10 @@ function rulesOf(path: string, line: string): string[] {
   // review/135: the whole line as one value, then its pairs window by window.
   scan("", text);
   for (let start = 0; start + PAIR_OVERLAP < text.length; start += PAIR_LINE_BOUND - PAIR_OVERLAP) {
-    readPairs(text.slice(start, start + PAIR_LINE_BOUND));
+    const window = text.slice(start, start + PAIR_LINE_BOUND);
+    readPairs(window);
+    // review/148: a window may open inside a string, which pairs its quotes the wrong way; read its literals at the other parity of each quote too.
+    if (start > 0) for (const quote of ['"', "'", "`"]) readLiterals(quote + window);
   }
   return [...rules];
 }

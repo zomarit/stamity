@@ -141,6 +141,22 @@ describe("scanAddedLines", () => {
     }
   });
 
+  // review/148: a window opened inside a quoted string still reads each literal in it with its own quotes.
+  it.each([
+    ["double", '"'],
+    ["single", "'"],
+    ["back", "`"],
+  ])("splits a %s-quoted header string held only by a window that opens inside a string of its quote", (_label, quote) => {
+    const header = `${quote}Authorization: ${["Bear", "er "].join("")}${body(30, 29)}${quote},`;
+    // `<q>ab<q>,` is five characters, so the second window's start (column 3,072) falls inside one; the header sits at column 5,000, in that window alone.
+    const filler = (units: number) => `${quote}ab${quote},`.repeat(units);
+    const line = `[${filler(999).slice(1)}${header}${filler(600)}]`.replace(/^\[/, `${quote}`);
+    expect(line.indexOf(header)).toBeGreaterThan(4_096);
+    expect(line.indexOf(header)).toBeLessThan(6_144 - header.length);
+    expect(line[3_072]).not.toBe(quote);
+    expect(scanAddedLines([file("dist/x.min.js", [line])])).toEqual([{ path: "dist/x.min.js", line: 1, rule: "bearer-token" }]);
+  });
+
   // review/135: past the hard cap a line is not read, and is named so the scan fails closed.
   it("names a line past the hard cap as unread, reads none of it, and still reports a hit on another line", () => {
     const files = [file("dist/x.min.js", ["a".repeat(300_000), `const t = "${FORGE_TOKEN}";`]), file("dist/y.js", ["b".repeat(200_000)])];
@@ -193,6 +209,31 @@ describe("scanAddedLines", () => {
       expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
     });
 
+    // review/147 (signed off): a plain shell assignment, a shell rc or profile file and a .cfg file join too.
+    it.each([
+      ["a plain assignment in a shell script", "scripts/deploy.sh", `DB_${UPPER}=${SHORT}`],
+      ["a readonly assignment in a shell script", "scripts/deploy.bash", `readonly DB_${UPPER}=${SHORT}`],
+      ["a local assignment in a shell function", "scripts/lib.zsh", `  local DB_${UPPER}=${SHORT}`],
+      ["a declare assignment with flags", "scripts/deploy.sh", `declare -rx DB_${UPPER}=${SHORT}`],
+      ["an export line in .bashrc", "home/.bashrc", `export DB_${UPPER}=${SHORT}`],
+      ["a plain assignment in .zshrc", ".zshrc", `DB_${UPPER}=${SHORT}`],
+      ["an export line in .profile", ".profile", `export DB_${UPPER}=${SHORT}`],
+      ["an export line in .bash_profile", ".bash_profile", `export DB_${UPPER}=${SHORT}`],
+      ["an export line in .zshenv", ".zshenv", `export DB_${UPPER}=${SHORT}`],
+      ["an export line in .zprofile", ".zprofile", `export DB_${UPPER}=${SHORT}`],
+      ["an INI entry in setup.cfg", "setup.cfg", `${PASS} = ${SHORT}`],
+    ])("hits %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
+    });
+
+    it.each([
+      ["a plain assignment of a variable in a shell script", "scripts/deploy.sh", `DB_${UPPER}=${"$"}VAULT_DB`],
+      ["a plain assignment of a command substitution in .bashrc", ".bashrc", `DB_${UPPER}=$(pass show db)`],
+      ["a call in a shell script that is no assignment", "scripts/deploy.sh", `run --${PASS}-file /run/secrets/db`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
     // review/132: a value that opens with `$` is an expansion, no literal.
     it.each([
       ["a positional parameter", "scripts/deploy.sh", `export DB_${UPPER}=$1`],
@@ -211,6 +252,67 @@ describe("scanAddedLines", () => {
       ["a Go template in code", "src/db.ts", `const DB_${UPPER} = "{{ .Secret }}";`],
     ])("passes %s", (_label, path, line) => {
       expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    // review/143: a value made wholly of mask characters is no literal, wherever the assignment is read.
+    const KEY_NAME = ["API", "_KEY"].join("");
+    it.each([
+      [
+        "a masked key quoted in an eval judge's citation",
+        "evals/runs/2026-10-08-run-43/summary.json",
+        `  "citation": "\\"The job environment had \`PAYMENT_${KEY_NAME}=****\` bound to the production key\\"",`,
+      ],
+      ["asterisks in .env", ".env", `DB_${UPPER}=********`],
+      ["bullets in YAML", "compose.yaml", `      ${PASS}: ••••••••`],
+      ["a lower-case x run, quoted in code", "src/db.ts", `const DB_${UPPER} = "xxxxxxxx";`],
+      ["an upper-case X run in INI", "settings.ini", `${PASS} = XXXX`],
+      ["[REDACTED] in prose", "docs/run.md", `the log showed \`${KEY_NAME}=[REDACTED]\` there`],
+      ["<redacted> in JSON", "config/app.json", `  "${PASS}": "<redacted>",`],
+      ["(REDACTED) in .env", ".env", `DB_${UPPER}=(REDACTED)`],
+      ["{REDACTED} in YAML", "compose.yaml", `      ${PASS}: "{REDACTED}"`],
+      ["a bare REDACTED in code", "src/db.ts", `const DB_${UPPER} = "REDACTED";`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    it.each([
+      ["mask characters ahead of a literal", ".env", `DB_${UPPER}=****${SHORT}`, "inline-password-assignment"],
+      ["a redaction note with more than the word in its brackets", "docs/plan.md", `\`${KEY_NAME.toLowerCase()}: [redacted 20 chars]\``, "inline-api-key-assignment"],
+      ["a short credential beside a masked one", "docs/run.md", `\`${KEY_NAME}=****\` and \`${PASS}=${SHORT}\``, "inline-password-assignment"],
+    ])("still hits %s", (_label, path, line, rule) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule }]);
+    });
+
+    // review/140: the `$` rule binds only where `$` expands; elsewhere a quoted value opening with `$` is a literal.
+    it.each([
+      ["a quoted value in code", "src/db.ts", `const DB_${UPPER} = "${"$"}${SHORT.toLowerCase()}";`],
+      ["a JSON value", "config/app.json", `  "${PASS}": "${"$"}${SHORT.toLowerCase()}",`],
+      ["a YAML value", "compose.yaml", `      ${PASS}: ${"$"}${SHORT.toLowerCase()}`],
+    ])("hits %s opening with $", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
+    });
+
+    it.each([
+      ["a variable in .env", ".env", `DB_${UPPER}=${"$"}VAULT_DB`],
+      ["a quoted positional parameter in a shell script", "scripts/deploy.sh", `DB_${UPPER}="$1"`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    // review/141: Dockerfile's space form `ENV NAME value` is joined as `ENV NAME=value` is.
+    it.each([
+      ["an unquoted value", "Dockerfile", `ENV DB_${UPPER} ${SHORT}`],
+      ["a quoted value", "docker/api.Dockerfile", `env DB_${UPPER} "${SHORT}"`],
+    ])("hits a Dockerfile ENV space-form line with %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
+    });
+
+    it.each([
+      ["a variable", `ENV DB_${UPPER} ${"$"}DB_${UPPER}`],
+      ["a placeholder", `ENV DB_${UPPER} ${"$"}{DB_${UPPER}}`],
+      ["a mask", `ENV DB_${UPPER} ****`],
+    ])("passes a Dockerfile ENV space-form line with %s", (_label, line) => {
+      expect(scanAddedLines([file("Dockerfile", [line])])).toEqual([]);
     });
 
     it("still hits a short credential beside a placeholder on the same line", () => {
