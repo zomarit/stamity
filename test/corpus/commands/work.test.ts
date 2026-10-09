@@ -615,7 +615,12 @@ describe("/st-work — Frame and Plan", () => {
     // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/115`): the head records the
     // run's base, which the Gates read for the scan and the class (sign-off: the run's branch point).
     expect(frame).toContain("with four lines among its first 15");
-    expect(frame).toContain("`Base: <commit>`, the run's branch point (`HEAD` at Frame)");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
+    // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
+    // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
+    expect(frame).toContain(
+      "`Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame, never the word `HEAD`)",
+    );
     // The reports folder is created beside the record and ignored by git.
     expect(frame).toContain("`reports/` folder");
     expect(frame).toContain("whose one line is `*`");
@@ -813,8 +818,10 @@ describe("/st-work — Prove", () => {
     // `build/62`): the class rides the "Gate results" label line itself. A class line of its own
     // between the label and the table became the table's lead in `src/cli/docs/measurements.ts`
     // (`labelledTables`), which then excluded the run as "gates in prose only".
+    // TEST CHANGE, justified (2026-10-09, the p3 fix round 2, `review/137`): the label line also
+    // shows the base, so a hand-edited later `Base:` that narrowed the scan and the class is seen.
     expect(proof).toContain(
-      "- gate results — the change's class as `gate classify` named it (`unclear` when none ran), on the `Gate results` label line itself, then per gate: command, pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites",
+      "- gate results — the change's class as `gate classify` named it (`unclear` when none ran) and the run's base commit, on the `Gate results` label line itself, then per gate: command, pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites",
     );
   });
 
@@ -1545,6 +1552,14 @@ describe("/st-work — dials", () => {
     expect(intensityRow(dials, "light")).not.toContain("specialist passes");
     expect(intensityRow(dials, "light")).toContain(
       "`security` specialist lens on a trigger-path match",
+    );
+    // Added 2026-10-09 (plan 019 file 2, the p3 fix round 2, `build/65`): the rows restate the
+    // Specialist pass, which also runs the security lens when the class is `security-sensitive`.
+    expect(intensityRow(dials, "light")).toContain(
+      "`security` specialist lens on a trigger-path match or a `security-sensitive` class",
+    );
+    expect(intensityRow(dials, "standard")).toContain(
+      "the `security` lens also on a `security-sensitive` class",
     );
   });
 

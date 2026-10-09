@@ -33,13 +33,13 @@ Seconds, not ceremony. In order:
 5. **Run record head.** Open `.stamity/runs/<run-id>/record.md` — `<run-id>` is
    `<UTC date>_<slug>` — with four lines among its first 15: `Status:`, reading
    `in progress` until the close; `Plan: <path>`, the `/st-plan` artifact or this run's
-   own `plan.md` once Phase 2 writes it; `Base: <commit>`, the run's branch point (`HEAD`
-   at Frame); and `Invocation: <this command line, verbatim>`. Create the run's `reports/`
-   folder beside the record, holding a `.gitignore` whose one line is `*`: reports stay
-   local and the ledger is the record. Records are files: create and extend `record.md`,
-   `plan.md`, reports and the inbox with the client's file write and edit tools
-   — never a shell redirect, a heredoc or `cat >` — and move ledger rows only
-   through the `ledger` verb under Ledger writes.
+   own `plan.md` once Phase 2 writes it; `Base: <commit>`, the run's branch point
+   (`git rev-parse HEAD` at Frame, never the word `HEAD`); and `Invocation: <this command
+   line, verbatim>`. Create the run's `reports/` folder beside the record, holding a
+   `.gitignore` whose one line is `*`: reports stay local and the ledger is the record.
+   Records are files: create and extend `record.md`, `plan.md`, reports and the inbox with
+   the client's file write and edit tools — never a shell redirect, a heredoc or `cat >` —
+   and move ledger rows only through the `ledger` verb under Ledger writes.
 
 ## Phase 1 — Understand
 
@@ -338,9 +338,9 @@ none left, there is no ask.
 Every run ends with a proof block, machine- and human-readable, doubling as an
 audit record:
 
-- gate results — the change's class as `gate classify` named it (`unclear` when none
-  ran), on the `Gate results` label line itself, then per gate: command, pass/fail/unknown,
-  failing excerpt if any, or the earlier result a byte-identical tree cites
+- gate results — the change's class as `gate classify` named it (`unclear` when none ran)
+  and the run's base commit, on the `Gate results` label line itself, then per gate: command,
+  pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
 - QA rows — per row: `walked`, `auto-proven` with its pointer, or
@@ -443,8 +443,8 @@ Run after gates pass; each lands in the run report:
 
 | Tier | When | What changes |
 |---|---|---|
-| light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), the `design-quality` and `performance` specialist lenses, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, the `security` specialist lens on a trigger-path match, every gate, the QA checkpoint, the proof block. |
-| standard | the default | Full spine: researcher fan-out sized to independent questions; plan gate asks on an in-flow plan and takes a persisted one as the go-ahead (execute-now default); review loop to the cap; a specialist lens on a trigger match. |
+| light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), the `design-quality` and `performance` specialist lenses, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, the `security` specialist lens on a trigger-path match or a `security-sensitive` class, every gate, the QA checkpoint, the proof block. |
+| standard | the default | Full spine: researcher fan-out sized to independent questions; plan gate asks on an in-flow plan and takes a persisted one as the go-ahead (execute-now default); review loop to the cap; a specialist lens on a trigger match, the `security` lens also on a `security-sensitive` class. |
 | deep | high risk surface, novel territory, wide diff | standard plus the full specialist pass and a whole-branch multi-lens review on the frontier class, run once the review loop converges and before the QA checkpoint. |
 
 Auto-derived at Frame from three signals: expected diff size (against the

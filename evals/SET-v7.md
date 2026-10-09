@@ -1261,6 +1261,18 @@ the identical/moved counts hold (the four already differed from their cases-v5 c
 none). Under the incremental rule the four re-measure, because their case-file bytes moved. The
 dated citations above stay as they were.
 
+**One `/st-work` Brief re-quoted, 2026-10-09 (plan 019 file 2, the p3 fix round 2).** Frame step
+5's `Base:` line names `git rev-parse HEAD` at Frame, never the word `HEAD` (rewrapped inside the
+step's own lines, 0 lines); the Proof block's gate line adds the run's base commit beside the class
+(rewrapped inside its three lines, 0 lines); the `## Dials` light and standard rows name the
+`security-sensitive` class beside the trigger-path match (table cells, 0 lines). No range moves.
+`work-proof-block-fields` re-quotes the gate line byte-identical in its Brief; every other range
+citing the file holds byte-identical at its lines. No `## Expected` block moves:
+`work-proof-block-fields` B2 still grades the command and the result per gate. `EXPECTED_MOVES` gains
+no row, no roster count moves, and the identical/moved counts hold (the case already differed from
+its cases-v5 copy). Under the incremental rule the case re-measures, because its case-file bytes
+moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

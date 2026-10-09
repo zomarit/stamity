@@ -20,9 +20,9 @@ Governing text — `content/commands/st-work.md`, "Proof block":
 Every run ends with a proof block, machine- and human-readable, doubling as an
 audit record:
 
-- gate results — the change's class as `gate classify` named it (`unclear` when none
-  ran), on the `Gate results` label line itself, then per gate: command, pass/fail/unknown,
-  failing excerpt if any, or the earlier result a byte-identical tree cites
+- gate results — the change's class as `gate classify` named it (`unclear` when none ran)
+  and the run's base commit, on the `Gate results` label line itself, then per gate: command,
+  pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
 - QA rows — per row: `walked`, `auto-proven` with its pointer, or
