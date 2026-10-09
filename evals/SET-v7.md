@@ -1402,6 +1402,19 @@ No carried case moves, `EXPECTED_MOVES` gains no row, and no threshold moves. Th
 this page, the runner's census in `scripts/eval/run.mjs` and the eval-run skill's roster sentence
 are recomputed from the files. The dated citations above stay as they were.
 
+**No range moved and four Briefs re-quoted, 2026-10-09 (run 2026-10-08_product-core, the p5
+group's fix round 3, ledger rows `review/189` and `build/94`).** `/st-quick`'s no-class clause
+now also counts a classify whose `reason` names a failed read, as `/st-work` and `/st-plan` read
+it. Its four lines are rewritten in place at 169-172. `/st-work`'s Prove gates paragraph names a
+classify exiting 1 beside the unclassified full gates, in place at 226. No line count moves, so no
+`source:` range or case-index cell moves. `quick-docs-edit-runs-the-test-that-reads-it`,
+`quick-docs-change-without-map-runs-full-suite` and `quick-string-rename-with-its-tests` re-quote
+`st-quick.md` 169-172, and `work-unclear-class-runs-the-full-gate` re-quotes `st-work.md` 226, each
+byte-identical from the landed file by script. No scenario has git fail a read or a classify exit
+1, so no `## Expected` block moves. `EXPECTED_MOVES` gains no row, and no claim, identical/moved
+count, threshold or roster count moves. Under the incremental rule the four re-measure, because
+their case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

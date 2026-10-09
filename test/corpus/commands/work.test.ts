@@ -790,6 +790,9 @@ describe("/st-work — Prove", () => {
       `With no base, the scan takes \`HEAD\` and the final tree runs \`${VERIFY_GATE_ALL_TOKEN}\` unclassified (\`unclear\`)`,
     );
     expect(gates).toContain("committed work then lists `secret scan: not run` under `Not done:`");
+    // Added 2026-10-09 (run 2026-10-08_product-core, the p5 group's fix round 3, `build/94`): a
+    // classify that exits 1 names no class, so the final tree takes the same unclassified full gates.
+    expect(gates).toContain("unclassified (`unclear`), as after a classify exiting 1;");
     // TEST CHANGE, justified (2026-10-09, the p3 fix round, `review/121`): this pinned "as do a CLI
     // that cannot run and a scan naming a `reason`, …"; an installed copy that predates `gate` now
     // takes the same line.

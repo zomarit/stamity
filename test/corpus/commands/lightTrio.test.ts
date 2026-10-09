@@ -878,8 +878,12 @@ describe("quick — the guardrails are the command", () => {
     // Added 2026-10-09 (run 2026-10-08_product-core, the p5 group's fix round 2, `review/179`, signed off): with
     // no class the quick lane fails closed on the security agent's paths, as `/st-work` does, and a batch the
     // table does not name stays.
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, the p5 group's fix round 3,
+    // `review/189`): this pinned "neither form runs, or the classify exits non-zero —". A git failure
+    // `gate classify` reports with exit 0 and a failed-read `reason` (`failClosed`) is no class too, as
+    // `/st-work` and `/st-plan` already read it, so a workflow or hook batch no longer stays in quick.
     expect(gates).toContain(
-      "With no class — neither form runs, or the classify exits non-zero — a batch with a path the `stamity-security` agent's `## Trigger` table names moves the same way, as for a `security-sensitive` class;",
+      "With no class — neither form runs, the classify exits non-zero, or its `reason` names a failed read — a batch with a path the `stamity-security` agent's `## Trigger` table names moves the same way, as for a `security-sensitive` class;",
     );
     expect(gates).toContain("a batch whose paths that table does not name, a docs-only one among them, stays.");
   });

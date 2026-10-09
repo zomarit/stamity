@@ -1114,10 +1114,10 @@ rounds.
   when the checks name `dependency-audit` (`:448-449`; `review/177`). In `/st-quick`, a `security-sensitive` class
   fires the `Security-sensitive surface` row: the whole batch moves to `/st-work` as it stands, nothing reverted,
   every applied item reported ungated, and no lens runs inside the quick lane (`content/commands/st-quick.md:165-169`;
-  `review/116`). With no class — neither CLI form runs, or the classify exits non-zero — a batch with a path the
-  security agent's `## Trigger` table names moves the same way, and a batch whose paths that table does not name, a
-  docs-only one among them, stays (`:169-173`; `review/179`). The lens reads `git log <range>` only after its
-  findings are formed (`content/agents/stamity-security.md:178-179`).
+  `review/116`). With no class — neither CLI form runs, the classify exits non-zero, or its `reason` names a failed
+  read — a batch with a path the security agent's `## Trigger` table names moves the same way, and a batch whose
+  paths that table does not name, a docs-only one among them, stays (`:169-173`; `review/179`, `review/189`). The
+  lens reads `git log <range>` only after its findings are formed (`content/agents/stamity-security.md:178-179`).
 - **Audit first.** When every path the rules placed `security-sensitive` is a `package-lock.json` and no
   `package.json` changed, the checks gain `dependency-audit` and the lens leaves, the class staying
   `security-sensitive` and the reason reading `lockfile-only bump: dependency audit first`, only when each lockfile
@@ -1758,8 +1758,8 @@ exists, it is the normative record for that requirement.
   commit, never `HEAD` or the work tree, and a base it cannot read makes the run `partial`.
 - GIVEN `/st-quick` and a batch `gate classify` names `security-sensitive` THEN the whole batch moves to `/st-work` as
   it stands, nothing reverted, every applied item listed ungated under `Not done:`; GIVEN no class (neither CLI form
-  runs, or the classify exits non-zero) THEN a batch touching a path the security agent's `## Trigger` table names
-  moves the same way, and a docs-only batch stays.
+  runs, the classify exits non-zero, or its `reason` names a failed read) THEN a batch touching a path the security
+  agent's `## Trigger` table names moves the same way, and a docs-only batch stays.
 - GIVEN `test/corpus/agents/specialists.test.ts` THEN the security agent's Trigger table and the roster's security row
   agree in both directions.
 
