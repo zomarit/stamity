@@ -1242,7 +1242,7 @@ function classify(
     return { result: withReasons(result, reasons), base: commit, tests };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
-    const reason = `${describeGitFailure(err)}, so the class is product`;
+    const reason = `the change could not be read (${describeGitFailure(err)}), so the class is product`; // review/194
     return { result: failClosed(reason), base: null, tests: { every: "the change could not be read, so every test runs" } };
   }
 }
@@ -1547,7 +1547,7 @@ function unclassifiedCommits(runner: GitRunner, cwd: string): string | undefined
       reference = shortRef(upstream);
       commit = resolveBase(runner, cwd, upstream);
       if (commit === null) {
-        return `its upstream ${reference} does not resolve, so the committed work HEAD holds is unread and the class is at least product; ${POINT_TO_BASE}`;
+        return `its upstream ${reference} does not resolve, so the committed work HEAD holds could not be read and the class is at least product; ${POINT_TO_BASE}`;
       }
     } else {
       reference = "origin/HEAD";

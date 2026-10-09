@@ -435,6 +435,8 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(doc["base"]).toBeNull();
     expect(doc["reason"]).toContain(cause);
     expect(doc["reason"]).not.toContain("does not resolve");
+    // review/194: the flows read this exit-0 reason as no class only when it names a failed read, so it says so.
+    expect(doc["reason"]).toBe(`the change could not be read (${cause}), so the class is product`);
   });
 
   it("keeps bidi and tag characters of an unresolved base out of the JSON reason", async () => {
@@ -661,6 +663,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(code).toBe(0);
     expect(doc["class"]).toBe("product");
     expect(doc["reason"]).toContain("git could not run");
+    expect(doc["reason"]).toBe("the change could not be read (git could not run (no git binary was found)), so the class is product");
   });
 
   // review/18, its remaining half: a spawn in a missing directory fails ENOENT too, and is no missing binary.
@@ -807,7 +810,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(code).toBe(0);
       expect(doc["class"]).toBe("product");
-      expect(doc["reason"]).toContain("its upstream origin/master does not resolve");
+      expect(doc["reason"]).toContain("its upstream origin/master does not resolve, so the committed work HEAD holds could not be read");
       expect(doc["reason"]).toContain("--base");
     });
 

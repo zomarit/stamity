@@ -1112,8 +1112,10 @@ rounds.
   and lets a NUL in a file's first 8,000 bytes alone decide binary (`:99-111`).
 - **In the flow.** The `security` lens runs at every tier when `gate classify` names the class `security-sensitive`,
   and on a trigger-path match; with no class from `gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason`
-  naming a failed read, which a classify that exits 1 carries (REQ-FLOW-061), it runs at every tier as for
-  `security-sensitive` (`content/commands/st-work.md:281-285`; `review/162`). `## Dials`' light and standard rows
+  naming a failed read, it runs at every tier as for `security-sensitive` (`content/commands/st-work.md:281-285`;
+  `review/162`). Both shapes of a classify carry such a reason: one that exits 1 with no class (REQ-FLOW-061), and
+  one that exits 0 with `product` because a git read failed, its reason reading "the change could not be read
+  (<cause>), so the class is product" (`src/cli/commands/gate.ts:1245`; `review/194`, `review/195`). `## Dials`' light and standard rows
   state the same rule in their own cells, and that a lockfile's own trigger-path match waits for the audit's flag
   when the checks name `dependency-audit` (`:448-449`; `review/177`). In `/st-quick`, a `security-sensitive` class
   fires the `Security-sensitive surface` row: the whole batch moves to `/st-work` as it stands, nothing reverted,
