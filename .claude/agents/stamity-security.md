@@ -30,6 +30,12 @@ readable without opening the engine.
 | Cryptography | `crypto/`, `*.pem`, `*.key` | encryption, signing, hashing |
 | Trust boundaries | `api/`, `routes/`, `handlers/` | input validation, injection, deserialization, upload |
 | Dependency set | `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `requirements.txt`, `go.mod`, `cargo.toml`, `gemfile` | dependency, advisory, supply chain |
+| CI and release | `.github/workflows/`, `*.sh`, `*.bash`, `*.zsh`, `*.ps1`, `*.psm1`, `dockerfile` | workflow, release, shell |
+| Client hooks and settings | `hooks/`, `hooks.json`, `settings.json`, `settings.local.json` | hook |
+
+The classifier also places a change here by a changed code line: a process spawn, a recursive
+delete or a file overwrite, a registry or network call, a token or secret name. The topics file
+deletion and network call pull this agent in by the task's words the same way.
 
 Always-on-match means every change on these surfaces, not every change in the repository. A
 specialist that runs on everything is a second reviewer, and a second reviewer's findings
@@ -165,6 +171,9 @@ and the result names that basis. A range that does not resolve — a shallow clo
 base — is never fetched: the result reports it and reads the hunks the brief carries, or returns
 `BLOCKED_DEPENDENCY` naming the unresolved range. A brief carrying neither a range nor hunks
 returns `BLOCKED_DEPENDENCY` naming the missing diff.
+
+This role reads `git log <range>` only after its findings are formed: a commit message states
+intent, not behaviour, and read first it would frame the diff it is checked against.
 
 ## Severity
 
