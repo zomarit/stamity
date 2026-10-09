@@ -1,44 +1,38 @@
 ---
 id: corpus-line-shifts-move-eval-case-source-ranges
 title: corpus line shifts move eval case source ranges
-date: 2026-09-24
+date: 2026-10-09
 confidence: high
-summary: "an eval case's source: range is a typed line range; a corpus line insert shifts every later range (build/348, build/349) — run test/evals in the lane and move the ranges plus SET-v7"
+summary: "an eval case's source: range is typed; a corpus line insert shifts later ranges, and test/evals/locators.test.ts now fails red on every shifted range"
 reviewBy: 2027-04-09
-validatedAgainst: "npx vitest run test/evals/locators.test.ts red on two cases at the sixth batch sync (build/348) and green at bf5a8d3f, with the uncaught probe range checked by hand (build/349)"
-integrity: sha256:bbd155243ea8339d7a2f348f8c5453b8cc4a93e9d8b1751f617167b8227e28fd
+validatedAgainst: "test/evals/locators.test.ts anchor and contiguous-quote checks (51899655, 96ec2532), read at 46121954"
+integrity: sha256:3c8e319f6463c43a82c3b768718cc64775c4f03ca95f49952dbd33a42360139d
 ---
 
 An eval case's `source:` key (`content/commands/st-work.md:326-342`) is a hand-typed line
-range, not a derivation. Any corpus edit that adds or removes a line moves every range
-after it, and the eval suite is the only thing that notices — and only for a case whose
-quoted governing block no longer matches the lines. A case with no quoted block goes
-stale with no test red at all. This is the same family as the learning
-`surface-pins-are-literals-that-drift`; the trigger is different — any line count change
-in a cited corpus file, not a new surface — so it is kept as its own entry.
+range, not a derivation. Any corpus edit that adds or removes a line moves every range after it.
+Since run 2026-10-08_product-core, `test/evals/locators.test.ts` reads every range of every case:
+each range's first non-blank line has to be anchored in the case, and each quoted governing
+block has to be contiguous, in-order runs of its range with skips only at a `[...]` line. So a
+shifted range now fails red in the eval suite, including for a case with no quoted block, which
+earlier went stale with no test red at all. The ranges still move by hand.
 
 ## Why
 
-Observed on 2026-09-24 in run 2026-09-23_orchestrator-context. ad520576 (ledger row
-build/340) wrapped one bullet of `content/commands/st-work.md` onto a new line at 161-162.
-The corpus lane's targeted tests did not include `test/evals`, so the shift reached the
-sixth batch sync, where the gate of record went red: `test/evals/locators.test.ts` failed
-two cases, `benign-optional-step-skipped-proceeds` and `work-proof-block-fields` (build/348).
-A third, `probe-none-work-run-qa-checkpoint`, has no quoted block, and nothing caught its
-stale range (build/349; the missing guard is deferred as build/350). bf5a8d3f moved the
-three ranges by +1 and recorded the move in `evals/SET-v7.md`, following 82a582d5 (the
-earlier move of the same four `/st-work` cases). That probe's range had already gone stale
-once, unnoticed by the gate, at the first batch sync on 2026-09-23 (build/88). Review
-horizon: retire when a test checks every `source:` range against a heading or anchor, not
-only the quoted ones.
+Observed on 2026-09-24 in run 2026-09-23_orchestrator-context: ad520576 (build/340) wrapped one
+bullet of `content/commands/st-work.md` onto a new line, and the gate of record went red on two
+cases with quoted blocks (build/348), while a third case with no quoted block went stale with
+nothing red (build/349). bf5a8d3f moved the three ranges by +1 and recorded the move in
+`evals/SET-v7.md`, as 82a582d5 had for an earlier move. The guard that build/350 deferred landed
+as 51899655 (every range anchored) and 96ec2532 (contiguous quotes) in run
+2026-10-08_product-core, and that run's later corpus edits re-quoted shifted cases by script when
+the suite went red. Review horizon: retire when `source:` ranges are derived rather than typed.
 
 ## How to apply
 
-A lane that adds or removes lines in a corpus file runs `npx vitest run test/evals` in its
-own targeted set, then lists every case citing that file:
-`rg -n '^source: content/<path>' evals/cases-v6`. Each range that starts after the edit
-moves by the line delta, and the case's quoted text is checked byte-identical at the new
-lines. A green locator suite does not prove this: it skips cases with no quoted block, so
-check those by hand. Record the move the way 82a582d5 and bf5a8d3f did — the `source:`
-cells, a dated paragraph in `evals/SET-v7.md` naming the moved cases, and the
-recomputed-count clause. Dated citations in dispositions and prose stay as written.
+A corpus edit that changes a cited file's line count shows up as red cases in
+`npx vitest run test/evals`, each failure naming the case and the range; a lane whose targeted
+set leaves out `test/evals` meets that red later, at the next integration. `rg -n
+'^source: content/<path>' evals/cases-v6` lists every case citing the edited file. Earlier moves
+were recorded the way 82a582d5 and bf5a8d3f did it: the `source:` cells, a dated paragraph in
+`evals/SET-v7.md` naming the moved cases, and the recomputed-count clause.
