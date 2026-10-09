@@ -1259,6 +1259,10 @@ describe("README", () => {
     // README names three hidden verbs. This mirrors the two pins above, so a README that drops it
     // fails the way dropping `learn` or `handoff` does.
     expect(text).toContain("`ledger`");
+    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, `build/9`): `gate` is the
+    // fourth plumbing verb README names behind the advertised surface, and nothing pinned it, so a
+    // README dropping it stayed green. This mirrors the three pins above.
+    expect(text).toContain("`gate`");
   });
 
   it("is indexed with the same verb count it states itself", () => {
@@ -2759,8 +2763,8 @@ describe("the guides", () => {
     // Hand-maintained, in the order `src/cli.ts` advertises, and it is the DRIVER: a verb joins
     // the surface here first and the page is then obliged to name it, which is what made
     // `workspace` a required word on that page rather than an optional one, and `worktree` after
-    // it. The plumbing verbs are deliberately absent — `learn` and `handoff` are not something a
-    // reader types.
+    // it. The plumbing verbs are deliberately absent — `learn`, `handoff`, `ledger` and `gate` are
+    // not something a reader types.
     for (const command of [
       "init",
       "sync",

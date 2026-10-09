@@ -93,6 +93,31 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-09, plan 019 file 2, consolidated at the close (run
+ *     2026-10-08_product-core; build/24). FIFTEEN commits on the branch from
+ *     5be05cda moved this suite's snapshot, each reviewed in its unit's round;
+ *     THREE goldens moved, all SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md in thirteen of them, 31282 ->
+ *     32995 bytes and 502 -> 507 lines in the corpus source: the room made
+ *     above the re-attachment cut (4968e8e6); the review loop's cap of 3,
+ *     escalation, confidence and acceptance wording (48e5f7c7, 3b6bef7a,
+ *     9c1d762a, f52cea5c); the digest rule (2a159409); the Prove pass's secret
+ *     scan and class gates on the classified base (11f711cc, c26cd6d8,
+ *     111f054d, b06e3a10); the security lens by class (4fc41475, fca476b3);
+ *     the final tree runs every gate after a classify exiting 1 (33c014e2).
+ *
+ *     SUBSTITUTION moved on the charter in two, 5695 -> 5754 bytes at an
+ *     unchanged line count (95): invariant 4 names the class's gates,
+ *     invariants 1.2.0 (51667e43), then takes the class from gate classify
+ *     (62850e8d).
+ *
+ *     SUBSTITUTION moved on agents/stamity-test-runner.md in two, 8006 ->
+ *     8683 bytes and 147 -> 157 lines: the class-to-gate mapping (11f711cc,
+ *     c26cd6d8).
+ *
+ *     NOTHING else moved here; the sibling suite itemises the emitted copies.
+ *
  *   - 2026-09-30, plan 013 whole-branch review, fixer round 1 (run
  *     2026-09-30_optimization-sweep, pass `branch`; review/162 signed off,
  *     review/164). TWO goldens moved:

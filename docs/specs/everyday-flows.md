@@ -483,7 +483,8 @@ From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw10-f
   `ensureGitignoreEntry`, which is empty under a dry run (`src/cli/commands/init/apply.ts:131-172`). A dry run prints
   the same count in the future tense (`panel.ts:333-335`; `src/cli/commands/init.ts:777`).
 - **`check`'s manifest row** names the managed paths, then the ledger rows across the clients:
-  `<paths> managed path(s) (<rows> ledger rows across <n> client(s))` (`src/cli/commands/check.ts:222-232`).
+  `<paths> managed path(s) (<rows> ledger rows across <n> client(s))` (`checkManifest`,
+  `src/cli/commands/check.ts:259-288`, its count at `:276-286`, re-pointed at `46121954`; `build/88`).
   `docs/troubleshooting.md:32` quotes it.
 - **A defaulted client set says so.** When init defaulted the tools, the panel and the dry run print
   `clients: <tools> (the default — no other client's files were found; <route>)`. On a dry run the route is
@@ -1023,7 +1024,9 @@ the record head's `Base:` line (REQ-CTX-012).
   `:162-164`). A `/st-quick` scan naming a `reason` still runs step 2's classify (`:162-164`; `review/113`). A
   `gate classify` that exits 1 names no class (REQ-FLOW-061): `/st-quick` then moves a batch that touches a path the
   security agent's `## Trigger` table names to `/st-work`, as for a `security-sensitive` class, and keeps any other
-  batch, a docs-only one among them (`:169-173`; `review/179`; REQ-FLOW-065).
+  batch, a docs-only one among them (`:169-173`; `review/179`; REQ-FLOW-065). `/st-work` runs
+  `${STAMITY:VERIFY_GATE_ALL}` on the final tree unclassified (`unclear`), as it does with no base
+  (`content/commands/st-work.md:224-225`; `review/190`).
 - **One review pass.** A class whose checks name `review-once` gets one review pass: a Critical or Warning it raises
   is fixed and closure-reviewed once, and no further round runs (`content/commands/st-work.md:227-228`).
 - **The charter.** Invariant 4 reads "Done means the gates `gate classify` names exit 0 (all if it did not run)", the

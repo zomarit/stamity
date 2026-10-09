@@ -35,7 +35,8 @@ and read against the integration head `47acb16e`; they are unreleased. The ids R
 `docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap; REQ-PROVE-026 to 029 are unallocated.
 The amendment dated 2026-10-09 to REQ-PROVE-031 comes from the spec delta of run `2026-10-08_product-core` (plan 019
 file 2), unit `p2c-ci-lanes-from-map`, merged by its unit `p9-spec-merge`; it cites the integration head `90710ba5`
-and is unreleased.
+and is unreleased. The amendment dated 2026-10-09 to REQ-PROVE-009 comes from the same run's close (ledger
+`build/99`); it cites the integration head `46121954` and is unreleased.
 
 ## Intent
 
@@ -347,6 +348,22 @@ SET-v7 says the "never composed" half holds once that driver compares the pair t
 (`evals/SET-v7.md:886-890`). The `scripts/eval/run.mjs` and `evals/SET-v7.md` citations in this
 paragraph were re-pointed on 2026-10-08 (run `2026-10-08_maintainer-tooling`, ledger `build/12`) to
 the integration head `47acb16e`, where both files had moved; the rest of it cites `e995fe02`.
+
+Amended 2026-10-09 (run `2026-10-08_product-core`, ledger `build/99`), as landed in `51899655` and
+`96ec2532`: the locator gate reads every `source:` range of every case, and each quoted governing block is
+held to its range as contiguous runs. Every range's first non-blank line is anchored in the case: a line of a
+governing block restricted to the case's own source path, one opening such a line's `[...]` quote, a body line
+once a leading `> ` is stripped, or, for a range opening on a frontmatter `description:` line, its value verbatim
+in the body (`test/evals/locators.test.ts:241-286`, run per case at `:512-522`). Each block's plain lines between
+`[...]` lines form runs, and each run is one contiguous slice of its range, after the text quoted before it; a
+quote skips lines only at a `[...]`, and a block opening or closing on a plain run starts and ends on a unit or
+sentence boundary (`:111-212`, applied at `:524-546`). Two declared ranges meet at a paragraph break (`:78-102`).
+
+- GIVEN a case whose range is one line off its quote WHEN the locator gate runs THEN it fails naming the case
+  and the range (`:343-358`); GIVEN a block that drops, repeats or reorders a line, or skips one with no `[...]`
+  line, THEN it fails, and the same omission marked with `[...]` passes (`:433-457`).
+
+This amendment cites the integration head `46121954`.
 
 ### REQ-PROVE-010 — Trigger probes for rule-projected skills
 
