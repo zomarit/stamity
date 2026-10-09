@@ -23,6 +23,9 @@ import {
   type CorpusFile,
 } from "../harness.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+
 /** Engine version stamped into the probe manifest; no assertion reads it. */
 const EMISSION_ENGINE_VERSION = "0.0.0-test";
 
@@ -779,7 +782,7 @@ describe("quick — the guardrails are the command", () => {
       '`npx --no stamity ledger close --run <its run> --id <row id> --retired "fixed by /st-quick"`',
     );
     expect(step).toContain("(`${STAMITY:CLI}` in place of `npx --no stamity` where npm refuses)");
-    expect(step.indexOf("retired there first")).toBeLessThan(step.indexOf("then its bullet leaves `.stamity/inbox.md`"));
+    expect(step.indexOf("retired there first")).toBeLessThan(step.indexOf(`then its bullet leaves \`${INBOX}\``));
     expect(step).toContain("When neither form runs, the bullet stays.");
     // Quick keeps no run record, so its report carries the retirement, and a named row left stays named.
     expect(step).toContain("The batch report names each row retired");

@@ -29,6 +29,7 @@
       "tests": [
         "test/authoring/specPlanCoverage.test.ts",
         "test/ci/leakGate.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
         "test/records"
@@ -38,17 +39,10 @@
       "glob": ".stamity/inbox.md",
       "tests": [
         "test/authoring/specPlanCoverage.test.ts",
-        "test/change/classify.test.ts",
         "test/ci/leakGate.test.ts",
-        "test/ci/recordsOnly.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
-        "test/corpus/commands/board.test.ts",
-        "test/corpus/commands/feedbackPair.test.ts",
-        "test/corpus/commands/lightTrio.test.ts",
-        "test/corpus/commands/plan.test.ts",
-        "test/corpus/commands/work.test.ts",
         "test/docsPages.test.ts",
-        "test/packs/ops.test.ts",
         "test/records"
       ]
     },
@@ -57,9 +51,7 @@
       "tests": [
         "test/authoring/specPlanCoverage.test.ts",
         "test/ci/leakGate.test.ts",
-        "test/ci/recordsOnly.test.ts",
-        "test/cli/commands/initApply.test.ts",
-        "test/cli/commands/initPanel.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
         "test/records"
@@ -70,6 +62,7 @@
       "tests": [
         "test/authoring/specPlanCoverage.test.ts",
         "test/ci/leakGate.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
         "test/records"
@@ -81,6 +74,7 @@
         "test/authoring/specPlanCoverage.test.ts",
         "test/ci/docsRoster.test.ts",
         "test/ci/leakGate.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
         "test/records",
@@ -108,6 +102,7 @@
         "test/ci/recordsOnly.test.ts",
         "test/ci/repoHygiene.test.ts",
         "test/ci/tableHeaderScope.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/ci/workflow.test.ts",
         "test/cli/commands/check.test.ts",
         "test/cli/docs/cliReference.test.ts",
@@ -130,6 +125,7 @@
         "test/ci/packSigningRehearsal.test.ts",
         "test/ci/recordsOnly.test.ts",
         "test/ci/tableHeaderScope.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/ci/workflow.test.ts",
         "test/cli/commands/check.test.ts",
         "test/cli/docs/cliReference.test.ts",
@@ -169,6 +165,7 @@
         "test/ci/recordsOnly.test.ts",
         "test/ci/repoHygiene.test.ts",
         "test/ci/tableHeaderScope.test.ts",
+        "test/ci/testInputsGuard.test.ts",
         "test/ci/workflow.test.ts",
         "test/cli/commands/clean.test.ts",
         "test/cli/commands/init.test.ts",
@@ -218,7 +215,6 @@
         "test/types/domain.test.ts",
         "test/types/markers.test.ts",
         "test/upstream/lane.test.ts",
-        "test/upstream/workflowLandingPolicy.test.ts",
         "test/upstream/workflowRecovery.test.ts",
         "test/worktree/engine.test.ts",
         "test/worktree/policy.test.ts"

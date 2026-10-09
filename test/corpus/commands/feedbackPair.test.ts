@@ -15,6 +15,9 @@ import {
   type CorpusFile,
 } from "../harness.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+
 /**
  * The feedback pair — `/st-rework` and `/st-pr-resolve` — checked as
  * shipped artifacts: frontmatter contract, the class rules a command carries
@@ -364,7 +367,7 @@ describe("rework — leftover scan and routing", () => {
 
     expect(routing).toMatch(/\bREVISE\b/);
     expect(routing).toMatch(/\bDEFER\b/);
-    expect(routing).toContain(".stamity/inbox.md");
+    expect(routing).toContain(INBOX);
     // The inbox is read, not just written: both readers are named where the rows land.
     expect(routing).toMatch(/\/st-board/);
     expect(routing).toMatch(/\/st-work/);
@@ -802,7 +805,7 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(replies).toMatch(/NEEDS_CLARIFICATION/);
     // UPDATED (was a bare containment check): the state path is asserted here as
     // text that SURVIVES egress, against hygiene guard 4's new scope below.
-    expect(replies).toContain(".stamity/inbox.md");
+    expect(replies).toContain(INBOX);
   });
 
   it(`carries all ${HYGIENE_GUARD_COUNT} egress guards, and guard 4 spares repo-relative state paths`, () => {
@@ -823,7 +826,7 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     // machine-local layout, with repo-relative state paths permitted by name.
     expect(guards).toMatch(/machine-local path stripping/i);
     expect(guards).toMatch(/repo-relative state paths are permitted/i);
-    expect(guards).toContain(".stamity/inbox.md");
+    expect(guards).toContain(INBOX);
     // The five are egress guards; the ingress screen is guard 0 and sits outside them.
     expect(guards).toMatch(/five egress guards/i);
     expect(guards).toMatch(/ingress screen in section 0 is guard 0/i);
@@ -845,7 +848,7 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     const close = clause(artifact(PR_RESOLVE).parsed.body, "## Close");
 
     expect(close).toMatch(/fourth write-back channel/i);
-    expect(close).toContain(".stamity/inbox.md");
+    expect(close).toContain(INBOX);
     expect(close).toMatch(/proof block/i);
   });
 

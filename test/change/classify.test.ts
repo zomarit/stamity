@@ -23,6 +23,8 @@ const DOCS_GLOB = ["docs", "**"].join("/");
 const SITE_GLOB = ["website", "**"].join("/");
 const TOP_MD_GLOB = ["*", "md"].join(".");
 const ANY_MD_GLOB = ["**/*", "md"].join(".");
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
 
 /**
  * p1a-classifier-verb (REQ-FLOW-061): the change classifier over a path list.
@@ -244,7 +246,7 @@ describe("matchGlob", () => {
 describe("classifyChange: the built-in rules", () => {
   const cases: readonly (readonly [string, ChangeClass])[] = [
     [".stamity/runs/2026-10-08_x/record.md", "records"],
-    [".stamity/inbox.md", "records"],
+    [INBOX, "records"],
     [".stamity/handoffs/h.md", "records"],
     ["docs/guide.md", "docs"],
     ["CHANGELOG.md", "docs"],
@@ -337,7 +339,7 @@ describe("classifyChange: the built-in rules", () => {
   });
 
   it("never places the engine's state in records", () => {
-    const result = given([".stamity/manifest.json", ".stamity/inbox.md"]);
+    const result = given([".stamity/manifest.json", INBOX]);
     expect(result.class).toBe("security-sensitive");
     expect(result.lenses).toEqual(["stamity-security"]);
   });
@@ -417,7 +419,7 @@ describe("classifyChange: the code-path floor", () => {
 describe("classifyChange: the strongest class wins", () => {
   it("reaches each of the seven classes through a fixture rule set", () => {
     const expected: Record<string, ChangeClass> = {
-      ".stamity/inbox.md": "records",
+      [INBOX]: "records",
       "docs/x.md": "docs",
       "test/a.test.ts": "tests",
       "tsconfig.json": "config",
@@ -432,12 +434,12 @@ describe("classifyChange: the strongest class wins", () => {
   });
 
   it("gives a mixed change its strongest path's class, and keeps every path's own", () => {
-    const result = given(["docs/x.md", "test/a.test.ts", ".stamity/inbox.md"], FIXTURE_RULES);
+    const result = given(["docs/x.md", "test/a.test.ts", INBOX], FIXTURE_RULES);
     expect(result.class).toBe("tests");
     expect(result.byPath.map((entry) => [entry.path, entry.class])).toEqual([
       ["docs/x.md", "docs"],
       ["test/a.test.ts", "tests"],
-      [".stamity/inbox.md", "records"],
+      [INBOX, "records"],
     ]);
 
     const stronger = given(["docs/x.md", "src/auth/login.ts"], FIXTURE_RULES);
@@ -492,8 +494,8 @@ describe("classifyChange: at least product, never lower", () => {
 
   it("lifts a rename between two weaker classes to product", () => {
     const result = classifyChange({
-      paths: [".stamity/inbox.md"],
-      renames: [{ from: "docs/a.md", to: ".stamity/inbox.md" }],
+      paths: [INBOX],
+      renames: [{ from: "docs/a.md", to: INBOX }],
       base: "given",
     });
     // docs and records differ, so the rename is at least product.

@@ -31,6 +31,9 @@ import {
 } from "../corpus/harness.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+
 /**
  * The ops pack, asserted as shipped supply rather than as source.
  *
@@ -158,9 +161,9 @@ const WRITE_CLAIMS: readonly { path: string; body: string; claim: string }[] = [
     claim: "`docs/runbooks/`",
   },
   {
-    path: ".stamity/inbox.md",
+    path: INBOX,
     body: "commands/st-incident-response.md",
-    claim: "`.stamity/inbox.md`",
+    claim: `\`${INBOX}\``,
   },
 ];
 

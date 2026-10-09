@@ -9,6 +9,9 @@ import {
   type CorpusFile,
 } from "../harness.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+
 /**
  * The `/st-board` artifact's own suite. Corpus-wide shape (identity head,
  * load enum, deny cleanliness across every file) is the frontmatter-contract
@@ -562,7 +565,7 @@ describe("st-board — sources, signals, and the inbox", () => {
     const files = await walkAllMarkdown();
     const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
 
-    expect(inbox).toContain(".stamity/inbox.md");
+    expect(inbox).toContain(INBOX);
     expect(inbox).toMatch(/Readers, three, all mandatory:.*`fill` triages the inbox on every run/);
     for (const reader of ["/st-work", "/st-plan"]) {
       expect(inbox, `${reader} reads the inbox and must be named`).toContain(reader);
@@ -595,7 +598,7 @@ describe("st-board — sources, signals, and the inbox", () => {
           file.relPath !== ARTIFACT_PATH &&
           !retirerOnly.includes(file.relPath) &&
           /append|land|routed|deferr/i.test(file.parsed.body) &&
-          file.parsed.body.includes(".stamity/inbox.md"),
+          file.parsed.body.includes(INBOX),
       )
       .map((file) => file.relPath);
     expect(writers.length).toBe(5);
@@ -606,7 +609,7 @@ describe("st-board — sources, signals, and the inbox", () => {
 
     // The fill mode is one of the readers, so it cites the same path.
     expect(flat(section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"))).toContain(
-      ".stamity/inbox.md",
+      INBOX,
     );
   });
 

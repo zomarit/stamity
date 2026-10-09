@@ -33,6 +33,9 @@ import type { PluginConfig } from "../../../src/types/manifest.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own handoffs keep file.
+const HANDOFFS_KEEP = [".stamity/handoffs", ".gitkeep"].join("/");
+
 /**
  * The planner seam is SUBSTITUTED here, and that is the whole of what the mock
  * buys: a hand-written `AdapterOutput[]` per case, so apply's write, ledger and
@@ -198,7 +201,7 @@ describe("applyInit — fresh repo", () => {
     expect(report).toEqual({
       manifestPath: join(root, ".stamity", "manifest.json"),
       createdDirs: [...STATE_DIRS],
-      createdKeeps: [".stamity/learnings/.gitkeep", ".stamity/handoffs/.gitkeep"],
+      createdKeeps: [".stamity/learnings/.gitkeep", HANDOFFS_KEEP],
       wrote: [],
       warnings: [],
       ledgerCount: 0,
@@ -350,7 +353,7 @@ describe("applyInit — dry run", () => {
     expect(report.ledgerCount).toBe(0);
     expect(report.gitignoreEnsured).toBe(false);
     // A preview names the placeholders it would create and appends nothing.
-    expect(report.createdKeeps).toEqual([".stamity/learnings/.gitkeep", ".stamity/handoffs/.gitkeep"]);
+    expect(report.createdKeeps).toEqual([".stamity/learnings/.gitkeep", HANDOFFS_KEEP]);
     expect(report.gitignoreAdded).toEqual([]);
     expect(report.manifestPath).toBe(join(root, ".stamity", "manifest.json"));
 

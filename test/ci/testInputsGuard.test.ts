@@ -12,7 +12,7 @@ import {
   parseClassFile,
   type ClassRule,
 } from "../../src/change/classify.ts";
-import { extractReadPaths, isTestSource, type TestInputEntry } from "../../src/change/testInputs.ts";
+import { extractReadPaths, isTestSource, selectTests, type TestInputEntry } from "../../src/change/testInputs.ts";
 // @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
 import * as lanes from "../../scripts/ci/records-only.mjs";
 
@@ -42,8 +42,6 @@ interface CensusInput {
   rules: readonly ClassRule[];
 }
 
-const TEST_FILE_GLOBS = ["**/*.test.*", "**/*.spec.*"];
-
 /**
  * `<folder>/**`, built at run time: written as a literal, a folder glob here would make this file a
  * declared reader of every tracked file under that folder (review/68), which the map would then have to list.
@@ -52,8 +50,21 @@ function under(folder: string): string {
   return [folder, "**"].join("/");
 }
 
+const testFiles = new Map<string, boolean>();
+
+/**
+ * A test file as {@link selectTests} splits them (p2d M-1): changed alone, a test file is selected by
+ * name, while a helper or fixture runs every test and any other path selects nothing. The module keeps
+ * its test-file globs private, so the guard asks it rather than spelling a second copy that could drift.
+ */
 function isTestFile(path: string): boolean {
-  return TEST_FILE_GLOBS.some((glob) => matchGlob(path, glob));
+  let answer = testFiles.get(path);
+  if (answer === undefined) {
+    const map = [{ glob: under("never-a-changed-path"), tests: [] }];
+    answer = selectTests({ paths: [path], class: "tests", map }).files.includes(path);
+    testFiles.set(path, answer);
+  }
+  return answer;
 }
 
 /** A relative import specifier in a source: `from "./x.ts"`, `import("../y.js")`, `import "./z.ts"`. */
@@ -294,6 +305,27 @@ describe("this repository's test-input map", () => {
     const guard = "test/ci/testInputsGuard.test.ts";
 
     expect(map.some((entry) => matchGlob("test/x/new.test.ts", entry.glob) && covers(entry, guard))).toBe(true);
+  });
+
+  // p2d W-1 (option a): the census reads the tracked set, so a records or docs change that adds a file an existing
+  // test string names opens a gap. Every entry such a path matches lists this guard, so the gap fails on that change,
+  // whether the selection unions the matching entries or takes one of them (review/77).
+  it("selects this guard from every entry a records or docs path matches", () => {
+    const guard = "test/ci/testInputsGuard.test.ts";
+    const rules = parsed.ok ? mergeRules(BUILT_IN_RULES, parsed.rules) : BUILT_IN_RULES;
+    const gaps = new Set<string>();
+    let narrowed = 0;
+    for (const path of tracked) {
+      const cls = classifyChange({ paths: [path], base: "given" }, rules).class;
+      if (cls !== "records" && cls !== "docs") continue;
+      narrowed += 1;
+      const matching = map.filter((entry) => matchGlob(path, entry.glob));
+      if (matching.length === 0) gaps.add(`no entry matches ${path}`);
+      for (const entry of matching) if (!covers(entry, guard)) gaps.add(`${entry.glob} does not list ${guard}`);
+    }
+
+    expect(narrowed).toBeGreaterThan(0);
+    expect([...gaps].toSorted()).toEqual([]);
   });
 
   const laneSuites = (lanes as Record<string, unknown>)["LANE_SUITES"] as Record<string, readonly string[]> | undefined;

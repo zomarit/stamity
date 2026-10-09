@@ -68,6 +68,10 @@ import { carriedProcessEnv, NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 
 const SCRIPT = fileURLToPath(new URL("../../scripts/upstream.mjs", import.meta.url));
 
+// Fixture data kept out of the test-input census: the scratch upstream's file names are built at run time, as literals they name this repository's README.md and CHANGELOG.md.
+const FIXTURE_README = ["README", "md"].join(".");
+const FIXTURE_CHANGELOG = ["CHANGELOG", "md"].join(".");
+
 /** 2026-01-01T00:00:00Z; the n-th commit or tag of the process is stamped EPOCH + n minutes. */
 const FIXTURE_EPOCH_SECONDS = 1767225600;
 let tick = 0;
@@ -258,7 +262,7 @@ console.log('gate: effective tier is enterprise')
 export const STRAY_GENERATOR_SOURCE = `import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-writeFileSync(fileURLToPath(new URL('../README.md', import.meta.url)), '# Fixture upstream\\n\\nRules: rewritten by scripts/stray.mjs\\n')
+writeFileSync(fileURLToPath(new URL('../${FIXTURE_README}', import.meta.url)), '# Fixture upstream\\n\\nRules: rewritten by scripts/stray.mjs\\n')
 `;
 
 /** The bytes of `README.md` after `scripts/stray.mjs` ran. */
@@ -412,8 +416,8 @@ export function createUpstream(parent: string): UpstreamFixture {
   writeFiles(dir, {
     ".gitignore": "node_modules/\n\n# The upstream lane's update worktrees.\n.stamity/upstream-work/\n",
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.0.0", private: true, type: "module" }, null, 2)}\n`,
-    "README.md": "# Fixture upstream\n\nRules: 2\n",
-    "CHANGELOG.md": CHANGELOG_V1,
+    [FIXTURE_README]: "# Fixture upstream\n\nRules: 2\n",
+    [FIXTURE_CHANGELOG]: CHANGELOG_V1,
     "content/rules/alpha.md": ALPHA_V1,
     "content/rules/stamity-secrets.md": SECRETS_V1,
     "content/skills/st-review/SKILL.md": SKILL_V1,
@@ -436,8 +440,8 @@ export function createUpstream(parent: string): UpstreamFixture {
     "content/rules/stamity-secrets.md": SECRETS_V1_1,
     "content/skills/st-review/SKILL.md": SKILL_V1_1,
     "assets/logo.bin": LOGO_V1_1,
-    "README.md": "# Fixture upstream\n\nRules: 4\n",
-    "CHANGELOG.md": changelogWith(SECTION_V1_1),
+    [FIXTURE_README]: "# Fixture upstream\n\nRules: 4\n",
+    [FIXTURE_CHANGELOG]: changelogWith(SECTION_V1_1),
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.1.0", private: true, type: "module" }, null, 2)}\n`,
   });
   regenerate(repo);
@@ -447,7 +451,7 @@ export function createUpstream(parent: string): UpstreamFixture {
   // v1.2.0 — the resolution rule moves, in a file no fork edits.
   writeFiles(dir, {
     "scripts/resolve-tier.mjs": RESOLVER_V2,
-    "CHANGELOG.md": changelogWith(SECTION_V1_2 + SECTION_V1_1),
+    [FIXTURE_CHANGELOG]: changelogWith(SECTION_V1_2 + SECTION_V1_1),
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.2.0", private: true, type: "module" }, null, 2)}\n`,
   });
   commitAll(repo, "release 1.2.0");
@@ -457,8 +461,8 @@ export function createUpstream(parent: string): UpstreamFixture {
   git(repo, ["mv", "content/rules/beta.md", "content/rules/gamma.md"]);
   writeFiles(dir, {
     "content/rules/delta.md": null,
-    "README.md": "# Fixture upstream\n\nRules: 3\n",
-    "CHANGELOG.md": changelogWith(SECTION_V1_3 + SECTION_V1_2 + SECTION_V1_1),
+    [FIXTURE_README]: "# Fixture upstream\n\nRules: 3\n",
+    [FIXTURE_CHANGELOG]: changelogWith(SECTION_V1_3 + SECTION_V1_2 + SECTION_V1_1),
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.3.0", private: true, type: "module" }, null, 2)}\n`,
   });
   regenerate(repo);
@@ -466,7 +470,7 @@ export function createUpstream(parent: string): UpstreamFixture {
   tagHead(repo, "v1.3.0", { annotated: true });
 
   // Past the newest stable release: a prerelease and a tag outside the pattern, on one commit.
-  writeFiles(dir, { "README.md": "# Fixture upstream\n\nRules: 3\n\nA release candidate is out.\n" });
+  writeFiles(dir, { [FIXTURE_README]: "# Fixture upstream\n\nRules: 3\n\nA release candidate is out.\n" });
   commitAll(repo, "prepare 1.4.0");
   tagHead(repo, PRERELEASE_TAG, { annotated: true });
   tagHead(repo, OFF_PATTERN_TAG, { annotated: false });

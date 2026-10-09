@@ -26,6 +26,9 @@ import { TOOLS } from "../../../src/types/core.ts";
 import type { MergeResult } from "../../../src/types/content.ts";
 import type { RepoInfo } from "../../../src/types/detect.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own handoffs keep file.
+const HANDOFFS_KEEP = [".stamity/handoffs", ".gitkeep"].join("/");
+
 /**
  * Pure-rendering lane: the panel is a string function over plain inputs, so no
  * filesystem, no funnel, no temp dirs. The command-level suite
@@ -88,7 +91,7 @@ function reportFixture(wrote: MergeResult[] = [], warnings: string[] = []): Init
     // FIXTURE RECONCILIATION (sw10-first-run-output): the report gained the
     // placeholders a fresh init creates and the .gitignore entries it appended —
     // here the fresh-repo answer for both, the whole required set included.
-    createdKeeps: [".stamity/learnings/.gitkeep", ".stamity/handoffs/.gitkeep"],
+    createdKeeps: [".stamity/learnings/.gitkeep", HANDOFFS_KEEP],
     wrote,
     warnings,
     ledgerCount: wrote.length,

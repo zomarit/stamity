@@ -19,6 +19,9 @@ import {
   type CorpusFile,
 } from "../harness.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+
 /**
  * Corpus invariants for `/st-work`, the core workflow command. The suite
  * binds the shipped artifact to its design contract: the frontmatter head and
@@ -1105,7 +1108,7 @@ describe("/st-work — Prove", () => {
     // close now appends, and the fields it appends are `/st-board`'s declared
     // grammar rather than a second shape a reader would have to guess at — the
     // `Ref:` back to the ledger row is what lets the two records converge.
-    expect(proof).toContain("At exit every row that closed `deferred` is appended to `.stamity/inbox.md`");
+    expect(proof).toContain(`At exit every row that closed \`deferred\` is appended to \`${INBOX}\``);
     expect(proof).toContain("in the row grammar `/st-board` declares");
     expect(proof).toContain("`source: /st-work`");
     expect(proof).toContain("`Ref: <the run's ledger path>#<row id>`");

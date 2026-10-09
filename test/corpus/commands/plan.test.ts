@@ -16,6 +16,9 @@ import {
   type CorpusFile,
 } from "../harness.ts";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+
 /**
  * `/st-plan` — the intent-routing planner, one command absorbing the
  * predecessor's seven plan-family commands. The suite binds what the design
@@ -548,7 +551,7 @@ describe("/st-plan — side effects", () => {
     expect(effects).toContain(".stamity/learnings/");
     expect(effects).toMatch(phrase("writes none and says so"));
     expect(effects).toMatch(phrase("Deferral-inbox append"));
-    expect(effects).toContain(".stamity/inbox.md");
+    expect(effects).toContain(INBOX);
   });
 
   it("keeps both side effects reportable, and neither one a product write", () => {
@@ -558,7 +561,7 @@ describe("/st-plan — side effects", () => {
     expect(effects).toMatch(phrase("No product file moves here"));
     // Each side effect owes the return block a row, or it is unobservable.
     expect(returns).toMatch(phrase("Learnings written, with their paths"));
-    expect(returns).toContain(".stamity/inbox.md");
+    expect(returns).toContain(INBOX);
   });
 });
 
@@ -591,7 +594,7 @@ describe("/st-plan — return contract", () => {
   it("routes out-of-scope follow-ups to the deferral inbox", () => {
     const returns = sectionOf(plan.parsed.body, "## Return contract");
 
-    expect(returns).toContain(".stamity/inbox.md");
+    expect(returns).toContain(INBOX);
     expect(returns).toContain("/st-board fill --source docs/plans/<file>");
   });
 

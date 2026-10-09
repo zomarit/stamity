@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — import-safe native ESM CI helper, outside the product package.
 import { decide, isRecordsPath, LANE_PATHS, LANE_SUITES, laneOf, RECORDS_PATHS, RECORDS_SUITES } from "../../scripts/ci/records-only.mjs";
 
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
+const INBOX = [".stamity", "inbox.md"].join("/");
+// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own handoffs keep file.
+const HANDOFFS_KEEP = [".stamity/handoffs", ".gitkeep"].join("/");
+
 /**
  * The CI lane classifier, `scripts/ci/records-only.mjs` (the file name predates the other lanes).
  *
@@ -57,7 +62,7 @@ describe("the records list", () => {
     expect(RECORDS_PATHS).toEqual([
       // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every record.
       [".stamity/runs", "**"].join("/"),
-      ".stamity/inbox.md",
+      INBOX,
       [".stamity/handoffs", "**"].join("/"),
       ["docs/plans", "**"].join("/"),
     ]);
@@ -67,7 +72,7 @@ describe("the records list", () => {
     for (const path of [
       ".stamity/runs/2026-09-30_x/record.md",
       ".stamity/runs/2026-09-30_x/reports/u1-implementer-r1.md",
-      ".stamity/inbox.md",
+      INBOX,
       ".stamity/handoffs/archive/2026-09-22_note_8457c.md",
       "docs/plans/013-optimization-sweep-03.md",
     ]) {
@@ -80,7 +85,7 @@ describe("the records list", () => {
       // The learnings feed the session hook and the troubleshooting count: not a record.
       ".stamity/learnings/some-finding.md",
       // Engine-emitted state scaffold, planned by sync and re-proven by the dogfood check.
-      ".stamity/handoffs/.gitkeep",
+      HANDOFFS_KEEP,
       ".stamity/runs/.gitkeep",
       // Prefix look-alikes.
       ".stamity/runsX/record.md",
@@ -126,7 +131,7 @@ describe("decide — the pure classification", () => {
       const decision = decideTyped({
         event,
         base: SHA,
-        paths: [".stamity/runs/x/record.md", "docs/plans/013-x.md", ".stamity/inbox.md"],
+        paths: [".stamity/runs/x/record.md", "docs/plans/013-x.md", INBOX],
       });
       expect(decision.recordsOnly, event).toBe(true);
     }
@@ -385,7 +390,7 @@ function repository(): { root: string; commit: (message: string) => string; writ
   git("init", "--quiet");
   write("src/cli.ts", "export {};\n");
   write(".stamity/runs/r1/record.md", "# record\n");
-  write(".stamity/inbox.md", "# inbox\n");
+  write(INBOX, "# inbox\n");
   commit("base");
   return { root, commit, write };
 }
@@ -407,7 +412,7 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     const repo = repository();
     const base = repo.commit("noop");
     repo.write(".stamity/runs/x/record.md", "# new record\n");
-    repo.write(".stamity/inbox.md", "# inbox, one row more\n");
+    repo.write(INBOX, "# inbox, one row more\n");
     repo.commit("records");
     const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "push" });
     expect(result.status, result.stderr).toBe(0);
