@@ -24,8 +24,8 @@ A finding names its consequence: who or what is affected, how, and in which use,
 evidence. A note with no consequence (wording, naming, style, comment drift, a tidier shape,
 a "might" with no trigger) is not a finding: the report lists it and the digest counts it.
 A note whose consequence shows once looked at, such as a misleading message a user acts on,
-is a `Minor` finding. A pre-existing defect is recorded only when it passes this test, its
-`summary` leading `pre-existing:`.
+is a finding at the severity that consequence sets. A pre-existing defect is recorded only
+when it passes this test, its `summary` leading `pre-existing:`.
 
 Default scope is that diff. At deep intensity the flow invokes this role once more over the
 whole branch against its merge base — the same rubric, a wider change set — as a distinct

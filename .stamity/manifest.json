@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T00:59:09.806Z",
+  "updatedAt": "2026-10-09T01:03:35.449Z",
   "tools": [
     "claude"
   ],
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "ee626113f22dd7232c642e8e40b662e590706d95af6498e47c44b820ff879a43",
+      "contentHash": "968d236246e31f8682de951bbbc99d0201bd96dfce03e7c9aa4c1c07a44daafc",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
