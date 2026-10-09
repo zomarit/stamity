@@ -54,13 +54,15 @@
  * the lines of each JavaScript, TypeScript or Python file (by extension, or by
  * a first-line shebang) outside the built-in test globs, a code file of another
  * language is named as read by no line rule (review/85), and a hit makes that
- * path `security-sensitive`. A line is read up to 4,096 characters, and a
- * longer one makes the class at least `product` (review/93). Added and removed
+ * path `security-sensitive`. A line is read to its end, `secret-name` in
+ * overlapping windows so its cost stays linear in the line (review/93,
+ * review/123); a line past a hard cap is not read and makes the class
+ * `security-sensitive`, so the lens reads it. Added and removed
  * lines count, and context lines only in a hunk that also removes one, so
  * removing the guard around an existing dangerous call still classifies. The
  * reason names the rule id and where, never the line's text (plan/17). A file
- * the read could not show is `unscanned`, and makes the class at least
- * `product` (plan/62).
+ * the read could not show is `unscanned`: a code file makes the class
+ * `security-sensitive` (review/125), any other at least `product` (plan/62).
  *
  * **Where a path came from decides how it is read** (review/20). A name git
  * gave is read literally: git never separates on `\`, so a backslash there is a
@@ -172,8 +174,9 @@ interface LineRule {
  * a name that merely contains a word do not match. S7's fifth risk, state read
  * back as authority, is placed by path. A bare `exec` call counts, or one on a
  * `child_process` receiver (`cp` included, and any name the file imports the
- * module as, by {@link childProcessNames}), never a RegExp's `exec` method; a
- * secret name counts only where it is assigned, or is an object key given, a
+ * module as, by {@link childProcessNames}), or a call of a name the file binds
+ * one of the module's spawning members to (review/124), never a RegExp's
+ * `exec` method; a secret name counts only where it is assigned, or is an object key given, a
  * string literal or an environment value, and never a literal that is wholly
  * one `${…}` template placeholder (build/47, review/92). The shapes are
  * JavaScript, TypeScript and Python APIs, so they read only the files of
@@ -183,7 +186,7 @@ export const SECURITY_LINE_RULES: readonly LineRule[] = [
   {
     id: "process-spawn",
     pattern:
-      /(?:\b(?:require|import)\s*\(\s*|\bfrom\s*|^\s*import\s*)["'](?:node:)?child_process["']|\b(?:execFile|execFileSync|execSync|spawn|spawnSync|fork|Popen)\(|(?<![\w$.])exec\(|\b(?:child_process|childProcess|cp)(?:["']\s*\))?\.exec\(|\bpromisify\(\s*(?:[\w$]+\.)?exec\s*\)|\bsubprocess\.(?:run|call|check_output|check_call)\(|\bos\.system\(/,
+      /(?:\b(?:require|import)\s*\(\s*|\bfrom\s*|^\s*import\s*)["'](?:node:)?child_process["']|\b(?:execFile|execFileSync|execSync|spawn|spawnSync|fork|Popen)\(|(?<![\w$.])exec\(|\b(?:child_process|childProcess|cp)(?:["']\s*\))?\.exec\(|\bpromisify\(\s*(?:[\w$]+\.)?exec\s*\)|\bsubprocess\.(?:run|call|check_output|check_call)\(|\bos\.(?:system|popen)\(/,
     rationale: "a child process runs a command the change can shape: an import of child_process, or a spawn, fork or exec call",
   },
   {
@@ -194,8 +197,10 @@ export const SECURITY_LINE_RULES: readonly LineRule[] = [
   },
   {
     id: "network-or-registry",
-    pattern: /\bfetch\(|\bhttps?\.(?:request|get)\(|\baxios(?:\.\w+)?\(|["'`][^"'`]*\b(?:(?:curl|wget)\s|npm\s+publish\b)/,
-    rationale: "a call leaves the machine: a fetch call, an http or https request, an axios call, or a download or publish command in a string",
+    pattern:
+      /\bfetch\(|\bhttps?\.(?:request|get)\(|\baxios(?:\.\w+)?\(|\brequests\.(?:get|post|put|patch|delete|head|options|request)\(|\burllib\.request\.urlopen\(|["'`][^"'`]*\b(?:(?:curl|wget)\s|npm\s+publish\b)/,
+    rationale:
+      "a call leaves the machine: a fetch call, an http or https request, an axios or Python requests call, urlopen, or a download or publish command in a string",
   },
   {
     id: "secret-name",
@@ -217,8 +222,18 @@ const LINE_RULE_EXTENSIONS: ReadonlySet<string> = new Set([
 /** A shebang interpreter in a covered language: Node and its runners, or Python. */
 const LINE_RULE_INTERPRETER = /^(?:node(?:js)?|deno|bun|tsx|ts-node|python[\d.]*)$/;
 
-/** A line longer than this is read only up to it, so no line costs the rules more than a bounded scan (review/93). */
-const LINE_RULE_MAX_CHARS = 4_096;
+/**
+ * `secret-name` backtracks over a long word run, so it reads a line in windows
+ * of this many characters (review/93), each overlapping the last by
+ * {@link LINE_RULE_OVERLAP}: a match up to that long is found wherever it sits
+ * (review/123). The other rules are linear and read the whole line.
+ */
+const LINE_RULE_WINDOW = 4_096;
+const LINE_RULE_OVERLAP = 1_024;
+/** The rule a long line is windowed for. */
+const WINDOWED_RULE = "secret-name";
+/** A line longer than this is not read, and makes the class `security-sensitive` (review/123). */
+const LINE_RULE_MAX_CHARS = 256 * 1024;
 
 /** At most this many characters of a file's head are searched for its child_process import names. */
 const HEAD_MAX_CHARS = 64 * 1024;
@@ -246,22 +261,54 @@ export function hasCodeExtension(path: string): boolean {
 const CHILD_PROCESS_BINDING =
   /\bimport\s+(?:\*\s*as\s+)?([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\}\s*)?from\s*["'](?:node:)?child_process["']|\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?(?:require|import)\s*\(\s*["'](?:node:)?child_process["']|\bimport\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*["'](?:node:)?child_process["']/g;
 
-/** The names `texts` bind the child_process module to (review/90): `cp` in a namespace import of the module as `cp`. */
-function childProcessNames(texts: readonly string[]): string[] {
-  const names = new Set<string>();
+/**
+ * A named import or a destructuring of the child_process module, its braces'
+ * content in group 1 or 2 (`exec as run`, `execSync: sh`); the braces are read
+ * to a bound, so an unclosed one costs no more than that per match start
+ * (review/124).
+ */
+const CHILD_PROCESS_MEMBER_BINDING =
+  /\bimport\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]{0,1024})\}\s*from\s*["'](?:node:)?child_process["']|\b(?:const|let|var)\s*\{([^}]{0,1024})\}\s*=\s*(?:await\s+)?(?:require|import)\s*\(\s*["'](?:node:)?child_process["']/g;
+
+/** The child_process members that run a command. */
+const SPAWNING_MEMBERS: ReadonlySet<string> = new Set(["exec", "execSync", "execFile", "execFileSync", "spawn", "spawnSync", "fork"]);
+
+/**
+ * The names `texts` bind the child_process module to (review/90), `cp` in a
+ * namespace import of the module as `cp`, and the names they bind a spawning
+ * member to (review/124), `run` in `import { exec as run }` or
+ * `const { execSync: run } = require(…)`.
+ */
+function childProcessNames(texts: readonly string[]): { modules: string[]; members: string[] } {
+  const modules = new Set<string>();
+  const members = new Set<string>();
   for (const text of texts) {
-    for (const match of text.slice(0, HEAD_MAX_CHARS).matchAll(CHILD_PROCESS_BINDING)) {
+    const head = text.slice(0, HEAD_MAX_CHARS);
+    for (const match of head.matchAll(CHILD_PROCESS_BINDING)) {
       const name = match[1] ?? match[2] ?? match[3];
-      if (name !== undefined) names.add(name);
+      if (name !== undefined) modules.add(name);
+    }
+    for (const match of head.matchAll(CHILD_PROCESS_MEMBER_BINDING)) {
+      for (const part of (match[1] ?? match[2] ?? "").split(",")) {
+        const bound = /^\s*([A-Za-z_$][\w$]*)\s*(?:\bas\b|:)\s*([A-Za-z_$][\w$]*)/.exec(part);
+        if (bound?.[1] !== undefined && bound[2] !== undefined && SPAWNING_MEMBERS.has(bound[1])) members.add(bound[2]);
+      }
     }
   }
-  return [...names];
+  return { modules: [...modules], members: [...members] };
 }
 
-/** The `exec` call on one of `names`, as the process-spawn rule reads it, or `undefined` for none. */
-function execOn(names: readonly string[]): RegExp | undefined {
-  if (names.length === 0) return undefined;
-  return new RegExp(`(?<![\\w$.])(?:${names.map((name) => name.replaceAll("$", "\\$")).join("|")})\\.exec\\(`);
+/**
+ * The `exec` call on one of `modules` and the bare call of one of `members`, as
+ * the process-spawn rule reads them, or `undefined` for neither.
+ */
+function execOn({ modules, members }: { modules: readonly string[]; members: readonly string[] }): RegExp | undefined {
+  const alternation = (names: readonly string[]): string => names.map((name) => name.replaceAll("$", "\\$")).join("|");
+  const shapes = [
+    ...(modules.length === 0 ? [] : [`(?:${alternation(modules)})\\.exec\\(`]),
+    ...(members.length === 0 ? [] : [`(?:${alternation(members)})\\(`]),
+  ];
+  return shapes.length === 0 ? undefined : new RegExp(`(?<![\\w$.])(?:${shapes.join("|")})`);
 }
 
 /** The interpreter a `#!` line names, `env` and its options passed over, or `undefined` for a line that is none. */
@@ -303,30 +350,53 @@ function lineRulesRead(raw: string, source: PathSource, shebang: string | undefi
 }
 
 /**
- * The first line rule a hunk hits and where, never the line's text, or no
- * `hit`; and whether a line it read was cut at {@link LINE_RULE_MAX_CHARS}.
- * Added lines first, then removed lines, then, only in a hunk that removes a
- * line, its context lines. `execOnNames` adds the `exec` call on the file's names for
- * the child_process module to `process-spawn`.
+ * Whether the line rules read a file of this path whose first line is
+ * `firstLine` (review/125): a reader that must bound its reads reads these
+ * first, so no budget leaves them unread.
  */
-function lineRuleHit(hunk: Hunk, path: string, execOnNames: RegExp | undefined): { hit?: string; cut: boolean } {
-  let cut = false;
+export function lineRulesCover(path: string, source: PathSource, firstLine: string | undefined): boolean {
+  return lineRulesRead(path, source, firstLine) === "read";
+}
+
+/** Whether `rule` matches `text`: {@link WINDOWED_RULE} window by window, any other over the whole text. */
+function ruleMatches(rule: LineRule, text: string): boolean {
+  if (rule.id !== WINDOWED_RULE || text.length <= LINE_RULE_WINDOW) return rule.pattern.test(text);
+  for (let start = 0; start + LINE_RULE_OVERLAP < text.length; start += LINE_RULE_WINDOW - LINE_RULE_OVERLAP) {
+    if (rule.pattern.test(text.slice(start, start + LINE_RULE_WINDOW))) return true;
+  }
+  return false;
+}
+
+/**
+ * The first line rule a hunk hits and where, never the line's text, or no
+ * `hit`; and whether it held a line past {@link LINE_RULE_MAX_CHARS}, which no
+ * rule reads. Added lines first, then removed lines, then, only in a hunk that
+ * removes a line, its context lines. `execOnNames` adds the `exec` call on the
+ * file's names for the child_process module, and the call of a name it binds a
+ * spawning member to, to `process-spawn`.
+ */
+function lineRuleHit(hunk: Hunk, path: string, execOnNames: RegExp | undefined): { hit?: string; overCap: boolean } {
+  let overCap = false;
   const matches = (rule: LineRule, text: string): boolean => {
-    if (text.length > LINE_RULE_MAX_CHARS) cut = true;
-    const read = text.length > LINE_RULE_MAX_CHARS ? text.slice(0, LINE_RULE_MAX_CHARS) : text;
-    return rule.pattern.test(read) || (rule.id === "process-spawn" && execOnNames?.test(read) === true);
+    if (text.length > LINE_RULE_MAX_CHARS) {
+      overCap = true;
+      return false;
+    }
+    return ruleMatches(rule, text) || (rule.id === "process-spawn" && execOnNames?.test(text) === true);
   };
   const first = (lines: readonly string[]): LineRule | undefined =>
     SECURITY_LINE_RULES.find((rule) => lines.some((text) => matches(rule, text)));
   for (const added of hunk.added) {
     const rule = first([added.text]);
-    if (rule !== undefined) return { hit: `${rule.id} at ${path}:${added.line}`, cut };
+    if (rule !== undefined) return { hit: `${rule.id} at ${path}:${added.line}`, overCap };
   }
-  if (hunk.removed.length === 0) return { cut };
+  if (hunk.removed.length === 0) return { overCap };
   const removed = first(hunk.removed);
-  if (removed !== undefined) return { hit: `${removed.id} at ${path}, a removed line`, cut };
+  if (removed !== undefined) return { hit: `${removed.id} at ${path}, a removed line`, overCap };
   const context = first(hunk.context);
-  return context === undefined ? { cut } : { hit: `${context.id} at ${path}, a context line of a hunk that removes one`, cut };
+  return context === undefined
+    ? { overCap }
+    : { hit: `${context.id} at ${path}, a context line of a hunk that removes one`, overCap };
 }
 
 /** One placement rule: every path a glob of `paths` matches takes `class` at least. */
@@ -751,7 +821,7 @@ export function classifyChange(
   }
   const lineHits: string[] = [];
   const uncovered = new Set<string>();
-  const cut = new Set<string>();
+  const overCap = new Set<string>();
   // Per file: its shebang (the head's first line, or an added line 1) and its names for the child_process module.
   const files = new Map<string, Hunk[]>();
   for (const hunk of input.hunks ?? []) files.set(hunk.path, [...(files.get(hunk.path) ?? []), hunk]);
@@ -772,8 +842,8 @@ export function classifyChange(
     const reading = lineRulesRead(hunk.path, source, fileFacts?.shebang);
     if (reading === "uncovered") uncovered.add(entry.path);
     if (reading !== "read") continue;
-    const { hit, cut: wasCut } = lineRuleHit(hunk, entry.path, fileFacts?.execOnNames);
-    if (wasCut) cut.add(entry.path);
+    const { hit, overCap: wasOver } = lineRuleHit(hunk, entry.path, fileFacts?.execOnNames);
+    if (wasOver) overCap.add(entry.path);
     if (hit === undefined) continue;
     lineHits.push(hit);
     if (rank("security-sensitive") < rank(entry.class)) {
@@ -805,7 +875,16 @@ export function classifyChange(
     reasons.push(`the rename ${from} -> ${to} crosses ${fromClass} and ${toClass}, so the class is at least product`);
     atLeastProduct.push("product");
   }
-  const unscanned = input.unscanned ?? [];
+  // review/125: no line rule read an unscanned code file, so the lens reads it, as for a failed read.
+  const unscannedCode = (input.unscanned ?? []).filter((path) => hasCodeExtension(path));
+  const unscanned = (input.unscanned ?? []).filter((path) => !hasCodeExtension(path));
+  if (unscannedCode.length > 0) {
+    const one = unscannedCode.length === 1;
+    reasons.push(
+      `${unscannedCode.length} changed code file${one ? "" : "s"} the read could not show ${one ? "is" : "are"} unscanned, so the class is security-sensitive and its lens reads ${one ? "it" : "them"}: ${namePaths(unscannedCode)}`,
+    );
+    atLeastProduct.push("security-sensitive");
+  }
   if (unscanned.length > 0) {
     const one = unscanned.length === 1;
     reasons.push(
@@ -813,11 +892,11 @@ export function classifyChange(
     );
     atLeastProduct.push("product");
   }
-  if (cut.size > 0) {
+  if (overCap.size > 0) {
     reasons.push(
-      `a line longer than ${LINE_RULE_MAX_CHARS} characters was read only that far, so the class is at least product: ${namePaths([...cut])}`,
+      `a line longer than ${LINE_RULE_MAX_CHARS} characters was not read, so the class is security-sensitive and its lens reads it: ${namePaths([...overCap])}`,
     );
-    atLeastProduct.push("product");
+    atLeastProduct.push("security-sensitive");
   }
   if (lineHits.length > 0) reasons.push(`the security line rules hit: ${namePaths(lineHits)}`);
   if (uncovered.size > 0) reasons.push(`read by no line rule, as none covers its language: ${namePaths([...uncovered])}`);

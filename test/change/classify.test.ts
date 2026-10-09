@@ -1535,14 +1535,26 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     expect(result.class).toBe("security-sensitive");
   });
 
-  it("makes the class at least product for a tracked code file the read could not show, counting it", () => {
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/125 (signed off): an unscanned code file
+   * made the class at least product, so a dangerous call in it reached no lens. No line rule could read it, so it now
+   * makes the class security-sensitive and the lens reads it, as a failed read does; any other unscanned file is
+   * still at least product. Retitled from "makes the class at least product for a tracked code file the read could
+   * not show, counting it".
+   */
+  it("makes the class security-sensitive for a code file the read could not show, and at least product for another", () => {
     const docsOnly = withLines([hunk("docs/x.md", { added: ["text"] })]);
     expect(docsOnly.class).toBe("docs");
-    const result = withLines([hunk("docs/x.md", { added: ["text"] })], { unscanned: ["src/x.ts"] });
-    expect(result.class).toBe("product");
-    // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/94 (signed off): untracked files past
-    // the total read cap are unscanned too, of any type, so the clause says "changed file", not "tracked code file".
-    expect(result.reason).toContain("1 changed file the read could not show is unscanned, so the class is at least product: src/x.ts");
+    const code = withLines([hunk("docs/x.md", { added: ["text"] })], { unscanned: ["src/x.ts"] });
+    const data = withLines([hunk("docs/x.md", { added: ["text"] })], { unscanned: ["data/x.txt"] });
+
+    expect(code.class).toBe("security-sensitive");
+    expect(code.lenses).toContain("stamity-security");
+    expect(code.reason).toContain(
+      "1 changed code file the read could not show is unscanned, so the class is security-sensitive and its lens reads it: src/x.ts",
+    );
+    expect(data.class).toBe("product");
+    expect(data.reason).toContain("1 changed file the read could not show is unscanned, so the class is at least product: data/x.txt");
   });
 
   // review/86, review/90: `exec` on the imported child_process module counts under whatever name the file gives it.
@@ -1560,6 +1572,29 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     expect(unknown.class).toBe("product");
   });
 
+  // review/124: a member of the module bound to another name, by a named import or a destructuring, counts as a bare call.
+  it.each([
+    ['import { ex~ec as run } from "node:child~_process";'],
+    ['import { spawn, ex~ecSync as run } from "child~_process";'],
+    ['import cp, { ex~ecFile as run } from "child~_process";'],
+    ['const { ex~ecSync: run } = require("child~_process");'],
+    ['let { spa~wn: run, fork } = await import("node:child~_process");'],
+  ])("hits a call of the member a file binds as run: %s", (importLine) => {
+    const call = built("  run(cmd);");
+    const imported = withLines([hunk("src/x.ts", { added: [call], head: `${built(importLine)}\nexport {};\n` })]);
+    const own = withLines([hunk("src/x.ts", { added: [call], head: "function run(cmd: string) {}\n" })]);
+    const inHunk = withLines([hunk("src/x.ts", { context: [built(importLine)], added: [call] })]);
+
+    expect(imported.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
+    expect(inHunk.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
+    expect(own.class).toBe("product");
+  });
+
+  it("reads a member bound under its own name as the bare call it already is, and no other module's members", () => {
+    const other = withLines([hunk("src/x.ts", { added: ["  run(cmd);"], head: 'import { exec as run } from "./runner";\n' })]);
+    expect(other.class).toBe("product");
+  });
+
   it("reads the import from the hunk's own lines when no head is given", () => {
     const result = withLines([hunk("src/x.ts", { context: [built('const run = require("child~_process");')], added: [built("run.ex~ec(cmd);")] })]);
     expect(result.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
@@ -1575,6 +1610,23 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
       expect(result.reason).toContain(`read by no line rule, as none covers its language: ${path}`);
     },
   );
+
+  // The signed-off Python shapes: a requests verb, urlopen, os.popen and os.system.
+  it.each([
+    ["network-or-registry", "r = requests.ge~t(url)"],
+    ["network-or-registry", "requests.po~st(url, json=body)"],
+    ["network-or-registry", "requests.requ~est('PUT', url)"],
+    ["network-or-registry", "with urllib.request.urlop~en(url) as res:"],
+    ["process-spawn", "out = os.pop~en(cmd).read()"],
+    ["process-spawn", "os.syst~em(cmd)"],
+  ])("hits %s on the Python line %s", (id, fragments) => {
+    const result = withLines([hunk("app/x.py", { added: [built(fragments)] })]);
+    expect(result.byPath[0]?.rule).toBe(`line rule ${id} at app/x.py:10`);
+  });
+
+  it.each([["requests_cache.get(url)"], ["self.requests.count(x)"], ["popen_count = 1"]])("does not hit the Python line %s", (line) => {
+    expect(withLines([hunk("app/x.py", { added: [line] })]).class).toBe("product");
+  });
 
   it.each([["src/x.py"], ["src/x.mjs"], ["src/App.vue"], ["src/x.tsx"]])("reads the lines of %s", (path) => {
     const result = withLines([hunk(path, { added: [built("shutil.rmt~ree(path)")] })]);
@@ -1607,16 +1659,64 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     expect(plain.reason).not.toContain("read by no line rule");
   });
 
-  // review/93: a line is cut to a bound before the rules run, and the cut is named.
-  it("reads a line only up to 4,096 characters, says so, and makes the class at least product", () => {
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/123 (signed off): a line was read only to
+   * 4,096 characters and the cut made the class at least product, so a call past that column reached no lens. The
+   * whole line is now read, `secret-name` in overlapping windows, so the late call hits; the "read only that far"
+   * clause is gone. Retitled from "reads a line only up to 4,096 characters, says so, and makes the class at least
+   * product".
+   */
+  it("reads a long line to its end, so a call past column 4,096 still hits", () => {
     const early = withLines([hunk("src/x.ts", { added: [`${RM_LINE}${" ".repeat(5_000)}`] })]);
     const late = withLines([hunk("src/x.ts", { added: [`${" ".repeat(5_000)}${RM_LINE}`] })]);
     const docs = withLines([hunk("docs/x.md", { added: ["text"] }), hunk("src/__tests__/x.ts", { added: ["x".repeat(5_000)] })]);
 
     expect(early.class).toBe("security-sensitive");
-    expect(late.class).toBe("product");
-    expect(late.byPath[0]?.rule).toBe("unplaced");
-    expect(late.reason).toContain("a line longer than 4096 characters was read only that far, so the class is at least product: src/x.ts");
+    expect(late.class).toBe("security-sensitive");
+    expect(late.byPath[0]?.rule).toBe("line rule delete-or-overwrite at src/x.ts:10");
+    expect(late.reason).not.toContain("read only that far");
     expect(docs.reason).not.toContain("longer than");
+  });
+
+  // review/123: a match is found wherever it sits against a window's edge, for every rule.
+  it.each([
+    ["delete-or-overwrite", RM_LINE],
+    ["secret-name", built('const tok~en = "abc";')],
+    ["process-spawn", built('const out = ex~ecSync("ls");')],
+    ["network-or-registry", built('const probe = "cu~rl -s https://example.test";')],
+  ])("hits %s straddling every offset around the 4,096-character window edges", (id, call) => {
+    for (const at of [4_080, 4_090, 4_095, 4_096, 8_180, 12_280, 20_000]) {
+      const line = `${";".repeat(at - 4)}    ${call}${";".repeat(300)}`;
+      const result = withLines([hunk("src/x.ts", { added: [line] })]);
+      expect(result.byPath[0]?.rule, `${id} at ${at}`).toBe(`line rule ${id} at src/x.ts:10`);
+    }
+  });
+
+  it("finds a string-anchored shape whose string opens a window before the call", () => {
+    const line = `${";".repeat(3_000)}const s = "${"a".repeat(2_000)} ${built("r~m -rf build")}";`;
+    expect(withLines([hunk("src/x.ts", { added: [line] })]).byPath[0]?.rule).toBe("line rule delete-or-overwrite at src/x.ts:10");
+  });
+
+  // review/123: past a hard cap a line is not read, and the lens reads it instead, as for a failed read.
+  it("makes the class security-sensitive for a line past the hard cap, naming it, and reads none of it", () => {
+    const capped = withLines([hunk("src/x.ts", { added: [`${"a".repeat(300_000)}`] }), hunk("docs/x.md", { added: ["text"] })]);
+    const under = withLines([hunk("src/x.ts", { added: [`${"a".repeat(200_000)}`] })]);
+    const docs = withLines([hunk("docs/x.md", { added: ["b".repeat(300_000)] })]);
+
+    expect(capped.class).toBe("security-sensitive");
+    expect(capped.lenses).toContain("stamity-security");
+    expect(capped.reason).toContain(
+      "a line longer than 262144 characters was not read, so the class is security-sensitive and its lens reads it: src/x.ts",
+    );
+    expect(under.class).toBe("product");
+    expect(docs.class).toBe("docs");
+  });
+
+  it("bounds the cost of a long crafted word run that repeats a secret word", () => {
+    const run = "token".repeat(20_000);
+    const started = performance.now();
+    const result = withLines([hunk("src/x.ts", { added: [run] })]);
+    expect(result.class).toBe("product");
+    expect(performance.now() - started).toBeLessThan(20_000);
   });
 });

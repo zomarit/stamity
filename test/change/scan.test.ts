@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { scanAddedLines } from "../../src/change/scan.ts";
+import { linesPastCap, scanAddedLines } from "../../src/change/scan.ts";
 
 /**
  * p5e-secret-scan (REQ-FLOW-066): the secret scan of a change's added lines.
@@ -129,6 +130,25 @@ describe("scanAddedLines", () => {
     expect(scanAddedLines([file("dist/x.min.js", [line])])).toEqual([{ path: "dist/x.min.js", line: 1, rule: "github-token" }]);
   });
 
+  // review/135: a long line keeps its pairs, read in overlapping windows, so a name or an anchor still gives context.
+  it.each([
+    ["a credential-named value", `{${["to", "ken"].join("")}:"${body(40, 23)}"}`, "high-entropy-string"],
+    ["a bearer header", `headers:{Authorization:"${["Bear", "er "].join("")}${body(30, 29)}"}`, "bearer-token"],
+  ])("finds %s past column 4,096 of a minified line, at every offset around the window edges", (_label, pair, rule) => {
+    for (const at of [4_000, 4_090, 4_096, 4_100, 7_160, 7_170, 12_300, 50_000]) {
+      const line = `${"a=1,".repeat(Math.ceil(at / 4)).slice(0, at)}${pair},b=2${",c=3".repeat(400)}`;
+      expect(scanAddedLines([file("dist/x.min.js", [line])]), `${rule} at ${at}`).toEqual([{ path: "dist/x.min.js", line: 1, rule }]);
+    }
+  });
+
+  // review/135: past the hard cap a line is not read, and is named so the scan fails closed.
+  it("names a line past the hard cap as unread, reads none of it, and still reports a hit on another line", () => {
+    const files = [file("dist/x.min.js", ["a".repeat(300_000), `const t = "${FORGE_TOKEN}";`]), file("dist/y.js", ["b".repeat(200_000)])];
+
+    expect(linesPastCap(files)).toEqual([{ path: "dist/x.min.js", line: 1 }]);
+    expect(scanAddedLines(files)).toEqual([{ path: "dist/x.min.js", line: 2, rule: "github-token" }]);
+  });
+
   // review/95: the joined name and value meet the two inline-assignment patterns for a quoted value or a config file.
   describe("a credential-named assignment of a short value", () => {
     const SHORT = body(10, 41);
@@ -158,6 +178,69 @@ describe("scanAddedLines", () => {
       ["a Markdown code span ending in a key", "docs/plan.md", `holding a literal \`${["api", "_key"].join("")}:\` line, **then** exit 0, \`a.bak\` holds`],
     ])("passes %s", (_label, path, line) => {
       expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    // review/132: the files where an unquoted NAME=value is the normal syntax read the name beside the value too.
+    it.each([
+      ["a shell script's export line", "scripts/deploy.sh", `export DB_${UPPER}=${SHORT}`],
+      ["a Dockerfile ENV line", "Dockerfile", `ENV DB_${UPPER}=${SHORT}`],
+      ["a Dockerfile ARG line", "docker/api.Dockerfile", `ARG DB_${UPPER}=${SHORT}`],
+      ["a Containerfile ENV line", "Containerfile", `ENV DB_${UPPER}=${SHORT}`],
+      ["a direnv entry", ".envrc", `export DB_${UPPER}=${SHORT}`],
+      ["a .cnf entry", "etc/my.cnf", `${PASS}=${SHORT}`],
+      ["a .conf entry", "etc/app.conf", `db_${PASS} = ${SHORT}`],
+    ])("hits %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
+    });
+
+    // review/132: a value that opens with `$` is an expansion, no literal.
+    it.each([
+      ["a positional parameter", "scripts/deploy.sh", `export DB_${UPPER}=$1`],
+      ["a command substitution", "scripts/deploy.sh", `export DB_${UPPER}=$(cat /run/secrets/db)`],
+      ["a variable in a Dockerfile ENV line", "Dockerfile", `ENV DB_${UPPER}=${"$"}DB_${UPPER}`],
+      ["a variable in .envrc", ".envrc", `export DB_${UPPER}="${"$"}VAULT_DB"`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    // review/136: a value that is wholly a {{ … }} template placeholder is no literal, as ${…} is.
+    it.each([
+      ["an Ansible variable, quoted", "roles/db/defaults/main.yml", `db_${PASS}: "{{ vault_db_${PASS} }}"`],
+      ["a Helm value, unquoted", "charts/app/templates/secret.yaml", `  ${PASS}: {{ .Values.db.${PASS} | quote }}`],
+      ["a Mustache placeholder in .env", ".env", `DB_${UPPER}={{db_${PASS}}}`],
+      ["a Go template in code", "src/db.ts", `const DB_${UPPER} = "{{ .Secret }}";`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    it("still hits a short credential beside a placeholder on the same line", () => {
+      const line = `  ${PASS}: ${SHORT} # was {{ .Values.x }}`;
+      expect(scanAddedLines([file("charts/app/values.yaml", [line])])).toEqual([
+        { path: "charts/app/values.yaml", line: 1, rule: "inline-password-assignment" },
+      ]);
+    });
+  });
+
+  // review/126: a pair whose name is a file path gives no credential context; its value is still scanned.
+  describe("a value keyed by a file path", () => {
+    const DIGEST = body(64, 61);
+    const AUTHOR = ["au", "thor"].join("");
+
+    it.each([
+      ["a JSON key holding a slash", "evals/runs/x/inputs.json", `      "evals/golden/spec-${AUTHOR}-contract.md": "${DIGEST}",`],
+      ["a snapshot key holding a slash", "test/__snapshots__/x.test.ts.snap", `  ".claude/agents/spec-${AUTHOR}.md": "${DIGEST} 11479 bytes",`],
+      ["a key ending in a file extension", "inputs.json", `  "spec-${AUTHOR}.md": "${DIGEST}",`],
+      ["a Windows path key", "inputs.json", `  "evals\\golden\\${AUTHOR}": "${DIGEST}",`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    it.each([
+      ["a credential key that is no path", "config/app.json", `  "${AUTHOR}_${["to", "ken"].join("")}": "${DIGEST}",`, "high-entropy-string"],
+      ["a property on an object", "src/a.ts", `this.${["to", "ken"].join("")} = "${DIGEST}";`, "high-entropy-string"],
+      ["an anchored token keyed by a path", "inputs.json", `  "docs/${AUTHOR}.md": "${FORGE_TOKEN}",`, "github-token"],
+    ])("hits %s", (_label, path, line, rule) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule }]);
     });
   });
 
@@ -196,6 +279,44 @@ describe("scanAddedLines", () => {
       ["a go.sum module line", "go.sum", `example.com/mod v1.2.3 ${GO_SUM_DIGEST}`],
       ["a go.sum go.mod line", "go.sum", `example.com/mod v1.2.3/go.mod ${GO_SUM_DIGEST}`],
     ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
+    // review/134: NuGet's packages.lock.json records a base64 SHA-512 under contentHash for every package.
+    const CONTENT_HASH = createHash("sha512").update("fixture").digest("base64");
+
+    it("passes NuGet's contentHash line, and scans the same digest on any other line", () => {
+      const line = `        "contentHash": "${CONTENT_HASH}",`;
+      const offByOne = `        "contentHash": "${CONTENT_HASH.slice(1)}=",`;
+
+      expect(scanAddedLines([file("src/App/packages.lock.json", [line])])).toEqual([]);
+      expect(scanAddedLines([file("config/app.json", [line])])).toEqual([{ path: "config/app.json", line: 1, rule: "high-entropy-string" }]);
+      expect(scanAddedLines([file("packages.lock.json", [`        "resolved": "${CONTENT_HASH}",`])])).toEqual([
+        { path: "packages.lock.json", line: 1, rule: "high-entropy-string" },
+      ]);
+      expect(scanAddedLines([file("packages.lock.json", [offByOne])])).toEqual([
+        { path: "packages.lock.json", line: 1, rule: "high-entropy-string" },
+      ]);
+    });
+
+    // review/134: the other common lockfile digest forms already pass, each pinned so a pattern change shows.
+    it.each(
+      ((): [string, string][] => {
+        const hex = (alg: string): string => createHash(alg).update("fixture").digest("hex");
+        const b64 = (alg: string): string => createHash(alg).update("fixture").digest("base64");
+        return [
+          ["Cargo.lock", `checksum = "${hex("sha256")}"`],
+          ["poetry.lock", `    {file = "pkg-1.0-py3-none-any.whl", hash = "sha256:${hex("sha256")}"},`],
+          ["Pipfile.lock", `                "sha256:${hex("sha256")}",`],
+          ["composer.lock", `                "shasum": "${hex("sha1")}"`],
+          ["Gemfile.lock", `  rake (13.0.6) sha256=${hex("sha256")}`],
+          ["pubspec.lock", `      sha256: "${hex("sha256")}"`],
+          ["gradle/verification-metadata.xml", `            <sha256 value="${hex("sha256")}" origin="Generated by Gradle"/>`],
+          ["gradle/verification-metadata.xml", `            <sha512 value="${hex("sha512")}" origin="Generated by Gradle"/>`],
+          ["flake.lock", `        "narHash": "sha256-${b64("sha256")}",`],
+        ];
+      })(),
+    )("passes a %s digest line", (path, line) => {
       expect(scanAddedLines([file(path, [line])])).toEqual([]);
     });
 

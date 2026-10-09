@@ -8,6 +8,7 @@ import {
   CLASS_ORDER,
   classifyChange,
   hasCodeExtension,
+  lineRulesCover,
   mergeRules,
   outsideSecurityRule,
   parseClassFile,
@@ -27,7 +28,7 @@ import {
   type TestSelectionInput,
   type TestSource,
 } from "../../change/testInputs.ts";
-import { scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
+import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -96,11 +97,12 @@ import type { GitRunner } from "../../workspace/git.ts";
  * base, their lines united (review/89), with every flag that config could turn
  * pinned (`-U3`, `-W`, `--text`, no external diff, colour or textconv, fixed
  * prefixes), each file section named by its place in the `-z` name list rather
- * than by its header, plus every untracked file read whole as added lines, up
- * to a total cap (review/94). A numstat read first leaves binaries out of the
+ * than by its header, plus every untracked file read whole as added lines: the
+ * files the line rules read first and outside any total (review/125), the rest
+ * up to a total cap (review/94). A numstat read first leaves binaries out of the
  * text read (review/87). A NUL byte in a file's first 8,000 bytes alone decides
- * binary; a tracked code file it marks is `unscanned`, so the class is at least
- * `product`. A failed line read keeps the path classes and makes the class
+ * binary; a tracked code file it marks is `unscanned`, so the class is
+ * `security-sensitive` (review/125). A failed line read keeps the path classes and makes the class
  * `security-sensitive`, so the lens reads what no line rule could (review/87).
  *
  * **The tests a change selects** (REQ-FLOW-062) come from the base copy's
@@ -125,7 +127,9 @@ import type { GitRunner } from "../../workspace/git.ts";
  * exits 0. A code file the read cannot show is listed in `unscanned`, never
  * read as clean (plan/62, review/94), and every other file left unread is
  * named in `skipped` (review/98); the exit stays 0 for either and the flows
- * read the lists.
+ * read the lists. An added line past the scan's hard cap is not read, so the
+ * run exits 1 with a `reason` naming it beside its hits, never clean
+ * (review/135).
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -325,8 +329,14 @@ const SNIFF_BYTES = 8_000;
 const HEAD_BYTES = 64 * 1024;
 /** An untracked file larger than this is not read (plan/19). */
 const UNTRACKED_MAX_BYTES = 1024 * 1024;
-/** The untracked reads stop at this many bytes in all; each file past it is unscanned, never read (review/94). */
+/**
+ * The untracked reads stop at this many bytes in all; each file past it is
+ * unscanned, never read (review/94). The files the line rules read are read
+ * first and never count against it (review/125).
+ */
 const UNTRACKED_TOTAL_BYTES = 16 * 1024 * 1024;
+/** A file's first line is looked for a shebang this far. */
+const SHEBANG_BYTES = 1024;
 
 /**
  * Up to `limit` bytes of a regular file, or `undefined` for anything else (a
@@ -583,9 +593,11 @@ function readSide(
  * The change's lines against `commit` (plan/59): the work tree's patch and the
  * index's, united (review/89), so a staged line the work tree has since
  * reverted is read as `git commit` would record it, plus every untracked file
- * read whole as added lines, up to {@link UNTRACKED_TOTAL_BYTES} in all
- * (review/94). An index line the work tree also adds to that file is read once,
- * from the work tree; an index hunk left with nothing new is dropped.
+ * read whole as added lines: first those the line rules read, by extension or
+ * by shebang, outside any total (review/125), then the rest up to
+ * {@link UNTRACKED_TOTAL_BYTES} in all (review/94). An index line the work tree
+ * also adds to that file is read once, from the work tree; an index hunk left
+ * with nothing new is dropped.
  */
 function readLines(
   runner: GitRunner,
@@ -632,12 +644,25 @@ function readLines(
     if (path !== null) unscanned.push(path);
     scanUnscanned.add(shown);
   };
+  // review/125: the files the line rules read come first and never meet the total, so no budget leaves them unread.
+  const source: PathSource = windows ? "listed" : "git";
+  const firstLine = (name: string): string | undefined => {
+    const start = readRegular(join(root.topLevel, name), SHEBANG_BYTES)?.toString("utf8");
+    return start?.startsWith("#!") === true ? start.split("\n", 1)[0] : undefined;
+  };
+  const covered = new Set(
+    untracked.filter((name) => {
+      const path = inside(name);
+      return path !== null && (lineRulesCover(path, source, undefined) || lineRulesCover(path, source, firstLine(name)));
+    }),
+  );
   let untrackedBytes = 0;
-  for (const name of untracked) {
+  for (const name of [...covered, ...untracked.filter((entry) => !covered.has(entry))]) {
     const path = inside(name);
     const shown = path ?? away(name);
+    const budgeted = !covered.has(name);
     if (path === null) outside.add(name);
-    if (untrackedBytes >= UNTRACKED_TOTAL_BYTES) {
+    if (budgeted && untrackedBytes >= UNTRACKED_TOTAL_BYTES) {
       pastCap(path, shown);
       continue;
     }
@@ -648,12 +673,12 @@ function readLines(
       scanSkipped.add(shown);
       continue;
     }
-    if (untrackedBytes + body.length > UNTRACKED_TOTAL_BYTES) {
+    if (budgeted && untrackedBytes + body.length > UNTRACKED_TOTAL_BYTES) {
       untrackedBytes = UNTRACKED_TOTAL_BYTES;
       pastCap(path, shown);
       continue;
     }
-    untrackedBytes += body.length;
+    if (budgeted) untrackedBytes += body.length;
     // A UTF-16 file is the scan's alone (review/98): the classifier still counts it skipped, as before.
     if (decoded !== undefined) {
       if (path !== null) skipped.add(path);
@@ -1177,7 +1202,17 @@ type ScanScope = "uncommitted" | "since-base";
 
 /** The scan of one run: its hits and what the read could not show, or why the change could not be read. */
 type ScanOutcome =
-  | { base: string | null; scope: ScanScope; hits: ScanHit[]; scanned: number; skipped: string[]; outside: number; unscanned: string[] }
+  | {
+      base: string | null;
+      scope: ScanScope;
+      hits: ScanHit[];
+      scanned: number;
+      skipped: string[];
+      outside: number;
+      unscanned: string[];
+      /** Why the scan is incomplete: the added lines past its hard cap, named (review/135). */
+      incomplete?: string;
+    }
   | { base: string | null; scope: ScanScope; failed: string };
 
 /** A commit is named in a hit by this many characters of its id. */
@@ -1276,7 +1311,15 @@ function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
       return left.length === 0 ? [] : [{ ...file, added: left }];
     });
     const files = [...current, ...past];
+    // review/135: a line past the hard cap is not read, so the scan is incomplete, never clean.
+    const unread = linesPastCap(files).map((at) => `${at.path}:${at.line}${at.commit === undefined ? "" : ` (commit ${at.commit})`}`);
+    const one = unread.length === 1;
     return {
+      ...(unread.length === 0
+        ? {}
+        : {
+            incomplete: `${unread.length} added line${one ? "" : "s"} longer than ${SCAN_LINE_MAX_CHARS} characters ${one ? "was" : "were"} not scanned: ${unread.join(", ")}`,
+          }),
       base: commit,
       scope,
       hits: scanAddedLines(files),
@@ -1304,6 +1347,8 @@ function runScan(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
   const hits = outcome.hits.map((hit) => ({ ...hit, path: sanitizeLabel(hit.path) }));
   const skipped = outcome.skipped.map((path) => sanitizeLabel(path));
   const unscanned = outcome.unscanned.map((path) => sanitizeLabel(path));
+  const incomplete = outcome.incomplete === undefined ? undefined : sanitizeLabel(outcome.incomplete);
+  if (incomplete !== undefined) ctx.io.err(`scan incomplete: ${incomplete}\n`);
   ctx.io.out(
     `${[
       scopeLine,
@@ -1315,8 +1360,18 @@ function runScan(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
     ].join("\n")}\n`,
   );
   return {
-    exitCode: hits.length === 0 ? 0 : 1,
-    json: { subcommand: SCAN, base, scope, hits, scanned: outcome.scanned, skipped, outside: outcome.outside, unscanned },
+    exitCode: hits.length === 0 && incomplete === undefined ? 0 : 1,
+    json: {
+      subcommand: SCAN,
+      base,
+      scope,
+      hits,
+      scanned: outcome.scanned,
+      skipped,
+      outside: outcome.outside,
+      unscanned,
+      ...(incomplete === undefined ? {} : { reason: incomplete }),
+    },
   };
 }
 

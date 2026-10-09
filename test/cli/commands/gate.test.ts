@@ -1324,17 +1324,23 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts:2");
     });
 
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/125 (signed off): an unscanned code file
+     * made the class product, with no lens. No line rule read it, so the class is now security-sensitive and the lens
+     * reads it, as for a failed read; the path keeps its own class and rule.
+     */
     it("lists a tracked code file whose head side holds a NUL as unscanned, and skips a binary image", async () => {
       const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", "assets/x.png": "png\n" });
       await getRoot().seedFiles({ "repo/src/x.ts": `export {};\0\n${RM}`, "repo/assets/x.png": "png\0\n" });
 
       const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
-      expect(doc["class"]).toBe("product");
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
       expect(ruleOf(doc, "src/x.ts")).toBe("unplaced");
-      // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/94 (signed off): untracked files past
-      // the total read cap are unscanned too, of any type, so the clause says "changed file", not "tracked code file".
-      expect(doc["reason"]).toContain("1 changed file the read could not show is unscanned, so the class is at least product: src/x.ts");
+      expect(doc["reason"]).toContain(
+        "1 changed code file the read could not show is unscanned, so the class is security-sensitive and its lens reads it: src/x.ts",
+      );
       expect(doc["reason"]).toContain("1 changed file not read line by line (binary, over 1 MiB, or not a regular file)");
     });
 
@@ -1467,7 +1473,11 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(doc["class"]).toBe("security-sensitive");
       expect(ruleOf(doc, "src/b.ts")).toBe("line rule delete-or-overwrite at src/b.ts:2");
-      expect(doc["reason"]).toContain("1 changed file the read could not show is unscanned, so the class is at least product: src/c.ts");
+      // TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/125 (signed off): an unscanned code
+      // file now makes the class security-sensitive, so its clause says so; the class here was already that.
+      expect(doc["reason"]).toContain(
+        "1 changed code file the read could not show is unscanned, so the class is security-sensitive and its lens reads it: src/c.ts",
+      );
       expect(doc["reason"]).toContain("1 changed file not read line by line");
       // The first is the work tree's read; the index holds no change here, so its read leaves nothing out.
       expect(workRead).toEqual(expect.arrayContaining([":(top,literal,exclude)assets/a.bin", ":(top,literal,exclude)src/c.ts"]));
@@ -1507,18 +1517,41 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).not.toContain("could not be read");
     });
 
-    // review/94: the untracked reads stop at a total byte cap; every file past it is unscanned, never read.
-    it("counts untracked files past the total read cap as unscanned", async () => {
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/125 (signed off): the case pinned
+     * src/z.ts, sorted after 16 MiB of untracked data, as unscanned and the class as product, so its delete call
+     * reached no lens. The files the line rules read, by extension or by shebang, are now read first and outside the
+     * byte budget, so it hits; an uncovered code file still past the cap makes the class security-sensitive.
+     * Retitled from "counts untracked files past the total read cap as unscanned".
+     */
+    // review/94, review/125: the untracked reads stop at a total byte cap, which the files the rules read never meet.
+    it("reads the untracked files the rules cover first and outside the cap, and counts the others past it", async () => {
       const filler = `${"x".repeat(1023)}\n`.repeat(1023);
       const files = Object.fromEntries(Array.from({ length: 17 }, (_, at) => [`repo/data/f${String(at).padStart(2, "0")}.txt`, filler]));
       const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
-      await getRoot().seedFiles({ ...files, "repo/src/z.ts": RM });
+      await getRoot().seedFiles({ ...files, "repo/src/z.ts": RM, "repo/tools/run": `#!/usr/bin/env node\n${RM}`, "repo/src/z.go": RM });
 
       const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
-      expect(doc["class"]).toBe("product");
-      expect(ruleOf(doc, "src/z.ts")).toBe("unplaced");
-      expect(doc["reason"]).toContain("2 changed files the read could not show are unscanned, so the class is at least product: data/f16.txt, src/z.ts");
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/z.ts")).toBe("line rule delete-or-overwrite at src/z.ts:1");
+      expect(ruleOf(doc, "tools/run")).toBe("line rule delete-or-overwrite at tools/run:2");
+      expect(doc["reason"]).toContain(
+        "1 changed code file the read could not show is unscanned, so the class is security-sensitive and its lens reads it: src/z.go",
+      );
+      expect(doc["reason"]).toContain("1 changed file the read could not show is unscanned, so the class is at least product: data/f16.txt");
+    });
+
+    it("says security-sensitive for an uncovered code file past the cap with no rule hit anywhere", async () => {
+      const filler = `${"x".repeat(1023)}\n`.repeat(1023);
+      const files = Object.fromEntries(Array.from({ length: 17 }, (_, at) => [`repo/data/f${String(at).padStart(2, "0")}.txt`, filler]));
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ ...files, "repo/src/z.rb": "puts 1\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
     });
 
     // review/86, build/52 through the read: the file's head names the child_process module, and a shebang makes code.
@@ -1609,6 +1642,29 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         outside: 0,
         unscanned: [],
       });
+    });
+
+    // review/135: a line past the scan's hard cap is not read, so the scan fails closed and names it; hits still report.
+    it("exits 1 naming a line past the hard cap, never clean, and still reports a hit elsewhere", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "repo/dist/x.min.js": `${"a".repeat(300_000)}\n`, "repo/src/new.ts": LINE });
+      const alone = await seedRepo("alone", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "alone/dist/x.min.js": `${"a".repeat(300_000)}\n` });
+
+      const json = await gateIn(repo, ["scan", "--json"]);
+      const human = await gateIn(alone, ["scan"]);
+      const quiet = await gateIn(alone, ["scan", "--json"]);
+
+      const reason = "1 added line longer than 262144 characters was not scanned: dist/x.min.js:1";
+      expect(json.code).toBe(1);
+      expect(json.doc["hits"]).toEqual([{ path: "src/new.ts", line: 1, rule: "github-token" }]);
+      expect(json.doc["reason"]).toBe(reason);
+      expect(quiet.code).toBe(1);
+      expect(quiet.doc["ok"]).toBe(false);
+      expect(quiet.doc["hits"]).toEqual([]);
+      expect(quiet.doc["reason"]).toBe(reason);
+      expect(human.code).toBe(1);
+      expect(`${human.stdout}${human.stderr}`).toContain(`scan incomplete: ${reason}`);
     });
 
     it("finds a staged token whatever diff.external says", async () => {
