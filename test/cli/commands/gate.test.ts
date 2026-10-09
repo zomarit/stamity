@@ -1575,6 +1575,138 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   });
 
   /**
+   * p5g-audit-first (REQ-FLOW-065; plan/12, plan/52, plan/61, plan/63): a
+   * lockfile-only bump the base and head copies prove runs the dependency audit
+   * first, in place of the security lens. Real git in scratch repositories: the
+   * base copy is read through the verb's runner, the head copy from the work tree.
+   */
+  describe("a lockfile-only bump runs the dependency audit first (p5g)", () => {
+    const AUDIT_FIRST = "lockfile-only bump: dependency audit first";
+    const MANIFEST = '{ "name": "x", "version": "1.0.0", "dependencies": { "a": "^1.0.0" } }\n';
+    /** An npm lockfile-version-3 copy with `a` at `version`, and the entry's own fields beside it. */
+    const lock = (version: string, entry: Record<string, unknown> = {}): string =>
+      `${JSON.stringify(
+        { name: "x", version: "1.0.0", lockfileVersion: 3, requires: true, packages: { "": { name: "x" }, "node_modules/a": { version, ...entry } } },
+        null,
+        2,
+      )}\n`;
+    const shown = (): string[] => gitSpy.calls.filter((argv) => argv.includes("show")).map((argv) => argv.at(-1) ?? "");
+
+    it("names the audit and no security lens for a proven bump, the base copy read at the base commit", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+      const head = git(repo, ["rev-parse", "HEAD"]).trim();
+
+      gitSpy.calls.length = 0;
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review", "dependency-audit"]);
+      expect(doc["lenses"]).toEqual([]);
+      expect(doc["reason"]).toContain(AUDIT_FIRST);
+      expect(shown()).toEqual([`${head}:package-lock.json`]);
+    });
+
+    it("keeps the lens for its twin whose bumped package has an install script", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1", { hasInstallScript: true }) });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+      expect(doc["reason"]).toContain("the security lens stays: package-lock.json bumps a package with an install script");
+    });
+
+    it("keeps the lens with no --base, reading no base copy", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+
+      gitSpy.calls.length = 0;
+      const { doc } = await classifyIn(repo, []);
+
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["reason"]).toContain("the security lens stays: package-lock.json has no base copy");
+      expect(shown()).toEqual([]);
+    });
+
+    it.each([["app"], ["app/sub"]])("reads the base copy under the prefix for a project in app/, run from %s", async (from) => {
+      const repo = await seedRepo("repo", {
+        "app/.stamity/manifest.json": "{}\n",
+        "app/package.json": MANIFEST,
+        "app/package-lock.json": lock("1.0.0"),
+        "app/sub/x.md": "base\n",
+      });
+      await getRoot().seedFiles({ "repo/app/package-lock.json": lock("1.0.1") });
+      const head = git(repo, ["rev-parse", "HEAD"]).trim();
+
+      gitSpy.calls.length = 0;
+      const { doc } = await classifyIn(join(repo, ...from.split("/")), ["--base", "HEAD"]);
+
+      expect(doc["paths"]).toEqual(["package-lock.json"]);
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review", "dependency-audit"]);
+      expect(doc["lenses"]).toEqual([]);
+      expect(shown()).toEqual([`${head}:app/package-lock.json`]);
+    });
+
+    it("puts the lens back when a security path outside the project raises the class", async () => {
+      const repo = await seedRepo("repo", {
+        "packages/app/.stamity/manifest.json": "{}\n",
+        "packages/app/package-lock.json": lock("1.0.0"),
+        "package-lock.json": lock("1.0.0"),
+      });
+      await getRoot().seedFiles({ "repo/packages/app/package-lock.json": lock("1.0.1"), "repo/package-lock.json": lock("1.0.1") });
+
+      const { doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+      expect(doc["reason"]).not.toContain(AUDIT_FIRST);
+      expect(doc["reason"]).toContain("package-lock.json outside the project matches security row package-lock.json");
+    });
+
+    it("puts the lens back when the changed lines cannot be read", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+
+      gitSpy.fault = { step: "--text", error: realFailure("process.exit(3)") };
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+      gitSpy.fault = undefined;
+
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+      expect(doc["reason"]).not.toContain(AUDIT_FIRST);
+    });
+
+    // A base copy past the runner's output bound fails as this planted failure does: the lens, never a narrower verdict.
+    it("keeps the lens, and the class, when the base copy's read fails", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+
+      gitSpy.fault = { step: "show", error: realFailure("process.exit(128)") };
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+      gitSpy.fault = undefined;
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["reason"]).toContain("the security lens stays: package-lock.json has no base copy");
+    });
+
+    it("keeps the lens for a lockfile deleted in the work tree", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await rm(join(repo, "package-lock.json"));
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["reason"]).toContain("the security lens stays: package-lock.json was not read");
+    });
+  });
+
+  /**
    * p5e-secret-scan (REQ-FLOW-066; plan/56, plan/57, plan/62, plan/63): `gate
    * scan` over p5a's one hardened read. The token is built at run time from
    * fragments (the sign-off on plan/57), so no line of this file carries one.

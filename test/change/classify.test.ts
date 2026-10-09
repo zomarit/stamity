@@ -9,6 +9,7 @@ import {
   CLASS_ORDER,
   CODE_EXTENSIONS,
   classifyChange,
+  keepSecurityLens,
   matchGlob,
   mergeRules,
   outsideSecurityRule,
@@ -1718,5 +1719,154 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     const result = withLines([hunk("src/x.ts", { added: [run] })]);
     expect(result.class).toBe("product");
     expect(performance.now() - started).toBeLessThan(20_000);
+  });
+});
+
+describe("classifyChange: a proven lockfile-only bump runs the dependency audit first (p5g, REQ-FLOW-065)", () => {
+  const AUDIT_FIRST = "lockfile-only bump: dependency audit first";
+  type Packages = Record<string, Record<string, unknown>>;
+  /** An npm lockfile at `version`, its `packages` map as given, the root entry first as npm writes it. */
+  const lock = (version: number, packages: Packages): string =>
+    `${JSON.stringify({ name: "x", version: "1.0.0", lockfileVersion: version, requires: true, packages: { "": { name: "x" }, ...packages } }, null, 2)}\n`;
+  // An entry that keeps its install script across the bump: unchanged, so it never blocks the rule.
+  const KEPT = { "node_modules/native": { version: "3.0.0", hasInstallScript: true } };
+  const BASE: Packages = { "node_modules/a": { version: "1.0.0" }, "node_modules/gone": { version: "0.1.0" }, ...KEPT };
+  const HEAD: Packages = { "node_modules/a": { version: "1.0.1" }, "node_modules/new": { version: "2.0.0" }, ...KEPT };
+  const bump = (
+    lockfiles: readonly { path: string; base: string | null; head: string }[],
+    paths: readonly string[] = ["package-lock.json"],
+    extra: { hunks?: Hunk[]; unscanned?: string[] } = {},
+  ) => classifyChange({ paths, base: "given", source: "git", lockfiles, ...extra });
+  const proven = (path = "package-lock.json", version = 3) => ({ path, base: lock(version, BASE), head: lock(version, HEAD) });
+  const auditFirst = [...CLASS_CHECKS["security-sensitive"], "dependency-audit"];
+
+  it.each([[3], [2]])("names the audit and no security lens for a lockfile-version-%i bump with no install script", (version) => {
+    const result = bump([proven("package-lock.json", version)]);
+    const unread = classifyChange({ paths: ["package-lock.json"], base: "given", source: "git" });
+
+    expect(result.class).toBe("security-sensitive");
+    expect(result.checks).toEqual(auditFirst);
+    expect(result.lenses).toEqual([]);
+    expect(result.reason).toContain(AUDIT_FIRST);
+    // The same path with no lockfile read is the lens, so the rule is what removed it.
+    expect(unread.lenses).toEqual(["stamity-security"]);
+    expect(unread.checks).not.toContain("dependency-audit");
+  });
+
+  it("keeps every other lens and reads a nested lockfile beside a path no security rule places", () => {
+    const result = bump([proven("web/package-lock.json")], ["web/package-lock.json", "web/components/Button.tsx", "docs/x.md"]);
+
+    expect(result.checks).toEqual(auditFirst);
+    expect(result.lenses).toEqual(["stamity-design-quality"]);
+    expect(result.reason).toContain(AUDIT_FIRST);
+  });
+
+  it.each([
+    ["added at head", { "node_modules/a": { version: "1.0.1", hasInstallScript: true } }, { "node_modules/a": { version: "1.0.0" } }],
+    ["present at both sides", { "node_modules/a": { version: "1.0.1", hasInstallScript: true } }, { "node_modules/a": { version: "1.0.0", hasInstallScript: true } }],
+    ["on a newly added entry", { "node_modules/new": { version: "2.0.0", hasInstallScript: true } }, {}],
+    ["marked by a value that is not false", { "node_modules/a": { version: "1.0.1", hasInstallScript: "yes" } }, { "node_modules/a": { version: "1.0.0" } }],
+  ])("keeps the lens when a bumped entry has an install script %s", (_label, head, base) => {
+    const result = bump([{ path: "package-lock.json", base: lock(3, { ...KEPT, ...base }), head: lock(3, { ...KEPT, ...head }) }]);
+
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).toEqual(CLASS_CHECKS["security-sensitive"]);
+    expect(result.reason).not.toContain(AUDIT_FIRST);
+    expect(result.reason).toContain("the security lens stays: package-lock.json bumps a package with an install script");
+  });
+
+  it.each([
+    ["a pnpm lockfile", "pnpm-lock.yaml", "lockfileVersion: '9.0'\npackages:\n  a@1.0.0: {}\n", "lockfileVersion: '9.0'\npackages:\n  a@1.0.1: {}\n"],
+    ["a yarn lockfile", "yarn.lock", "a@^1:\n  version \"1.0.0\"\n", "a@^1:\n  version \"1.0.1\"\n"],
+    ["an npm lockfile-version-1", "package-lock.json", lock(1, BASE), lock(1, HEAD)],
+    ["a base copy that does not parse", "package-lock.json", "{ not json", lock(3, HEAD)],
+    ["a head copy that does not parse", "package-lock.json", lock(3, BASE), "{ not json"],
+    ["a head copy that is no JSON object", "package-lock.json", lock(3, BASE), "[]"],
+    ["a base at version 1 bumped to version 3", "package-lock.json", lock(1, BASE), lock(3, HEAD)],
+    ["a packages map that is no object", "package-lock.json", lock(3, BASE), JSON.stringify({ lockfileVersion: 3, packages: [] })],
+    ["a package entry that is no object", "package-lock.json", lock(3, BASE), JSON.stringify({ lockfileVersion: 3, packages: { "node_modules/a": "1.0.1" } })],
+  ])("keeps the lens for %s", (_label, path, base, head) => {
+    const result = bump([{ path, base, head }], [path]);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).not.toContain(AUDIT_FIRST);
+    expect(result.reason).toContain(`the security lens stays: ${path}`);
+  });
+
+  it("keeps the lens when no base copy exists, or no lockfile was read for the path", () => {
+    const noBase = bump([{ path: "package-lock.json", base: null, head: lock(3, HEAD) }]);
+    const otherPath = bump([proven("web/package-lock.json")]);
+
+    expect(noBase.lenses).toEqual(["stamity-security"]);
+    expect(noBase.reason).toContain("the security lens stays: package-lock.json has no base copy");
+    expect(otherPath.lenses).toEqual(["stamity-security"]);
+    expect(otherPath.reason).toContain("the security lens stays: package-lock.json was not read");
+  });
+
+  it.each([["package.json"], ["web/package.json"], ["Package.JSON"]])("keeps the lens for the bump plus a %s change", (manifest) => {
+    const result = bump([proven()], ["package-lock.json", manifest]);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).toContain(`the security lens stays: ${manifest} changed`);
+  });
+
+  it("keeps the lens for a package.json change even with a roster that does not place it", () => {
+    const lockOnly: SpecialistTrigger[] = [{ specialist: "stamity-security", triggerPaths: ["package-lock.json"], triggerKeywords: [], rationale: "lockfiles" }];
+    const result = classifyChange(
+      { paths: ["package-lock.json", "package.json"], base: "given", source: "git", lockfiles: [proven()] },
+      BUILT_IN_RULES,
+      lockOnly,
+    );
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+  });
+
+  it("keeps the lens when a security line rule hits a code file beside the bump", () => {
+    const rm = ["  fs.rm", "Sync(dir, { recursive: true });"].join("");
+    const hunks: Hunk[] = [{ path: "src/x.ts", added: [{ line: 3, text: rm }], removed: [], context: [] }];
+    const result = bump([proven()], ["package-lock.json", "src/x.ts"], { hunks });
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).toContain("the security lens stays: src/x.ts is not an npm lockfile");
+  });
+
+  it("keeps the lens when a line past the cap, or an unscanned code file, raised the class", () => {
+    const long: Hunk[] = [{ path: "src/x.ts", added: [{ line: 1, text: "a".repeat(300_000) }], removed: [], context: [] }];
+    const overCap = bump([proven()], ["package-lock.json", "src/x.ts"], { hunks: long });
+    const unscanned = bump([proven()], ["package-lock.json"], { unscanned: ["src/y.ts"] });
+
+    for (const result of [overCap, unscanned]) {
+      expect(result.lenses).toEqual(["stamity-security"]);
+      expect(result.checks).not.toContain("dependency-audit");
+      expect(result.reason).not.toContain(AUDIT_FIRST);
+    }
+  });
+
+  it("is not a rule for a class the roster does not make security-sensitive", () => {
+    const result = classifyChange({ paths: ["package-lock.json"], base: "given", source: "git", lockfiles: [proven()] }, BUILT_IN_RULES, []);
+
+    expect(result.class).toBe("product");
+    expect(result.checks).toEqual(CLASS_CHECKS.product);
+    expect(result.reason).not.toContain(AUDIT_FIRST);
+  });
+
+  it("puts the lens back, drops the audit and its clause when a later read raises the class (keepSecurityLens)", () => {
+    const first = bump([proven()], ["package-lock.json", "web/components/Button.tsx"]);
+    const kept = keepSecurityLens(first);
+
+    expect(first.lenses).toEqual(["stamity-design-quality"]);
+    expect(kept.class).toBe("security-sensitive");
+    expect(kept.lenses).toEqual(["stamity-security", "stamity-design-quality"]);
+    expect(kept.checks).toEqual(CLASS_CHECKS["security-sensitive"]);
+    expect(kept.reason).not.toContain(AUDIT_FIRST);
+    expect(kept.reason).toContain("the strongest path is package-lock.json");
+    // A result that already has the lens comes back unchanged.
+    const lensed = bump([], ["package-lock.json"]);
+    expect(keepSecurityLens(lensed)).toEqual(lensed);
   });
 });

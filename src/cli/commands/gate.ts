@@ -8,6 +8,7 @@ import {
   CLASS_ORDER,
   classifyChange,
   hasCodeExtension,
+  keepSecurityLens,
   lineRulesCover,
   mergeRules,
   outsideSecurityRule,
@@ -17,6 +18,7 @@ import {
   type ClassifyResult,
   type ClassRule,
   type Hunk,
+  type Lockfile,
   type PathSource,
   type TestInput,
 } from "../../change/classify.ts";
@@ -104,6 +106,12 @@ import type { GitRunner } from "../../workspace/git.ts";
  * binary; a tracked code file it marks is `unscanned`, so the class is
  * `security-sensitive` (review/125). A failed line read keeps the path classes and makes the class
  * `security-sensitive`, so the lens reads what no line rule could (review/87).
+ *
+ * **The lockfile copies** (REQ-FLOW-065, p5g) feed the classifier's audit-first
+ * rule: each changed `package-lock.json`'s base copy (`git show`, under the
+ * project's prefix, only with a resolved `--base`) and its work-tree copy. A
+ * floor this file adds later that raises the class to `security-sensitive` (an
+ * outside path, a failed line read) puts the security lens back.
  *
  * **The tests a change selects** (REQ-FLOW-062) come from the base copy's
  * test-input map and the tracked test sources of the work tree, through
@@ -1006,8 +1014,12 @@ function withReasons(result: ClassifyResult, reasons: readonly string[]): Classi
 /** The security lens, as the classifier names it for a `security-sensitive` change. */
 const SECURITY_LENS = "stamity-security";
 
-/** `result` raised to at least `floor`; a lens it already had stays, and `security-sensitive` adds its lens first. */
+/**
+ * `result` raised to at least `floor`; a lens it already had stays, and `security-sensitive` adds its lens first,
+ * also to a result the audit-first rule left without it, since that rule held over the paths alone (p5g).
+ */
 function raiseTo(result: ClassifyResult, floor: ChangeClass): ClassifyResult {
+  if (floor === "security-sensitive" && result.class === floor) return keepSecurityLens(result);
   if (CLASS_ORDER.indexOf(result.class) <= CLASS_ORDER.indexOf(floor)) return result;
   const lenses =
     floor === "security-sensitive" ? [SECURITY_LENS, ...result.lenses.filter((lens) => lens !== SECURITY_LENS)] : result.lenses;
@@ -1080,6 +1092,37 @@ function applyNameFloor(result: ClassifyResult): ClassifyResult {
   ]);
 }
 
+/** The one lockfile whose two copies the audit-first rule reads (p5g). */
+const NPM_LOCKFILE = "package-lock.json";
+
+/**
+ * Each changed `package-lock.json`'s two copies, for the audit-first rule
+ * (REQ-FLOW-065, plan/61, plan/63): the base commit's through the runner, as
+ * `git show <commit>:<prefix><path>` from the project root, and the work tree's
+ * from the project root, a regular file within the runner's output bound. No
+ * base, or a base read that fails (an absent file, a copy past the bound), is
+ * `base: null`, and a head copy that cannot be read leaves the file out: either
+ * keeps the security lens, never a narrower verdict.
+ */
+function readLockfiles(runner: GitRunner, root: ProjectRoot, commit: string | null, paths: readonly string[]): Lockfile[] {
+  const lockfiles: Lockfile[] = [];
+  for (const path of paths) {
+    if (path.slice(path.lastIndexOf("/") + 1) !== NPM_LOCKFILE) continue;
+    const head = readRegular(join(root.dir, path), GATE_GIT_MAX_BUFFER, GATE_GIT_MAX_BUFFER);
+    if (head === undefined) continue;
+    let base: string | null = null;
+    if (commit !== null) {
+      try {
+        base = runGit(runner, root.dir, "show", ["show", "--no-textconv", `${commit}:${root.prefix}${path}`]);
+      } catch (err) {
+        if (!(err instanceof GitReadError)) throw err;
+      }
+    }
+    lockfiles.push({ path, base, head: head.toString("utf8") });
+  }
+  return lockfiles;
+}
+
 /**
  * The classification and the resolved base for one run. `--paths` alone reads
  * no git at all; anything else goes through the hardened runner.
@@ -1122,8 +1165,9 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
       const source: PathSource = windows ? "listed" : "git";
       const change = readChange(runner, root, treeish, windows);
       const lines = "failed" in change.lines ? {} : { hunks: change.lines.hunks, unscanned: change.lines.unscanned };
+      const lockfiles = readLockfiles(runner, root, commit, change.paths);
       result = applyReadFloors(
-        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source, ...lines }, rules),
+        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source, ...lines, lockfiles }, rules),
         change,
         source,
       );

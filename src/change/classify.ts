@@ -64,6 +64,17 @@
  * the read could not show is `unscanned`: a code file makes the class
  * `security-sensitive` (review/125), any other at least `product` (plan/62).
  *
+ * **Audit first** (REQ-FLOW-065, S7 (a), plan/12, plan/52). A caller that read
+ * a changed npm lockfile's two copies passes them as `lockfiles`. When every
+ * path the class's paths placed `security-sensitive` is a `package-lock.json`
+ * whose base and head copies both parse at `lockfileVersion` 2 or 3, no
+ * `package.json` changed, and no differing `packages` entry carries an install
+ * script at head, the checks gain `dependency-audit` and the lenses lose the
+ * security lens: the audit runs first and the lens only on its flag. Any other
+ * format, a missing base copy, a parse failure, or a raise by a line past the
+ * cap or an unscanned code file keeps the lens, and the reason says why. A
+ * later read that raises the class puts the lens back ({@link keepSecurityLens}).
+ *
  * **Where a path came from decides how it is read** (review/20). A name git
  * gave is read literally: git never separates on `\`, so a backslash there is a
  * filename character and the reported path is git's own name. A listed path
@@ -767,6 +778,15 @@ export interface ClassifyInput {
   hunks?: readonly Hunk[];
   /** Files the read could not show (plan/62, review/94); any makes the class at least `product`. */
   unscanned?: readonly string[];
+  /** The changed npm lockfiles' two copies, for the audit-first rule; `base` is `null` when no base copy was read. */
+  lockfiles?: readonly Lockfile[];
+}
+
+/** One changed lockfile: its project-relative path, the base commit's copy (or `null`) and the work tree's. */
+export interface Lockfile {
+  path: string;
+  base: string | null;
+  head: string;
 }
 
 export interface ClassifyResult {
@@ -918,16 +938,121 @@ export function classifyChange(
     reasons.push(`the strongest path is ${top.path}, ${top.class} by ${top.rule}`);
   }
 
+  // S7 (a): a proven lockfile-only bump runs the dependency audit first, in place of the security lens.
+  const raisedByLines = atLeastProduct.includes("security-sensitive");
+  const refusal = cls === "security-sensitive" && !raisedByLines ? auditFirstRefusal(input, byPath) : undefined;
+  const auditFirst = refusal === null;
+  if (auditFirst) reasons.push(AUDIT_FIRST_REASON);
+  else if (refusal !== undefined) reasons.push(`the security lens stays: ${refusal}`);
+
   // The security lens first when the class asks for it, then every row the paths match, each once.
-  const lenses = new Set<string>(cls === "security-sensitive" ? [SECURITY_LENS] : []);
-  for (const entry of byPath) for (const lens of specialistsForPath(entry.path, triggers)) lenses.add(lens);
+  const lenses = new Set<string>(cls === "security-sensitive" && !auditFirst ? [SECURITY_LENS] : []);
+  for (const entry of byPath) {
+    for (const lens of specialistsForPath(entry.path, triggers)) if (!(auditFirst && lens === SECURITY_LENS)) lenses.add(lens);
+  }
 
   return {
     class: cls,
     byPath,
-    checks: [...CLASS_CHECKS[cls]],
+    checks: [...CLASS_CHECKS[cls], ...(auditFirst ? (["dependency-audit"] as const) : [])],
     lenses: [...lenses],
     reason: reasons.join("; "),
+  };
+}
+
+// ── Audit first (S7 (a), REQ-FLOW-065) ───────────────────────────────────────
+
+/** The reason clause of a change the audit-first rule took off the security lens. */
+export const AUDIT_FIRST_REASON = "lockfile-only bump: dependency audit first";
+
+/** The one lockfile format whose two copies prove a bump: npm's, which records `hasInstallScript` per entry. */
+const NPM_LOCKFILE = "package-lock.json";
+/** The npm lockfile versions whose `packages` map carries `hasInstallScript`. */
+const PROVEN_LOCKFILE_VERSIONS: ReadonlySet<unknown> = new Set([2, 3]);
+/** The lockfile names a refusal is worth naming for: a change holding none of them was never a bump. */
+const LOCKFILE_NAMES: ReadonlySet<string> = new Set([NPM_LOCKFILE, "pnpm-lock.yaml", "yarn.lock"]);
+
+const basenameOf = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
+
+/** A lockfile copy's `packages` map, each entry an object, or why the copy proves nothing. */
+function lockPackages(text: string): Map<string, Record<string, unknown>> | string {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return "does not parse";
+  }
+  if (!isRecord(value)) return "is not a JSON object";
+  if (!PROVEN_LOCKFILE_VERSIONS.has(value["lockfileVersion"])) return "is not at lockfileVersion 2 or 3";
+  const packages = value["packages"];
+  if (!isRecord(packages)) return "holds no packages map";
+  const entries = new Map<string, Record<string, unknown>>();
+  for (const [key, entry] of Object.entries(packages)) {
+    if (!isRecord(entry)) return "holds a package entry that is not an object";
+    entries.set(key, entry);
+  }
+  return entries;
+}
+
+/**
+ * Why one security-placed path is no proven npm lockfile bump, or `undefined`
+ * when it is: both copies parse at `lockfileVersion` 2 or 3, and no `packages`
+ * entry that differs between them carries an install script at head, whether
+ * the entry is new there or had one at base too (plan/12, plan/52). Any value
+ * of `hasInstallScript` but absent or `false` counts as one.
+ */
+function lockfileRefusal(path: string, lockfiles: readonly Lockfile[]): string | undefined {
+  if (basenameOf(path) !== NPM_LOCKFILE) return `${path} is not an npm lockfile`;
+  const lockfile = lockfiles.find((candidate) => candidate.path === path);
+  if (lockfile === undefined) return `${path} was not read`;
+  if (lockfile.base === null) return `${path} has no base copy`;
+  const base = lockPackages(lockfile.base);
+  if (typeof base === "string") return `${path}'s base copy ${base}`;
+  const head = lockPackages(lockfile.head);
+  if (typeof head === "string") return `${path}'s head copy ${head}`;
+  for (const [key, entry] of head) {
+    if (JSON.stringify(entry) === JSON.stringify(base.get(key))) continue;
+    const script = entry["hasInstallScript"];
+    if (script !== undefined && script !== false) return `${path} bumps a package with an install script`;
+  }
+  return undefined;
+}
+
+/**
+ * The audit-first rule over a `security-sensitive` change its paths placed:
+ * `null` when it holds — every security-placed path is a proven npm lockfile
+ * bump and no `package.json` changed — or why it does not. `undefined` when no
+ * security-placed path is a lockfile, so there is no bump to name a refusal for.
+ */
+function auditFirstRefusal(input: ClassifyInput, byPath: readonly PathClass[]): string | null | undefined {
+  const placed = byPath.filter((entry) => entry.class === "security-sensitive").map((entry) => entry.path);
+  if (!placed.some((path) => LOCKFILE_NAMES.has(basenameOf(path)))) return undefined;
+  const manifest = byPath.find((entry) => basenameOf(entry.path).toLowerCase() === "package.json");
+  if (manifest !== undefined) return `${manifest.path} changed`;
+  for (const path of placed) {
+    const why = lockfileRefusal(path, input.lockfiles ?? []);
+    if (why !== undefined) return why;
+  }
+  return null;
+}
+
+/**
+ * `result` with the security lens it needs once a read after the classifier
+ * raises it to `security-sensitive` (an outside path, a failed line read): the
+ * audit-first rule held only over the paths, so its check and its reason clause
+ * go and the lens comes first. A result that has the lens comes back as it is.
+ */
+export function keepSecurityLens(result: ClassifyResult): ClassifyResult {
+  if (result.lenses.includes(SECURITY_LENS)) return result;
+  return {
+    ...result,
+    class: "security-sensitive",
+    checks: [...CLASS_CHECKS["security-sensitive"]],
+    lenses: [SECURITY_LENS, ...result.lenses],
+    reason: result.reason
+      .split("; ")
+      .filter((clause) => clause !== AUDIT_FIRST_REASON)
+      .join("; "),
   };
 }
 
