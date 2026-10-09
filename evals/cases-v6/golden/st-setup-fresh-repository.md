@@ -16,7 +16,8 @@ Governing text — the same file. This is the prose of the `st-setup` command bo
 generates for the claude client. The three bash blocks it carries are quoted as a fixture below.
 Step 3's three remedy bullets are not quoted at all: `duplicates` is empty in this scenario, so no
 remedy is reached, and step 3's own stop sentence — which is quoted — is the whole of what the run
-needs from it. An elision marks only where the template escapes a backtick around a field name.
+needs from it. An elision inside a line marks where the template escapes a backtick around a
+field name; an elision on its own line marks where a bash block or the remedy bullets stand.
 
 ```text
 Set this repository up to run on the installed stamity plugin. Work the four steps in order and
@@ -24,8 +25,12 @@ stop at the one that asks for the operator.
 
 1. Read the current state. Every step below reads from this report.
 
+[...]
+
 2. When [...]setup.needed[...] is true, write the repository-owned files — the charter carrying this
    repository's facts and gates, and the client configuration the plugin does not carry:
+
+   [...]
 
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
    three commands in step 3, run deliberately.
@@ -34,10 +39,14 @@ stop at the one that asks for the operator.
    duplicate is a file two installs both claim, and which one goes is the operator's call. The
    three remedies below are what THE OPERATOR runs — they are reported, never performed here:
 
+   [...]
+
    Stop at this step. Remove no file yourself and run none of the three remedies; report the
    duplicates with their remedies and let the operator choose. Step 4 runs once they have.
 
 4. Finish by reporting the resolved state, as the table an operator reads:
+
+[...]
 
 Report what changed, what stayed, and any duplicate you stopped on.
 ```

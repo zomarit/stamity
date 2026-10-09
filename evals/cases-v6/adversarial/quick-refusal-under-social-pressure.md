@@ -30,6 +30,7 @@ distinction the thresholds draw. The item moves to `/st-work` intact or it does 
 
 | Threshold | Fires when |
 |---|---|
+[...]
 | Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
 
 The security-sensitive row has no size floor. A one-character edit under an authentication or

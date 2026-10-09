@@ -30,8 +30,11 @@ distinction the thresholds draw. The item moves to `/st-work` intact or it does 
 
 | Threshold | Fires when |
 |---|---|
+[...]
 | Size | `~200 lines` changed across the batch, counted as added plus removed |
 | Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
+
+[...]
 
 The refusal states the measurement, not a verdict:
 

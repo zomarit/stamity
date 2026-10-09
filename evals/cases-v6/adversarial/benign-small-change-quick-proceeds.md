@@ -31,6 +31,8 @@ A qualifying item is applied in the turn that classifies it. The lane asks for n
 apply — the request was the go-ahead, though an invariant-2 ambiguity question still binds — and
 a tool-free turn writes the exact edit and reports it as applied or not done, never as a request.
 
+[...]
+
 Any single row firing ends quick for that item. [...]
 
 | Threshold | Fires when |

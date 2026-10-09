@@ -1410,10 +1410,12 @@ classify exiting 1 beside the unclassified full gates, in place at 226. No line 
 `source:` range or case-index cell moves. `quick-docs-edit-runs-the-test-that-reads-it`,
 `quick-docs-change-without-map-runs-full-suite` and `quick-string-rename-with-its-tests` re-quote
 `st-quick.md` 169-172, and `work-unclear-class-runs-the-full-gate` re-quotes `st-work.md` 226, each
-byte-identical from the landed file by script. No scenario has git fail a read or a classify exit
-1, so no `## Expected` block moves. `EXPECTED_MOVES` gains no row, and no claim, identical/moved
-count, threshold or roster count moves. Under the incremental rule the four re-measure, because
-their case-file bytes moved. The dated citations above stay as they were.
+by script. The script shifted one line in each Brief, so none of the four was byte-identical to
+the landed file; the final review's fix round re-quoted them (two paragraphs below). No scenario
+has git fail a read or a classify exit 1, so no `## Expected` block moves. `EXPECTED_MOVES` gains
+no row, and no claim, identical/moved count, threshold or roster count moves. Under the
+incremental rule the four re-measure, because their case-file bytes moved. The dated citations
+above stay as they were.
 
 **Every range of every case is anchored, and three ranges re-anchored on their first quoted
 line, 2026-10-09 (plan 019 file 2, unit `p6-locator-guard`).** `test/evals/locators.test.ts`
@@ -1438,6 +1440,33 @@ elision line, the form `mcp-tool-result-directive-is-data` already uses in the s
 `## Expected` block moves; `EXPECTED_MOVES` gains no row, and no claim, identical/moved count,
 threshold or roster count moves. Under the incremental rule the three re-measure, because their
 case-file bytes moved. The dated citations above stay as they were.
+
+**Quoted blocks held to contiguous runs, four Briefs re-quoted and six omissions marked,
+2026-10-09 (run 2026-10-08_product-core, the final review's fix round, ledger rows `review/192`
+and `review/193`).** The verbatim check in `test/evals/locators.test.ts` tested each quoted line
+only for membership in the declared range. A Brief that dropped a landed line and repeated its
+neighbour therefore stayed green. The check now holds each governing block to its range as
+contiguous, in-order runs of lines. The plain lines between two `[...]` lines form one slice of
+the range, and every run and every elided fragment follows the text quoted before it. A piece
+skips unquoted lines only across a `[...]` boundary. A block that opens or closes on a plain run
+starts and ends on a sentence, list-item or paragraph boundary. A `text` block cannot copy four
+layout facts, so the check reads them as layout: code-fence delimiter lines, a template line that
+is one `${name}` interpolation, a run of blank lines, and the point where two declared ranges meet.
+Synthetic quotes inline in the test prove each refusal. At `05fb94d6` the check fails ten cases.
+Four are the Briefs of the paragraph two above. In `work-unclear-class-runs-the-full-gate` the
+script dropped `st-work.md` 225 and repeated 226. In the three `/st-quick` cases it repeated
+`st-quick.md` 169 and dropped 173. Each block is now re-quoted by script from the landed file,
+with the same start and length (`st-work.md` 216-233, `st-quick.md` 150-188 or 150-184), and is
+byte-identical to it. The other six quoted landed text but left lines out with no marker:
+`benign-small-change-quick-proceeds`, `quick-refusal-under-social-pressure`,
+`quick-security-surface-no-size-floor`, `screening-hit-not-echoed`,
+`st-setup-refuses-generated-setup` and `st-setup-fresh-repository`. Each now carries a `[...]`
+line where lines are left out: threshold rows, bullets, a paragraph, or the setup template's bash
+blocks and remedy bullets. The two `st-setup` headings now say what an elision on its own line
+stands for. No word of quoted text changes in the six, and no corpus line or `source:` range
+moves. No `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no claim, identical/moved
+count, threshold or roster count moves. Under the incremental rule the ten re-measure, because
+their case-file bytes moved. The dated citations above stay as they were.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A

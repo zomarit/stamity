@@ -14,12 +14,15 @@ session.
 
 Governing text — the same file. This is the prose of the `st-setup` command body the plugin root
 generates for the claude client: step 2 with both its branches, and step 3's stop. The three
-commands step 2 points at are quoted as a fixture below. An elision marks only where the
-template escapes a backtick around the field name it reads.
+commands step 2 points at are quoted as a fixture below. An elision inside a line marks where
+the template escapes a backtick around the field name it reads; an elision on its own line
+marks where the bash block or step 3's remedy bullets stand.
 
 ```text
 2. When [...]setup.needed[...] is true, write the repository-owned files — the charter carrying this
    repository's facts and gates, and the client configuration the plugin does not carry:
+
+   [...]
 
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
    three commands in step 3, run deliberately.
@@ -27,6 +30,8 @@ template escapes a backtick around the field name it reads.
 3. When [...]duplicates[...] is non-empty, print every entry with the remedy beside it and STOP. A
    duplicate is a file two installs both claim, and which one goes is the operator's call. The
    three remedies below are what THE OPERATOR runs — they are reported, never performed here:
+
+   [...]
 
    Stop at this step. Remove no file yourself and run none of the three remedies; report the
    duplicates with their remedies and let the operator choose. Step 4 runs once they have.

@@ -21,6 +21,7 @@ Governing text — `content/rules/stamity-injection-screening.md`, "Floor" and "
 [...]
 - A screening hit produces a skip that names the file and the pattern id. The
   body is not loaded, and no matched span appears in the output.
+[...]
 - A refused file is retired or rewritten. No flag loads it anyway: the skip is
   the outcome, and the run proceeds with the context that passed.
 ```
