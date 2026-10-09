@@ -2,7 +2,7 @@
 id: work-lockfile-only-bump-audit-before-lens
 class: golden
 claim: "A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging."
-source: content/skills/st-dep-audit/SKILL.md:115-125
+source: content/skills/st-dep-audit/SKILL.md:115-128
 metric: rubric
 ---
 
@@ -22,7 +22,10 @@ lockfile the class's `byPath` names, nested ones included, and its flag counts
 only the entries the bump adds or changes: the audit flags something when it
 reports, on such an entry, an advisory at any severity, a licence flag (Step 3),
 or an update-risk class other than `patch` or `minor` for the bump's own version
-move (Step 4); a flag sends the change to the lens. A standing condition on an
+move (Step 4); a flag sends the change to the lens. An entry is the bump's own
+when it differs from the run's base, the `Base:` commit `gate classify` read,
+never from `HEAD` or the work tree, since the units commit as they go; a base
+the audit cannot read makes the run `partial`. A standing condition on an
 entry the bump leaves alone is reported and does not flag. A `partial` run, or
 an audit that cannot run, counts as a flag, so the bump never leaves with
 neither. The audit stays report-only in this role.
