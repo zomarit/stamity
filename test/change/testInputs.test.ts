@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { extractReadPaths, isTestSource, selectTests } from "../../src/change/testInputs.ts";
 
@@ -9,7 +10,8 @@ import { extractReadPaths, isTestSource, selectTests } from "../../src/change/te
  * tracked set is a list, so no double stands in for anything here. Every case
  * that expects a narrow selection asserts the named files AND `full: false`,
  * because `full: true` with no files is what every fail-safe branch returns: a
- * selector that selected nothing would pass any case expecting it.
+ * selector that selected nothing would pass any case expecting it. The last
+ * block is the exception: it reads this repository's own test sources.
  */
 
 const TRACKED = new Set([
@@ -271,5 +273,22 @@ describe("selectTests", () => {
 
     expect(selection.full).toBe(true);
     expect(selection.reason).toContain("test/support/pages.ts");
+  });
+});
+
+// review/73: one refused literal in any test source makes every selection here full (review/62), so none may hold one.
+describe("this repository's test sources", () => {
+  it("hold no glob literal over the cost bound", () => {
+    const root = new URL("../../", import.meta.url);
+    const refused: string[] = [];
+    for (const top of ["test", "evals"]) {
+      for (const entry of readdirSync(new URL(`${top}/`, root), { recursive: true, encoding: "utf8" })) {
+        const path = `${top}/${entry.replaceAll("\\", "/")}`;
+        if (!isTestSource(path, ["test/**", "evals/**"])) continue;
+        const result = extractReadPaths(readFileSync(new URL(path, root), "utf8"), new Set());
+        if (!Array.isArray(result)) refused.push(`${path}: ${result.refused} ${result.error}`);
+      }
+    }
+    expect(refused).toEqual([]);
   });
 });

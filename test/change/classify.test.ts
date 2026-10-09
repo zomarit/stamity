@@ -874,9 +874,10 @@ describe("parseClassFile: what the class file may say", () => {
     ["a test input with no tests", '{"testInputs": [{"glob": "docs/**"}]}', 'testInputs[0].tests is neither "all" nor a list'],
     ["a test input with an unknown key", '{"testInputs": [{"glob": "docs/**", "tests": "all", "why": 1}]}', '"why" is not a key of testInputs[0]'],
     // review/50: a glob's matching cost is bounded by its length and its ** count.
+    // review/73: the two ** globs are joined at run time, so this file holds no literal over the bound (review/62).
     ["a glob longer than 200 characters", JSON.stringify({ classes: { product: [`${"a".repeat(198)}/**`] } }), "classes.product[0] is longer than 200 characters"],
-    ["a glob with more than four **", '{"classes": {"security-sensitive": ["**/a/**/b/**/c/**/d/**"]}}', "classes.security-sensitive[0] holds more than four **"],
-    ["a test-input glob with more than four **", '{"testInputs": [{"glob": "**/**/**/**/**.md", "tests": "all"}]}', "testInputs[0].glob holds more than four **"],
+    ["a glob with more than four **", JSON.stringify({ classes: { "security-sensitive": [["**", "a", "**", "b", "**", "c", "**", "d", "**"].join("/")] } }), "classes.security-sensitive[0] holds more than four **"],
+    ["a test-input glob with more than four **", JSON.stringify({ testInputs: [{ glob: `${["**", "**", "**", "**", "**"].join("/")}.md`, tests: "all" }] }), "testInputs[0].glob holds more than four **"],
   ])("refuses %s", (_label, text, error) => {
     expect(firstError(text)).toContain(error);
   });
