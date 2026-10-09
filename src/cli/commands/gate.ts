@@ -14,6 +14,7 @@ import {
   type ChangeClass,
   type ClassifyResult,
   type ClassRule,
+  type PathSource,
 } from "../../change/classify.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -36,9 +37,13 @@ import type { GitRunner } from "../../workspace/git.ts";
  * filename character). Without it the change is read from git: the tracked
  * changes (staged and unstaged) against the base, renames as renames, plus the
  * untracked files of the whole work tree; git's names are read literally, as
- * git gave them (review/20). `--base <ref>` names the base, resolved once to a
- * commit id every later call uses; with no `--base` the reads run against
- * `HEAD` and the reason says no base was given.
+ * git gave them (review/20), except on win32, where a backslash in a name is a
+ * separator at checkout (with `core.protectNTFS` off), so there they are read
+ * both ways and the stronger class kept, as `--paths` are (review/43); the
+ * project's prefix and the outside rules read them both ways too. `--base
+ * <ref>` names the base, resolved once to a commit id every later call uses;
+ * with no `--base` the reads run against `HEAD` and the reason says no base
+ * was given.
  *
  * **Fail-closed.** Every git call runs through {@link gitCheckRunner}, the
  * hardened construction the CLI's other git reads use. A directory outside a
@@ -194,9 +199,12 @@ interface ChangeRead {
  * cannot escape a name, and both top-level-relative (`--no-relative`, so a
  * `diff.relative` setting cannot narrow the read) before {@link toProjectPath}.
  * The untracked list runs from the top-level, so an untracked file outside the
- * project meets the outside rules as a tracked one does (review/34).
+ * project meets the outside rules as a tracked one does (review/34). On win32
+ * (`windows`) a name outside the project by its literal reading that lands
+ * inside it with `\` as a separator is read there too, and stays counted
+ * outside: the stronger reading wins either way (review/43).
  */
-function readChange(runner: GitRunner, root: ProjectRoot, commit: string): ChangeRead {
+function readChange(runner: GitRunner, root: ProjectRoot, commit: string, windows: boolean): ChangeRead {
   const { dir: cwd, prefix } = root;
   const diff = parseNameStatus(
     runGit(runner, cwd, "diff --name-status", [
@@ -227,8 +235,9 @@ function readChange(runner: GitRunner, root: ProjectRoot, commit: string): Chang
   const outside = new Set<string>();
   const project = (path: string): string | null => {
     const inside = toProjectPath(prefix, path);
-    if (inside === null) outside.add(path);
-    return inside;
+    if (inside !== null) return inside;
+    outside.add(path);
+    return windows ? toProjectPath(prefix, path.replaceAll("\\", "/")) : null;
   };
   const paths: string[] = [];
   const renames: Rename[] = [];
@@ -261,17 +270,27 @@ function gitSaidNo(err: unknown, status?: number): boolean {
 }
 
 /**
- * Whether `<treeish>:<prefix>.stamity` is a folder in that commit's tree. Git
- * answering no (the path is not there) is `false`; a timeout, an output bound
- * or a missing binary is a failed read, never a quiet "no".
+ * The type of the entry `treeish` holds at the top-level-relative `path`
+ * (`blob`, `tree`, `commit` for a submodule), or `null` when git answers
+ * cleanly that nothing is there: `ls-tree` exits 0 printing no entry for an
+ * absent path. That is the one "no". A missing or corrupt object, a failed lazy
+ * fetch, a timeout or no binary fails the call, and a failed read fails closed
+ * (p2a M-2): `cat-file -t` exits 128 for an absent path and a corrupt store
+ * alike, so it could not tell them apart. `--literal-pathspecs` reads the path
+ * as a name, never as pathspec magic; `--full-tree` ignores the cwd.
  */
-function baseHoldsStateFolder(runner: GitRunner, cwd: string, treeish: string, prefix: string): boolean {
-  try {
-    return runner(["cat-file", "-t", `${treeish}:${prefix}.stamity`], cwd).trim() === "tree";
-  } catch (err) {
-    if (gitSaidNo(err)) return false;
-    throw new GitReadError("cat-file -t", err, cwd);
+function baseEntryType(runner: GitRunner, cwd: string, treeish: string, path: string): string | null {
+  const output = runGit(runner, cwd, "ls-tree", ["--literal-pathspecs", "ls-tree", "-z", "--full-tree", treeish, "--", path]);
+  for (const record of output.split("\0")) {
+    const tab = record.indexOf("\t");
+    if (tab !== -1 && record.slice(tab + 1) === path) return record.slice(0, tab).split(" ")[1] ?? null;
   }
+  return null;
+}
+
+/** Whether `<treeish>:<prefix>.stamity` is a folder in that commit's tree; any failed read throws (p2a M-2). */
+function baseHoldsStateFolder(runner: GitRunner, cwd: string, treeish: string, prefix: string): boolean {
+  return baseEntryType(runner, cwd, treeish, `${prefix}.stamity`) === "tree";
 }
 
 /** The cwd's path below the git top-level (`git rev-parse --show-prefix`); outside a work tree this call fails. */
@@ -333,20 +352,16 @@ type BaseClassFile = { state: "absent" } | { state: "valid"; rules: ClassRule[] 
 
 /**
  * `<commit>:<prefix>.stamity/change-classes.json`, read as a raw blob (`cat-file
- * blob`, so no textconv or filter rewrites it) after `cat-file -t` says what
- * the base holds there. Git answering no is an absent file; any other failure
- * is a failed read and fails closed. An entry that is not a blob (a folder, a
- * submodule) is refused, never read as absent.
+ * blob`, so no textconv or filter rewrites it) after {@link baseEntryType} says
+ * what the base holds there. Only git's clean "nothing there" is an absent
+ * file; any other failure is a failed read and fails closed. An entry that is
+ * not a blob (a folder, a submodule) is refused, never read as absent.
  */
 function readBaseClassFile(runner: GitRunner, root: ProjectRoot, commit: string): BaseClassFile {
-  const spec = `${commit}:${root.prefix}${CLASS_FILE}`;
-  let type: string;
-  try {
-    type = runner(["cat-file", "-t", spec], root.dir).trim();
-  } catch (err) {
-    if (gitSaidNo(err)) return { state: "absent" };
-    throw new GitReadError("cat-file -t", err, root.dir);
-  }
+  const path = `${root.prefix}${CLASS_FILE}`;
+  const type = baseEntryType(runner, root.dir, commit, path);
+  if (type === null) return { state: "absent" };
+  const spec = `${commit}:${path}`;
   if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file` };
   const parsed = parseClassFile(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
   return parsed.ok ? { state: "valid", rules: parsed.rules } : { state: "invalid", error: parsed.errors[0] ?? "refused" };
@@ -396,20 +411,25 @@ function namePaths(paths: readonly string[]): string {
 /**
  * The floors the git read adds over the path rules: a path outside the project
  * raises the class to at least `product` (review/13), or to `security-sensitive`
- * when the security floor or row matches it (review/21); a name that is not
+ * when the security floor or row matches it (review/21), one clause per rule
+ * naming its paths through {@link namePaths} (review/42); a name that is not
  * valid UTF-8, decoded to U+FFFD, raises it to at least `product` (review/19).
  */
-function applyReadFloors(result: ClassifyResult, change: ChangeRead): ClassifyResult {
+function applyReadFloors(result: ClassifyResult, change: ChangeRead, source: PathSource): ClassifyResult {
   let raised = result;
   const reasons: string[] = [];
   if (change.outside.length > 0) {
     const count = change.outside.length;
     reasons.push(`${count} changed path${count === 1 ? "" : "s"} outside the project left out, so the class is at least product`);
     raised = raiseTo(raised, "product");
+    const byRule = new Map<string, string[]>();
     for (const path of change.outside) {
-      const rule = outsideSecurityRule(path);
-      if (rule === undefined) continue;
-      reasons.push(`${path} outside the project matches ${rule}, so the class is security-sensitive`);
+      const rule = outsideSecurityRule(path, source);
+      if (rule !== undefined) byRule.set(rule, [...(byRule.get(rule) ?? []), path]);
+    }
+    for (const [rule, paths] of byRule) {
+      const verb = paths.length === 1 ? "matches" : "match";
+      reasons.push(`${namePaths(paths)} outside the project ${verb} ${rule}, so the class is security-sensitive`);
       raised = raiseTo(raised, "security-sensitive");
     }
   }
@@ -472,10 +492,14 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
     if (listed !== undefined) {
       result = classifyChange({ paths: listed, base: baseState }, rules);
     } else {
-      const change = readChange(runner, root, treeish);
+      // On win32 git's names are read both ways (review/43); elsewhere literally (review/20).
+      const windows = process.platform === "win32";
+      const source: PathSource = windows ? "listed" : "git";
+      const change = readChange(runner, root, treeish, windows);
       result = applyReadFloors(
-        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source: "git" }, rules),
+        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source }, rules),
         change,
+        source,
       );
     }
     if (classFile?.state === "invalid") result = raiseTo(result, "product");

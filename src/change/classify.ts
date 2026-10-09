@@ -262,15 +262,22 @@ function matchRead(path: string, glob: string, foldCase = false): boolean {
  * name literally (review/20); then each pattern of the trigger roster's security
  * row, each matched by the roster's own matcher over a one-pattern row. The
  * check lives here so the roster keeps one `src/` reader; the git read in
- * `../cli/commands/gate.ts` calls it for each outside path.
+ * `../cli/commands/gate.ts` calls it for each outside path. A `listed` source
+ * (git's names on win32, where a backslash separates at checkout: review/43)
+ * meets the floor by either reading, as {@link readPath} reads such a path.
  */
 export function outsideSecurityRule(
   path: string,
+  source: PathSource = "git",
   triggers: readonly SpecialistTrigger[] = SPECIALIST_TRIGGER_TABLE,
 ): string | undefined {
   for (const rule of BUILT_IN_RULES) {
     if (rule.class !== "security-sensitive") continue;
-    const glob = rule.paths.find((candidate) => matchGlob(path, candidate, { literal: true, foldCase: rule.foldCase === true }));
+    const foldCase = rule.foldCase === true;
+    const glob = rule.paths.find(
+      (candidate) =>
+        matchGlob(path, candidate, { literal: true, foldCase }) || (source === "listed" && matchGlob(path, candidate, { foldCase })),
+    );
     if (glob !== undefined) return `built-in ${glob}`;
   }
   const pattern = securityRowPattern(path, findSpecialistTrigger(SECURITY_LENS, triggers));
@@ -312,12 +319,13 @@ function classifyPath(
   const code = isCodePath(path);
   let best: { class: ChangeClass; rule: string } | undefined;
   let floored = false;
-  const fromFile: { class: ChangeClass; glob: string }[] = [];
+  const fromFile: { class: ChangeClass; glob: string; refused: boolean }[] = [];
   for (const rule of rules) {
     const glob = rule.paths.find((candidate) => matchRead(path, candidate, rule.foldCase === true));
     if (glob === undefined) continue;
-    if (rule.origin === "class-file") fromFile.push({ class: rule.class, glob });
-    if (code && NOT_FOR_CODE.has(rule.class)) {
+    const refused = code && NOT_FOR_CODE.has(rule.class);
+    if (rule.origin === "class-file") fromFile.push({ class: rule.class, glob, refused });
+    if (refused) {
       floored = true;
       continue;
     }
@@ -339,9 +347,11 @@ function classifyPath(
       : { class: "product", rule: UNPLACED };
   }
   const placed = best.class;
-  // A class-file glob weaker than where the path ended lowered nothing; the reason names it (S3).
+  // A class-file glob weaker than where the path ended lowered nothing; the reason names it (S3). A glob the
+  // code-path floor refused, where the floor then decided, is the floor's clause alone: no stronger rule placed it.
+  const floorDecided = best.rule.startsWith("floor:");
   const unlowered = fromFile
-    .filter((match) => rank(match.class) > rank(placed))
+    .filter((match) => rank(match.class) > rank(placed) && !(match.refused && floorDecided))
     .map((match) => `${match.glob} (${match.class}) for ${path}, kept ${placed}`);
   return { path, class: placed, rule: best.rule, floored, unlowered };
 }

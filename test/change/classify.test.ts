@@ -598,6 +598,15 @@ describe("outsideSecurityRule: the security rule a path outside the project meet
   it("reads the name literally against the built-in floor, so a backslash is a filename character", () => {
     expect(outsideSecurityRule(".stamity/overrides/a\\..\\..\\..\\docs\\x.md")).toBe("built-in .stamity/overrides/**");
     expect(outsideSecurityRule(".stamity\\manifest.json")).toBeUndefined();
+    expect(outsideSecurityRule(".stamity\\manifest.json", "git")).toBeUndefined();
+  });
+
+  // review/43: on win32 git's names are read as listed paths are, both ways, and the floor meets either reading.
+  it("reads a listed-source name both ways against the built-in floor", () => {
+    expect(outsideSecurityRule(".stamity\\manifest.json", "listed")).toBe("built-in .stamity/manifest.json");
+    expect(outsideSecurityRule(".Stamity\\Overrides\\x.md", "listed")).toBe("built-in .stamity/overrides/**");
+    expect(outsideSecurityRule(".stamity/overrides/a\\..\\..\\..\\docs\\x.md", "listed")).toBe("built-in .stamity/overrides/**");
+    expect(outsideSecurityRule("docs\\guide.md", "listed")).toBeUndefined();
   });
 
   it("names the shipped security row's pattern when no built-in rule matches", () => {
@@ -614,10 +623,10 @@ describe("outsideSecurityRule: the security rule a path outside the project meet
     const fixtureTable: readonly SpecialistTrigger[] = [
       { specialist: "stamity-security", triggerPaths: ["vault/"], triggerKeywords: [], rationale: "fixture: a vault" },
     ];
-    expect(outsideSecurityRule("src/vault/key.ts", fixtureTable)).toBe("security row vault/");
-    expect(outsideSecurityRule("lib/auth/session.ts", fixtureTable)).toBeUndefined();
-    expect(outsideSecurityRule("lib/auth/session.ts", [])).toBeUndefined();
-    expect(outsideSecurityRule(".stamity/manifest.json", [])).toBe("built-in .stamity/manifest.json");
+    expect(outsideSecurityRule("src/vault/key.ts", "git", fixtureTable)).toBe("security row vault/");
+    expect(outsideSecurityRule("lib/auth/session.ts", "git", fixtureTable)).toBeUndefined();
+    expect(outsideSecurityRule("lib/auth/session.ts", "git", [])).toBeUndefined();
+    expect(outsideSecurityRule(".stamity/manifest.json", "git", [])).toBe("built-in .stamity/manifest.json");
   });
 });
 
@@ -803,6 +812,17 @@ describe("mergeRules: a class file's globs join their class and never lower a pa
     expect(result.class).toBe(expected);
     expect(result.reason).toContain(glob);
     expect(result.reason).toContain("weaker globs do not lower");
+  });
+
+  // p2a reviewer M-2: where the code-path floor decided, the floor clause names it; no stronger rule is claimed.
+  it("names the floor, not a stronger rule, when only the floor kept a code file out of a weak glob's class", () => {
+    const result = classOf("website/src/x.tsx", withFile({ classes: { docs: ["website/**"] } }));
+    expect(result.class).toBe("product");
+    expect(result.reason).toContain("kept out of records and docs as code or an extensionless file: website/src/x.tsx");
+    expect(result.reason).not.toContain("weaker globs do not lower");
+    const tests = classOf("test/x.ts", withFile({ classes: { docs: ["test/**"] } }));
+    expect(tests.class).toBe("tests");
+    expect(tests.reason).not.toContain("weaker globs do not lower");
   });
 
   it("names no ignored glob when the file's glob decides the path", () => {

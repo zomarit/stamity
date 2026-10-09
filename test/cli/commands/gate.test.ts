@@ -1,7 +1,7 @@
 import type * as ChildProcessModule from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { gateCommand, toProjectPath } from "../../../src/cli/commands/gate.ts";
@@ -64,6 +64,17 @@ function realFailure(script: string, bounds: { timeout?: number; maxBuffer?: num
 
 const run = (argv: readonly string[], opts?: { cwd?: string }) =>
   runInProcess([gateCommand], ["gate", ...argv], opts);
+
+/** Runs `body` with `process.platform` reading `platform`, restored after (review/43). */
+async function onPlatform<T>(platform: NodeJS.Platform, body: () => Promise<T>): Promise<T> {
+  const real = process.platform;
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    return await body();
+  } finally {
+    Object.defineProperty(process, "platform", { value: real, configurable: true });
+  }
+}
 
 describe("stamity gate classify --paths", () => {
   it("prints the JSON document for a docs path", async () => {
@@ -475,12 +486,31 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     commitNamesOnly(repo, ["docs/a\\b.md", "docs\\..\\.stamity\\manifest.json"]);
 
-    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+    const { code, doc } = await onPlatform("linux", () => classifyIn(repo, ["--base", "HEAD"]));
 
     expect(code).toBe(0);
     expect((doc["paths"] as string[]).toSorted()).toEqual(["docs/a\\b.md", "docs\\..\\.stamity\\manifest.json"].toSorted());
     expect(doc["byPath"]).toContainEqual({ path: "docs/a\\b.md", class: "docs", rule: "docs/**" });
     expect(doc["class"]).toBe("product");
+  });
+
+  // review/43: on win32 a backslash in a git name is a separator at checkout, so there the name is read both ways.
+  it("reads a git name holding a backslash both ways on win32, keeping the stronger class, and literally elsewhere", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+    commitNamesOnly(repo, [".stamity\\overrides\\x.md"]);
+
+    const windows = await onPlatform("win32", () => classifyIn(repo, ["--base", "HEAD"]));
+    const posix = await onPlatform("linux", () => classifyIn(repo, ["--base", "HEAD"]));
+
+    expect(windows.code).toBe(0);
+    expect(windows.doc["class"]).toBe("security-sensitive");
+    expect(windows.doc["lenses"]).toContain("stamity-security");
+    expect(windows.doc["byPath"]).toEqual([
+      { path: ".stamity/overrides/x.md", class: "security-sensitive", rule: ".stamity/overrides/**" },
+    ]);
+    expect(posix.code).toBe(0);
+    expect(posix.doc["class"]).toBe("docs");
+    expect(posix.doc["byPath"]).toEqual([{ path: ".stamity\\overrides\\x.md", class: "docs", rule: "*.md" }]);
   });
 
   // review/36: the report strips these code points, so the name it prints is no longer the file's own.
@@ -733,12 +763,57 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       const outside = ".stamity/overrides/a\\..\\..\\..\\docs\\x.md";
       commitNamesOnly(repo, [outside]);
 
-      const { code, doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
+      const { code, doc } = await onPlatform("linux", () => classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]));
 
       expect(code).toBe(0);
       expect(doc["paths"]).toEqual([]);
       expect(doc["class"]).toBe("security-sensitive");
       expect(doc["reason"]).toContain(`${outside} outside the project matches built-in .stamity/overrides/**`);
+    });
+
+    // review/43: on win32 a name outside the project by its literal reading may check out inside it, or as a state file.
+    it("on win32 reads an outside git name both ways: under the project's prefix and against the built-in floor", async () => {
+      const repo = await seedRepo("repo", { "packages/app/.stamity/manifest.json": "{}\n", "docs/a.md": "base\n" });
+      commitNamesOnly(repo, ["packages\\app\\.stamity\\overrides\\x.md", ".stamity\\manifest.json"]);
+      const cwd = join(repo, "packages", "app");
+
+      const windows = await onPlatform("win32", () => classifyIn(cwd, ["--base", "HEAD"]));
+      const posix = await onPlatform("linux", () => classifyIn(cwd, ["--base", "HEAD"]));
+
+      expect(windows.code).toBe(0);
+      expect(windows.doc["class"]).toBe("security-sensitive");
+      expect(windows.doc["paths"]).toEqual([".stamity/overrides/x.md"]);
+      expect(windows.doc["reason"]).toContain("2 changed paths outside the project left out");
+      expect(windows.doc["reason"]).toContain(
+        ".stamity\\manifest.json outside the project matches built-in .stamity/manifest.json",
+      );
+      expect(posix.code).toBe(0);
+      expect(posix.doc["class"]).toBe("product");
+      expect(posix.doc["paths"]).toEqual([]);
+      expect(posix.doc["reason"]).not.toContain("matches built-in");
+    });
+
+    // review/42: outside matches are grouped by rule, each group naming at most five paths and counting the rest.
+    it("names at most five outside paths per security rule and counts the rest", async () => {
+      const repo = await seedRepo("repo", { "packages/app/.stamity/manifest.json": "{}\n", "packages/app/docs/x.md": "base\n" });
+      const scaffold = Object.fromEntries(
+        Array.from({ length: 7 }, (_, at) => [`repo/packages/api/a${at + 1}.ts`, "export {};\n"]),
+      );
+      await getRoot().seedFiles({ ...scaffold, "repo/package-lock.json": "{}\n", "repo/packages/app/docs/x.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
+      const reason = doc["reason"] as string;
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(reason).toContain("8 changed paths outside the project left out");
+      expect(reason).toContain(
+        "packages/api/a1.ts, packages/api/a2.ts, packages/api/a3.ts, packages/api/a4.ts, packages/api/a5.ts and 2 more " +
+          "outside the project match security row api/, so the class is security-sensitive",
+      );
+      expect(reason).toContain("package-lock.json outside the project matches security row package-lock.json");
+      expect(reason.split("outside the project match").length - 1).toBe(2);
+      expect(reason).not.toContain("a6.ts");
     });
 
     it("says at least product for an untracked file outside the project beside a docs edit", async () => {
@@ -875,8 +950,12 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       await classifyIn(repo, ["--base", "HEAD"]);
 
       const reads = gitSpy.calls.filter((argv) => argv.some((arg) => arg.endsWith(CLASS_FILE)));
-      expect(reads.length).toBeGreaterThan(0);
-      for (const argv of reads) expect(argv).toContain(`${head}:${CLASS_FILE}`);
+      expect(reads.some((argv) => argv.includes("blob"))).toBe(true);
+      for (const argv of reads) {
+        // The entry is looked up in the base commit's tree, then its blob is read from the same commit.
+        if (argv.includes("ls-tree")) expect(argv.slice(argv.indexOf("ls-tree"))).toEqual(["ls-tree", "-z", "--full-tree", head, "--", CLASS_FILE]);
+        else expect(argv).toContain(`${head}:${CLASS_FILE}`);
+      }
     });
 
     it("says product, naming the failure, when the class file read fails", async () => {
@@ -890,6 +969,59 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(code).toBe(0);
       expect(doc["class"]).toBe("product");
       expect(doc["reason"]).toContain("git cat-file blob failed, exit 3");
+    });
+
+    /** Overwrites the loose object `oid` of `repo` with bytes that do not inflate: a corrupt object store. */
+    async function corruptObject(repo: string, oid: string): Promise<void> {
+      const file = join(repo, ".git", "objects", oid.slice(0, 2), oid.slice(2));
+      await chmod(file, 0o644);
+      await writeFile(file, "not a zlib stream");
+    }
+
+    // p2a M-2 (reviewer W-1): only git's clean "nothing there" answer is an absent file; any other failure fails closed.
+    it("says product, naming the failed read, when the base tree holding the class file is corrupt", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "docs/x.md": "base\n" });
+      await corruptObject(repo, git(repo, ["rev-parse", "HEAD:.stamity"]).trim());
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD", "--paths", "docs/x.md"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("git ls-tree failed");
+      expect(doc["reason"]).not.toContain("the base holds no");
+    });
+
+    it("says product, naming the failed read, when the base tree the project root is looked up in is corrupt", async () => {
+      const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", "app/docs/x.md": "base\n" });
+      await corruptObject(repo, git(repo, ["rev-parse", "HEAD:app"]).trim());
+
+      const { code, doc } = await classifyIn(join(repo, "app"), ["--base", "HEAD", "--paths", "docs/x.md"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("git ls-tree failed");
+    });
+
+    // p2a reviewer M-1: a folder or a submodule at the class file's path is refused, never read as absent.
+    it.each([
+      ["a folder", "tree"],
+      ["a submodule", "commit"],
+    ])("reads no map and says at least product when the base holds %s at the class file's path", async (_label, type) => {
+      const repo = await seedRepo("repo", { "docs/x.md": "base\n" });
+      if (type === "tree") {
+        await getRoot().seedFiles({ [`repo/${CLASS_FILE}/inner.json`]: "{}\n" });
+        git(repo, ["add", "--", `${CLASS_FILE}/inner.json`]);
+      } else {
+        const commit = git(repo, ["rev-parse", "HEAD"]).trim();
+        git(repo, ["update-index", "--add", "--cacheinfo", `160000,${commit},${CLASS_FILE}`]);
+      }
+      git(repo, ["commit", "-q", "-m", `a ${type} at the class file's path`]);
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD", "--paths", "docs/x.md"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain(`the base copy of ${CLASS_FILE} is invalid (the base holds a ${type} there, not a file)`);
     });
 
     it("reads the base copy for --paths with --base too", async () => {
