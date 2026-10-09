@@ -22,7 +22,9 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     on the digest's `findings:` line as `notes left out: <n>`; a pre-existing defect that
  *     passes the test leads its `summary` with `pre-existing:`. {@link CAPTURE_PINS} holds
  *     each role's sentences by section, and {@link captureGaps} reads them, so a dropped
- *     sentence is exercised red on a real body.
+ *     sentence is exercised red on a real body. The security lens applies its Exclusions
+ *     first and keeps its out-of-change row (S13), so it carries no `pre-existing:` lead, and
+ *     a note with a security consequence is a finding carried in full on `security:`.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -51,6 +53,7 @@ const SEVERITY_ROLES: readonly string[] = [
 ];
 
 const REVIEWER = "agents/stamity-reviewer.md";
+const SECURITY = "agents/stamity-security.md";
 const REWORK = "commands/st-rework.md";
 
 /** The reviewer's own Warning rule (`## Critical rows`), which the scale does not replace. */
@@ -111,7 +114,55 @@ const CAPTURE_PINS: readonly CapturePin[] = [
     section: "Return contract",
     phrase: "an inline result carries the notes count, never the notes.",
   },
+  {
+    relPath: SECURITY,
+    section: "Return contract",
+    phrase:
+      "Exclusions are applied first: what they remove is out of scope, neither a finding nor a " +
+      "note.",
+  },
+  {
+    relPath: SECURITY,
+    section: "Return contract",
+    phrase:
+      "Of the rest, a finding names its consequence: who or what is affected, how, and in which " +
+      "use, with its evidence.",
+  },
+  {
+    relPath: SECURITY,
+    section: "Return contract",
+    phrase:
+      "A note with no consequence (wording, comment drift, a \"might\" with no trigger) is not a " +
+      "finding: the report lists it and the digest counts it.",
+  },
+  {
+    relPath: SECURITY,
+    section: "Return contract",
+    phrase:
+      "A note whose consequence shows once looked at is a finding at the severity that " +
+      "consequence sets, and `security:` carries it in full: a security consequence is never a " +
+      "note left out.",
+  },
+  {
+    relPath: SECURITY,
+    section: "Return contract",
+    phrase: "then the `Minor` count with its ids and locators, ending `notes left out: <n>`;",
+  },
+  {
+    relPath: SECURITY,
+    section: "Return contract",
+    phrase: "an inline result carries the notes count, never the notes.",
+  },
 ];
+
+/**
+ * The security lens's out-of-change exclusion (S13): the lens keeps raising what it raised
+ * before the capture rule, so a pre-existing condition stays out of scope rather than becoming
+ * a `pre-existing:` finding.
+ */
+const SECURITY_OUT_OF_CHANGE =
+  "**Anything outside the change.** A pre-existing condition the change neither introduces " +
+  "nor worsens is out of scope for this run.";
 
 /** The text of one top-level `## <heading>` section, up to the next one, or `undefined`. */
 function sectionText(file: CorpusFile, heading: string): string | undefined {
@@ -268,6 +319,53 @@ describe("capture by consequence — a finding names its consequence, a note is 
     expect(captureGaps(noLead)).toEqual([
       "Rubric: A pre-existing defect is recorded only when it passes this test, its `summary` " +
         "leading `pre-existing:`.",
+    ]);
+    expect(captureGaps(noCount)).toEqual([
+      "Return contract: then the `Minor` count with its ids and locators, ending " +
+        "`notes left out: <n>`;",
+    ]);
+  });
+});
+
+describe("capture by consequence — the security lens keeps its exclusions and counts its notes", () => {
+  it("(f) the security digest counts the notes on the `findings:` line, before `security:`", async () => {
+    const contract = flat(sectionText(await load(SECURITY), "Return contract") ?? "");
+    const findings = contract.indexOf("`findings:`");
+    const notes = contract.indexOf("`notes left out: <n>`");
+
+    expect(findings).toBeGreaterThan(-1);
+    expect(notes).toBeGreaterThan(findings);
+    expect(contract.indexOf("`security:`", findings)).toBeGreaterThan(notes);
+  });
+
+  it("(f) keeps the out-of-change exclusion and four or more rows, and no `pre-existing:` lead (S13)", async () => {
+    const security = await load(SECURITY);
+    const exclusions = flat(sectionText(security, "Exclusions") ?? "");
+
+    expect(exclusions).toContain(SECURITY_OUT_OF_CHANGE);
+    expect(exclusions.match(/- \*\*/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(security.raw).not.toContain("`pre-existing:`");
+  });
+
+  it("(f) fails when the lens drops the exclusions-first sentence or the notes count", async () => {
+    const security = await load(SECURITY);
+    const noExclusions = corpusFileOf(
+      security.relPath,
+      security.raw.replace(
+        "- Exclusions are applied first: what they remove is out of scope, neither a finding nor a note.\n  Of the rest, a finding",
+        "- A finding",
+      ),
+    );
+    const noCount = corpusFileOf(
+      security.relPath,
+      security.raw.replace(", ending\n  `notes left out: <n>`;", ";"),
+    );
+
+    expect(captureGaps(noExclusions)).toEqual([
+      "Return contract: Exclusions are applied first: what they remove is out of scope, neither " +
+        "a finding nor a note.",
+      "Return contract: Of the rest, a finding names its consequence: who or what is affected, " +
+        "how, and in which use, with its evidence.",
     ]);
     expect(captureGaps(noCount)).toEqual([
       "Return contract: then the `Minor` count with its ids and locators, ending " +

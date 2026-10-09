@@ -2,7 +2,7 @@
 id: agent-security-return-contract
 class: golden
 claim: "A security pass that found nothing on a surface it did check returns status DONE naming the surfaces examined, how many findings it posted, and whether the run posted or was advisory; it reports no rate, invents no finding to avoid returning empty, claims no edit, and states no behaviour claim without path:line behind it."
-source: content/agents/stamity-security.md:14-22,60-147
+source: content/agents/stamity-security.md:14-22,60-154
 metric: rubric
 ---
 
@@ -83,6 +83,12 @@ run.
   question or dropped — posting it spends a fix round on an assertion nobody can check. A
   file path with no line number is a bare path, not a citation — the same defect as no
   citation at all.
+- Exclusions are applied first: what they remove is out of scope, neither a finding nor a note.
+  Of the rest, a finding names its consequence: who or what is affected, how, and in which use,
+  with its evidence. A note with no consequence (wording, comment drift, a "might" with no
+  trigger) is not a finding: the report lists it and the digest counts it. A note whose
+  consequence shows once looked at is a finding at the severity that consequence sets, and
+  `security:` carries it in full: a security consequence is never a note left out.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the findings with their locators and OWASP ids, how
@@ -106,11 +112,12 @@ run.
   makes, which edits no product, test or configuration file — and the final message is the
   digest, one labelled line each: `status:`; `mode:` `posted` or `advisory`, with the posted
   count; `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every finding of this run in full, since each is security-relevant; `contract delta: none`;
-  then at most 1,500 characters of prose. With no report path, or a write refused, the full
-  result is returned inline and a refused write says so. A `BLOCKED_*` return writes no report
-  and is returned in full.
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every finding of this run in full, since each is
+  security-relevant; `contract delta: none`; then at most 1,500 characters of prose. With no
+  report path, or a write refused, the full result is returned inline and a refused write says
+  so; an inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
+  report and is returned in full.
 ```
 
 Scenario state — the pass you have just completed, given to you as fact:
