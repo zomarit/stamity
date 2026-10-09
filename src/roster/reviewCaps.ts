@@ -11,10 +11,11 @@
  *
  * Calibrated on convergence economics, not on detector reachability: published
  * LLM self-correction results put most of the achievable gain in the first two
- * correction rounds, and this default holds one round of headroom above that
- * so a slow-but-converging change is not cut off. A loop that is diverging
- * rather than converging exits through its own escape conditions well before
- * the cap, so raising this number buys little and costs a full round.
+ * correction rounds, and this default spends exactly those two: three review
+ * passes with a fixer round between each, and no headroom round after them.
+ * A loop that is diverging rather than converging exits through its own
+ * escape conditions well before the cap, so raising this number buys little
+ * and costs a full round.
  */
 export const DEFAULT_MAX_REVIEW_ITERATIONS: number = 3;
 

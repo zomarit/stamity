@@ -736,6 +736,10 @@ describe("/st-work — Prove", () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("per gate: command, pass/fail/unknown");
     expect(proof).toContain("the earlier result a byte-identical tree cites");
+    // Added 2026-10-09 (p4a–c review r1 fix round, `review/30`): the review line has a slot for the
+    // two records the Review loop requires of it.
+    expect(proof).toContain("review verdicts + confidence, per round, naming an approval below the gate");
+    expect(proof).toContain("each escalation's effort step or `effort: not settable`");
   });
 
   it("references verification commands only through substitution tokens", async () => {
@@ -763,20 +767,29 @@ describe("/st-work — Prove", () => {
   // (REQ-FLOW-064, REQ-LADDER-003). The stronger-class stage is retired, so its phrase is asserted
   // absent from the whole body; the cap's BLOCKED_FAILURE stop and a raised cap's "no new stage"
   // stay pinned, and the light tier's cap is pinned as prose (the hook cannot see a tier).
+  // TEST CHANGE, justified (2026-10-09, plan 019 file 2, p4a–c review r1 fix round, `review/25`,
+  // `review/27`, `review/29`): the third trigger read "a finding still open at the cap round",
+  // which also reads as "after the cap round's review", where the closure re-review would be a
+  // round past the cap; it now reads "entering the cap round". The orchestrator attaches the round
+  // history to the escalation spawn (a dispatcher's duty the fixer cannot do for itself), so the
+  // clause is pinned here. The light cap's hook caveat is pinned as signed off: a hook that cannot
+  // see the tier may hold a light run to the engine cap.
   it("escalates on what the run shows and stops as BLOCKED past the escalation fixer", async () => {
     const text = await body();
     const loop = collapse(section(text, "### Review loop"));
     expect(loop).toContain(`${DEFAULT_MAX_REVIEW_ITERATIONS} rounds by default (2 at light)`);
+    expect(loop).toContain("a review-gate hook that cannot see the tier may hold a light run to the engine cap");
     // The three triggers, in order.
     const triggers = [
       "a finding whose ledger row carries two `re-review not-fixed` notes",
       "a gate red after a fix",
-      "a finding still open at the cap round",
+      "a finding still open entering the cap round",
     ];
     for (const trigger of triggers) expect(loop, trigger).toContain(trigger);
     const positions = triggers.map((trigger) => loop.indexOf(trigger));
     expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
-    expect(loop).toContain("goes to a fresh fixer spawn — never the resumed one");
+    expect(loop).not.toContain("still open at the cap round");
+    expect(loop).toContain("goes to a fresh fixer spawn — never the resumed one — with the round history attached");
     expect(loop).toContain("on the same model at one effort level above the fixer's declared one");
     expect(loop).toContain("the proof block records `effort: not settable`");
     expect(loop).toContain("A finding that fixer leaves open stops the run as BLOCKED_FAILURE");
@@ -897,7 +910,11 @@ describe("/st-work — Prove", () => {
   it("exits the loop before the cap on convergence or divergence", async () => {
     const loop = collapse(section(await body(), "### Review loop"));
     expect(loop).toContain("Escape before the cap");
-    expect(loop).toContain("at-confidence approval exits");
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, p4a–c review r1 fix round, `review/24`):
+    // the pin read "at-confidence approval exits", which told the orchestrator a below-gate approval
+    // does not exit, against the Review loop's own rule that it counts and is named (REQ-CTX-018).
+    expect(loop).toContain("an approval exits, a below-gate one named");
+    expect(loop).not.toContain("at-confidence");
     expect(loop).toContain("diverged");
   });
 

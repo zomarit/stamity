@@ -586,6 +586,13 @@ export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
  * carried `+ merged` as a fourth clause and no run in the corpus could satisfy
  * it — see the module docblock for why that is a property of what this
  * repository writes down rather than of what it merges.
+ *
+ * Stricter than the flow, on purpose (2026-10-09): `/st-work` now closes a run
+ * on an approval below the record's confidence gate, named below it, with no
+ * stronger re-review to lift it (REQ-CTX-018). This rule still counts only an
+ * approval at or above that gate, so such a run closes in the flow and lands in
+ * the rate's denominator, not its numerator. The bar stays here; the string and
+ * the generated page do not follow the flow's acceptance.
  */
 export const MERGE_READY_RULE =
   "verified merge-ready = the final gate table all pass, the last review verdict an approval at " +

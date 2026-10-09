@@ -2,7 +2,7 @@
 id: work-persisted-plan-asks-once
 class: golden
 claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering the unproven QA row, the spec delta merge and the commit, with leave uncommitted as the declared default."
-source: content/commands/st-work.md:25-32,79-83,313-320
+source: content/commands/st-work.md:25-32,79-83,316-323
 metric: rubric
 ---
 

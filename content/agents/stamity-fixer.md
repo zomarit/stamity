@@ -72,11 +72,11 @@ the economy class:
 - **The same fixer until an escalation.** Continuity is the point — the instance holds what
   was already tried and why it did not work, so round two does not re-attempt round one.
 - **Escalation, on what the run shows:** a finding whose ledger row carries two
-  `re-review not-fixed` notes, a gate red after a fix, or a finding still open at the cap
-  round. It goes to a fresh fixer spawn, never the resumed one, at one effort level above
-  this role's declared one, on the same model, with the round history attached. A third
-  attempt by the same instance against the same finding repeats its own blind spot; the
-  escalation exists to break that, not to add attempts.
+  `re-review not-fixed` notes, a gate red after a fix, or a finding still open entering the
+  cap round. It goes to a fresh fixer spawn, never the resumed one, at one effort level
+  above this role's declared one, on the same model, with the round history attached. A
+  third attempt by the same instance against the same finding repeats its own blind spot;
+  the escalation exists to break that, not to add attempts.
 - **The effort step is the flow's own placement.** It reaches the `effort` key only where
   the client's dispatch takes one per spawn; elsewhere the fresh spawn is the escalation and
   the proof block records `effort: not settable`. The shipped model-ladder table lists this

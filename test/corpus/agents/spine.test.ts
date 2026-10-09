@@ -795,11 +795,16 @@ describe("fixer — bounded scope, escalating rounds", () => {
     );
 
     expect(rounds).toMatch(/the same fixer until an escalation/i);
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, p4a–c review r1 fix round, `review/29`):
+    // the third trigger read "a finding still open at the cap round", which also reads as "after
+    // the cap round's review", where the closure re-review would run past the cap. It now reads
+    // "entering the cap round", in lockstep with `/st-work`'s escalation bullet.
     const triggers = [
       "a finding whose ledger row carries two `re-review not-fixed` notes",
       "a gate red after a fix",
-      "a finding still open at the cap round",
+      "a finding still open entering the cap round",
     ];
+    expect(rounds).not.toContain("still open at the cap round");
     for (const trigger of triggers) expect(rounds, trigger).toContain(trigger);
     const positions = triggers.map((trigger) => rounds.indexOf(trigger));
     expect(positions).toEqual([...positions].toSorted((a, b) => a - b));

@@ -2,7 +2,7 @@
 id: probe-none-work-run-qa-checkpoint
 class: probe
 claim: "Inside an active work run that has reached its own QA checkpoint, no skill is separately selected: the running command owns the checkpoint step."
-source: content/commands/st-work.md:293-309
+source: content/commands/st-work.md:296-312
 metric: classification
 ---
 
