@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-09T00:50:50.618Z",
+  "updatedAt": "2026-10-09T00:59:09.806Z",
   "tools": [
     "claude"
   ],
@@ -71,7 +71,7 @@
       "adapter": "claude",
       "artifactId": "design-quality",
       "artifactType": "agent",
-      "contentHash": "fca312ad7e85d5d730c16eaba2282d8757900d437e3457827eb30577358c46a6",
+      "contentHash": "66659874dfb66148998ddb837f68b8171c1d7e413543c8cd3f5fa58ad0f0971f",
       "path": ".claude/agents/stamity-design-quality.md"
     },
     {
@@ -92,7 +92,7 @@
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "9f79b4d8e87b3f88580b64ddf792d64abdb531f6ca6ee4e9e7b38cfb9918b417",
+      "contentHash": "8879798a6600417b82edada16aa532913abfeb85ce759531c5776fad660da91b",
       "path": ".claude/agents/stamity-performance.md"
     },
     {

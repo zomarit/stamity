@@ -114,7 +114,10 @@ run.
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** for findings: `Critical` | `Warning` | `Minor`. `Critical` requires a
-  breached declared budget; without one the run's ceiling is `Warning`.
+  breached declared budget; without one the run's ceiling is `Warning`. Where the
+  `## Severity` scale below reads otherwise, this budget rule decides the lens's levels:
+  `Critical` only on a breached declared budget, and with no declared budget over the surface
+  the strongest finding is a `Warning`, as `/st-work`'s Specialist pass states.
 - Every behaviour claim cites `path:line`, and every cost claim carries its measurement and the
   method that produced it, named in that finding's own `method:` slot below — a `path:line` says
   where the code is, never how its cost was established. A bare path is not a citation: a
@@ -133,6 +136,13 @@ run.
   budget file it read. `method:` has no empty form and no implied default: a cost claim with
   nothing to put there is written as a question, not returned as a finding. The slot exists
   because a cost claim carrying `path:line` and no method reads as measured when it was not.
+- Exclusions are applied first: what they remove is out of scope, neither a finding nor a note.
+  Of the rest, a finding names its consequence: who or what is affected, how, and in which use,
+  with its evidence. A note with no consequence (naming, comment drift, a tidier shape, a
+  "might be slow" with no input that reaches it) is not a finding: the report lists it and the
+  digest counts it. A note whose consequence shows once looked at is a finding at the severity
+  that consequence sets, within the `Warning` ceiling unless a declared budget is breached; a
+  security-relevant one is carried on `security:` in full, never a note left out.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the budgets found and the budget classes absent, the
@@ -157,10 +167,11 @@ run.
   else, and the final message is the digest, one labelled line each: `status:`; `mode:`
   `posted` or `advisory`, with the posted count and whether a declared budget was breached;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
-  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
-  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
-  1,500 characters of prose. The cap binds the prose only. With no report path, or a write
-  refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
+  `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
+  `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only.
+  With no report path, or a write refused, the full result is returned inline and a refused
+  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*`
   return writes no report and is returned in full.
 
 ## Reading the change
