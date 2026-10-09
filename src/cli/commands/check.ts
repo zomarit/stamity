@@ -5,6 +5,7 @@ import { delimiter, join, relative, resolve, sep } from "node:path";
 import { Option, type Command } from "commander";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
+import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
@@ -347,6 +348,46 @@ async function checkLearnings(
       `${result.invalid.length} of ${total} learning(s) carry ${errorCount} error(s), and ` +
       `${result.overCap.length} sit past the ${caps.maxCount}-file cap (those will not load) — ` +
       `run ${packageCommand("validate")} for the per-file detail`,
+  };
+}
+
+/**
+ * The repository's class file (REQ-FLOW-061): the change classes and the
+ * test-input map `gate classify` reads from a base commit. No row when the file
+ * is absent, so a repository without one keeps its fifteen rows. This reads the
+ * work tree's copy, the one the next pull request lands as a base: it passes
+ * when the validator accepts it, and fails naming the first error, since a base
+ * holding a refused copy gives every change at least `product`.
+ */
+async function checkChangeClasses(rootDir: string): Promise<DoctorCheck | null> {
+  const id = "change-classes";
+  let text: string | null;
+  try {
+    text = await readIfPresent(join(rootDir, CLASS_FILE));
+  } catch (cause) {
+    return { id, status: "warn", detail: `could not be checked: ${messageOf(cause)}` };
+  }
+  if (text === null) return null;
+  const parsed = parseClassFile(text);
+  if (parsed.ok) {
+    const globs = parsed.rules.reduce((sum, rule) => sum + rule.paths.length, 0);
+    return {
+      id,
+      status: "pass",
+      detail:
+        `${CLASS_FILE} is valid: ${globs} glob(s) across ${parsed.rules.length} class(es), ` +
+        `${parsed.testInputs.length} test-input entry(ies)`,
+    };
+  }
+  const [first = "refused", ...rest] = parsed.errors;
+  const more = rest.length === 0 ? "" : ` (and ${rest.length} more)`;
+  return {
+    id,
+    status: "fail",
+    // The error quotes the file's own bytes, so it is sanitised before it meets a terminal.
+    detail:
+      `${CLASS_FILE} is invalid: ${sanitizeLabel(first)}${more} — gate classify reads no map from a base ` +
+      `holding this copy and gives every change at least product; fix the entry the error names`,
   };
 }
 
@@ -1456,6 +1497,7 @@ export async function runDoctor(
     pluginRuntime,
     pluginDuplicates,
     packReach,
+    changeClasses,
     invariants,
   ] = await Promise.all([
     requiredNodeRange(),
@@ -1467,6 +1509,7 @@ export async function runDoctor(
     guarded("plugin-runtime", () => checkPluginRuntime(app.runtime.env, manifest)),
     guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir, manifest)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
+    checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);
 
@@ -1495,6 +1538,9 @@ export async function runDoctor(
     // side: not what the repository holds twice, but what an installed pack
     // ships that no selected client receives.
     packReach,
+    // Present only with a class file. It answers about this repository, so it
+    // sits with the repository rows, before the one row that reads the corpus.
+    ...(changeClasses === null ? [] : [changeClasses]),
     // Last, and read off the installed corpus rather than the repo: every row
     // above answers about THIS repository's state, and this one answers about
     // the engine's own content — the version of the floors a sync would write.
@@ -2402,7 +2448,7 @@ function expectationMismatches(report: ExpectationReport): string[] {
 /**
  * The `expectations` doctor row. Printed only when a flag asked for it, after
  * `invariants` and outside {@link runDoctor}, so a run without the flags keeps
- * its fifteen rows. A manifest that could not be read leaves nothing to compare
+ * its fifteen rows (sixteen with a class file). A manifest that could not be read leaves nothing to compare
  * against: the row says so, and the `manifest` row above it carries the cause.
  */
 function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorCheck {

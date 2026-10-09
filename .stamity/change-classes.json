@@ -1,0 +1,18 @@
+{
+  "classes": {
+    "security-sensitive": [
+      "src/merge/**",
+      "src/manifest/**",
+      "src/runs/ledgerStore.ts",
+      "src/cli/engine/gitStatus.ts",
+      "src/change/**",
+      "src/cli/commands/gate.ts",
+      "src/roster/triggers.ts",
+      "scripts/ci/**"
+    ],
+    "product": ["content/**"],
+    "config": ["tsconfig*.json", "vitest.config.ts", ".oxlintrc.json", "eslint.config.*", "knip.*"],
+    "tests": ["test/**", "evals/**"],
+    "docs": ["website/**"]
+  }
+}

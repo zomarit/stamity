@@ -799,6 +799,127 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).toContain("1 changed path outside the project left out");
     });
   });
+
+  // ── The base's class file (p2a-class-file) ────────────────────────────────
+
+  describe("the class file, read from the base", () => {
+    const CLASS_FILE = ".stamity/change-classes.json";
+    const fileOf = (classes: Record<string, string[]>): string => `${JSON.stringify({ classes })}\n`;
+    const classOfPath = (doc: Record<string, unknown>, path: string): unknown =>
+      (doc["byPath"] as { path: string; class: string }[]).find((entry) => entry.path === path)?.class;
+
+    it("places a path by the base's class file, and keeps the floor for code under its glob", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      await getRoot().seedFiles({ "repo/website/x.md": "changed\n", "repo/website/src/x.tsx": "export {};\n" });
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(classOfPath(doc, "website/x.md")).toBe("docs");
+      expect(classOfPath(doc, "website/src/x.tsx")).toBe("product");
+    });
+
+    it("reads no map from a base copy that matches every path below product, and says at least product", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ records: ["**"] }), "docs/x.md": "base\n" });
+      await getRoot().seedFiles({ "repo/docs/x.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(classOfPath(doc, "docs/x.md")).toBe("docs");
+      expect(doc["reason"]).toContain(`the base copy of ${CLASS_FILE} is invalid`);
+      expect(doc["reason"]).toContain('"**"');
+      expect(doc["reason"]).toContain("no map was read from it, so the class is at least product");
+    });
+
+    it("applies the base copy's rules when the change edits the file, and the change is at least config", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["notes/**"] }), "notes/x.md": "base\n" });
+      // The head copy drops the docs glob: read, it would leave notes/x.md unplaced (product).
+      await getRoot().seedFiles({ [`repo/${CLASS_FILE}`]: fileOf({ records: ["notes/**"] }), "repo/notes/x.md": "changed\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(classOfPath(doc, "notes/x.md")).toBe("docs");
+      expect(classOfPath(doc, CLASS_FILE)).toBe("config");
+      expect(doc["class"]).toBe("config");
+    });
+
+    it("reads built-ins only when the base holds no class file, whatever the head copy says", async () => {
+      const repo = await seedRepo("repo", { "notes/x.md": "base\n" });
+      await getRoot().seedFiles({ [`repo/${CLASS_FILE}`]: fileOf({ docs: ["notes/**"] }), "repo/notes/x.md": "changed\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(classOfPath(doc, "notes/x.md")).toBe("product");
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain(`the base holds no ${CLASS_FILE}, so only the built-in rules apply`);
+    });
+
+    it("reads no class file with no base, as D5 says", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      await getRoot().seedFiles({ "repo/website/x.md": "changed\n" });
+
+      const { doc } = await classifyIn(repo, []);
+
+      expect(classOfPath(doc, "website/x.md")).toBe("product");
+      expect(doc["reason"]).toContain("no base was given");
+    });
+
+    it("never reads the class file from the head or the work tree: only the base commit's blob", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      const head = git(repo, ["rev-parse", "HEAD"]).trim();
+      await getRoot().seedFiles({ "repo/website/x.md": "changed\n" });
+      gitSpy.calls.length = 0;
+
+      await classifyIn(repo, ["--base", "HEAD"]);
+
+      const reads = gitSpy.calls.filter((argv) => argv.some((arg) => arg.endsWith(CLASS_FILE)));
+      expect(reads.length).toBeGreaterThan(0);
+      for (const argv of reads) expect(argv).toContain(`${head}:${CLASS_FILE}`);
+    });
+
+    it("says product, naming the failure, when the class file read fails", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }), "website/x.md": "base\n" });
+      await getRoot().seedFiles({ "repo/website/x.md": "changed\n" });
+
+      gitSpy.fault = { step: "blob", error: realFailure("process.exit(3)") };
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+      gitSpy.fault = undefined;
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("git cat-file blob failed, exit 3");
+    });
+
+    it("reads the base copy for --paths with --base too", async () => {
+      const repo = await seedRepo("repo", { [CLASS_FILE]: fileOf({ docs: ["website/**"] }) });
+
+      const given = await classifyIn(repo, ["--base", "HEAD", "--paths", "website/x.md"]);
+      const bare = await classifyIn(repo, ["--paths", "website/x.md"]);
+
+      expect(given.doc["class"]).toBe("docs");
+      expect(given.doc["checks"]).toEqual(["scan", "tests-selected", "review-once"]);
+      expect(bare.doc["class"]).toBe("product");
+    });
+
+    // plan/61, plan/63: the file is read under the project's prefix, from the project root found by `.stamity/`.
+    it.each([["app"], ["app/lib"]])("reads a subfolder project's class file under its prefix, run from %s", async (from) => {
+      const repo = await seedRepo("repo", {
+        "app/.stamity/change-classes.json": fileOf({ "security-sensitive": ["lib/**"] }),
+        "app/lib/x.ts": "export {};\n",
+      });
+      await getRoot().seedFiles({ "repo/app/lib/x.ts": "export const x = 1;\n" });
+
+      const read = await classifyIn(join(repo, ...from.split("/")), ["--base", "HEAD"]);
+      const listed = await classifyIn(join(repo, ...from.split("/")), ["--base", "HEAD", "--paths", "lib/x.ts"]);
+
+      expect(read.doc["class"]).toBe("security-sensitive");
+      expect(read.doc["paths"]).toEqual(["lib/x.ts"]);
+      expect(read.doc["lenses"]).toContain("stamity-security");
+      expect(listed.doc["class"]).toBe("security-sensitive");
+    });
+  });
 });
 
 describe.skipIf(!gitAvailable)("gitCheckRunner", () => {

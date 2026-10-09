@@ -4544,6 +4544,75 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
   });
 });
 
+describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
+  const CLASS_FILE = ".stamity/change-classes.json";
+
+  it("prints no row when the repository has no class file", async () => {
+    const root = await seedRepo(getRepo());
+
+    const { doc } = await runJson(root);
+
+    expect(doc.doctor.map((entry) => entry.id)).not.toContain("change-classes");
+    expect(doc.doctor).toHaveLength(15);
+  });
+
+  it("passes a valid class file, as the sixteenth row before invariants", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: {
+        [CLASS_FILE]: JSON.stringify({
+          classes: { docs: ["website/**"], tests: ["test/**", "evals/**"] },
+          testInputs: [{ glob: "content/**", tests: "all" }],
+        }),
+      },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "change-classes")).toEqual({
+      id: "change-classes",
+      status: "pass",
+      detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
+    });
+    const ids = doc.doctor.map((entry) => entry.id);
+    expect(ids).toHaveLength(16);
+    expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
+  });
+
+  it("fails a class file that matches every path below product, naming the glob", async () => {
+    const root = await seedRepo(getRepo(), { files: { [CLASS_FILE]: '{"classes": {"records": ["**"]}}' } });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).not.toBe(0);
+    const verdict = row(doc, "change-classes");
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain(`${CLASS_FILE} is invalid: classes.records[0]: the glob "**" matches every path`);
+    expect(verdict.detail).toContain("gate classify reads no map from a base holding this copy");
+  });
+
+  it("fails a malformed class file, naming the error, and says how many more there are", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: { [CLASS_FILE]: '{"classes": {"librarian": ["x/**"], "docs": [""]}}' },
+    });
+
+    const verdict = row((await runJson(root)).doc, "change-classes");
+
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain('"librarian" is not a change class');
+    expect(verdict.detail).toContain("(and 1 more)");
+  });
+
+  it("prints the row for a person too", async () => {
+    const root = await seedRepo(getRepo(), { files: { [CLASS_FILE]: "{ not json" } });
+
+    const human = await runHuman(root);
+
+    expect(human.code).not.toBe(0);
+    expect(human.stdout).toMatch(/^\s+fail\s+change-classes\s+\.stamity\/change-classes\.json is invalid: not valid JSON/m);
+  });
+});
+
 describe("evaluateExpectations (REQ-PLUGIN-047)", () => {
   function manifestOf(tools: Tool[], generatedBy: string, plugin?: SetupManifest["plugin"]): SetupManifest {
     const manifest = createManifest({

@@ -2,13 +2,18 @@ import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
+  BUILT_IN_RULES,
   CLASS_CHECKS,
+  CLASS_FILE,
   CLASS_ORDER,
   classifyChange,
+  mergeRules,
   outsideSecurityRule,
+  parseClassFile,
   type BaseState,
   type ChangeClass,
   type ClassifyResult,
+  type ClassRule,
 } from "../../change/classify.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -55,6 +60,16 @@ import type { GitRunner } from "../../workspace/git.ts";
  * `security-sensitive` (review/21). A name that is not valid UTF-8 raises it to
  * at least `product` too, since nothing can open it by the name read back, and
  * so, for any source, does a name the report has to strip (review/36).
+ *
+ * **The class file comes from the base.** With a resolved `--base`, the
+ * project's {@link CLASS_FILE} is read as the base commit's blob, under the
+ * project's prefix, and merged with the built-in rules; the head copy and the
+ * work tree's are never read, so a change cannot lower its own checks through
+ * the file, and a change to the file is at least `config` by a built-in rule. A
+ * base with no file gives the built-ins alone. A base copy the validator refuses
+ * gives no map at all and at least `product`, its first error named (plan/25).
+ * With no base, no class file is read (D5). `--paths` with `--base` reads the
+ * base copy the same way, from the same project root.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -313,6 +328,42 @@ function resolveBase(runner: GitRunner, cwd: string, ref: string): string | null
   return OBJECT_ID.test(id) ? id : null;
 }
 
+/** The base commit's class file: absent, read and valid, or refused with its first error. */
+type BaseClassFile = { state: "absent" } | { state: "valid"; rules: ClassRule[] } | { state: "invalid"; error: string };
+
+/**
+ * `<commit>:<prefix>.stamity/change-classes.json`, read as a raw blob (`cat-file
+ * blob`, so no textconv or filter rewrites it) after `cat-file -t` says what
+ * the base holds there. Git answering no is an absent file; any other failure
+ * is a failed read and fails closed. An entry that is not a blob (a folder, a
+ * submodule) is refused, never read as absent.
+ */
+function readBaseClassFile(runner: GitRunner, root: ProjectRoot, commit: string): BaseClassFile {
+  const spec = `${commit}:${root.prefix}${CLASS_FILE}`;
+  let type: string;
+  try {
+    type = runner(["cat-file", "-t", spec], root.dir).trim();
+  } catch (err) {
+    if (gitSaidNo(err)) return { state: "absent" };
+    throw new GitReadError("cat-file -t", err, root.dir);
+  }
+  if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file` };
+  const parsed = parseClassFile(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
+  return parsed.ok ? { state: "valid", rules: parsed.rules } : { state: "invalid", error: parsed.errors[0] ?? "refused" };
+}
+
+/** The rules a base's class file gives, and the reason clause it adds, if any. */
+function rulesFrom(classFile: BaseClassFile): { rules: readonly ClassRule[]; reason?: string } {
+  if (classFile.state === "valid") return { rules: mergeRules(BUILT_IN_RULES, classFile.rules) };
+  if (classFile.state === "absent") {
+    return { rules: BUILT_IN_RULES, reason: `the base holds no ${CLASS_FILE}, so only the built-in rules apply` };
+  }
+  return {
+    rules: BUILT_IN_RULES,
+    reason: `the base copy of ${CLASS_FILE} is invalid (${classFile.error}): no map was read from it, so the class is at least product`,
+  };
+}
+
 /** The verdict for a change git could not read: `product`, the failure named. */
 function failClosed(reason: string): ClassifyResult {
   return { class: "product", byPath: [], checks: [...CLASS_CHECKS.product], lenses: [], reason };
@@ -406,18 +457,29 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
     const reasons: string[] = [];
     if (baseState === "unresolved") reasons.push(`the base ${ref ?? ""} does not resolve to a commit here`);
 
-    if (listed !== undefined) {
-      return { result: withReasons(classifyChange({ paths: listed, base: baseState }), reasons), base: commit };
-    }
-    // An unresolved base leaves nothing to diff against: no path is read, and the class is at least product.
+    // An unresolved base leaves no class file to read and, without --paths, nothing to diff against.
     if (baseState === "unresolved") {
-      return { result: withReasons(classifyChange({ paths: [], base: baseState }), reasons), base: commit };
+      return { result: withReasons(classifyChange({ paths: listed ?? [], base: baseState }), reasons), base: commit };
     }
     const treeish = commit ?? "HEAD";
     const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
-    const change = readChange(runner, root, treeish);
-    const result = classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source: "git" });
-    return { result: withReasons(applyReadFloors(result, change), reasons), base: commit };
+    // With no base no class file is read (D5); with one, only the base commit's copy is.
+    const classFile = commit === null ? undefined : readBaseClassFile(runner, root, commit);
+    const { rules, reason: fileReason } = classFile === undefined ? { rules: BUILT_IN_RULES } : rulesFrom(classFile);
+    if (fileReason !== undefined) reasons.push(fileReason);
+
+    let result: ClassifyResult;
+    if (listed !== undefined) {
+      result = classifyChange({ paths: listed, base: baseState }, rules);
+    } else {
+      const change = readChange(runner, root, treeish);
+      result = applyReadFloors(
+        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source: "git" }, rules),
+        change,
+      );
+    }
+    if (classFile?.state === "invalid") result = raiseTo(result, "product");
+    return { result: withReasons(result, reasons), base: commit };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
     return { result: failClosed(`${describeGitFailure(err)}, so the class is product`), base: null };

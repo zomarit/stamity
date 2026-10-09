@@ -23,9 +23,14 @@
  * instruction-file and security rules match without case, as the trigger table
  * does, because a case-insensitive checkout opens `claude.md` as `CLAUDE.md`;
  * the weaker rules stay case-sensitive, so a case variant never lowers a path.
- * A repository's own lists live in its
- * `.stamity/change-classes.json`, read from the base commit by the caller, never
- * from the head, so a change cannot lower its own checks.
+ *
+ * **A repository's own lists** live in its {@link CLASS_FILE}, which
+ * {@link parseClassFile} validates and {@link mergeRules} joins to the
+ * built-ins. The caller reads it from the base commit, never from the head, so
+ * a change cannot lower its own checks through that file's data. That bounds
+ * the data only: the code that applies the rules (this module and the verb that
+ * calls it) is placed `security-sensitive` by this repository's own class file,
+ * so a change to it gets the security lens (review/8).
  *
  * **The trigger roster's security row** (REQ-FLOW-065). A path the
  * `stamity-security` row of the specialist trigger table matches is
@@ -142,7 +147,12 @@ export interface ClassRule {
   rationale: string;
   /** Match `paths` without case. Only for a rule that raises a path: folding a weaker rule's case could lower one. */
   foldCase?: boolean;
+  /** Set by {@link mergeRules} on a class file's rule, so a reason can name its glob when it lowers nothing. */
+  origin?: "class-file";
 }
+
+/** Where a repository keeps its own class lists and test-input map, relative to the project root. */
+export const CLASS_FILE = ".stamity/change-classes.json";
 
 /** The generic rules every repository gets, before its own class file. */
 export const BUILT_IN_RULES: readonly ClassRule[] = [
@@ -166,7 +176,7 @@ export const BUILT_IN_RULES: readonly ClassRule[] = [
   },
   {
     class: "config",
-    paths: [".stamity/change-classes.json"],
+    paths: [CLASS_FILE],
     rationale: "the class file itself: a change to it changes what every later change runs",
   },
   {
@@ -298,13 +308,15 @@ function classifyPath(
   path: string,
   rules: readonly ClassRule[],
   securityRow: SpecialistTrigger | undefined,
-): PathClass & { floored: boolean } {
+): PathClass & { floored: boolean; unlowered: string[] } {
   const code = isCodePath(path);
   let best: { class: ChangeClass; rule: string } | undefined;
   let floored = false;
+  const fromFile: { class: ChangeClass; glob: string }[] = [];
   for (const rule of rules) {
     const glob = rule.paths.find((candidate) => matchRead(path, candidate, rule.foldCase === true));
     if (glob === undefined) continue;
+    if (rule.origin === "class-file") fromFile.push({ class: rule.class, glob });
     if (code && NOT_FOR_CODE.has(rule.class)) {
       floored = true;
       continue;
@@ -326,7 +338,12 @@ function classifyPath(
       ? { class: "product", rule: "floor: a code or extensionless file is never records or docs" }
       : { class: "product", rule: UNPLACED };
   }
-  return { path, class: best.class, rule: best.rule, floored };
+  const placed = best.class;
+  // A class-file glob weaker than where the path ended lowered nothing; the reason names it (S3).
+  const unlowered = fromFile
+    .filter((match) => rank(match.class) > rank(placed))
+    .map((match) => `${match.glob} (${match.class}) for ${path}, kept ${placed}`);
+  return { path, class: placed, rule: best.rule, floored, unlowered };
 }
 
 /** Where the paths came from: names git gave, or paths a caller listed. */
@@ -354,7 +371,7 @@ function readPath(
   rules: readonly ClassRule[],
   securityRow: SpecialistTrigger | undefined,
   source: PathSource,
-): (PathClass & { floored: boolean }) | undefined {
+): ReturnType<typeof classifyPath> | undefined {
   const read = (path: string) => (path === "" ? undefined : classifyPath(path, rules, securityRow));
   if (source === "git") return read(raw);
   const windows = normalizePath(raw);
@@ -411,6 +428,7 @@ export function classifyChange(
   const readRaw = (raw: string) => readPath(raw, rules, securityRow, source);
   const byPath: PathClass[] = [];
   const floored: string[] = [];
+  const unlowered: string[] = [];
   const index = new Map<string, ChangeClass>();
   // The kept reading names the path, so two raw spellings dedupe only when they read as one file.
   const add = (raw: string): void => {
@@ -419,6 +437,7 @@ export function classifyChange(
     const { path } = placed;
     index.set(path, placed.class);
     if (placed.floored) floored.push(path);
+    unlowered.push(...placed.unlowered);
     byPath.push({ path, class: placed.class, rule: placed.rule });
   };
   for (const path of input.paths) add(path);
@@ -454,6 +473,9 @@ export function classifyChange(
   if (floored.length > 0) {
     reasons.push(`kept out of records and docs as code or an extensionless file: ${namePaths(floored)}`);
   }
+  if (unlowered.length > 0) {
+    reasons.push(`the class file's weaker globs do not lower a path a stronger rule places: ${namePaths(unlowered)}`);
+  }
 
   const pathClass = strongest(byPath.map((entry) => entry.class));
   const cls = strongest([...(pathClass === undefined ? [] : [pathClass]), ...atLeastProduct]) ?? "product";
@@ -473,4 +495,205 @@ export function classifyChange(
     lenses: [...lenses],
     reason: reasons.join("; "),
   };
+}
+
+// ── The class file ───────────────────────────────────────────────────────────
+
+/** The classes whose rules raise a path, so they fold case (review/12); every other class matches with case. */
+const FOLDS_CASE: ReadonlySet<ChangeClass> = new Set(["product", "public-contract", "security-sensitive"]);
+
+/** The classes a glob matching every path may join: only one that raises a path (the sign-off on plan/8). */
+const MATCH_ALL_FLOOR: ChangeClass = "product";
+
+/** The class file's two keys, both optional. */
+const CLASS_FILE_KEYS: readonly string[] = ["classes", "testInputs"];
+const TEST_INPUT_KEYS: readonly string[] = ["glob", "tests"];
+
+/** One test-input entry: a glob over changed paths and the tests it selects, or every test. */
+export interface TestInput {
+  glob: string;
+  tests: string[] | "all";
+}
+
+/** A class file read and validated, or the reasons it was refused, the first one first. */
+export type ClassFileParse =
+  | { ok: true; rules: ClassRule[]; testGlobs: string[]; testInputs: TestInput[] }
+  | { ok: false; errors: string[] };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A glob made only of `*` segments with at least one `**` (or longer run) among
+ * them: after the dots resolve it matches every path, or every path below some
+ * depth, so it may not join a class that lowers a path.
+ */
+function matchesEveryPath(glob: string): boolean {
+  const segments = normalizePath(glob).split("/");
+  return segments.every((segment) => /^\*+$/.test(segment)) && segments.some((segment) => segment.length >= 2);
+}
+
+/** Whether a code point is a C0 control or DEL, by number, so no escape sits in this source. */
+function isControl(char: string): boolean {
+  const point = char.codePointAt(0) ?? 0;
+  return point < 0x20 || point === 0x7f;
+}
+
+/**
+ * Why a test entry is not a plain repository-relative file path, or
+ * `undefined` when it is (plan/23). An entry reaches a test runner as an
+ * argument, so a leading `-` would be an option and a glob would select more
+ * than it names.
+ */
+function testEntryError(entry: string): string | undefined {
+  if (entry === "") return "is empty";
+  if (entry.startsWith("-")) return "starts with '-'";
+  if (/\s/.test(entry) || [...entry].some(isControl)) return "holds whitespace or a control character";
+  if (/[*?[\]{}]/.test(entry)) return "holds a glob character";
+  if (entry.startsWith("/") || entry.includes("\\") || /^[A-Za-z]:/.test(entry)) {
+    return "is not a repository-relative POSIX path";
+  }
+  if (entry.split("/").includes("..")) return "has a '..' segment";
+  return undefined;
+}
+
+function isChangeClass(value: string): value is ChangeClass {
+  return (CLASS_ORDER as readonly string[]).includes(value);
+}
+
+function readClasses(value: unknown, errors: string[]): Map<ChangeClass, string[]> {
+  const classes = new Map<ChangeClass, string[]>();
+  if (value === undefined) return classes;
+  if (!isRecord(value)) {
+    errors.push("classes is not an object of class names to glob lists");
+    return classes;
+  }
+  for (const [key, globs] of Object.entries(value)) {
+    if (!isChangeClass(key)) {
+      errors.push(`classes: ${JSON.stringify(key)} is not a change class (one of ${CLASS_ORDER.join(", ")})`);
+      continue;
+    }
+    if (!Array.isArray(globs)) {
+      errors.push(`classes.${key} is not a list of globs`);
+      continue;
+    }
+    const kept: string[] = [];
+    globs.forEach((glob: unknown, at) => {
+      const where = `classes.${key}[${at}]`;
+      if (typeof glob !== "string") errors.push(`${where} is not a string`);
+      else if (glob === "") errors.push(`${where} is empty`);
+      else if (rank(key) > rank(MATCH_ALL_FLOOR) && matchesEveryPath(glob)) {
+        errors.push(
+          `${where}: the glob ${JSON.stringify(glob)} matches every path, and only ${MATCH_ALL_FLOOR} or a stronger class may take every path`,
+        );
+      } else kept.push(glob);
+    });
+    classes.set(key, kept);
+  }
+  return classes;
+}
+
+function readTestInputs(value: unknown, errors: string[]): TestInput[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push("testInputs is not a list of { glob, tests } entries");
+    return [];
+  }
+  const inputs: TestInput[] = [];
+  value.forEach((entry: unknown, at) => {
+    const where = `testInputs[${at}]`;
+    if (!isRecord(entry)) {
+      errors.push(`${where} is not an object`);
+      return;
+    }
+    const before = errors.length;
+    for (const key of Object.keys(entry)) {
+      if (!TEST_INPUT_KEYS.includes(key)) errors.push(`${JSON.stringify(key)} is not a key of ${where} (${TEST_INPUT_KEYS.join(", ")})`);
+    }
+    const { glob, tests } = entry;
+    if (typeof glob !== "string" || glob === "") errors.push(`${where}.glob is not a non-empty string`);
+    if (tests !== "all" && !Array.isArray(tests)) errors.push(`${where}.tests is neither "all" nor a list of test files`);
+    if (Array.isArray(tests)) {
+      tests.forEach((test: unknown, index) => {
+        const problem = typeof test === "string" ? testEntryError(test) : "is not a string";
+        if (problem !== undefined) errors.push(`${where}.tests[${index}] ${JSON.stringify(test)} ${problem}`);
+      });
+    }
+    if (errors.length === before) inputs.push({ glob: glob as string, tests: tests === "all" ? "all" : [...(tests as string[])] });
+  });
+  return inputs;
+}
+
+/**
+ * The class file's text, validated (REQ-FLOW-061, REQ-FLOW-062). Shape:
+ * `{ "classes": { "<class>": ["<glob>", …] }, "testInputs": [{ "glob": "<glob>",
+ * "tests": ["<test file>", …] | "all" }] }`, both keys optional. Refused: text
+ * that is not a JSON object, an unknown key, an unknown class, a glob that is
+ * not a non-empty string, a glob that matches every path under a class weaker
+ * than `product` (the sign-off on plan/8), and a test entry that is not a plain
+ * repository-relative file path (plan/23). Every error is listed, the first one
+ * first; a refused file yields no rules at all.
+ *
+ * One rule per class, strongest first. A `product`, `public-contract` or
+ * `security-sensitive` rule folds case and no other does (review/12), so a
+ * repository's own security globs read a case variant as the built-ins do and a
+ * case variant never lowers a path. `testGlobs` are the `tests` globs, which
+ * extend {@link BUILT_IN_TEST_GLOBS}.
+ */
+export function parseClassFile(text: string): ClassFileParse {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    return { ok: false, errors: [`not valid JSON: ${err instanceof Error ? err.message : String(err)}`] };
+  }
+  if (!isRecord(value)) return { ok: false, errors: ["the file is not a JSON object"] };
+  const errors: string[] = [];
+  for (const key of Object.keys(value)) {
+    if (!CLASS_FILE_KEYS.includes(key)) {
+      errors.push(`${JSON.stringify(key)} is not a key of the class file (${CLASS_FILE_KEYS.join(", ")})`);
+    }
+  }
+  const classes = readClasses(value["classes"], errors);
+  const testInputs = readTestInputs(value["testInputs"], errors);
+  if (errors.length > 0) return { ok: false, errors };
+
+  const rules: ClassRule[] = [];
+  for (const cls of CLASS_ORDER) {
+    const paths = classes.get(cls) ?? [];
+    if (paths.length === 0) continue;
+    rules.push({
+      class: cls,
+      paths,
+      rationale: `the class file's ${cls} globs`,
+      ...(FOLDS_CASE.has(cls) ? { foldCase: true } : {}),
+    });
+  }
+  return { ok: true, rules, testGlobs: [...(classes.get("tests") ?? [])], testInputs };
+}
+
+/**
+ * The built-in rules with a class file's rules after them, each marked as the
+ * file's. An extension glob joins its class; since every path takes the
+ * strongest class any rule gives it, a path a built-in rule (or the trigger
+ * roster's security row) places can only end in an equal or stronger class, and
+ * the reason names an extension glob that lowered nothing (S3's floor). The
+ * code-path floor, the instruction-file rule and the extensionless floor bind
+ * these rules as they bind the built-ins. The case rule is held here too, so a
+ * hand-built extension cannot fold a weaker class's case.
+ */
+export function mergeRules(builtIn: readonly ClassRule[], extension: readonly ClassRule[]): ClassRule[] {
+  return [
+    ...builtIn,
+    ...extension.map(
+      (rule): ClassRule => ({
+        class: rule.class,
+        paths: rule.paths,
+        rationale: rule.rationale,
+        origin: "class-file",
+        ...(FOLDS_CASE.has(rule.class) ? { foldCase: true } : {}),
+      }),
+    ),
+  ];
 }

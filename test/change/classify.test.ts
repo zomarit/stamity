@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_RULES,
   BUILT_IN_TEST_GLOBS,
   CLASS_CHECKS,
+  CLASS_FILE,
   CLASS_ORDER,
   CODE_EXTENSIONS,
   classifyChange,
   matchGlob,
+  mergeRules,
   outsideSecurityRule,
+  parseClassFile,
   type ChangeClass,
   type ClassRule,
 } from "../../src/change/classify.ts";
@@ -614,5 +618,268 @@ describe("outsideSecurityRule: the security rule a path outside the project meet
     expect(outsideSecurityRule("lib/auth/session.ts", fixtureTable)).toBeUndefined();
     expect(outsideSecurityRule("lib/auth/session.ts", [])).toBeUndefined();
     expect(outsideSecurityRule(".stamity/manifest.json", [])).toBe("built-in .stamity/manifest.json");
+  });
+});
+
+// ── The repository's class file (p2a-class-file, REQ-FLOW-061, REQ-FLOW-062) ──
+
+/** `parseClassFile` over a JSON value, asserting it was accepted. */
+function accepted(file: unknown): Extract<ReturnType<typeof parseClassFile>, { ok: true }> {
+  const parsed = parseClassFile(JSON.stringify(file));
+  if (!parsed.ok) throw new Error(`refused: ${parsed.errors.join("; ")}`);
+  return parsed;
+}
+
+/** The first error `parseClassFile` gives for `text`, asserting it was refused. */
+function firstError(text: string): string {
+  const parsed = parseClassFile(text);
+  if (parsed.ok) throw new Error(`accepted: ${text}`);
+  expect(parsed.errors.length).toBeGreaterThan(0);
+  return parsed.errors[0] ?? "";
+}
+
+/** The built-in rules merged with a class file's, as `gate` merges a base copy. */
+const withFile = (file: unknown): ClassRule[] => mergeRules(BUILT_IN_RULES, accepted(file).rules);
+
+const classOf = (path: string, rules: readonly ClassRule[]) =>
+  classifyChange({ paths: [path], base: "given" }, rules);
+
+describe("parseClassFile: what the class file may say", () => {
+  it("names the file's place in the project", () => {
+    expect(CLASS_FILE).toBe(".stamity/change-classes.json");
+  });
+
+  it("reads one rule per class, the tests globs and the test inputs", () => {
+    const parsed = accepted({
+      classes: { docs: ["website/**"], tests: ["evals/**"], "security-sensitive": ["src/merge/**"] },
+      testInputs: [
+        { glob: "docs/**", tests: ["test/docsPages.test.ts"] },
+        { glob: "content/**", tests: "all" },
+      ],
+    });
+
+    expect(parsed.rules.map((rule) => [rule.class, rule.paths])).toEqual([
+      ["security-sensitive", ["src/merge/**"]],
+      ["tests", ["evals/**"]],
+      ["docs", ["website/**"]],
+    ]);
+    expect(parsed.testGlobs).toEqual(["evals/**"]);
+    expect(parsed.testInputs).toEqual([
+      { glob: "docs/**", tests: ["test/docsPages.test.ts"] },
+      { glob: "content/**", tests: "all" },
+    ]);
+  });
+
+  it("takes both keys as optional", () => {
+    expect(accepted({})).toEqual({ ok: true, rules: [], testGlobs: [], testInputs: [] });
+  });
+
+  // review/12: a rule that raises a path folds case; a weaker one never does, so a case variant never lowers a path.
+  it("folds case on the product, public-contract and security-sensitive rules and on no other", () => {
+    const parsed = accepted({
+      classes: Object.fromEntries(CLASS_ORDER.map((cls) => [cls, [`${cls}/**`]])),
+    });
+    const folded = Object.fromEntries(parsed.rules.map((rule) => [rule.class, rule.foldCase === true]));
+    expect(folded).toEqual({
+      "security-sensitive": true,
+      "public-contract": true,
+      product: true,
+      config: false,
+      tests: false,
+      docs: false,
+      records: false,
+    });
+  });
+
+  it.each([
+    ["invalid JSON", "{ classes: ", "not valid JSON"],
+    ["a JSON value that is no object", "[]", "not a JSON object"],
+    ["an unknown top-level key", '{"class": {}}', '"class" is not a key of the class file'],
+    ["classes that are no object", '{"classes": []}', "classes is not an object"],
+    ["an unknown class key", '{"classes": {"librarian": ["x/**"]}}', '"librarian" is not a change class'],
+    ["a class whose globs are no list", '{"classes": {"docs": "website/**"}}', "classes.docs is not a list of globs"],
+    ["a glob that is no string", '{"classes": {"docs": [3]}}', "classes.docs[0] is not a string"],
+    ["an empty glob", '{"classes": {"docs": ["website/**", ""]}}', "classes.docs[1] is empty"],
+    ["test inputs that are no list", '{"testInputs": {}}', "testInputs is not a list"],
+    ["a test input with no glob", '{"testInputs": [{"tests": "all"}]}', "testInputs[0].glob is not a non-empty string"],
+    ["a test input with no tests", '{"testInputs": [{"glob": "docs/**"}]}', 'testInputs[0].tests is neither "all" nor a list'],
+    ["a test input with an unknown key", '{"testInputs": [{"glob": "docs/**", "tests": "all", "why": 1}]}', '"why" is not a key of testInputs[0]'],
+  ])("refuses %s", (_label, text, error) => {
+    expect(firstError(text)).toContain(error);
+  });
+
+  // The sign-off on plan/8: a glob that matches every path may only raise.
+  it.each([["**"], ["**/*"], ["*/**"], ["./**"], ["***"], ["**/**/*"]])(
+    "refuses the match-all glob %s for every class weaker than product, naming it",
+    (glob) => {
+      for (const cls of ["config", "tests", "docs", "records"] as const) {
+        const error = firstError(JSON.stringify({ classes: { [cls]: [glob] } }));
+        expect(error).toContain(`classes.${cls}[0]`);
+        expect(error).toContain(JSON.stringify(glob));
+        expect(error).toContain("matches every path");
+      }
+      for (const cls of ["product", "public-contract", "security-sensitive"] as const) {
+        expect(parseClassFile(JSON.stringify({ classes: { [cls]: [glob] } })).ok).toBe(true);
+      }
+    },
+  );
+
+  it("keeps a glob that only looks wide: one with a literal segment, or a single *", () => {
+    expect(accepted({ classes: { docs: ["*", "**/*.md", "notes/**"] } }).rules[0]?.paths).toEqual([
+      "*",
+      "**/*.md",
+      "notes/**",
+    ]);
+  });
+
+  // plan/23: a test entry reaches `npx vitest run` as an argument, so it is a plain file path or nothing.
+  it.each([
+    ["-x", "starts with '-'"],
+    ["--reporter=x", "starts with '-'"],
+    ["test/*.ts", "holds a glob character"],
+    ["test/a?.ts", "holds a glob character"],
+    ["test/[a].ts", "holds a glob character"],
+    ["test/{a,b}.ts", "holds a glob character"],
+    ["a b.ts", "holds whitespace or a control character"],
+    ["a\tb.ts", "holds whitespace or a control character"],
+    ["/abs/a.test.ts", "is not a repository-relative POSIX path"],
+    ["C:/a.test.ts", "is not a repository-relative POSIX path"],
+    ["test\\a.test.ts", "is not a repository-relative POSIX path"],
+    ["test/../../a.test.ts", "has a '..' segment"],
+    ["", "is empty"],
+  ])("refuses the test entry %j", (entry, error) => {
+    const message = firstError(JSON.stringify({ testInputs: [{ glob: "docs/**", tests: ["test/ok.test.ts", entry] }] }));
+    expect(message).toContain("testInputs[0].tests[1]");
+    expect(message).toContain(error);
+  });
+
+  it("refuses a control character in a test entry", () => {
+    const entry = `test/a${String.fromCodePoint(1)}.ts`;
+    expect(firstError(JSON.stringify({ testInputs: [{ glob: "docs/**", tests: [entry] }] }))).toContain(
+      "holds whitespace or a control character",
+    );
+  });
+
+  it("lists every error, the first one first", () => {
+    const parsed = parseClassFile(JSON.stringify({ classes: { records: ["**"], docs: [""] } }));
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.errors).toHaveLength(2);
+    expect(parsed.errors[0]).toContain("classes.records[0]");
+  });
+});
+
+describe("mergeRules: a class file's globs join their class and never lower a path", () => {
+  it("keeps every built-in rule and adds the file's, marked as the file's", () => {
+    const merged = withFile({ classes: { docs: ["website/**"] } });
+    expect(merged.slice(0, BUILT_IN_RULES.length)).toEqual(BUILT_IN_RULES);
+    expect(merged.slice(BUILT_IN_RULES.length)).toEqual([
+      expect.objectContaining({ class: "docs", paths: ["website/**"], origin: "class-file" }),
+    ]);
+  });
+
+  it("holds the case rule even for a hand-built extension: a weaker rule never folds, a raising one always does", () => {
+    const merged = mergeRules(BUILT_IN_RULES, [
+      { class: "docs", paths: ["notes/**"], rationale: "hand-built", foldCase: true },
+      { class: "security-sensitive", paths: ["lib/**"], rationale: "hand-built" },
+    ]);
+    const added = merged.slice(BUILT_IN_RULES.length);
+    expect(added.map((rule) => rule.foldCase === true)).toEqual([false, true]);
+  });
+
+  it("places a docs page by the file and keeps the floor for code under the same glob", () => {
+    const rules = withFile({ classes: { docs: ["website/**"] } });
+    expect(classOf("website/x.md", rules).class).toBe("docs");
+    expect(classOf("website/src/x.tsx", rules).class).toBe("product");
+    expect(classOf("website/x.md", BUILT_IN_RULES).class).toBe("product");
+  });
+
+  it.each([
+    ["src/auth/x.ts", "docs", "src/**", "security-sensitive"],
+    ["docs/x.md", "records", "docs/**", "docs"],
+    [".stamity/manifest.json", "records", ".stamity/*.json", "security-sensitive"],
+  ])("does not narrow %s by a %s glob, and names the glob", (path, cls, glob, expected) => {
+    const result = classOf(path, withFile({ classes: { [cls]: [glob] } }));
+    expect(result.class).toBe(expected);
+    expect(result.reason).toContain(glob);
+    expect(result.reason).toContain("weaker globs do not lower");
+  });
+
+  it("names no ignored glob when the file's glob decides the path", () => {
+    expect(classOf("website/x.md", withFile({ classes: { docs: ["website/**"] } })).reason).not.toContain(
+      "weaker globs do not lower",
+    );
+  });
+
+  it("keeps an agent instruction file and an extensionless file at least product under a docs glob", () => {
+    const rules = withFile({ classes: { docs: ["**/AGENTS.md", "notes/**"] } });
+    expect(classOf("notes/AGENTS.md", rules).class).toBe("product");
+    expect(classOf("notes/Makefile", rules).class).toBe("product");
+    expect(classOf("notes/x.md", rules).class).toBe("docs");
+  });
+
+  it("keeps a dotfile under a records glob at product (review/11)", () => {
+    const rules = withFile({ classes: { records: ["keep/**"] } });
+    expect(classOf("keep/.gitkeep", rules).class).toBe("product");
+    expect(classOf("keep/x.md", rules).class).toBe("records");
+  });
+
+  // review/12: a raising rule folds case, a weaker one does not.
+  it("raises LIB/x.ts by a lib/** security glob, and places NOTES/x.md by no notes/** docs glob", () => {
+    expect(classOf("LIB/x.ts", withFile({ classes: { "security-sensitive": ["lib/**"] } }))).toMatchObject({
+      class: "security-sensitive",
+      lenses: ["stamity-security"],
+    });
+    const notes = classOf("NOTES/x.md", withFile({ classes: { docs: ["notes/**"] } }));
+    expect(notes.class).toBe("product");
+    expect(notes.byPath[0]?.rule).not.toBe("notes/**");
+  });
+
+  it("gives a path the file lists under two classes the stronger one", () => {
+    const rules = withFile({ classes: { docs: ["guides/**"], config: ["guides/settings.json"] } });
+    expect(classOf("guides/settings.json", rules).class).toBe("config");
+    expect(classOf("guides/a.md", rules).class).toBe("docs");
+  });
+
+  it("keeps a glob that matches nothing, with no error", () => {
+    const rules = withFile({ classes: { docs: ["nowhere/**"] } });
+    expect(classOf("docs/x.md", rules).class).toBe("docs");
+  });
+});
+
+describe("this repository's class file", () => {
+  const committed = parseClassFile(readFileSync(new URL("../../.stamity/change-classes.json", import.meta.url), "utf8"));
+  const rules = committed.ok ? mergeRules(BUILT_IN_RULES, committed.rules) : [];
+
+  it("is valid", () => {
+    expect(committed.ok ? [] : committed.errors).toEqual([]);
+  });
+
+  // review/8: the code that decides the checks gets the lens.
+  it.each([
+    ["src/change/classify.ts"],
+    ["src/cli/commands/gate.ts"],
+    ["src/roster/triggers.ts"],
+    ["scripts/ci/records-only.mjs"],
+    ["src/merge/writeEscape.ts"],
+    ["src/manifest/manifest.ts"],
+    ["src/runs/ledgerStore.ts"],
+    ["src/cli/engine/gitStatus.ts"],
+  ])("places %s security-sensitive with the lens", (path) => {
+    expect(classOf(path, rules)).toMatchObject({ class: "security-sensitive", lenses: ["stamity-security"] });
+  });
+
+  it.each([
+    ["content/commands/st-work.md", "product"],
+    ["website/index.md", "docs"],
+    ["test/change/classify.test.ts", "tests"],
+    ["evals/cases-v6/golden/x.md", "tests"],
+    ["vitest.config.ts", "config"],
+    ["tsconfig.json", "config"],
+    ["knip.json", "config"],
+    [".oxlintrc.json", "config"],
+    ["eslint.config.js", "config"],
+  ])("places %s in %s", (path, cls) => {
+    expect(classOf(path, rules).class).toBe(cls);
   });
 });
