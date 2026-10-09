@@ -124,9 +124,12 @@ const LANE_FLOOR: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** A path strictly beneath a lane pattern, built from the pattern so no literal names a tracked file. */
-function sampleUnder(pattern: string): string {
-  return pattern.endsWith("/**") ? `${pattern.slice(0, -2)}p2c-sample/probe.md` : pattern;
+function sampleUnder(pattern: string, extension = ".md"): string {
+  return pattern.endsWith("/**") ? `${pattern.slice(0, -2)}p2c-sample/probe${extension}` : pattern;
 }
+
+/** The extensions the floor check samples under each lane pattern (review/149): a per-extension map split narrows none. */
+const FLOOR_SAMPLE_EXTENSIONS: readonly string[] = [".md", ".mdx", ".json", ".yml", ".svg", ".png", ".txt", ".jsonl"];
 
 /** The CLI's `key=value` lines as a map, so a case reads the one answer it is about. */
 function outputsOf(stdout: string): Record<string, string> {
@@ -304,8 +307,8 @@ describe("the lanes — website, specs and learnings beside the records", () => 
     // list, since a path takes every matching entry's suites (a `docs/specs/` path also matches
     // `docs/**`), the same answer `selectTests` gives for it.
     for (const lane of ALL_LANES) {
-      for (const pattern of lanePaths[lane] ?? []) {
-        const path = sampleUnder(pattern);
+      // review/149: several extensions per pattern, so a per-extension split of a lane entry cannot narrow a path unseen.
+      for (const path of (lanePaths[lane] ?? []).flatMap((pattern) => FLOOR_SAMPLE_EXTENSIONS.map((extension) => sampleUnder(pattern, extension)))) {
         const decision = decideTyped({ event: "pull_request", base: SHA, paths: [path] });
         expect(decision, `${lane}: ${path}`).toMatchObject({ full: false, lanes: [lane] });
         expect(decision.suites, `${lane}: ${path}`).toEqual(expect.arrayContaining([...(LANE_FLOOR[lane] ?? [])]));
@@ -482,7 +485,7 @@ describe("decide — the lanes' suites from the base commit's map", () => {
 
   it("gives each lane the suites selectTests gives for that lane's paths", () => {
     for (const [lane, patterns] of Object.entries(lanePaths)) {
-      const paths = patterns.map(sampleUnder);
+      const paths = patterns.map((pattern) => sampleUnder(pattern));
       const decision = decideTyped({ event: "pull_request", base: SHA, paths });
       expect(decision.full, lane).toBe(false);
       expect(decision.suites, lane).toEqual(mapSelection(paths));

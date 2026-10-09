@@ -1344,7 +1344,14 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).toContain("1 changed file not read line by line (binary, over 1 MiB, or not a regular file)");
     });
 
-    it.skipIf(process.platform === "win32")("skips an oversized file and a symlink, counted, and never opens a FIFO", async () => {
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/138 (signed off): the oversized
+     * untracked src/big.ts was counted skipped beside the symlink, and the class was product with no lens. An
+     * untracked regular code file left unread for its size now counts unscanned and makes the class
+     * security-sensitive; the symlink stays skipped, and the FIFO is still never opened. Retitled from "skips an
+     * oversized file and a symlink, counted, and never opens a FIFO".
+     */
+    it.skipIf(process.platform === "win32")("counts an oversized code file unscanned, skips a symlink, and never opens a FIFO", async () => {
       const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
       await getRoot().seedFiles({ "repo/src/big.ts": `${"// pad\n".repeat(300_000)}${RM}` });
       await symlink("big.ts", join(repo, "src", "link.ts"));
@@ -1353,8 +1360,29 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
       expect(code).toBe(0);
-      expect(doc["class"]).toBe("product");
-      expect(doc["reason"]).toContain("2 changed files not read line by line");
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain("1 changed code file the read could not show is unscanned, so the class is security-sensitive and its lens reads it: src/big.ts");
+      expect(doc["reason"]).toContain("1 changed file not read line by line");
+    });
+
+    // review/138 (signed off): an untracked regular code file the NUL sniff leaves unread is unscanned and raises.
+    it("counts an untracked code file with a NUL, by extension or by a covered shebang, unscanned, and skips a binary image", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({
+        "repo/src/n.ts": `export {};\0\n${RM}`,
+        "repo/tools/run": `#!/usr/bin/env node\n\0${RM}`,
+        "repo/assets/x.png": "png\0\n",
+      });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain(
+        "2 changed code files the read could not show are unscanned, so the class is security-sensitive and its lens reads them: src/n.ts, tools/run",
+      );
+      expect(doc["reason"]).toContain("1 changed file not read line by line");
     });
 
     it.skipIf(process.platform === "win32")("reads past a type change: the walk keeps its names in order", async () => {
@@ -1542,6 +1570,23 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["reason"]).toContain("1 changed file the read could not show is unscanned, so the class is at least product: data/f16.txt");
     });
 
+    // review/146: the files the rules cover have a total of their own; past it each is unscanned and raises.
+    it("counts the covered untracked files past their own total unscanned, by extension or by shebang", async () => {
+      // Short words, so the line rules read the filler fast.
+      const filler = `${"a ".repeat(511)}\n`.repeat(1023);
+      const files = Object.fromEntries(Array.from({ length: 17 }, (_, at) => [`repo/src/f${String(at).padStart(2, "0")}.ts`, filler]));
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ ...files, "repo/src/zz.ts": "export const z = 1;\n", "repo/tools/zz": "#!/usr/bin/env node\nconsole.log(1);\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain(
+        "3 changed code files the read could not show are unscanned, so the class is security-sensitive and its lens reads them: src/f16.ts, src/zz.ts, tools/zz",
+      );
+    }, 60_000);
+
     it("says security-sensitive for an uncovered code file past the cap with no rule hit anywhere", async () => {
       const filler = `${"x".repeat(1023)}\n`.repeat(1023);
       const files = Object.fromEntries(Array.from({ length: 17 }, (_, at) => [`repo/data/f${String(at).padStart(2, "0")}.txt`, filler]));
@@ -1583,18 +1628,38 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   describe("a lockfile-only bump runs the dependency audit first (p5g)", () => {
     const AUDIT_FIRST = "lockfile-only bump: dependency audit first";
     const MANIFEST = '{ "name": "x", "version": "1.0.0", "dependencies": { "a": "^1.0.0" } }\n';
-    /** An npm lockfile-version-3 copy with `a` at `version`, and the entry's own fields beside it. */
-    const lock = (version: string, entry: Record<string, unknown> = {}): string =>
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/157 and review/155: each entry now
+     * names its registry tarball and integrity, as npm writes them, since a changed entry must resolve from a host
+     * the base copy uses; and each proven bump is staged, since audit-first holds only when the index copy is the
+     * work tree's to the byte. `shown` lists the base reads; `staged` the index reads.
+     */
+    /** An npm lockfile-version-3 copy with `a` at `version`, and the entry's own fields beside it, then `more` entries. */
+    const lock = (version: string, entry: Record<string, unknown> = {}, more: Record<string, unknown> = {}): string =>
       `${JSON.stringify(
-        { name: "x", version: "1.0.0", lockfileVersion: 3, requires: true, packages: { "": { name: "x" }, "node_modules/a": { version, ...entry } } },
+        {
+          name: "x",
+          version: "1.0.0",
+          lockfileVersion: 3,
+          requires: true,
+          packages: {
+            "": { name: "x" },
+            "node_modules/a": { version, resolved: `https://registry.npmjs.org/a/-/a-${version}.tgz`, integrity: `sha512-a${version}`, ...entry },
+            ...more,
+          },
+        },
         null,
         2,
       )}\n`;
-    const shown = (): string[] => gitSpy.calls.filter((argv) => argv.includes("show")).map((argv) => argv.at(-1) ?? "");
+    const shown = (): string[] =>
+      gitSpy.calls.filter((argv) => argv.includes("show") && !(argv.at(-1) ?? "").startsWith(":")).map((argv) => argv.at(-1) ?? "");
+    const staged = (): string[] =>
+      gitSpy.calls.filter((argv) => argv.includes("show") && (argv.at(-1) ?? "").startsWith(":")).map((argv) => argv.at(-1) ?? "");
 
     it("names the audit and no security lens for a proven bump, the base copy read at the base commit", async () => {
       const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
       await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+      git(repo, ["add", "package-lock.json"]);
       const head = git(repo, ["rev-parse", "HEAD"]).trim();
 
       gitSpy.calls.length = 0;
@@ -1606,11 +1671,13 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["lenses"]).toEqual([]);
       expect(doc["reason"]).toContain(AUDIT_FIRST);
       expect(shown()).toEqual([`${head}:package-lock.json`]);
+      expect(staged()).toEqual([":package-lock.json"]);
     });
 
     it("keeps the lens for its twin whose bumped package has an install script", async () => {
       const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
       await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1", { hasInstallScript: true }) });
+      git(repo, ["add", "package-lock.json"]);
 
       const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
 
@@ -1639,6 +1706,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         "app/sub/x.md": "base\n",
       });
       await getRoot().seedFiles({ "repo/app/package-lock.json": lock("1.0.1") });
+      git(repo, ["add", "app/package-lock.json"]);
       const head = git(repo, ["rev-parse", "HEAD"]).trim();
 
       gitSpy.calls.length = 0;
@@ -1648,6 +1716,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["checks"]).toEqual(["scan", "gates-all", "review", "dependency-audit"]);
       expect(doc["lenses"]).toEqual([]);
       expect(shown()).toEqual([`${head}:app/package-lock.json`]);
+      expect(staged()).toEqual([":app/package-lock.json"]);
     });
 
     it("puts the lens back when a security path outside the project raises the class", async () => {
@@ -1657,6 +1726,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         "package-lock.json": lock("1.0.0"),
       });
       await getRoot().seedFiles({ "repo/packages/app/package-lock.json": lock("1.0.1"), "repo/package-lock.json": lock("1.0.1") });
+      git(repo, ["add", "packages/app/package-lock.json", "package-lock.json"]);
 
       const { doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
 
@@ -1670,6 +1740,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     it("puts the lens back when the changed lines cannot be read", async () => {
       const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
       await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+      git(repo, ["add", "package-lock.json"]);
 
       gitSpy.fault = { step: "--text", error: realFailure("process.exit(3)") };
       const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
@@ -1684,6 +1755,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     it("keeps the lens, and the class, when the base copy's read fails", async () => {
       const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
       await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+      git(repo, ["add", "package-lock.json"]);
 
       gitSpy.fault = { step: "show", error: realFailure("process.exit(128)") };
       const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
@@ -1692,7 +1764,59 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(code).toBe(0);
       expect(doc["class"]).toBe("security-sensitive");
       expect(doc["lenses"]).toEqual(["stamity-security"]);
-      expect(doc["reason"]).toContain("the security lens stays: package-lock.json has no base copy");
+      // build/78: the reason names the git failure.
+      expect(doc["reason"]).toContain("the security lens stays: package-lock.json has no base copy (git show failed, exit 128)");
+    });
+
+    // review/155 (security): `git commit` records the index copy, so it must be the proven work-tree copy to the byte.
+    it("keeps the lens for a staged install-script bump under a clean work-tree bump", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1", { hasInstallScript: true }) });
+      git(repo, ["add", "package-lock.json"]);
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+      expect(doc["reason"]).toContain("the security lens stays: package-lock.json's staged copy differs from the work tree's");
+    });
+
+    it("keeps the lens for an unstaged bump, and when the staged copy cannot be read", async () => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": lock("1.0.1") });
+
+      const unstaged = await classifyIn(repo, ["--base", "HEAD"]);
+      git(repo, ["add", "package-lock.json"]);
+      gitSpy.fault = { step: ":package-lock.json", error: realFailure("process.exit(128)") };
+      const unread = await classifyIn(repo, ["--base", "HEAD"]);
+      gitSpy.fault = undefined;
+
+      expect(unstaged.doc["lenses"]).toEqual(["stamity-security"]);
+      expect(unstaged.doc["reason"]).toContain("the security lens stays: package-lock.json's staged copy differs from the work tree's");
+      expect(unread.doc["lenses"]).toEqual(["stamity-security"]);
+      expect(unread.doc["reason"]).toContain("the security lens stays: package-lock.json's staged copy was not read");
+    });
+
+    // review/157 (C) and review/163: a source the base copy never used, or a package new to the graph, keeps the lens.
+    it.each([
+      ["resolves a bump from another host", lock("1.0.1", { resolved: "https://evil.example/a-1.0.1.tgz" }), "resolves a changed package"],
+      ["resolves a bump from git", lock("1.0.1", { resolved: "git+https://github.com/x/a.git#0123abc" }), "resolves a changed package"],
+      [
+        "adds a package new to the graph",
+        lock("1.0.1", {}, { "node_modules/b": { version: "1.0.0", resolved: "https://registry.npmjs.org/b/-/b-1.0.0.tgz", integrity: "sha512-b" } }),
+        "adds a package new to the graph",
+      ],
+    ])("keeps the lens for a staged bump that %s", async (_label, head, why) => {
+      const repo = await seedRepo("repo", { "package.json": MANIFEST, "package-lock.json": lock("1.0.0") });
+      await getRoot().seedFiles({ "repo/package-lock.json": head });
+      git(repo, ["add", "package-lock.json"]);
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(doc["checks"]).not.toContain("dependency-audit");
+      expect(doc["reason"]).toContain(`the security lens stays: package-lock.json ${why}`);
     });
 
     it("keeps the lens for a lockfile deleted in the work tree", async () => {
@@ -1813,7 +1937,13 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["hits"]).toEqual([{ path: "src/a.ts", line: 2, rule: "github-token" }]);
     });
 
-    it.skipIf(process.platform === "win32")("skips and counts an untracked binary, a file over 1 MiB and a FIFO, without a hang", async () => {
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/138 (signed off): src/bin.ts and
+     * src/big.ts were named in `skipped`. Each is a regular code file the scan cannot read (a NUL, over 1 MiB), so
+     * each is now named in `unscanned`, as a tracked code file the read cannot show is; the exit stays 0.
+     * Retitled from "skips and counts an untracked binary, a file over 1 MiB and a FIFO, without a hang".
+     */
+    it.skipIf(process.platform === "win32")("names an untracked binary code file and one over 1 MiB unscanned, and a FIFO not at all", async () => {
       const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
       await getRoot().seedFiles({
         "repo/src/bin.ts": `\0${LINE}`,
@@ -1827,7 +1957,8 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["hits"]).toEqual([]);
       // git lists no FIFO as untracked, so the binary and the oversized file are the two named; the FIFO is never opened.
       // TEST CHANGE, justified: 2026-10-09, review/98 — `skipped` names each file by path instead of counting it.
-      expect(doc["skipped"]).toEqual(["src/big.ts", "src/bin.ts"]);
+      expect(doc["skipped"]).toEqual([]);
+      expect(doc["unscanned"]).toEqual(["src/big.ts", "src/bin.ts"]);
       expect(doc["scanned"]).toBe(0);
     });
 

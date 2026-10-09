@@ -100,11 +100,12 @@ import type { GitRunner } from "../../workspace/git.ts";
  * pinned (`-U3`, `-W`, `--text`, no external diff, colour or textconv, fixed
  * prefixes), each file section named by its place in the `-z` name list rather
  * than by its header, plus every untracked file read whole as added lines: the
- * files the line rules read first and outside any total (review/125), the rest
- * up to a total cap (review/94). A numstat read first leaves binaries out of the
- * text read (review/87). A NUL byte in a file's first 8,000 bytes alone decides
- * binary; a tracked code file it marks is `unscanned`, so the class is
- * `security-sensitive` (review/125). A failed line read keeps the path classes and makes the class
+ * files the line rules read first and under a total of their own (review/125,
+ * review/146), the rest up to a total cap (review/94). A numstat read first
+ * leaves binaries out of the text read (review/87). A NUL byte in a file's first
+ * 8,000 bytes alone decides binary; a code file it marks, tracked or an
+ * untracked regular one, is `unscanned`, as is an untracked regular code file
+ * over 1 MiB, so the class is `security-sensitive` (review/125, review/138). A failed line read keeps the path classes and makes the class
  * `security-sensitive`, so the lens reads what no line rule could (review/87).
  *
  * **The lockfile copies** (REQ-FLOW-065, p5g) feed the classifier's audit-first
@@ -340,9 +341,12 @@ const UNTRACKED_MAX_BYTES = 1024 * 1024;
 /**
  * The untracked reads stop at this many bytes in all; each file past it is
  * unscanned, never read (review/94). The files the line rules read are read
- * first and never count against it (review/125).
+ * first and never count against it (review/125): they have a total of their own,
+ * {@link UNTRACKED_COVERED_TOTAL_BYTES}, past which each is unscanned too and
+ * makes the class `security-sensitive` (review/146).
  */
 const UNTRACKED_TOTAL_BYTES = 16 * 1024 * 1024;
+const UNTRACKED_COVERED_TOTAL_BYTES = 16 * 1024 * 1024;
 /** A file's first line is looked for a shebang this far. */
 const SHEBANG_BYTES = 1024;
 
@@ -367,6 +371,15 @@ function readRegular(file: string, limit: number, whole?: number): Buffer | unde
     }
   } catch {
     return undefined;
+  }
+}
+
+/** Whether a path names a regular file, by `lstat`: never a symlink, a FIFO or a device. */
+function isRegularFile(file: string): boolean {
+  try {
+    return lstatSync(file).isFile();
+  } catch {
+    return false;
   }
 }
 
@@ -428,9 +441,12 @@ interface ChangeLines {
   skipped: number;
   /**
    * Files the read could not show (plan/62): tracked code files the sniff marks
-   * binary, and untracked files past the total read cap (review/94).
+   * binary, untracked files past a total read cap (review/94, review/146), and
+   * untracked regular code files left unread for their size or a NUL (review/138).
    */
   unscanned: string[];
+  /** The unscanned files a covered shebang, not an extension, makes code (review/138, review/146). */
+  unscannedCode: string[];
   scan: ScanLines;
 }
 
@@ -602,8 +618,10 @@ function readSide(
  * index's, united (review/89), so a staged line the work tree has since
  * reverted is read as `git commit` would record it, plus every untracked file
  * read whole as added lines: first those the line rules read, by extension or
- * by shebang, outside any total (review/125), then the rest up to
- * {@link UNTRACKED_TOTAL_BYTES} in all (review/94). An index line the work tree
+ * by shebang, up to {@link UNTRACKED_COVERED_TOTAL_BYTES} of their own
+ * (review/125, review/146), then the rest up to {@link UNTRACKED_TOTAL_BYTES}
+ * in all (review/94). A regular code file left unread, past a total, over
+ * 1 MiB or by a NUL, is unscanned; a symlink or a FIFO is skipped (review/138). An index line the work tree
  * also adds to that file is read once, from the work tree; an index hunk left
  * with nothing new is dropped.
  */
@@ -648,11 +666,13 @@ function readLines(
   const scanSkipped = new Set([...work.scan.skipped, ...index.scan.skipped]);
   const scanUnscanned = new Set([...work.scan.unscanned, ...index.scan.unscanned]);
   const outside = new Set([...work.outside, ...index.outside]);
-  const pastCap = (path: string | null, shown: string): void => {
+  const unscannedCode: string[] = [];
+  const notShown = (path: string | null, shown: string, code: boolean): void => {
     if (path !== null) unscanned.push(path);
+    if (path !== null && code && !hasCodeExtension(path)) unscannedCode.push(path);
     scanUnscanned.add(shown);
   };
-  // review/125: the files the line rules read come first and never meet the total, so no budget leaves them unread.
+  // review/125, review/146: the files the line rules read come first, under a total of their own, so no other budget leaves them unread.
   const source: PathSource = windows ? "listed" : "git";
   const firstLine = (name: string): string | undefined => {
     const start = readRegular(join(root.topLevel, name), SHEBANG_BYTES)?.toString("utf8");
@@ -664,32 +684,45 @@ function readLines(
       return path !== null && (lineRulesCover(path, source, undefined) || lineRulesCover(path, source, firstLine(name)));
     }),
   );
-  let untrackedBytes = 0;
+  // Two totals: the covered files' own (review/146), and the rest's (review/94).
+  const spent = { covered: 0, rest: 0 };
   for (const name of [...covered, ...untracked.filter((entry) => !covered.has(entry))]) {
     const path = inside(name);
     const shown = path ?? away(name);
-    const budgeted = !covered.has(name);
+    const pool = covered.has(name) ? "covered" : "rest";
+    const total = pool === "covered" ? UNTRACKED_COVERED_TOTAL_BYTES : UNTRACKED_TOTAL_BYTES;
+    // A code file by extension or by a covered shebang: what no line rule reads is unscanned, never skipped.
+    const code = hasCodeExtension(shown) || pool === "covered";
     if (path === null) outside.add(name);
-    if (budgeted && untrackedBytes >= UNTRACKED_TOTAL_BYTES) {
-      pastCap(path, shown);
+    if (spent[pool] >= total) {
+      notShown(path, shown, code);
       continue;
     }
-    const body = readRegular(join(root.topLevel, name), UNTRACKED_MAX_BYTES, UNTRACKED_MAX_BYTES);
+    const file = join(root.topLevel, name);
+    const body = readRegular(file, UNTRACKED_MAX_BYTES, UNTRACKED_MAX_BYTES);
     const decoded = body === undefined ? undefined : decodeUtf16(body);
     if (body === undefined || (decoded === undefined && body.subarray(0, SNIFF_BYTES).includes(0))) {
+      // review/138: a regular code file left unread for its size or a NUL is unscanned; a symlink or a FIFO stays skipped.
+      if (code && isRegularFile(file)) {
+        notShown(path, shown, code);
+        continue;
+      }
       if (path !== null) skipped.add(path);
       scanSkipped.add(shown);
       continue;
     }
-    if (budgeted && untrackedBytes + body.length > UNTRACKED_TOTAL_BYTES) {
-      untrackedBytes = UNTRACKED_TOTAL_BYTES;
-      pastCap(path, shown);
+    if (spent[pool] + body.length > total) {
+      spent[pool] = total;
+      notShown(path, shown, code);
       continue;
     }
-    if (budgeted) untrackedBytes += body.length;
-    // A UTF-16 file is the scan's alone (review/98): the classifier still counts it skipped, as before.
+    spent[pool] += body.length;
+    // A UTF-16 file is the scan's alone (review/98): the classifier counts a code one unscanned (review/138), any other skipped.
     if (decoded !== undefined) {
-      if (path !== null) skipped.add(path);
+      if (path !== null && code) {
+        unscanned.push(path);
+        if (!hasCodeExtension(path)) unscannedCode.push(path);
+      } else if (path !== null) skipped.add(path);
       scanHunks.push(wholeFile(shown, decoded));
       continue;
     }
@@ -702,6 +735,7 @@ function readLines(
     hunks,
     skipped: skipped.size,
     unscanned: [...new Set(unscanned)],
+    unscannedCode: [...new Set(unscannedCode)],
     scan: {
       hunks: scanHunks,
       skipped: [...scanSkipped].filter((path) => !read.has(path)),
@@ -1096,13 +1130,16 @@ function applyNameFloor(result: ClassifyResult): ClassifyResult {
 const NPM_LOCKFILE = "package-lock.json";
 
 /**
- * Each changed `package-lock.json`'s two copies, for the audit-first rule
+ * Each changed `package-lock.json`'s copies, for the audit-first rule
  * (REQ-FLOW-065, plan/61, plan/63): the base commit's through the runner, as
  * `git show <commit>:<prefix><path>` from the project root, and the work tree's
  * from the project root, a regular file within the runner's output bound. No
  * base, or a base read that fails (an absent file, a copy past the bound), is
- * `base: null`, and a head copy that cannot be read leaves the file out: either
- * keeps the security lens, never a narrower verdict.
+ * `base: null`, the failure named (build/78), and a head copy that cannot be
+ * read leaves the file out. The index copy, which `git commit` records, is read
+ * as `git show :<prefix><path>` and compared with the work tree's byte for byte
+ * (review/155): `same`, `differs`, or `unread` when the read fails. Any of these
+ * but `same` with a base copy keeps the security lens, never a narrower verdict.
  */
 function readLockfiles(runner: GitRunner, root: ProjectRoot, commit: string | null, paths: readonly string[]): Lockfile[] {
   const lockfiles: Lockfile[] = [];
@@ -1111,14 +1148,24 @@ function readLockfiles(runner: GitRunner, root: ProjectRoot, commit: string | nu
     const head = readRegular(join(root.dir, path), GATE_GIT_MAX_BUFFER, GATE_GIT_MAX_BUFFER);
     if (head === undefined) continue;
     let base: string | null = null;
+    let baseFailure: string | undefined;
+    let staged: Lockfile["staged"] = "unread";
     if (commit !== null) {
       try {
         base = runGit(runner, root.dir, "show", ["show", "--no-textconv", `${commit}:${root.prefix}${path}`]);
       } catch (err) {
         if (!(err instanceof GitReadError)) throw err;
+        baseFailure = describeGitFailure(err);
+      }
+      try {
+        const index = runGit(runner, root.dir, "show", ["show", "--no-textconv", `:${root.prefix}${path}`]);
+        // The runner decodes UTF-8, so a byte it could not decode never reads as equal.
+        staged = !index.includes("\uFFFD") && Buffer.from(index, "utf8").equals(head) ? "same" : "differs";
+      } catch (err) {
+        if (!(err instanceof GitReadError)) throw err;
       }
     }
-    lockfiles.push({ path, base, head: head.toString("utf8") });
+    lockfiles.push({ path, base, head: head.toString("utf8"), staged, ...(baseFailure === undefined ? {} : { baseFailure }) });
   }
   return lockfiles;
 }
@@ -1164,7 +1211,10 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
       const windows = process.platform === "win32";
       const source: PathSource = windows ? "listed" : "git";
       const change = readChange(runner, root, treeish, windows);
-      const lines = "failed" in change.lines ? {} : { hunks: change.lines.hunks, unscanned: change.lines.unscanned };
+      const lines =
+        "failed" in change.lines
+          ? {}
+          : { hunks: change.lines.hunks, unscanned: change.lines.unscanned, unscannedCode: change.lines.unscannedCode };
       const lockfiles = readLockfiles(runner, root, commit, change.paths);
       result = applyReadFloors(
         classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source, ...lines, lockfiles }, rules),

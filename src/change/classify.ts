@@ -185,9 +185,10 @@ interface LineRule {
  * a name that merely contains a word do not match. S7's fifth risk, state read
  * back as authority, is placed by path. A bare `exec` call counts, or one on a
  * `child_process` receiver (`cp` included, and any name the file imports the
- * module as, by {@link childProcessNames}), or a call of a name the file binds
- * one of the module's spawning members to (review/124), never a RegExp's
- * `exec` method; a secret name counts only where it is assigned, or is an object key given, a
+ * module as, by {@link fileNames}), or a call of a name the file binds
+ * one of the module's spawning members to (review/124), or assigns a spawning
+ * or network member to, Python's import aliases included (review/145), never a
+ * RegExp's `exec` method; a secret name counts only where it is assigned, or is an object key given, a
  * string literal or an environment value, and never a literal that is wholly
  * one `${…}` template placeholder (build/47, review/92). The shapes are
  * JavaScript, TypeScript and Python APIs, so they read only the files of
@@ -284,17 +285,50 @@ const CHILD_PROCESS_MEMBER_BINDING =
 /** The child_process members that run a command. */
 const SPAWNING_MEMBERS: ReadonlySet<string> = new Set(["exec", "execSync", "execFile", "execFileSync", "spawn", "spawnSync", "fork"]);
 
+/** A Python `import` line's items, `subprocess as sp`, read for the aliases of the modules the rules name (review/145). */
+const PY_IMPORT = /^[ \t]*import[ \t]+([^\n#]{1,1024})/gm;
+/** A Python `from <module> import` of a module the rules name, its items parenthesised over lines or on one (review/145). */
+const PY_FROM_IMPORT = /^[ \t]*from[ \t]+(subprocess|os|urllib\.request|urllib)[ \t]+import[ \t]+(?:\(([^)]{0,1024})\)|([^\n#]{0,1024}))/gm;
+/** One import item: a dotted name and its `as` alias. */
+const PY_ITEM = /^([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?$/;
+/** The spawning members of Python's `subprocess` and `os`, and the network one of `urllib.request`. */
+const PY_MEMBERS: Readonly<Record<string, { spawn: readonly string[]; network: readonly string[] }>> = {
+  subprocess: { spawn: ["run", "call", "check_output", "check_call", "Popen"], network: [] },
+  os: { spawn: ["system", "popen"], network: [] },
+  "urllib.request": { spawn: [], network: ["urlopen"] },
+};
+
+/** The names a file binds to the modules and members the spawn and network rules read. */
+interface FileNames {
+  /** Names of the child_process module (JS), and of Python's `subprocess`, `os` and `urllib.request`. */
+  modules: string[];
+  pySubprocess: string[];
+  pyOs: string[];
+  pyRequest: string[];
+  /** Names a call of which spawns, or leaves the machine. */
+  spawn: string[];
+  network: string[];
+}
+
+const alternation = (names: Iterable<string>): string => [...names].map((name) => name.replaceAll("$", "\\$")).join("|");
+
 /**
  * The names `texts` bind the child_process module to (review/90), `cp` in a
- * namespace import of the module as `cp`, and the names they bind a spawning
+ * namespace import of the module as `cp`; the names they bind a spawning
  * member to (review/124), `run` in `import { exec as run }` or
- * `const { execSync: run } = require(…)`.
+ * `const { execSync: run } = require(…)`; Python's aliases and from-imports of
+ * `subprocess`, `os` and `urllib.request`; and, read after those, each name
+ * assigned a spawning or network member, or `promisify` of one, `execAsync` in
+ * `const execAsync = promisify(exec)` (review/145). A member passed on, or
+ * bound in another file, is not followed.
  */
-function childProcessNames(texts: readonly string[]): { modules: string[]; members: string[] } {
+function fileNames(texts: readonly string[]): FileNames {
+  const heads = texts.map((text) => text.slice(0, HEAD_MAX_CHARS));
   const modules = new Set<string>();
-  const members = new Set<string>();
-  for (const text of texts) {
-    const head = text.slice(0, HEAD_MAX_CHARS);
+  const spawn = new Set<string>();
+  const network = new Set<string>();
+  const py = { subprocess: new Set<string>(), os: new Set<string>(), "urllib.request": new Set<string>() };
+  for (const head of heads) {
     for (const match of head.matchAll(CHILD_PROCESS_BINDING)) {
       const name = match[1] ?? match[2] ?? match[3];
       if (name !== undefined) modules.add(name);
@@ -302,24 +336,88 @@ function childProcessNames(texts: readonly string[]): { modules: string[]; membe
     for (const match of head.matchAll(CHILD_PROCESS_MEMBER_BINDING)) {
       for (const part of (match[1] ?? match[2] ?? "").split(",")) {
         const bound = /^\s*([A-Za-z_$][\w$]*)\s*(?:\bas\b|:)\s*([A-Za-z_$][\w$]*)/.exec(part);
-        if (bound?.[1] !== undefined && bound[2] !== undefined && SPAWNING_MEMBERS.has(bound[1])) members.add(bound[2]);
+        if (bound?.[1] !== undefined && bound[2] !== undefined && SPAWNING_MEMBERS.has(bound[1])) spawn.add(bound[2]);
+      }
+    }
+    for (const match of head.matchAll(PY_IMPORT)) {
+      for (const part of (match[1] ?? "").split(",")) {
+        const item = PY_ITEM.exec(part.trim());
+        const module = item?.[1];
+        if (module !== undefined && item?.[2] !== undefined && Object.hasOwn(py, module)) py[module as keyof typeof py].add(item[2]);
+      }
+    }
+    for (const match of head.matchAll(PY_FROM_IMPORT)) {
+      const from = match[1] ?? "";
+      for (const part of (match[2] ?? match[3] ?? "").split(",")) {
+        const item = PY_ITEM.exec(part.trim());
+        const name = item?.[1];
+        if (name === undefined) continue;
+        const bound = item?.[2] ?? name;
+        if (from === "urllib" && name === "request") py["urllib.request"].add(bound);
+        if (PY_MEMBERS[from]?.spawn.includes(name) === true) spawn.add(bound);
+        if (PY_MEMBERS[from]?.network.includes(name) === true) network.add(bound);
       }
     }
   }
-  return { modules: [...modules], members: [...members] };
+  const members = alternation(SPAWNING_MEMBERS);
+  const spawnSource = [
+    `(?:child_process|childProcess|cp${modules.size === 0 ? "" : `|${alternation(modules)}`})\\.(?:${members})`,
+    `require\\(\\s*["'](?:node:)?child_process["']\\s*\\)\\.(?:${members})`,
+    `(?:subprocess${py.subprocess.size === 0 ? "" : `|${alternation(py.subprocess)}`})\\.(?:${alternation(PY_MEMBERS["subprocess"]?.spawn ?? [])})`,
+    `(?:os${py.os.size === 0 ? "" : `|${alternation(py.os)}`})\\.(?:system|popen)`,
+    `(?:${members}${spawn.size === 0 ? "" : `|${alternation(spawn)}`})`,
+  ].join("|");
+  const networkSource = [
+    "https?\\.(?:request|get)",
+    "fetch",
+    "axios(?:\\.\\w+)?",
+    "requests\\.(?:get|post|put|patch|delete|head|options|request)",
+    `(?:urllib\\.request${py["urllib.request"].size === 0 ? "" : `|${alternation(py["urllib.request"])}`})\\.urlopen`,
+    ...(network.size === 0 ? [] : [`(?:${alternation(network)})`]),
+  ].join("|");
+  // The member alone on the right, never a call of it (`cp.exec(…)`), a property of it or a longer name.
+  const assigned = (source: string): RegExp =>
+    new RegExp(
+      `(?<![\\w$.])(?:(?:const|let|var)\\s+)?([A-Za-z_$][\\w$]*)\\s*=\\s*(?:(?:\\butil\\.)?promisify\\(\\s*(?:${source})\\s*\\)|(?:${source})(?![\\w$.(]))`,
+      "g",
+    );
+  for (const [source, into] of [[spawnSource, spawn], [networkSource, network]] as const) {
+    const pattern = assigned(source);
+    for (const head of heads) for (const match of head.matchAll(pattern)) if (match[1] !== undefined) into.add(match[1]);
+  }
+  return {
+    modules: [...modules],
+    pySubprocess: [...py.subprocess],
+    pyOs: [...py.os],
+    pyRequest: [...py["urllib.request"]],
+    spawn: [...spawn],
+    network: [...network],
+  };
 }
 
 /**
- * The `exec` call on one of `modules` and the bare call of one of `members`, as
- * the process-spawn rule reads them, or `undefined` for neither.
+ * The calls through a file's own names, per rule: `process-spawn` the `exec`
+ * call on one of its child_process names, a member call on its aliases of
+ * Python's `subprocess` or `os`, and the bare call of a name bound to a
+ * spawning member; `network-or-registry` `urlopen` on its aliases of
+ * `urllib.request` and the bare call of a name bound to a network member.
  */
-function execOn({ modules, members }: { modules: readonly string[]; members: readonly string[] }): RegExp | undefined {
-  const alternation = (names: readonly string[]): string => names.map((name) => name.replaceAll("$", "\\$")).join("|");
-  const shapes = [
-    ...(modules.length === 0 ? [] : [`(?:${alternation(modules)})\\.exec\\(`]),
-    ...(members.length === 0 ? [] : [`(?:${alternation(members)})\\(`]),
-  ];
-  return shapes.length === 0 ? undefined : new RegExp(`(?<![\\w$.])(?:${shapes.join("|")})`);
+function aliasCalls(names: FileNames): ReadonlyMap<string, RegExp> {
+  const calls = new Map<string, RegExp>();
+  const add = (rule: string, shapes: readonly string[]): void => {
+    if (shapes.length > 0) calls.set(rule, new RegExp(`(?<![\\w$.])(?:${shapes.join("|")})`));
+  };
+  add("process-spawn", [
+    ...(names.modules.length === 0 ? [] : [`(?:${alternation(names.modules)})\\.exec\\(`]),
+    ...(names.pySubprocess.length === 0 ? [] : [`(?:${alternation(names.pySubprocess)})\\.(?:${alternation(PY_MEMBERS["subprocess"]?.spawn ?? [])})\\(`]),
+    ...(names.pyOs.length === 0 ? [] : [`(?:${alternation(names.pyOs)})\\.(?:system|popen)\\(`]),
+    ...(names.spawn.length === 0 ? [] : [`(?:${alternation(names.spawn)})\\(`]),
+  ]);
+  add("network-or-registry", [
+    ...(names.pyRequest.length === 0 ? [] : [`(?:${alternation(names.pyRequest)})\\.urlopen\\(`]),
+    ...(names.network.length === 0 ? [] : [`(?:${alternation(names.network)})\\(`]),
+  ]);
+  return calls;
 }
 
 /** The interpreter a `#!` line names, `env` and its options passed over, or `undefined` for a line that is none. */
@@ -382,18 +480,17 @@ function ruleMatches(rule: LineRule, text: string): boolean {
  * The first line rule a hunk hits and where, never the line's text, or no
  * `hit`; and whether it held a line past {@link LINE_RULE_MAX_CHARS}, which no
  * rule reads. Added lines first, then removed lines, then, only in a hunk that
- * removes a line, its context lines. `execOnNames` adds the `exec` call on the
- * file's names for the child_process module, and the call of a name it binds a
- * spawning member to, to `process-spawn`.
+ * removes a line, its context lines. `calls` adds, per rule, the calls through
+ * the file's own names for its modules and members ({@link aliasCalls}).
  */
-function lineRuleHit(hunk: Hunk, path: string, execOnNames: RegExp | undefined): { hit?: string; overCap: boolean } {
+function lineRuleHit(hunk: Hunk, path: string, calls: ReadonlyMap<string, RegExp> | undefined): { hit?: string; overCap: boolean } {
   let overCap = false;
   const matches = (rule: LineRule, text: string): boolean => {
     if (text.length > LINE_RULE_MAX_CHARS) {
       overCap = true;
       return false;
     }
-    return ruleMatches(rule, text) || (rule.id === "process-spawn" && execOnNames?.test(text) === true);
+    return ruleMatches(rule, text) || calls?.get(rule.id)?.test(text) === true;
   };
   const first = (lines: readonly string[]): LineRule | undefined =>
     SECURITY_LINE_RULES.find((rule) => lines.some((text) => matches(rule, text)));
@@ -776,17 +873,29 @@ export interface ClassifyInput {
   source?: PathSource;
   /** The change's diff hunks, for the security line rules; a hunk's path is placed too. */
   hunks?: readonly Hunk[];
-  /** Files the read could not show (plan/62, review/94); any makes the class at least `product`. */
+  /**
+   * Files the read could not show (plan/62, review/94); any makes the class at
+   * least `product`, and a code one `security-sensitive` (review/125).
+   */
   unscanned?: readonly string[];
+  /** Those of `unscanned` the reader knows are code though no extension says so: a covered shebang (review/138, review/146). */
+  unscannedCode?: readonly string[];
   /** The changed npm lockfiles' two copies, for the audit-first rule; `base` is `null` when no base copy was read. */
   lockfiles?: readonly Lockfile[];
 }
 
-/** One changed lockfile: its project-relative path, the base commit's copy (or `null`) and the work tree's. */
+/**
+ * One changed lockfile: its project-relative path, the base commit's copy (or
+ * `null`, with why when the read failed) and the work tree's, and whether the
+ * index copy `git commit` records is the work tree's to the byte (review/155).
+ */
 export interface Lockfile {
   path: string;
   base: string | null;
   head: string;
+  staged: "same" | "differs" | "unread";
+  /** Why the base copy's read failed, named in the reason (build/78). */
+  baseFailure?: string;
 }
 
 export interface ClassifyResult {
@@ -851,7 +960,7 @@ export function classifyChange(
       const firstAdded = hunks.flatMap((hunk) => hunk.added).find((added) => added.line === 1)?.text;
       const shebang = heads[0]?.split("\n", 1)[0] ?? firstAdded;
       const lines = hunks.flatMap((hunk) => [...hunk.added.map((added) => added.text), ...hunk.removed, ...hunk.context]);
-      return [raw, { shebang, execOnNames: execOn(childProcessNames([...heads, ...lines])) }] as const;
+      return [raw, { shebang, calls: aliasCalls(fileNames([...heads, ...lines])) }] as const;
     }),
   );
   for (const hunk of input.hunks ?? []) {
@@ -862,7 +971,7 @@ export function classifyChange(
     const reading = lineRulesRead(hunk.path, source, fileFacts?.shebang);
     if (reading === "uncovered") uncovered.add(entry.path);
     if (reading !== "read") continue;
-    const { hit, overCap: wasOver } = lineRuleHit(hunk, entry.path, fileFacts?.execOnNames);
+    const { hit, overCap: wasOver } = lineRuleHit(hunk, entry.path, fileFacts?.calls);
     if (wasOver) overCap.add(entry.path);
     if (hit === undefined) continue;
     lineHits.push(hit);
@@ -896,8 +1005,10 @@ export function classifyChange(
     atLeastProduct.push("product");
   }
   // review/125: no line rule read an unscanned code file, so the lens reads it, as for a failed read.
-  const unscannedCode = (input.unscanned ?? []).filter((path) => hasCodeExtension(path));
-  const unscanned = (input.unscanned ?? []).filter((path) => !hasCodeExtension(path));
+  const shebangCode = new Set(input.unscannedCode ?? []);
+  const isCode = (path: string): boolean => hasCodeExtension(path) || shebangCode.has(path);
+  const unscannedCode = (input.unscanned ?? []).filter((path) => isCode(path));
+  const unscanned = (input.unscanned ?? []).filter((path) => !isCode(path));
   if (unscannedCode.length > 0) {
     const one = unscannedCode.length === 1;
     reasons.push(
@@ -974,8 +1085,40 @@ const LOCKFILE_NAMES: ReadonlySet<string> = new Set([NPM_LOCKFILE, "pnpm-lock.ya
 
 const basenameOf = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
-/** A lockfile copy's `packages` map, each entry an object, or why the copy proves nothing. */
-function lockPackages(text: string): Map<string, Record<string, unknown>> | string {
+/** A lockfile copy's `packages` map and its legacy `dependencies` tree flattened under the same keys. */
+interface LockCopy {
+  packages: Map<string, Record<string, unknown>>;
+  legacy: Map<string, Record<string, unknown>>;
+}
+
+/** The clause of a bump that adds a package the base copy's graph does not hold (review/163). */
+const NEW_PACKAGE = "adds a package new to the graph";
+
+/** A legacy `dependencies` tree deeper than this proves nothing. */
+const LEGACY_MAX_DEPTH = 64;
+
+/**
+ * A legacy `dependencies` tree (review/158) flattened into `into` under the
+ * `packages` map's keys (`node_modules/a/node_modules/b`), each entry without
+ * its nested tree, or why it proves nothing.
+ */
+function flattenLegacy(tree: unknown, prefix: string, depth: number, into: Map<string, Record<string, unknown>>): string | undefined {
+  if (!isRecord(tree)) return "holds a legacy dependencies section that is not an object";
+  if (depth > LEGACY_MAX_DEPTH) return `nests its legacy dependencies deeper than ${LEGACY_MAX_DEPTH}`;
+  for (const [name, entry] of Object.entries(tree)) {
+    if (!isRecord(entry)) return "holds a legacy dependencies entry that is not an object";
+    const key = `${prefix}node_modules/${name}`;
+    const { dependencies: nested, ...own } = entry;
+    into.set(key, own);
+    if (nested === undefined) continue;
+    const why = flattenLegacy(nested, `${key}/`, depth + 1, into);
+    if (why !== undefined) return why;
+  }
+  return undefined;
+}
+
+/** A lockfile copy's `packages` map, each entry an object, and its legacy tree, or why the copy proves nothing. */
+function lockCopy(text: string): LockCopy | string {
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -986,34 +1129,104 @@ function lockPackages(text: string): Map<string, Record<string, unknown>> | stri
   if (!PROVEN_LOCKFILE_VERSIONS.has(value["lockfileVersion"])) return "is not at lockfileVersion 2 or 3";
   const packages = value["packages"];
   if (!isRecord(packages)) return "holds no packages map";
-  const entries = new Map<string, Record<string, unknown>>();
+  const copy: LockCopy = { packages: new Map(), legacy: new Map() };
   for (const [key, entry] of Object.entries(packages)) {
     if (!isRecord(entry)) return "holds a package entry that is not an object";
-    entries.set(key, entry);
+    copy.packages.set(key, entry);
   }
-  return entries;
+  // npm 6 and other readers install from the legacy tree, so it is read wherever it is present.
+  if (value["dependencies"] !== undefined) return flattenLegacy(value["dependencies"], "", 0, copy.legacy) ?? copy;
+  return copy;
+}
+
+/** An entry's `resolved` as a URL, or `undefined` for none or one that does not parse. */
+function resolvedUrl(entry: Record<string, unknown> | undefined): URL | undefined {
+  const resolved = entry?.["resolved"];
+  if (typeof resolved !== "string") return undefined;
+  try {
+    return new URL(resolved);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The registry hosts a copy's entries already resolve tarballs from: each `https` `resolved` URL's host, port included. */
+function registryHosts(copy: LockCopy): Set<string> {
+  const hosts = new Set<string>();
+  for (const entry of [...copy.packages.values(), ...copy.legacy.values()]) {
+    const url = resolvedUrl(entry);
+    if (url?.protocol === "https:") hosts.add(url.host);
+  }
+  return hosts;
+}
+
+/**
+ * Why one entry that differs between the copies is no proven bump (review/157),
+ * or `undefined`: no install script, no link, a `resolved` that is an `https`
+ * URL on a host the base copy already uses (never `git+`, `file:`, `github:` or
+ * another source), and no `resolved` or `integrity` moved at an unchanged
+ * version. The project's own root entry (`""`) installs from no source. The
+ * clauses name no key: the key is the change's own text.
+ */
+function entryRefusal(key: string, entry: Record<string, unknown>, before: Record<string, unknown> | undefined, hosts: ReadonlySet<string>): string | undefined {
+  const script = entry["hasInstallScript"];
+  if (script !== undefined && script !== false) return "bumps a package with an install script";
+  const link = entry["link"];
+  if (link !== undefined && link !== false) return "links a package";
+  if (key === "") return undefined;
+  const url = resolvedUrl(entry);
+  if (url?.protocol !== "https:" || !hosts.has(url.host) || url.username !== "" || url.password !== "") {
+    return "resolves a changed package from a source that is no https tarball on a registry host its base copy uses";
+  }
+  const moved = before !== undefined && before["version"] === entry["version"];
+  if (moved && (before["resolved"] !== entry["resolved"] || before["integrity"] !== entry["integrity"])) {
+    return "moves a package's resolved or integrity at an unchanged version";
+  }
+  return undefined;
 }
 
 /**
  * Why one security-placed path is no proven npm lockfile bump, or `undefined`
- * when it is: both copies parse at `lockfileVersion` 2 or 3, and no `packages`
- * entry that differs between them carries an install script at head, whether
- * the entry is new there or had one at base too (plan/12, plan/52). Any value
- * of `hasInstallScript` but absent or `false` counts as one.
+ * when it is: its staged copy is the work tree's (review/155), both copies
+ * parse at `lockfileVersion` 2 or 3, and each `packages` entry that differs
+ * between them passes {@link entryRefusal}, an install script refusing whether
+ * the entry is new there or had one at base too (plan/12, plan/52); each legacy
+ * `dependencies` entry that differs has a `packages` twin at its version and
+ * passes the same checks (review/158). A package new to the graph, a
+ * `packages` key or a legacy entry absent at base, refuses too: no audit flags
+ * a new dependency with no advisory yet (review/163); a removed one does not.
+ * Any value of `hasInstallScript` but
+ * absent or `false` counts as one.
  */
 function lockfileRefusal(path: string, lockfiles: readonly Lockfile[]): string | undefined {
   if (basenameOf(path) !== NPM_LOCKFILE) return `${path} is not an npm lockfile`;
   const lockfile = lockfiles.find((candidate) => candidate.path === path);
   if (lockfile === undefined) return `${path} was not read`;
-  if (lockfile.base === null) return `${path} has no base copy`;
-  const base = lockPackages(lockfile.base);
+  if (lockfile.base === null) return `${path} has no base copy${lockfile.baseFailure === undefined ? "" : ` (${lockfile.baseFailure})`}`;
+  if (lockfile.staged === "unread") return `${path}'s staged copy was not read`;
+  if (lockfile.staged !== "same") return `${path}'s staged copy differs from the work tree's`;
+  const base = lockCopy(lockfile.base);
   if (typeof base === "string") return `${path}'s base copy ${base}`;
-  const head = lockPackages(lockfile.head);
+  const head = lockCopy(lockfile.head);
   if (typeof head === "string") return `${path}'s head copy ${head}`;
-  for (const [key, entry] of head) {
-    if (JSON.stringify(entry) === JSON.stringify(base.get(key))) continue;
-    const script = entry["hasInstallScript"];
-    if (script !== undefined && script !== false) return `${path} bumps a package with an install script`;
+  const hosts = registryHosts(base);
+  const changed = (entry: Record<string, unknown>, before: Record<string, unknown> | undefined): boolean =>
+    JSON.stringify(entry) !== JSON.stringify(before);
+  for (const [key, entry] of head.packages) {
+    const before = base.packages.get(key);
+    const why = changed(entry, before) ? entryRefusal(key, entry, before, hosts) : undefined;
+    if (why !== undefined) return `${path} ${why}`;
+    if (before === undefined && key !== "") return `${path} ${NEW_PACKAGE}`;
+  }
+  for (const [key, entry] of head.legacy) {
+    const before = base.legacy.get(key);
+    if (!changed(entry, before)) continue;
+    if (head.packages.get(key)?.["version"] !== entry["version"]) {
+      return `${path} holds a legacy dependencies entry with no packages twin at its version`;
+    }
+    const why = entryRefusal(key, entry, before, hosts);
+    if (why !== undefined) return `${path} ${why}`;
+    if (before === undefined) return `${path} ${NEW_PACKAGE}`;
   }
   return undefined;
 }

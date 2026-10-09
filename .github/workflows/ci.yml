@@ -182,7 +182,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # No `cache: npm` and no install: the detector is plain ESM over Node built-ins and git.
+      # No `cache: npm` and no install: the detector is ESM over Node built-ins and git, and loads
+      # src/change/classify.ts (and what it imports) by Node's type stripping, so no dependency.
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -776,9 +777,10 @@ jobs:
     needs: [changes, prove-pr]
     if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full == 'false'"
     runs-on: ubuntu-latest
-    # 20: the records suites measured 85 s on 2026-09-30 (`npx vitest run` over the five entries,
-    # darwin, no dist/) inside the 15 the records lane carried; the website lane adds a site
-    # install and build, which docs-site.yml's build job holds under its own 15.
+    # 20: the records suites measured 85 s on 2026-09-30 (`npx vitest run` over the five entries the
+    # old list held, darwin, no dist/) inside the 15 the records lane carried. The suites now come from
+    # the base map's union, which runs more of them for some paths, not re-measured; the website
+    # lane adds a site install and build, which docs-site.yml's build job holds under its own 15.
     timeout-minutes: 20
     permissions:
       contents: read

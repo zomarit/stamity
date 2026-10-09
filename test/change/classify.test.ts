@@ -18,6 +18,7 @@ import {
   type ChangeClass,
   type ClassRule,
   type Hunk,
+  type Lockfile,
 } from "../../src/change/classify.ts";
 import { SPECIALIST_TRIGGER_TABLE, type SpecialistTrigger } from "../../src/roster/triggers.ts";
 
@@ -1596,6 +1597,43 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     expect(other.class).toBe("product");
   });
 
+  // review/145 (signed off): a name bound by assignment, promisify or a Python import to a spawning or network member.
+  it.each([
+    ["src/x.ts", 'import { ex~ec } from "node:child~_process";\nimport { promisify } from "node:util";\nconst execAsync = promisify(ex~ec);\n', "  await execAsync(cmd);", "process-spawn"],
+    ["src/x.ts", 'import { ex~ec } from "node:child~_process";\nconst execAsync = util.promisify(ex~ec);\n', "  await execAsync(cmd);", "process-spawn"],
+    ["src/x.ts", 'import * as cp from "node:child~_process";\nconst run = cp.ex~ec;\n', "  run(cmd);", "process-spawn"],
+    ["src/x.ts", 'import * as proc from "node:child~_process";\nlet run = proc.spa~wnSync;\n', "  run(cmd);", "process-spawn"],
+    ["src/x.js", 'const run = require("child~_process").ex~ecSync;\n', "  run(cmd);", "process-spawn"],
+    ["src/x.ts", 'import https from "node:https";\nconst get = https.ge~t;\n', "  get(url, onResponse);", "network-or-registry"],
+    ["src/x.ts", "const send = fet~ch;\n", "  await send(url);", "network-or-registry"],
+    ["app/x.py", "import subprocess as sp\n", "    sp.ru~n(cmd)", "process-spawn"],
+    ["app/x.py", "from subprocess import run\n", "    run(cmd)", "process-spawn"],
+    ["app/x.py", "from subprocess import (\n    check_output as co,\n    call,\n)\n", "    co(cmd)", "process-spawn"],
+    ["app/x.py", "import os as o\n", "    o.syst~em(cmd)", "process-spawn"],
+    ["app/x.py", "from os import popen as p\n", "    p(cmd)", "process-spawn"],
+    ["app/x.py", "import subprocess\nrun = subprocess.ru~n\n", "    run(cmd)", "process-spawn"],
+    ["app/x.py", "from urllib.request import urlopen\n", "    urlopen(url)", "network-or-registry"],
+    ["app/x.py", "import urllib.request as ur\n", "    ur.urlopen(url)", "network-or-registry"],
+    ["app/x.py", "from urllib import request\n", "    request.urlopen(url)", "network-or-registry"],
+  ])("hits an added call through a name %s binds by its head: %s", (path, head, call, id) => {
+    const bound = withLines([hunk(path, { added: [built(call)], head: built(head) })]);
+    const unbound = withLines([hunk(path, { added: [built(call)], head: "x = 1\n" })]);
+
+    expect(bound.byPath[0]?.rule).toBe(`line rule ${id} at ${path}:10`);
+    expect(unbound.class).toBe("product");
+  });
+
+  it.each([
+    ["src/x.ts", 'const out = cp.ex~ec("ls");\n', "  out(cmd);"],
+    ["src/x.ts", "const send = fet~ch.bind(globalThis);\n", "  send(url);"],
+    ["src/x.ts", "if (mode == fet~ch) {}\n", "  mode(url);"],
+    ["app/x.py", "from other import run\n", "    run(cmd)"],
+    ["app/x.py", "import shutil as sp\n", "    sp.run(cmd)"],
+    ["app/x.py", "from urllib.parse import urlparse as urlopen\n", "    urlopen(url)"],
+  ])("does not bind a name %s gives no spawning or network member: %s", (path, head, call) => {
+    expect(withLines([hunk(path, { added: [built(call)], head: built(head) })]).class).toBe("product");
+  });
+
   it("reads the import from the hunk's own lines when no head is given", () => {
     const result = withLines([hunk("src/x.ts", { context: [built('const run = require("child~_process");')], added: [built("run.ex~ec(cmd);")] })]);
     expect(result.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
@@ -1728,16 +1766,39 @@ describe("classifyChange: a proven lockfile-only bump runs the dependency audit 
   /** An npm lockfile at `version`, its `packages` map as given, the root entry first as npm writes it. */
   const lock = (version: number, packages: Packages): string =>
     `${JSON.stringify({ name: "x", version: "1.0.0", lockfileVersion: version, requires: true, packages: { "": { name: "x" }, ...packages } }, null, 2)}\n`;
+  /*
+   * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/157 (C, fixed as the security lens
+   * proposed): the entries carried a version alone. A changed entry must now resolve from an https tarball on a
+   * registry host the base copy already uses, so each fixture entry names its registry tarball and integrity as npm
+   * writes them; the cases' outcomes are unchanged. review/155: each lockfile names its staged copy's reading, which
+   * `bump` fills as byte-equal unless a case says otherwise. review/163 (signed off): a package new to the graph
+   * refuses the rule, so HEAD no longer adds `node_modules/new`; it bumps one entry and removes another.
+   */
+  const REGISTRY = "https://registry.npmjs.org";
+  /** A registry entry as npm writes it: its version, tarball and integrity (a short stand-in, no real digest). */
+  const entry = (name: string, version: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    version,
+    resolved: `${REGISTRY}/${name}/-/${name}-${version}.tgz`,
+    integrity: `sha512-${name}${version}`,
+    ...extra,
+  });
   // An entry that keeps its install script across the bump: unchanged, so it never blocks the rule.
-  const KEPT = { "node_modules/native": { version: "3.0.0", hasInstallScript: true } };
-  const BASE: Packages = { "node_modules/a": { version: "1.0.0" }, "node_modules/gone": { version: "0.1.0" }, ...KEPT };
-  const HEAD: Packages = { "node_modules/a": { version: "1.0.1" }, "node_modules/new": { version: "2.0.0" }, ...KEPT };
+  const KEPT = { "node_modules/native": entry("native", "3.0.0", { hasInstallScript: true }) };
+  const BASE: Packages = { "node_modules/a": entry("a", "1.0.0"), "node_modules/gone": entry("gone", "0.1.0"), ...KEPT };
+  const HEAD: Packages = { "node_modules/a": entry("a", "1.0.1"), ...KEPT };
   const bump = (
-    lockfiles: readonly { path: string; base: string | null; head: string }[],
+    lockfiles: readonly (Omit<Lockfile, "staged"> & Partial<Pick<Lockfile, "staged">>)[],
     paths: readonly string[] = ["package-lock.json"],
     extra: { hunks?: Hunk[]; unscanned?: string[] } = {},
-  ) => classifyChange({ paths, base: "given", source: "git", lockfiles, ...extra });
-  const proven = (path = "package-lock.json", version = 3) => ({ path, base: lock(version, BASE), head: lock(version, HEAD) });
+  ) =>
+    classifyChange({
+      paths,
+      base: "given",
+      source: "git",
+      lockfiles: lockfiles.map((lockfile) => ({ staged: "same" as const, ...lockfile })),
+      ...extra,
+    });
+  const proven = (path = "package-lock.json", version = 3): Lockfile => ({ path, base: lock(version, BASE), head: lock(version, HEAD), staged: "same" });
   const auditFirst = [...CLASS_CHECKS["security-sensitive"], "dependency-audit"];
 
   it.each([[3], [2]])("names the audit and no security lens for a lockfile-version-%i bump with no install script", (version) => {
@@ -1853,6 +1914,126 @@ describe("classifyChange: a proven lockfile-only bump runs the dependency audit 
     expect(result.class).toBe("product");
     expect(result.checks).toEqual(CLASS_CHECKS.product);
     expect(result.reason).not.toContain(AUDIT_FIRST);
+  });
+
+  // review/157 (C, security): a changed entry's source is proven too, not its install-script flag alone.
+  const sourceOf = (head: Record<string, unknown>) => bump([{ path: "package-lock.json", base: lock(3, BASE), head: lock(3, { ...HEAD, "node_modules/a": head }) }]);
+  it.each([
+    ["links a package", entry("a", "1.0.1", { link: true, resolved: "../a" }), "links a package"],
+    ["resolves from plain http", entry("a", "1.0.1", { resolved: "http://registry.npmjs.org/a/-/a-1.0.1.tgz" }), "resolves a changed package"],
+    ["resolves from a host the base copy never uses", entry("a", "1.0.1", { resolved: "https://evil.example/a/-/a-1.0.1.tgz" }), "resolves a changed package"],
+    ["resolves from the registry host on another port", entry("a", "1.0.1", { resolved: "https://registry.npmjs.org:8443/a/-/a-1.0.1.tgz" }), "resolves a changed package"],
+    ["resolves from a git URL", entry("a", "1.0.1", { resolved: "git+https://github.com/x/a.git#0123abc" }), "resolves a changed package"],
+    ["resolves from git over ssh", entry("a", "1.0.1", { resolved: "git+ssh://git@github.com/x/a.git#0123abc" }), "resolves a changed package"],
+    ["resolves from a github: shorthand", entry("a", "1.0.1", { resolved: "github:x/a#0123abc" }), "resolves a changed package"],
+    ["resolves from a file: path", entry("a", "1.0.1", { resolved: "file:../a" }), "resolves a changed package"],
+    ["names no resolved source", { version: "1.0.1", integrity: "sha512-a1.0.1" }, "resolves a changed package"],
+    ["names a resolved source that is no string", entry("a", "1.0.1", { resolved: ["https://registry.npmjs.org/a"] }), "resolves a changed package"],
+    ["moves resolved at an unchanged version", entry("a", "1.0.0", { resolved: `${REGISTRY}/a/-/a-1.0.0-1.tgz` }), "moves a package's resolved or integrity at an unchanged version"],
+    ["moves integrity at an unchanged version", entry("a", "1.0.0", { integrity: "sha512-other" }), "moves a package's resolved or integrity at an unchanged version"],
+  ])("keeps the lens when a changed entry %s", (_label, head, why) => {
+    const result = sourceOf(head);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).not.toContain(AUDIT_FIRST);
+    expect(result.reason).toContain(`the security lens stays: package-lock.json ${why}`);
+  });
+
+  it("proves a bump beside an unchanged entry whatever its source", () => {
+    const git = { "node_modules/g": { version: "1.0.0", resolved: "git+https://github.com/x/g.git#0123abc" } };
+    const result = bump([{ path: "package-lock.json", base: lock(3, { ...BASE, ...git }), head: lock(3, { ...HEAD, ...git }) }]);
+
+    expect(result.checks).toEqual(auditFirst);
+    expect(result.lenses).toEqual([]);
+  });
+
+  // review/163 (signed off): a package new to the graph is the event-stream case no audit flags, so it keeps the lens.
+  it("keeps the lens for a package new to the graph, on the registry host, with no install script", () => {
+    const added = bump([{ path: "package-lock.json", base: lock(3, BASE), head: lock(3, { ...HEAD, "node_modules/new": entry("new", "2.0.0") }) }]);
+    const nested = bump([
+      { path: "package-lock.json", base: lock(3, BASE), head: lock(3, { ...HEAD, "node_modules/a/node_modules/new": entry("new", "2.0.0") }) },
+    ]);
+
+    for (const result of [added, nested]) {
+      expect(result.lenses).toEqual(["stamity-security"]);
+      expect(result.checks).not.toContain("dependency-audit");
+      expect(result.reason).toContain("the security lens stays: package-lock.json adds a package new to the graph");
+    }
+  });
+
+  it("proves a bump that only removes a package", () => {
+    const { "node_modules/gone": _gone, ...rest } = BASE;
+    const result = bump([{ path: "package-lock.json", base: lock(3, BASE), head: lock(3, { ...rest, "node_modules/a": entry("a", "1.0.0") }) }]);
+    expect(result.checks).toEqual(auditFirst);
+  });
+
+  // review/155 (security): the staged copy is what `git commit` records, so it must be the work tree's to the byte.
+  it.each([
+    ["differs", "package-lock.json's staged copy differs from the work tree's"],
+    ["unread", "package-lock.json's staged copy was not read"],
+  ] as const)("keeps the lens when the staged copy %s", (staged, why) => {
+    const result = bump([{ ...proven(), staged }]);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).toContain(`the security lens stays: ${why}`);
+  });
+
+  // build/78: a failed base read names its failure.
+  it("names why the base copy was not read", () => {
+    const result = bump([{ ...proven(), base: null, baseFailure: "git show failed, exit 128" }]);
+    expect(result.reason).toContain("the security lens stays: package-lock.json has no base copy (git show failed, exit 128)");
+  });
+
+  // review/158: version 2's legacy `dependencies` tree is read beside `packages`, entry by entry.
+  /** A version-2 lockfile whose legacy section is `legacy` beside the `packages` map. */
+  const lock2 = (packages: Packages, legacy: Record<string, unknown>): string =>
+    `${JSON.stringify({ name: "x", version: "1.0.0", lockfileVersion: 2, requires: true, packages: { "": { name: "x" }, ...packages }, dependencies: legacy }, null, 2)}\n`;
+  const legacyOf = (packages: Packages): Record<string, unknown> =>
+    Object.fromEntries(Object.entries(packages).map(([key, value]) => [key.slice("node_modules/".length), { ...value, hasInstallScript: undefined }]));
+  const v2 = (headLegacy: Record<string, unknown>, headPackages: Packages = HEAD) =>
+    bump([{ path: "package-lock.json", base: lock2(BASE, legacyOf(BASE)), head: lock2(headPackages, headLegacy) }]);
+
+  it("proves a version-2 bump whose legacy entries match their packages twins", () => {
+    const result = v2(legacyOf(HEAD));
+    expect(result.checks).toEqual(auditFirst);
+    expect(result.lenses).toEqual([]);
+  });
+
+  it.each([
+    ["a legacy entry moved to another host", { ...legacyOf(HEAD), a: entry("a", "1.0.1", { resolved: "https://evil.example/a-1.0.1.tgz" }) }, "resolves a changed package"],
+    ["a legacy entry moved at an unchanged version", { ...legacyOf(HEAD), native: entry("native", "3.0.0", { integrity: "sha512-other" }) }, "moves a package's resolved or integrity at an unchanged version"],
+    ["a legacy entry with no packages twin", { ...legacyOf(HEAD), extra: entry("extra", "1.0.0") }, "holds a legacy dependencies entry with no packages twin at its version"],
+    ["a legacy entry at another version than its twin", { ...legacyOf(HEAD), a: entry("a", "1.0.2") }, "holds a legacy dependencies entry with no packages twin at its version"],
+    ["a nested legacy entry from git", { ...legacyOf(HEAD), a: { ...entry("a", "1.0.1"), dependencies: { b: { version: "git+https://github.com/x/b.git#0123abc" } } } }, "holds a legacy dependencies entry with no packages twin at its version"],
+    ["a legacy entry new to the graph with a packages twin", { ...legacyOf(HEAD), extra: entry("extra", "1.0.0") }, "adds a package new to the graph", { ...HEAD, "node_modules/extra": entry("extra", "1.0.0") }],
+    ["a legacy section that is no object", [], "holds a legacy dependencies section that is not an object"],
+  ])("keeps the lens for %s", (_label, legacy, why, packages?: Packages) => {
+    const result = v2(legacy as Record<string, unknown>, packages);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.checks).not.toContain("dependency-audit");
+    expect(result.reason).toContain(`the security lens stays: package-lock.json${why.startsWith("holds a legacy dependencies section") ? "'s head copy" : ""} ${why}`);
+  });
+
+  it("keeps the lens for a legacy entry the base copy's legacy tree lacks, its packages twin at both sides", () => {
+    const packages: Packages = { ...BASE, "node_modules/a": entry("a", "1.0.1") };
+    const result = bump([
+      { path: "package-lock.json", base: lock2(BASE, legacyOf({ "node_modules/a": entry("a", "1.0.0"), "node_modules/gone": entry("gone", "0.1.0") })), head: lock2(packages, legacyOf(packages)) },
+    ]);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.reason).toContain("the security lens stays: package-lock.json adds a package new to the graph");
+  });
+
+  it("checks a nested legacy entry whose packages twin is nested too", () => {
+    const nested: Packages = { ...HEAD, "node_modules/a/node_modules/b": entry("b", "1.0.0", { resolved: "https://evil.example/b-1.0.0.tgz" }) };
+    const legacy = { ...legacyOf(HEAD), a: { ...entry("a", "1.0.1"), dependencies: { b: entry("b", "1.0.0", { resolved: "https://evil.example/b-1.0.0.tgz" }) } } };
+    const result = v2(legacy, nested);
+
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.reason).toContain("the security lens stays: package-lock.json resolves a changed package");
   });
 
   it("puts the lens back, drops the audit and its clause when a later read raises the class (keepSecurityLens)", () => {
