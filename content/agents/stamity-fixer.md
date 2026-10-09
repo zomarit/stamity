@@ -124,6 +124,11 @@ the economy class:
 - Sub-agents do not put questions to the operator. A finding admitting two materially
   different fixes returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the
   ambiguity gate and re-spawns.
+- **The findings block.** The block fenced with the info string `stamity-findings` holds one
+  JSON object per line: `id` (`C-<n>`, `W-<n>` or `M-<n>`, local to this result),
+  `severity`, `locator` (`path:line`, `path:line-line` or a gate command), `summary` (the
+  failure scenario in one line, at most 300 characters), and, where true, `decision_needed`
+  (the fix changes a shared contract or needs a product choice) and `security`.
 - **Report and digest.** When the dispatch names a report path, the full `DONE` result — the
   rejection reasoning with it — goes to that exact path and nowhere else, its new findings in a
   block fenced with the info string `stamity-findings` (empty when the round raised none), and

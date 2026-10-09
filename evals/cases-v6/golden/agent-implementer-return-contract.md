@@ -2,7 +2,7 @@
 id: agent-implementer-return-contract
 class: golden
 claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree; an adjacent improvement larger than one line is counted as a note left out, never a deferral or an edit, and an inline result carries the notes count, never the note."
-source: content/agents/stamity-implementer.md:14-16,36-40,64-132
+source: content/agents/stamity-implementer.md:14-16,36-40,64-133
 metric: rubric
 ---
 
@@ -75,7 +75,8 @@ Run before returning, over the unit's surface:
   A note whose consequence shows once looked at is a finding at the severity that consequence
   sets.
 - `DONE` carries files changed, tests added or modified (with justifications), gate
-  results, the spec delta, and deferrals.
+  results, the spec delta, and deferrals. A deferral is a finding the unit leaves open,
+  with its consequence, never a note.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
   input; work completed before the block is listed file by file so nothing is silently
   half-applied.

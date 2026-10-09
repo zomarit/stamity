@@ -103,7 +103,8 @@ Run before returning, over the unit's surface:
   A note whose consequence shows once looked at is a finding at the severity that consequence
   sets.
 - `DONE` carries files changed, tests added or modified (with justifications), gate
-  results, the spec delta, and deferrals.
+  results, the spec delta, and deferrals. A deferral is a finding the unit leaves open,
+  with its consequence, never a note.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
   input; work completed before the block is listed file by file so nothing is silently
   half-applied.

@@ -2,7 +2,7 @@
 id: agent-fixer-return-contract
 class: golden
 claim: "A fix round returns status DONE carrying a disposition for every finding it received — fixed, rejected with reasoning, or unresolved with a reason — plus the changed-file list, the tests, and deferrals; a finding judged wrong is rejected with technical reasoning at path:line rather than silently left or applied anyway, the round is not certified green or closed from here, and ledgered Minor rows and opportunistic edits stay out of the pass."
-source: content/agents/stamity-fixer.md:14-55,96-138
+source: content/agents/stamity-fixer.md:14-55,96-143
 metric: rubric
 ---
 
@@ -96,6 +96,11 @@ finding stays open in the ledger until one of them does.
 - Sub-agents do not put questions to the operator. A finding admitting two materially
   different fixes returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the
   ambiguity gate and re-spawns.
+- **The findings block.** The block fenced with the info string `stamity-findings` holds one
+  JSON object per line: `id` (`C-<n>`, `W-<n>` or `M-<n>`, local to this result),
+  `severity`, `locator` (`path:line`, `path:line-line` or a gate command), `summary` (the
+  failure scenario in one line, at most 300 characters), and, where true, `decision_needed`
+  (the fix changes a shared contract or needs a product choice) and `security`.
 - **Report and digest.** When the dispatch names a report path, the full `DONE` result — the
   rejection reasoning with it — goes to that exact path and nowhere else, its new findings in a
   block fenced with the info string `stamity-findings` (empty when the round raised none), and

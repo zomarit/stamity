@@ -199,8 +199,14 @@ const FENCE_GRAMMAR: readonly string[] = [
     "`decision_needed` (the fix changes a shared contract or needs a product choice) and `security`.",
 ];
 
-describe("implementer and spec-author — the findings fence's grammar", () => {
-  it.each([IMPLEMENTER, SPEC_AUTHOR])("%s spells the stamity-findings grammar", async (relPath) => {
+/*
+ * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, the p8 Minors fix round
+ * (review/69). The fixer joins the roles held to the grammar: it writes the same block, and two of
+ * this run's fixer blocks were refused for a summary over the cap and re-filed by hand. It writes
+ * no `stamity-closures` block (a re-review's), so no closures grammar is pinned for it.
+ */
+describe("implementer, fixer and spec-author — the findings fence's grammar", () => {
+  it.each([IMPLEMENTER, FIXER, SPEC_AUTHOR])("%s spells the stamity-findings grammar", async (relPath) => {
     const contract = section(await load(relPath), "Return contract");
     for (const phrase of FENCE_GRAMMAR) {
       expect(contract, phrase).toContain(phrase);

@@ -14,7 +14,9 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *   - **(c) The scale's shape.** Critical, Warning and Minor, each set by its consequence
  *     with one example, then the no-findings sentence.
  *   - **(d) What stays.** The reviewer's own Warning rule in `## Critical rows` stays word
- *     for word, and `/st-rework`'s severity vocabulary keeps its three lines (20–22).
+ *     for word, and `/st-rework`'s severity vocabulary keeps its three lines (20–22). Its
+ *     severity inference and its leftover scan's cleanup rows grade a nit Minor only with a
+ *     named consequence, a note otherwise, in the lines they held.
  *   - **(e) Red checks.** The checker is pure over a {@link CorpusFile}, so a reworded,
  *     missing or misplaced section is exercised on real bodies with one edit each.
  *   - **(f) Capture by consequence** (REQ-FLOW-072, REQ-CTX-002). A role records a finding
@@ -208,6 +210,15 @@ const CAPTURE_PINS: readonly CapturePin[] = [
     phrase:
       "A pre-existing defect is recorded as a finding only when it names a consequence, its " +
       "`summary` leading `pre-existing:`.",
+  },
+  /*
+   * Added 2026-10-09, run 2026-10-08_product-core, the p8 Minors fix round (build/34): `DONE`
+   * still lists deferrals, and with the larger note now counted, this says what fills them.
+   */
+  {
+    relPath: IMPLEMENTER,
+    section: "Return contract",
+    phrase: "A deferral is a finding the unit leaves open, with its consequence, never a note.",
   },
   ...executionCapturePins(FIXER, "A finding this role raises names its consequence:", [
     "then any new `Critical` or `Warning` as `<id> <locator> — <summary>`, ending " +
@@ -421,6 +432,36 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
     );
     expect(flat(paragraph)).toContain("**Critical** (breaks a supported use");
     expect(flat(paragraph)).toContain("**Warning** (wrong or missing behavior a user or maintainer meets)");
+  });
+
+  /*
+   * Added 2026-10-09, run 2026-10-08_product-core, the p8 Minors fix round (build/26): the
+   * interview's severity inference and the leftover scan's cleanup rows grade by the same scale,
+   * a Minor only with a named consequence and a note otherwise, each in the lines it held, so no
+   * eval range after them moves.
+   */
+  it("(d) grades /st-rework's nits and cleanup rows by the scale, in the lines they held", async () => {
+    const rework = await load(REWORK);
+    const lines = rework.raw.split("\n");
+    const inference = lines.findIndex((line) => line.startsWith("**Severity inference.**"));
+    const scan = lines.findIndex((line) => line.startsWith("## 3. Leftover scan"));
+    const routing = lines.findIndex((line) => line.startsWith("## 4. Routing"));
+    const scanText = lines.slice(scan, routing);
+    const defaults = scanText
+      .filter((line) => /^\| \d+ \|/.test(line))
+      .map((line) => line.split("|").at(-2)?.trim());
+
+    expect(flat(lines.slice(inference, inference + 5).join("\n"))).toContain(
+      "\"nit\", \"polish\", \"cosmetic\" → Minor with a named consequence, else a note.",
+    );
+    expect(lines[inference + 5]).toBe("");
+    expect(rework.raw).not.toContain("\"cosmetic\" → Minor.");
+    expect(flat(scanText.join("\n"))).toContain("A note is not a finding and is never routed.");
+    expect(defaults).toHaveLength(13);
+    expect(defaults).not.toContain("Minor");
+    expect(defaults.filter((cell) => cell === "Minor with a named consequence, else a note")).toHaveLength(7);
+    // The routing section the eval cases quote opens where it did before this fix.
+    expect(routing + 1).toBe(154);
   });
 
   it("(e) fails when one word of the section is reworded", async () => {
