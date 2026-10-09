@@ -7204,9 +7204,10 @@ re-reading its transcript:
 - **The digest:** one labelled line each — \`status:\`; the reviewer's
   \`verdict:\` and \`confidence:\`, which the review gate reads; a lens's \`mode:\`,
   posted or advisory, with its count; \`report:\`; \`findings:\` every Critical
-  and Warning, Minors as a count with ids; \`security:\` in full, or \`none\`;
-  \`contract delta:\` census rows, or \`none\` — then at most 1,500 characters of
-  prose. The cap binds the prose only.
+  and Warning, Minors as a count with ids, ending \`notes left out: <n>\` for
+  the reviewer, each lens, the implementer and the fixer; \`security:\` in
+  full, or \`none\`; \`contract delta:\` census rows, or \`none\` — then at most
+  1,500 characters of prose. The cap binds the prose only.
 - **Never digested:** a BLOCKED_* return and a red test-runner return, beside
   the full returns above. Open the report when a digest line is not enough to
   act on.
@@ -7263,7 +7264,8 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   finding set across two consecutive rounds, or findings oscillating between two
   states, exit as diverged (BLOCKED_FAILURE), not burning the remaining rounds.
 - Minor/nit findings are ledgered, never loop-triggering; on re-review new
-  nits are suppressed, as the reviewer's nit policy states.
+  nits are suppressed, as the reviewer's nit policy states. A note with no
+  consequence is not a finding.
 - Each re-review is a fresh reviewer spawn, never a resumed one; its brief
   is the Verdict dispatch's, plus the ledger ids and each finding's locator
   at HEAD, and no fixer claim. It verifies those ids and returns one closure

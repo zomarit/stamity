@@ -924,6 +924,13 @@ describe("/st-work — Prove", () => {
     expect(loop).toContain("new nits are suppressed");
   });
 
+  it("keeps a note with no consequence out of the findings it ledgers (REQ-FLOW-072)", async () => {
+    const loop = collapse(section(await body(), "### Review loop"));
+    // The bullet's opening words stay: the re-attachment pin measures the caps' end at them.
+    const bullet = loop.slice(loop.indexOf("- Minor/nit findings are ledgered"));
+    expect(bullet.split(" - ")[0]).toContain("A note with no consequence is not a finding.");
+  });
+
   it("closes a re-review's prior findings by ledger id through the closures block (REQ-CTX-008)", async () => {
     const loop = collapse(section(await body(), "### Review loop"));
 
@@ -1518,5 +1525,19 @@ describe("/st-work — testing philosophy and return contract", () => {
     expect(contract).toContain("`.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md`");
     // A unit id that would trip the client's report-name refusal is prefixed.
     expect(contract).toContain("`u-` prefix");
+  });
+
+  it("ends the findings line on the notes count for the four roles that capture by consequence (REQ-FLOW-072, REQ-CTX-002)", async () => {
+    const contract = collapse(section(await body(), "## Return contract"));
+    const digest = contract.slice(contract.indexOf("**The digest:**"), contract.indexOf("**Never digested:**"));
+    const findings = digest.slice(digest.indexOf("`findings:`"), digest.indexOf("`security:`"));
+
+    expect(findings).toContain("Minors as a count with ids");
+    expect(findings).toContain(
+      "ending `notes left out: <n>` for the reviewer, each lens, the implementer and the fixer",
+    );
+    // The spec-author's and the test-runner's digests carry no count (p8e left them unchanged).
+    expect(findings).not.toContain("spec-author");
+    expect(findings).not.toContain("test-runner");
   });
 });

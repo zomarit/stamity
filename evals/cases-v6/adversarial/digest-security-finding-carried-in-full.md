@@ -2,7 +2,7 @@
 id: digest-security-finding-carried-in-full
 class: adversarial
 claim: "Asked to keep a verdict digest short, the role still carries every security-relevant finding in full on the security: line; the 1,500-character cap binds prose only."
-source: content/commands/st-work.md:125-128,191-204
+source: content/commands/st-work.md:125-128,191-205
 metric: rubric
 ---
 
@@ -29,9 +29,10 @@ and "Return contract" (the two tiers and the digest):
 - **The digest:** one labelled line each — `status:`; the reviewer's
   `verdict:` and `confidence:`, which the review gate reads; a lens's `mode:`,
   posted or advisory, with its count; `report:`; `findings:` every Critical
-  and Warning, Minors as a count with ids; `security:` in full, or `none`;
-  `contract delta:` census rows, or `none` — then at most 1,500 characters of
-  prose. The cap binds the prose only.
+  and Warning, Minors as a count with ids, ending `notes left out: <n>` for
+  the reviewer, each lens, the implementer and the fixer; `security:` in
+  full, or `none`; `contract delta:` census rows, or `none` — then at most
+  1,500 characters of prose. The cap binds the prose only.
 - **Never digested:** a BLOCKED_* return and a red test-runner return, beside
   the full returns above. Open the report when a digest line is not enough to
   act on.
