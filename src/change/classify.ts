@@ -51,8 +51,11 @@
  *
  * **The security line rules** (REQ-FLOW-065, S7 (c), D3). A caller that read
  * the change's lines passes them as hunks; {@link SECURITY_LINE_RULES} run over
- * the lines of each code file (by {@link CODE_EXTENSIONS}) outside the built-in
- * test globs, and a hit makes that path `security-sensitive`. Added and removed
+ * the lines of each JavaScript, TypeScript or Python file (by extension, or by
+ * a first-line shebang) outside the built-in test globs, a code file of another
+ * language is named as read by no line rule (review/85), and a hit makes that
+ * path `security-sensitive`. A line is read up to 4,096 characters, and a
+ * longer one makes the class at least `product` (review/93). Added and removed
  * lines count, and context lines only in a hunk that also removes one, so
  * removing the guard around an existing dangerous call still classifies. The
  * reason names the rule id and where, never the line's text (plan/17). A tracked
@@ -168,34 +171,57 @@ interface LineRule {
  * call shapes, each word-bounded and with its opening parenthesis, so prose and
  * a name that merely contains a word do not match. S7's fifth risk, state read
  * back as authority, is placed by path. A bare `exec` call counts, or one on a
- * `child_process` receiver, never a RegExp's `exec` method; a secret name counts
- * only where it is assigned a string literal or an environment value.
+ * `child_process` receiver (`cp` included, and any name the file imports the
+ * module as, by {@link childProcessNames}), never a RegExp's `exec` method; a
+ * secret name counts only where it is assigned, or is an object key given, a
+ * string literal or an environment value, and never a literal that is wholly
+ * one `${…}` template placeholder (build/47, review/92). The shapes are
+ * JavaScript, TypeScript and Python APIs, so they read only the files of
+ * {@link LINE_RULE_EXTENSIONS} and of a covered shebang (review/85).
  */
 export const SECURITY_LINE_RULES: readonly LineRule[] = [
   {
     id: "process-spawn",
     pattern:
-      /(?:\b(?:require|import)\s*\(\s*|\bfrom\s*|^\s*import\s*)["'](?:node:)?child_process["']|\b(?:execFile|execFileSync|execSync|spawn|spawnSync|Popen)\(|(?<![\w$.])exec\(|\b(?:child_process|childProcess)(?:["']\s*\))?\.exec\(|\bsubprocess\.(?:run|call)\(|\bos\.system\(/,
-    rationale: "a child process runs a command the change can shape: an import of child_process, or a spawn or exec call",
+      /(?:\b(?:require|import)\s*\(\s*|\bfrom\s*|^\s*import\s*)["'](?:node:)?child_process["']|\b(?:execFile|execFileSync|execSync|spawn|spawnSync|fork|Popen)\(|(?<![\w$.])exec\(|\b(?:child_process|childProcess|cp)(?:["']\s*\))?\.exec\(|\bpromisify\(\s*(?:[\w$]+\.)?exec\s*\)|\bsubprocess\.(?:run|call|check_output|check_call)\(|\bos\.system\(/,
+    rationale: "a child process runs a command the change can shape: an import of child_process, or a spawn, fork or exec call",
   },
   {
     id: "delete-or-overwrite",
     pattern:
-      /\b(?:rmSync|rm|unlink|unlinkSync|rmdir|rmdirSync|writeFile|writeFileSync|rename|renameSync|truncate)\(|\bshutil\.rmtree\(|\bos\.remove\(|["'`][^"'`]*\brm\s+-(?:rf|fr)\b/,
-    rationale: "a file is deleted or overwritten: an fs delete, write, rename or truncate call, or a recursive rm in a string",
+      /\b(?:rmSync|rm|unlink|unlinkSync|rmdir|rmdirSync|writeFile|writeFileSync|createWriteStream|copyFile|copyFileSync|cp|cpSync|rename|renameSync|truncate)\(|\bshutil\.rmtree\(|\bos\.remove\(|["'`][^"'`]*\brm\s+-(?:rf|fr)\b/,
+    rationale: "a file is deleted or overwritten: an fs delete, write, copy, rename or truncate call, or a recursive rm in a string",
   },
   {
     id: "network-or-registry",
-    pattern: /\bfetch\(|\bhttps?\.request\(|\baxios(?:\.\w+)?\(|["'`][^"'`]*\b(?:(?:curl|wget)\s|npm\s+publish\b)/,
+    pattern: /\bfetch\(|\bhttps?\.(?:request|get)\(|\baxios(?:\.\w+)?\(|["'`][^"'`]*\b(?:(?:curl|wget)\s|npm\s+publish\b)/,
     rationale: "a call leaves the machine: a fetch call, an http or https request, an axios call, or a download or publish command in a string",
   },
   {
     id: "secret-name",
     pattern:
-      /(?:^|[^\w$])[\w$]*?(?:token|secret|password|credential|apikey)[\w$]*["']?(?:\s*:\s*[\w$.<>[\]| ]{1,80}?)?\s*(?:=(?![=>])|:)\s*(?:["'`]|process\.env\b|os\.environ\b)/i,
-    rationale: "a token, secret, password, credential or API key name assigned a string literal or an environment value",
+      /(?:(?:^|[^\w$])[\w$]*?(?:token|secret|password|credential|api_?key)[\w$]*(?:\s*:\s*[\w$.<>[\]| ]{1,80}?)?\s*=(?![=>])|(?:^|[{,])\s*["']?[\w$]*?(?:token|secret|password|credential|api_?key)[\w$]*["']?\s*:)\s*(?:(["'`])(?!\$\{(?!\s*process\.env\b)[^}"'`]*\}\1)|process\.env\b|os\.environ\b|os\.getenv\()/i,
+    rationale: "a token, secret, password, credential or API key name assigned, or keyed to, a string literal or an environment value",
   },
 ];
+
+/**
+ * The extensions whose language the line rules' shapes are written in:
+ * JavaScript and TypeScript (with the component formats that hold them) and
+ * Python. Any other code file is named as read by no line rule (review/85).
+ */
+const LINE_RULE_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".astro", ".py",
+]);
+
+/** A shebang interpreter in a covered language: Node and its runners, or Python. */
+const LINE_RULE_INTERPRETER = /^(?:node(?:js)?|deno|bun|tsx|ts-node|python[\d.]*)$/;
+
+/** A line longer than this is read only up to it, so no line costs the rules more than a bounded scan (review/93). */
+const LINE_RULE_MAX_CHARS = 4_096;
+
+/** At most this many characters of a file's head are searched for its child_process import names. */
+const HEAD_MAX_CHARS = 64 * 1024;
 
 /** One diff hunk of a changed file: its added lines (numbered on the new side), removed lines and context lines. */
 export interface Hunk {
@@ -203,6 +229,11 @@ export interface Hunk {
   added: readonly { line: number; text: string }[];
   removed: readonly string[];
   context: readonly string[];
+  /**
+   * The start of the file's head side, when the reader has it: its first line
+   * is read for a shebang and its imports for the child_process module's names.
+   */
+  head?: string;
 }
 
 /** Whether a path's extension is in {@link CODE_EXTENSIONS}; an extensionless file is not. */
@@ -211,23 +242,91 @@ export function hasCodeExtension(path: string): boolean {
   return CODE_EXTENSIONS.includes(posix.extname(basename).toLowerCase());
 }
 
+/** An import or require that binds the whole child_process module to a name, in JavaScript or TypeScript. */
+const CHILD_PROCESS_BINDING =
+  /\bimport\s+(?:\*\s*as\s+)?([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\}\s*)?from\s*["'](?:node:)?child_process["']|\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?(?:require|import)\s*\(\s*["'](?:node:)?child_process["']|\bimport\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*["'](?:node:)?child_process["']/g;
+
+/** The names `texts` bind the child_process module to (review/90): `cp` in a namespace import of the module as `cp`. */
+function childProcessNames(texts: readonly string[]): string[] {
+  const names = new Set<string>();
+  for (const text of texts) {
+    for (const match of text.slice(0, HEAD_MAX_CHARS).matchAll(CHILD_PROCESS_BINDING)) {
+      const name = match[1] ?? match[2] ?? match[3];
+      if (name !== undefined) names.add(name);
+    }
+  }
+  return [...names];
+}
+
+/** The `exec` call on one of `names`, as the process-spawn rule reads it, or `undefined` for none. */
+function execOn(names: readonly string[]): RegExp | undefined {
+  if (names.length === 0) return undefined;
+  return new RegExp(`(?<![\\w$.])(?:${names.map((name) => name.replaceAll("$", "\\$")).join("|")})\\.exec\\(`);
+}
+
+/** The interpreter a `#!` line names, `env` and its options passed over, or `undefined` for a line that is none. */
+function shebangInterpreter(line: string): string | undefined {
+  if (!line.startsWith("#!")) return undefined;
+  const words = line.slice(2).trim().split(/\s+/);
+  const program = (word: string | undefined): string => (word ?? "").slice((word ?? "").lastIndexOf("/") + 1);
+  if (program(words[0]) !== "env") return program(words[0]);
+  return program(words.slice(1).find((word) => !word.startsWith("-") && !word.includes("=")));
+}
+
+/** What the line rules do with a file: read it, name it as a language they do not cover, or pass it over as no code. */
+type LineReading = "read" | "uncovered" | "none";
+
 /**
- * The first line rule a hunk hits and where, never the line's text, or
- * `undefined`. Added lines first, then removed lines, then, only in a hunk
- * that removes a line, its context lines.
+ * Whether the line rules read a hunk of this raw path (D3, review/85): a file
+ * outside the built-in test globs whose extension is in
+ * {@link LINE_RULE_EXTENSIONS}, or whose first line is a shebang naming a
+ * covered interpreter, is read; another code file, by extension or by any
+ * shebang, is `uncovered`. A listed path is read both ways and the stronger
+ * reading kept, so no spelling hides a file's lines. A class file's wider
+ * `tests` globs never apply here, as they never take code off the full gates
+ * (review/47).
  */
-function lineRuleHit(hunk: Hunk, path: string): string | undefined {
+function lineRulesRead(raw: string, source: PathSource, shebang: string | undefined): LineReading {
+  const readings = source === "git" ? [raw] : [normalizePath(raw), resolveDots(raw)];
+  const interpreter = shebang === undefined ? undefined : shebangInterpreter(shebang);
+  const outcomes = new Set(
+    readings.map((path): LineReading => {
+      if (BUILT_IN_TEST_GLOBS.some((glob) => matchRead(path, glob))) return "none";
+      const extension = posix.extname(path.slice(path.lastIndexOf("/") + 1)).toLowerCase();
+      if (LINE_RULE_EXTENSIONS.has(extension)) return "read";
+      if (interpreter !== undefined && LINE_RULE_INTERPRETER.test(interpreter)) return "read";
+      return CODE_EXTENSIONS.includes(extension) || interpreter !== undefined ? "uncovered" : "none";
+    }),
+  );
+  if (outcomes.has("read")) return "read";
+  return outcomes.has("uncovered") ? "uncovered" : "none";
+}
+
+/**
+ * The first line rule a hunk hits and where, never the line's text, or no
+ * `hit`; and whether a line it read was cut at {@link LINE_RULE_MAX_CHARS}.
+ * Added lines first, then removed lines, then, only in a hunk that removes a
+ * line, its context lines. `execOnNames` adds the `exec` call on the file's names for
+ * the child_process module to `process-spawn`.
+ */
+function lineRuleHit(hunk: Hunk, path: string, execOnNames: RegExp | undefined): { hit?: string; cut: boolean } {
+  let cut = false;
+  const matches = (rule: LineRule, text: string): boolean => {
+    if (text.length > LINE_RULE_MAX_CHARS) cut = true;
+    const read = text.length > LINE_RULE_MAX_CHARS ? text.slice(0, LINE_RULE_MAX_CHARS) : text;
+    return rule.pattern.test(read) || (rule.id === "process-spawn" && execOnNames?.test(read) === true);
+  };
   const first = (lines: readonly string[]): LineRule | undefined =>
-    SECURITY_LINE_RULES.find((rule) => lines.some((text) => rule.pattern.test(text)));
+    SECURITY_LINE_RULES.find((rule) => lines.some((text) => matches(rule, text)));
   for (const added of hunk.added) {
     const rule = first([added.text]);
-    if (rule !== undefined) return `${rule.id} at ${path}:${added.line}`;
+    if (rule !== undefined) return { hit: `${rule.id} at ${path}:${added.line}`, cut };
   }
-  if (hunk.removed.length === 0) return undefined;
+  if (hunk.removed.length === 0) return { cut };
   const removed = first(hunk.removed);
-  if (removed !== undefined) return `${removed.id} at ${path}, a removed line`;
+  if (removed !== undefined) return { hit: `${removed.id} at ${path}, a removed line`, cut };
   const context = first(hunk.context);
-  return context === undefined ? undefined : `${context.id} at ${path}, a context line of a hunk that removes one`;
+  return context === undefined ? { cut } : { hit: `${context.id} at ${path}, a context line of a hunk that removes one`, cut };
 }
 
 /** One placement rule: every path a glob of `paths` matches takes `class` at least. */
@@ -585,17 +684,6 @@ function readPath(
   return rank(second.class) < rank(first.class) ? second : first;
 }
 
-/**
- * Whether the line rules read a hunk of this raw path: a code file by extension
- * outside the built-in test globs (D3), by either reading of a listed path, so
- * no spelling hides a file's lines. A class file's wider `tests` globs never
- * apply here, as they never take code off the full gates (review/47).
- */
-function lineRulesRead(raw: string, source: PathSource): boolean {
-  const readings = source === "git" ? [raw] : [normalizePath(raw), resolveDots(raw)];
-  return readings.some((path) => hasCodeExtension(path) && !BUILT_IN_TEST_GLOBS.some((glob) => matchRead(path, glob)));
-}
-
 /** What the caller knows about the base: given and resolved, never given, or given and unresolvable. */
 export type BaseState = "given" | "absent" | "unresolved";
 
@@ -662,11 +750,30 @@ export function classifyChange(
     add(rename.to);
   }
   const lineHits: string[] = [];
+  const uncovered = new Set<string>();
+  const cut = new Set<string>();
+  // Per file: its shebang (the head's first line, or an added line 1) and its names for the child_process module.
+  const files = new Map<string, Hunk[]>();
+  for (const hunk of input.hunks ?? []) files.set(hunk.path, [...(files.get(hunk.path) ?? []), hunk]);
+  const facts = new Map(
+    [...files].map(([raw, hunks]) => {
+      const heads = hunks.flatMap((hunk) => (hunk.head === undefined ? [] : [hunk.head]));
+      const firstAdded = hunks.flatMap((hunk) => hunk.added).find((added) => added.line === 1)?.text;
+      const shebang = heads[0]?.split("\n", 1)[0] ?? firstAdded;
+      const lines = hunks.flatMap((hunk) => [...hunk.added.map((added) => added.text), ...hunk.removed, ...hunk.context]);
+      return [raw, { shebang, execOnNames: execOn(childProcessNames([...heads, ...lines])) }] as const;
+    }),
+  );
   for (const hunk of input.hunks ?? []) {
     add(hunk.path);
     const entry = byPath.find((placed) => placed.path === readRaw(hunk.path)?.path);
-    if (entry === undefined || !lineRulesRead(hunk.path, source)) continue;
-    const hit = lineRuleHit(hunk, entry.path);
+    const fileFacts = facts.get(hunk.path);
+    if (entry === undefined) continue;
+    const reading = lineRulesRead(hunk.path, source, fileFacts?.shebang);
+    if (reading === "uncovered") uncovered.add(entry.path);
+    if (reading !== "read") continue;
+    const { hit, cut: wasCut } = lineRuleHit(hunk, entry.path, fileFacts?.execOnNames);
+    if (wasCut) cut.add(entry.path);
     if (hit === undefined) continue;
     lineHits.push(hit);
     if (rank("security-sensitive") < rank(entry.class)) {
@@ -706,7 +813,14 @@ export function classifyChange(
     );
     atLeastProduct.push("product");
   }
+  if (cut.size > 0) {
+    reasons.push(
+      `a line longer than ${LINE_RULE_MAX_CHARS} characters was read only that far, so the class is at least product: ${namePaths([...cut])}`,
+    );
+    atLeastProduct.push("product");
+  }
   if (lineHits.length > 0) reasons.push(`the security line rules hit: ${namePaths(lineHits)}`);
+  if (uncovered.size > 0) reasons.push(`read by no line rule, as none covers its language: ${namePaths([...uncovered])}`);
   const unplaced = byPath.filter((entry) => entry.rule === UNPLACED).map((entry) => entry.path);
   if (unplaced.length > 0) reasons.push(`no rule places ${namePaths(unplaced)}, so it is product`);
   if (floored.length > 0) {

@@ -1353,12 +1353,16 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
   const built = (text: string): string => text.replaceAll("~", "");
   const RM_LINE = built("  fs.rm~Sync(dir, { recursive: true });");
 
-  /** One hunk of `path`, its added lines numbered from 10. */
-  const hunk = (path: string, lines: { added?: string[]; removed?: string[]; context?: string[] }): Hunk => ({
+  /** One hunk of `path`, its added lines numbered from `from` (10 unless said), with the file's `head` when given. */
+  const hunk = (
+    path: string,
+    lines: { added?: string[]; removed?: string[]; context?: string[]; head?: string; from?: number },
+  ): Hunk => ({
     path,
-    added: (lines.added ?? []).map((text, at) => ({ line: 10 + at, text })),
+    added: (lines.added ?? []).map((text, at) => ({ line: (lines.from ?? 10) + at, text })),
     removed: lines.removed ?? [],
     context: lines.context ?? [],
+    ...(lines.head === undefined ? {} : { head: lines.head }),
   });
   const withLines = (hunks: readonly Hunk[], extra: { unscanned?: string[] } = {}) =>
     classifyChange({ paths: [...new Set(hunks.map((entry) => entry.path))], base: "given", source: "git", hunks, ...extra });
@@ -1449,6 +1453,32 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     ["secret-name", 'pass~word = os.environ["PW"]'],
     ["secret-name", 'const client = { clientSec~ret: "abc" };'],
     ["secret-name", 'let dbCredent~ial: string = "abc";'],
+    // build/52, review/86, review/90: the same APIs' missed shapes join the lists.
+    /*
+     * TEST CHANGE, justified: 2026-10-09, run 2026-10-08_product-core, review/90 (signed off): `cp.exec(cmd)` was
+     * pinned in the no-hit list below. `cp` is the conventional name of the imported child_process module, so the
+     * call is a shell exec and now hits; the RegExp receivers `re.exec(s)` and `pattern.exec(text)` stay no-hits.
+     */
+    ["process-spawn", "cp.ex~ec(cmd);"],
+    ["process-spawn", "const run = promis~ify(ex~ec);"],
+    ["process-spawn", "const run = util.promis~ify(cp.ex~ec);"],
+    ["process-spawn", 'const worker = for~k("./worker.js");'],
+    ["process-spawn", 'out = subprocess.check_out~put(["ls"])'],
+    ["process-spawn", "subprocess.check_ca~ll(args)"],
+    ["delete-or-overwrite", "const out = fs.createWrite~Stream(path);"],
+    ["delete-or-overwrite", "await copy~File(from, to);"],
+    ["delete-or-overwrite", "copy~FileSync(from, to);"],
+    ["delete-or-overwrite", "await fs.c~p(from, to, { recursive: true });"],
+    ["delete-or-overwrite", "c~pSync(from, to);"],
+    ["network-or-registry", "http.ge~t(url, done);"],
+    ["network-or-registry", "https.ge~t(url, done);"],
+    ["secret-name", 'pass~word = os.get~env("PW")'],
+    ["secret-name", 'API_K~EY = "abc"'],
+    ["secret-name", 'api_k~ey = os.environ["K"]'],
+    ["secret-name", 'const keys = { "api_k~ey": "abc" };'],
+    ["secret-name", "  apiK~ey: process.env.KEY,"],
+    // build/47: a placeholder that reads an environment value is still one.
+    ["secret-name", "const tok~en = `${process.env.T}`;"],
   ])("hits %s on %s", (id, fragments) => {
     const result = withLines([hunk("src/x.ts", { added: [built(fragments)] })]);
     expect(result.class).toBe("security-sensitive");
@@ -1458,7 +1488,7 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
   it.each([
     ["re.exec(s)"],
     ["const match = pattern.exec(text);"],
-    ["cp.exec(cmd);"],
+    ["run.exec(cmd);"],
     ["transform(x)"],
     ["perform(task)"],
     ["confirm(answer)"],
@@ -1470,6 +1500,12 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     ["const parts = tokenize(text);"],
     ['const tokenCount = count("x");'],
     ["// the rm -rf of a build folder, in prose"],
+    // build/47: a value that is wholly a template placeholder is no credential.
+    [built('export const CLI_TOK~EN = "${STAMITY:CLI}";')],
+    [built("const tok~en = `${name}`;")],
+    // review/92: a secret name matches in an assignment or an object key only.
+    [built('function pick(tok~en: "a" | "b") {}')],
+    [built('const label = ok ? tok~en : "x";')],
   ])("does not hit on %s", (line) => {
     const result = withLines([hunk("src/x.ts", { added: [line] })]);
     expect(result.class).toBe("product");
@@ -1505,5 +1541,80 @@ describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
     const result = withLines([hunk("docs/x.md", { added: ["text"] })], { unscanned: ["src/x.ts"] });
     expect(result.class).toBe("product");
     expect(result.reason).toContain("1 tracked code file the read could not show is unscanned, so the class is at least product: src/x.ts");
+  });
+
+  // review/86, review/90: `exec` on the imported child_process module counts under whatever name the file gives it.
+  it.each([
+    ['import * as run from "node:child~_process";'],
+    ['const run = require("child~_process");'],
+    ['import run, { spawn } from "child~_process";'],
+    ['import run = require("node:child~_process");'],
+  ])("hits exec on the module a file imports as run: %s", (importLine) => {
+    const call = built("  run.ex~ec(cmd);");
+    const imported = withLines([hunk("src/x.ts", { added: [call], head: `${built(importLine)}\nexport {};\n` })]);
+    const unknown = withLines([hunk("src/x.ts", { added: [call], head: "export {};\n" })]);
+
+    expect(imported.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
+    expect(unknown.class).toBe("product");
+  });
+
+  it("reads the import from the hunk's own lines when no head is given", () => {
+    const result = withLines([hunk("src/x.ts", { context: [built('const run = require("child~_process");')], added: [built("run.ex~ec(cmd);")] })]);
+    expect(result.byPath[0]?.rule).toBe("line rule process-spawn at src/x.ts:10");
+  });
+
+  // review/85: the rules read the languages their shapes are written for, and name the code files they cannot read.
+  it.each([["src/x.go"], ["scripts/clean.sh"], ["scripts/clean.ps1"], ["src/Main.java"]])(
+    "reads no line of %s, another language, and names it in the reason",
+    (path) => {
+      const result = withLines([hunk(path, { added: [RM_LINE, built("rm -r~f build")] })]);
+      expect(result.class).toBe("product");
+      expect(result.byPath[0]?.rule).not.toMatch(/^line rule/);
+      expect(result.reason).toContain(`read by no line rule, as none covers its language: ${path}`);
+    },
+  );
+
+  it.each([["src/x.py"], ["src/x.mjs"], ["src/App.vue"], ["src/x.tsx"]])("reads the lines of %s", (path) => {
+    const result = withLines([hunk(path, { added: [built("shutil.rmt~ree(path)")] })]);
+    expect(result.byPath[0]?.rule).toBe(`line rule delete-or-overwrite at ${path}:10`);
+    expect(result.reason).not.toContain("read by no line rule");
+  });
+
+  // build/52: a first-line shebang makes a file code for the line rules; its interpreter decides the language.
+  it.each([
+    ["#!/usr/bin/env node", "bin/tool"],
+    ["#!/usr/bin/python3", "bin/tool"],
+    ["#!/usr/bin/env -S node --no-warnings", "scripts/release.txt"],
+  ])("reads a file whose first line is %s", (shebang, path) => {
+    const result = withLines([hunk(path, { added: [RM_LINE], head: `${shebang}\n` })]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.byPath[0]?.rule).toBe(`line rule delete-or-overwrite at ${path}:10`);
+  });
+
+  it("reads a shebang from an added first line when no head is given", () => {
+    const result = withLines([hunk("bin/clean", { added: ["#!/usr/bin/env python3", built("shutil.rmt~ree(p)")], from: 1 })]);
+    expect(result.byPath[0]?.rule).toBe("line rule delete-or-overwrite at bin/clean:2");
+  });
+
+  it("names a shell script found by its shebang as read by no line rule, and reads no extensionless file without one", () => {
+    const shell = withLines([hunk("bin/clean", { added: [built("rm -r~f build")], head: "#!/bin/sh\n" })]);
+    const plain = withLines([hunk("bin/notes", { added: [RM_LINE], head: "notes\n" })]);
+
+    expect(shell.reason).toContain("read by no line rule, as none covers its language: bin/clean");
+    expect(plain.class).toBe("product");
+    expect(plain.reason).not.toContain("read by no line rule");
+  });
+
+  // review/93: a line is cut to a bound before the rules run, and the cut is named.
+  it("reads a line only up to 4,096 characters, says so, and makes the class at least product", () => {
+    const early = withLines([hunk("src/x.ts", { added: [`${RM_LINE}${" ".repeat(5_000)}`] })]);
+    const late = withLines([hunk("src/x.ts", { added: [`${" ".repeat(5_000)}${RM_LINE}`] })]);
+    const docs = withLines([hunk("docs/x.md", { added: ["text"] }), hunk("src/__tests__/x.ts", { added: ["x".repeat(5_000)] })]);
+
+    expect(early.class).toBe("security-sensitive");
+    expect(late.class).toBe("product");
+    expect(late.byPath[0]?.rule).toBe("unplaced");
+    expect(late.reason).toContain("a line longer than 4096 characters was read only that far, so the class is at least product: src/x.ts");
+    expect(docs.reason).not.toContain("longer than");
   });
 });
