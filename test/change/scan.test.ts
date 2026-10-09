@@ -295,6 +295,28 @@ describe("scanAddedLines", () => {
       expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
     });
 
+    // review/176 (security): a quoted value is a mask only when nothing but whitespace follows the mask run to its closing quote,
+    // and the joined text is read to that quote, so the lookahead cannot mask a value that goes on.
+    it.each([
+      ["a quoted mask letter then a word in YAML", "compose.yaml", `      ${PASS}: "x ${SHORT}"`],
+      ["a quoted mask letter then a word in .env", ".env", `DB_${UPPER}="x ${SHORT}"`],
+      ["a quoted asterisk then a word in a code literal", "src/db.ts", `const DB_${UPPER} = "* ${SHORT}";`],
+      ["a single-quoted mask word then a word in .env", ".env", `DB_${UPPER}='REDACTED ${SHORT}'`],
+      ["a quoted mask run then a hash and a word in YAML", "compose.yaml", `      ${PASS}: "XXXX #${SHORT}"`],
+      ["a quoted mask letter then a word in a Dockerfile ENV space-form line", "Dockerfile", `ENV DB_${UPPER} "x ${SHORT}"`],
+      ["a bare mask letter then a word in a Dockerfile ENV space-form line", "Dockerfile", `ENV DB_${UPPER} x ${SHORT}`],
+    ])("hits %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([{ path, line: 1, rule: "inline-password-assignment" }]);
+    });
+
+    it.each([
+      ["a quoted mask with spaces inside its quotes in .env", ".env", `DB_${UPPER}=" ******** "`],
+      ["a quoted mask then a comment in YAML", "compose.yaml", `      ${PASS}: "XXXX"  # placeholder`],
+      ["a mask quoted in prose then a word", "docs/run.md", `set \`${PASS}=****\` before the run`],
+    ])("passes %s", (_label, path, line) => {
+      expect(scanAddedLines([file(path, [line])])).toEqual([]);
+    });
+
     it.each([
       ["a mask then a comment in .env", ".env", `DB_${UPPER}=******** # rotated`],
       ["a mask then a comment in YAML", "compose.yaml", `      ${PASS}: XXXX  # placeholder`],

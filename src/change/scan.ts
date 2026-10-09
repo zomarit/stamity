@@ -190,8 +190,16 @@ const LINE_ENDS = /^(?:\s*$|\s+(?:#|\/\/|;))/;
  * value (review/143): the two inline-assignment patterns read it masked out,
  * so a quoted `NAME=****` in prose is no assignment. A closing `,;)]}` ends it
  * only before whitespace or the end, so `=x,<rest>` is no mask (review/161).
+ * A value opened by a quote is a mask only when nothing but whitespace follows
+ * the run to its closing quote, and an unquoted run only when {@link LINE_ENDS}
+ * reads what follows it, so `="x <rest>"` and `=x <rest>` are no mask (review/176).
  */
-const MASKED_ASSIGNMENT = new RegExp(String.raw`[:=]\s*\\?["'` + "`" + String.raw`]?${MASK}\\?["'` + "`" + String.raw`]?(?=$|\s|[,;)\]}](?:\s|$))`, "gi");
+const MASK_QUOTE = String.raw`\\?["'` + "`]";
+const MASKED_ASSIGNMENT = new RegExp(
+  String.raw`[:=]\s*(?:(${MASK_QUOTE})\s*${MASK}\s*\1|${MASK}${MASK_QUOTE})(?=$|\s|[,;)\]}](?:\s|$))` +
+    String.raw`|[:=]\s*${MASK}(?=${LINE_ENDS.source.slice(1)}|[,;)\]}](?:\s|$))`,
+  "gi",
+);
 
 /** A `{{ … }}` template placeholder (Jinja, Ansible, Helm, Go templates, Mustache), cut from the rest of a line (review/136). */
 const TEMPLATE_PLACEHOLDER = /\{\{[^{}]*\}\}/g;
@@ -294,7 +302,8 @@ function rulesOf(path: string, line: string): string[] {
         const spanClose = raw.startsWith("`") && text[match.index - 1] === "`";
         const literal =
           !pathName && !placeholder && !expansion && !spanClose && !masked && !NO_LITERAL.test(value.trim()) && !INTEGRITY_HASH.test(value.trim());
-        if (literal && (joinAll || /^["'`]/.test(raw))) scan("", `${name}=${value}`, WHOLLY_MASK.test(value.trim()));
+        // review/176: a quoted value joins with its quotes, so the mask lookahead reads it to its closing quote.
+        if (literal && (joinAll || /^["'`]/.test(raw))) scan("", `${name}=${/^["'`]/.test(raw) ? raw : value}`, WHOLLY_MASK.test(value.trim()));
       }
     }
     readLiterals(text);
@@ -311,7 +320,8 @@ function rulesOf(path: string, line: string): string[] {
     scan(name, value);
     const expansion = value.startsWith("$") && !raw.startsWith("'");
     if (!expansion && !NO_LITERAL.test(value.trim()) && !WHOLLY_MASK.test(value.trim()) && !INTEGRITY_HASH.test(value.trim())) {
-      scan("", `${name}=${value}`);
+      // review/176: the whole rest of the line is the one value, already ruled no mask, so no mask may hide it again.
+      scan("", `${name}=${value}`, true);
     }
   }
   if (text.length <= PAIR_LINE_BOUND) {
