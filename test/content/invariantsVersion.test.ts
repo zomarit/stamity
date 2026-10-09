@@ -45,6 +45,10 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // Appended 2026-09-27 (plan 010 D5): invariant 2 now says exactly one question and no second
   // request in the same turn. The 1.0.0 row above stays as the record of the ratified text.
   "1.1.0": "d1662371a3ae872c70a3896bad89584edb25d409944905b376da47162bfce009",
+  // Appended 2026-10-09 (plan 019 file 2, unit p3a-charter-invariant-4; S5 as amended): invariant 4
+  // now says done means the gates the change's class names exit 0, all of them if the class is
+  // unclear. The `Not done:` line is unchanged. The 1.1.0 row above stays as the record.
+  "1.2.0": "b5b5788557346a7027855e2e55a94bc821d148a3e72d9aff63f70b92f328672e",
 };
 
 /** The rendered version line, template form and emitted form alike. */

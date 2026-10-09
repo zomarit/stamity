@@ -5,9 +5,9 @@ description: "Always-on repo charter: curated repo facts, floor invariants, touc
 tags: [orchestration]
 load: always
 obsolete_when: every target client natively injects equivalent repo facts and floor invariants at session start
-invariants_version: 1.1.0
+invariants_version: 1.2.0
 invariants_ratified: 2026-08-31
-invariants_amended: 2026-09-27
+invariants_amended: 2026-10-09
 ---
 
 # Charter
@@ -50,7 +50,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a `Not done:` list naming each open gap.
 5. **Learnings first.** Read `.stamity/learnings/` before project-specific work;
    repeating a recorded failure is a process defect.

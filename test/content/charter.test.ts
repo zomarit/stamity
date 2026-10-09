@@ -229,8 +229,11 @@ describe("corpus charter", () => {
     // The version line renders as one line under the heading it versions.
     // 1.0.0 -> 1.1.0, amended 2026-09-13 -> 2026-09-27 (plan 010 D5): the shipped charter's
     // invariants version moved with invariant 2's amendment, and this pins the shipped values.
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p3a-charter-invariant-4): 1.1.0 ->
+    // 1.2.0, amended 2026-09-27 -> 2026-10-09. Invariant 4 moved (S5): done means the gates the
+    // change's class names exit 0, all of them if the class is unclear. Only the shipped values move.
     expect(rendered).toContain(
-      "## Invariants\nInvariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27\n",
+      "## Invariants\nInvariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09\n",
     );
   });
 
@@ -258,10 +261,13 @@ describe("corpus charter", () => {
 
     // 1.0.0 -> 1.1.0, amended 2026-09-13 -> 2026-09-27 (plan 010 D5): invariant 2's amendment
     // bumped the shipped version; the ratification date does not move.
+    // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p3a-charter-invariant-4): 1.1.0 ->
+    // 1.2.0, amended 2026-09-27 -> 2026-10-09. Invariant 4 moved (invariants 1.2.0, S5); the
+    // ratification date still does not move.
     expect(invariants).toEqual({
-      version: "1.1.0",
+      version: "1.2.0",
       ratified: "2026-08-31",
-      amended: "2026-09-27",
+      amended: "2026-10-09",
     });
     // The typed read and the raw map agree — no second spelling of the keys.
     expect(charter.frontmatter["invariants_version"]).toBe(invariants.version);

@@ -310,7 +310,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // rewrapped inside the three lines the paragraph already had, so no line count
 // moved. The same +8 lands in the charter-alone figure below and in
 // ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_304;
+// 5_304 -> 5_328 on 2026-10-09, plan 019 file 2, unit p3a-charter-invariant-4
+// (invariants 1.2.0): invariant 4's first line says done means the gates the
+// change's class names exit 0, all of them if the class is unclear, +24 bytes
+// on the one line, so no line count moved (the version line and the amended
+// date keep their widths). The same +24 lands in the charter-alone figure
+// below and in ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_328;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -336,7 +342,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_304;
 // paragraph's delivery sentence, the same +20 as above.
 // 5_296 -> 5_304 on 2026-09-30, branch review round 1 (review/162): the
 // Touchpoints sentence's two skill spellings, the same +8 as above.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_304;
+// 5_304 -> 5_328 on 2026-10-09, unit p3a-charter-invariant-4: invariant 4's
+// class-named gates (invariants 1.2.0), the same +24 as above.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_328;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -359,7 +367,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_304;
 // half of the override carries the Touchpoints paragraph's +20 bytes.
 // 25_326 -> 25_334 on 2026-09-30, branch review round 1 (review/162): the
 // charter half of the override carries the Touchpoints sentence's +8 bytes.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_334;
+// 25_334 -> 25_358 on 2026-10-09, unit p3a-charter-invariant-4: the charter
+// half of the override carries invariant 4's +24 bytes (invariants 1.2.0).
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_358;
 
 /**
  * The composite always-on line count one client pays for a plan under a

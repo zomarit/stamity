@@ -679,7 +679,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -694,7 +694,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -764,7 +764,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -779,7 +779,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1144,7 +1144,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1159,7 +1159,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1229,7 +1229,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1244,7 +1244,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1499,18 +1499,18 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "262b8fe828ba9e41b35951b8c62208558c9ee7ec499fbb6fed939b6eb3dade2b 80774 bytes",
+  ".stamity/manifest.json": "da0eb3a2ea82da66e71b9f420b02306ab3455c1d141b5d7297d60286a2d30d85 80774 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
-  "AGENTS.override.md": "2040f6f0957f799431f28b0fd92d0aac236c22c12fb5d98b83744af14552cbf6 25334 bytes",
+  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "AGENTS.override.md": "8826204d1ad043a5725fc6bb6cebf9787c67ae4187f1a1fa64a2e27069051692 25358 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  "packages/alpha/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  "packages/beta/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1644,7 +1644,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1659,7 +1659,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -1783,8 +1783,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "e1a964985310bd62c7811b650902378bfaaedcdce0aae6416b53ea1a9784a989 19286 bytes",
-  "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  ".stamity/manifest.json": "335014ba0f23af437704956d1417d74a53688ebbcc3c5a8afab9792011b30f36 19286 bytes",
+  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1917,7 +1917,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1932,7 +1932,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2002,7 +2002,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2017,7 +2017,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2378,7 +2378,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2393,7 +2393,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2463,7 +2463,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2478,7 +2478,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2604,15 +2604,15 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "1ac163aca5172f570187ad43c489816f6614d1ac643a56475039e67032a8a12c 21208 bytes",
-  "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
-  "AGENTS.override.md": "2040f6f0957f799431f28b0fd92d0aac236c22c12fb5d98b83744af14552cbf6 25334 bytes",
+  ".stamity/manifest.json": "f008c451ffc23dc445431354ac18b1b0a446af9b627efb82736f2bb2f633aaea 21208 bytes",
+  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
+  "AGENTS.override.md": "8826204d1ad043a5725fc6bb6cebf9787c67ae4187f1a1fa64a2e27069051692 25358 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  "packages/alpha/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  "packages/beta/AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2752,7 +2752,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2767,7 +2767,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -2887,10 +2887,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "fe4a28e2c7f100e4926ee8685a1b95f33755b995d5e3091d03ff49ec31fcebac 19055 bytes",
+  ".stamity/manifest.json": "27095221f2bcca1af3c4162b3d522d0f751794a3c554ae70cb6fcb0d72cdd24e 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3295,7 +3295,7 @@ Run before declaring any change done.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -3310,7 +3310,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
-4. **No green, no done.** Done means the verification gates above exit 0.
+4. **No green, no done.** Done means the gates the change's class names exit 0 (all, if unclear).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
    repeating a recorded failure is a process defect.
@@ -3441,8 +3441,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "182feae31b4fd4be65893912c9a8f17f61d42d5855da06e93eeed0ab1e27cfa6 21863 bytes",
-  "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
+  ".stamity/manifest.json": "242cf3a6986be7acea7aefd456493bf7fc6997444da052e0b7381af8e40238a8 21863 bytes",
+  "AGENTS.md": "7d5004e5c7e980b62f7a7f7dcefe888864330ca5076bd14210de9ac8f5f8cf68 5328 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

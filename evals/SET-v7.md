@@ -936,6 +936,19 @@ No `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no roster count
 incremental rule the two re-measure, because their case-file bytes moved. The dated citations
 above stay as they were.
 
+**No range moved and two charter Briefs re-quoted, 2026-10-09 (plan 019 file 2, unit
+`p3a-charter-invariant-4`).** Invariants 1.2.0: invariant 4's first line says done means the gates
+the change's class names exit 0, all of them if the class is unclear; its `Not done:` line is
+unchanged. In `content/charter/stamity-charter.md` line 53 is rewritten in place and the
+frontmatter's version and amended date keep their lines (0 lines), so no `source:` range moves.
+`charter-universal-floor-holds-under-deadline` (53-54 inside 40-47,53-54 → unchanged) and
+`charter-floor-relaxation-refused` (53-54 inside 40-47,53-54 → unchanged) re-quote line 53
+byte-identical from the landed file. No `## Expected` block moves: no row grades the old wording,
+since each scenario's change (`src/billing/invoice.ts`, `src/auth/token.ts`) owes every gate under
+either text. `EXPECTED_MOVES` gains no row, and no roster count moves; both cases already differed
+from their cases-v5 copies, so the identical/moved counts hold. Under the incremental rule the two
+re-measure, because their case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
