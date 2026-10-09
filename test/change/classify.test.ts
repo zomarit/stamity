@@ -13,8 +13,10 @@ import {
   mergeRules,
   outsideSecurityRule,
   parseClassFile,
+  SECURITY_LINE_RULES,
   type ChangeClass,
   type ClassRule,
+  type Hunk,
 } from "../../src/change/classify.ts";
 import { SPECIALIST_TRIGGER_TABLE, type SpecialistTrigger } from "../../src/roster/triggers.ts";
 
@@ -1234,5 +1236,170 @@ describe("this repository's class file", () => {
     ["eslint.config.js", "config"],
   ])("places %s in %s", (path, cls) => {
     expect(classOf(path, rules).class).toBe(cls);
+  });
+});
+
+/**
+ * p5a-security-classifier (REQ-FLOW-065, S7 (c), D3): the security line rules
+ * over a change's hunks. Pure, so every hunk is a literal input and nothing is
+ * stubbed. Each dangerous-call line is built at run time with `~` cut out of it
+ * (the run's fixture rule), so no line of this file is itself a call shape.
+ */
+describe("classifyChange: the security line rules (p5a, REQ-FLOW-065)", () => {
+  const built = (text: string): string => text.replaceAll("~", "");
+  const RM_LINE = built("  fs.rm~Sync(dir, { recursive: true });");
+
+  /** One hunk of `path`, its added lines numbered from 10. */
+  const hunk = (path: string, lines: { added?: string[]; removed?: string[]; context?: string[] }): Hunk => ({
+    path,
+    added: (lines.added ?? []).map((text, at) => ({ line: 10 + at, text })),
+    removed: lines.removed ?? [],
+    context: lines.context ?? [],
+  });
+  const withLines = (hunks: readonly Hunk[], extra: { unscanned?: string[] } = {}) =>
+    classifyChange({ paths: [...new Set(hunks.map((entry) => entry.path))], base: "given", source: "git", hunks, ...extra });
+
+  it("spells four rule families, each with a rationale", () => {
+    expect(SECURITY_LINE_RULES.map((rule) => rule.id)).toEqual([
+      "process-spawn",
+      "delete-or-overwrite",
+      "network-or-registry",
+      "secret-name",
+    ]);
+    for (const rule of SECURITY_LINE_RULES) expect(rule.rationale.length, rule.id).toBeGreaterThan(20);
+  });
+
+  it("places an added recursive delete in src/x.ts security-sensitive, naming the rule and path:line", () => {
+    const result = withLines([hunk("src/x.ts", { added: ["const keep = 1;", RM_LINE] })]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.lenses).toEqual(["stamity-security"]);
+    expect(result.byPath).toEqual([
+      { path: "src/x.ts", class: "security-sensitive", rule: "line rule delete-or-overwrite at src/x.ts:11" },
+    ]);
+    expect(result.reason).toContain("delete-or-overwrite at src/x.ts:11");
+  });
+
+  it("reads a context line in a hunk that only removes the guard around an existing delete", () => {
+    const result = withLines([hunk("src/x.ts", { removed: ["if (safe) {", "}"], context: [RM_LINE] })]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.byPath[0]?.rule).toBe("line rule delete-or-overwrite at src/x.ts, a context line of a hunk that removes one");
+  });
+
+  it("reads a removed line", () => {
+    const result = withLines([hunk("src/x.ts", { removed: [RM_LINE] })]);
+    expect(result.byPath[0]?.rule).toBe("line rule delete-or-overwrite at src/x.ts, a removed line");
+  });
+
+  it("leaves context out of a hunk that removes nothing: an unrelated line beside an existing delete", () => {
+    const result = withLines([hunk("src/x.ts", { added: ["const n = 2;"], context: [RM_LINE] })]);
+    expect(result.class).toBe("product");
+    expect(result.byPath[0]?.rule).toBe("unplaced");
+  });
+
+  it.each([["docs/x.md"], ["src/__snapshots__/x.test.ts.snap"], ["config/x.json"], ["test/x.test.ts"], ["src/x.test.ts"]])(
+    "reads no line of %s: not a code file, or under a test glob",
+    (path) => {
+      const result = withLines([hunk(path, { added: [RM_LINE], removed: [RM_LINE] })]);
+      expect(result.class).not.toBe("security-sensitive");
+      expect(result.byPath[0]?.rule).not.toMatch(/^line rule/);
+    },
+  );
+
+  it.each([
+    ["process-spawn", 'import { exec~File } from "node:child~_process";'],
+    ["process-spawn", 'const cp = require("child~_process");'],
+    ["process-spawn", 'exec~FileSync("git", ["status"]);'],
+    ["process-spawn", "const out = exec~Sync(cmd);"],
+    ["process-spawn", 'spa~wn("ls", []);'],
+    ["process-spawn", 'spa~wnSync("ls", []);'],
+    ["process-spawn", "ex~ec(cmd, done);"],
+    ["process-spawn", "child~_process.ex~ec(cmd);"],
+    ["process-spawn", 'require("node:child~_process").ex~ec(cmd);'],
+    ["process-spawn", 'subprocess.ru~n(["ls"])'],
+    ["process-spawn", "subprocess.cal~l(args)"],
+    ["process-spawn", "proc = Pop~en(args)"],
+    ["process-spawn", "os.syst~em(cmd)"],
+    ["delete-or-overwrite", "await r~m(dir, { recursive: true });"],
+    ["delete-or-overwrite", "unl~ink(path, done);"],
+    ["delete-or-overwrite", "unl~inkSync(path);"],
+    ["delete-or-overwrite", "rmd~ir(path, done);"],
+    ["delete-or-overwrite", "rmd~irSync(path);"],
+    ["delete-or-overwrite", "await write~File(path, text);"],
+    ["delete-or-overwrite", "write~FileSync(path, text);"],
+    ["delete-or-overwrite", "await rena~me(from, to);"],
+    ["delete-or-overwrite", "rena~meSync(from, to);"],
+    ["delete-or-overwrite", "trunc~ate(path, 0, done);"],
+    ["delete-or-overwrite", "shutil.rmt~ree(path)"],
+    ["delete-or-overwrite", "os.rem~ove(path)"],
+    ["delete-or-overwrite", 'const clean = "r~m -rf build";'],
+    ["network-or-registry", "const res = await fet~ch(url);"],
+    ["network-or-registry", "http.requ~est(options);"],
+    ["network-or-registry", "https.requ~est(options);"],
+    ["network-or-registry", "await axi~os.get(url);"],
+    ["network-or-registry", "await axi~os(config);"],
+    ["network-or-registry", 'const probe = "cu~rl -s https://example.test";'],
+    ["network-or-registry", "const pull = 'wg~et https://example.test';"],
+    ["network-or-registry", 'const ship = "np~m publish --tag next";'],
+    ["secret-name", 'const tok~en = "abc";'],
+    ["secret-name", "apiK~ey = process.env.KEY;"],
+    ["secret-name", 'pass~word = os.environ["PW"]'],
+    ["secret-name", 'const client = { clientSec~ret: "abc" };'],
+    ["secret-name", 'let dbCredent~ial: string = "abc";'],
+  ])("hits %s on %s", (id, fragments) => {
+    const result = withLines([hunk("src/x.ts", { added: [built(fragments)] })]);
+    expect(result.class).toBe("security-sensitive");
+    expect(result.byPath[0]?.rule).toBe(`line rule ${id} at src/x.ts:10`);
+  });
+
+  it.each([
+    ["re.exec(s)"],
+    ["const match = pattern.exec(text);"],
+    ["cp.exec(cmd);"],
+    ["transform(x)"],
+    ["perform(task)"],
+    ["confirm(answer)"],
+    ["prefetch(url)"],
+    ["use(API_TOKEN_NAME)"],
+    ["const n = MAX_TOKENS + 1;"],
+    ['if (token === "x") return;'],
+    ["return token;"],
+    ["const parts = tokenize(text);"],
+    ['const tokenCount = count("x");'],
+    ["// the rm -rf of a build folder, in prose"],
+  ])("does not hit on %s", (line) => {
+    const result = withLines([hunk("src/x.ts", { added: [line] })]);
+    expect(result.class).toBe("product");
+    expect(result.byPath[0]?.rule).toBe("unplaced");
+  });
+
+  it("carries no text of a matched line in the reason or byPath", () => {
+    const marker = ["MARK", "ER", "7731"].join("");
+    const result = withLines([
+      hunk("src/x.ts", { added: [built(`write~FileSync("${marker}", data);`)] }),
+      hunk("src/y.ts", { removed: [built(`const tok~en = "${marker}";`)] }),
+    ]);
+    expect(result.class).toBe("security-sensitive");
+    expect(JSON.stringify(result)).not.toContain(marker);
+    expect(result.reason).toContain("delete-or-overwrite at src/x.ts:10");
+    expect(result.reason).toContain("secret-name at src/y.ts, a removed line");
+  });
+
+  it("keeps a stronger path class and names it, not the line rule", () => {
+    const result = withLines([hunk(".stamity/manifest.json", { added: [RM_LINE] }), hunk("src/auth/login.ts", { added: [RM_LINE] })]);
+    expect(result.byPath.map((entry) => entry.rule)).toEqual([".stamity/manifest.json", "the trigger roster's security row (auth/)"]);
+  });
+
+  it("places a hunk's path that the path list missed", () => {
+    const result = classifyChange({ paths: ["docs/x.md"], base: "given", source: "git", hunks: [hunk("src/x.ts", { added: [RM_LINE] })] });
+    expect(result.byPath.map((entry) => entry.path)).toEqual(["docs/x.md", "src/x.ts"]);
+    expect(result.class).toBe("security-sensitive");
+  });
+
+  it("makes the class at least product for a tracked code file the read could not show, counting it", () => {
+    const docsOnly = withLines([hunk("docs/x.md", { added: ["text"] })]);
+    expect(docsOnly.class).toBe("docs");
+    const result = withLines([hunk("docs/x.md", { added: ["text"] })], { unscanned: ["src/x.ts"] });
+    expect(result.class).toBe("product");
+    expect(result.reason).toContain("1 tracked code file the read could not show is unscanned, so the class is at least product: src/x.ts");
   });
 });

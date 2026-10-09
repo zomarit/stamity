@@ -49,6 +49,16 @@
  * {@link outsideSecurityRule}, which the git read calls for a path outside the
  * project, so this module stays the roster's one `src/` reader.
  *
+ * **The security line rules** (REQ-FLOW-065, S7 (c), D3). A caller that read
+ * the change's lines passes them as hunks; {@link SECURITY_LINE_RULES} run over
+ * the lines of each code file (by {@link CODE_EXTENSIONS}) outside the built-in
+ * test globs, and a hit makes that path `security-sensitive`. Added and removed
+ * lines count, and context lines only in a hunk that also removes one, so
+ * removing the guard around an existing dangerous call still classifies. The
+ * reason names the rule id and where, never the line's text (plan/17). A tracked
+ * code file the read could not show is `unscanned`, and makes the class at
+ * least `product` (plan/62).
+ *
  * **Where a path came from decides how it is read** (review/20). A name git
  * gave is read literally: git never separates on `\`, so a backslash there is a
  * filename character and the reported path is git's own name. A listed path
@@ -145,6 +155,80 @@ export const BUILT_IN_TEST_GLOBS: readonly string[] = [
   "tests/**",
   "**/__tests__/**",
 ];
+
+/** One security line rule: a call shape on a named API, matched per line (S7 (c)). */
+interface LineRule {
+  id: string;
+  pattern: RegExp;
+  rationale: string;
+}
+
+/**
+ * The security line rules (S7 (c), the sign-off on plan/29): four families of
+ * call shapes, each word-bounded and with its opening parenthesis, so prose and
+ * a name that merely contains a word do not match. S7's fifth risk, state read
+ * back as authority, is placed by path. A bare `exec` call counts, or one on a
+ * `child_process` receiver, never a RegExp's `exec` method; a secret name counts
+ * only where it is assigned a string literal or an environment value.
+ */
+export const SECURITY_LINE_RULES: readonly LineRule[] = [
+  {
+    id: "process-spawn",
+    pattern:
+      /(?:\b(?:require|import)\s*\(\s*|\bfrom\s*|^\s*import\s*)["'](?:node:)?child_process["']|\b(?:execFile|execFileSync|execSync|spawn|spawnSync|Popen)\(|(?<![\w$.])exec\(|\b(?:child_process|childProcess)(?:["']\s*\))?\.exec\(|\bsubprocess\.(?:run|call)\(|\bos\.system\(/,
+    rationale: "a child process runs a command the change can shape: an import of child_process, or a spawn or exec call",
+  },
+  {
+    id: "delete-or-overwrite",
+    pattern:
+      /\b(?:rmSync|rm|unlink|unlinkSync|rmdir|rmdirSync|writeFile|writeFileSync|rename|renameSync|truncate)\(|\bshutil\.rmtree\(|\bos\.remove\(|["'`][^"'`]*\brm\s+-(?:rf|fr)\b/,
+    rationale: "a file is deleted or overwritten: an fs delete, write, rename or truncate call, or a recursive rm in a string",
+  },
+  {
+    id: "network-or-registry",
+    pattern: /\bfetch\(|\bhttps?\.request\(|\baxios(?:\.\w+)?\(|["'`][^"'`]*\b(?:(?:curl|wget)\s|npm\s+publish\b)/,
+    rationale: "a call leaves the machine: a fetch call, an http or https request, an axios call, or a download or publish command in a string",
+  },
+  {
+    id: "secret-name",
+    pattern:
+      /(?:^|[^\w$])[\w$]*?(?:token|secret|password|credential|apikey)[\w$]*["']?(?:\s*:\s*[\w$.<>[\]| ]{1,80}?)?\s*(?:=(?![=>])|:)\s*(?:["'`]|process\.env\b|os\.environ\b)/i,
+    rationale: "a token, secret, password, credential or API key name assigned a string literal or an environment value",
+  },
+];
+
+/** One diff hunk of a changed file: its added lines (numbered on the new side), removed lines and context lines. */
+export interface Hunk {
+  path: string;
+  added: readonly { line: number; text: string }[];
+  removed: readonly string[];
+  context: readonly string[];
+}
+
+/** Whether a path's extension is in {@link CODE_EXTENSIONS}; an extensionless file is not. */
+export function hasCodeExtension(path: string): boolean {
+  const basename = path.slice(path.lastIndexOf("/") + 1);
+  return CODE_EXTENSIONS.includes(posix.extname(basename).toLowerCase());
+}
+
+/**
+ * The first line rule a hunk hits and where, never the line's text, or
+ * `undefined`. Added lines first, then removed lines, then, only in a hunk
+ * that removes a line, its context lines.
+ */
+function lineRuleHit(hunk: Hunk, path: string): string | undefined {
+  const first = (lines: readonly string[]): LineRule | undefined =>
+    SECURITY_LINE_RULES.find((rule) => lines.some((text) => rule.pattern.test(text)));
+  for (const added of hunk.added) {
+    const rule = first([added.text]);
+    if (rule !== undefined) return `${rule.id} at ${path}:${added.line}`;
+  }
+  if (hunk.removed.length === 0) return undefined;
+  const removed = first(hunk.removed);
+  if (removed !== undefined) return `${removed.id} at ${path}, a removed line`;
+  const context = first(hunk.context);
+  return context === undefined ? undefined : `${context.id} at ${path}, a context line of a hunk that removes one`;
+}
 
 /** One placement rule: every path a glob of `paths` matches takes `class` at least. */
 export interface ClassRule {
@@ -501,6 +585,17 @@ function readPath(
   return rank(second.class) < rank(first.class) ? second : first;
 }
 
+/**
+ * Whether the line rules read a hunk of this raw path: a code file by extension
+ * outside the built-in test globs (D3), by either reading of a listed path, so
+ * no spelling hides a file's lines. A class file's wider `tests` globs never
+ * apply here, as they never take code off the full gates (review/47).
+ */
+function lineRulesRead(raw: string, source: PathSource): boolean {
+  const readings = source === "git" ? [raw] : [normalizePath(raw), resolveDots(raw)];
+  return readings.some((path) => hasCodeExtension(path) && !BUILT_IN_TEST_GLOBS.some((glob) => matchRead(path, glob)));
+}
+
 /** What the caller knows about the base: given and resolved, never given, or given and unresolvable. */
 export type BaseState = "given" | "absent" | "unresolved";
 
@@ -510,6 +605,10 @@ export interface ClassifyInput {
   base: BaseState;
   /** Where `paths` and `renames` came from; `listed` (both readings) when not said. */
   source?: PathSource;
+  /** The change's diff hunks, for the security line rules; a hunk's path is placed too. */
+  hunks?: readonly Hunk[];
+  /** Tracked code files the read could not show; any makes the class at least `product` (plan/62). */
+  unscanned?: readonly string[];
 }
 
 export interface ClassifyResult {
@@ -562,6 +661,20 @@ export function classifyChange(
     add(rename.from);
     add(rename.to);
   }
+  const lineHits: string[] = [];
+  for (const hunk of input.hunks ?? []) {
+    add(hunk.path);
+    const entry = byPath.find((placed) => placed.path === readRaw(hunk.path)?.path);
+    if (entry === undefined || !lineRulesRead(hunk.path, source)) continue;
+    const hit = lineRuleHit(hunk, entry.path);
+    if (hit === undefined) continue;
+    lineHits.push(hit);
+    if (rank("security-sensitive") < rank(entry.class)) {
+      entry.class = "security-sensitive";
+      entry.rule = `line rule ${hit}`;
+      index.set(entry.path, entry.class);
+    }
+  }
 
   const reasons: string[] = [];
   const atLeastProduct: ChangeClass[] = [];
@@ -585,6 +698,15 @@ export function classifyChange(
     reasons.push(`the rename ${from} -> ${to} crosses ${fromClass} and ${toClass}, so the class is at least product`);
     atLeastProduct.push("product");
   }
+  const unscanned = input.unscanned ?? [];
+  if (unscanned.length > 0) {
+    const one = unscanned.length === 1;
+    reasons.push(
+      `${unscanned.length} tracked code file${one ? "" : "s"} the read could not show ${one ? "is" : "are"} unscanned, so the class is at least product: ${namePaths(unscanned)}`,
+    );
+    atLeastProduct.push("product");
+  }
+  if (lineHits.length > 0) reasons.push(`the security line rules hit: ${namePaths(lineHits)}`);
   const unplaced = byPath.filter((entry) => entry.rule === UNPLACED).map((entry) => entry.path);
   if (unplaced.length > 0) reasons.push(`no rule places ${namePaths(unplaced)}, so it is product`);
   if (floored.length > 0) {

@@ -1,7 +1,7 @@
 import type * as ChildProcessModule from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { gateCommand, toProjectPath } from "../../../src/cli/commands/gate.ts";
@@ -1196,6 +1196,165 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(read.doc["paths"]).toEqual(["lib/x.ts"]);
       expect(read.doc["lenses"]).toContain("stamity-security");
       expect(listed.doc["class"]).toBe("security-sensitive");
+    });
+  });
+
+  /**
+   * p5a-security-classifier (REQ-FLOW-065, plan/59, plan/62, plan/63): the
+   * changed lines come from one hardened read, and the line rules run over them.
+   * Every dangerous-call line is built at run time with `~` cut out of it (the
+   * run's fixture rule), so no line of this file is itself a call shape.
+   */
+  describe("the changed lines and the security line rules (p5a)", () => {
+    const built = (text: string): string => text.replaceAll("~", "");
+    const RM = built('rm~Sync("build", { recursive: true });\n');
+    const GUARDED = built('export function clean(safe: boolean): void {\n\n  if (safe) {\n    rm~Sync("build");\n  }\n}\n');
+    const UNGUARDED = built('export function clean(safe: boolean): void {\n\n    rm~Sync("build");\n}\n');
+    const ruleOf = (doc: Record<string, unknown>, path: string): string | undefined =>
+      (doc["byPath"] as { path: string; rule: string }[]).find((entry) => entry.path === path)?.rule;
+
+    it("reads a new, unstaged, untracked src/cleanup.ts whole", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "repo/src/cleanup.ts": `export {};\n${RM}` });
+
+      const { code, doc, stdout } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toEqual(["stamity-security"]);
+      expect(ruleOf(doc, "src/cleanup.ts")).toBe("line rule delete-or-overwrite at src/cleanup.ts:2");
+      expect(stdout).not.toContain("build");
+    });
+
+    it("hits a staged and an unstaged line in two tracked files, whatever diff.external says", async () => {
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n", "src/b.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${RM}`, "repo/src/b.ts": `export {};\n\n${RM}` });
+      git(repo, ["add", "--", "src/a.ts"]);
+      const script = getRoot().path("external-diff.sh");
+      await getRoot().seedFiles({ "external-diff.sh": "#!/bin/sh\nexit 0\n" });
+      await chmod(script, 0o755);
+      git(repo, ["config", "diff.external", script.replaceAll("\\", "/")]);
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/a.ts")).toBe("line rule delete-or-overwrite at src/a.ts:2");
+      expect(ruleOf(doc, "src/b.ts")).toBe("line rule delete-or-overwrite at src/b.ts:3");
+    });
+
+    it("reads the context of a hunk that only removes a guard, whatever diff.context and blank-line settings say", async () => {
+      const repo = await seedRepo("repo", { "src/x.ts": GUARDED });
+      await getRoot().seedFiles({ "repo/src/x.ts": UNGUARDED });
+      git(repo, ["config", "diff.context", "0"]);
+      git(repo, ["config", "diff.interHunkContext", "0"]);
+      git(repo, ["config", "diff.suppressBlankEmpty", "true"]);
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts, a context line of a hunk that removes one");
+    });
+
+    it.each([
+      ["a committed -diff attribute", { ".gitattributes": "*.ts -diff\n" }, {}, []],
+      ["a -diff attribute the change adds", {}, { ".gitattributes": "*.ts -diff\n" }, []],
+      ["a diff driver marked binary", { ".gitattributes": "*.ts diff=x\n" }, {}, ["diff.x.binary", "true"]],
+    ] as const)("reads a tracked code file's lines through %s", async (_label, committed, added, config) => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", ...committed });
+      await getRoot().seedFiles(Object.fromEntries(Object.entries({ "src/x.ts": `export {};\n${RM}`, ...added }).map(([k, v]) => [`repo/${k}`, v])));
+      if (config.length === 2) git(repo, ["config", config[0], config[1]]);
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts:2");
+    });
+
+    it("lists a tracked code file whose head side holds a NUL as unscanned, and skips a binary image", async () => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", "assets/x.png": "png\n" });
+      await getRoot().seedFiles({ "repo/src/x.ts": `export {};\0\n${RM}`, "repo/assets/x.png": "png\0\n" });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("product");
+      expect(ruleOf(doc, "src/x.ts")).toBe("unplaced");
+      expect(doc["reason"]).toContain("1 tracked code file the read could not show is unscanned, so the class is at least product: src/x.ts");
+      expect(doc["reason"]).toContain("1 changed file not read line by line (binary, over 1 MiB, or not a regular file)");
+    });
+
+    it.skipIf(process.platform === "win32")("skips an oversized file and a symlink, counted, and never opens a FIFO", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "repo/src/big.ts": `${"// pad\n".repeat(300_000)}${RM}` });
+      await symlink("big.ts", join(repo, "src", "link.ts"));
+      execFileSync("mkfifo", [join(repo, "src", "pipe.ts")]);
+
+      const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("2 changed files not read line by line");
+    });
+
+    it.skipIf(process.platform === "win32")("reads past a type change: the walk keeps its names in order", async () => {
+      const repo = await seedRepo("repo", { "src/x.ts": "export {};\n", "src/y.ts": "export {};\n", "src/z.ts": "export {};\n" });
+      await rm(join(repo, "src", "y.ts"));
+      await symlink("x.ts", join(repo, "src", "y.ts"));
+      await getRoot().seedFiles({ "repo/src/z.ts": `export {};\n${RM}` });
+
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/z.ts")).toBe("line rule delete-or-overwrite at src/z.ts:2");
+      expect(doc["reason"]).not.toContain("could not be read");
+    });
+
+    it.each([
+      ["docs/a.md", "product"],
+      [".stamity/manifest.json", "security-sensitive"],
+    ])("keeps the path class of %s and says at least product when the line read fails", async (path, cls) => {
+      const repo = await seedRepo("repo", { [path]: "{}\n" });
+      await getRoot().seedFiles({ [`repo/${path}`]: '{"changed":true}\n' });
+
+      gitSpy.fault = { step: "--text", error: realFailure("process.exit(3)") };
+      const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+      gitSpy.fault = undefined;
+
+      expect(doc["class"]).toBe(cls);
+      expect(doc["paths"]).toEqual([path]);
+      expect(doc["reason"]).toContain("the changed lines could not be read (git diff --text failed, exit 3), so the class is at least product");
+    });
+
+    it.skipIf(process.platform === "win32")("reads a quoted name by its real name, from the project in app/", async () => {
+      const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", 'app/a"b.ts': "export {};\n" });
+      await getRoot().seedFiles({ 'repo/app/a"b.ts': `export {};\n${RM}` });
+
+      const { doc } = await classifyIn(join(repo, "app"), ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, 'a"b.ts')).toBe('line rule delete-or-overwrite at a"b.ts:2');
+    });
+
+    it("reads the project's lines from app/docs/, as from its root", async () => {
+      const repo = await seedRepo("repo", { "app/.stamity/manifest.json": "{}\n", "app/docs/x.md": "base\n", "app/src/x.ts": "export {};\n" });
+      await getRoot().seedFiles({ "repo/app/src/x.ts": `export {};\n${RM}` });
+
+      const { doc } = await classifyIn(join(repo, "app", "docs"), ["--base", "HEAD"]);
+
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts:2");
+    });
+
+    it("pins every flag of the line read", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
+
+      gitSpy.calls.length = 0;
+      await classifyIn(repo, ["--base", "HEAD"]);
+      const read = gitSpy.calls.find((argv) => argv.includes("--text"));
+
+      expect(read).toEqual(
+        expect.arrayContaining(["core.quotePath=false", "-U3", "-M", "--no-relative", "--no-ext-diff", "--no-color", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--inter-hunk-context=0", "--submodule=short", "--ignore-submodules=none"]),
+      );
     });
   });
 });

@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
@@ -7,6 +7,7 @@ import {
   CLASS_FILE,
   CLASS_ORDER,
   classifyChange,
+  hasCodeExtension,
   mergeRules,
   outsideSecurityRule,
   parseClassFile,
@@ -14,6 +15,7 @@ import {
   type ChangeClass,
   type ClassifyResult,
   type ClassRule,
+  type Hunk,
   type PathSource,
   type TestInput,
 } from "../../change/classify.ts";
@@ -87,6 +89,16 @@ import type { GitRunner } from "../../workspace/git.ts";
  * (review/48).
  * With no base, no class file is read (D5). `--paths` with `--base` reads the
  * base copy the same way, from the same project root.
+ *
+ * **The changed lines** (REQ-FLOW-065, plan/59, plan/62) come from one more
+ * read through the same runner: the patch against the base with every flag
+ * that config could turn pinned (`-U3`, `--text`, no external diff, colour or
+ * textconv, fixed prefixes), each file section named by its place in the
+ * `-z` name list rather than by its header, plus every untracked file read
+ * whole as added lines. A NUL byte in a file's first 8,000 bytes alone decides
+ * binary; a tracked code file it marks is `unscanned`, so the class is at least
+ * `product`. A failed line read keeps the path classes and says at least
+ * `product`, never narrower.
  *
  * **The tests a change selects** (REQ-FLOW-062) come from the base copy's
  * test-input map and the tracked test sources of the work tree, through
@@ -175,11 +187,19 @@ function describeGitFailure(err: GitReadError): string {
   return `git ${err.step} failed${status}`;
 }
 
-/** `git diff --name-status -z` rows: a status, then one path, or two for a rename or a copy. */
-function parseNameStatus(output: string): { paths: string[]; renames: Rename[] } {
+/** One file section the patch holds, in the name list's order: its old and new names. */
+type Section = Rename;
+
+/**
+ * `git diff --name-status -z` rows: a status, then one path, or two for a
+ * rename or a copy; and the patch's sections in the same order, where a type
+ * change (`T`) is two sections, the old type removed and the new one added.
+ */
+function parseNameStatus(output: string): { paths: string[]; renames: Rename[]; sections: Section[] } {
   const fields = output.split("\0");
   const paths: string[] = [];
   const renames: Rename[] = [];
+  const sections: Section[] = [];
   let index = 0;
   while (index < fields.length) {
     const status = fields[index] ?? "";
@@ -192,15 +212,205 @@ function parseNameStatus(output: string): { paths: string[]; renames: Rename[] }
       const to = fields[index + 2];
       if (from === undefined || to === undefined) throw new GitReadError("diff --name-status", new Error("truncated row"), "");
       renames.push({ from, to });
+      sections.push({ from, to });
       index += 3;
     } else {
       const path = fields[index + 1];
       if (path === undefined) throw new GitReadError("diff --name-status", new Error("truncated row"), "");
       paths.push(path);
+      sections.push(...Array.from({ length: status.startsWith("T") ? 2 : 1 }, () => ({ from: path, to: path })));
       index += 2;
     }
   }
-  return { paths, renames };
+  return { paths, renames, sections };
+}
+
+/** A patch that does not read as the name list says: the line read fails closed. */
+class PatchError extends Error {}
+
+/** One file section of the patch: its hunks, whether it deletes the file, and whether git printed no lines for it. */
+interface PatchSection {
+  hunks: Omit<Hunk, "path">[];
+  deleted: boolean;
+  unshown: boolean;
+}
+
+/**
+ * The patch, one ordered walk: section `n` is the name list's entry `n`, so no
+ * header is parsed for a name and a C-quoted name is read by its real one. An
+ * unquoted header must name that entry exactly; a count that differs, a hunk
+ * header that does not parse or a hunk line its header does not allow is a
+ * {@link PatchError}. Each hunk's lines are counted from its header, so a
+ * binary file's raw bytes, NULs and `diff --git` text included, stay data.
+ */
+function parsePatch(output: string, sections: readonly Section[]): PatchSection[] {
+  const lines = output.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  const parsed: PatchSection[] = [];
+  let at = 0;
+  const next = (): string => lines[at] ?? "";
+  while (at < lines.length) {
+    const expected = sections[parsed.length];
+    const header = next();
+    if (expected === undefined || !header.startsWith("diff --git ")) throw new PatchError("the patch holds more sections than the name list");
+    if (!header.includes('"') && header !== `diff --git a/${expected.from} b/${expected.to}`) {
+      throw new PatchError("a patch section's header does not name the file the name list gives in its place");
+    }
+    const section: PatchSection = { hunks: [], deleted: false, unshown: false };
+    for (at += 1; at < lines.length && !next().startsWith("@@ ") && !next().startsWith("diff --git "); at += 1) {
+      if (next().startsWith("deleted file mode ")) section.deleted = true;
+      if (next().startsWith("Binary files ")) section.unshown = true;
+    }
+    while (at < lines.length && next().startsWith("@@ ")) {
+      const counts = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(next());
+      if (counts === null) throw new PatchError("a hunk header did not parse");
+      let oldLeft = Number(counts[1] ?? 1);
+      let newLine = Number(counts[2]);
+      let newLeft = Number(counts[3] ?? 1);
+      const hunk = { added: [] as { line: number; text: string }[], removed: [] as string[], context: [] as string[] };
+      for (at += 1; oldLeft > 0 || newLeft > 0; at += 1) {
+        if (at >= lines.length) throw new PatchError("a hunk ended before its header's line counts");
+        const line = next();
+        const text = line.slice(1);
+        if (line.startsWith("\\")) continue;
+        // `diff.suppressBlankEmpty` prints an empty context line with no leading space.
+        if ((line === "" || line.startsWith(" ")) && oldLeft > 0 && newLeft > 0) {
+          hunk.context.push(text);
+          oldLeft -= 1;
+          newLeft -= 1;
+          newLine += 1;
+        } else if (line.startsWith("-") && oldLeft > 0) {
+          hunk.removed.push(text);
+          oldLeft -= 1;
+        } else if (line.startsWith("+") && newLeft > 0) {
+          hunk.added.push({ line: newLine, text });
+          newLeft -= 1;
+          newLine += 1;
+        } else throw new PatchError("a hunk line does not fit its header's line counts");
+      }
+      while (at < lines.length && next().startsWith("\\")) at += 1;
+      section.hunks.push(hunk);
+    }
+    parsed.push(section);
+  }
+  if (parsed.length !== sections.length) throw new PatchError("the patch holds fewer sections than the name list");
+  return parsed;
+}
+
+/** The binary sniff reads this many bytes from a file's start (plan/62). */
+const SNIFF_BYTES = 8_000;
+/** An untracked file larger than this is not read (plan/19). */
+const UNTRACKED_MAX_BYTES = 1024 * 1024;
+
+/**
+ * Up to `limit` bytes of a regular file, or `undefined` for anything else (a
+ * symlink, a FIFO, a device, a folder, a missing file) or a file over `whole`
+ * bytes when given. `lstat` first; the open never follows a link and never
+ * waits on a FIFO swapped in since, and `fstat` checks the open file again.
+ */
+function readRegular(file: string, limit: number, whole?: number): Buffer | undefined {
+  try {
+    if (!lstatSync(file).isFile()) return undefined;
+    const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || (whole !== undefined && stat.size > whole)) return undefined;
+      const buffer = Buffer.alloc(Math.min(stat.size, limit));
+      const read = readSync(fd, buffer, 0, buffer.length, 0);
+      return buffer.subarray(0, read);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+/** The changed lines in project-relative hunks, and what the read could not show. */
+interface ChangeLines {
+  hunks: Hunk[];
+  /** Files whose lines were not read: binary and not code, untracked over 1 MiB, or not a regular file. */
+  skipped: number;
+  /** Hunks left out because their file sits outside the project. */
+  outside: number;
+  /** Tracked code files the sniff marks binary, so the read could not show them (plan/62). */
+  unscanned: string[];
+}
+
+/**
+ * The patch against `commit` (staged and unstaged) and every untracked file,
+ * as hunks under project-relative names (plan/59). `-U3` and
+ * `--inter-hunk-context=0` pin the context whatever `diff.context` says;
+ * `--text` keeps an attribute or a `binary` diff driver from hiding a code
+ * file's lines; `--submodule=short` keeps a submodule one section. Section
+ * names come from `sections`, the name list's order (plan/62).
+ */
+function readLines(
+  runner: GitRunner,
+  root: ProjectRoot,
+  commit: string,
+  sections: readonly Section[],
+  untracked: readonly string[],
+  windows: boolean,
+): ChangeLines {
+  const patch = runGit(runner, root.dir, "diff --text", [
+    "-c",
+    "core.quotePath=false",
+    "diff",
+    "-U3",
+    "-M",
+    "--text",
+    "--no-relative",
+    "--no-ext-diff",
+    "--no-color",
+    "--no-textconv",
+    // Fixed prefixes, so `diff.noprefix` or `diff.mnemonicPrefix` cannot move an unquoted header off its entry.
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+    "--inter-hunk-context=0",
+    // `diff.submodule=log` would print a submodule as a log, not one section: the walk would lose its place.
+    "--submodule=short",
+    "--ignore-submodules=none",
+    commit,
+    "--",
+  ]);
+  const read: ChangeLines = { hunks: [], skipped: 0, outside: 0, unscanned: [] };
+  const inside = (name: string): string | null =>
+    toProjectPath(root.prefix, name) ?? (windows ? toProjectPath(root.prefix, name.replaceAll("\\", "/")) : null);
+  const holdsNul = (lines: readonly string[]): boolean => lines.join("\n").slice(0, SNIFF_BYTES).includes("\0");
+  parsePatch(patch, sections).forEach((section, index) => {
+    const name = sections[index]?.to ?? "";
+    const path = inside(name);
+    if (path === null) {
+      read.outside += section.hunks.length;
+      return;
+    }
+    // The head side: the work-tree file, or for a deletion or a non-regular file the section's own lines.
+    const head = section.deleted ? undefined : readRegular(join(root.topLevel, name), SNIFF_BYTES);
+    const sniffed = section.hunks.flatMap((hunk) => (section.deleted ? hunk.removed : hunk.added.map((line) => line.text)));
+    if (section.unshown || (head === undefined ? holdsNul(sniffed) : head.includes(0))) {
+      if (hasCodeExtension(path)) read.unscanned.push(path);
+      else read.skipped += 1;
+      return;
+    }
+    for (const hunk of section.hunks) read.hunks.push({ path, ...hunk });
+  });
+  for (const name of untracked) {
+    const path = inside(name);
+    if (path === null) {
+      read.outside += 1;
+      continue;
+    }
+    const body = readRegular(join(root.topLevel, name), UNTRACKED_MAX_BYTES, UNTRACKED_MAX_BYTES);
+    if (body === undefined || body.subarray(0, SNIFF_BYTES).includes(0)) {
+      read.skipped += 1;
+      continue;
+    }
+    const lines = body.toString("utf8").split("\n");
+    if (lines.at(-1) === "") lines.pop();
+    read.hunks.push({ path, added: lines.map((text, at) => ({ line: at + 1, text })), removed: [], context: [] });
+  }
+  return { ...read, unscanned: [...new Set(read.unscanned)] };
 }
 
 /** What the git read hands the classifier, in project-relative paths. */
@@ -209,6 +419,8 @@ interface ChangeRead {
   renames: Rename[];
   /** Top-level-relative paths left out because they sit outside the project. */
   outside: string[];
+  /** The changed lines, or why they could not be read. */
+  lines: ChangeLines | { failed: string };
 }
 
 /**
@@ -271,7 +483,16 @@ function readChange(runner: GitRunner, root: ProjectRoot, commit: string, window
     else if (from !== null) paths.push(from);
     else if (to !== null) paths.push(to);
   }
-  return { paths, renames, outside: [...outside] };
+  // The lines serve the line rules: their failure keeps the paths read above and says at least product.
+  let lines: ChangeRead["lines"];
+  try {
+    lines = readLines(runner, root, commit, diff.sections, untracked, windows);
+  } catch (err) {
+    if (err instanceof GitReadError) lines = { failed: describeGitFailure(err) };
+    else if (err instanceof PatchError) lines = { failed: err.message };
+    else throw err;
+  }
+  return { paths, renames, outside: [...outside], lines };
 }
 
 /** The project a run reads: its directory, its prefix below the git top-level, and the top-level's directory. */
@@ -532,6 +753,13 @@ function applyReadFloors(result: ClassifyResult, change: ChangeRead, source: Pat
     reasons.push(`not valid UTF-8, so unreadable by name and the class is at least product: ${namePaths(unreadable)}`);
     raised = raiseTo(raised, "product");
   }
+  if ("failed" in change.lines) {
+    reasons.push(`the changed lines could not be read (${change.lines.failed}), so the class is at least product`);
+    raised = raiseTo(raised, "product");
+  } else if (change.lines.skipped > 0) {
+    const { skipped } = change.lines;
+    reasons.push(`${skipped} changed file${skipped === 1 ? "" : "s"} not read line by line (binary, over 1 MiB, or not a regular file)`);
+  }
   return withReasons(raised, reasons);
 }
 
@@ -591,8 +819,9 @@ function classify(cwd: string, listed: readonly string[] | undefined, ref: strin
       const windows = process.platform === "win32";
       const source: PathSource = windows ? "listed" : "git";
       const change = readChange(runner, root, treeish, windows);
+      const lines = "failed" in change.lines ? {} : { hunks: change.lines.hunks, unscanned: change.lines.unscanned };
       result = applyReadFloors(
-        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source }, rules),
+        classifyChange({ paths: change.paths, renames: change.renames, base: baseState, source, ...lines }, rules),
         change,
         source,
       );
