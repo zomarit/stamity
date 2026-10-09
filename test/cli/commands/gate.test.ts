@@ -524,8 +524,16 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     git(repo, ["update-ref", "HEAD", git(repo, ["commit-tree", tree, "-p", "HEAD", "-m", "names only"]).trim()]);
   }
 
+  /**
+   * prove/1: on a real Windows host these five cases cannot run. Git for Windows refuses a backslash in a file
+   * name in the index and, under `core.protectNTFS` (its default), in a tree it reads, so neither the fixture nor
+   * the verb's own diff can hold such a name there. The win32 reading of these names stays covered on POSIX hosts,
+   * through the `onPlatform("win32")` stub.
+   */
+  const backslashNamesRefused = process.platform === "win32";
+
   // prove/1: Git for Windows refuses a backslash in an index path, so the names must never pass through the index.
-  it("commits backslash git names as tree objects, never through the index", async () => {
+  it.skipIf(backslashNamesRefused)("commits backslash git names as tree objects, never through the index", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     commitNamesOnly(repo, ["docs/a\\b.md", "x\\y.md"]);
 
@@ -538,7 +546,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   });
 
   // review/20 (a): git never separates on a backslash, so its name is read and reported as it is.
-  it("reports a git name holding a backslash as git names it, read literally", async () => {
+  it.skipIf(backslashNamesRefused)("reports a git name holding a backslash as git names it, read literally", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     commitNamesOnly(repo, ["docs/a\\b.md", "docs\\..\\.stamity\\manifest.json"]);
 
@@ -551,7 +559,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   });
 
   // review/43: on win32 a backslash in a git name is a separator at checkout, so there the name is read both ways.
-  it("reads a git name holding a backslash both ways on win32, keeping the stronger class, and literally elsewhere", async () => {
+  it.skipIf(backslashNamesRefused)("reads a git name holding a backslash both ways on win32, keeping the stronger class, and literally elsewhere", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     commitNamesOnly(repo, [".stamity\\overrides\\x.md"]);
 
@@ -814,7 +822,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     });
 
     // review/20 (a): an outside name from git is matched as git names it, so a backslash name stays under its folder.
-    it("reads an outside git name literally against the built-in security floor", async () => {
+    it.skipIf(backslashNamesRefused)("reads an outside git name literally against the built-in security floor", async () => {
       const repo = await seedRepo("repo", { "packages/app/.stamity/manifest.json": "{}\n", "docs/a.md": "base\n" });
       const outside = ".stamity/overrides/a\\..\\..\\..\\docs\\x.md";
       commitNamesOnly(repo, [outside]);
@@ -828,7 +836,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     });
 
     // review/43: on win32 a name outside the project by its literal reading may check out inside it, or as a state file.
-    it("on win32 reads an outside git name both ways: under the project's prefix and against the built-in floor", async () => {
+    it.skipIf(backslashNamesRefused)("on win32 reads an outside git name both ways: under the project's prefix and against the built-in floor", async () => {
       const repo = await seedRepo("repo", { "packages/app/.stamity/manifest.json": "{}\n", "docs/a.md": "base\n" });
       commitNamesOnly(repo, ["packages\\app\\.stamity\\overrides\\x.md", ".stamity\\manifest.json"]);
       const cwd = join(repo, "packages", "app");
