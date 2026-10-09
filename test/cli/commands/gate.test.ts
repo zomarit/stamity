@@ -128,6 +128,23 @@ describe("stamity gate classify --paths", () => {
     expect(doc["reason"]).toContain("docs/a31mgnp.md");
   });
 
+  // review/36: a listed name the report has to strip is no longer the file's own name.
+  it.each([
+    ["a C1", 0x9b],
+    ["a bidi", 0x202e],
+    ["a tag", 0xe0041],
+  ])("says at least product and names a listed path holding %s character the report strips", async (_label, point) => {
+    const hostile = `docs/a${String.fromCodePoint(point)}.md`;
+    const result = await run(["classify", "--paths", hostile, "docs/x.md", "--json"]);
+
+    expect(result.code).toBe(0);
+    const doc = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(doc["class"]).toBe("product");
+    expect(doc["checks"]).toEqual(["scan", "gates-all", "review"]);
+    expect(doc["reason"]).toContain("names the report cannot show as they are, so the class is at least product: docs/a.md");
+    expect(JSON.parse((await run(["classify", "--paths", "docs/x.md", "--json"])).stdout)).toMatchObject({ class: "docs" });
+  });
+
   it("exits 2 on an unknown subcommand", async () => {
     const result = await run(["bogus", "--paths", "docs/x.md"]);
 
@@ -441,6 +458,46 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(doc["reason"]).toContain("docs/\uFFFD.md");
   });
 
+  /** Commits `names` (raw bytes, no file-system name needed) and leaves them out of the work tree: each reads as deleted. */
+  function commitNamesOnly(repo: string, names: readonly string[]): void {
+    const blob = git(repo, ["hash-object", "-w", "--", "docs/a.md"]).trim();
+    execFileSync("git", ["update-index", "-z", "--index-info"], {
+      cwd: repo,
+      input: Buffer.concat(names.map((name) => Buffer.from(`100644 ${blob}\t${name}\0`))),
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ...SEED_ENV },
+    });
+    git(repo, ["commit", "-q", "-m", "names only"]);
+  }
+
+  // review/20 (a): git never separates on a backslash, so its name is read and reported as it is.
+  it("reports a git name holding a backslash as git names it, read literally", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+    commitNamesOnly(repo, ["docs/a\\b.md", "docs\\..\\.stamity\\manifest.json"]);
+
+    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+    expect(code).toBe(0);
+    expect((doc["paths"] as string[]).toSorted()).toEqual(["docs/a\\b.md", "docs\\..\\.stamity\\manifest.json"].toSorted());
+    expect(doc["byPath"]).toContainEqual({ path: "docs/a\\b.md", class: "docs", rule: "docs/**" });
+    expect(doc["class"]).toBe("product");
+  });
+
+  // review/36: the report strips these code points, so the name it prints is no longer the file's own.
+  it("says at least product and names the path when a changed file name holds a bidi or tag character", async () => {
+    const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+    const name = `docs/a${String.fromCodePoint(0x202e)}b${String.fromCodePoint(0xe0041)}.md`;
+    commitNamesOnly(repo, [name]);
+
+    const { code, doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+    expect(code).toBe(0);
+    expect(doc["paths"]).toEqual(["docs/ab.md"]);
+    expect(doc["byPath"]).toEqual([{ path: "docs/ab.md", class: "docs", rule: "docs/**" }]);
+    expect(doc["class"]).toBe("product");
+    expect(doc["reason"]).toContain("names the report cannot show as they are, so the class is at least product: docs/ab.md");
+  });
+
   it("says at least product, naming the ref, for a base that does not resolve", async () => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
@@ -478,6 +535,18 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(code).toBe(0);
     expect(doc["class"]).toBe("product");
     expect(doc["reason"]).toContain("git could not run");
+  });
+
+  // review/18, its remaining half: a spawn in a missing directory fails ENOENT too, and is no missing binary.
+  it("says product, naming the missing directory, when the directory git runs in does not exist", async () => {
+    const missing = getRoot().path("gone");
+
+    const { code, doc } = await classifyIn(missing, []);
+
+    expect(code).toBe(0);
+    expect(doc["class"]).toBe("product");
+    expect(doc["reason"]).toContain(`the directory git runs in, ${missing}, does not exist`);
+    expect(doc["reason"]).not.toContain("no git binary");
   });
 
   it("never reads a committed folder shaped like a bare repository, nor runs its fsmonitor", async () => {
@@ -642,6 +711,46 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(doc["class"]).toBe("security-sensitive");
       expect(doc["lenses"]).toContain("stamity-security");
       expect(doc["reason"]).toContain(`${outsidePath} outside the project matches ${rule}`);
+    });
+
+    // review/34: untracked files are listed from the top-level, so an untracked outside path meets the raise rule.
+    it("says security-sensitive with the lens for an untracked lockfile outside the project", async () => {
+      const repo = await seedRepo("repo", { "packages/app/.stamity/manifest.json": "{}\n", "packages/app/docs/x.md": "base\n" });
+      await getRoot().seedFiles({ "repo/package-lock.json": "{}\n", "repo/packages/app/docs/x.md": "changed\n" });
+
+      const { code, doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["paths"]).toEqual(["docs/x.md"]);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["lenses"]).toContain("stamity-security");
+      expect(doc["reason"]).toContain("package-lock.json outside the project matches security row package-lock.json");
+    });
+
+    // review/20 (a): an outside name from git is matched as git names it, so a backslash name stays under its folder.
+    it("reads an outside git name literally against the built-in security floor", async () => {
+      const repo = await seedRepo("repo", { "packages/app/.stamity/manifest.json": "{}\n", "docs/a.md": "base\n" });
+      const outside = ".stamity/overrides/a\\..\\..\\..\\docs\\x.md";
+      commitNamesOnly(repo, [outside]);
+
+      const { code, doc } = await classifyIn(join(repo, "packages", "app"), ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["paths"]).toEqual([]);
+      expect(doc["class"]).toBe("security-sensitive");
+      expect(doc["reason"]).toContain(`${outside} outside the project matches built-in .stamity/overrides/**`);
+    });
+
+    it("says at least product for an untracked file outside the project beside a docs edit", async () => {
+      const repo = await seedRepo("repo", PROJECT_FILES);
+      await getRoot().seedFiles({ "repo/app/docs/x.md": "changed\n", "repo/other/new.ts": "export {};\n" });
+
+      const { code, doc } = await classifyIn(join(repo, "app", "docs"), ["--base", "HEAD"]);
+
+      expect(code).toBe(0);
+      expect(doc["paths"]).toEqual(["docs/x.md"]);
+      expect(doc["class"]).toBe("product");
+      expect(doc["reason"]).toContain("1 changed path outside the project left out, so the class is at least product");
     });
 
     it("says at least product when only paths outside the project changed", async () => {

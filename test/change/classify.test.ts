@@ -10,6 +10,7 @@ import {
   type ChangeClass,
   type ClassRule,
 } from "../../src/change/classify.ts";
+import { SPECIALIST_TRIGGER_TABLE, type SpecialistTrigger } from "../../src/roster/triggers.ts";
 
 /**
  * p1a-classifier-verb (REQ-FLOW-061): the change classifier over a path list.
@@ -408,6 +409,42 @@ describe("classifyChange: a backslash read both ways (review/5, review/9)", () =
     expect(given(["src\\auth\\login.ts"], FIXTURE_RULES).class).toBe("security-sensitive");
     expect(given(["src\\auth\\login.ts"], FIXTURE_RULES).byPath[0]?.path).toBe("src/auth/login.ts");
   });
+
+  // review/20, option (b): a listed path is read both ways, so a Windows path whose
+  // POSIX twin is weaker over-gates to product and names the raw string. Accepted.
+  it("over-gates a listed Windows path whose separator reading is the weaker one, naming the raw path", () => {
+    const image = given(["docs\\img.png"]);
+    expect(image.class).toBe("product");
+    expect(image.byPath).toEqual([{ path: "docs\\img.png", class: "product", rule: "unplaced" }]);
+    expect(image.reason).toContain("no rule places docs\\img.png");
+    expect(given([".stamity\\runs\\x\\ledger.jsonl"]).class).toBe("product");
+    expect(classifyChange({ paths: ["docs\\img.png"], base: "given", source: "listed" }).class).toBe("product");
+  });
+});
+
+describe("classifyChange: a path git named is read literally (review/20, option a)", () => {
+  const fromGit = (paths: readonly string[]) => classifyChange({ paths, base: "given", source: "git" });
+
+  it("reports git's own name: a backslash is a filename character there, never a separator", () => {
+    expect(fromGit(["docs/a\\b.md"]).byPath).toEqual([{ path: "docs/a\\b.md", class: "docs", rule: "docs/**" }]);
+    expect(fromGit(["docs\\img.png"]).byPath).toEqual([{ path: "docs\\img.png", class: "product", rule: "unplaced" }]);
+  });
+
+  it("gives no separator reading to a git name, so a top-level file spelled like a state path is not one", () => {
+    const result = fromGit(["docs\\..\\.stamity\\manifest.json"]);
+    expect(result.class).toBe("product");
+    expect(result.byPath[0]?.path).toBe("docs\\..\\.stamity\\manifest.json");
+  });
+
+  it("keeps the literal class of a git name, a backslash name under a security folder included", () => {
+    const literal = ".stamity/overrides/a\\..\\..\\..\\docs\\x.md";
+    expect(fromGit([literal]).byPath).toEqual([{ path: literal, class: "security-sensitive", rule: ".stamity/overrides/**" }]);
+  });
+
+  it("reads a rename's sides from git literally too", () => {
+    const result = classifyChange({ paths: [], renames: [{ from: "docs/a\\b.md", to: "docs/c.md" }], base: "given", source: "git" });
+    expect(result.byPath.map((entry) => entry.path)).toEqual(["docs/a\\b.md", "docs/c.md"]);
+  });
 });
 
 describe("classifyChange: the trigger roster's security row (p1d, REQ-FLOW-065)", () => {
@@ -444,6 +481,23 @@ describe("classifyChange: the trigger roster's security row (p1d, REQ-FLOW-065)"
     const result = given(["docs/auth/x.md"]);
     expect(result.class).toBe("security-sensitive");
     expect(result.lenses).toEqual(["stamity-security"]);
+  });
+
+  // review/22: D10's instruction-file rule gives product; the row is stronger and must raise over it.
+  it("raises a nested instruction file under a security segment over D10's product", () => {
+    expect(given(["docs/guide/AGENTS.md"]).class).toBe("product");
+    const cases: readonly (readonly [string, string])[] = [
+      ["docs/auth/AGENTS.md", "auth/"],
+      ["web/routes/claude.local.md", "routes/"],
+    ];
+    for (const [path, pattern] of cases) {
+      const result = given([path]);
+      expect(result.class, path).toBe("security-sensitive");
+      expect(result.byPath, path).toEqual([
+        { path, class: "security-sensitive", rule: `the trigger roster's security row (${pattern})` },
+      ]);
+      expect(result.lenses, path).toEqual(["stamity-security"]);
+    }
   });
 
   it("binds whatever rules a caller passes, so no rule set can drop the row", () => {
@@ -491,5 +545,40 @@ describe("classifyChange: the trigger roster's security row (p1d, REQ-FLOW-065)"
     });
     expect(result.class).toBe("security-sensitive");
     expect(result.lenses).toEqual(["stamity-security"]);
+  });
+});
+
+describe("classifyChange: the trigger table is an input (review/23)", () => {
+  const fixtureTable: readonly SpecialistTrigger[] = [
+    { specialist: "stamity-security", triggerPaths: ["vault/"], triggerKeywords: [], rationale: "fixture: a vault" },
+    { specialist: "stamity-performance", triggerPaths: ["jobs/"], triggerKeywords: [], rationale: "fixture: jobs" },
+  ];
+
+  it("defaults to the shipped table", () => {
+    expect(classifyChange({ paths: ["src/auth/login.ts"], base: "given" }, BUILT_IN_RULES, SPECIALIST_TRIGGER_TABLE)).toEqual(
+      given(["src/auth/login.ts"]),
+    );
+  });
+
+  it("raises nothing and names no trigger lens on an empty table, the class's own lens kept", () => {
+    const login = classifyChange({ paths: ["src/auth/login.ts", "src/components/a.tsx"], base: "given" }, BUILT_IN_RULES, []);
+    expect(login.class).toBe("product");
+    expect(login.lenses).toEqual([]);
+    expect(login.byPath.map((entry) => entry.rule)).toEqual(["unplaced", "unplaced"]);
+
+    const manifest = classifyChange({ paths: [".stamity/manifest.json"], base: "given" }, BUILT_IN_RULES, []);
+    expect(manifest.class).toBe("security-sensitive");
+    expect(manifest.lenses).toEqual(["stamity-security"]);
+  });
+
+  it("reads a caller's table for the security row and the lenses", () => {
+    const result = classifyChange(
+      { paths: ["src/auth/login.ts", "src/vault/key.ts", "src/jobs/x.ts"], base: "given" },
+      BUILT_IN_RULES,
+      fixtureTable,
+    );
+    expect(result.byPath.map((entry) => entry.class)).toEqual(["product", "security-sensitive", "product"]);
+    expect(result.byPath[1]?.rule).toBe("the trigger roster's security row (vault/)");
+    expect(result.lenses).toEqual(["stamity-security", "stamity-performance"]);
   });
 });

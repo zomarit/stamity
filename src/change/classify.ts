@@ -32,14 +32,26 @@
  * `security-sensitive`, whatever rules the caller passes: the row is read here,
  * not merged into `rules`, so no class file can drop or weaken it. A change's
  * lenses are every trigger row its paths match, plus the security lens when the
- * class is `security-sensitive` by any rule.
+ * class is `security-sensitive` by any rule. The table is an input that defaults
+ * to the shipped one, so a trimmed or empty roster is reachable (review/23).
+ *
+ * **Where a path came from decides how it is read** (review/20). A name git
+ * gave is read literally: git never separates on `\`, so a backslash there is a
+ * filename character and the reported path is git's own name. A listed path
+ * (`--paths`) may be either spelling, so it is read both ways and the stronger
+ * class kept; see {@link readPath} for the over-gating that costs.
  *
  * Pure: no filesystem, no git, and one internal import, the trigger roster
  * (`../roster/triggers.ts`, wave 1). The verb in `../cli/commands/gate.ts`
  * gathers the paths and prints the result.
  */
 import { posix } from "node:path";
-import { findSpecialistTrigger, specialistsForPath } from "../roster/triggers.ts";
+import {
+  findSpecialistTrigger,
+  SPECIALIST_TRIGGER_TABLE,
+  specialistsForPath,
+  type SpecialistTrigger,
+} from "../roster/triggers.ts";
 
 /** The seven change classes. */
 export type ChangeClass =
@@ -91,12 +103,8 @@ export const CLASS_CHECKS: Readonly<Record<ChangeClass, readonly Check[]>> = {
 /** The lens a `security-sensitive` change always gets; also the trigger roster's id for the security row. */
 const SECURITY_LENS = "stamity-security";
 
-/** The roster's security row, read once. `undefined` only if a roster ships without it. */
-const SECURITY_ROW = findSpecialistTrigger(SECURITY_LENS);
-
-/** The first pattern of the security row that matches `path`, by the roster's own matching. */
-function securityRowPattern(path: string): string | undefined {
-  const row = SECURITY_ROW;
+/** The first pattern of the security row that matches `path`, by the roster's own matching; none without a row. */
+function securityRowPattern(path: string, row: SpecialistTrigger | undefined): string | undefined {
   if (row === undefined) return undefined;
   return row.triggerPaths.find((pattern) => specialistsForPath(path, [{ ...row, triggerPaths: [pattern] }]).length > 0);
 }
@@ -219,9 +227,14 @@ function globRegExp(glob: string, foldCase = false): RegExp {
   return compiled;
 }
 
-/** Whether `path` matches `glob`, both read as POSIX paths. */
-export function matchGlob(path: string, glob: string): boolean {
-  return globRegExp(glob).test(normalizePath(path));
+/**
+ * Whether `path` matches `glob`, both read as POSIX paths. `literal` reads a
+ * name git gave: no separator rewrite, so a backslash stays a filename
+ * character (review/20). `foldCase` matches without case.
+ */
+export function matchGlob(path: string, glob: string, options: { literal?: boolean; foldCase?: boolean } = {}): boolean {
+  const read = options.literal === true ? path : normalizePath(path);
+  return globRegExp(glob, options.foldCase === true).test(read);
 }
 
 /** Whether an already-read `path` matches `glob`: no second separator rewrite, so a literal backslash stays one. */
@@ -256,7 +269,11 @@ interface PathClass {
   rule: string;
 }
 
-function classifyPath(path: string, rules: readonly ClassRule[]): PathClass & { floored: boolean } {
+function classifyPath(
+  path: string,
+  rules: readonly ClassRule[],
+  securityRow: SpecialistTrigger | undefined,
+): PathClass & { floored: boolean } {
   const code = isCodePath(path);
   let best: { class: ChangeClass; rule: string } | undefined;
   let floored = false;
@@ -269,7 +286,7 @@ function classifyPath(path: string, rules: readonly ClassRule[]): PathClass & { 
     }
     if (best === undefined || rank(rule.class) < rank(best.class)) best = { class: rule.class, rule: glob };
   }
-  const securityPattern = securityRowPattern(path);
+  const securityPattern = securityRowPattern(path, securityRow);
   if (securityPattern !== undefined && (best === undefined || rank("security-sensitive") < rank(best.class))) {
     best = { class: "security-sensitive", rule: `the trigger roster's security row (${securityPattern})` };
   }
@@ -287,18 +304,36 @@ function classifyPath(path: string, rules: readonly ClassRule[]): PathClass & { 
   return { path, class: best.class, rule: best.rule, floored };
 }
 
+/** Where the paths came from: names git gave, or paths a caller listed. */
+export type PathSource = "git" | "listed";
+
 /**
- * One raw path, read both ways: with backslashes as separators (Windows) and as
- * filename characters (POSIX, where git tracks such names). The stronger
- * reading is kept, the Windows one on a tie, so no spelling lowers a path: a
- * POSIX file named `a\..\docs\x.md` under `.stamity/overrides/` stays
- * there, and `docs\..\.stamity\manifest.json` still meets the manifest rule.
- * `undefined` when both readings are empty.
+ * One raw path. A git name is classified as git gave it, nothing rewritten.
+ * A listed path is read both ways: with backslashes as separators (Windows)
+ * and as filename characters (POSIX). The stronger reading is kept, the
+ * Windows one on a tie, so no spelling lowers a path: a POSIX file named
+ * `a\..\docs\x.md` under `.stamity/overrides/` stays there, and
+ * `docs\..\.stamity\manifest.json` still meets the manifest rule.
+ *
+ * The cost, accepted (review/20, option b): the literal reading of a
+ * Windows-separated listed path is one top-level segment, which matches only
+ * `*.md` or nothing, so whenever its separator reading is weaker the path
+ * over-gates. `docs\img.png` reads `product` (unplaced) rather than `docs`,
+ * and `.stamity\runs\x\ledger.jsonl` `product` rather than `records`, and
+ * the report names the raw string. The class only rises, so no gate or lens is
+ * lost; a caller with git names passes `source: "git"` and pays none of it.
+ * `undefined` when every reading is empty.
  */
-function readPath(raw: string, rules: readonly ClassRule[]): (PathClass & { floored: boolean }) | undefined {
+function readPath(
+  raw: string,
+  rules: readonly ClassRule[],
+  securityRow: SpecialistTrigger | undefined,
+  source: PathSource,
+): (PathClass & { floored: boolean }) | undefined {
+  const read = (path: string) => (path === "" ? undefined : classifyPath(path, rules, securityRow));
+  if (source === "git") return read(raw);
   const windows = normalizePath(raw);
   const literal = resolveDots(raw);
-  const read = (path: string) => (path === "" ? undefined : classifyPath(path, rules));
   const first = read(windows);
   if (literal === windows) return first;
   const second = read(literal);
@@ -314,6 +349,8 @@ export interface ClassifyInput {
   paths: readonly string[];
   renames?: readonly { from: string; to: string }[];
   base: BaseState;
+  /** Where `paths` and `renames` came from; `listed` (both readings) when not said. */
+  source?: PathSource;
 }
 
 export interface ClassifyResult {
@@ -334,16 +371,25 @@ function namePaths(paths: readonly string[]): string {
 
 /**
  * Classify one change. `rules` defaults to {@link BUILT_IN_RULES}; a caller that
- * read a class file passes the merged set. Every path in `paths` and both sides
- * of every rename are classified, once each, in that order.
+ * read a class file passes the merged set. `triggers` defaults to the shipped
+ * {@link SPECIALIST_TRIGGER_TABLE}; an empty one raises nothing and names only
+ * the class's own lens. Every path in `paths` and both sides of every rename
+ * are classified, once each, in that order.
  */
-export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[] = BUILT_IN_RULES): ClassifyResult {
+export function classifyChange(
+  input: ClassifyInput,
+  rules: readonly ClassRule[] = BUILT_IN_RULES,
+  triggers: readonly SpecialistTrigger[] = SPECIALIST_TRIGGER_TABLE,
+): ClassifyResult {
+  const securityRow = findSpecialistTrigger(SECURITY_LENS, triggers);
+  const source = input.source ?? "listed";
+  const readRaw = (raw: string) => readPath(raw, rules, securityRow, source);
   const byPath: PathClass[] = [];
   const floored: string[] = [];
   const index = new Map<string, ChangeClass>();
   // The kept reading names the path, so two raw spellings dedupe only when they read as one file.
   const add = (raw: string): void => {
-    const placed = readPath(raw, rules);
+    const placed = readRaw(raw);
     if (placed === undefined || index.has(placed.path)) return;
     const { path } = placed;
     index.set(path, placed.class);
@@ -370,8 +416,8 @@ export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[]
     atLeastProduct.push("product");
   }
   for (const rename of input.renames ?? []) {
-    const from = readPath(rename.from, rules)?.path ?? "";
-    const to = readPath(rename.to, rules)?.path ?? "";
+    const from = readRaw(rename.from)?.path ?? "";
+    const to = readRaw(rename.to)?.path ?? "";
     const fromClass = index.get(from);
     const toClass = index.get(to);
     if (fromClass === undefined || toClass === undefined || fromClass === toClass) continue;
@@ -393,7 +439,7 @@ export function classifyChange(input: ClassifyInput, rules: readonly ClassRule[]
 
   // The security lens first when the class asks for it, then every row the paths match, each once.
   const lenses = new Set<string>(cls === "security-sensitive" ? [SECURITY_LENS] : []);
-  for (const entry of byPath) for (const lens of specialistsForPath(entry.path)) lenses.add(lens);
+  for (const entry of byPath) for (const lens of specialistsForPath(entry.path, triggers)) lenses.add(lens);
 
   return {
     class: cls,
