@@ -2,7 +2,7 @@
 id: agent-performance-return-contract
 class: golden
 claim: "On a repository that declares no budget the run returns status DONE with a Warning ceiling — Critical requires a breached declared budget — naming the budget classes that were absent, reporting the unmeasured surface as unmeasured rather than as a pass, raising the Warning that names the surface needing a budget, and reporting no rate."
-source: content/agents/stamity-performance.md:14-49,107-178
+source: content/agents/stamity-performance.md:14-49,107-181
 metric: rubric
 ---
 
@@ -59,7 +59,10 @@ Governing text — the same file, "Kill switch" and "Return contract":
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** for findings: `Critical` | `Warning` | `Minor`. `Critical` requires a
-  breached declared budget; without one the run's ceiling is `Warning`.
+  breached declared budget; without one the run's ceiling is `Warning`. Where the
+  `## Severity` scale below reads otherwise, this budget rule decides the lens's levels:
+  `Critical` only on a breached declared budget, and with no declared budget over the surface
+  the strongest finding is a `Warning`, as `/st-work`'s Specialist pass states.
 - Every behaviour claim cites `path:line`, and every cost claim carries its measurement and the
   method that produced it, named in that finding's own `method:` slot below — a `path:line` says
   where the code is, never how its cost was established. A bare path is not a citation: a

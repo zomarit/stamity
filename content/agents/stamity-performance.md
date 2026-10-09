@@ -120,7 +120,10 @@ run.
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** for findings: `Critical` | `Warning` | `Minor`. `Critical` requires a
-  breached declared budget; without one the run's ceiling is `Warning`.
+  breached declared budget; without one the run's ceiling is `Warning`. Where the
+  `## Severity` scale below reads otherwise, this budget rule decides the lens's levels:
+  `Critical` only on a breached declared budget, and with no declared budget over the surface
+  the strongest finding is a `Warning`, as `/st-work`'s Specialist pass states.
 - Every behaviour claim cites `path:line`, and every cost claim carries its measurement and the
   method that produced it, named in that finding's own `method:` slot below — a `path:line` says
   where the code is, never how its cost was established. A bare path is not a citation: a

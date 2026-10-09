@@ -28,7 +28,8 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     performance and design-quality lenses follow the security lens's shape: Exclusions
  *     first, then the consequence test, the notes counted on the digest. Design-quality keeps
  *     its out-of-change row (S13), and performance's consequence grade stays under its
- *     `Warning` ceiling unless a declared budget is breached.
+ *     `Warning` ceiling unless a declared budget is breached: its Return contract says the
+ *     budget rule, not the shared scale, decides its levels.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -210,6 +211,26 @@ const SECURITY_OUT_OF_CHANGE =
 const DESIGN_OUT_OF_CHANGE =
   "**Surfaces the change did not touch.** A pre-existing surface the change neither renders " +
   "differently nor newly reaches is out of scope for this run.";
+
+/**
+ * The performance lens's precedence over the shared scale (review p8a–c, W-2): the scale stays
+ * byte-identical (S11), so the lens's budget rule says outside it that it decides the levels.
+ */
+const PERFORMANCE_PRECEDENCE =
+  "Where the `## Severity` scale below reads otherwise, this budget rule decides the lens's " +
+  "levels: `Critical` only on a breached declared budget, and with no declared budget over the " +
+  "surface the strongest finding is a `Warning`, as `/st-work`'s Specialist pass states.";
+
+/** Why the performance body fails the precedence rule, or `undefined` when it holds. */
+function precedenceDefect(file: CorpusFile): string | undefined {
+  if (!flat(sectionText(file, "Return contract") ?? "").includes(PERFORMANCE_PRECEDENCE)) {
+    return `${file.relPath}: no budget-rule precedence in the Return contract`;
+  }
+  if (flat(sectionText(file, "Severity") ?? "").includes("budget")) {
+    return `${file.relPath}: the precedence sits inside the shared scale`;
+  }
+  return undefined;
+}
 
 /** The text of one top-level `## <heading>` section, up to the next one, or `undefined`. */
 function sectionText(file: CorpusFile, heading: string): string | undefined {
@@ -462,6 +483,19 @@ describe("capture by consequence — the performance and design-quality lenses",
     expect(budgets).toContain("**Everything else caps at `Warning`.**");
     expect(contract).toContain(
       "`Critical` requires a breached declared budget; without one the run's ceiling is `Warning`.",
+    );
+  });
+
+  it("(f) performance states that its budget rule, not the shared scale, decides its levels", async () => {
+    const performance = await load(PERFORMANCE);
+    const dropped = corpusFileOf(
+      performance.relPath,
+      performance.raw.replace("`## Severity` scale below reads otherwise", "body"),
+    );
+
+    expect(precedenceDefect(performance)).toBeUndefined();
+    expect(precedenceDefect(dropped)).toBe(
+      `${performance.relPath}: no budget-rule precedence in the Return contract`,
     );
   });
 
