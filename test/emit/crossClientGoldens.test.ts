@@ -186,6 +186,31 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules, review round 1
+  //     (run 2026-10-10_next-tier; ledger rows review/41 to review/45, build/25
+  //     and build/26). The st-board touchpoint moved, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 26475 -> 27127,
+  //       `.agents/skills/st-board/SKILL.md` 26521 -> 27173), by +652 bytes,
+  //       the corpus source's own delta (444 -> 454 lines), all of it inside
+  //       `## Deferral inbox`: the Writers bullet says `/st-work`'s close
+  //       appends the `deferred` rows it schedules to the inbox, not every
+  //       one; the Row grammar bullet names a trigger of filler words alone
+  //       among those refused; the Removal bullet states the `scheduled`
+  //       retire value and its three place forms; and the Leftovers bullet
+  //       lists a withheld or skipped row without deciding it, names what
+  //       each prints, narrows the never-open rule to `/st-work`'s Frame and
+  //       close, and points the Schedule sentence at the retire value.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-board skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q10a-work-close (run
   //     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019,
   //     REQ-FLOW-024, REQ-CTX-020). The st-work touchpoint moved, plus the

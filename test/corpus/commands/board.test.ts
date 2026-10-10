@@ -706,6 +706,8 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(grammar).toContain(`Rows below the inbox's heading \`${SCHEDULE_RULE_HEADING}\` carry \`by:\` or \`when:\``);
     expect(grammar).toContain("`when: touched` needs a path in the location or `files:`");
     expect(grammar).toContain(`made only of vague words (${VAGUE_TRIGGERS.map((word) => `\`${word}\``).join(", ")}) and filler words`);
+    // review/44: filler words alone are named as refused too, as the code now refuses them.
+    expect(grammar).toContain("and filler words (`maybe later`, or filler alone, `at some point`)");
     expect(grammar).toContain("names `hygiene batch` at all");
     expect(grammar).toContain("holds no letter or digit is refused");
     // The pre-existing rule the new sentences sit beside still closes the bullet.
@@ -736,6 +738,7 @@ describe("st-board — sources, signals, and the inbox", () => {
       ["lib/widget.ts:3", ""],
       ["—", " · when: touched"],
       ["lib/widget.ts:3", " · when: maybe later"],
+      ["lib/widget.ts:3", " · when: at some point"],
       ["lib/widget.ts:3", " · when: the next hygiene batch"],
       ["lib/widget.ts:3", " · when: —"],
       ["—", " · by: 2026-11-01 · files: lib/widget.ts the parser"],
@@ -791,9 +794,50 @@ describe("st-board — sources, signals, and the inbox", () => {
       ok: true,
       value: { kind: "cut", reason: "accepted risk: one caller, behind a flag" },
     });
-    for (const vague of ["cut maybe later", "cut —", "fixed someday", "fixed —"]) {
+    for (const vague of ["cut maybe later", "cut —", "fixed someday", "fixed —", "cut not yet", "fixed just now"]) {
       expect(parseDisposition(vague).ok, `${vague} is refused`).toBe(false);
     }
+
+    // review/45: the value a placed row retires with is stated, and every form
+    // the sentence names is one the grammar reads, with each of its two due parts.
+    const shape = /A place's retire value reads (.*?)\. Nothing retires/.exec(removal)?.[1] ?? "";
+    const [byForm, whenForm, ...places] = [...shape.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "");
+    expect([byForm, whenForm]).toEqual(["scheduled <place> · by <YYYY-MM-DD>", "scheduled <place> · when <trigger>"]);
+    expect(places).toEqual(["plan docs/plans/<file>.md#<unit-id or follow-ups>", "board <item ref>", "handoff <path>"]);
+    // Made-up names in each placeholder: a place is text the grammar never opens.
+    const filled = (form: string): string =>
+      form
+        .replace("<file>", "990-made-up")
+        .replace("<unit-id or follow-ups>", "follow-ups")
+        .replace("<item ref>", "#42")
+        .replace("<path>", "notes/made-up.md")
+        .replace("<YYYY-MM-DD>", "2026-11-01")
+        .replace("<trigger>", "touched");
+    for (const place of places) {
+      for (const form of [byForm, whenForm]) {
+        const value = filled((form ?? "").replace("<place>", place));
+        expect(parseDisposition(value), value).toMatchObject({
+          ok: true,
+          value: { kind: "scheduled", place: { kind: place.split(" ")[0] } },
+        });
+      }
+    }
+    // The leftover line parts its fields with commas; a retire value does not.
+    expect(parseDisposition("scheduled board #42, by 2026-11-01").ok).toBe(false);
+  });
+
+  it("names `/st-work`'s close as the writer of the rows it schedules to the inbox, not of every deferred row", async () => {
+    // review/41, build/25: the census said the close appends every `deferred`
+    // ledger row, while the Leftovers bullet retires a dropped or placed row
+    // so that it never reaches the inbox. One section, one rule.
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const writers = inboxBullet(inbox, "Writers");
+
+    expect(writers).toContain(
+      "`/st-work`'s close, which at run exit appends the `deferred` ledger rows it schedules to the inbox (a dropped row, or one placed in a plan, board or handoff, never reaches it)",
+    );
+    expect(inbox).not.toContain("appends every `deferred` ledger row");
+    expect(inboxBullet(inbox, "Leftovers at a close")).toContain("so it never reaches the inbox");
   });
 
   it("widens the `/st-work` retirer to the rows its close decided, and names no third retirer", async () => {
@@ -834,12 +878,12 @@ describe("st-board — sources, signals, and the inbox", () => {
       "`L<n> <severity> · <location> · <summary> → fix now | schedule: <place>, <by or when>, <files> | drop — <evidence>; would change if <condition>`",
       "Critical and Warning first and never pre-set to drop",
       "`Notes (<p>): drop`",
-      "An inbox row's answer applies by the Removal rule.",
+      "Any other inbox row's answer applies by the Removal rule.",
       "`L2 fix; drop L1: <reason>; show L3`",
       "or stop, every leftover on `Not done:`",
       "offered only while the review cap leaves a round and outside the files of an open person QA row",
       "`fix-now failed: <gate or finding>` in its description",
-      "Schedule closes the row `deferred` and appends it under the schedule rule, or retires it to a plan, board or handoff place.",
+      "Schedule closes the row `deferred` and appends it under the schedule rule, or retires it to a plan, board or handoff place with the Removal rule's `scheduled` value.",
       "Drop closes the row `deferred` and retires it at once (`cut <reason>`), so it never reaches the inbox",
       "only the person drops a Critical or Warning, retired `cut accepted risk: <reason>` and kept on `Not done:`",
       "With no answer, only notes are dropped and only fixes the run's plan covers are made",
@@ -852,17 +896,32 @@ describe("st-board — sources, signals, and the inbox", () => {
       expect(leftovers, `the leftovers rule states: ${phrase}`).toContain(phrase);
     }
 
-    // A withheld row is listed as the query prints it and never summarised:
-    // the screen refused its text, so no agent reads it back in.
-    expect(leftovers).toContain(
-      "listed as it prints, by its line, severity and location and `withheld by the screen (<pattern id>); read it by hand`, with no summary",
+    // TEST CHANGE, justified (2026-10-10, review/42, review/43, review/45): this
+    // unit's own first-round pins moved with three sentences. A withheld row
+    // was "recommended to stay as it is" and its answer applied "by the Removal
+    // rule", which needs the `Ref:` and the description the query never prints;
+    // "No agent opens the inbox" promised more than `fill`, which reads the file
+    // whole, keeps; and the Schedule sentence now points at the retire value.
+    // A withheld or skipped row is listed and never decided, in the words
+    // `/st-work`'s close carries for the same row.
+    const undecided =
+      "A row the query withholds or skips is listed as it prints, the person's to read, and never decided: the close offers no disposition for it and applies none, and it stays in the inbox until the person edits it or hands over its `Ref:` with an instruction.";
+    expect(leftovers).toContain(undecided);
+    const workText = flat(
+      (await walkAllMarkdown()).find((file) => file.relPath === "commands/st-work.md")?.parsed.body ?? "",
     );
+    expect(workText, "`/st-work`'s close states the same rule in the same words").toContain(undecided);
+    expect(leftovers).not.toContain("recommended to stay as it is");
+    // What each prints; the code side of both lines is `test/runs/ledgerInbox.test.ts`.
     expect(leftovers).toContain(
-      "its text is the person's to read, and it is recommended to stay as it is until the person has read it",
+      "A withheld row prints its line, severity and location and `withheld by the screen (<pattern id>); read it by hand`, with no summary; a skipped one prints `skipped: <line> (<pattern id>)`.",
     );
-    // The same floor `/st-work`'s Frame states for its own read: a skip line is
-    // a row the screen refused too, and a writer can force one by padding a row.
-    expect(leftovers).toContain("No agent opens the inbox for a row the query withholds or skips.");
+    // The floor is named for the flows that keep it and for no other: `fill`
+    // collects the inbox file itself (its step 1), and `/st-plan` reads it too.
+    expect(leftovers).toContain(
+      "`/st-work`'s Frame and close never open the inbox for such a row; `fill` and `/st-plan` still read the file whole.",
+    );
+    expect(leftovers).not.toContain("No agent opens the inbox");
 
     // The row an unattended close appends, built from the two fields the
     // bullet names, parses below the heading and shows on a query for a path
