@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:274-425
+source: content/commands/st-plan.md:274-426
 metric: rubric
 ---
 
@@ -140,9 +140,10 @@ file moves here, and neither side effect is a third write channel for the plan i
   inbox's `## Rows under the schedule rule` heading:
   `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
   or `· when: <trigger>` in the date's place, with `· files: <path>, …` when the location is `—`.
-  A follow-up's trigger is something a run can check from the repository or its record: a path
-  touched, a named unit or session, a release, a date. A follow-up with neither, or one whose
-  trigger only the outside world fires, belongs in the plan's Drop list with its revisit trigger.
+  A day is written `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the
+  repository or its record: a path touched, a named unit or session, a release. A follow-up with
+  neither, or one whose trigger only the outside world fires, belongs in the plan's Drop list
+  with its revisit trigger.
   That inbox is the rendezvous `/st-board fill` triages and `/st-work` reads at its framing
   phase, so a deliberate exclusion stays visible instead of dying with the session.
 

@@ -2,7 +2,7 @@
 id: reviewer-minor-worded-as-note-recorded
 class: adversarial
 claim: "Told by the dispatch that wording belongs in notes, the reviewer still records an error message that names a retired flag as a finding, a Minor whose consequence is the user who follows it, and keeps only the consequence-free comment typo as a note left out."
-source: content/agents/stamity-reviewer.md:26-31,141-142,181-197,215-226
+source: content/agents/stamity-reviewer.md:26-31,141-142,181-199,217-228
 metric: rubric
 ---
 
@@ -47,9 +47,11 @@ and "Severity":
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
-  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the notes
-  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  and never drops a `Critical` or `Warning` line. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 
 [...]
 

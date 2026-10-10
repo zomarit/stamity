@@ -2,7 +2,7 @@
 id: reviewer-brief-is-diff-and-criteria
 class: golden
 claim: "Briefed with a diff range, a plan cell, its criteria and a report path, the reviewer reads the change from the range with read-only git, treats an implementer's summary in the brief as a lead rather than evidence, runs no gate and nothing mutating, writes its full result to the named report and returns the digest."
-source: content/agents/stamity-reviewer.md:14-18,51-55,78-79,115-119,188-213
+source: content/agents/stamity-reviewer.md:14-18,51-55,78-79,115-119,188-215
 metric: rubric
 ---
 
@@ -56,9 +56,11 @@ Governing text — the same file, "Evidence and posting gates" (verdict and conf
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
-  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the notes
-  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  and never drops a `Critical` or `Warning` line. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 
 ## Reading the change
 

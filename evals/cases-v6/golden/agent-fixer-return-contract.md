@@ -2,7 +2,7 @@
 id: agent-fixer-return-contract
 class: golden
 claim: "A fix round returns status DONE carrying a disposition for every finding it received — fixed, rejected with reasoning, or unresolved with a reason — plus the changed-file list, the tests, and deferrals; a finding judged wrong is rejected with technical reasoning at path:line rather than silently left or applied anyway, the round is not certified green or closed from here, and ledgered Minor rows and opportunistic edits stay out of the pass."
-source: content/agents/stamity-fixer.md:14-55,96-143
+source: content/agents/stamity-fixer.md:14-55,96-145
 metric: rubric
 ---
 
@@ -110,9 +110,11 @@ finding stays open in the ledger until one of them does.
   `<id> <locator> — <summary>`, ending `notes left out: <n>`; `security:` every
   security-relevant finding in full, or `none`; `contract delta:` the census rows of a
   shared-contract fix in full, or `none`; then at most 1,500 characters of prose naming the
-  files changed and the tests added or modified. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the
-  notes count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  files changed and the tests added or modified. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 ```
 
 Scenario state — the round as you worked it, given to you as fact:

@@ -2,7 +2,7 @@
 id: re-review-closures-fresh-reviewer
 class: golden
 claim: "A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted."
-source: content/agents/stamity-reviewer.md:14-18,51-58,141-158,188-197
+source: content/agents/stamity-reviewer.md:14-18,51-58,141-158,188-199
 metric: rubric
 ---
 
@@ -64,9 +64,11 @@ Governing text — the same file, "Nit policy" and "Return contract" (report and
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
-  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the notes
-  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  and never drops a `Critical` or `Warning` line. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 ```
 
 Governing text — `content/commands/st-work.md`, "Review loop":

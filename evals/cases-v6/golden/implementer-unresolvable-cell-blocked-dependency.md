@@ -41,9 +41,9 @@ cell item) and "Return contract" (what a block carries, and where it goes):
   input; work completed before the block is listed file by file so nothing is silently
   half-applied.
 [...]
-  or a write refused, the full result is returned inline and a refused write says so; an
-  inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
-  report and is returned in full.
+  With no report path, or a write refused, the full result is returned inline and a refused
+  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*` return
+  writes no report and is returned in full.
 ```
 
 Scenario state — the unit as you worked it, given to you as fact:

@@ -39,6 +39,10 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     its own unit's files and counts a larger one, never deferring it; the fixer's "no
  *     opportunistic edits" rule stays byte for byte, and a reviewer's notes are never handed
  *     to it.
+ *   - **(h) The report lists the notes.** Each of the six bodies says, in its `Report and
+ *     digest` rule, that the written report lists every note left out, one line each with its
+ *     locator, and that the digest keeps the count alone: {@link NOTES_LISTED}, the same
+ *     sentence in all six, after the digest's count and before the inline fallback.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -79,6 +83,14 @@ const REVIEWER_WARNING_RULE =
   "These fail a review on their own, whatever the lens weighting says. Each is a blocking " +
   "finding when it appears in the change, and a `Warning` when the change makes an existing " +
   "instance worse without introducing it:";
+
+/**
+ * Where a left-out note is written down (check (h)): the report lists each one, so a reader
+ * who comes after the role has ended can still read it; the digest carries the count only.
+ */
+export const NOTES_LISTED =
+  "The written report lists every note left out, one line each with its locator, and the " +
+  "digest keeps the count alone.";
 
 /** One capture sentence a role carries, whitespace-collapsed, inside one `## ` section. */
 interface CapturePin {
@@ -242,6 +254,17 @@ const CAPTURE_PINS: readonly CapturePin[] = [
       "A pre-existing defect is recorded as a finding only when it names a consequence, its " +
       "`summary` leading `pre-existing:`.",
   },
+  /*
+   * Added 2026-10-10, run 2026-10-10_next-tier, the QA walk's fix round (ledger row qa/2,
+   * signed off): each body counted its left-out notes on the digest and said "the report lists
+   * it" only in passing, where the note is defined, and 24 of that run's reports listed none.
+   * The rule that says what the report holds now says it, in the same words in all six.
+   */
+  ...SEVERITY_ROLES.map((relPath) => ({
+    relPath,
+    section: "Return contract",
+    phrase: NOTES_LISTED,
+  })),
 ];
 
 /**
@@ -778,3 +801,42 @@ describe("capture by consequence — the implementer and the fixer", () => {
     ]);
   });
 });
+
+describe("capture by consequence — the written report lists every note left out", () => {
+  /** The `Report and digest` rule of one body, whitespace-collapsed, or "" when absent. */
+  const reportRule = (file: CorpusFile): string => {
+    const contract = sectionText(file, "Return contract") ?? "";
+    const start = contract.indexOf("- **Report and digest.**");
+    if (start === -1) return "";
+    const end = contract.indexOf("\n- ", start + 1);
+    return flat(end === -1 ? contract.slice(start) : contract.slice(start, end));
+  };
+
+  it.each(SEVERITY_ROLES)(
+    "(h) %s says so in its `Report and digest` rule, after the count and before the inline fallback",
+    async (relPath) => {
+      const rule = reportRule(await load(relPath));
+      const count = rule.indexOf("`notes left out: <n>`");
+      const listed = rule.indexOf(NOTES_LISTED);
+
+      expect(count).toBeGreaterThan(-1);
+      expect(listed).toBeGreaterThan(count);
+      expect(rule.indexOf("With no report path, or a write refused,")).toBeGreaterThan(listed);
+      // Once per body: a second copy elsewhere would be a second rule to keep in step.
+      expect(flat((await load(relPath)).raw).split(NOTES_LISTED)).toHaveLength(2);
+    },
+  );
+
+  it("(h) fails when a body counts its notes and no longer says the report lists them", async () => {
+    const reviewer = await load(REVIEWER);
+    const sentence = new RegExp(`\\s${NOTES_LISTED.split(" ").map(escapeRegExp).join("\\s+")}`);
+    const dropped = corpusFileOf(reviewer.relPath, reviewer.raw.replace(sentence, ""));
+
+    expect(dropped.raw).not.toBe(reviewer.raw);
+    expect(captureGaps(dropped)).toEqual([`Return contract: ${NOTES_LISTED}`]);
+  });
+});
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

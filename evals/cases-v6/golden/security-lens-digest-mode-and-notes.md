@@ -2,7 +2,7 @@
 id: security-lens-digest-mode-and-notes
 class: golden
 claim: "With a report path named and its full result written, the security lens's final message is the digest: status, mode posted with its count of two, the report path, the Critical line and the Minor count ending notes left out: 1, the excluded out-of-change condition counted as neither, every finding in full on security:, and contract delta: none."
-source: content/agents/stamity-security.md:14-18,66-75,108-113,118-160
+source: content/agents/stamity-security.md:14-18,66-75,108-113,118-161
 metric: rubric
 ---
 
@@ -87,10 +87,11 @@ and wrong here, and together they are what holds the rate under the bar.
   count; `report:` with the path; `findings:` every `Critical` and `Warning` as
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every finding of this run in full, since each is
-  security-relevant; `contract delta: none`; then at most 1,500 characters of prose. With no
-  report path, or a write refused, the full result is returned inline and a refused write says
-  so; an inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
-  report and is returned in full.
+  security-relevant; `contract delta: none`; then at most 1,500 characters of prose. The written
+  report lists every note left out, one line each with its locator, and the digest keeps the
+  count alone. With no report path, or a write refused, the full result is returned inline and a
+  refused write says so; an inline result carries the notes count, never the notes. A
+  `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Scenario state — the pass you have just completed, given to you as fact:

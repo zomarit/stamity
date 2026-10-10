@@ -2,7 +2,7 @@
 id: fixer-decision-needed-waits-for-sign-off
 class: golden
 claim: "A fixer handed a decision_needed ledger id with no sign-off beside it returns that id unresolved, reason sign-off missing, however small its fix, while a decision_needed id whose sign-off the dispatch records is fixed; the round still returns DONE, and the digest carries one disposition per handed id and the census row of the signed-off shared-contract fix."
-source: content/agents/stamity-fixer.md:14-29,110-143
+source: content/agents/stamity-fixer.md:14-29,110-145
 metric: rubric
 ---
 
@@ -68,9 +68,11 @@ Governing text — the same file, "Return contract":
   `<id> <locator> — <summary>`, ending `notes left out: <n>`; `security:` every
   security-relevant finding in full, or `none`; `contract delta:` the census rows of a
   shared-contract fix in full, or `none`; then at most 1,500 characters of prose naming the
-  files changed and the tests added or modified. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the
-  notes count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  files changed and the tests added or modified. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 ```
 
 Scenario state — the round as you worked it, given to you as fact:

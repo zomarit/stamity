@@ -186,6 +186,51 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, the QA walk's fix round, pass qa-row4
+  //     (run 2026-10-10_next-tier; REQ-FLOW-072, REQ-FLOW-077, ledger rows
+  //     qa/2 and qa/4). Six agents and one touchpoint moved, plus the manifest
+  //     rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the six agents whose digest ends `notes left out: <n>`,
+  //       wherever each is emitted, by its corpus source's own delta, one hunk
+  //       each in `## Return contract`: the `Report and digest` rule gains
+  //       "The written report lists every note left out, one line each with
+  //       its locator, and the digest keeps the count alone." before "With no
+  //       report path, or a write refused", and is re-wrapped from the line
+  //       the sentence starts on to the rule's end. Per agent, the paths being
+  //       `.claude/agents/<id>.md`, `.cursor/agents/<id>.md`,
+  //       `.github/agents/<id>.agent.md` and `.codex/agents/<id>.toml`:
+  //       stamity-reviewer (+120, 226 -> 228 lines) 15677 -> 15797,
+  //         15594 -> 15714, 15710 -> 15830, 16380 -> 16500;
+  //       stamity-fixer (+120, 167 -> 169) 10584 -> 10704, 10453 -> 10573,
+  //         10602 -> 10722, 11200 -> 11320;
+  //       stamity-implementer (+118, 157 -> 158) 10045 -> 10163,
+  //         9912 -> 10030, 10065 -> 10183, 10669 -> 10787;
+  //       stamity-security (+118, 192 -> 193) 12922 -> 13040, 12839 -> 12957,
+  //         12955 -> 13073, 13625 -> 13743;
+  //       stamity-design-quality (+118, 185 -> 186) 11943 -> 12061,
+  //         11854 -> 11972, 11976 -> 12094, 12652 -> 12770;
+  //       stamity-performance (+118, 210 -> 211) 13922 -> 14040,
+  //         13832 -> 13950, 13953 -> 14071, 14626 -> 14744.
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 27967 -> 27986,
+  //       `.agents/skills/st-plan/SKILL.md` 28010 -> 28029), by +19 bytes, the
+  //       corpus source's own delta (425 -> 426 lines), one hunk in
+  //       `## Side effects`: the Deferral-inbox append bullet no longer lists
+  //       "a date" among a follow-up's triggers and reads "A day is written
+  //       `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the
+  //       repository or its record: a path touched, a named unit or session, a
+  //       release." (three lines become four); the Drop-list sentence after it
+  //       holds word for word.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, the other four agents (creator,
+  //       researcher, spec-author, test-runner), every rule, every skill other
+  //       than the touchpoint's skill copy, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer, review round 1
   //     (run 2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger rows
   //     review/63 to review/68 and build/38). One skill moved, plus the

@@ -93,6 +93,24 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, the QA walk's fix round, pass qa-row4 (run
+ *     2026-10-10_next-tier; REQ-FLOW-072, REQ-FLOW-077, ledger rows qa/2 and
+ *     qa/4). NOTHING moved in this suite; the row keeps the two ledgers in
+ *     step. The round's emitted changes are six agents and one touchpoint.
+ *     `agents/stamity-reviewer.md` (15940 -> 16060 bytes, 226 -> 228 lines),
+ *     `stamity-fixer.md` (10741 -> 10861, 167 -> 169), `stamity-implementer.md`
+ *     (10210 -> 10328, 157 -> 158), `stamity-security.md` (13102 -> 13220,
+ *     192 -> 193), `stamity-design-quality.md` (12104 -> 12222, 185 -> 186)
+ *     and `stamity-performance.md` (14058 -> 14176, 210 -> 211): each
+ *     `Report and digest` rule says the written report lists every note left
+ *     out, one line each with its locator, and the digest keeps the count
+ *     alone. `commands/st-plan.md` (28136 -> 28155, 425 -> 426): the Side
+ *     effects' inbox bullet writes a day as `by: <YYYY-MM-DD>` and keeps
+ *     `when:` for an event a run can check, "a date" gone from the trigger
+ *     list. None is a substitution target, the catalog, the policy document or
+ *     a core hook script, so no golden here carries one; the sibling suite
+ *     itemises them.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer, review round 1
  *     (run 2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger rows
  *     review/63 to review/68 and build/38). NOTHING moved in this suite; the

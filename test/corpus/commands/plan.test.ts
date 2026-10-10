@@ -769,8 +769,12 @@ describe("/st-plan — side effects", () => {
     // so the bullet names the field and states the row whole; and "a follow-up with neither" gains
     // the trigger only the outside world fires (pinned in the next test). Every earlier word
     // stays, the old phrase a substring of the new one; nothing is loosened.
+    // TEST CHANGE, justified (2026-10-10, the QA walk's fix round; ledger row qa/4, signed off):
+    // the pin ended on the next sentence's first words, "A follow-up's trigger is", and that
+    // sentence now opens "A day is written `by: <YYYY-MM-DD>`;" (pinned whole in the next test).
+    // Only those closing words move; every word of the bullet before them is held as it was.
     expect(effects).toContain(
-      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path in \`Ref:\`, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading: \`<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>\`, or \`· when: <trigger>\` in the date's place, with \`· files: <path>, …\` when the location is \`—\`. A follow-up's trigger is`,
+      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path in \`Ref:\`, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading: \`<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>\`, or \`· when: <trigger>\` in the date's place, with \`· files: <path>, …\` when the location is \`—\`. A day is written \`by: <YYYY-MM-DD>\`;`,
     );
     expect(effects).toContain(
       "belongs in the plan's Drop list with its revisit trigger. That inbox is the rendezvous `/st-board fill` triages",
@@ -786,9 +790,15 @@ describe("/st-plan — side effects", () => {
     // Without these two sentences one item fitted both sections: a trigger nothing in the
     // repository ever fires went to the inbox, where no query sees it arrive, or a checkable one
     // went to the Drop list, which appends nowhere.
+    // TEST CHANGE, justified (2026-10-10, the QA walk's fix round; ledger row qa/4, signed off):
+    // the pinned sentence listed "a date" among the triggers, and a row written `when: <a day>`
+    // parses while the inbox's due read takes only `by:`, so that follow-up never came back on
+    // its day. The sentence now sends a day to `by:` and keeps `when:` for an event; the Drop-list
+    // sentence after it stays word for word, and the old wording is pinned gone.
     expect(effects).toContain(
-      "A follow-up's trigger is something a run can check from the repository or its record: a path touched, a named unit or session, a release, a date. A follow-up with neither, or one whose trigger only the outside world fires, belongs in the plan's Drop list with its revisit trigger.",
+      "A day is written `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the repository or its record: a path touched, a named unit or session, a release. A follow-up with neither, or one whose trigger only the outside world fires, belongs in the plan's Drop list with its revisit trigger.",
     );
+    expect(effects).not.toContain("a release, a date");
     // The section list carries the same test in its own words.
     expect(shape).toContain("of items with no date and no trigger a run can check; they append nowhere.");
   });

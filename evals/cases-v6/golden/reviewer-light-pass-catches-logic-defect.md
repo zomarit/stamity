@@ -2,7 +2,7 @@
 id: reviewer-light-pass-catches-logic-defect
 class: golden
 claim: "A light run's single review pass over a three-line diff still applies the rubric: the reviewer catches the page-count boundary defect, locates it, names the boundary input it breaks and what a user of the list meets, grades it Warning or Critical, and does not approve because the run is light, the diff small or the added test green."
-source: content/agents/stamity-reviewer.md:14-18,20-49,84-91,115-119,215-226
+source: content/agents/stamity-reviewer.md:14-18,20-49,84-91,115-119,217-228
 metric: rubric
 ---
 
