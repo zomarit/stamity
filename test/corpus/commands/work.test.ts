@@ -605,25 +605,34 @@ describe("/st-work — Frame and Plan", () => {
 
   it("opens the run record head at Frame with the plan and the invocation (REQ-CTX-012)", async () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit f0-make-room; REQ-CTX-014): the
+    // four head lines and the `reports/` folder's `.gitignore` moved out of Frame step 5 into the
+    // Proof block's record paragraph, below the re-attachment cut, to make room above it. Frame
+    // still opens the record and points at that paragraph; a resumed run reads an existing head
+    // and never rewrites it. Every phrase below is pinned word for word as before, only its
+    // section moved from Frame to `### Proof block`, and the pointer is pinned in Frame.
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(frame).toContain("with the head lines and the `reports/` folder the Proof block names");
 
     // The resume card is built from the record's head after a compaction, so
     // the head has to name what the run executes and how it was invoked, near
     // the top where a reader of the first lines finds it.
-    expect(frame).toContain("`Plan: <path>`");
-    expect(frame).toContain("`Invocation: <this command line, verbatim>`");
-    expect(frame).toContain("among its first 15");
+    expect(proof).toContain("`Plan: <path>`");
+    expect(proof).toContain("`Invocation: <this command line, verbatim>`");
+    expect(proof).toContain("among its first 15");
     // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/115`): the head records the
     // run's base, which the Gates read for the scan and the class (sign-off: the run's branch point).
-    expect(frame).toContain("with four lines among its first 15");
+    expect(proof).toContain("with four lines among its first 15");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
     // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
-    expect(frame).toContain(
+    expect(proof).toContain(
       "`Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame, never the word `HEAD`)",
     );
     // The reports folder is created beside the record and ignored by git.
     expect(frame).toContain("`reports/` folder");
-    expect(frame).toContain("whose one line is `*`");
+    expect(proof).toContain("`reports/` folder");
+    expect(proof).toContain("whose one line is `*`");
   });
 
   it("persists an in-flow plan once under the run folder, never under the plan artifacts (REQ-CTX-009)", async () => {
@@ -874,7 +883,12 @@ describe("/st-work — Prove", () => {
     const text = await body();
     const loop = collapse(section(text, "### Review loop"));
     expect(loop).toContain(`${DEFAULT_MAX_REVIEW_ITERATIONS} rounds by default (2 at light)`);
-    expect(loop).toContain("a review-gate hook that cannot see the tier may hold a light run to the engine cap");
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit f0-make-room; REQ-CTX-014): the
+    // light cap's hook caveat moved out of the Review loop's cap bullet into the client-events
+    // paragraph under `### Intensity`, which is about what the hook enforces, to make room above
+    // the re-attachment cut. The phrase is pinned word for word, only its section moved.
+    const events = collapse(section(text, "### Intensity"));
+    expect(events).toContain("a review-gate hook that cannot see the tier may hold a light run to the engine cap");
     // The three triggers, in order.
     const triggers = [
       "a finding whose ledger row carries two `re-review not-fixed` notes",
@@ -1591,6 +1605,12 @@ describe("/st-work — dials", () => {
       expect(intensityRow(dials, tier)).toContain("or with no class from `gate classify`");
       expect(intensityRow(dials, tier)).toContain(
         "a lockfile's own trigger-path match waiting for the audit's flag when the checks name `dependency-audit`",
+      );
+      // Added 2026-10-10 (plan 019 file 3, unit f0-make-room; inbox row
+      // `2026-10-08_product-core/close/10`): the rows restate the Specialist pass's whole fail-closed
+      // rule, so a classify whose `reason` names a failed read keeps the lens at both tiers too.
+      expect(intensityRow(dials, tier)).toContain(
+        "or with no class from `gate classify` or a `reason` naming a failed read (a lockfile's",
       );
     }
   });

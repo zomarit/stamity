@@ -93,6 +93,26 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit f0-make-room (run
+ *     2026-10-10_next-tier; inbox rows 2026-10-08_product-core/build/1 and
+ *     close/10). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32995 -> 32396 bytes and
+ *     507 -> 463 lines in the corpus source: room above the re-attachment cut
+ *     (`### Specialist pass` at offset 17858 -> 16662) and under the 500-line
+ *     cap (body 498 -> 454). Unquoted blocks rewrap at 100 columns; the
+ *     opening line, Frame's "Seconds, not ceremony", the Dispatch contract's
+ *     lead-in and the Review loop's opening line go; Frame step 4's census
+ *     sentence, the isolation examples, the findings-ledger tail, the resume
+ *     bullet, the return lead-in, the cap bullet and the nit bullet shorten;
+ *     Frame's four record-head lines and the reports `.gitignore` move to the
+ *     Proof block's record paragraph; the light cap's hook caveat moves to
+ *     the Intensity client-events paragraph; both Dials rows add "or a
+ *     `reason` naming a failed read" to the no-class clause. No token sits in
+ *     the moved text.
+ *
+ *     NOTHING else moved here; the sibling suite itemises the emitted copies.
+ *
  *   - 2026-10-09, plan 019 file 2, consolidated at the close (run
  *     2026-10-08_product-core; build/24). FIFTEEN commits on the branch from
  *     5be05cda moved this suite's snapshot, each reviewed in its unit's round;

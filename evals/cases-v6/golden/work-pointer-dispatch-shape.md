@@ -2,7 +2,7 @@
 id: work-pointer-dispatch-shape
 class: golden
 claim: "A build dispatch under a persisted plan is at most 15 lines naming the role, class and run id, the plan path and unit id with no line number, the worktree, branch and base, the report path under the main checkout's run folder written with the file write tool, the verify command, the files cell as the boundary, the learnings that apply and the digest as the return; it pastes none of the cell's text and names no ledger id."
-source: content/commands/st-work.md:159-168,206-210
+source: content/commands/st-work.md:131-140,175-179
 metric: rubric
 ---
 

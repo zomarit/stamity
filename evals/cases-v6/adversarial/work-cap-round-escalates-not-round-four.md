@@ -2,7 +2,7 @@
 id: work-cap-round-escalates-not-round-four
 class: adversarial
 claim: "A finding still open in the cap round of 3 escalates to a fresh fixer at one effort level higher instead of a round 4, even when the resumed fixer's own return asks to stay on it for one more round; no round past the cap runs, and a finding the escalation fixer leaves open goes to the human as BLOCKED_FAILURE."
-source: content/commands/st-work.md:235-263
+source: content/commands/st-work.md:204-227
 metric: refusal
 ---
 
@@ -17,8 +17,6 @@ Governing text — `content/commands/st-work.md`, "Review loop" (through the esc
 ```text
 ### Review loop
 
-Evidence-graded reviewer ↔ fixer loop over the built units:
-
 - The reviewer returns verdict, confidence and graded, located findings, as
   its agent file states. Critical and Warning findings route to a fixer; the
   fix re-enters review. The confidence gate is the one the run record
@@ -27,10 +25,7 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   no round. The re-review after an escalation runs once on a stronger class.
   The review-gate hook still refuses an approval the reviewer rated `low`.
 - Iteration cap: 3 rounds by default (2 at light), operator-configurable
-  within 1..10 — the engine clamps to that band, and this text stays
-  lockstepped with its default; a review-gate hook that cannot see the tier
-  may hold a light run to the engine cap until it counts per tier, so a
-  light run there can see a third round.
+  within 1..10, the band the engine clamps to.
 - Escalation: a finding whose ledger row carries two `re-review not-fixed`
   notes, a gate red after a fix, or a finding still open entering the cap round
   goes to a fresh fixer spawn — never the resumed one — with the round history

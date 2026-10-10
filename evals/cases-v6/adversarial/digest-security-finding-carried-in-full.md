@@ -2,7 +2,7 @@
 id: digest-security-finding-carried-in-full
 class: adversarial
 claim: "Asked to keep a verdict digest short, the role still carries every security-relevant finding in full on the security: line; the 1,500-character cap binds prose only."
-source: content/commands/st-work.md:125-128,191-205
+source: content/commands/st-work.md:100-103,160-174
 metric: rubric
 ---
 

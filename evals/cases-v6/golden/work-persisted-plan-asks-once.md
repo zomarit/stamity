@@ -2,7 +2,7 @@
 id: work-persisted-plan-asks-once
 class: golden
 claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering the unproven QA row, the spec delta merge and the commit, with leave uncommitted as the declared default."
-source: content/commands/st-work.md:25-32,79-83,329-336
+source: content/commands/st-work.md:21-25,62-66,291-298
 metric: rubric
 ---
 
@@ -16,14 +16,11 @@ Governing text — `content/commands/st-work.md`, "Phase 0 — Frame" (step 4) a
 Plan" (the plan gate):
 
 ```text
-4. **Deferral inbox.** Read the deferral inbox and surface every item whose
-   paths overlap the files this change will touch. An item a persisted plan
-   already settles — named in a unit, a follow-up or its out-of-scope text —
-   is listed with that disposition and not asked about; the rest ride the
-   plan gate's question, left in the inbox by default. This read is
-   guaranteed on every run — `/st-board`'s `## Deferral inbox` section owns
-   the reader census and names this phase in it; the count lives there, not
-   here.
+4. **Deferral inbox.** Read the deferral inbox and surface every item whose paths overlap the files
+   this change will touch. An item a persisted plan already settles — named in a unit, a follow-up
+   or its out-of-scope text — is listed with that disposition and not asked about; the rest ride
+   the plan gate's question, left in the inbox by default. This read is guaranteed on every run;
+   `/st-board`'s `## Deferral inbox` section owns the reader census.
 
 [...]
 

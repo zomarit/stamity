@@ -186,6 +186,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit f0-make-room (run 2026-10-10_next-tier;
+  //     inbox rows 2026-10-08_product-core/build/1 and close/10). The st-work
+  //     touchpoint moved, plus the manifest rows that record it. No emitted path
+  //     was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32720 -> 32121, `.agents/skills/st-work/SKILL.md` 32765 -> 32166), by
+  //       -599 bytes, the corpus source's own delta: room above the
+  //       re-attachment cut and under the line cap (rewraps at 100 columns,
+  //       restating sentences cut, the record head moved to the Proof block, the
+  //       light cap's hook caveat moved to Intensity) and the Dials rows' no-class
+  //       clause naming a failed read.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-09, plan 019 file 2, unit p5f-class-file-gate-config (run
   //     2026-10-08_product-core; REQ-FLOW-061). The injection-screening rule
   //     moved, plus the manifest rows that record it. No emitted path was added
