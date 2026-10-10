@@ -2331,8 +2331,11 @@ exists, it is the normative record for that requirement.
 - GIVEN a `product` change to one CLI source file, with no rendered surface, no third-party account and no step that
   cannot be undone, THEN none of the three kinds creates a person row, and where every row's check ran and passed no
   QA question is asked; a row whose check is missing, cannot run or fails stays on the human path, the person's, and
-  is asked (`content/skills/st-qa/SKILL.md:43-44`, `:105-107`, `:113`; amended 2026-10-10, `review/83`; it read "THEN
-  no person row is created and no QA question is asked"). `judgment: reviewer`
+  is asked, and so does the negative row a security-adjacent path derives where no committed test's assertion covers
+  it, a check run once for that row being no proof for it (`content/skills/st-qa/SKILL.md:43-44`, `:45-49`,
+  `:105-107`, `:113`; amended 2026-10-10, `review/83`; it read "THEN no person row is created and no QA question is
+  asked"; amended 2026-10-10, the whole-branch review's cap round, `review/103`: the clause on the negative row and
+  its citation `:45-49` added). `judgment: reviewer`
 
 **REQ-FLOW-070**
 
