@@ -508,6 +508,23 @@ describe("stamity ledger inbox", () => {
       "",
     ].join("\n");
 
+    // review/89: a day under `when:` is no row. It parsed as a trigger and was counted among the
+    // rows no query sees arrive; it now prints as unparsed, with where a day goes.
+    it("lists a row whose when: holds a day as unparsed, naming by: for it", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, `${SCHEDULE_RULE_HEADING}\n\n- Minor · — · meant for a day · source: x · when: 2026-11-01\n`);
+
+      const result = await inbox(dir, "--due", "2026-12-01");
+
+      expect(result.stdout).toBe(
+        [
+          "inbox: 1 rows · 0 matched · 0 unmatched · 1 unparsed · 0 skipped · 0 due by 2026-12-01 · 0 triggers",
+          "unparsed: 3: `when:` names a day and no event; a day goes under `by: <YYYY-MM-DD>`",
+          "",
+        ].join("\n"),
+      );
+    });
+
     it("matches the rows whose by: is on or before the day as due, and only counts the triggers", async () => {
       const dir = tempDir();
       await seedInbox(dir, SCHEDULED);

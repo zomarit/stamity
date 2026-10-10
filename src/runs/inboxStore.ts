@@ -1,4 +1,4 @@
-import { isIsoDate, vagueTrigger } from "./disposition.ts";
+import { dayTrigger, isIsoDate, vagueTrigger } from "./disposition.ts";
 import { LEDGER_FILE } from "./layout.ts";
 
 /**
@@ -24,7 +24,8 @@ import { LEDGER_FILE } from "./layout.ts";
  * carries `by:` or `when:`. Rows above it are older and stay valid without. A
  * trigger is held to one rule wherever its row stands: the one
  * `./disposition.ts` holds a `retired` value's trigger to, so this module
- * keeps no word list of its own.
+ * keeps no word list of its own. By that rule a `when:` holding a day and no
+ * event is refused: a query finds a day under `by:` alone.
  *
  * Two callers read one grammar: `stamity ledger inbox`, which prints the rows a
  * run's Frame folds in, and the records gate (`test/records/ledgers.test.ts`),
@@ -181,6 +182,7 @@ function parseTrailing(rest: readonly string[], hasRef: boolean): ScheduleFields
       if (!/[\p{L}\p{N}]/u.test(value)) return "`when:` names no trigger";
       const vague = vagueTrigger(value);
       if (vague !== null) return `\`when:\` names the vague trigger \`${vague}\`, which no event brings back`;
+      if (dayTrigger(value)) return "`when:` names a day and no event; a day goes under `by: <YYYY-MM-DD>`";
       fields.when = value;
     } else if (key === "files") {
       if (fields.files !== null) return twice(key);

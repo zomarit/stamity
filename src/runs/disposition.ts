@@ -12,7 +12,8 @@
  *   `plan docs/plans/<file>.md#<unit-id or follow-ups>`, `board <item ref>` or
  *   `handoff <path>`.
  *
- * A vague trigger ({@link VAGUE_TRIGGERS}) or an empty one, a date that names no
+ * A vague trigger ({@link VAGUE_TRIGGERS}) or an empty one, a trigger that is a
+ * day ({@link dayTrigger}; a day goes under `by`), a date that names no
  * calendar day, and any other shape are refused with a one-line problem naming
  * what is missing. Values dated before the cutover are never read against it.
  *
@@ -198,6 +199,26 @@ export function vagueTrigger(trigger: string): string | null {
   return vagueWord(trigger) ?? onlyFiller(wordsOf(trigger));
 }
 
+/** Every run shaped as a date, `YYYY-MM-DD`; whether one names a real day is not asked. */
+const DAY_RUNS = /\d{4}-\d{2}-\d{2}/gu;
+
+/**
+ * Whether a trigger names a day and no event: it holds a `YYYY-MM-DD`-shaped
+ * run, and with every such run taken out nothing is left that stands as a
+ * trigger. Either no word is left (`2026-11-15`, a backticked one, a day that
+ * is no real one, two days), or the words left are ones {@link vagueTrigger}
+ * names (`on 2026-11-15`, `later, 2026-11-15`). A row scheduled on such a
+ * trigger never comes back on its day, since only `by` is read as a day. A
+ * date beside a word outside both lists (`the 2026-11-15 release ships`, `the
+ * first close after 2026-11-15`) leaves a trigger, so this is false for it.
+ */
+export function dayTrigger(trigger: string): boolean {
+  const rest = trigger.replace(DAY_RUNS, " ");
+  // Taking a run out changes the text, so a text left as it was held none.
+  if (rest === trigger) return false;
+  return wordsOf(rest).length === 0 || vagueTrigger(rest) !== null;
+}
+
 type Parsed<T> = { ok: true; value: T } | { ok: false; problem: string };
 
 /** A keyword, an optional colon, then whitespace or the end; the rest is what follows. */
@@ -230,6 +251,9 @@ function parseDue(text: string): Parsed<Due> {
       ok: false,
       problem: `\`when\` names the vague trigger \`${vague}\`, which no event brings back`,
     };
+  }
+  if (dayTrigger(rest)) {
+    return { ok: false, problem: "`when` names a day and no event; a day goes under `by <YYYY-MM-DD>`" };
   }
   return { ok: true, value: { when: rest } };
 }

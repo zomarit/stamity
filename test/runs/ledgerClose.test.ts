@@ -1072,6 +1072,8 @@ describe("retireRow under the schedule rule (q9a-disposition)", () => {
     ["fixed just now", "`fixed` names only filler words (`just now`)"],
     ["scheduled board #42 · when at some point", "`when` names the vague trigger `at some point`"],
     ["scheduled board #42 · when —", "`when` names no trigger"],
+    // review/89: a day in the trigger's slot would never come back, since only `by` is read as a day.
+    ["scheduled board #42 · when 2026-11-15", "`when` names a day and no event; a day goes under `by <YYYY-MM-DD>`"],
     ["fixed —", "`fixed` names no ref"],
   ])("refuses %j from the cutover with why and next, the ledger byte-identical", async (disposition, problem) => {
     const dir = tempDir();

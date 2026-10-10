@@ -177,6 +177,9 @@ function ruled(bullet: string): string {
   return parsed.problems[0]?.message ?? "";
 }
 
+/** What a day under `when:` is refused with (review/89): it names `by:` as the place for a day. */
+const WHEN_DAY = "`when:` names a day and no event; a day goes under `by: <YYYY-MM-DD>`";
+
 describe("parseInbox — the schedule fields (q9b)", () => {
   it("parses /st-rework's critical-deferred row as written, with its trigger, tag, date and rationale", () => {
     // The template of `/st-rework`'s protocol text with D11's field and the placeholders filled.
@@ -328,6 +331,16 @@ describe("parseInbox — the schedule fields (q9b)", () => {
       "when: touched · files: that rule and its copies",
       "`files:` entry starting `that` holds a space; an entry is one path, parted from the next by a comma",
     ],
+    // review/89: a day under `when:` names no event, and `--due` reads `by:` alone, so the row
+    // would never come back on its day. It is refused whether or not the day is a real one, in
+    // backticks, and with only filler or vague words beside it; the message names `by:`.
+    ["src/a.ts:1", "when: 2026-11-15", WHEN_DAY],
+    ["src/a.ts:1", "when: 2026-02-30", WHEN_DAY],
+    ["src/a.ts:1", "when: `2026-11-15`.", WHEN_DAY],
+    ["src/a.ts:1", "when: on 2026-11-15", WHEN_DAY],
+    ["—", "when: until the 2026-11-15, maybe", WHEN_DAY],
+    ["—", "when: later, 2026-11-15", WHEN_DAY],
+    ["—", "when: 2026-11-15 or 2026-11-20", WHEN_DAY],
   ])("refuses a row at %j carrying %j", (location, field, message) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe(message);
   });
@@ -339,6 +352,9 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["—", "when: the next edit of src/a.ts"],
     ["—", "when: the next hygiene pass after the release"],
     ["—", "by: 2026-11-01"],
+    // review/89: a date among words that name an event is a trigger still.
+    ["—", "when: the 2026-11-15 release ships"],
+    ["—", "when: the first close after 2026-11-15"],
   ])("accepts a row at %j carrying %j below the heading", (location, field) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe("");
   });
@@ -364,6 +380,10 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     "later than the 1.14.0 release",
     "on the day",
     "next attended close",
+    // review/89: a day, alone or beside filler words, and a date beside an event.
+    "2026-11-15",
+    "on 2026-11-15",
+    "the 2026-11-15 release ships",
   ])("gives the trigger %j the verdict the `retired` grammar gives it after `scheduled <place> · when`", (trigger) => {
     const retired = parseDisposition(`scheduled board #42 · when ${trigger}`);
     const inbox = parseInbox(`- Minor · src/a.ts:1 · d · source: x · when: ${trigger}`);

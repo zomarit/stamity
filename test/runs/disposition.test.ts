@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dayTrigger,
   FILLER_WORDS,
   isIsoDate,
   parseDisposition,
@@ -18,6 +19,9 @@ import {
  * never opens, so none of them needs to exist, and none names a tracked file:
  * the test-input guard reads a tracked path literal as a read this file declares.
  */
+
+/** What a day in the trigger's slot is refused with (review/89): it names `by` as the place for a day. */
+const WHEN_DAY = "`when` names a day and no event; a day goes under `by <YYYY-MM-DD>`";
 
 /** The problem text of a refused value, or a marker that makes an accepted one fail the case. */
 function problemOf(text: string): string {
@@ -98,6 +102,39 @@ describe("isIsoDate", () => {
     ["a slash-spelled date", "2026/10/10"],
   ])("refuses %s", (_label, text) => {
     expect(isIsoDate(text)).toBe(false);
+  });
+});
+
+// review/89: a day in the trigger's slot names no event, and only `by` is read as a day, so a
+// value scheduled on one would never come back. The shape refused is the trigger that, its
+// `YYYY-MM-DD` runs taken out, has no word left or only words `vagueTrigger` names.
+describe("dayTrigger", () => {
+  it.each([
+    "2026-11-15",
+    "  2026-11-15  ",
+    "`2026-11-15`.",
+    "(2026-11-15)",
+    "2026-02-30",
+    "on 2026-11-15",
+    "until the 2026-11-15, maybe",
+    "later, 2026-11-15",
+    "2026-11-15 or 2026-11-20",
+  ])("reads %j as a day and no event", (trigger) => {
+    expect(dayTrigger(trigger)).toBe(true);
+  });
+
+  it.each([
+    "the 2026-11-15 release ships",
+    "the first close after 2026-11-15",
+    "2026-11-15_next-tier closes",
+    "touched",
+    "the 1.14.0 release",
+    "plan 020 starts",
+    "later",
+    "",
+    "—",
+  ])("reads %j as no day: a word outside both lists stands beside the date, or it holds no date", (trigger) => {
+    expect(dayTrigger(trigger)).toBe(false);
   });
 });
 
@@ -298,6 +335,13 @@ describe("parseDisposition", () => {
     ["a punctuation-only trigger", "scheduled board #42 · when ?!...", "`when` names no trigger"],
     ["a symbol-only trigger", "scheduled board #42 · when ~ + = ` $", "`when` names no trigger"],
     ["a dash-only board item", "scheduled board — · by 2026-11-01", "the place is none of"],
+    // review/89: a day in the trigger's slot, alone or beside filler and vague words only.
+    ["a day for a trigger", "scheduled board #42 · when 2026-11-15", WHEN_DAY],
+    ["a day for a trigger after a colon", "scheduled board #42 · when: 2026-11-15", WHEN_DAY],
+    ["a day that is no real one for a trigger", "scheduled board #42 · when 2026-02-30", WHEN_DAY],
+    ["a day in backticks for a trigger", "scheduled board #42 · when `2026-11-15`.", WHEN_DAY],
+    ["a day beside filler words for a trigger", "scheduled board #42 · when on the 2026-11-15", WHEN_DAY],
+    ["a day beside a vague word for a trigger", "scheduled board #42 · when later, 2026-11-15", WHEN_DAY],
     ["a symbol-only board item", "scheduled board # · when touched", "the place is none of"],
     ["a lone dot as a handoff place", "scheduled handoff . · by 2026-11-01", "the place is none of"],
     ["a lone slash as a handoff place", "scheduled handoff / · by 2026-11-01", "the place is none of"],
@@ -346,6 +390,9 @@ describe("parseDisposition", () => {
     "scheduled board #42 · when next attended close",
     "scheduled board #42 · when later today's release ships",
     "scheduled board 7 · when: the next client release",
+    // review/89: a date among words that name an event is a trigger still.
+    "scheduled board #42 · when the 2026-11-15 release ships",
+    "scheduled board #42 · when the first close after 2026-11-15",
     "scheduled handoff notes.md · by 2026-11-01",
     // review/47: a board item with a digit, or a filler word beside a real one.
     "scheduled board #42 · by 2026-11-01",
