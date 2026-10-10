@@ -66,9 +66,9 @@ does an `unknown` one; the verdict names the rows that caused it.
   holds no edit tool — that write is the one redirect this role makes, and no gate command is
   ever redirected — and the final message is the digest: `status:`, `report:` with the path,
   the verdict line, `security:` any redacted-credential row in full or `none`, and
-  `contract delta: none`. A `red` verdict is returned in full, rows and excerpts, whatever the
-  dispatch names: its excerpts are ledger evidence. A `BLOCKED_*` return writes no report and
-  is returned in full.
+  `contract delta: none`. A `red` verdict writes nothing to the named path and is returned in
+  full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence. A
+  `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Governing text — `content/commands/st-work.md`, "Return contract" (the two tiers and what

@@ -35,8 +35,8 @@ appended, the whole suite when the selection reads `full`, and no row when it
 names none; `lint` → `lint`; `typecheck` → `typecheck`; `gates-all`, an
 `unclear` class, or a test command that takes no file list → `all`. The other
 checks are the orchestrator's. On the final tree a `product` or stronger class
-runs `all`. Where the charter's `CI provider` reads `unknown`, the final tree
-runs `all` whatever the class.
+runs `all`. This repository's CI provider is ${STAMITY:CI_PROVIDER}; where that
+reads `unknown`, the final tree runs `all` whatever the class.
 
 `all` is a `&&` chain and stops at the first failing link. A gate the chain
 never reached is reported `not-run`, not `pass` — reporting an unreached gate as
@@ -141,9 +141,9 @@ producing the same evidence, so a re-run is only warranted after a fix lands.
   holds no edit tool — that write is the one redirect this role makes, and no gate command is
   ever redirected — and the final message is the digest: `status:`, `report:` with the path,
   the verdict line, `security:` any redacted-credential row in full or `none`, and
-  `contract delta: none`. A `red` verdict is returned in full, rows and excerpts, whatever the
-  dispatch names: its excerpts are ledger evidence. A `BLOCKED_*` return writes no report and
-  is returned in full.
+  `contract delta: none`. A `red` verdict writes nothing to the named path and is returned in
+  full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence. A
+  `BLOCKED_*` return writes no report and is returned in full.
 
 ## Shell
 

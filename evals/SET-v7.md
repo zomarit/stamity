@@ -1555,6 +1555,24 @@ clauses, so no `## Expected` block moves; `EXPECTED_MOVES` gains no row, and no 
 identical/moved count, threshold or roster count moves. Under the incremental rule the one case
 re-measures, because its case-file bytes moved. The dated citations above stay as they were.
 
+**No range moved and three Briefs re-quoted, 2026-10-10 (plan 019 file 3, unit
+`q6t-test-runner-ci-line`; inbox rows `build/61` and `build/85`).** The test-runner's Gate set
+names the CI provider through the detection token instead of pointing at the charter: "This
+repository's CI provider is ${STAMITY:CI_PROVIDER}; where that reads `unknown`, [...]", rewrapped
+in place at 38-39. Its Return contract's red sentence now says a `red` verdict "writes nothing to
+the named path and is returned in full", rewrapped in place at 144-146. No line count moves (the
+body stays at 157 lines), so no `source:` range or case-index cell moves. Each Brief re-quotes the
+landed lines by script, byte-identical: `agent-test-runner-return-contract` and
+`test-runner-red-verdict-never-digested` (144-146, in their Return contract blocks), and
+`work-unclear-class-runs-the-full-gate` (38-39, in its test-runner "Gate set" block); that case's
+scenario now resolves the token beside the gate tokens it already resolves ("`${STAMITY:CI_PROVIDER}`, the CI
+provider, reads `github-actions`"), in place of the charter field it named. The
+red sentence states what was already true, and the provider rule decides the same way for the
+same provider, so no `## Expected` block moves. `agent-test-runner-return-contract` was already
+not byte-identical to its cases-v5 copy, so `EXPECTED_MOVES` gains no row, and no claim,
+identical/moved count, threshold or roster count moves. Under the incremental rule the three
+re-measure, because their case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

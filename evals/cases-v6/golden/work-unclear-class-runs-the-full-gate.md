@@ -51,8 +51,8 @@ appended, the whole suite when the selection reads `full`, and no row when it
 names none; `lint` → `lint`; `typecheck` → `typecheck`; `gates-all`, an
 `unclear` class, or a test command that takes no file list → `all`. The other
 checks are the orchestrator's. On the final tree a `product` or stronger class
-runs `all`. Where the charter's `CI provider` reads `unknown`, the final tree
-runs `all` whatever the class.
+runs `all`. This repository's CI provider is ${STAMITY:CI_PROVIDER}; where that
+reads `unknown`, the final tree runs `all` whatever the class.
 ```
 
 Governing text — `content/charter/stamity-charter.md`, invariant 4:
@@ -67,8 +67,8 @@ Scenario state — given to you as fact:
 > The charter's verification gates resolve as follows: `${STAMITY:VERIFY_GATE_TEST}` is
 > `npx vitest run`, `${STAMITY:VERIFY_GATE_LINT}` is `npm run lint`,
 > `${STAMITY:VERIFY_GATE_TYPECHECK}` is `npm run typecheck`, and `${STAMITY:VERIFY_GATE_ALL}`
-> is `npm run lint && npm run typecheck && npx vitest run`. The charter's `CI provider` reads
-> `github-actions`. The `stamity` CLI is installed and has a `gate` verb.
+> is `npm run lint && npm run typecheck && npx vitest run`. `${STAMITY:CI_PROVIDER}`, the CI
+> provider, reads `github-actions`. The `stamity` CLI is installed and has a `gate` verb.
 > This is the run `2026-10-09_install-guide`. Its record head reads, in full:
 > `Status: in progress`, `Plan: .stamity/runs/2026-10-09_install-guide/plan.md` and
 > `Invocation: /st-work refresh the install guide for the new Node floor`. It carries no

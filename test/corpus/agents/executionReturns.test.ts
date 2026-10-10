@@ -133,7 +133,10 @@ describe("test-runner — a green verdict may be digested, a red one never", () 
   it("returns a red verdict in full whatever the dispatch names", async () => {
     const contract = section(await load(TEST_RUNNER), "Return contract");
     expect(contract).toContain("a red one never is");
-    expect(contract).toContain("A `red` verdict is returned in full");
+    // TEST CHANGE, justified (2026-10-10, q6t-test-runner-ci-line, `build/85`, D36): the red
+    // sentence now also states that a red verdict writes nothing to the named path, which was
+    // already true; the full return it pins is unchanged.
+    expect(contract).toContain("A `red` verdict writes nothing to the named path and is returned in full");
     expect(contract).toContain("whatever the dispatch names");
     // The pin the quality suite holds survives beside the new bullet.
     expect(contract).toMatch(/a red verdict is still `DONE`/i);

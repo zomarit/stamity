@@ -93,6 +93,20 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q6t-test-runner-ci-line (run
+ *     2026-10-10_next-tier; REQ-FLOW-063, inbox rows build/61 and build/85).
+ *     ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on agents/stamity-test-runner.md, 8683 -> 8754 bytes
+ *     at an unchanged 157 lines in the corpus source: the Gate set's
+ *     `unknown`-provider sentence names the provider through
+ *     `${STAMITY:CI_PROVIDER}`, which the detected fixture renders as
+ *     `github-actions`, in place of the charter field it pointed at; and the
+ *     Return contract's red sentence states that a `red` verdict writes
+ *     nothing to the named path. Both rewrapped inside their paragraphs.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q2-qa-rows (run
  *     2026-10-10_next-tier; review/2, review/3, review/4). NOTHING moved in
  *     this suite; the row keeps the two ledgers in step. The round's one
