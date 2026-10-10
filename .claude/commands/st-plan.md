@@ -357,8 +357,8 @@ When neither form runs, the installed copy has no `gate` verb, or a classify's `
 6. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with
    `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append
    as the Side effects say.
-7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with only a revisit
-   trigger; they append nowhere.
+7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no
+   trigger a run can check; they append nowhere.
 
 **Fresh-context criteria.** The artifact is executable by an implementer holding no session
 history. Two checks before the write: (1) every unit's `interfaces` resolve without opening another
@@ -385,9 +385,14 @@ file moves here, and neither side effect is a third write channel for the plan i
   non-obvious, verified, repo-specific. A run that met no qualifying failure writes none and
   says so, because a silent zero and an unrecorded finding read identically.
 - **Deferral-inbox append.** Follow-ups this plan deliberately left out append to
-  `.stamity/inbox.md`, one row each, citing the plan path, each row carrying `by:` or `when:`,
-  and `files:` when its location is `—`, below the inbox's `## Rows under the schedule rule`
-  heading; a follow-up with neither belongs in the plan's Drop list with its revisit trigger.
+  `.stamity/inbox.md`, one row each, citing the plan path in `Ref:`, each row carrying `by:` or
+  `when:`, and `files:` when its location is `—`, below the
+  inbox's `## Rows under the schedule rule` heading:
+  `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
+  or `· when: <trigger>` in the date's place, with `· files: <path>, …` when the location is `—`.
+  A follow-up's trigger is something a run can check from the repository or its record: a path
+  touched, a named unit or session, a release, a date. A follow-up with neither, or one whose
+  trigger only the outside world fires, belongs in the plan's Drop list with its revisit trigger.
   That inbox is the rendezvous `/st-board fill` triages and `/st-work` reads at its framing
   phase, so a deliberate exclusion stays visible instead of dying with the session.
 
@@ -411,4 +416,4 @@ Close the run with:
   artifact goes to `/st-board fill --source docs/plans/<file>`; any other clean artifact
   goes to `/st-work docs/plans/<file>`. One action, named, with the state that chose it.
 - Follow-ups outside this plan's scope append to `.stamity/inbox.md`, one line each, citing the
-  plan path, with `by:` or `when:`; the Drop list appends nothing.
+  plan path in `Ref:`, with `by:` or `when:`; the Drop list appends nothing.

@@ -352,6 +352,7 @@ command is what parses it.
   `rationale: <rest of line>` last. Rows below the inbox's
   heading `## Rows under the schedule rule` carry `by:` or `when:`, without
   which a row there does not parse, and name `files:` when the location is `—`;
+  a writer appending where the heading is absent adds it first, at the end of the file;
   `when: touched` needs a path in the location or `files:`. A trigger made only
   of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
   filler words (`maybe later`, or filler alone, `at some point`), one that
