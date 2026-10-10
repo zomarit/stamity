@@ -294,25 +294,44 @@ export function parseInbox(text: string): { rows: InboxRow[]; problems: InboxPro
 /**
  * The paths a location names: split on `,`; each entry trimmed, its backticks
  * stripped, cut at the first space and then at the first `:`; kept when it
- * holds a `/` or a `.`. So `nightly.yml:219-221,241-246,280` names
- * `nightly.yml`, `src/cli/commands/gate.ts GitReadError` names the file, and
- * `—` or a prose location names none.
+ * holds a `/` or a `.`, or when the entry carries a line suffix
+ * ({@link lineSuffixed}). So `nightly.yml:219-221,241-246,280` names
+ * `nightly.yml`, `src/cli/commands/gate.ts GitReadError` names the file,
+ * `Makefile:12` and `Dockerfile:3-9` name the root file with no dot in its
+ * name, and `—`, a bare `Makefile` or a prose location names none.
  */
 export function locationPaths(location: string): string[] {
-  return location
-    .split(",")
-    .map(entryPath)
-    .filter((path) => path.includes("/") || path.includes("."));
+  return location.split(",").flatMap((entry) => {
+    const path = entryPath(entry);
+    return path.includes("/") || path.includes(".") || lineSuffixed(entryToken(entry)) ? [path] : [];
+  });
+}
+
+/** One comma-separated entry up to its first space: trimmed, its backticks stripped. */
+function entryToken(entry: string): string {
+  const token = entry.replaceAll("`", "").trim();
+  const space = token.indexOf(" ");
+  return space === -1 ? token : token.slice(0, space);
 }
 
 /** One comma-separated entry as a path: trimmed, its backticks stripped, cut at the first space and then at the first `:`. */
 function entryPath(entry: string): string {
-  let path = entry.replaceAll("`", "").trim();
-  const space = path.indexOf(" ");
-  if (space !== -1) path = path.slice(0, space);
-  const colon = path.indexOf(":");
-  if (colon !== -1) path = path.slice(0, colon);
-  return path;
+  const token = entryToken(entry);
+  const colon = token.indexOf(":");
+  return colon === -1 ? token : token.slice(0, colon);
+}
+
+/**
+ * Whether an entry's token is a name, one `:`, then a line number or a line
+ * range and nothing more: `Makefile:12`, `Dockerfile:3-9`. The name holds a
+ * letter, so `—:12`, `:12` and a clock time such as `12:30` are none; a `:`
+ * followed by anything else (`Makefile:`, `Makefile:all`, `Makefile:12:5`) is
+ * none either. It is the third tell of a path, for a file with no `/` and no
+ * `.` to show: a bare word stays prose, since nothing sets it apart from one.
+ */
+function lineSuffixed(token: string): boolean {
+  const colon = token.indexOf(":");
+  return colon !== -1 && /\p{L}/u.test(token.slice(0, colon)) && /^\d+(?:-\d+)?$/.test(token.slice(colon + 1));
 }
 
 /** POSIX spelling: `\` to `/`, a leading `./` and a trailing `/` dropped. */

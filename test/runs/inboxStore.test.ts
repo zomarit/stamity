@@ -338,6 +338,7 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["src/a.ts:1", "when: ...", "`when:` names no trigger"],
     ["—", "when: touched", "`when: touched` needs a path, in the location or in `files:`"],
     ["the ledger grammar", "when: Touched.", "`when: touched` needs a path, in the location or in `files:`"],
+    ["Gemfile", "when: touched", "`when: touched` needs a path, in the location or in `files:`"],
     [
       "—",
       "when: touched · files: that rule and its copies",
@@ -374,6 +375,8 @@ describe("parseInbox — the schedule fields (q9b)", () => {
 
   it.each([
     ["src/a.ts:1", "when: touched"],
+    // review/107: a root file with no dot is a path by its line suffix, so an edit of it brings the row back.
+    ["Gemfile:12", "when: touched"],
     ["—", "when: touched · files: src/b.ts"],
     ["—", "files: src/b.ts · when: touched"],
     ["—", "when: the next edit of src/a.ts"],
@@ -432,6 +435,44 @@ describe("locationPaths", () => {
   ])("names the paths of %j", (location, paths) => {
     expect(locationPaths(location)).toEqual(paths);
   });
+
+  // review/107, review/77: a file at the repository root with no dot in its name (a `Makefile`, a
+  // `Dockerfile`, a `Gemfile`) has neither tell of a path, so its line suffix is the third one.
+  it.each([
+    ["Makefile:12", ["Makefile"]],
+    ["Dockerfile:3-9", ["Dockerfile"]],
+    ["`Gemfile:12`", ["Gemfile"]],
+    ["Makefile:12 the build target", ["Makefile"]],
+    ["Makefile:12-14,20,30-31", ["Makefile"]],
+    ["LICENSE:1, src/a.ts:2, Dockerfile:3", ["LICENSE", "src/a.ts", "Dockerfile"]],
+  ])("names a file with no slash and no dot by its line suffix, in %j", (location, paths) => {
+    expect(locationPaths(location)).toEqual(paths);
+  });
+
+  it.each([
+    // No line suffix: a bare word, with or without words after it, is prose.
+    "Makefile",
+    "Makefile target",
+    "`Makefile`",
+    // A `:` with no line number or line range after it.
+    "Makefile:",
+    "Makefile: 12",
+    "Makefile:all",
+    "Makefile:12a",
+    "Makefile:12-",
+    "Makefile:-12",
+    "Makefile:12:5",
+    "note: see the plan",
+    // A line suffix with no name before it: nothing, a dash, a number.
+    ":12",
+    "—:12",
+    "12:30",
+    // The later ranges of a multi-range location, each an entry of its own.
+    "241-246",
+    "280",
+  ])("names no path for %j", (location) => {
+    expect(locationPaths(location)).toEqual([]);
+  });
 });
 
 describe("matchInbox", () => {
@@ -450,6 +491,20 @@ describe("matchInbox", () => {
   it("matches an entry with no folder by the query path's basename", () => {
     const rows = [row(1, "gate.ts GitReadError"), row(2, "notgate.ts:1")];
     expect(answer(rows, { paths: ["src/cli/commands/gate.ts"] })).toEqual(["1:path"]);
+  });
+
+  // review/107: the row the bot's query left out.
+  it("matches a row at a root file with no dot by its path, and no longer by an area word", () => {
+    const rows = [
+      row(1, "Makefile:12", { description: "the build note" }),
+      row(2, "Dockerfile:3-9", { description: "the build note" }),
+      row(3, "Makefile", { description: "the build note" }),
+    ];
+    expect(answer(rows, { paths: ["Makefile"] })).toEqual(["1:path"]);
+    expect(answer(rows, { paths: ["./Dockerfile"] })).toEqual(["2:path"]);
+    expect(answer(rows, { paths: ["tools/Makefile"] })).toEqual(["1:path"]);
+    // A row pinned to a file is found by its file; the bare word is still prose, found by its words.
+    expect(answer(rows, { paths: ["src/z.ts"], area: ["build"] })).toEqual(["3:area"]);
   });
 
   it("treats a query path as a folder, with or without its trailing slash, and an entry as one too", () => {

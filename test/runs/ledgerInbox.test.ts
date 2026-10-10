@@ -277,6 +277,33 @@ describe("stamity ledger inbox", () => {
     expect(area.stdout).toBe("inbox: 3 rows · 1 matched · 2 unmatched · 0 unparsed · 0 skipped\n2 Minor · — · the ledger note (area)\n");
   });
 
+  // review/107: `ledger inbox --paths Makefile` left the row out, so Frame and the close missed it.
+  it("matches a row at a root file with no dot in its name by --paths", async () => {
+    const dir = tempDir();
+    await seedInbox(
+      dir,
+      [
+        "- Warning · Makefile:12 · the target runs twice · source: /st-work",
+        "- Minor · Dockerfile:3-9 · the base image floats · source: /st-work",
+        "- Minor · Makefile · a bare word, so prose · source: /st-work",
+        "",
+      ].join("\n"),
+    );
+
+    const makefile = await inbox(dir, "--paths", "Makefile");
+    const dockerfile = await inbox(dir, "--paths", "Dockerfile", "--json");
+
+    expect(makefile.code).toBe(0);
+    expect(makefile.stdout).toBe(
+      "inbox: 3 rows · 1 matched · 2 unmatched · 0 unparsed · 0 skipped\n1 Warning · Makefile:12 · the target runs twice (path)\n",
+    );
+    expect(JSON.parse(dockerfile.stdout)).toMatchObject({
+      total: 3,
+      matched: [{ line: 2, location: "Dockerfile:3-9", matchedBy: "path" }],
+      unmatched: 2,
+    });
+  });
+
   it("withholds a row whose screened keyword an invisible character splits, by the stripped view", async () => {
     const dir = tempDir();
     await seedInbox(dir, `- Minor · src/a.ts:1 · a row${HEADER_HIT_SPLIT} · source: x\n`);
