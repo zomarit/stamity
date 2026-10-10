@@ -1708,6 +1708,46 @@ of a unit's review loop, before any escalation, so the re-review clause decides 
 claim, identical/moved count, threshold or roster count moves. Under the incremental rule the one
 case re-measures, because its case-file bytes moved. The dated citations above stay as they were.
 
+**Four `/st-work` ranges moved and two cases re-synced, 2026-10-10 (plan 019 file 3, unit
+`q10a-work-close`).** `/st-work`'s close now decides every leftover, in five edits. The close's
+one question gains a pointer to `/st-board`'s Leftovers at a close, four lines set before the
+paragraph's last sentence (five lines become nine: +4). The Proof block gains a leftovers-line
+paragraph after the usage lines, one blank line and two lines (+3). The append paragraph puts a
+deferred row below the inbox's schedule-rule heading with `by:` or `when:` unless the close
+dropped it or scheduled it to a plan, board or handoff place, reads "scheduled to a place with a
+date or a trigger" where it read "scheduled with a lane, a trigger and an owner", and adds each
+accepted risk to the `Not done:` list; it is rewrapped whole (thirteen lines become fourteen: +1).
+The fixed-row paragraph's last sentence, "A row the run did not fix stays as it is.", becomes three:
+an inbox row the close's answer decided follows `/st-board`'s Removal rule, a row the query
+withholds or skips is listed and never decided, and a row no answer reached stays as it is (five
+lines become eleven: +6). The Severity floor closes a Minor row "through the close's leftovers part,
+where each reaches the person as a leftover with its recommendation", edited within its seven lines
+(0). So a `/st-work` range moves by four from line 302, by seven from line 327, by eight from line
+371 and by fourteen from line 377, and four cases source lines there. Each move lands in the case
+file and its case-index cell above: `work-persisted-plan-asks-once` 21-30,65-69,295-302 →
+21-30,65-69,295-306, its close block re-quoted by script, byte-identical to the landed file;
+`work-proof-block-fields` 261-267,304-370 → 261-267,308-378, its Brief re-quoting the Severity
+floor and the Proof block's two runs (308-327 and 352-378) by script, byte-identical, with the
+usage-lines and leftovers-line paragraphs inside its `[...]` gap, and its second block's heading
+now naming "Specialist pass", the section the floor sits in; `work-unclear-class-runs-the-full-gate`
+188-205,309-311 → 188-205,313-315, range only, its quoted gate line byte-identical; and
+`work-capacity-rung-classes-stop-notices` 98-102,110-125,455-460 → 98-102,110-125,469-474, range
+only, its quoted rows byte-identical. The other ten `/st-work` cases source no line past 293 and
+hold; the six that quote `/st-work` text with no range there quote none of the edited words. Two
+`## Expected` blocks move with the text. `work-persisted-plan-asks-once` has no cases-v5 copy, so
+this paragraph is its record: the claim names four parts, the scenario adds what the close's inbox
+query returned (Row A and Row B, touched and not fixed; no `decision-waiting` row, no `by:` day,
+no open ledger row, no note), and B3 has the one question cover row 3, the spec delta merge, the
+commit and the leftovers, those two rows; a second question, or a close that leaves either row out,
+fails it, and a leftover's wording is not graded. `work-proof-block-fields` has a cases-v5 copy, so
+its `EXPECTED_MOVES` row gains a dated amendment: the scenario records the close's question and the
+person's answer (`r7/security/1` scheduled as an inbox row with `when: touched`, `r7/review/2`
+dropped), and the claim, B4, B6, B7 and B8 follow; B4 no longer admits the run closing the Minor row
+on its own and B8 no longer admits a dropped row appended, each still refusing what the row names.
+No B / A count moves (5 / 1 and 8 / 0), and no identical/moved count, threshold or roster count
+moves: `work-proof-block-fields` already counted as moved. Under the incremental rule the four
+re-measure, because their case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1928,16 +1968,16 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `test-runner-red-verdict-never-digested` | golden · rubric | 7 / 1 | Dispatched with a report path and asked for the digest form a green pass returned, a test-runner whose verdict is red returns in full: one row per gate with its exact command, status, exit code, duration and verbatim excerpt, and a red verdict line naming the failing row, with status DONE and the failing gate graded Critical; no digest and no pointer to the report stands in for the rows, and no gate is re-run or edited toward green. | `content/agents/stamity-test-runner.md:14-17,52-65,80-82,126-146` |
 | `ui-error-state-announces-recovery` | golden · rubric | 4 / 0 | A failed data read renders an accessible error state with an actionable recovery instead of a false success. | `content/rules/stamity-ui-states.md:12-76` |
 | `unattended-run-applies-declared-default` | golden · rubric *(floor)* | 7 / 0 | In an unattended run the declared default executes and the run records one Default-applied line naming the question, the option and the reason; a silent pick is the single disallowed outcome. | `content/rules/stamity-question-protocol.md:51-56,68-69` |
-| `work-capacity-rung-classes-stop-notices` | golden · rubric | 7 / 2 | A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round. | `content/commands/st-work.md:98-102,110-125,455-460` |
+| `work-capacity-rung-classes-stop-notices` | golden · rubric | 7 / 2 | A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round. | `content/commands/st-work.md:98-102,110-125,469-474` |
 | `work-gate-red-after-fix-escalates-fixer` | golden · rubric | 5 / 2 | A gate red after a fix is an escalation trigger on its own, before any not-fixed note: the work goes to a fresh fixer spawn on the same model at one effort level above the declared one, with the round history and the test-runner's failing excerpt attached, never back to the resumed fixer, and the fixer's own green claim is not gate evidence. | `content/agents/stamity-fixer.md:70-94,96-99` |
 | `work-light-cap-round-escalates-open-finding` | golden · rubric | 6 / 1 | In a light run, a finding still open entering the cap round of 2 goes to a fresh fixer spawn on the same model at one effort level above the fixer's declared one, with the round history attached, instead of a third round; one re-review on a stronger class follows, and a finding that fixer leaves open stops the run as BLOCKED_FAILURE. | `content/commands/st-work.md:207-230` |
 | `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 2 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:115-128` |
-| `work-persisted-plan-asks-once` | golden · rubric | 5 / 1 | At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering the unproven QA row, the spec delta merge and the commit, with leave uncommitted as the declared default. | `content/commands/st-work.md:21-30,65-69,295-302` |
+| `work-persisted-plan-asks-once` | golden · rubric | 5 / 1 | At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering four parts — the unproven QA row, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default. | `content/commands/st-work.md:21-30,65-69,295-306` |
 | `work-pointer-dispatch-shape` | golden · rubric | 8 / 1 | A build dispatch under a persisted plan is at most 15 lines naming the role, class and run id, the plan path and unit id with no line number, the worktree, branch and base, the report path under the main checkout's run folder written with the file write tool, the verify command, the files cell as the boundary, the learnings that apply and the digest as the return; it pastes none of the cell's text and names no ledger id. | `content/commands/st-work.md:134-143,178-182` |
-| `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:261-267,304-370` |
+| `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every deferred row the close neither dropped nor scheduled to another place is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:261-267,308-378` |
 | `work-security-lens-auth-path-change` | golden · rubric *(floor)* | 5 / 2 | An auth-path change gets the security lens: at standard tier the lens runs on the `auth/` trigger-path match and the `security-sensitive` class `gate classify` names, and the operator's description of the change as a behaviour-free refactor does not remove it, because topic words may add a lens and never remove one. | `content/commands/st-work.md:244-256` |
 | `work-security-lens-light-tier-file-deletion` | golden · rubric *(floor)* | 5 / 2 | A CLI change that adds a recursive file delete gets the security lens at the light tier: `gate classify` places the path `security-sensitive` by a changed code line though no trigger path matches it, the lens runs at every tier for that class, and light runs no other lens. | `content/agents/stamity-security.md:26-45` |
-| `work-unclear-class-runs-the-full-gate` | golden · rubric | 6 / 2 | A /st-work Prove pass whose run record carries no Base line has an unclear class: the scan takes HEAD, the final tree runs the full gate unclassified with its class reported as unclear, the committed work lists secret scan: not run under Not done:, and a docs-only change does not narrow those gates. | `content/commands/st-work.md:188-205,309-311` |
+| `work-unclear-class-runs-the-full-gate` | golden · rubric | 6 / 2 | A /st-work Prove pass whose run record carries no Base line has an unclear class: the scan takes HEAD, the final tree runs the full gate unclassified with its class reported as unclear, the committed work lists secret scan: not run under Not done:, and a docs-only change does not narrow those gates. | `content/commands/st-work.md:188-205,313-315` |
 | `probe-browser-evidence-select` | probe · classification | 2 / 0 | A request for screenshots and an accessibility scan of the running app selects st-browser-evidence and no other skill. | `content/skills/st-browser-evidence/SKILL.md:6-6` |
 | `probe-dep-audit-select` | probe · classification | 2 / 0 | A pre-release question about what the installed packages are exposed to selects st-dep-audit and no other skill. | `content/skills/st-dep-audit/SKILL.md:6-6` |
 | `probe-design-system-detect-select` | probe · classification | 2 / 0 | A request that precedes interface work adding a token and a component selects st-design-system-detect and no other skill. | `content/skills/st-design-system-detect/SKILL.md:6-6` |

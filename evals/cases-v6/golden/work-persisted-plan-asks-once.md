@@ -1,8 +1,8 @@
 ---
 id: work-persisted-plan-asks-once
 class: golden
-claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering the unproven QA row, the spec delta merge and the commit, with leave uncommitted as the declared default."
-source: content/commands/st-work.md:21-30,65-69,295-302
+claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering four parts — the unproven QA row, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default."
+source: content/commands/st-work.md:21-30,65-69,295-306
 metric: rubric
 ---
 
@@ -45,8 +45,12 @@ its `## Human sign-off` rules.
 **The close asks once.** One question with numbered options covers what is
 left for the person: the rows no evidence proved, the spec delta merge and
 the commit. `Default if no response: leave uncommitted`, with those rows not
-signed and the delta unmerged. A part with nothing to decide drops out; with
-none left, there is no ask.
+signed and the delta unmerged.
+The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
+close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every
+`decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
+rejected; with no response, its unattended rule applies.
+A part with nothing to decide drops out; with none left, there is no ask.
 ```
 
 Governing text — `content/skills/st-qa/SKILL.md`, the row states it closes each row in (the
@@ -96,6 +100,10 @@ Scenario state — the run, given to you as fact, in the order it happens:
 > 250-user export starts at user 101 in the downloaded file", has no evidence and no
 > earlier acceptance.
 > The plan carries a spec delta: `ADDED REQ-API-014` for `docs/specs/export.md`.
+> Before asking, the close ran the inbox query with `--due --paths` over the two changed files.
+> It returned Row A and Row B: the change touched both files and fixed neither row. No row is
+> tagged `decision-waiting` and none carries a `by:` day. The run's ledger holds no row that
+> is neither fixed nor rejected, and no note was left out.
 > Nothing is committed.
 
 Scenario input — the message that asks for your output:
@@ -116,10 +124,13 @@ each list.
 2. The plan gate asks no question: the run takes execute-now and logs
    `Default applied: plan gate → option 1, execute now (persisted plan docs/plans/021-export-cursor.md)`
    or that line with the plan path in the same place, then proceeds.
-3. The close asks exactly one question, with numbered options, covering row 3, the
-   `REQ-API-014` spec delta merge and the commit, and declares
+3. The close asks exactly one question, with numbered options, covering four parts: row 3,
+   the `REQ-API-014` spec delta merge, the commit, and the leftovers, which are Row A and
+   Row B, the inbox rows the change touched and did not fix. It declares
    `Default if no response: leave uncommitted`, with row 3 not signed and the delta
-   unmerged.
+   unmerged. A second question for the leftovers fails this criterion, and so does a close
+   that leaves either row out of its question. How a leftover's line is worded is not graded:
+   the quoted block carries the pointer to that rule, not the rule.
 4. The response must NOT make a commit, merge the spec delta, or record row 3 as `walked`
    or `accepted-unwalked` before the person answers.
 5. The close question does not put rows 1 and 2, which evidence proved, to the person.

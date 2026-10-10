@@ -186,6 +186,32 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q10a-work-close (run
+  //     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019,
+  //     REQ-FLOW-024, REQ-CTX-020). The st-work touchpoint moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       33029 -> 34624, `.agents/skills/st-work/SKILL.md` 33074 -> 34669), by
+  //       +1595 bytes, the corpus source's own delta (471 -> 485 lines), all of
+  //       it below the re-attachment cut: the Severity floor closes a Minor row
+  //       through the close's leftovers part; "The close asks once" gains the
+  //       four-line pointer to `/st-board`'s Leftovers at a close; the Proof
+  //       block gains the "Leftovers line" paragraph after the usage lines; the
+  //       append paragraph puts a deferred row under the schedule rule unless
+  //       the close dropped or placed it, reads "scheduled to a place with a
+  //       date or a trigger" and adds each accepted risk to `Not done:`; and
+  //       the fixed-row paragraph applies the close's answer by `/st-board`'s
+  //       Removal rule, lists a withheld or skipped row without deciding it,
+  //       and keeps a row no answer reached.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules (run
   //     2026-10-10_next-tier; REQ-FLOW-076, REQ-FLOW-074, REQ-FLOW-075,
   //     REQ-FLOW-024). The st-board touchpoint moved, plus the manifest rows

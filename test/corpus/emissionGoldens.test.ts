@@ -93,6 +93,31 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q10a-work-close (run
+ *     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019,
+ *     REQ-FLOW-024, REQ-CTX-020). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33304 -> 34899 bytes and
+ *     471 -> 485 lines in the corpus source, five hunks. The Severity floor
+ *     closes a Minor row "through the close's leftovers part, where each
+ *     reaches the person as a leftover with its recommendation" and opens its
+ *     last sentence "Before the close," (edited within its seven lines). "The
+ *     close asks once" gains a four-line pointer, "The leftovers join it as a
+ *     fourth part, by `/st-board`'s Leftovers at a close", set before the
+ *     paragraph's last sentence (+4 lines). The Proof block gains a
+ *     "**Leftovers line.**" paragraph after the usage lines (+3). The append
+ *     paragraph puts a deferred row below the inbox's schedule-rule heading
+ *     with `by:` or `when:` unless the close dropped it or scheduled it
+ *     elsewhere, reads "scheduled to a place with a date or a trigger", and
+ *     ends "and each accepted risk", rewrapped whole (+1). The fixed-row
+ *     paragraph's last sentence becomes three: an answered inbox row follows
+ *     `/st-board`'s Removal rule, a withheld or skipped row is listed and
+ *     never decided, and "A row no answer reached stays as it is." (+6). All
+ *     five sit below the re-attachment cut (`### Specialist pass` holds at
+ *     17076). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules (run
  *     2026-10-10_next-tier; REQ-FLOW-076, REQ-FLOW-074, REQ-FLOW-075,
  *     REQ-FLOW-024). NOTHING moved in this suite; the row keeps the two

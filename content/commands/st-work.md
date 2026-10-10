@@ -261,10 +261,10 @@ format, a parse failure, or an audit that cannot run keeps the lens.
 - **Severity floor.** Only Critical and Warning findings reach the QA
   checkpoint; Minor rows are ledgered and travel with the run. Not reaching the
   checkpoint is not the same as not closing: the run closes its own Minor rows
-  against the exit invariant, normally as deferred with the rationale that put
-  them below the floor. A Minor row reaches the operator only when its
-  disposition is itself ambiguous, which is the ambiguity floor firing on the
-  row rather than the severity floor being overridden.
+  against the exit invariant through the close's leftovers part, where each reaches
+  the person as a leftover with its recommendation. Before the close, a Minor row
+  reaches the operator only when its disposition is itself ambiguous, which is the
+  ambiguity floor firing on the row rather than the severity floor being overridden.
 - **Precision kill switch.** Each lens measures its own false-positive rate at the checkpoint
   against the bar its body states, and downgrades itself to advisory for the following run once it
   reaches that bar: findings recorded, none blocking, and the downgrade declared in its return.
@@ -298,8 +298,12 @@ its `## Human sign-off` rules.
 **The close asks once.** One question with numbered options covers what is
 left for the person: the rows no evidence proved, the spec delta merge and
 the commit. `Default if no response: leave uncommitted`, with those rows not
-signed and the delta unmerged. A part with nothing to decide drops out; with
-none left, there is no ask.
+signed and the delta unmerged.
+The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
+close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every
+`decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
+rejected; with no response, its unattended rule applies.
+A part with nothing to decide drops out; with none left, there is no ask.
 
 ### Proof block
 
@@ -324,6 +328,9 @@ audit record:
 
 **Usage lines.** As each phase or review round ends, append `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)`
 to the run record, as a capacity line is appended: minutes from the orchestrator's clock, a line of its own, never directly above a table.
+
+**Leftovers line.** The close adds `- <UTC> leftovers: shown=<n> real=<a> fixed=<f> scheduled=<s> dropped=<d> accepted=<k> notes=<p|unknown> changed=<c>`,
+a line of its own in the record's Proof block, never directly above a table (n = f + s + d, k ≤ d, a ≤ n; a `decision-waiting` append and a kept inbox row count in s; unattended, d = k = c = 0).
 
 Cite native platform artifacts where they exist — per-sub-agent transcripts,
 hook-gate outcomes, session logs. A self-quoted completion marker is the
@@ -355,25 +362,32 @@ not have. The run then closes on the reply. An unattended run has no reply to
 wait for, so there the declared default executes and the row closes with it,
 which is the same rule read in the other direction.
 
-At exit every row that closed `deferred` is appended to `.stamity/inbox.md` in
-the row grammar `/st-board` declares — the severity, the row's `file:line` or
-`—`, the evidence in one line, `source: /st-work`, and `Ref: <the run's ledger
-path>#<row id>` — one dated block per run, so a deferral outlives the session
-instead of dying in a write-once ledger. The ledger row keeps its `deferred`
-state and gains an optional eighth field on the row, `retired`, whose value
-opens with the date and then states the disposition, only when its inbox row
-leaves: fixed in a commit, cut with a reason, or scheduled with a lane, a
-trigger and an owner. A committed ledger is read by later runs, so a row still
-`open` when the record is written is a gate failure and not a note — the close
-reads its own ledger before writing the record and refuses while any row reads
-`open`. The proof block's next-step line names the inbox rows the run appended,
-and its `Not done:` list is empty or names the scheduled item each line became.
+At exit every row that closed `deferred` is appended to `.stamity/inbox.md`, below its
+`## Rows under the schedule rule` heading with `by:` or `when:` (and `files:` when the location is
+`—`), unless the close dropped it or scheduled it to a plan, board or handoff place, which retires
+it then. An appended row is in the row grammar `/st-board` declares — the severity, the row's
+`file:line` or `—`, the evidence in one line, `source: /st-work`, and
+`Ref: <the run's ledger path>#<row id>` — one dated block per run, so a deferral outlives the
+session instead of dying in a write-once ledger. The ledger row keeps its `deferred` state and gains
+an optional eighth field on the row, `retired`, whose value opens with the date and then states the
+disposition, only when its inbox row leaves: fixed in a commit, cut with a reason, or scheduled to a
+place with a date or a trigger. A committed ledger is read by later runs, so a row still `open` when
+the record is written is a gate failure and not a note — the close reads its own ledger before
+writing the record and refuses while any row reads `open`. The proof block's next-step line names
+the inbox rows the run appended, and its `Not done:` list is empty or names the scheduled item each
+line became, and each accepted risk.
 
 An inbox row this run fixed — folded in at Frame or settled by the persisted plan — leaves the
 inbox at the close: a row whose `Ref:` names a ledger row is first retired, its state kept, through
 `stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`; then its bullet
-is removed, and the run record carries `- inbox retired: <location> — fixed in <run id>`. A row the
-run did not fix stays as it is.
+is removed, and the run record carries `- inbox retired: <location> — fixed in <run id>`. An inbox
+row the close's answer decided follows `/st-board`'s Removal rule: a drop retires it `cut <reason>`
+and removes its bullet, a plan, board or handoff place retires it there, and a new date or trigger
+replaces its bullet with one row carrying the same `Ref:`; each removal adds an `- inbox retired:`
+line naming its disposition. A row the query withholds or skips is listed as it prints, the person's
+to read, and never decided: the close offers no disposition for it and applies none, and it stays in
+the inbox until the person edits it or hands over its `Ref:` with an instruction. A row no answer
+reached stays as it is.
 
 Beside `retired`, two more optional fields ride a row appended from a report: `report`, the
 repo-relative path of the report it came from, and `decision_needed`, present only as `true` when

@@ -322,7 +322,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed |
 | `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
 | `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |
-| `.stamity/inbox.md` | deferred rows, one dated block per run that filed them |
+| `.stamity/inbox.md` | deferred rows, one dated block per run that filed them; each new row carries a date or a trigger that brings it back, and a row a close dropped or scheduled elsewhere never lands there |
 | `.stamity/worktree.json` | the worktree lane's policy — yours to write; absent, its two defaults apply |
 | `.stamity/workspace-sync-journal.jsonl` | at a workspace root: the cascade's crash trail, two lines per attempted member per run |
 | `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |

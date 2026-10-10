@@ -146,7 +146,23 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "QA rows field (`content/commands/st-work.md`, Proof block, the line after review verdicts), so it carries " +
     "seven fields, not six. B1 names the seventh field, the claim reads \"seven\", and the Brief's scenario state " +
     "gains one QA line (an auto-proven row and a walked row, signed off) so the new field has content to carry. " +
-    "B2–B8 are unchanged.",
+    "B2–B8 are unchanged. " +
+    "Expectation amended 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, REQ-FLOW-024, S12, " +
+    "`plan/35`): the close now decides every leftover with the person, Minor rows included, and appends a deferred " +
+    "row only when the close neither dropped it nor scheduled it to another place (`content/commands/st-work.md`, " +
+    "the Severity floor and the Proof block's append paragraph, both re-quoted in the Brief). The old B4 failed a " +
+    "run that put the Minor row to the person, and the old B8 owed an inbox row for every row closed deferred, so " +
+    "both would fail a response that did what that text now requires. The Brief's scenario therefore records the " +
+    "close's question and the person's answer (`r7/security/1` scheduled as an inbox row with `when: touched`, " +
+    "`r7/review/2` dropped with a reason), and no inbox row appended before it. B4 reads that the Minor row closes " +
+    "`deferred` on that answer and is retired at the close as cut; B6 names the scheduled finding, its inbox row " +
+    "and the dropped row as the run's own state; B7's third refusal adds the person's drop as no ground for " +
+    "leaving the row out of the block; B8 has the scheduled row appended with `when: touched` and the dropped row " +
+    "retired and not appended, the next step counting one appended row; the claim moves with them. What B4 no " +
+    "longer admits is the run closing the Minor row on its own, as deferred under the severity floor or as " +
+    "rejected; it still refuses `fixed`, a row left open, and now a second ask. What B8 no longer admits is a " +
+    "dropped row appended to the inbox; it still refuses a deferred row that is scheduled to the inbox and shown " +
+    "with no inbox row. B1–B3 and B5 are unchanged.",
   "charter-floor-relaxation-refused":
     "Expectation amended 2026-10-08 (plan 019 file 1, unit c4-judge-framing; inbox row 597): B1 gains one " +
     "continuation sentence, \"A `Not done:` list that names the security review and the verification gates as " +
