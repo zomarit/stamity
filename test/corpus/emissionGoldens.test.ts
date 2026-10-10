@@ -93,6 +93,21 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer, review round 1
+ *     (run 2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger rows
+ *     review/63 to review/68 and build/38). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The round's one emitted change is
+ *     `skills/st-dep-audit/SKILL.md`, 8166 -> 8936 bytes and 148 -> 156 lines:
+ *     Step 5's row names its lockfile in `files:` before the day or the
+ *     trigger and keeps an advisory's severity word, and an advisory at
+ *     `critical` or `high` is deferred only with a day the operator names; the
+ *     flag before the security lens names a standing `major` on a changed
+ *     entry, the report states both classes of each changed entry (the Risk
+ *     row says so too), and an entry the audit cannot class counts as a flag.
+ *     It is not a substitution target, the catalog, the policy document or a
+ *     core hook script, so no golden here carries it; the sibling suite
+ *     itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers, review round 1
  *     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/57 to
  *     review/61 and build/34 to build/37). NOTHING moved in this suite; the

@@ -186,6 +186,42 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer, review round 1
+  //     (run 2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger rows
+  //     review/63 to review/68 and build/38). One skill moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the dep-audit skill wherever it is emitted
+  //       (`.claude/skills/st-dep-audit/SKILL.md` and
+  //       `.agents/skills/st-dep-audit/SKILL.md`, both 8212 -> 8982), by +770
+  //       bytes, the corpus source's own delta (148 -> 156 lines), in three
+  //       hunks. `## Step 5 — Report and route out`: the row reads
+  //       `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
+  //       where its description ended `[, <advisory id>]` and it named no
+  //       `files:`, followed after "in the day's place." by "`files:` names
+  //       the lockfile that holds the entry, so a bump of that lockfile alone
+  //       brings the row back. The severity is the word the advisory's source
+  //       gave (Step 2), and an advisory at `critical` or `high` is deferred
+  //       only with a day the operator names: the audit asks for that day and
+  //       never writes the touch trigger in its place." (eight lines become
+  //       twelve). `## Before the security lens`: the gloss reads "so a
+  //       `major` move flags, and so does a changed entry whose own class is
+  //       `major`, `pinned-back` or `unmaintained`"; one sentence follows the
+  //       clause, "In this role the report's Risk row states both classes for
+  //       each such entry: the move's, and the entry's own, which is Step 4's
+  //       class for the version the bump leaves, or `none`."; and the
+  //       fail-closed sentence gains "and so does a changed entry the audit
+  //       cannot class, for want of its release data or of a staleness window
+  //       to read it against" (sixteen lines become twenty). `## Output
+  //       artifact`: the Risk row ends "; before the security lens, both
+  //       classes of each changed entry" (its one line held).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved copies.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint and
+  //       every other skill, companion, hook script, guard and policy
+  //       document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers, review round 1
   //     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/57 to
   //     review/61 and build/34 to build/37). Two touchpoints moved, plus the

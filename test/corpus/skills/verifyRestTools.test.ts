@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
-import { matchInbox, parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
+import { INBOX_PATH, matchInbox, parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
 import {
   assertDenyClean,
   assertLineCap,
@@ -742,7 +742,7 @@ describe("dep-audit — report-only", () => {
 describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ-FLOW-077)", () => {
   const DEP_AUDIT = "skills/st-dep-audit/SKILL.md";
   const ROW_OPENING = "<Warning with an advisory, else Minor> · ";
-  const DESCRIPTION = "<package> <current> → <target>, <risk class>[, <advisory id>]";
+  const DESCRIPTION = "<package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>]";
 
   /** Step 5 with every whitespace run collapsed, so a rewrapped sentence still reads as one. */
   const stepFive = async (): Promise<string> =>
@@ -758,7 +758,10 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
     package: string;
     move: readonly [current: string, target: string];
     riskClass: string;
-    advisory?: string;
+    /** The lockfile that holds the entry: what a bump of the lockfile alone changes. */
+    lockfile: string;
+    /** The advisory's identifier and the severity word its source gave. */
+    advisory?: { readonly severity: string; readonly id: string };
   }
 
   /** The template with every placeholder filled from one audited item, field by field. */
@@ -769,10 +772,10 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
         if (field === "<Warning with an advisory, else Minor>") return item.advisory === undefined ? "Minor" : "Warning";
         if (field === "<manifest path:line>") return item.location;
         if (field === DESCRIPTION) {
-          const tail = item.advisory === undefined ? "" : `, ${item.advisory}`;
+          const tail = item.advisory === undefined ? "" : `, ${item.advisory.severity} advisory ${item.advisory.id}`;
           return `${item.package} ${item.move[0]} → ${item.move[1]}, ${item.riskClass}${tail}`;
         }
-        return field.replace("<YYYY-MM-DD>", day);
+        return field.replace("<lockfile path>", item.lockfile).replace("<YYYY-MM-DD>", day);
       })
       .join(" · ");
   }
@@ -787,22 +790,52 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
     package: "left-pad",
     move: ["1.2.0", "2.0.0"],
     riskClass: "major",
-    advisory: "GHSA-made-up0-0001",
+    lockfile: "package-lock.json",
+    advisory: { severity: "critical", id: "GHSA-made-up0-0001" },
   };
-  const PLAIN: Item = { location: "services/api/package.json:31", package: "tiny-clock", move: ["3.1.0", "3.4.2"], riskClass: "minor" };
+  const PLAIN: Item = {
+    location: "services/api/package.json:31",
+    package: "tiny-clock",
+    move: ["3.1.0", "3.4.2"],
+    riskClass: "minor",
+    lockfile: "services/api/package-lock.json",
+  };
   /** A transitive package: it stands on no line of the manifest. */
-  const TRANSITIVE: Item = { ...PLAIN, location: "package.json:1", package: "deep-leaf", riskClass: "unmaintained" };
+  const TRANSITIVE: Item = {
+    ...PLAIN,
+    location: "package.json:1",
+    package: "deep-leaf",
+    riskClass: "unmaintained",
+    lockfile: "package-lock.json",
+  };
+  /** A manifest whose name holds no dot and no folder: the reader takes no path from its location. */
+  const DOTLESS: Item = { ...PLAIN, location: "Gemfile:12", package: "slow-gem", lockfile: "Gemfile.lock" };
 
   it("states the row in the board's grammar, with a day in its format or a touch (REQ-FLOW-077)", async () => {
     const step = await stepFive();
 
-    expect(step).toContain("land as `.stamity/inbox.md` rows, one per item, in `/st-board`'s grammar:");
+    // TEST CHANGE, justified (2026-10-10, unit q11c-dep-audit-writer, review round 1, `review/66`):
+    // the path is the store's own constant, written at run time. This suite reads no inbox, and a
+    // quoted literal of the tracked file made the test-input census count it as a reader.
+    expect(step).toContain(`land as \`${INBOX_PATH}\` rows, one per item, in \`/st-board\`'s grammar:`);
     // Sign-off on ledger row `build/34` of run 2026-10-10_next-tier: every `by:` in a template
     // writes its format, since the reader takes a real `YYYY-MM-DD` and nothing else.
-    expect(rowTemplate(step)).toBe(`${ROW_OPENING}<manifest path:line> · ${DESCRIPTION} · source: dep-audit · by: <YYYY-MM-DD>`);
+    // TEST CHANGE, justified (same round, `review/67` with `build/38`, and `review/65`): the row
+    // names its lockfile in `files:`, before the day or the trigger, and an advisory's
+    // description keeps the severity word its source gave.
+    expect(rowTemplate(step)).toBe(
+      `${ROW_OPENING}<manifest path:line> · ${DESCRIPTION} · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
+    );
     expect(step).not.toContain("by: <date>");
     // Whose day it is, and what the row carries when nobody names one.
     expect(step).toContain("(an advisory's deadline, when the operator names one) or `· when: touched` in the day's place.");
+    // Why the lockfile is named: the location is the manifest, which a bump of the lockfile alone never changes.
+    expect(step).toContain("`files:` names the lockfile that holds the entry, so a bump of that lockfile alone brings the row back.");
+    // `review/65`: time, not a touch, makes an advisory worse, so a critical or high one waits on a day.
+    expect(step).toContain("The severity is the word the advisory's source gave (Step 2),");
+    expect(step).toContain(
+      "an advisory at `critical` or `high` is deferred only with a day the operator names: the audit asks for that day and never writes the touch trigger in its place.",
+    );
     // A transitive package has no manifest line, and a touch trigger needs a path to watch.
     expect(step).toContain("An item with no manifest line of its own takes the manifest's path with `:1`.");
     // The rest of the paragraph stays.
@@ -820,8 +853,10 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
     expect(rows[0]).toMatchObject({
       severity: "Warning",
       location: "package.json:14",
-      description: "left-pad 1.2.0 → 2.0.0, major, GHSA-made-up0-0001",
+      // The source's severity word stays readable in the row, which opens `Warning` whatever it was.
+      description: "left-pad 1.2.0 → 2.0.0, major, critical advisory GHSA-made-up0-0001",
       source: "dep-audit",
+      files: ["package-lock.json"],
       by: "2026-11-02",
       when: null,
       tag: null,
@@ -830,6 +865,8 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
     // The day brings it back: a close on that day sees it, a close the day before does not.
     expect(matchInbox(rows, { paths: [], due: "2026-11-02" }).matched.map((match) => match.matchedBy)).toEqual(["due"]);
     expect(matchInbox(rows, { paths: [], due: "2026-11-01" }).matched).toEqual([]);
+    // And so does a bump of its lockfile alone, before the day.
+    expect(matchInbox(rows, { paths: [ADVISED.lockfile] }).matched.map((match) => match.matchedBy)).toEqual(["path"]);
   });
 
   it.each([
@@ -848,10 +885,41 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
     const { rows, problems } = parseBelowRule(filled);
     expect(problems).toEqual([]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ severity: "Minor", description, source: "dep-audit", by: null, when: "touched", belowRule: true });
+    expect(rows[0]).toMatchObject({
+      severity: "Minor",
+      description,
+      source: "dep-audit",
+      files: [item.lockfile],
+      by: null,
+      when: "touched",
+      belowRule: true,
+    });
     // `when: touched` needs a path, and the location gives it: a run that changes that manifest
     // gets the row back, and a run that changes another file does not.
     expect(matchInbox(rows, { paths: [manifest] }).matched.map((match) => match.matchedBy)).toEqual(["path"]);
+    expect(matchInbox(rows, { paths: ["docs/unrelated.md"] }).matched).toEqual([]);
+    // `review/67`: the weekly bump changes the lockfile and never the manifest, and it is the
+    // change that moves or fixes the deferred entry, so the row comes back for the lockfile too.
+    expect(matchInbox(rows, { paths: [item.lockfile] }).matched.map((match) => match.matchedBy)).toEqual(["path"]);
+  });
+
+  it("parses on a touch where the manifest's name holds no dot: the lockfile is the path it watches", async () => {
+    const step = await stepFive();
+    const filled = fillRow(rowTemplate(step).replace(/ · by: <YYYY-MM-DD>$/, " · when: touched"), DOTLESS);
+    expect(filled).not.toMatch(/[<>[\]]/);
+
+    // The reader takes no path from `Gemfile:12`, so without `files:` it refuses the touch trigger.
+    const withoutFiles = filled.split(" · ").filter((field) => !field.startsWith("files: ")).join(" · ");
+    expect(withoutFiles).not.toBe(filled);
+    expect(parseBelowRule(withoutFiles).problems.map((problem) => problem.message)).toEqual([
+      "`when: touched` needs a path, in the location or in `files:`",
+    ]);
+
+    const { rows, problems } = parseBelowRule(filled);
+    expect(problems).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ location: "Gemfile:12", files: ["Gemfile.lock"], when: "touched", belowRule: true });
+    expect(matchInbox(rows, { paths: ["Gemfile.lock"] }).matched.map((match) => match.matchedBy)).toEqual(["path"]);
     expect(matchInbox(rows, { paths: ["docs/unrelated.md"] }).matched).toEqual([]);
   });
 
@@ -880,8 +948,11 @@ describe("dep-audit — the flag before the security lens reads the entry (REQ-F
     // 2026-10-08_product-core): the flag read only the bump's own version move, so a bump that
     // changed an entry Step 4 classes `pinned-back` or `unmaintained` by a patch step left with
     // neither a flag nor the lens. The clause now reads the entry too.
+    // TEST CHANGE, justified (2026-10-10, review round 1 of the same unit, `review/68`): the gloss
+    // named only a `major` move, while the clause lets any class but `patch` and `minor` flag on
+    // the entry itself. The wider reading stands, so the gloss names a standing `major` too.
     expect(role).toContain(
-      "or an update-risk class other than `patch` or `minor` (Step 4), for the bump's own version move or on the entry itself, so a `major` move, or a changed entry that is `pinned-back` or `unmaintained`, flags; a flag sends the change to the lens.",
+      "or an update-risk class other than `patch` or `minor` (Step 4), for the bump's own version move or on the entry itself, so a `major` move flags, and so does a changed entry whose own class is `major`, `pinned-back` or `unmaintained`; a flag sends the change to the lens.",
     );
     expect(role).not.toContain("`patch` or `minor` for the bump's own version move (Step 4)");
 
@@ -891,9 +962,34 @@ describe("dep-audit — the flag before the security lens reads the entry (REQ-F
       .filter((line) => line.startsWith("| ") && !line.startsWith("| Class") && !line.startsWith("|---"))
       .map((line) => line.split("|")[1]?.trim() ?? "");
     expect(classes).toEqual(["patch", "minor", "major", "pinned-back", "unmaintained"]);
-    const flagging = /so (a `major` move.*?), flags;/.exec(role)?.[1] ?? "";
-    expect([...flagging.matchAll(/`([a-z-]+)`/g)].map((match) => match[1])).toEqual(
-      classes.filter((klass) => klass !== "patch" && klass !== "minor"),
+    const named = (text: string): (string | undefined)[] => [...text.matchAll(/`([a-z-]+)`/g)].map((match) => match[1]);
+    const gloss = /so a (`[a-z-]+`) move flags, and so does a changed entry whose own class is (.*?); a flag sends/.exec(role);
+    // A move has one class that flags; an entry's own class may be any but the two let through.
+    expect(named(gloss?.[1] ?? "")).toEqual(["major"]);
+    expect(named(gloss?.[2] ?? "")).toEqual(classes.filter((klass) => klass !== "patch" && klass !== "minor"));
+  });
+
+  it("has the report state both classes of a changed entry, and counts an entry it cannot class as a flag", async () => {
+    const file = await load("skills/st-dep-audit/SKILL.md");
+    const role = section(file, "Before the security lens").replace(/\s+/g, " ");
+
+    // Added 2026-10-10 (review round 1 of unit q11c-dep-audit-writer, `review/63`): the flag fires
+    // on what the report says, and the Risk row held one class per package, so a patch move of an
+    // `unmaintained` entry could be reported `patch` and leave with no flag and no lens.
+    expect(role).toContain(
+      "In this role the report's Risk row states both classes for each such entry: the move's, and the entry's own, which is Step 4's class for the version the bump leaves, or `none`.",
+    );
+    const risk = section(file, "Output artifact")
+      .split("\n")
+      .find((line) => line.startsWith("| Risk |"));
+    expect(risk).toBe(
+      "| Risk | package, current and latest versions, class from the table above; before the security lens, both classes of each changed entry |",
+    );
+
+    // Added the same round (`review/64`): two of the classes need data the audit may not hold, and
+    // an entry with no class reported looked the same as an entry with none to report.
+    expect(role).toContain(
+      "A `partial` run, or an audit that cannot run, counts as a flag, and so does a changed entry the audit cannot class, for want of its release data or of a staleness window to read it against, so the bump never leaves with neither.",
     );
   });
 });

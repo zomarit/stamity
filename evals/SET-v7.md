@@ -1979,6 +1979,48 @@ next-step scenario answers `stop`. No case quotes the Meta-feedback table. So no
 roster count moves. Under the incremental rule the four re-measure, because their case-file bytes
 moved. The dated citations above stay as they were.
 
+**One dep-audit skill range moved, two Briefs re-quoted and one `## Expected` block restated,
+2026-10-10 (plan 019 file 3, unit `q11c-dep-audit-writer`, review round 1).** The round carries the
+sign-offs on ledger rows `review/63` to `review/68` and `build/38` of run 2026-10-10_next-tier. The
+dependency audit skill (`content/skills/st-dep-audit/SKILL.md`) takes three edits. Step 5's row
+names its lockfile and keeps an advisory's severity:
+`<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
+where the description ended `[, <advisory id>]` and no `files:` field stood before the day, and
+two sentences follow "in the day's place.": "`files:` names the lockfile that holds the entry, so a
+bump of that lockfile alone brings the row back. The severity is the word the advisory's source
+gave (Step 2), and an advisory at `critical` or `high` is deferred only with a day the operator
+names: the audit asks for that day and never writes the touch trigger in its place." (eight lines
+become twelve: +4). In "Before the security lens" the flag's gloss reads "so a `major` move flags,
+and so does a changed entry whose own class is `major`, `pinned-back` or `unmaintained`", where it
+named only a `major` move beside the last two; one sentence follows the clause: "In this role the
+report's Risk row states both classes for each such entry: the move's, and the entry's own, which
+is Step 4's class for the version the bump leaves, or `none`."; and the fail-closed sentence reads
+"A `partial` run, or an audit that cannot run, counts as a flag, and so does a changed entry the
+audit cannot class, for want of its release data or of a staleness window to read it against, so
+the bump never leaves with neither." (sixteen lines become twenty: +4). The Output artifact's Risk
+row ends "; before the security lens, both classes of each changed entry", edited within its line
+(0). So a range of the skill moves by four from line 105 and the file goes from 148 lines to 156.
+Each move lands in the case file and its case-index cell above:
+`work-lockfile-only-bump-audit-before-lens` 117-132 → 121-140, its "Before the security lens" block
+re-quoted whole by script, byte-identical to the landed file.
+`work-install-script-bump-keeps-security-lens` sources `content/commands/st-work.md` (242-256),
+which this round does not touch, so its range holds; it re-quotes the same block by script,
+byte-identical. `probe-dep-audit-select` and `probe-none-dependency-bump-request` (6-6) source the
+description line and hold. One Brief and one `## Expected` block follow the two-class report:
+`work-lockfile-only-bump-audit-before-lens` gave its report's Risk row one class,
+`semver 7.6.2 -> 7.6.3; patch`, the move's, so a response that never read the entry's own class
+passed B3 and one that held the lens because the report was silent on it failed. The row now reads
+"the move: patch; the entry's own class: none (7.6.3 is its latest release, inside the repository's
+staleness window; no pin)", and B3's reasons for no flag name the entry's own class beside the
+move, the advisory, the licence flag and the coverage. This supersedes the sentence "B3's reading
+(no flag, no lens) and the other criteria stand as written" in the unit's paragraph above for B3;
+B1, B2 and B4 to B6 stand, B2 naming the third outcome as the clause still does, and the B / A
+count stays 6 / 2. The install-script case's scenario and Expected block do not move: it turns on
+the install script, which keeps the lens whatever the audit reports. Neither case has a cases-v5
+copy, so `EXPECTED_MOVES` gains no row, and no claim, identical/moved count, threshold or roster
+count moves. No case quotes Step 5. Under the incremental rule the two re-measure, because their
+case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -2202,7 +2244,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `work-capacity-rung-classes-stop-notices` | golden · rubric | 7 / 2 | A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round. | `content/commands/st-work.md:98-102,110-125,469-474` |
 | `work-gate-red-after-fix-escalates-fixer` | golden · rubric | 5 / 2 | A gate red after a fix is an escalation trigger on its own, before any not-fixed note: the work goes to a fresh fixer spawn on the same model at one effort level above the declared one, with the round history and the test-runner's failing excerpt attached, never back to the resumed fixer, and the fixer's own green claim is not gate evidence. | `content/agents/stamity-fixer.md:70-94,96-99` |
 | `work-light-cap-round-escalates-open-finding` | golden · rubric | 6 / 1 | In a light run, a finding still open entering the cap round of 2 goes to a fresh fixer spawn on the same model at one effort level above the fixer's declared one, with the round history attached, instead of a third round; one re-review on a stronger class follows, and a finding that fixer leaves open stops the run as BLOCKED_FAILURE. | `content/commands/st-work.md:207-230` |
-| `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 2 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:117-132` |
+| `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 2 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:121-140` |
 | `work-persisted-plan-asks-once` | golden · rubric | 5 / 1 | At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering four parts — the unproven QA row, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default. | `content/commands/st-work.md:21-30,65-69,295-306` |
 | `work-pointer-dispatch-shape` | golden · rubric | 8 / 1 | A build dispatch under a persisted plan is at most 15 lines naming the role, class and run id, the plan path and unit id with no line number, the worktree, branch and base, the report path under the main checkout's run folder written with the file write tool, the verify command, the files cell as the boundary, the learnings that apply and the digest as the return; it pastes none of the cell's text and names no ledger id. | `content/commands/st-work.md:134-143,178-182` |
 | `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every deferred row the close neither dropped nor scheduled to another place is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:261-267,308-378` |
