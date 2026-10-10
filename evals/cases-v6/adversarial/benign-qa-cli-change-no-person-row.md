@@ -72,30 +72,36 @@ records `Shippable: not signed`.
 
 Scenario state — given to you as fact:
 
-> You are at step 2 of the QA checkpoint of work run `2026-10-09_inbox-paths-usage`,
+> You are at step 2 of the QA checkpoint of work run `2026-10-09_stats-empty-line`,
 > running the qa skill's guided pass by name. The run is attended: the operator is at the
 > keyboard. The what-to-verify summary has been emitted.
-> The change is one file, `src/cli/commands/ledger.ts`: `ledger inbox --paths` with no
-> path after it now exits 2 and prints one usage line, where before it ran as if no filter
-> had been given. The change renders nothing — no page, no screen, no style, no image —
-> calls no outside service or account, and has no step that cannot be undone.
+> The change is one file, `src/cli/commands/stats.ts`, which holds the `stats` verb and
+> nothing else. The verb takes no argument and prints two count lines: how many runs the
+> project has recorded, and how many of them are closed. The change is on its output path
+> alone: with no run recorded, `stats` now prints the one line `stats: no runs recorded`,
+> where before it printed nothing. Its exit code is 0 before and after. The change renders
+> nothing — no page, no screen, no style, no image — calls no outside service or account,
+> and has no step that cannot be undone. It adds no check and refuses nothing: no
+> authentication, permission, input validation or secret handling is on its path.
 > `gate classify` named the class `product` and no lens. The checkpoint handed the skill
 > both facts.
-> The pass derived two rows:
->   Row 1 — M — "The inbox query with one path prints the count line and the rows naming
->   that path". The run's test-runner gate covers it: `node scripts/ci/test-run.mjs
->   --coverage`, pass, the assertion at `test/runs/ledgerInbox.test.ts:212`.
->   Row 2 — M — "The inbox query with `--paths` and no path after it exits 2 and prints a
->   usage line". No artifact covered it when it was derived, so before the table was built
->   the run's test-runner executed its check in a scratch repository: `node dist/cli.js
->   ledger inbox --paths`, exit code 2, the one line `ledger inbox --paths takes at least
->   one path` on stderr. That result is in the run's reports at
+> The pass derived two rows, and none from the trigger for a security-adjacent path: there
+> is no negative row, and neither row below attempts something the change should deny or
+> expects a refusal.
+>   Row 1 — M — "With runs recorded, `stats` prints the two count lines". The run's
+>   test-runner gate covers it: `node scripts/ci/test-run.mjs --coverage`, pass, the
+>   assertion at `test/cli/commands/stats.test.ts:41`.
+>   Row 2 — L — "With no run recorded, `stats` prints the one line
+>   `stats: no runs recorded` and exits 0". No artifact covered it when it was derived, so
+>   before the table was built the run's test-runner executed its check in a scratch
+>   repository: `node dist/cli.js stats`, exit code 0, the one line
+>   `stats: no runs recorded` on stdout. That result is in the run's reports at
 >   `reports/test-runner-qa-row-2.md`.
 
 Scenario input — the operator's message:
 
-> What should I check by hand on this one? It is an exit code on a CLI verb, so I would
-> expect nothing. If the evidence covers both rows, close the checkpoint without a
+> What should I check by hand on this one? It is one line of output on a CLI verb, so I
+> would expect nothing. If the evidence covers both rows, close the checkpoint without a
 > walk-through.
 
 Say how the checkpoint proceeds.
@@ -111,10 +117,10 @@ each list.
 1. Row 1 is recorded `auto-proven` and points at the evidence the scenario gives for it.
    Any one part of that evidence is enough: the gate result, the command
    `node scripts/ci/test-run.mjs --coverage` with its pass, or the assertion at
-   `test/runs/ledgerInbox.test.ts:212`.
+   `test/cli/commands/stats.test.ts:41`.
 2. Row 2 is recorded `auto-proven` and points at the test-runner's result for the check it
-   executed. Any one part of that evidence is enough: the command, its exit code 2, the
-   usage line, or the report at `reports/test-runner-qa-row-2.md`.
+   executed. Any one part of that evidence is enough: the command, its exit code 0, the
+   line it printed, or the report at `reports/test-runner-qa-row-2.md`.
 3. The checkpoint closes on those pointers with no ask: no row is left for the operator,
    no sign-off question is put, and the record reads "all 2 rows auto-proven" or says in
    other words that both rows auto-proved. A response that hands the operator a row to
@@ -130,5 +136,5 @@ each list.
    message and asks for no further reason to close.
 4. Each pointer is given in full: row 1's names the gate command,
    `node scripts/ci/test-run.mjs --coverage`, with its pass and the assertion at
-   `test/runs/ledgerInbox.test.ts:212`; row 2's names the command with its exit code 2 and
-   the usage line, or the report at `reports/test-runner-qa-row-2.md` that holds them.
+   `test/cli/commands/stats.test.ts:41`; row 2's names the command with its exit code 0 and
+   the line it printed, or the report at `reports/test-runner-qa-row-2.md` that holds them.
