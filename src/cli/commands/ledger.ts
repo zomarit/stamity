@@ -1026,11 +1026,12 @@ function listedLines(label: string, lines: readonly string[]): string[] {
  * unmatched, unparsed or skipped, but for a matched withheld row, which counts
  * under matched and skipped both; a skip line prints whatever the query (a
  * clean row skipped by its line has one only where the query matches it), and
- * the JSON `skipped` lists every screened bullet, a matched withheld row
- * included. The unparsed lines and the skip lines are listed up to
- * {@link INBOX_LISTED_MAX} each, then one `unparsed: … +<n> more` or
- * `skipped: … +<n> more` line; the count line keeps the whole numbers, and the
- * JSON `problems` and `skipped` hold the first of each up to the same cap,
+ * the JSON `skipped` lists the bullets the skip lines name: a matched withheld
+ * row has no skip line and is left out of it, standing under `matched` with
+ * its pattern id as `withheld`. The unparsed lines and the skip lines are
+ * listed up to {@link INBOX_LISTED_MAX} each, then one `unparsed: … +<n> more`
+ * or `skipped: … +<n> more` line; the count line keeps the whole numbers, and
+ * the JSON `problems` and `skipped` hold the first of each up to the same cap,
  * with the number left out of each under `truncated`. The JSON `counts`
  * tallies the matched rows by severity. Reads only; `--dry-run` is accepted
  * and changes nothing, so it prints no dry-run line.
@@ -1122,6 +1123,8 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   const unmatched = result.unmatched - (withheld.size - withheldMatches);
   // The withheld rows whose line prints; each of the others prints its skip line.
   const shown = new Set(matched.filter(({ row }) => withheld.has(row.line)).map(({ row }) => row.line));
+  // The skips listed, in the human form and the document alike, each left out before its cap.
+  const listed = skipped.filter((skip) => !shown.has(skip.line));
 
   // Counted by the day and not by the `due` label: a row a path matched first may be overdue too.
   const overdue = due === null ? 0 : matched.filter(({ row }) => row.by !== null && row.by <= due).length;
@@ -1135,7 +1138,7 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     ),
     ...listedLines(
       "skipped",
-      skipped.filter((skip) => !shown.has(skip.line)).map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
+      listed.map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
     ),
   ];
   ctx.io.out(`${lines.join("\n")}\n`);
@@ -1151,10 +1154,10 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
       problems: problems
         .slice(0, INBOX_LISTED_MAX)
         .map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) })),
-      skipped: skipped.slice(0, INBOX_LISTED_MAX),
+      skipped: listed.slice(0, INBOX_LISTED_MAX),
       truncated: {
         problems: Math.max(0, problems.length - INBOX_LISTED_MAX),
-        skipped: Math.max(0, skipped.length - INBOX_LISTED_MAX),
+        skipped: Math.max(0, listed.length - INBOX_LISTED_MAX),
       },
       due,
       triggers: result.triggers,

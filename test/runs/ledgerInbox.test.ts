@@ -149,6 +149,13 @@ describe("stamity ledger inbox", () => {
     // TEST CHANGE, justified (2026-10-10, review/27): the document gained `truncated`, the count of
     // the `problems` and `skipped` entries past the cap, so the three whole-document pins of this
     // file name it. Every key they pinned before keeps its value.
+    // TEST CHANGE, justified (2026-10-10, review/78): `skipped` held line 8 too, the withheld row
+    // the query matches. The document's list now leaves out the rows `matched` already carries
+    // with their pattern id as `withheld`, as the human listing leaves out their skip lines, and
+    // caps what is left; capped first, such rows could fill the list ahead of a refused bullet.
+    // Eight pins of this file named a matched withheld row under `skipped`, this one among them,
+    // and each moved. A withheld row the query does not match, or whose line the screen hits,
+    // stays listed.
     expect(payload).toEqual({
       inbox: INBOX_PATH,
       total: 6,
@@ -199,10 +206,7 @@ describe("stamity ledger inbox", () => {
       counts: { Critical: 1, Warning: 1, Minor: 1, Info: 0 },
       unmatched: 1,
       problems: [{ line: 7, message: "trailing field(s) beyond one optional tag word — two words" }],
-      skipped: [
-        { line: 8, pattern: "fake-instruction-header" },
-        { line: 9, pattern: "send-data-external" },
-      ],
+      skipped: [{ line: 9, pattern: "send-data-external" }],
       truncated: { problems: 0, skipped: 0 },
       due: null,
       triggers: 0,
@@ -265,13 +269,13 @@ describe("stamity ledger inbox", () => {
     );
     expect(json.stdout).not.toContain("quiet");
     expect(json.stdout).not.toContain("tagword");
+    // TEST CHANGE, justified (2026-10-10, review/78): as the first document pin's note says, the
+    // matched withheld row left `skipped`; `matched` carries it, with its pattern id as `withheld`.
+    // Line 2 does not parse, so it is no row and stays.
     expect(JSON.parse(json.stdout)).toMatchObject({
       matched: [{ line: 1, description: null, withheld: "never-verify" }],
       problems: [],
-      skipped: [
-        { line: 1, pattern: "never-verify" },
-        { line: 2, pattern: "never-verify" },
-      ],
+      skipped: [{ line: 2, pattern: "never-verify" }],
     });
   });
 
@@ -282,9 +286,11 @@ describe("stamity ledger inbox", () => {
     const result = await inbox(dir, "--json");
 
     expect(result.stdout).not.toContain("quiet");
+    // TEST CHANGE, justified (2026-10-10, review/78): as the first document pin's note says, the
+    // matched withheld row left `skipped`; `matched` carries it, with its pattern id as `withheld`.
     expect(JSON.parse(result.stdout)).toMatchObject({
       matched: [{ line: 1, description: null, withheld: "fake-instruction-header" }],
-      skipped: [{ line: 1, pattern: "fake-instruction-header" }],
+      skipped: [],
     });
   });
 
@@ -340,6 +346,8 @@ describe("stamity ledger inbox", () => {
       const { ok: _ok, command: _command, version: _version, ...payload } = JSON.parse(json.stdout) as Record<string, unknown>;
       // TEST CHANGE, justified (2026-10-10, q9b-inbox-schedule-grammar): as the document pin
       // above, the new `due`, `triggers`, `by`, `when` and `files` keys are named; no value moved.
+      // TEST CHANGE, justified (2026-10-10, review/78): as the first document pin's note says, the
+      // matched withheld row left `skipped`; `matched` carries it, with its pattern id as `withheld`.
       expect(payload).toEqual({
         inbox: INBOX_PATH,
         total: 2,
@@ -376,7 +384,7 @@ describe("stamity ledger inbox", () => {
         counts: { Critical: 0, Warning: 1, Minor: 1, Info: 0 },
         unmatched: 0,
         problems: [],
-        skipped: [{ line: 3, pattern: "never-verify" }],
+        skipped: [],
         truncated: { problems: 0, skipped: 0 },
         due: null,
         triggers: 0,
@@ -699,6 +707,8 @@ describe("stamity ledger inbox", () => {
           "inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped · 0 due by 2026-10-31 · 0 triggers\nskipped: 3 (never-verify)\n",
         );
         for (const word of ["quiet", "hidden"]) expect(json.stdout).not.toContain(word);
+        // TEST CHANGE, justified (2026-10-10, review/78): as the first document pin's note says, the
+        // matched withheld row left `skipped`; `matched` carries it, with its pattern id as `withheld`.
         expect(JSON.parse(json.stdout)).toMatchObject({
           matched: [
             {
@@ -714,7 +724,7 @@ describe("stamity ledger inbox", () => {
               withheld: "never-verify",
             },
           ],
-          skipped: [{ line: 3, pattern: "never-verify" }],
+          skipped: [],
         });
       });
 
@@ -768,9 +778,11 @@ describe("stamity ledger inbox", () => {
         "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped\n1 Minor · src/a.ts:1 · withheld by the screen (fake-instruction-header); read it by hand (path)\n",
       );
       expect(json.stdout).not.toContain("quiet");
+      // TEST CHANGE, justified (2026-10-10, review/78): as the first document pin's note says, the
+      // matched withheld row left `skipped`; `matched` carries it, with its pattern id as `withheld`.
       expect(JSON.parse(json.stdout)).toMatchObject({
         matched: [{ line: 1, description: null, when: null, withheld: "fake-instruction-header" }],
-        skipped: [{ line: 1, pattern: "fake-instruction-header" }],
+        skipped: [],
       });
     });
 
@@ -783,9 +795,11 @@ describe("stamity ledger inbox", () => {
       const result = await inbox(dir, "--paths", "src/a.ts", "--json");
 
       expect(result.stdout).not.toContain(`${SPACELESS_HIT}/x.ts`);
+      // TEST CHANGE, justified (2026-10-10, review/78): as the first document pin's note says, the
+      // matched withheld row left `skipped`; `matched` carries it, with its pattern id as `withheld`.
       expect(JSON.parse(result.stdout)).toMatchObject({
         matched: [{ line: 1, description: null, by: "2026-11-01", files: [], matchedBy: "path", withheld: "exfiltrate" }],
-        skipped: [{ line: 1, pattern: "exfiltrate" }],
+        skipped: [],
       });
     });
   });
@@ -942,6 +956,56 @@ describe("stamity ledger inbox", () => {
       expect(doc.truncated).toEqual({ problems: 0, skipped: 0 });
     });
 
+    // review/78: the document's list leaves out the withheld rows `matched` already carries and
+    // then caps, as the human listing does. Capped first, fifty such rows filled it, and a refused
+    // bullet after them reached a `--json` reader as a count, with no line and no reason.
+    it("lists in the document the skip lines the human form lists, past fifty matched withheld rows", async () => {
+      const dir = tempDir();
+      const withheldRows = Array.from(
+        { length: INBOX_LISTED_MAX },
+        (_, index) => `- Minor · src/a.ts:${index + 1} · a row ${NEVER_HIT} · source: x`,
+      );
+      const overLength = `- Minor · src/z.ts:1 · ${"x".repeat(INBOX_BULLET_MAX_CHARS)} · source: x`;
+      await seedInbox(dir, [...withheldRows, overLength, ""].join("\n"));
+
+      const human = await inbox(dir, "--paths", "src/a.ts");
+      const json = await inbox(dir, "--paths", "src/a.ts", "--json");
+
+      const lines = human.stdout.split("\n");
+      expect(lines[0]).toBe("inbox: 51 rows · 50 matched · 0 unmatched · 0 unparsed · 51 skipped");
+      expect(lines.slice(51)).toEqual([`skipped: 51 (${INBOX_OVER_LENGTH})`, ""]);
+      const doc = JSON.parse(json.stdout) as { matched: { withheld: string | null }[]; skipped: unknown[]; truncated: unknown };
+      expect(doc.matched.map((row) => row.withheld)).toEqual(Array.from({ length: INBOX_LISTED_MAX }, () => "never-verify"));
+      expect(doc.skipped).toEqual([{ line: 51, pattern: INBOX_OVER_LENGTH }]);
+      expect(doc.truncated).toEqual({ problems: 0, skipped: 0 });
+    });
+
+    it("caps the document's list after leaving those rows out, and counts the rest of it alone", async () => {
+      const dir = tempDir();
+      const withheldRows = Array.from(
+        { length: INBOX_LISTED_MAX },
+        (_, index) => `- Minor · src/a.ts:${index + 1} · a row ${NEVER_HIT} · source: x`,
+      );
+      await seedInbox(dir, [...withheldRows, ...skippedBullets(INBOX_LISTED_MAX + 1), ""].join("\n"));
+
+      const human = await inbox(dir, "--paths", "src/a.ts");
+      const json = await inbox(dir, "--paths", "src/a.ts", "--json");
+
+      const lines = human.stdout.split("\n");
+      expect(lines[0]).toBe("inbox: 101 rows · 50 matched · 0 unmatched · 0 unparsed · 101 skipped");
+      expect(lines.slice(51)).toEqual([
+        ...Array.from({ length: INBOX_LISTED_MAX }, (_, index) => `skipped: ${index + 51} (send-data-external)`),
+        "skipped: … +1 more",
+        "",
+      ]);
+      const doc = JSON.parse(json.stdout) as { matched: unknown[]; skipped: unknown[]; truncated: unknown };
+      expect(doc.matched).toHaveLength(INBOX_LISTED_MAX);
+      expect(doc.skipped).toEqual(
+        Array.from({ length: INBOX_LISTED_MAX }, (_, index) => ({ line: index + 51, pattern: "send-data-external" })),
+      );
+      expect(doc.truncated).toEqual({ problems: 0, skipped: 1 });
+    });
+
     it("caps each list on its own: a shown withheld row has no skip line to count", async () => {
       const dir = tempDir();
       const withheldRows = Array.from(
@@ -960,8 +1024,12 @@ describe("stamity ledger inbox", () => {
       expect(human.stdout).not.toContain("skipped: ");
       const doc = JSON.parse(json.stdout) as { matched: unknown[]; skipped: unknown[]; truncated: unknown };
       expect(doc.matched).toHaveLength(51);
-      expect(doc.skipped).toHaveLength(50);
-      expect(doc.truncated).toEqual({ problems: 0, skipped: 1 });
+      // TEST CHANGE, justified (2026-10-10, review/78): the document listed the first fifty of
+      // these rows under `skipped` and counted the fifty-first as left out, while the human form
+      // printed no skip line at all. Every one of them stands under `matched`, so the list is
+      // empty and nothing is left out of it, as the case's name already said of the human form.
+      expect(doc.skipped).toEqual([]);
+      expect(doc.truncated).toEqual({ problems: 0, skipped: 0 });
     });
   });
 
