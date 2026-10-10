@@ -434,6 +434,34 @@ describe("/st-work — Frame and Plan", () => {
     expect(frame).toContain("guaranteed on every run");
   });
 
+  it("reads the inbox through the ledger verb's query and reads the file whole only when that query is absent (REQ-FLOW-068)", async () => {
+    const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    // Added 2026-10-10 (plan 019 file 3, unit q1t-frame-inbox-read). The inbox is state any
+    // writer can author, and the query screens every row before it prints one. Frame reads the
+    // matching rows through it, by the change's paths and by the plan.
+    expect(frame).toContain("the `ledger` verb's `inbox` query");
+    expect(frame).toContain("`--paths`");
+    expect(frame).toContain("`--plan`");
+    // The counts say how much of the inbox the query left out.
+    expect(frame).toContain("unmatched");
+    // A bare intent names no files until Phase 2 has planned them: the second query.
+    expect(frame).toContain("again with the plan's files");
+    // A row the screen withholds is listed as the query's own line, never opened for its text.
+    expect(frame).toContain("A row it withholds is listed as it prints");
+    // The whole-file read has one trigger: no installed CLI, or a copy older than the query. No
+    // failed run of the query is it. A writer can force a refusal (a link, a file padded past
+    // the ceiling) and perhaps a crash, and a whole read would be unscreened. The plan's r4 text
+    // let a crash earn the whole read; q1a's round-2 review narrowed it to the absent verb, as
+    // the orchestrator signed off, before this unit landed.
+    expect(frame).toContain("Only when the CLI or that query is absent, read the whole file and say so");
+    expect(frame).toContain(
+      "any other failure (a refusal, a crash, a failing exit) is a finding naming it, never a whole-file read",
+    );
+    expect(frame).not.toContain("When the query cannot run");
+    expect(frame).not.toContain("cannot run at all");
+    expect(frame).not.toContain("absent or crashed");
+  });
+
   it("lists an inbox row a persisted plan settles and asks nothing about it (REQ-FLOW-019)", async () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
     // A row the persisted plan already disposed of is recorded with that disposition, not asked.
@@ -643,6 +671,19 @@ describe("/st-work — Frame and Plan", () => {
     expect(plan).toContain("persisted nowhere under `docs/plans/`");
     expect(plan).toContain("`.stamity/runs/<run-id>/plan.md`");
     expect(plan).toContain("not a reviewable artifact");
+  });
+
+  it("names the record's Plan: line where the in-flow plan is written, above the re-attachment cut", async () => {
+    const plan = collapse(section(await body(), "## Phase 2 — Plan"));
+    const raw = (await workFile).raw;
+
+    // Added 2026-10-10 (plan 019 file 3, unit q1t-frame-inbox-read; ledger row `review/1`). The
+    // head-line list moved below the cut in f0-make-room, so a run compacted before it re-read
+    // the Proof block could write plan.md and leave `Plan:` unset, and its resume card would
+    // carry no plan path. The duty is named where the plan is written.
+    expect(plan).toContain("not a reviewable artifact; the record's `Plan:` line names it.");
+    expect(raw.indexOf("the record's `Plan:` line names it")).toBeGreaterThan(-1);
+    expect(raw.indexOf("the record's `Plan:` line names it")).toBeLessThan(REATTACH_BUDGET_CHARS);
   });
 });
 

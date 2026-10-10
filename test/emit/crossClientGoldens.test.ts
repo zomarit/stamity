@@ -186,6 +186,28 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q1t-frame-inbox-read (run
+  //     2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-019, ledger row review/1).
+  //     The st-work touchpoint moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32489 -> 32889, `.agents/skills/st-work/SKILL.md` 32534 -> 32934), by
+  //       +400 bytes, the corpus source's own delta: Frame step 4 reads the
+  //       inbox rows that match the change through the `ledger` verb's `inbox`
+  //       query and keeps the whole-file read for a CLI or a query that is
+  //       absent; the Freshness guard's last sentence drops "recorded"; the
+  //       in-flow plan sentence ends "the record's `Plan:` line names it"; the
+  //       Coverage before Build bullet ends "A structural pass alone is not
+  //       clarity."
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit
   //     q6t-test-runner-ci-line (run 2026-10-10_next-tier; review/14 as signed
   //     off). The test-runner agent moved, plus the manifest rows that record

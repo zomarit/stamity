@@ -93,6 +93,27 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q1t-frame-inbox-read (run
+ *     2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-019, ledger row review/1).
+ *     ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32764 -> 33164 bytes and
+ *     467 -> 469 lines in the corpus source, four hunks. Frame step 4's
+ *     first sentence is replaced: the run reads the inbox rows that match its
+ *     change through the `ledger` verb's `inbox` query (`--paths`, `--plan`),
+ *     lists a row the query withholds as it prints, reads the whole file only
+ *     when the CLI or that query is absent, and reports any other failure (a
+ *     refusal, a crash, a failing exit) as a finding (five lines become nine,
+ *     the rest of the step rewrapped and unchanged). The Freshness guard's
+ *     last sentence drops "recorded" and pulls its last line up. The Decompose
+ *     bullet's in-flow plan sentence ends "the record's `Plan:` line names
+ *     it". The Coverage before Build bullet's last sentence reads "A
+ *     structural pass alone is not clarity." and pulls its last line up. All
+ *     four sit above the re-attachment cut (`### Specialist pass` moves
+ *     16662 -> 17062). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit
  *     q6t-test-runner-ci-line (run 2026-10-10_next-tier; review/14 as signed
  *     off). ONE golden moved, SUBSTITUTION:
