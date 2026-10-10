@@ -195,6 +195,16 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "and adds one sentence: the ninth row is conditional, and its presence or its absence does not fail the " +
     "criterion. What B6 now admits is a unit carrying a `threat` row, or none; a unit missing any of the eight " +
     "still fails it. No other row moves.",
+  "rework-critical-deferral-record":
+    "Expectation re-synced 2026-10-10 to the landed corpus (plan 019 file 3, unit q11b-feedback-writers; " +
+    "REQ-FLOW-077, the plan's D11): `/st-rework`'s fixed deferred-Critical row gained its schedule field, " +
+    "`when: touched`, straight after `/st-board`'s four fields and ahead of the tag (or `by: <date>` when the user " +
+    "names one), because a row under the inbox's schedule rule that carries neither does not parse " +
+    "(`content/commands/st-rework.md:195-201`, quoted in the Brief). B4 and the claim said three fields follow the " +
+    "grammar's four; B4 now names four, the schedule field first, and reads it as `when: touched`, since the " +
+    "scenario's user names no day. What B4 now refuses that it admitted: a row that carries no schedule field, " +
+    "which the governing text no longer describes. It still refuses a row led by the tag. No other row moves, and " +
+    "the B / A counts hold at 6 / 0.",
 };
 
 const markdown = (directory: string): string[] =>

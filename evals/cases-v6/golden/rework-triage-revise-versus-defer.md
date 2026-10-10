@@ -47,17 +47,17 @@ under the presented table as `note · file:line · category · remedy` and count
 
 - REVISE findings become plan units in phase 6.
 - DEFER findings append to `.stamity/inbox.md` as one dated block per rework run, each row
-  `severity · file:line · one-line description · source: rework <branch>`, written through the
-  persistence guard above. That inbox has two guaranteed readers — `/st-board` fill triages
-  it, and `/st-work` surfaces overlapping items when its framing phase touches the same
-  files — so a deferral is tracked, not lost.
+  `severity · file:line · one-line description · source: rework <branch> · when: touched`, with
+  `files: <path>` when the location is `—`, written through the persistence guard above. That inbox
+  has two guaranteed readers — `/st-board` fill triages it, and `/st-work` surfaces overlapping
+  items when its framing phase touches the same files — so a deferral is tracked, not lost.
 - Present the whole routing table once and take one batched correction
   (*"revise 3, defer 7 and 9"*), not a prompt per finding.
 - Present each finding's disposition in the shape it will take: a REVISE finding as the plan
   unit it becomes, a DEFER finding as the inbox row it becomes, written out in full —
-  `severity · file:line · one-line description · source: rework <branch>`. Say where those
-  rows land: one dated block appended to `.stamity/inbox.md` for this rework run. Rows shown
-  without that block named leave the reader guessing what this run appends.
+  `severity · file:line · one-line description · source: rework <branch> · when: touched`. Say
+  where those rows land: one dated block appended to `.stamity/inbox.md` for this rework run.
+  Rows shown without that block named leave the reader guessing what this run appends.
 ```
 
 Scenario state — the run so far, given to you as fact:

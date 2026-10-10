@@ -186,6 +186,47 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers (run
+  //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-074, ledger rows
+  //     review/52, build/29 and build/31). Two touchpoints moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 21000 -> 21114,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 21051 -> 21165), by +114
+  //       bytes, the corpus source's own delta (332 -> 333 lines), all of it
+  //       in the Close's first paragraph: the row template ends
+  //       `· when: touched`, followed by "(or `· by: <date>` when the reviewer
+  //       names one)", and the paragraph closes "A FIX that stays blocked
+  //       lands as the same row."
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 19812 -> 20203,
+  //       `.agents/skills/st-rework/SKILL.md` 19859 -> 20250), by +391 bytes,
+  //       the source's own delta (302 -> 304 lines), in five hunks.
+  //       `## 4. Routing`: both DEFER row templates end
+  //       `· source: rework <branch> · when: touched`, the first followed by
+  //       "with `files: <path>` when the location is `—`" (each bullet
+  //       rewrapped into its five lines). `### Critical Deferral Protocol`:
+  //       "the schedule field, the tag and the two extra fields follow the
+  //       grammar's four", and the fixed row carries `when: touched` ahead of
+  //       `critical-deferred`, followed by "(or `by: <date>` when the user
+  //       names one)" (seven lines held). `## 6. Plan handoff`: the one ask's
+  //       pointer at `/st-board`'s Leftovers at a close is replaced by "Each
+  //       DEFER row was decided at phase 4's routing table, in its one batched
+  //       correction", its row carrying `/st-board`'s schedule fields, and
+  //       "this handoff asks no leftovers question" (+2 lines); the `stop`
+  //       sentence is byte for byte as it was. `## Meta-feedback`: the last
+  //       table row names its inbox row as
+  //       `Minor · — · <one line> · source: rework <branch> · by: <YYYY-MM-DD> · meta`.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       two touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer (run
   //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-070, ledger row
   //     review/39). The st-plan touchpoint moved, plus the manifest rows that

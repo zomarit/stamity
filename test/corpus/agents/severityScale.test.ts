@@ -14,7 +14,7 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *   - **(c) The scale's shape.** Critical, Warning and Minor, each set by its consequence
  *     with one example, then the no-findings sentence.
  *   - **(d) What stays.** The reviewer's own Warning rule in `## Critical rows` stays word
- *     for word, and `/st-rework`'s severity vocabulary keeps its three lines (20–22). Its
+ *     for word, and `/st-rework`'s severity vocabulary keeps its three lines. Its
  *     severity inference grades a person's nit Minor, never a note, and its leftover scan's
  *     cleanup rows grade one Minor only with a named consequence, a note otherwise; the notes
  *     are listed under the routing table and counted in the proof block, in the lines they held.
@@ -421,13 +421,33 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
     expect(flat(reviewer.raw)).toContain(REVIEWER_WARNING_RULE);
   });
 
-  it("(d) aligns /st-rework's severity vocabulary in the same three lines, 20–22", async () => {
+  /*
+   * TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit q11b-feedback-writers; the sign-off
+   * on ledger row `build/28` of run 2026-10-10_next-tier). This test and the next one pinned
+   * `/st-rework` by line number: the vocabulary at lines 20 to 22, and the routing section, the
+   * deferral protocol and the proof paragraph opening at lines 154, 187 and 267. What changed
+   * about the contract: the numbers stood in for "the ranges the eval cases quote did not move",
+   * which `test/evals/locators.test.ts` has held directly since run 2026-10-08_product-core (every
+   * `source:` range anchored, every quoted block contiguous). Held here as well, they made each
+   * later writer of the file rewrap its edit into the lines a paragraph already had, past the
+   * file's width (unit q10b-flow-close-pointers). Each pin is re-anchored on the words it was
+   * about: the paragraph is found by its opening words, and its length and the blank lines around
+   * it are measured from there. Nothing is relaxed about the text: the same sentences are pinned
+   * in the same paragraphs, each anchor has to be found exactly once, and the three sections keep
+   * their order.
+   */
+  it("(d) aligns /st-rework's severity vocabulary in the same three lines", async () => {
     const lines = (await load(REWORK)).raw.split("\n");
-    const paragraph = lines.slice(19, 22).join("\n");
+    const opening = "**Severity vocabulary**, used by every table below";
+    const vocabulary = lines.findIndex((line) => line.startsWith(opening));
+    const paragraph = lines.slice(vocabulary, vocabulary + 3).join("\n");
 
-    expect(lines[18]).toBe("");
-    expect(lines[19]?.startsWith("**Severity vocabulary**, used by every table below")).toBe(true);
-    expect(lines[22]).toBe("");
+    expect(lines.filter((line) => line.startsWith(opening))).toHaveLength(1);
+    expect(lines[vocabulary - 1]).toBe("");
+    expect(lines[vocabulary + 3]).toBe("");
+    // It sits in the head of the body, before the first table it governs.
+    expect(vocabulary).toBeGreaterThan(lines.findIndex((line) => line === "# Rework"));
+    expect(vocabulary).toBeLessThan(lines.findIndex((line) => line === "## Dispatch"));
     expect(flat(paragraph)).toContain(
       "**Minor** (a true defect with a small, named consequence)",
     );
@@ -490,10 +510,15 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
       "findings by severity plus the notes count, REVISE/DEFER counts,",
     );
     expect(lines[proof + 4]).toBe("");
-    // The sections the eval cases quote open where they did before this fix.
-    expect(routing + 1).toBe(154);
-    expect(protocol + 1).toBe(187);
-    expect(proof + 1).toBe(267);
+    // The sections the eval cases quote are each found once, by their opening words, and in the
+    // order the cases cite them (re-anchored 2026-10-10, the note above the vocabulary test).
+    for (const anchor of ["## 4. Routing", "### Critical Deferral Protocol", "Close with this run's proof block:"]) {
+      expect(lines.filter((line) => line.startsWith(anchor)), anchor).toHaveLength(1);
+    }
+    expect(scan).toBeGreaterThan(inference);
+    expect(routing).toBeGreaterThan(scan);
+    expect(protocol).toBeGreaterThan(routing);
+    expect(proof).toBeGreaterThan(protocol);
   });
 
   it("(e) fails when one word of the section is reworded", async () => {
