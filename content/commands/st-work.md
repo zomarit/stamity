@@ -319,6 +319,9 @@ audit record:
   uncovered, the inbox rows it appended. A run that closed with none of those
   says so in the same line.
 
+**Usage lines.** An ended phase or review round adds `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)`
+to the record, minutes from the orchestrator's clock, after this list and never directly above a table.
+
 Cite native platform artifacts where they exist — per-sub-agent transcripts,
 hook-gate outcomes, session logs. A self-quoted completion marker is the
 fallback, and the proof block states which evidence class each citation is.

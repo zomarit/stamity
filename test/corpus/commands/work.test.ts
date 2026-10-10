@@ -1238,6 +1238,25 @@ describe("/st-work — Prove", () => {
     );
   });
 
+  // Added 2026-10-10 (plan 019 file 3, unit q5-usage-lines; REQ-CTX-019, D17): what a phase and a
+  // review round cost is one record line in a fixed grammar, placed after the field list and never
+  // directly above a table, because `src/cli/docs/measurements.ts` takes a table's lead from the
+  // nearest non-empty line above it (`test/cli/docs/measurements.test.ts` holds that side).
+  it("names the usage line a phase or review round adds, below the re-attachment cut (REQ-CTX-019)", async () => {
+    const raw = (await workFile).raw;
+    const proof = collapse(section(await body(), "### Proof block"));
+    const usage =
+      "**Usage lines.** An ended phase or review round adds `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)` to the record, minutes from the orchestrator's clock, after this list and never directly above a table.";
+    expect(proof).toContain(usage);
+    // After the field list's last item, before the citation paragraph.
+    const at = proof.indexOf(usage);
+    expect(at).toBeGreaterThan(proof.indexOf("says so in the same line."));
+    expect(at).toBeLessThan(proof.indexOf("Cite native platform artifacts"));
+    // Below the cut: the paragraph costs nothing a resumed run re-attaches.
+    expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+    expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+  });
+
   it("closes the run with the proof block over a write-ahead ledger", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     for (const item of [

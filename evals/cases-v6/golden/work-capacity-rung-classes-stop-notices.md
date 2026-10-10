@@ -2,7 +2,7 @@
 id: work-capacity-rung-classes-stop-notices
 class: golden
 claim: "A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round."
-source: content/commands/st-work.md:95-99,107-122,448-453
+source: content/commands/st-work.md:95-99,107-122,451-456
 metric: rubric
 ---
 
