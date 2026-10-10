@@ -750,6 +750,33 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(parseInbox(ruledInbox("—", " · when: touched · files: lib/widget.ts")).problems).toEqual([]);
   });
 
+  it("has a writer add the schedule-rule heading where an inbox has none, at the end of the file (review/55)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const grammar = inboxBullet(inbox, "Row grammar");
+
+    // The emitted tree ships no inbox, so in an installed repository the first writer meets a
+    // file with no heading. Every writer appends "below" it and none said who adds it; a row
+    // written with no heading above it stands under no rule, and the query never holds it to
+    // `by:` or `when:`. One clause, in the grammar every writer's own text points at.
+    expect(grammar).toContain(
+      `Rows below the inbox's heading \`${SCHEDULE_RULE_HEADING}\` carry \`by:\` or \`when:\`, without which a row there does not parse, and name \`files:\` when the location is \`—\`; a writer appending where the heading is absent adds it first, at the end of the file; \`when: touched\` needs a path in the location or \`files:\`.`,
+    );
+
+    // Why the end of the file: the parser holds every row after the heading to the rule. An
+    // older row with no day and no trigger stays valid above an appended heading...
+    const older = "- Minor · lib/widget.ts:3 · an older row · source: /st-plan";
+    const added = "- Minor · lib/widget.ts:9 · a new row · source: /st-plan · by: 2027-01-15";
+    const appended = parseInbox(`${older}\n\n${SCHEDULE_RULE_HEADING}\n\n${added}\n`);
+    expect(appended.problems).toEqual([]);
+    expect(appended.rows.map((row) => row.belowRule)).toEqual([false, true]);
+    // ...and stops parsing below one put at the top.
+    const atTop = parseInbox(`${SCHEDULE_RULE_HEADING}\n\n${older}\n${added}\n`);
+    expect(atTop.rows).toHaveLength(1);
+    expect(atTop.problems).toHaveLength(1);
+    // With no heading at all, the new row stands under no rule: the gap the clause closes.
+    expect(parseInbox(`${older}\n${added}\n`).rows.map((row) => row.belowRule)).toEqual([false, false]);
+  });
+
   it("triages `critical-deferred` rows first, then `decision-waiting`, as the query always shows both", async () => {
     const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
     const triage = inboxBullet(inbox, "Triage order");

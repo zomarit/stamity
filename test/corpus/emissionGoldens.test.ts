@@ -93,6 +93,21 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer, review round 1 (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/53, review/54,
+ *     review/55, build/32 and build/33). NOTHING moved in this suite; the row
+ *     keeps the two ledgers in step. The round's emitted changes are two
+ *     touchpoints: `commands/st-plan.md` (27668 -> 28136 bytes, 420 -> 425
+ *     lines: the Side effects' inbox bullet cites the plan path in `Ref:`,
+ *     states the follow-up row whole and says a follow-up's trigger is one a
+ *     run can check from the repository or its record; the Drop list holds
+ *     items with no date and no such trigger; the last return row names
+ *     `Ref:`) and `commands/st-board.md` (27913 -> 28001, 462 -> 463: one line
+ *     in the Row grammar, a writer appending where the schedule-rule heading
+ *     is absent adds it first, at the end of the file). Neither is a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries one; the sibling suite itemises them.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers (run
  *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-074, ledger rows review/52,
  *     build/29 and build/31). NOTHING moved in this suite; the row keeps the

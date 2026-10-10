@@ -186,6 +186,43 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer, review round 1
+  //     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/53,
+  //     review/54, review/55, build/32 and build/33). Two touchpoints moved,
+  //     plus the manifest rows that record them. No emitted path was added or
+  //     removed.
+  //
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 27499 -> 27967,
+  //       `.agents/skills/st-plan/SKILL.md` 27542 -> 28010), by +468 bytes,
+  //       the corpus source's own delta (420 -> 425 lines), in three hunks.
+  //       `## Plan artifact shape`: the Drop list holds "items with no date
+  //       and no trigger a run can check" (its two lines held).
+  //       `## Side effects`: the Deferral-inbox append bullet cites the plan
+  //       path "in `Ref:`", states the row after the heading's name,
+  //       `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
+  //       "or `· when: <trigger>` in the date's place, with
+  //       `· files: <path>, …` when the location is `—`", and says a
+  //       follow-up's trigger is something a run can check from the repository
+  //       or its record, one with neither, or with a trigger only the outside
+  //       world fires, going to the plan's Drop list (six lines become
+  //       eleven). `## Return contract`: the last row reads "citing the plan
+  //       path in `Ref:`" (its two lines held).
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 27732 -> 27820,
+  //       `.agents/skills/st-board/SKILL.md` 27778 -> 27866), by +88 bytes,
+  //       the source's own delta (462 -> 463 lines), one line in the Deferral
+  //       inbox's Row grammar bullet: "a writer appending where the heading is
+  //       absent adds it first, at the end of the file;".
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       two touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers (run
   //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-074, ledger rows
   //     review/52, build/29 and build/31). Two touchpoints moved, plus the

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { typeIdKey } from "../../../src/content/catalog.ts";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { scanAntiSlop } from "../../../src/denyscan/denyScan.ts";
-import { parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
+import { matchInbox, parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
 import {
   CORPUS_ROOT,
   assertDenyClean,
@@ -115,13 +115,54 @@ function ruledInbox(...rows: string[]): string {
   return `${SCHEDULE_RULE_HEADING}\n\n${rows.map((row) => `- ${row}`).join("\n")}\n`;
 }
 
+/** What a fixture follow-up says. Made up, like every path beside it. */
+const FOLLOW_UP_TEXT = "the alias prints a notice until its removal";
+
 /**
- * One follow-up row as the Side effects bullet has `/st-plan` write it: the
- * grammar's four fields, the plan path it cites as its `Ref:`, then the
- * schedule fields the bullet names.
+ * The row template the Side effects bullet states, read out of the shipped
+ * text: the dated row, and the two spans the bullet says replace or follow its
+ * date. Read rather than typed, so a row a test writes is a row the text asks
+ * for, and a template that loses a field fails here (ledger row review/54).
+ * Throws when the bullet states none.
  */
-function followUpRow(location: string, schedule: string): string {
-  return `Minor · ${location} · the alias prints a notice until its removal · source: /st-plan · Ref: ${FOLLOW_UP_PLAN} · ${schedule}`;
+function followUpTemplate(effects: string): { dated: string; trigger: string; files: string } {
+  const read = flat(effects);
+  const dated = /`(<severity> · [^`]+)`/.exec(read)?.[1];
+  const trigger = /`(· when: [^`]+)`/.exec(read)?.[1];
+  const files = /`(· files: [^`]+)`/.exec(read)?.[1];
+  if (dated === undefined || trigger === undefined || files === undefined) {
+    throw new Error(`${RELATIVE_PATH}: the Side effects state no follow-up row template`);
+  }
+  return { dated, trigger, files };
+}
+
+/** One placeholder of a template filled; a template without it fails rather than passing unfilled. */
+function fill(template: string, placeholder: string, value: string): string {
+  if (!template.includes(placeholder)) throw new Error(`the row template has no ${placeholder}`);
+  return template.replace(placeholder, value);
+}
+
+/**
+ * One follow-up row written from that template, its placeholders filled: a
+ * day in `by`, or a trigger in the date's place, and the paths of a row whose
+ * location is `—`.
+ */
+function followUpRow(
+  template: { dated: string; trigger: string; files: string },
+  location: string,
+  schedule: { by: string } | { when: string },
+  files: readonly string[] = [],
+): string {
+  let row = template.dated;
+  row = fill(row, "<severity>", "Minor");
+  row = fill(row, "<file:line or —>", location);
+  row = fill(row, "<description>", FOLLOW_UP_TEXT);
+  row = fill(row, "docs/plans/<file>.md", FOLLOW_UP_PLAN);
+  row =
+    "by" in schedule
+      ? fill(row, "<YYYY-MM-DD>", schedule.by)
+      : fill(row, " · by: <YYYY-MM-DD>", ` ${fill(template.trigger, "<trigger>", schedule.when)}`);
+  return files.length === 0 ? row : `${row} ${fill(template.files, "<path>, …", files.join(", "))}`;
 }
 
 /** The body of one `## `-level section, heading line included. Throws when the heading moved. */
@@ -673,9 +714,15 @@ describe("/st-plan — plan artifact shape", () => {
     expect(read).toContain(
       "6. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append as the Side effects say.",
     );
+    // TEST CHANGE, justified (2026-10-10, q11a-plan-writer fix round 1; ledger rows review/53 and
+    // build/32, signed off): the pinned sentence moves. "items with only a revisit trigger" also
+    // described a follow-up carrying `when:`, so one item fitted both sections. The Drop list now
+    // holds what has no date and no trigger a run can check. The old words are asserted gone;
+    // nothing is loosened.
     expect(read).toContain(
-      "7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with only a revisit trigger; they append nowhere.",
+      "7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no trigger a run can check; they append nowhere.",
     );
+    expect(read).not.toContain("items with only a revisit trigger");
     // Both are optional and close the list: a plan with neither is a valid plan, and the criteria
     // paragraph still follows the last section.
     expect(read).toMatch(/they append nowhere\. \*\*Fresh-context criteria\.\*\*/);
@@ -716,20 +763,48 @@ describe("/st-plan — side effects", () => {
 
     // The bullet keeps its words and its path and gains the schedule rule. The heading is read
     // from the parser that looks for it, so the text cannot name one the parser does not.
+    // TEST CHANGE, justified (2026-10-10, q11a-plan-writer fix round 1; ledger rows review/53,
+    // review/54, build/32 and build/33, signed off): the pinned sentence moves, in two places.
+    // "citing the plan path" named no field, and the inbox query finds a plan's rows by `Ref:`,
+    // so the bullet names the field and states the row whole; and "a follow-up with neither" gains
+    // the trigger only the outside world fires (pinned in the next test). Every earlier word
+    // stays, the old phrase a substring of the new one; nothing is loosened.
     expect(effects).toContain(
-      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading; a follow-up with neither belongs in the plan's Drop list with its revisit trigger. That inbox is the rendezvous \`/st-board fill\` triages`,
+      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path in \`Ref:\`, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading: \`<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>\`, or \`· when: <trigger>\` in the date's place, with \`· files: <path>, …\` when the location is \`—\`. A follow-up's trigger is`,
+    );
+    expect(effects).toContain(
+      "belongs in the plan's Drop list with its revisit trigger. That inbox is the rendezvous `/st-board fill` triages",
     );
     // Still two side effects: the rule adds no third bullet.
     expect(sectionOf(plan.parsed.body, "## Side effects").split("\n").filter((line) => line.startsWith("- **"))).toHaveLength(2);
   });
 
-  it("writes follow-up rows the inbox's one parser reads below that heading", () => {
-    // Each row is written from the bullet's words: the four fields, the plan path cited, then a
-    // day, or a trigger, and `files:` where the location is `—`. No double: the parser is the
-    // real one, the one `/st-board` and the `ledger` verb's `inbox` query read rows with.
-    const dated = followUpRow("lib/alias.ts:12", "by: 2027-01-15");
-    const touched = followUpRow("lib/alias.ts", "when: touched");
-    const unlocated = followUpRow("—", "when: the 2.0.0 release is cut · files: lib/alias.ts, lib/entry.ts");
+  it("parts a follow-up's trigger from a Drop-list revisit trigger by what a run can check (review/53)", () => {
+    const effects = flat(sectionOf(plan.parsed.body, "## Side effects"));
+    const shape = flat(sectionOf(plan.parsed.body, "## Plan artifact shape"));
+
+    // Without these two sentences one item fitted both sections: a trigger nothing in the
+    // repository ever fires went to the inbox, where no query sees it arrive, or a checkable one
+    // went to the Drop list, which appends nowhere.
+    expect(effects).toContain(
+      "A follow-up's trigger is something a run can check from the repository or its record: a path touched, a named unit or session, a release, a date. A follow-up with neither, or one whose trigger only the outside world fires, belongs in the plan's Drop list with its revisit trigger.",
+    );
+    // The section list carries the same test in its own words.
+    expect(shape).toContain("of items with no date and no trigger a run can check; they append nowhere.");
+  });
+
+  it("writes follow-up rows the inbox's one parser reads below that heading, and its query finds by plan", () => {
+    // TEST CHANGE, justified (2026-10-10, q11a-plan-writer fix round 1; ledger rows review/54 and
+    // build/33, signed off): the rows were a literal that already carried `source: /st-plan` and
+    // a `Ref:` the text never named, so the test stayed green whatever the bullet said. Each row
+    // is now built from the template read out of the Side effects, its placeholders filled: a
+    // day, or a trigger in the date's place, and `files:` where the location is `—`. Every
+    // earlier assertion stands; two are added. No double: the parser and the query are the real
+    // ones, the ones `/st-board` and the `ledger` verb's `inbox` query read rows with.
+    const template = followUpTemplate(sectionOf(plan.parsed.body, "## Side effects"));
+    const dated = followUpRow(template, "lib/alias.ts:12", { by: "2027-01-15" });
+    const touched = followUpRow(template, "lib/alias.ts", { when: "touched" });
+    const unlocated = followUpRow(template, "—", { when: "the 2.0.0 release is cut" }, ["lib/alias.ts", "lib/entry.ts"]);
     const read = parseInbox(ruledInbox(dated, touched, unlocated));
 
     expect(read.problems).toEqual([]);
@@ -746,10 +821,25 @@ describe("/st-plan — side effects", () => {
       files: ["lib/alias.ts", "lib/entry.ts"],
     });
 
+    // The `/st-work` run that executes the plan asks the query for that plan's rows, and the query
+    // reads `Ref:` (or a location), never the description. Each template row comes back as `plan`.
+    const byPlan = matchInbox(read.rows, { paths: [], plan: FOLLOW_UP_PLAN });
+    expect(byPlan.matched.map((match) => match.matchedBy)).toEqual(["plan", "plan", "plan"]);
+    expect(byPlan.unmatched).toBe(0);
+    // The old reading of "citing the plan path": the path in the description and no `Ref:`. The
+    // row parses, so nothing refuses it, and the plan's own run never gets it back.
+    const cited = parseInbox(
+      ruledInbox(`Minor · lib/alias.ts:12 · left out of ${FOLLOW_UP_PLAN}: ${FOLLOW_UP_TEXT} · source: /st-plan · by: 2027-01-15`),
+    );
+    expect(cited.problems).toEqual([]);
+    expect(cited.rows).toHaveLength(1);
+    expect(matchInbox(cited.rows, { paths: [], plan: FOLLOW_UP_PLAN })).toMatchObject({ matched: [], unmatched: 1 });
+
     // What the bullet keeps out of the inbox is what the parser refuses there: a row with no day
     // and no trigger (the plan's Drop list is its place), and `touched` with no path to touch.
-    const bare = `Minor · lib/alias.ts:12 · the alias prints a notice until its removal · source: /st-plan · Ref: ${FOLLOW_UP_PLAN}`;
-    for (const refused of [bare, followUpRow("—", "when: touched")]) {
+    const bare = dated.replace(" · by: 2027-01-15", "");
+    expect(bare).toBe(`Minor · lib/alias.ts:12 · ${FOLLOW_UP_TEXT} · source: /st-plan · Ref: ${FOLLOW_UP_PLAN}`);
+    for (const refused of [bare, followUpRow(template, "—", { when: "touched" })]) {
       const verdict = parseInbox(ruledInbox(refused));
       expect(verdict.rows, `${refused} is refused`).toEqual([]);
       expect(verdict.problems).toHaveLength(1);
@@ -807,8 +897,11 @@ describe("/st-plan — return contract", () => {
   it("reports the follow-ups with their day or trigger, and appends nothing for the Drop list (REQ-FLOW-077)", () => {
     const returns = flat(sectionOf(plan.parsed.body, "## Return contract"));
 
+    // TEST CHANGE, justified (2026-10-10, q11a-plan-writer fix round 1; ledger rows review/54 and
+    // build/33, signed off): the pinned row names the field the path is cited in, as the Side
+    // effects' template does. The older phrase stays a substring; nothing is loosened.
     expect(returns).toContain(
-      `- Follow-ups outside this plan's scope append to \`${INBOX}\`, one line each, citing the plan path, with \`by:\` or \`when:\`; the Drop list appends nothing.`,
+      `- Follow-ups outside this plan's scope append to \`${INBOX}\`, one line each, citing the plan path in \`Ref:\`, with \`by:\` or \`when:\`; the Drop list appends nothing.`,
     );
     // It stays the block's last row, after the next step.
     expect(returns.trimEnd().endsWith("the Drop list appends nothing.")).toBe(true);

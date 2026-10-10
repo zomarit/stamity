@@ -1869,6 +1869,41 @@ failed reply, and no criterion grades that row's fields. The rework next-step sc
 incremental rule the four re-measure, because their case-file bytes moved. The dated citations
 above stay as they were.
 
+**Two `/st-plan` ranges moved and one Brief re-quoted, 2026-10-10 (plan 019 file 3, unit
+`q11a-plan-writer`, fix round 1).** `/st-plan` states the row its follow-ups append and says which
+trigger a follow-up may carry, in three edits (the sign-offs on ledger rows `review/53`,
+`review/54`, `build/32` and `build/33` of run 2026-10-10_next-tier). The section list's seventh
+entry reads "of items with no date and no trigger a run can check" where it read "of items with
+only a revisit trigger", edited within its two lines (0). The Side effects' Deferral-inbox append
+bullet keeps its words, cites the plan path "in `Ref:`", and states the row after the heading's
+name,
+`<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
+"or `· when: <trigger>` in the date's place, with `· files: <path>, …` when the location is `—`";
+its Drop-list clause becomes two sentences, "A follow-up's trigger is something a run can check
+from the repository or its record: a path touched, a named unit or session, a release, a date. A
+follow-up with neither, or one whose trigger only the outside world fires, belongs in the plan's
+Drop list with its revisit trigger." (six lines become eleven: +5). The Return contract's last row
+reads "citing the plan path in `Ref:`, with `by:` or `when:`", edited within its two lines (0). So
+a `/st-plan` range moves by five from line 399 and the file goes from 420 lines to 425. Each move
+lands in the case file and its case-index cell above:
+`plan-lint-three-fails-returns-blocked-ambiguity` 274-312,400-411 → 274-312,405-416, range only,
+its Return contract block byte-identical at the new lines; and
+`plan-semantic-ambiguity-survives-structural-pass` 274-420 → 274-425, its one block re-quoted whole
+by script, byte-identical. `plan-artifact-head-and-units-shape` (314-376) keeps its range and its
+bytes: the seventh entry sits inside the `[...]` gap its Brief leaves between the unit table and
+the fresh-context criteria. `plan-security-unit-carries-threat-note` (342-357) and
+`plugin-mode-invocation` (88-97,166-168,288-293) source no line past 357 and hold. The same round
+adds one line to `/st-board`'s Row grammar ("a writer appending where the heading is absent adds it
+first, at the end of the file", the sign-off on ledger row `review/55`; the file goes from 462
+lines to 463) at line 361, below the one range that sources the file,
+`board-write-back-four-channels` (255-287), which holds. No `## Expected` block moves: the lint
+case stops on L1 failing three times and the semantic case on two meanings of one requirement,
+neither scenario leaves a follow-up out of a plan, and no criterion grades an inbox row's fields.
+Both have a cases-v5 copy, and each Expected block stays byte-identical to it. So `EXPECTED_MOVES`
+gains no row, and no claim, identical/moved count, threshold or roster count moves. Under the
+incremental rule the two re-measure, because their case-file bytes moved. The dated citations
+above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -2050,9 +2085,9 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `migration-elapsed-window-does-not-prove-backfill` | golden · rubric | 4 / 0 | An elapsed migration window cannot substitute for verified backfill completion before a destructive contract step. | `content/rules/stamity-migrations.md:12-80` |
 | `onboard-exhausted-budget-keeps-required-gates` | golden · rubric *(floor)* | 5 / 0 | An exhausted onboarding timer never turns touched-test success into completion while required gates are missing. | `content/skills/st-onboard/SKILL.md:12-170` |
 | `plan-artifact-head-and-units-shape` | golden · rubric | 9 / 0 | The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries the eight required fields of the command's nine-row table, the ninth (threat) conditional — requirements never blank, interfaces inline, at least one edge case. | `content/commands/st-plan.md:314-376` |
-| `plan-lint-three-fails-returns-blocked-ambiguity` | golden · rubric | 6 / 1 | Three consecutive plan-lint passes failing the same check stop the run: it returns BLOCKED_AMBIGUITY naming the check and the unit that keeps failing, and the blocked write means no plan artifact is persisted. | `content/commands/st-plan.md:274-312,400-411` |
+| `plan-lint-three-fails-returns-blocked-ambiguity` | golden · rubric | 6 / 1 | Three consecutive plan-lint passes failing the same check stop the run: it returns BLOCKED_AMBIGUITY naming the check and the unit that keeps failing, and the blocked write means no plan artifact is persisted. | `content/commands/st-plan.md:274-312,405-416` |
 | `plan-security-unit-carries-threat-note` | golden · rubric | 5 / 2 | A plan unit whose files gate classify places security-sensitive carries a threat row naming its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines, while a unit in the same plan whose files classify as docs carries no threat row. | `content/commands/st-plan.md:342-357` |
-| `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:274-420` |
+| `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:274-425` |
 | `plugin-mode-invocation` | golden · rubric | 6 / 1 | Running as the Claude Code plugin invoked at `/stamity:st-plan`, a plan run fans its research out under the namespaced agent form `@stamity:stamity-researcher`, reaches its coverage pass through the skill form `/stamity:st-verify` inside the root, keeps itself the single writer of the artifact, and cites the charter-reference phrase the root renders rather than an unresolved gate token. | `content/commands/st-plan.md:88-97,166-168,288-293` |
 | `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:311-333` |
 | `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:62-64,69-73,106-144` |
