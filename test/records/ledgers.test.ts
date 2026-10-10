@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { INBOX_PATH, INBOX_SEVERITIES, parseInbox, type InboxProblem } from "../../src/runs/inboxStore.ts";
 import { LEDGER_SUFFIX, SEVERITIES, parseLedger, type LedgerRow } from "../support/ledgerGrammar.ts";
 
 /**
@@ -25,13 +26,24 @@ import { LEDGER_SUFFIX, SEVERITIES, parseLedger, type LedgerRow } from "../suppo
  *
  * The row grammar itself — the fields, the vocabularies and `parseLedger` —
  * lives in `test/support/ledgerGrammar.ts`, so the `ledger append` suite holds
- * the bytes it writes to this same parser.
+ * the bytes it writes to this same parser. The inbox's row grammar — `parseInbox`
+ * and the `Ref:` rule — lives in `src/runs/inboxStore.ts`, so `stamity ledger
+ * inbox` and this gate read one grammar.
  */
 
 /** Repo root, resolved from this file rather than from the process cwd. */
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 
-const INBOX_PATH = ".stamity/inbox.md";
+/**
+ * One inbox problem as the gate prints it: `.stamity/inbox.md:<line>: <message>`.
+ *
+ * TEST CHANGE, justified (2026-10-10, q1b-records-gate-parser): the inbox parser
+ * moved from this file to `src/runs/inboxStore.ts` so the `ledger inbox` query
+ * and this gate read one grammar. The shared parser returns `{ line, message }`
+ * rather than a prefixed string, so the prefix is composed here; no message and
+ * no verdict changed, and every pin below matches the same substring as before.
+ */
+const renderProblem = (problem: InboxProblem): string => `${INBOX_PATH}:${problem.line}: ${problem.message}`;
 
 /**
  * The ledgers carrying each legacy spelling, by NAME rather than by count. A
@@ -63,29 +75,6 @@ const LEGACY_INFO_LEDGERS = [
 const RETIRED_DATE = /^\d{4}-\d{2}-\d{2}\s+\S/;
 
 /**
- * A `Ref:` value, in the two forms `/st-board`'s grammar declares: a bare
- * `<path>`, or `<path>#<anchor>` naming one line inside it. `/st-work`'s close
- * writes the anchored form (`<the run's ledger path>#<row id>`), while a
- * `/st-rework` or `/st-pr-resolve` row may name a record whose whole file is
- * the reference. The one place the anchor is mandatory is a ledger: it is
- * addressable only by row id, so a bare `ledger.jsonl` path names nothing the
- * dangling check below can resolve.
- */
-const REF_PATH = /^[^\s#]+$/;
-const REF_ANCHORED = /^[^\s#]+#\S+$/;
-
-/** The grammar problem with a `Ref:` value, or null where it parses. */
-const refProblem = (ref: string): string | null => {
-  if (REF_PATH.test(ref)) {
-    return ref.endsWith(LEDGER_SUFFIX)
-      ? `\`Ref: ${ref}\` names a ledger, which is addressable only as \`<path>#<row id>\``
-      : null;
-  }
-  if (REF_ANCHORED.test(ref)) return null;
-  return `\`Ref: ${ref}\` is neither \`<path>\` nor \`<path>#<anchor>\``;
-};
-
-/**
  * `<ledger>#<id>` for every id a ledger carries more than once. The id is what
  * makes the in-place rewrite converge instead of appending a second row, so two
  * rows sharing one id are two answers to the same finding: an inbox `Ref:`
@@ -105,89 +94,6 @@ const duplicateIds = (ledgerPath: string, rows: readonly LedgerRow[]): string[] 
 /** `<ledger>#<id>` for every row a committed ledger left `open`. */
 const openRowLabels = (ledgerPath: string, rows: readonly LedgerRow[]): string[] =>
   rows.filter((row) => row.state === "open").map((row) => `${ledgerPath}#${row.id}`);
-
-interface InboxBullet {
-  readonly severity: string;
-  readonly location: string;
-  readonly description: string;
-  readonly source: string;
-  readonly ref: string | null;
-  readonly tag: string | null;
-}
-
-interface InboxParse {
-  readonly rows: readonly InboxBullet[];
-  readonly problems: readonly string[];
-}
-
-/**
- * Parse the inbox under `/st-board`'s declared row grammar:
- * `severity · file:line · description · source: <writer>`, with an optional
- * `Ref: <path>` or `Ref: <path>#<anchor>` and an optional trailing tag word. Non-bullet lines —
- * headings, prose, blanks — are not rows and are ignored: the grammar governs
- * what a reader can parse, not what a writer is allowed to say around it.
- */
-const parseInbox = (text: string): InboxParse => {
-  const rows: InboxBullet[] = [];
-  const problems: string[] = [];
-
-  text.split("\n").forEach((line, index) => {
-    const at = `${INBOX_PATH}:${index + 1}`;
-    if (!line.startsWith("- ")) return;
-    const fields = line.slice(2).split(" · ");
-
-    const sourceIndex = fields.findIndex((field) => field.startsWith("source: "));
-    if (sourceIndex === -1) {
-      problems.push(`${at}: no \`source: <writer>\` field`);
-      return;
-    }
-    if (sourceIndex < 3) {
-      problems.push(`${at}: \`source:\` arrives before severity, location and description are all present`);
-      return;
-    }
-    const severity = fields[0] ?? "";
-    if (!SEVERITIES.has(severity)) {
-      problems.push(`${at}: severity \`${severity}\` is outside ${[...SEVERITIES].join(", ")}`);
-      return;
-    }
-    const location = fields[1] ?? "";
-    if (location.trim() === "") {
-      problems.push(`${at}: the location field is a \`file:line\` or \`—\`, never empty`);
-      return;
-    }
-    const description = fields.slice(2, sourceIndex).join(" · ");
-    if (description.trim() === "") {
-      problems.push(`${at}: the description field is empty`);
-      return;
-    }
-    const writer = (fields[sourceIndex] ?? "").slice("source: ".length).trim();
-    if (writer === "") {
-      problems.push(`${at}: \`source:\` names no writer`);
-      return;
-    }
-
-    const rest = fields.slice(sourceIndex + 1);
-    let ref: string | null = null;
-    if (rest[0]?.startsWith("Ref: ") === true) {
-      ref = rest[0].slice("Ref: ".length).trim();
-      const problem = refProblem(ref);
-      if (problem !== null) {
-        problems.push(`${at}: ${problem}`);
-        return;
-      }
-      rest.shift();
-    }
-    const tag = rest.length > 0 ? (rest[0] ?? "") : null;
-    if (rest.length > 1 || (tag !== null && (tag.trim() === "" || /\s/.test(tag.trim())))) {
-      problems.push(`${at}: trailing field(s) beyond one optional tag word — ${rest.join(" · ")}`);
-      return;
-    }
-
-    rows.push({ severity, location, description, source: writer, ref, tag: tag?.trim() ?? null });
-  });
-
-  return { rows, problems };
-};
 
 /** Every `Ref:` value the inbox carries, as written. */
 const inboxRefs = (text: string): Set<string> =>
@@ -300,7 +206,8 @@ describe("the deferral inbox", () => {
   });
 
   it("parses every bullet under the board's declared row grammar", () => {
-    const { rows, problems } = parseInbox(INBOX_TEXT);
+    const { rows, problems: parsed } = parseInbox(INBOX_TEXT);
+    const problems = parsed.map(renderProblem);
     expect(problems, `${problems.length} inbox row(s) outside the grammar`).toEqual([]);
     // No floor on the row count: an empty inbox is the state a completeness pass leaves
     // behind, and the parser's own non-vacuity is proven by the fixtures below, not by
@@ -386,7 +293,7 @@ describe("fixtures — the gate fails where it must", () => {
       "",
     ].join("\n");
     const { rows } = parseLedger(LEDGER, text);
-    expect(parseInbox(inbox).problems).toEqual([]);
+    expect(parseInbox(inbox).problems.map(renderProblem)).toEqual([]);
     expect(unaccountedDeferrals(LEDGER, rows, inboxRefs(inbox))).toEqual([]);
   });
 
@@ -449,7 +356,10 @@ describe("fixtures — the gate fails where it must", () => {
   });
 
   it("reports inbox bullets outside the grammar, and ignores everything that is not one", () => {
-    const problem = (line: string): string => parseInbox(line).problems[0] ?? "";
+    const problem = (line: string): string => {
+      const first = parseInbox(line).problems[0];
+      return first === undefined ? "" : renderProblem(first);
+    };
     expect(problem("- Trivial · — · d · source: /st-work")).toContain("severity `Trivial`");
     expect(problem("- Minor · — · d")).toContain("no `source: <writer>` field");
     expect(problem("- Minor · source: /st-work")).toContain("arrives before severity");
@@ -470,18 +380,26 @@ describe("fixtures — the gate fails where it must", () => {
     expect(problem("- Minor · — · d · source: /st-work · two words")).toContain("beyond one optional tag");
     expect(problem("- Minor · — · d · source: /st-work · a#1 · b")).toContain("trailing field(s)");
     // Prose, headings and blank lines are not rows.
-    expect(parseInbox("# Deferral inbox\n\nRows: 3.\n  - indented\n").problems).toEqual([]);
+    expect(parseInbox("# Deferral inbox\n\nRows: 3.\n  - indented\n").problems.map(renderProblem)).toEqual([]);
     // The full shape, with the tag, parses.
     const tagged = "- Critical · src/a.ts:9 · the consequence · source: rework main · Ref: r.jsonl#a/1 · critical-deferred";
     const parsed = parseInbox(tagged);
-    expect(parsed.problems).toEqual([]);
+    expect(parsed.problems.map(renderProblem)).toEqual([]);
     expect(parsed.rows[0]?.tag).toBe("critical-deferred");
     expect(parsed.rows[0]?.ref).toBe("r.jsonl#a/1");
     // And the grammar's other declared form — a bare path, which is what a row
     // naming a whole record carries — parses as the same optional field.
     const bare = parseInbox("- Minor · — · d · source: rework main · Ref: .stamity/runs/x/record.md");
-    expect(bare.problems).toEqual([]);
+    expect(bare.problems.map(renderProblem)).toEqual([]);
     expect(bare.rows[0]?.ref).toBe(".stamity/runs/x/record.md");
+  });
+
+  it("admits on the inbox exactly the severities the ledger admits", () => {
+    // The inbox grammar now lives in `src/runs/inboxStore.ts` and the ledger grammar in
+    // `test/support/ledgerGrammar.ts`; a deferral moves a row from one to the other, so a
+    // severity either side admits alone would strand it. Compared as ordered arrays, so the
+    // severity problem message, which lists them, reads the same on both sides.
+    expect([...INBOX_SEVERITIES]).toEqual([...SEVERITIES]);
   });
 });
 
