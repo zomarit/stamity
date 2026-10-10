@@ -1,8 +1,17 @@
-import { stat } from "node:fs/promises";
+import { constants as FS, type Stats } from "node:fs";
+import { lstat, open, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Argument, Option, type Command } from "commander";
+import {
+  CONTENT_DENY_PATTERNS,
+  INJECTION_PATTERNS,
+  INVISIBLE_SMUGGLING_CHARS,
+  LEARNINGS_INJECTION_PATTERNS,
+  normalizeForDenyScan,
+} from "../../denyscan/denyScan.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { BlockProblem } from "../../runs/blocks.ts";
+import type { InboxProblem, InboxRow, MatchedBy } from "../../runs/inboxStore.ts";
 import type { AppendResult, CloseChange, CloseResult } from "../../runs/ledgerStore.ts";
 import type { ResumeCard } from "../../runs/resumeCard.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
@@ -11,14 +20,17 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
 import { sanitizeLabel } from "../kit/prompts.ts";
 
 /**
- * `stamity ledger append`, `stamity ledger close` and `stamity ledger status` —
- * the one serialized writer of a work run's findings ledger, its reader, and the
- * CLI's third hidden plumbing verb. `append` files a report's findings as `open`
+ * `stamity ledger append`, `stamity ledger close`, `stamity ledger status` and
+ * `stamity ledger inbox` — the one serialized writer of a work run's findings
+ * ledger, its reader, the deferral inbox's query, and the CLI's third hidden
+ * plumbing verb. `append` files a report's findings as `open`
  * rows; `close` moves rows on a re-review's closures block (`--report` with the
  * `--ids` it was handed), by one manual transition (`--id`, `--state`,
  * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
  * prints the run's resume card, the same lines the session-start hook prints
- * after a compaction or a resume, and writes nothing.
+ * after a compaction or a resume, and writes nothing; `inbox` prints the
+ * deferral inbox's rows a change's paths touch, each line screened first, and
+ * writes nothing.
  * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -27,7 +39,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * row numbering, the closure rules, the lock and the write live in
  * `../../runs/ledgerStore.ts`; the
  * run id's grammar lives in `../../runs/layout.ts`; the resume card lives in
- * `../../runs/resumeCard.ts`. Every verdict printed here is
+ * `../../runs/resumeCard.ts`; the inbox's grammar and query live in
+ * `../../runs/inboxStore.ts`. Every verdict printed here is
  * one of theirs. What this file owns is which flags spell an append, a close or
  * a status, where the block's text comes from, and how a refusal reads on a
  * terminal. A flag only another subcommand reads is a usage error, never ignored.
@@ -41,7 +54,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * `<id> <from> -> <to>` line per row (with its closure status, or a
  * retirement's `retired: <value>`, in parentheses),
  * or `<id> unchanged (already recorded)`; for a status, the card's lines, or the
- * one no-run sentence. Everything else — the nothing-to-do
+ * one no-run sentence; for an inbox, the count line, then the matched rows, the
+ * unparsed lines and the skipped lines. Everything else — the nothing-to-do
  * note, the warnings about a line that is not a row or about locking being off
  * — goes to stderr. The dry-run line is the one exception, and it ends the
  * output; a status writes nothing, so its dry run prints no such line.
@@ -56,6 +70,7 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 const APPEND = "append";
 const CLOSE = "close";
 const STATUS = "status";
+const INBOX = "inbox";
 const MANUAL_STATES = ["fixed", "rejected", "deferred"] as const;
 
 /** Where the block came from when it was piped rather than named. */
@@ -115,7 +130,8 @@ function missingFlag(subcommand: string, flag: string): CliFailure {
 /**
  * The flags a subcommand does not read, keyed by subcommand: each as its
  * commander option key, its spelling, and the subcommands that do read it.
- * `--run` is read by all three; `--report` by append and close.
+ * `--run` is read by every subcommand but inbox; `--report` by append and close;
+ * `--paths`, `--plan` and `--area` by inbox alone.
  */
 const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string, readonly string[]])[]>> = {
   [APPEND]: [
@@ -124,13 +140,34 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["state", "--state", [CLOSE]],
     ["rationale", "--rationale", [CLOSE]],
     ["retired", "--retired", [CLOSE]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
   ],
   [CLOSE]: [
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
     ["stdin", "--stdin", [APPEND]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
   ],
   [STATUS]: [
+    ["phase", "--phase", [APPEND]],
+    ["source", "--source", [APPEND]],
+    ["stdin", "--stdin", [APPEND]],
+    ["report", "--report", [APPEND, CLOSE]],
+    ["ids", "--ids", [CLOSE]],
+    ["id", "--id", [CLOSE]],
+    ["state", "--state", [CLOSE]],
+    ["rationale", "--rationale", [CLOSE]],
+    ["retired", "--retired", [CLOSE]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
+  ],
+  [INBOX]: [
+    ["run", "--run", [APPEND, CLOSE, STATUS]],
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
     ["stdin", "--stdin", [APPEND]],
@@ -648,15 +685,202 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
   return { exitCode: 0, json: statusJson(card) };
 }
 
+/** The largest inbox `ledger inbox` reads: 1 MiB, the engine's report ceiling. */
+const INBOX_READ_MAX_BYTES = 1_048_576;
+
+/**
+ * The inbox screen: the session-start screen's three catalogs in its order
+ * (`../../hooks/scripts.ts`), block rows only, WITHOUT its network-vocabulary
+ * filter. That filter keeps the emitted hook script free of network words; this
+ * screen ships in no script, so the exfil rows (`remote-exec-pipe`,
+ * `send-data-external`, `image-url-exfiltration`) stay in. Each pattern is a
+ * private copy, so a `lastIndex` left on a catalog row never reaches here.
+ */
+export const INBOX_SCREEN: readonly { readonly id: string; readonly re: RegExp }[] = [
+  ...LEARNINGS_INJECTION_PATTERNS,
+  ...CONTENT_DENY_PATTERNS,
+  ...INJECTION_PATTERNS,
+]
+  .filter((entry) => entry.severity === "block")
+  .map((entry) => ({ id: entry.id, re: new RegExp(entry.pattern.source, entry.pattern.flags) }));
+
+/**
+ * The first {@link INBOX_SCREEN} id, in list order, whose pattern matches the
+ * line, the line with invisible smuggling characters stripped, or the
+ * normalized form of the stripped line; "" when none does. The union
+ * `screenCard` composes (`../../runs/resumeCard.ts`).
+ */
+function screenInboxLine(line: string): string {
+  const stripped = line.replace(INVISIBLE_SMUGGLING_CHARS, "");
+  const copies = [line, stripped, normalizeForDenyScan(stripped)];
+  const hit = INBOX_SCREEN.find((entry) =>
+    copies.some((copy) => {
+      entry.re.lastIndex = 0;
+      return entry.re.test(copy);
+    }),
+  );
+  return hit === undefined ? "" : hit.id;
+}
+
+function inboxRefusal(message: string, why: string): CliFailure {
+  return new CliFailure({
+    code: "VALIDATION_ERROR",
+    message,
+    why,
+    next: `make ${STATE_DIR}/inbox.md a regular file of at most ${INBOX_READ_MAX_BYTES} bytes inside the repository, then re-run`,
+  });
+}
+
+/**
+ * The inbox's text, or null when there is none. Each segment is `lstat`ed top
+ * down, so a link at `.stamity` or at the inbox is refused rather than read
+ * through, and the open takes `O_NOFOLLOW` where the platform has it, so a
+ * leaf swapped for a link after the walk is refused too.
+ */
+async function readInbox(rootDir: string, inboxPath: string): Promise<string | null> {
+  let walked = rootDir;
+  let leaf: Stats | null = null;
+  for (const segment of inboxPath.split("/")) {
+    walked = join(walked, segment);
+    try {
+      // eslint-disable-next-line no-await-in-loop -- top-down on purpose: the first bad segment is the one named
+      leaf = await lstat(walked);
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw inboxRefusal(`ledger inbox cannot read ${inboxPath}`, cause instanceof Error ? cause.message : String(cause));
+    }
+    if (leaf.isSymbolicLink()) {
+      throw inboxRefusal(
+        `ledger inbox refused ${inboxPath}: ${segment} is a symbolic link`,
+        "the inbox is read only as a regular file inside the repository, never through a link",
+      );
+    }
+  }
+  const tooLarge = (size: number): CliFailure =>
+    inboxRefusal(
+      `ledger inbox refused ${inboxPath}: it is ${size} bytes, over the ${INBOX_READ_MAX_BYTES} byte ceiling`,
+      "the inbox's rows are printed into a run's context, so its size is bounded",
+    );
+  const notFile = inboxRefusal(
+    `ledger inbox refused ${inboxPath}: it is not a regular file`,
+    "the inbox is one markdown file of rows",
+  );
+  if (leaf === null || !leaf.isFile()) throw notFile;
+  if (leaf.size > INBOX_READ_MAX_BYTES) throw tooLarge(leaf.size);
+
+  const handle = await open(walked, FS.O_RDONLY | (FS.O_NOFOLLOW ?? 0));
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) throw notFile;
+    if (stats.size > INBOX_READ_MAX_BYTES) throw tooLarge(stats.size);
+    return await handle.readFile({ encoding: "utf8" });
+  } finally {
+    await handle.close();
+  }
+}
+
+/** A row as the JSON document carries it: every text field sanitised. */
+function inboxRowJson(row: InboxRow, matchedBy: MatchedBy): Record<string, unknown> {
+  return {
+    line: row.line,
+    severity: sanitizeLabel(row.severity),
+    location: sanitizeLabel(row.location),
+    description: sanitizeLabel(row.description),
+    source: sanitizeLabel(row.source),
+    ref: row.ref === null ? null : sanitizeLabel(row.ref),
+    tag: row.tag === null ? null : sanitizeLabel(row.tag),
+    matchedBy,
+  };
+}
+
+/**
+ * `ledger inbox`: the deferral inbox's rows a change touches — by `--paths`,
+ * by `--plan`, by `--area` word for a row naming no path, every row tagged
+ * `critical-deferred` or `decision-waiting`, and every row when no filter is
+ * given. The inbox is user-tier state any writer can author and these lines
+ * land in a run's context, so every bullet, parsed or not, is screened before
+ * anything of it prints: a hit prints `skipped: <line> (<pattern id>)` and
+ * never the row's text nor its parse message. Every printed field is
+ * sanitised. The count line's numbers add up to the bullets: matched,
+ * unmatched, unparsed and skipped; a skip line prints whatever the query, and
+ * the JSON `counts` tallies the matched rows by severity. Reads only;
+ * `--dry-run` is accepted and changes nothing, so it prints no dry-run line.
+ */
+async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+  const rootDir = ctx.app.runtime.cwd;
+  await requireStateDir(rootDir, "to read the deferral inbox from");
+  const { inboxStore } = ctx.engine.runs;
+  const counts: Record<string, number> = Object.fromEntries(inboxStore.INBOX_SEVERITIES.map((severity) => [severity, 0]));
+
+  const inboxText = await readInbox(rootDir, inboxStore.INBOX_PATH);
+  if (inboxText === null) {
+    ctx.io.out("inbox: absent\n");
+    return {
+      exitCode: 0,
+      json: { inbox: inboxStore.INBOX_PATH, total: 0, matched: [], counts, unmatched: 0, problems: [], skipped: [] },
+    };
+  }
+
+  const skipped: { line: number; pattern: string }[] = [];
+  const skippedLines = new Set<number>();
+  inboxText.split("\n").forEach((raw, index) => {
+    if (!raw.startsWith("- ")) return;
+    const pattern = screenInboxLine(raw);
+    if (pattern === "") return;
+    skipped.push({ line: index + 1, pattern });
+    skippedLines.add(index + 1);
+  });
+
+  const parsed = inboxStore.parseInbox(inboxText);
+  const rows = parsed.rows.filter((row) => !skippedLines.has(row.line));
+  const problems: InboxProblem[] = parsed.problems.filter((problem) => !skippedLines.has(problem.line));
+  const paths = Array.isArray(opts["paths"]) ? (opts["paths"] as string[]) : [];
+  const area = Array.isArray(opts["area"]) ? (opts["area"] as string[]) : undefined;
+  const plan = text(opts, "plan");
+  const result = inboxStore.matchInbox(rows, {
+    paths,
+    ...(plan === undefined ? {} : { plan }),
+    ...(area === undefined ? {} : { area }),
+  });
+  for (const { row } of result.matched) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
+  const total = parsed.rows.length + parsed.problems.length;
+
+  const lines = [
+    `inbox: ${total} rows · ${result.matched.length} matched · ${result.unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped`,
+    ...result.matched.map(({ row, matchedBy }) =>
+      sanitizeLabel(
+        `${row.line} ${row.severity} · ${row.location} · ${row.description}${row.tag === null ? "" : ` · ${row.tag}`} (${matchedBy})`,
+      ),
+    ),
+    ...problems.map((problem) => sanitizeLabel(`unparsed: ${problem.line}: ${problem.message}`)),
+    ...skipped.map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
+  ];
+  ctx.io.out(`${lines.join("\n")}\n`);
+
+  return {
+    exitCode: 0,
+    json: {
+      inbox: inboxStore.INBOX_PATH,
+      total,
+      matched: result.matched.map(({ row, matchedBy }) => inboxRowJson(row, matchedBy)),
+      counts,
+      unmatched: result.unmatched,
+      problems: problems.map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) })),
+      skipped,
+    },
+  };
+}
+
 export const ledgerCommand: CommandModule = {
   name: "ledger",
-  summary: "append findings to a run's ledger, close its rows, and print its resume card (plumbing)",
+  summary:
+    "append findings to a run's ledger, close its rows, print its resume card, and read the deferral inbox (plumbing)",
   hidden: true,
   mutating: true,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS]))
+      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS, INBOX]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/")
       .option("--phase <phase>", "the phase the rows are filed under, a lowercase slug (review, build)")
       .option("--source <role>", "the role whose findings these are, a lowercase slug (reviewer)")
@@ -671,13 +895,17 @@ export const ledgerCommand: CommandModule = {
       .option(
         "--retired <disposition>",
         "retire a deferred row whose inbox row left: keeps its state and records the date and this disposition",
-      );
+      )
+      .option("--paths <paths...>", "the paths a change touches; the inbox rows naming them are printed")
+      .option("--plan <path>", "a plan path; the inbox rows whose Ref: or location names it are printed")
+      .option("--area <words...>", "whole words matched in an inbox row that names no path");
   },
 
   async run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    const subcommand = args[0] === CLOSE || args[0] === STATUS ? args[0] : APPEND;
+    const subcommand = args[0] === CLOSE || args[0] === STATUS || args[0] === INBOX ? args[0] : APPEND;
     refuseForeignFlags(subcommand, opts);
+    if (subcommand === INBOX) return await runInbox(ctx, opts);
     if (subcommand === STATUS) return await runStatus(ctx, opts);
     return subcommand === CLOSE ? await runClose(ctx, opts) : await runAppend(ctx, opts);
   },

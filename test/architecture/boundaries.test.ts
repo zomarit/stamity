@@ -334,6 +334,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The findings-block reader: a pure parser over the run layout's fence
   // patterns (wave 1), read by the wave-4 ledger store that files its rows.
   "src/runs/blocks.ts": { unit: "ctx-ledger-append", wave: 2 },
+  // The deferral inbox's grammar and query: pure over the run layout (wave 1), read by the wave-14 ledger command.
+  "src/runs/inboxStore.ts": { unit: "q1a-inbox-store", wave: 2 },
   "src/handoffs/schema.ts": { unit: "p1-21", wave: 2 },
   "src/handoffs/validation.ts": { unit: "p1-21", wave: 2 },
   // The change classifier (plan 019 file 2, unit p1a): zero internal imports

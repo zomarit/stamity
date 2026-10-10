@@ -30,7 +30,7 @@ mistake.
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
-| `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, and print its resume card (plumbing) |
+| `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read the deferral inbox (plumbing) |
 | `stamity gate` | plumbing | reads only | classify a change by its paths, or scan its added lines for secrets (plumbing) |
 
 ## What every command shares
@@ -295,7 +295,7 @@ the framed body all still print, and the run names the transition it withheld �
 
 ## `stamity ledger`
 
-append findings to a run's ledger, close its rows, and print its resume card (plumbing)
+append findings to a run's ledger, close its rows, print its resume card, and read the deferral inbox (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity ledger --help` prints
@@ -306,7 +306,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which ledger action to run — one of `append`, `close`, `status` |
+| `<subcommand>` | which ledger action to run — one of `append`, `close`, `status`, `inbox` |
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -320,6 +320,9 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--state <state>` | the state a manual close sets — one of `fixed`, `rejected`, `deferred` | — |
 | `--rationale <text>` | why a manual close moves the row, recorded on it | — |
 | `--retired <disposition>` | retire a deferred row whose inbox row left: keeps its state and records the date and this disposition | — |
+| `--paths <paths...>` | the paths a change touches; the inbox rows naming them are printed | — |
+| `--plan <path>` | a plan path; the inbox rows whose Ref: or location names it are printed | — |
+| `--area <words...>` | whole words matched in an inbox row that names no path | — |
 
 ## `stamity gate`
 
