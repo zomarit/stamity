@@ -57,7 +57,10 @@ and whatever tree the paragraphs around it name; the paragraphs marked "amended 
 those three files since. The Context section's citations stay at `fed39ac`, and a citation of any other file stays at
 the tree its paragraph names. One exception, from a follow-up pass on that unit the same day: four of REQ-CTX-002's
 citations, the `Report and digest` rule in the reviewer's, the security lens's, the implementer's and the fixer's
-body, were re-pointed to `9a0ba4cf`, since that run's QA fix round lengthened the rule after the merge (`6348d944`).
+body, were re-pointed to `9a0ba4cf`, since that run's QA fix round lengthened the rule after the merge (`6348d944`). A
+second, from that run's whole-branch review's fix round the same day: REQ-CTX-020's three citations of
+`content/commands/st-board.md` were re-pointed to `5cd61743`, where that round lengthened the "Leftovers at a close"
+bullet, and the clause it added under "A stopped close" cites that head.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -1067,11 +1070,14 @@ The close adds one line to the record's Proof block:
   close (`content/commands/st-work.md:332-333`).
 - **The count rule.** n = f + s + d, k ≤ d and a ≤ n. A `decision-waiting` append and a kept inbox row count in s, an
   inbox row already tagged `decision-waiting` among them, so every `decision-waiting` row the close took counts in
-  n. Unattended, d = k = c = 0 (`:333`; `content/commands/st-board.md:426-432`). The notes are counted under `notes`
+  n. Unattended, d = k = c = 0 (`:333`; `content/commands/st-board.md:434-440`). The notes are counted under `notes`
   and outside n: an unattended close drops its notes and still reads d = 0.
 - **`real` and `changed`.** `real` counts the Critical and Warning rows among those shown, and `changed` the rows
-  whose recommendation the person changed (`content/commands/st-board.md:441-443`).
-- **A stopped close** counts as an unattended one: each leftover is counted as scheduled (`:434-441`).
+  whose recommendation the person changed (`content/commands/st-board.md:449-451`).
+- **A stopped close** counts as an unattended one: each leftover is counted as scheduled (`:442-449`). Its notes are
+  dropped as an unattended close drops them, and `/st-board`'s third answer names every leftover row on `Not done:`, no
+  note (`:423-424`; amended 2026-10-10, the whole-branch review's fix round of run `2026-10-10_next-tier`, its ledger
+  row `review/91`; the answer read "every leftover on `Not done:`").
 
 As built, where the delta differed: `real` and `changed` are defined in `/st-board`'s "Leftovers at a close" bullet,
 not in `/st-work`'s paragraph (`review/49`); the delta defined neither.

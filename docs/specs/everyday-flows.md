@@ -44,7 +44,16 @@ fix round changed after the merge (`6348d944`): the reviewer, the fixer, the imp
 and design-quality lenses. It re-pointed to that head the ones the round moved, which are the six `## Severity`
 sections (REQ-FLOW-073), the security lens's `git log` sentence (REQ-FLOW-065), `/st-plan`'s return line
 (REQ-FLOW-070) and its inbox-append and follow-ups bullets (REQ-FLOW-077), and found every other citation of those
-seven files on its text there, above the lines the round moved.
+seven files on its text there, above the lines the round moved. The run's whole-branch review then had a fix round the
+same day (pass `branch`). Its text part settled the ledger rows `review/69`, `review/89` (as `review/99` and
+`review/100` shaped it), `review/90`, `review/91`, `review/93`, `review/94`, `review/96` and `review/97` in four shipped
+texts (`5cd61743`), and the lines below marked "the whole-branch review's fix round" state them, under REQ-FLOW-068,
+REQ-FLOW-069 and REQ-FLOW-074 to REQ-FLOW-077. The same pass re-pointed to `5cd61743` every citation in this file of
+`content/commands/st-board.md`, `content/commands/st-rework.md` and `content/skills/st-qa/SKILL.md` at or below the
+first line that round moved in each, and the four citations of `content/commands/st-work.md` that reach into lines 24 to
+30, which it rewrapped in place; every other `/st-work` citation holds its line. What those lines say of the parser, the
+retire grammar and the query's JSON document is that round's code part (`review/78`, `review/89`), which landed beside
+the texts; it is cited there by file and not by line.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -406,7 +415,7 @@ name them (`review/67`).
 
 ### REQ-FLOW-017 — QA rows record walked, auto-proven or accepted-unwalked
 
-Each QA row records exactly one state (`content/skills/st-qa/SKILL.md:69-73`; `content/commands/st-work.md:295-296`
+Each QA row records exactly one state (`content/skills/st-qa/SKILL.md:74-78`; `content/commands/st-work.md:295-296`
 points at those states):
 
 - `walked`, only when the person's reply says so for that row or for all of them, and that reply is quoted in the
@@ -416,7 +425,7 @@ points at those states):
 
 A bare sign-off ("signed off", "ok") records each open row `accepted-unwalked`, never `walked`, and so does any
 sign-off for each open row it does not name. A reply that withholds sign-off records no row as accepted and leaves the
-checkpoint open (`content/skills/st-qa/SKILL.md:110-113`). The proof block lists the QA rows per state, then the
+checkpoint open (`content/skills/st-qa/SKILL.md:115-118`). The proof block lists the QA rows per state, then the
 sign-off or `not signed` (`content/commands/st-work.md:318-319`).
 
 - **Amended 2026-10-10** (run `2026-10-10_next-tier`, unit `q2-qa-rows`, with its fix round for `review/2` and
@@ -430,16 +439,16 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
 ### REQ-FLOW-018 — No QA question when every row auto-proved; unattended means not signed; unchanged accepted rows are not asked again
 
 1. When every row is auto-proven, the checkpoint asks no QA question and records "all N rows auto-proven"
-   (`content/skills/st-qa/SKILL.md:108-110`). Inside a work run the skill asks nothing itself; the rows left for a person
-   ride the run's one close question (`:143-144`).
-2. A run with no person to answer asks nothing and records `Shippable: not signed` (`:119-120`).
+   (`content/skills/st-qa/SKILL.md:113-115`). Inside a work run the skill asks nothing itself; the rows left for a person
+   ride the run's one close question (`:148-149`).
+2. A run with no person to answer asks nothing and records `Shippable: not signed` (`:124-125`).
 3. Each row records an input hash, the QA skill's own: the sha256 of the sorted lines `<path> <git hash-object of path>`
-   over the files the row derives from (`:69-73`). It is not the QA harness's `rowHash` (REQ-PROVE-021). A row recorded
+   over the files the row derives from (`:74-78`). It is not the QA harness's `rowHash` (REQ-PROVE-021). A row recorded
    `accepted-unwalked` in an earlier record of this change with the same input hash is carried as
-   `accepted-unwalked (carried from <run-id>)` without asking; a changed hash reopens it (`:115-119`).
+   `accepted-unwalked (carried from <run-id>)` without asking; a changed hash reopens it (`:120-124`).
 4. A row whose Risk is now `H` is never carried on a hash and is asked at every checkpoint until walked or auto-proven.
    `Shippable: YES` is recorded only with no `H` row accepted-unwalked; otherwise `NO`, naming the open `H` row
-   (`:125-130`).
+   (`:130-135`).
 
 - `judgment: reviewer` — the result stays inside charter invariant 1: fewer questions, never fewer checks.
 - **As built, where the delta differed:** the no-ask record reads "all N rows auto-proven", not
@@ -452,7 +461,7 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
 
 1. Frame asks nothing about an inbox row a persisted plan already settles — named in a unit, a follow-up or its
    out-of-scope text; it lists that row with its disposition. The other overlapping rows ride the plan gate's
-   question and stay in the inbox by default (`content/commands/st-work.md:26-29`).
+   question and stay in the inbox by default (`content/commands/st-work.md:27-29`).
 2. At standard intensity, a persisted `/st-plan` artifact that passed the freshness guard is the go-ahead: the gate
    takes execute-now and logs
    `Default applied: plan gate → option 1, execute now (persisted plan <path>)`. An in-flow plan is presented and
@@ -466,7 +475,7 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   (ledger `build/67`, open); the log line takes the long form, which carries the plan path (the run's Frame audit).
 - **Amended 2026-10-10** (run `2026-10-10_next-tier`, units `q1t-frame-inbox-read` and `q10a-work-close`): the inbox
   rows item 1 speaks of are the ones Frame reads through the `ledger` verb's `inbox` query (REQ-FLOW-068), no longer
-  the whole file (`content/commands/st-work.md:21-26`). The close's one question of item 3 gains the leftovers as a
+  the whole file (`content/commands/st-work.md:21-27`). The close's one question of item 3 gains the leftovers as a
   fourth part (REQ-FLOW-074), and with no response the unattended rule applies beside "leave uncommitted"
   (REQ-FLOW-075; `:302-305`).
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
@@ -603,7 +612,7 @@ names a ledger row is retired, its state kept, through
 as it is (`content/commands/st-work.md:380-383`). `/st-quick`, which keeps no run record, retires a row after the gate
 is green — the ledger row first, then the bullet — and names each row retired, and each named row left, in its batch
 report (`content/commands/st-quick.md:120-127`). The board's removal rule names both retirers
-(`content/commands/st-board.md:341-344`, `:378-383`).
+(`content/commands/st-board.md:341-344`, `:379-384`).
 
 `--retired` sets the optional `retired` field to `<UTC YYYY-MM-DD> <disposition>` on a `deferred` row only, keeps its
 state, and reads the date from the caller's clock. A row whose `retired` value already states that disposition is
@@ -618,10 +627,10 @@ state, and reads the date from the caller's clock. A row whose `retired` value a
   (`src/runs/ledgerStore.ts:907-912`, `:984-993`). A ledger row the close's one question dropped, or scheduled to a
   plan, board or handoff place, is retired then and never appended to the inbox, and an inbox row that answer decided
   leaves by the board's Removal rule (`content/commands/st-work.md:365-368`, `:383-387`;
-  `content/commands/st-board.md:389-396`; REQ-FLOW-074). So the body's "a row the run did not fix stays as it is" now
+  `content/commands/st-board.md:390-397`; REQ-FLOW-074). So the body's "a row the run did not fix stays as it is" now
   reads "A row no answer reached stays as it is" (`content/commands/st-work.md:389-390`). Both commands spell the
   third kind of retirement "scheduled to a place with a date or a trigger", where they read "scheduled with a lane, a
-  trigger and an owner" (`:373-374`; `content/commands/st-board.md:380-381`). The board still names two retirers, and
+  trigger and an owner" (`:373-374`; `content/commands/st-board.md:381-382`). The board still names two retirers, and
   adds that `/st-work`'s close also removes a row its one question dropped, placed elsewhere or re-dated
   (`content/commands/st-board.md:341-344`).
 - **Proof:** `test/runs/ledgerClose.test.ts`, `test/cli/docs/cliReference.test.ts`, `test/corpus/commands/work.test.ts`,
@@ -1305,7 +1314,7 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p8
 - **`/st-rework`.** A person's own nit, polish or cosmetic feedback is a Minor finding, never a note: their ask is its
   consequence (`content/commands/st-rework.md:110-114`; `review/72`). A leftover-scan hit with no named consequence
   is a note, listed under the phase-4 table and counted, never routed; the proof block counts notes beside the
-  findings (`:125-126`, `:159-161`, `:271-274`).
+  findings (`:125-126`, `:159-161`, `:272-275`).
 - **The findings grammar** — one JSON object per line, `id`, `severity`, `locator`, a `summary` of at most 300
   characters, and where true `decision_needed` and `security` — is spelled in the implementer's, the fixer's and the
   spec-author's return contracts (`content/agents/stamity-implementer.md:118-122`;
@@ -1340,7 +1349,10 @@ sections byte-identical. `/st-rework`'s severity vocabulary reads the same three
 From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q1a-inbox-store`, `q1b-records-gate-parser`,
 `q9b-inbox-schedule-grammar` and `q1t-frame-inbox-read` and their fix rounds. Every `path:line` in REQ-FLOW-068 to
 REQ-FLOW-077 reads at `a60cb496`, but for the three `content/commands/st-plan.md` ranges the lead's follow-up pass
-re-pointed to `9a0ba4cf` (REQ-FLOW-070's return line; REQ-FLOW-077's `/st-plan` bullet).
+re-pointed to `9a0ba4cf` (REQ-FLOW-070's return line; REQ-FLOW-077's `/st-plan` bullet). The ranges of
+`content/commands/st-board.md`, `content/commands/st-rework.md` and `content/skills/st-qa/SKILL.md` that the
+whole-branch review's fix round moved, and the `content/commands/st-work.md` ones inside lines 24 to 30, read at
+`5cd61743`.
 
 Frame reads and surfaces the deferral inbox rows whose paths overlap the change's files through the `ledger` verb's
 `inbox` query, which returns those rows, the rows it always shows, and its total and unmatched counts; from a bare
@@ -1379,7 +1391,10 @@ intent it queries again with the plan's files (`content/commands/st-work.md:21-2
 - **The caps.** The unparsed lines and the skip lines are listed up to 50 each, then one `unparsed: … +<n> more` or
   `skipped: … +<n> more` line. The count line keeps the whole numbers, and the JSON `problems` and `skipped` hold the
   first 50 of each, with the number left out of each under `truncated`. The matched rows are not capped (`:726-735`,
-  `:978-985`, `:1151-1158`).
+  `:978-985`, `:1151-1158`). Amended 2026-10-10 (the whole-branch review's fix round, its code part; `review/78`): the
+  JSON `skipped` lists the bullets the skip lines name, up to 50, the rest counted under `truncated.skipped`; a withheld
+  row the query matches has no skip line and is not among them, and stands under `matched` with its pattern id as
+  `withheld`. Before it the list was cut to 50 with those rows still in it (`src/cli/commands/ledger.ts`, by file).
 - **A refused read.** The query reads the inbox only as a regular file of at most 1,048,576 bytes inside the
   repository: each path segment is `lstat`ed top down, and the open takes `O_NOFOLLOW` where the platform has it. A
   symbolic link, a non-file or a larger file is refused as `VALIDATION_ERROR`, and the refusal's `next` says not to
@@ -1387,8 +1402,16 @@ intent it queries again with the plan's files (`content/commands/st-work.md:21-2
 - **In Frame and at the close.** A row the query withholds or skips is listed as it prints, the person's to read, and
   Frame never opens the inbox for it. Frame reads the whole file, and says so, only when the CLI or that query is
   absent; any other failure — a refusal, a crash, a failing exit — is a finding naming it, never a whole-file read
-  (`content/commands/st-work.md:24-26`). The close lists such a row the same way and never decides it (REQ-FLOW-074).
-  `fill` and `/st-plan` still read the inbox file whole (`content/commands/st-board.md:413-415`).
+  (`content/commands/st-work.md:24-27`). The close lists such a row the same way and never decides it (REQ-FLOW-074).
+  `fill` and `/st-plan` still read the inbox file whole (`content/commands/st-board.md:416-417`).
+- **Amended 2026-10-10** (the whole-branch review's fix round; `review/90`, `review/97`). The row the query cannot parse
+  has a reader too: Frame's sentence reads "A row it withholds, skips or cannot parse is listed as it prints, the
+  person's to read or fix; never open the inbox for it" (`content/commands/st-work.md:24-25`; its subject read "A row it
+  withholds or skips"), and at the close an `unparsed: <line>: <message>` line is listed as it prints, the person's to
+  fix as a skipped row is (`content/commands/st-board.md:414-416`). The never-open floor is Frame's alone, where the
+  board's sentence read "`/st-work`'s Frame and close never open the inbox for such a row". Where the client's edit tool
+  reads a file before it writes, the close's write to the inbox reads it whole: the text of a withheld or skipped row is
+  data the close never acts on or repeats, and the row is still listed as it printed, with no disposition (`:417-421`).
 - **One grammar, two readers.** The parser is `parseInbox` (`src/runs/inboxStore.ts:268-286`); the query and the
   records gate both read it, and the gate holds the committed inbox to it (`:29-31`). The row grammar is
   REQ-FLOW-076's.
@@ -1422,13 +1445,19 @@ the row points at that result (`content/skills/st-qa/SKILL.md:38-43`).
   `tests` emits the line "no walk-through required — <class> only", with no sign-off block and no ask, unless it
   changes a path the project's site build renders (its pages, styles or images) or a path the classify hands the
   `design-quality` lens; then it emits one person row, the changed page renders and reads right and the links to and
-  from it resolve, followed by the sign-off block. With no class passed, the trigger table decides (`:46-52`).
+  from it resolve, followed by the sign-off block. With no class passed, the trigger table decides (`:51-57`).
   `/st-work` hands the skill the class and the lenses at its QA step (REQ-FLOW-017, amended 2026-10-10).
+- **Amended 2026-10-10** (the whole-branch review's fix round; `review/94`, a security finding). One row is held to
+  more: the negative row a security-adjacent path derives (`:35`) is auto-proven only where a committed test's assertion
+  covers it, by the Auto-prove pass's rule 1, the test source `file:line` beside the runner's command and outcome. A
+  check run once for the row is not proof for it, and with no such test it stays on the human path (`:45-49`,
+  `:100-104`). Every other row keeps the rule above. `/st-work`'s QA step restates none of it: it hands the skill the
+  class and the lenses (`content/commands/st-work.md:280-281`).
 - **As built, where the delta differed:**
   - A row whose check is missing, cannot run or fails stays on the human path under the Auto-prove pass's rule 2
-    (`:43-44`, `:100-102`; `review/2`). The three kinds bound which rows are created for a person; missing evidence
+    (`:43-44`, `:105-107`; `review/2`). The three kinds bound which rows are created for a person; missing evidence
     is still never scored as a pass.
-  - The one person row also checks that the links to and from the changed page resolve (`:50-52`; `review/4`).
+  - The one person row also checks that the links to and from the changed page resolve (`:55-57`; `review/4`).
 - **Proof:** `test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; must-hold
   `qa-bare-signoff-records-unwalked`; QA.
 
@@ -1455,7 +1484,7 @@ runs to the line before the next such `### ` or `## ` heading, trailing blank li
 (`content/commands/st-plan.md:286`), and its return line reads
 `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run` (`:416-417`). `/st-rework`
 runs the same gate, names `L5` as advisory, and closes its own line with `R1 pass|fail`
-(`content/commands/st-rework.md:244-250`, `:273-274`). The verify skill names the four codes as L5
+(`content/commands/st-rework.md:245-251`, `:274-275`). The verify skill names the four codes as L5
 (`content/skills/st-verify/SKILL.md:26`).
 
 - **As built, where the delta differed:**
@@ -1498,33 +1527,39 @@ no such key (`src/adapters/copilot.ts:486-520`, the line at `:511`; `:536-549`).
 
 From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9t-board-inbox-rules`, `q10a-work-close`
 and `q10b-flow-close-pointers` and their fix rounds. The rule's text is `/st-board`'s "Leftovers at a close" bullet
-(`content/commands/st-board.md:400-443`), which `/st-work`'s close points at (`content/commands/st-work.md:302-305`).
+(`content/commands/st-board.md:401-451`), which `/st-work`'s close points at (`content/commands/st-work.md:302-305`).
 
 - **The set.** Before asking, the close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every
   inbox row tagged `decision-waiting` first, then the due and touched rows and each ledger row neither fixed nor
   rejected, Minor rows included; the notes left out ride as one line, titles on request
-  (`content/commands/st-work.md:302-305`; `content/commands/st-board.md:400-404`).
+  (`content/commands/st-work.md:302-305`; `content/commands/st-board.md:401-405`).
 - **The line.** Each leftover reads
   `L<n> <severity> · <location> · <summary> → fix now | schedule: <place>, <by or when>, <files> | drop — <evidence>; would change if <condition>`,
   after the `decision-waiting` rows, Critical and Warning first and never pre-set to drop, then `Notes (<p>): drop`
-  (`content/commands/st-board.md:404-407`).
+  (`content/commands/st-board.md:405-408`).
 - **The answers.** Accept the recommendations; change rows in one line (`L2 fix; drop L1: <reason>; show L3`); or
-  stop (`:415-418`).
+  stop (`:422-424`).
   - Fix now runs one fix round, offered only while the review cap leaves a round and outside the files of an open
     person QA row; a fix that fails is reverted and scheduled, `fix-now failed: <gate or finding>` in its description
-    (`:418-421`).
+    (`:425-429`).
   - Schedule closes the row `deferred` and appends it under the schedule rule, or retires it to a plan, board or
-    handoff place with the Removal rule's `scheduled` value (`:421-423`).
+    handoff place with the Removal rule's `scheduled` value (`:429-431`).
   - Drop closes the row `deferred` and retires it at once, `cut <reason>`, so it never reaches the inbox. Only the
-    person drops a Critical or Warning, retired `cut accepted risk: <reason>` and kept on `Not done:` (`:423-426`).
+    person drops a Critical or Warning, retired `cut accepted risk: <reason>` and kept on `Not done:` (`:431-434`).
+  - **Amended 2026-10-10** (the whole-branch review's fix round; `review/91`, `review/96`). The third answer reads "or
+    stop, every leftover row on `Not done:`", where it read "every leftover on": the notes are no row of that list, and
+    a stop drops them as no answer does (REQ-FLOW-075). `show` prints a note's title; on a withheld or skipped row it is
+    refused, since the person reads that row by hand (`:423-425`).
 - **An inbox row the answer decided** follows the Removal rule: a drop retires it and removes its bullet; a plan,
   board or handoff place retires it there and removes its bullet; a new date or trigger removes its bullet and appends
   one row under the schedule rule carrying the same `Ref:`. Each removal adds an `- inbox retired:` line naming its
-  disposition. Nothing retires a row without an answer, and a row no answer reached stays as it is (`:389-397`;
+  disposition. Nothing retires a row without an answer, and a row no answer reached stays as it is (`:390-398`;
   `content/commands/st-work.md:383-390`).
 - **A withheld or skipped row** (REQ-FLOW-068) is listed as it prints, the person's to read, and never decided: the
   close offers no disposition for it and applies none, and it stays in the inbox until the person edits it or hands
-  over its `Ref:` with an instruction (`content/commands/st-board.md:407-415`; `content/commands/st-work.md:387-389`).
+  over its `Ref:` with an instruction (`content/commands/st-board.md:408-414`; `content/commands/st-work.md:387-389`).
+  An `unparsed:` line is listed as it prints too, the person's to fix as a skipped row is, and the close's write may
+  read the inbox whole (`content/commands/st-board.md:414-421`; REQ-FLOW-068, amended 2026-10-10).
 - **Minor rows reach the person here.** Only Critical and Warning findings reach the QA checkpoint; the run closes its
   own Minor rows through the close's leftovers part, where each reaches the person as a leftover with its
   recommendation, and before the close a Minor row reaches the operator only when its disposition is itself ambiguous
@@ -1533,7 +1568,7 @@ and `q10b-flow-close-pointers` and their fix rounds. The rule's text is `/st-boa
   REQ-FLOW-075's, beside "leave uncommitted".
 - **The other flows.** `/st-pr-resolve` decides each DEFER row in its phase-3 triage ask and adds no closing ask
   (`content/commands/st-pr-resolve.md:323-325`). `/st-rework` decides its DEFER rows at phase 4's routing table and
-  asks no leftovers question at its handoff (`content/commands/st-rework.md:261-264`). `/st-quick` has no leftovers
+  asks no leftovers question at its handoff (`content/commands/st-rework.md:262-265`). `/st-quick` has no leftovers
   ask (REQ-FLOW-077).
 - **As built, where the delta differed:**
   - The delta said "the answer is applied before the record is written". No sentence states it in those words; what
@@ -1541,7 +1576,7 @@ and `q10b-flow-close-pointers` and their fix rounds. The rule's text is `/st-boa
     reads `open` (`content/commands/st-work.md:374-376`).
   - `stop` is defined: at a close that asks this question it fixes nothing and otherwise handles rows as no answer
     does, and nothing is fixed, merged or committed; another ask's own `stop`, as at a plan handoff, keeps its
-    meaning (`content/commands/st-board.md:434-441`; `review/48`).
+    meaning (`content/commands/st-board.md:442-449`; `review/48`).
   - A withheld or skipped row is never decided, where the delta had the close list it "among the leftovers the same
     way" (`review/42`).
   - `/st-rework`'s rows are decided at phase 4, where the plan had them ride its handoff ask (`review/52`).
@@ -1560,15 +1595,16 @@ run's own ledger is appended tagged `decision-waiting`, its recommendation in th
 stays as it is, with no copy. Each is listed on `Not done:` and counted as scheduled in the leftovers line
 (REQ-CTX-020); the record's `Status:` names how many wait tagged `decision-waiting`, and the next attended close asks
 about every `decision-waiting` row first. A real defect is never dropped by default
-(`content/commands/st-board.md:426-434`, `:443`).
+(`content/commands/st-board.md:434-442`, `:451`).
 
 - **Always shown.** A row tagged `decision-waiting` matches every `inbox` query (`src/runs/inboxStore.ts:46-47`,
   `:373`), and board triage takes such rows second, after `critical-deferred`
-  (`content/commands/st-board.md:371-377`).
+  (`content/commands/st-board.md:372-378`).
 - **Stop.** The answer `stop`, at a close that asks the leftovers question, handles rows as no answer does and fixes
   nothing: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with
   `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled
-  (`:434-441`).
+  (`:442-449`). The notes are dropped there as with no answer, so the answers line names every leftover row on `Not
+  done:` and no note (`:423-424`; amended 2026-10-10, the whole-branch review's fix round, `review/91`).
 - **As built, where the delta differed:** the delta did not define `stop`, and named the `Status:` count in no
   entry; both are the landed bullet's (`review/48`).
 - **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/commands/work.test.ts`,
@@ -1590,24 +1626,33 @@ From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9a-d
 - **Triggers.** A trigger made only of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
   filler words, one of filler words alone (`at some point`), one that names `hygiene batch` at all, or one holding no
   letter or digit is refused, wherever its row stands (`src/runs/disposition.ts:40-80`, `:175-199`;
-  `src/runs/inboxStore.ts:178-184`).
+  `src/runs/inboxStore.ts:178-184`). Amended 2026-10-10 (the whole-branch review's fix round; `review/89`, shaped by
+  `review/99` and `review/100`): `when:` names an event and never holds a day. A trigger holding a `YYYY-MM-DD`-shaped
+  day, alone or among other words, is refused, so its row does not parse; a day is written `by: <YYYY-MM-DD>`, the one
+  field the `--due` read takes. A `YYYY-MM-DD` that opens a run id, followed directly by `_` and a letter or digit as in
+  `<UTC date>_<slug>`, is no day and may stand there (`content/commands/st-board.md:366-368` for the rule; the parser's
+  side is that round's code part, `src/runs/disposition.ts` and `src/runs/inboxStore.ts`, by file).
 - **Retire values.** From 2026-10-10 (`SCHEDULE_RULE_FROM`, `src/runs/disposition.ts:37-38`) a new `retired` value
   is one of three shapes, a keyword optionally followed by a colon: `fixed <ref>`; `cut <reason>`,
   `cut accepted risk: <reason>` included; or `scheduled <place> · by <YYYY-MM-DD>` or
   `scheduled <place> · when <trigger>`, split at the last ` · `, the place written
   `plan docs/plans/<file>.md#<unit-id or follow-ups>`, `board <item ref>` or `handoff <path>` (`:5-17`, `:201-279`,
   `:287-348`). Any other value is refused by `ledger close --retired` with `why` and `next`, and nothing is written
-  (REQ-FLOW-024, amended 2026-10-10). A place is text and is never resolved or opened (`:29-31`).
+  (REQ-FLOW-024, amended 2026-10-10). A place is text and is never resolved or opened (`:29-31`). Amended 2026-10-10
+  (`review/89`): the `when` slot of a `scheduled` value is held to the same day rule, so `scheduled <place> · when <a
+  day>` is refused and a day is written `· by <YYYY-MM-DD>`.
 - **Free text says something a reader can check.** A trigger, a `fixed` reference, a `cut` reason, an accepted-risk
   reason and a board item whose every word is a vague or a filler word are refused, and each of them, and a handoff
   path, must hold at least one letter or digit. In `cut accepted risk: <reason>` the reason is held to the rule
   alone. Words are compared as written, lower-cased: a look-alike letter is not folded (`:19-27`, `:250-258`,
-  `:299-347`).
+  `:299-347`). `/st-board`'s Removal rule names the four slots beside the trigger it points at
+  (`content/commands/st-board.md:398-400`; amended 2026-10-10, the whole-branch review's fix round, `review/69`: it
+  named a `fixed` reference and a `cut` reason alone).
 - **Coming back.** The query's `--due` returns the rows whose `by:` day is on or before the day and counts, beside
   them, the unmatched rows that wait on a `when:` trigger, which no query sees arrive
-  (`src/runs/inboxStore.ts:372`, `:399-405`; `content/commands/st-board.md:386-389`). A row whose day has come, or
+  (`src/runs/inboxStore.ts:372`, `:399-405`; `content/commands/st-board.md:387-390`). A row whose day has come, or
   whose paths a run changes, comes back to that run's close as a leftover; a kept row is never re-dated in place
-  (`content/commands/st-board.md:384-386`, `:396-397`).
+  (`content/commands/st-board.md:385-387`, `:397-398`).
 - **The records gate** holds the committed inbox to the parser, and holds to the grammar every `retired` value of a
   ledger whose run is dated from the cutover, and in any other ledger every value whose own date is; in a run dated
   from the cutover a value dated before its run is a problem of its own (`test/records/ledgers.test.ts:108-139`).
@@ -1615,7 +1660,7 @@ From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9a-d
 - **As built, where the delta differed:**
   - The delta listed "an inbox row" among the places. A `retired` value's place is a plan, a board item or a handoff.
     An item scheduled to the inbox is an inbox row carrying `by:` or `when:`, and a re-dated row keeps its `Ref:`, so
-    its ledger row stays accounted for and takes no `retired` value (`content/commands/st-board.md:392-393`;
+    its ledger row stays accounted for and takes no `retired` value (`content/commands/st-board.md:393-394`;
     `plan/36`).
   - "Its files" binds through the reader for `when: touched` alone: such a row needs a path in its location or in
     `files:`. `/st-board`'s text also asks a row at `—` to name `files:` (`:359-360`), which the reader does not
@@ -1642,7 +1687,8 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   or `· when: <trigger>` in the date's place. A follow-up's trigger is something a run can check from the repository
   or its record; one with neither, or whose trigger only the outside world fires, belongs in the plan's Drop list.
   The plan shape names two optional sections, 6 Follow-ups and 7 Drop list, and the Drop list appends nothing
-  (`content/commands/st-plan.md:363-367`, `:393-404`, `:425-426`).
+  (`content/commands/st-plan.md:363-367`, `:393-404`, `:425-426`). A day is written `by: <YYYY-MM-DD>`, and `when:`
+  names an event (`:399-400`; REQ-FLOW-076, amended 2026-10-10).
 - **`/st-pr-resolve`.** A deferral lands as `severity · file:line · description · source: pr-resolve #<n> ·
   when: touched`, or `· by: <YYYY-MM-DD>` when the user names one, and a FIX that stays blocked lands as the same row
   (`content/commands/st-pr-resolve.md:315-318`).
@@ -1650,9 +1696,11 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   location is `—` (`content/commands/st-rework.md:174-176`, `:181-183`). The critical-deferred row reads
   `Critical · <file:line> · <the consequence in one line> · source: rework <branch> · when: touched ·
   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`, or `by: <YYYY-MM-DD>` when the user names
-  one; at `—` it adds `files: <path>` straight after `when: touched`, or carries the user's day (`:195-203`). The
+  one; at `—` it adds `files: <path>` straight after `when: touched`, or carries the user's day (`:195-204`). The
   meta row reads `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta`, or
-  `by: <YYYY-MM-DD>` in the trigger's place when the user names a day (`:290`).
+  `by: <YYYY-MM-DD>` in the trigger's place when the user names a day (`:291`). Amended 2026-10-10 (the whole-branch
+  review's fix round; `review/93`, `review/89`): with no path to name, the rationale question also asks for the day, and
+  with neither no row is written (`:203-204`); the meta row's alternative now ends "never a day under `when:`" (`:291`).
 - **The dep-audit skill.** A deferred item lands as
   `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
   or `· when: touched` in the day's place. `files:` names the lockfile that holds the entry, so a bump of that
@@ -1673,7 +1721,7 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   - The plan's clause that `/st-quick` asks when its batch leaves a leftover was withdrawn before the build, so the
     lane offers no choice a scan hit, a red gate or a refusal could be closed around (`plan/40`).
   - `/st-rework` decides its DEFER rows at phase 4's routing table, not at its handoff ask
-    (`content/commands/st-rework.md:261-264`).
+    (`content/commands/st-rework.md:262-265`).
   - The dep-audit row carries `files:` and the advisory's severity word, and the day rule for a `critical` or `high`
     advisory, none of which the plan's template had (`review/65`, `review/67`).
 - **Proof:** `test/corpus/commands/plan.test.ts`, `test/corpus/commands/feedbackPair.test.ts`,
@@ -2250,21 +2298,30 @@ exists, it is the normative record for that requirement.
   screened.
 - GIVEN 60 lines that do not parse THEN 50 are listed, one `unparsed: … +10 more` line follows, the count line reads
   60 unparsed, and the JSON carries 50 `problems` and `truncated.problems: 10`.
+- GIVEN more than 50 bullets the screen skips and a withheld row the query matches THEN the JSON `skipped` holds the
+  first 50 bullets the skip lines name and `truncated.skipped` the number of the rest, and the withheld row stands under
+  `matched` with its pattern id as `withheld` and not under `skipped` (added 2026-10-10, the whole-branch review's fix
+  round, `review/78`).
 - GIVEN an inbox that is a symbolic link, or larger than 1,048,576 bytes, THEN the query refuses with
   `VALIDATION_ERROR`, and its `next` says not to read the file whole and to report the refusal as a finding; GIVEN no
   inbox THEN it prints `inbox: absent` and exits 0.
 - GIVEN `content/commands/st-work.md` WHEN Frame step 4 is read THEN it names the `ledger` verb's `inbox` query with
-  `--paths` and `--plan`, the second query from a bare intent, a withheld or skipped row listed as it prints with
-  "never open the inbox for it", the whole-file read only when the CLI or that query is absent, and any other failure
-  as a finding, never a whole-file read.
+  `--paths` and `--plan`, the second query from a bare intent, a row the query withholds, skips or cannot parse listed
+  as it prints, the person's to read or fix, with "never open the inbox for it", the whole-file read only when the CLI
+  or that query is absent, and any other failure as a finding, never a whole-file read (amended 2026-10-10, the
+  whole-branch review's fix round, `review/90`; it read "a withheld or skipped row listed as it prints").
 - GIVEN a run whose query refuses the read WHEN Frame runs THEN the record carries a finding naming the refusal and
   the orchestrator opened no inbox file. `judgment: reviewer`
 
 **REQ-FLOW-069**
 
-- GIVEN the qa skill WHEN read THEN it names the three kinds, says every other row is auto-proven from a check the
-  run's test-runner executes before the table is built, and keeps on the human path a row whose check is missing,
-  cannot run or fails.
+- GIVEN the qa skill WHEN read THEN it names the three kinds, says every other row is auto-proven from a check the run's
+  test-runner executes before the table is built, and keeps on the human path a row whose check is missing, cannot run
+  or fails, and holds the negative row of a security-adjacent path to a committed test's assertion (amended 2026-10-10,
+  the whole-branch review's fix round, `review/94`).
+- GIVEN a change to a security-adjacent path whose negative row no committed test's assertion covers THEN that row is
+  not recorded `auto-proven` on a check the test-runner ran once for it; it stays on the human path and is asked (added
+  2026-10-10, the whole-branch review's fix round, `review/94`). `judgment: reviewer`
 - GIVEN a change of class `docs`, `records` or `tests` that changes no path the site build renders and none the
   classify hands the `design-quality` lens THEN the checkpoint prints "no walk-through required — <class> only", with
   no sign-off block and no ask.
@@ -2274,7 +2331,7 @@ exists, it is the normative record for that requirement.
 - GIVEN a `product` change to one CLI source file, with no rendered surface, no third-party account and no step that
   cannot be undone, THEN none of the three kinds creates a person row, and where every row's check ran and passed no
   QA question is asked; a row whose check is missing, cannot run or fails stays on the human path, the person's, and
-  is asked (`content/skills/st-qa/SKILL.md:43-44`, `:100-102`, `:108`; amended 2026-10-10, `review/83`; it read "THEN
+  is asked (`content/skills/st-qa/SKILL.md:43-44`, `:105-107`, `:113`; amended 2026-10-10, `review/83`; it read "THEN
   no person row is created and no QA question is asked"). `judgment: reviewer`
 
 **REQ-FLOW-070**
@@ -2305,7 +2362,10 @@ exists, it is the normative record for that requirement.
 
 - GIVEN `/st-board`'s Leftovers at a close WHEN read THEN it names the four kinds of leftover with the
   `decision-waiting` rows first, the line form, "never pre-set to drop", the three answers, and a withheld or skipped
-  row as listed and never decided.
+  row as listed and never decided; and, amended 2026-10-10 (the whole-branch review's fix round; `review/90`,
+  `review/91`, `review/96`, `review/97`), an `unparsed:` line as the person's to fix, the never-open floor as Frame's
+  alone with what the close's write reads, `stop` as every leftover row on `Not done:`, and what `show` prints and where
+  it is refused.
 - GIVEN a close holding a Warning finding whose author's note urges dropping it, and two notes, THEN the Warning is
   listed with fix now or schedule as its recommendation, never pre-set to drop and never folded into the notes line.
   `judgment: reviewer`
@@ -2328,24 +2388,28 @@ exists, it is the normative record for that requirement.
 - GIVEN a row tagged `decision-waiting` THEN `ledger inbox` shows it for every query, matched as `always` where no
   other filter matches it.
 - GIVEN the answer `stop` at a close that asks the leftovers question THEN nothing is fixed, merged or committed, each
-  leftover of the run's own ledger closes `deferred` and is appended tagged `decision-waiting`, and each inbox row
-  stays as it is. `judgment: reviewer`
+  leftover of the run's own ledger closes `deferred` and is appended tagged `decision-waiting`, and each inbox row stays
+  as it is, and the notes are dropped as with no answer (amended 2026-10-10, the whole-branch review's fix round,
+  `review/91`). `judgment: reviewer`
 
 **REQ-FLOW-076**
 
 - GIVEN `parseDisposition` THEN `fixed in 2026-10-10_x`, `fixed by /st-quick`, `cut: out of scope`,
   `cut accepted risk: no exploit path`, `scheduled plan docs/plans/015-board-writes.md#b1-board-contract · by
   2026-11-01` and `scheduled board #42 · when touched` are accepted; `scheduled later`, `scheduled board #42 · when
-  later on`, `scheduled board #42 · by 2026-02-30`, `scheduled board now · by 2026-11-01`, `fixed later`,
-  `cut: tbd`, `cut accepted risk: tbd`, `fixed —` and `moved somewhere` are refused, each naming its problem.
+  later on`, `scheduled board #42 · by 2026-02-30`, `scheduled board now · by 2026-11-01`, `scheduled board #42 · when
+  2026-11-15`, `fixed later`, `cut: tbd`, `cut accepted risk: tbd`, `fixed —` and `moved somewhere` are refused, each
+  naming its problem (the day under `when` added 2026-10-10, the whole-branch review's fix round, `review/89`).
 - GIVEN a deferred ledger row and a clock at 2026-10-10 WHEN `ledger close --retired "scheduled later"` names it THEN
   the command exits 1 with `why` and `next` and the ledger is byte-identical; GIVEN the clock at 2026-10-09 THEN the
   value is recorded as before; GIVEN a re-run, after 2026-10-10, of a value recorded before it THEN it prints
   `unchanged`.
 - GIVEN an inbox row below `## Rows under the schedule rule` with neither `by:` nor `when:`, with `when: later`, with
-  `when: at some point`, with both `by:` and `when:`, or with `when: touched` at `—` and no `files:`, THEN
-  `parseInbox` names a problem at its line; GIVEN `when: the next edit of src/a.ts` THEN none; GIVEN a row above the
-  heading with no schedule field THEN none.
+  `when: at some point`, with both `by:` and `when:`, with `when: touched` at `—` and no `files:`, or with a `when:`
+  that holds a day, alone (`when: 2026-11-15`) or among other words, THEN `parseInbox` names a problem at its line;
+  GIVEN `when: the next edit of src/a.ts`, or a `when:` naming a run id that opens on its date, THEN none; GIVEN a row
+  above the heading with no schedule field THEN none (the day under `when:` added 2026-10-10, the whole-branch review's
+  fix round, `review/89`).
 - GIVEN `ledger inbox --due 2026-12-01` THEN a row whose `by:` day is on or before that day matches, as `due` where
   nothing else matched it, the count line ends `· <n> due by 2026-12-01 · <n> triggers`, and an unmatched row carrying
   `when:` counts under triggers; GIVEN `--due` with no value THEN the clock's UTC day is used; GIVEN `--due
@@ -2364,6 +2428,10 @@ exists, it is the normative record for that requirement.
   never `when: touched`.
 - GIVEN a `/st-plan` follow-up with no date and no trigger a run can check THEN it goes to the plan's Drop list and
   appends nothing.
+- GIVEN a Critical the user defers, with no path to name and no day named, THEN `/st-rework` asks for the day in the
+  rationale question and writes no `critical-deferred` row with neither a path nor a day; the run closes naming the
+  unwritten row as its open item (added 2026-10-10, the whole-branch review's fix round, `review/93`).
+  `judgment: reviewer`
 
 ## References
 
@@ -2500,13 +2568,16 @@ exists, it is the normative record for that requirement.
     `content/commands/st-quick.md:165`), and the charter's two lines hold no room for it.
 - REQ-FLOW-068 to REQ-FLOW-077 — the residuals run `2026-10-10_next-tier` recorded, as landed; each id is that run's
   ledger row, open at this merge:
-  - **The free-text refusal has five slots, and the command names three** (`review/69`). `/st-board`'s Removal rule
-    states it for a trigger, a `fixed` reference and a `cut` reason (`content/commands/st-board.md:397-399`); the
-    grammar also refuses a board item and an accepted-risk reason (`src/runs/disposition.ts:253-254`, `:326-346`).
+  - **The free-text refusal has five slots, and the command named three** (`review/69`). `/st-board`'s Removal rule
+    stated it for a trigger, a `fixed` reference and a `cut` reason; the grammar also refuses a board item and an
+    accepted-risk reason (`src/runs/disposition.ts:253-254`, `:326-346`). Settled 2026-10-10 in the whole-branch
+    review's fix round: the rule names all five (`content/commands/st-board.md:398-400`).
   - **The query's caps are in no command text** (`review/70`). `/st-board` says a skipped row is listed as it prints;
     one past the fiftieth has no line of its own, only the `+<n> more` count. The JSON `skipped` list is cut to 50
     before the matched withheld rows are left out of it, where the human form drops them first
-    (`src/cli/commands/ledger.ts:1136-1139`, `:1154`; `review/78`).
+    (`src/cli/commands/ledger.ts:1136-1139`, `:1154`; `review/78`). Settled 2026-10-10 in the whole-branch review's fix
+    round, its code part: the JSON list leaves those rows out before its cap, as the human form does (REQ-FLOW-068, the
+    caps).
   - **`files:` at `—`** (`review/62`). `/st-board` asks a row at `—` to name `files:`; the reader holds only a
     `when: touched` row to a path, and `/st-rework`'s meta row stands at `—` with none (REQ-FLOW-076, REQ-FLOW-077).
   - **What the grammar still lets through.** A row placed above the heading passes with no day and no trigger
@@ -2514,13 +2585,19 @@ exists, it is the normative record for that requirement.
     so a pattern split over two adjacent rows passes (`src/cli/commands/ledger.ts:1065-1070`; `review/26`).
   - **The close edits the inbox whole.** It removes and appends bullets with the file tools, and no text limits its
     read to the lines it changes, so a whole-file read there brings a withheld row's text into the orchestrator's
-    context, which the query kept out (`content/commands/st-work.md:380-390`; `review/50`).
+    context, which the query kept out (`content/commands/st-work.md:380-390`; `review/50`). Amended 2026-10-10 (the
+    whole-branch review's fix round, `review/97`): the text no longer claims the never-open floor for the close; it says
+    the close's write reads the file whole where the client's edit tool reads before it writes, and that a withheld or
+    skipped row's text is data the close never acts on or repeats (`content/commands/st-board.md:417-421`). The read
+    itself stands.
   - **A settled row is asked about at the close.** A row a persisted plan settles as deferred is not asked about at
     Frame (REQ-FLOW-019), yet it is a touched, unfixed row at the close, so each run touching its file asks about it
     there (`build/27`, a decision left open).
   - **The qa skill's two readings of auto-proven** (`build/42`). Its person-row paragraph auto-proves a row from a
     check the test-runner executed, while its Auto-prove table and rule 1 ask for the test source's `file:line`
-    (`content/skills/st-qa/SKILL.md:41-43`, `:85`, `:95-99`). Recorded as observed; this merge settles neither.
+    (`content/skills/st-qa/SKILL.md:41-43`, `:90`, `:100-104`). Recorded as observed; this merge settles neither.
+    Amended 2026-10-10 (the whole-branch review's fix round, `review/94`): the negative row of a security-adjacent path
+    is held to rule 1's pointer (`:45-49`); for every other row the two readings stand.
   - **Copilot's verdict roles load the working tree's instructions** (`review/22`, a security finding and a decision
     left open). With REQ-FLOW-071's key, Copilot's reviewer and lenses load the checkout's `AGENTS.md`, `CLAUDE.md`
     and `copilot-instructions.md`, so a branch that edits one is judged by roles already following the edit.
