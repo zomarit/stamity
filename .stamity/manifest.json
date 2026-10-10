@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T15:13:47.346Z",
+  "updatedAt": "2026-10-10T16:06:47.635Z",
   "tools": [
     "claude"
   ],
@@ -71,28 +71,28 @@
       "adapter": "claude",
       "artifactId": "design-quality",
       "artifactType": "agent",
-      "contentHash": "66659874dfb66148998ddb837f68b8171c1d7e413543c8cd3f5fa58ad0f0971f",
+      "contentHash": "31ae607e2661ae3d5f0070592b3fb19e283f6c07c946a91c8040eeef2b49bd2e",
       "path": ".claude/agents/stamity-design-quality.md"
     },
     {
       "adapter": "claude",
       "artifactId": "fixer",
       "artifactType": "agent",
-      "contentHash": "442a502bc3989a4e27ad58a71da58cd5454102e534f51e41c6952eafb3081a50",
+      "contentHash": "567d8489f1369588cff20b29d39517aeccd19cb86877238a94d21a072e9ed12d",
       "path": ".claude/agents/stamity-fixer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "dc85962ac7fb775f6312589e3156d6e1fd0effd044b0de9f9f0c9998766fb483",
+      "contentHash": "1409081a4c3b87a51b2022f5e4f5951803cdaccfcba90f9d3e440931b21d16d4",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "8879798a6600417b82edada16aa532913abfeb85ce759531c5776fad660da91b",
+      "contentHash": "3211fe9fb4c5535a7c43e3e829cf9ea11a9f6c381e5bff98cdb053db00eb0294",
       "path": ".claude/agents/stamity-performance.md"
     },
     {
@@ -106,14 +106,14 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "968d236246e31f8682de951bbbc99d0201bd96dfce03e7c9aa4c1c07a44daafc",
+      "contentHash": "09c8e72b27918d1b2d587b2b43ee56c7cebea3a3bea2a70f5d0919711a0154e7",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "e413815e30df22c844c042c1427f625750d515d8529993852cfcc3987712a984",
+      "contentHash": "baf297774a6fac2c2b0cbe928dd80755c14187cc7556db69c1cb85e23866d0fd",
       "path": ".claude/agents/stamity-security.md"
     },
     {
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "bac60fe67c2ceb503465fcd45c26a6034f6f3e0fc8f7c7b1a165e64b8fe390a4",
+      "contentHash": "32a03d9bfd485473be332f7cdafbe84efbbc3c6d45bd202f33866de5fa1feee0",
       "path": ".claude/commands/st-plan.md"
     },
     {

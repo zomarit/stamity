@@ -170,9 +170,10 @@ run.
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only.
-  With no report path, or a write refused, the full result is returned inline and a refused
-  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*`
-  return writes no report and is returned in full.
+  The written report lists every note left out, one line each with its locator, and the digest
+  keeps the count alone. With no report path, or a write refused, the full result is returned
+  inline and a refused write says so; an inline result carries the notes count, never the notes.
+  A `BLOCKED_*` return writes no report and is returned in full.
 
 ## Reading the change
 
