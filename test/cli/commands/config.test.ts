@@ -777,20 +777,65 @@ describe("config — the model ladder's nine keys", () => {
     expect(rowFor(result.stdout, "effort.economy")).toMatch(/low\s+\(default\)/);
   });
 
-  it("names the clients that carry effort rather than implying all four do", async () => {
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "names the clients
+  // that carry effort rather than implying all four do" and pinned "carried on claude, cursor,
+  // codex" beside "omitted on copilot", with a copilot-only level called legal and inert. The
+  // engine now writes Copilot's `reasoning-effort` key (REQ-LADDER-004), so all four carry the
+  // axis, the hint drops its "omitted on" clause, and the level set here reaches the emitted file.
+  it("names the clients that carry effort, and no omitter once none is left", async () => {
     const handle = tempDir();
     await seedManifest(handle, { tools: ["copilot"] });
 
-    // Setting effort on a copilot-only repo is legal and inert; the refusal
+    // Setting effort on a copilot-only repo is legal and binds; the refusal
     // message quotes the hint, which is where the carrier list is published.
-    const inert = await run(handle, ["set", "effort.standard", "high"]);
-    expect(inert.code).toBe(0);
+    const carried = await run(handle, ["set", "effort.standard", "high"]);
+    expect(carried.code).toBe(0);
     expect((await readManifest(handle.dir))?.models?.effort?.standard).toBe("high");
+    expect(resolveEffortValue("standard", "copilot", { standard: "high" })).toBe("high");
+    expect(rowFor((await run(handle, ["list"])).stdout, "effort.standard")).toMatch(/high\s+\(set\)/);
 
     const refused = await run(handle, ["set", "effort.standard", "nonsense"]);
     expect(refused.code).toBe(1);
-    expect(refused.stderr).toContain("carried on claude, cursor, codex");
-    expect(refused.stderr).toContain("omitted on copilot");
+    expect(refused.stderr).toContain("carried on claude, cursor, copilot, codex; the levels are");
+    expect(refused.stderr).not.toContain("omitted on");
+  });
+
+  it("refuses `ultra` on a copilot-only selection, naming the client and its ceiling", async () => {
+    // Copilot's documented scale ends at `max`. Before the engine wrote its key, any level was
+    // accepted here and reached no file; now a level above the top is refused as on any narrow
+    // client, and the manifest is left as it was.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["copilot"] });
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "effort.frontier", "ultra"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(
+      "effort.frontier ultra is not expressible on copilot (its scale ends at max)",
+    );
+    expect(result.stderr).toContain("set max or lower, or deselect the client");
+    expect(await manifestBytes(handle)).toBe(before);
+
+    // The control: the top of the scale itself is written.
+    expect((await run(handle, ["set", "effort.frontier", "max"])).code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.frontier).toBe("max");
+  });
+
+  it("accepts Copilot's legacy `minimal` on a copilot-only selection, emitted as `low`", async () => {
+    // `minimal` is off Copilot's documented scale and still on its flag's list, so a copilot-only
+    // repository that set it keeps it; the emission writes `low` and the list row says so.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["copilot"] });
+
+    const result = await run(handle, ["set", "effort.economy", "minimal"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.economy).toBe("minimal");
+    expect(resolveEffortValue("economy", "copilot", { economy: "minimal" })).toBe("low");
+    expect(rowFor((await run(handle, ["list"])).stdout, "effort.economy")).toContain(
+      "low (clamped from minimal)",
+    );
   });
 
   it("persists a pin under models.pins and reads it back with a before->after diff", async () => {

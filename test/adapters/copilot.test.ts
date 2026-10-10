@@ -31,8 +31,8 @@ import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import {
   CLIENT_MODEL_PROJECTION,
-  resolveEffortValue,
-  MODEL_LADDER,
+  effortDisclosures,
+  type EffortMap,
 } from "../../src/roster/modelLadder.ts";
 import {
   ADAPTER_ALLOWLIST_COVERAGE,
@@ -82,6 +82,24 @@ const CORPUS_AGENT_IDS = [
   "test-runner",
 ] as const;
 
+/**
+ * The effort each shipped agent's declared class asks for, as literals: `advanced` runs `high`,
+ * `standard` `medium`, `economy` `low`. Restated here, not read through the resolver the adapter
+ * calls, so the emission is held to the ladder as designed and not to itself.
+ */
+const CORPUS_AGENT_EFFORT: Readonly<Record<(typeof CORPUS_AGENT_IDS)[number], string>> = {
+  creator: "medium",
+  "design-quality": "high",
+  fixer: "medium",
+  implementer: "high",
+  performance: "medium",
+  researcher: "medium",
+  reviewer: "high",
+  security: "high",
+  "spec-author": "high",
+  "test-runner": "low",
+};
+
 /** The three CQ specialist lenses, which read and never edit. */
 const SPECIALIST_AGENT_IDS = ["design-quality", "performance", "security"] as const;
 
@@ -120,6 +138,7 @@ interface CtxOptions {
   mcp?: { servers: string[] };
   languages?: string[];
   pins?: Partial<Record<ModelClass, string>>;
+  efforts?: EffortMap;
   /** The manifest's plugin record; absent everywhere but the ownership cases. */
   plugin?: SetupManifest["plugin"];
 }
@@ -143,7 +162,14 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
       }),
       // `models` is an operator dial persisted after creation, so it is layered
       // on rather than passed in — the same shape `stamity config` writes.
-      ...(over.pins === undefined ? {} : { models: { pins: over.pins } }),
+      ...(over.pins === undefined && over.efforts === undefined
+        ? {}
+        : {
+            models: {
+              ...(over.pins === undefined ? {} : { pins: over.pins }),
+              ...(over.efforts === undefined ? {} : { effort: over.efforts }),
+            },
+          }),
       ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
       ...(over.plugin === undefined ? {} : { plugin: over.plugin }),
     },
@@ -459,12 +485,18 @@ describe("agents → .github/agents", () => {
       // because a live sub-agent check on Copilot CLI 1.0.89 found that an agent dispatched
       // through `task` without the key loads no `AGENTS.md` (REQ-FLOW-071); every other line is
       // unchanged.
+      // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the exact list gains
+      // `reasoning-effort: <level>` as its last line, at the default of the class the agent
+      // declares. The contract moved because the Copilot CLI's custom-agent loader reads that key
+      // (changelog 1.0.66 and 1.0.88; the 1.0.89 loader) and the engine now writes it
+      // (REQ-LADDER-004); every other line is unchanged.
       expect(frontmatterLines(row.content)).toEqual([
         `name: stamity-${id}`,
         `description: ${frontmatterValue(row.content, "description")}`,
         "target: github-copilot",
         "include-custom-instructions: true",
         `tools: ${toCopilotToolsFrontmatter(rosterAllow(`stamity-${id}`))}`,
+        `reasoning-effort: ${CORPUS_AGENT_EFFORT[id]}`,
       ]);
       expect(frontmatterValue(row.content, "tools")).not.toBe("[]");
       expect(row.owner).toEqual({ adapter: "copilot", artifactId: id, artifactType: "agent" });
@@ -489,8 +521,11 @@ describe("agents → .github/agents", () => {
     }
     // Non-degenerate: the pin reaches at least one agent, so the order check above
     // ran against a frontmatter that carries a model line too.
+    // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the pinned model line was the
+    // last frontmatter line; `reasoning-effort` now follows it, so the model line is found one
+    // from the end. What the pin shows, a model line below `tools`, is unchanged.
     expect(
-      frontmatterLines(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content).at(-1),
+      frontmatterLines(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content).at(-2),
     ).toBe('model: "some-vendor/frontier-1"');
 
     // A prompt file runs in the session that already carries the instructions: no key.
@@ -923,33 +958,69 @@ describe("model pinning", () => {
     expect(frontmatterValue(bogus.content, "model")).toBeUndefined();
   });
 
-  it("never emits an effort key: this client carries the axis nowhere", async () => {
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "never emits an
+  // effort key: this client carries the axis nowhere" and refused `reasoning-effort` on every agent
+  // file, with a `null` carrier and the cap row's "this engine does not write it yet". The Copilot
+  // CLI's custom-agent loader reads that key (changelog 1.0.66 and 1.0.88; the 1.0.89 loader, read
+  // 2026-10-10), and the plan gate chose to emit it (REQ-LADDER-004), so the case now pins the
+  // emission: the key, its level per class, its place, and the files that carry none.
+  it("emits `reasoning-effort` at each class's default, after the model line, and on no prompt file", async () => {
     const plan = await planResidue({ pins: { advanced: "some-vendor/frontier-1" } });
 
-    for (const row of plan.filter((entry) => entry.path.endsWith(".agent.md"))) {
-      for (const line of frontmatterLines(row.content)) {
-        // `reasoning-effort` is the key Copilot CLI custom agents accept (1.0.66, applied on
-        // agent selection since 1.0.88); this engine does not write it yet, so it is refused too.
-        expect(line, row.path).not.toMatch(/^(effort|reasoning_effort|reasoning-effort|model_reasoning_effort):/);
-      }
+    for (const id of CORPUS_AGENT_IDS) {
+      const row = rowAt(plan, `.github/agents/stamity-${id}.agent.md`);
+      const lines = frontmatterLines(row.content);
+      // Bare, like the file's other fixed-vocabulary values, and always the last line.
+      expect(lines.at(-1), row.path).toBe(`reasoning-effort: ${CORPUS_AGENT_EFFORT[id]}`);
+      // The one spelling this client's loader carries: no other rides along.
+      expect(lines.filter((line) => /effort/i.test(line.split(":")[0] ?? "")), row.path).toHaveLength(1);
     }
-
-    // Data-driven, not a hand-wave: the projection declares no carrier, so the
-    // resolver answers nothing for every class on the ladder. If that row ever
-    // grows a carrier, this fails and points at the omission cap row.
-    expect(CLIENT_MODEL_PROJECTION.copilot.effortCarrier).toBeNull();
-    for (const row of MODEL_LADDER) {
-      expect(resolveEffortValue(row.modelClass, "copilot")).toBeUndefined();
-    }
-    // TEST CHANGE, justified: the pin read "documented omission of the reasoning-effort axis".
-    // The 2026-09-30 currency pass (plan 013, sw14-client-currency-sweep) found that wording
-    // refuted: Copilot CLI custom agents accept `reasoning-effort` since 1.0.66, applied on agent
-    // selection since 1.0.88 (release notes, accessed 2026-09-30). The behaviour this test guards
-    // is unchanged — no effort key is emitted — so the cap row now says the key exists and this
-    // engine does not write it.
+    // Non-degenerate: all three class defaults are on the page, and a pinned agent carries the
+    // effort line directly below its model line.
+    expect(new Set(Object.values(CORPUS_AGENT_EFFORT))).toEqual(new Set(["high", "medium", "low"]));
     expect(
-      COPILOT_DIALECT_FACTS.caps.find((cap) => cap.name === "effort-axis")?.value,
-    ).toContain("this engine does not write it yet");
+      frontmatterLines(rowAt(plan, ".github/agents/stamity-reviewer.agent.md").content).slice(-2),
+    ).toEqual(['model: "some-vendor/frontier-1"', "reasoning-effort: high"]);
+    expect(CLIENT_MODEL_PROJECTION.copilot.effortKey).toBe("reasoning-effort");
+
+    // A prompt file runs in the session, at the session's own effort: no key.
+    const prompts = plan.filter((row) => row.path.startsWith(".github/prompts/"));
+    expect(prompts).toHaveLength(CORPUS_COMMAND_IDS.length);
+    for (const row of prompts) expect(row.content, row.path).not.toContain("reasoning-effort");
+
+    // An agent with no class, or a class off the ladder, has asked for no level.
+    for (const frontmatter of [{}, { model_class: "titanic" }]) {
+      const output = buildAgentFile(
+        itemOf({ type: "agent", id: "unsized", frontmatter }),
+        grantOf("stamity-reviewer"),
+        asIs,
+        {},
+        { advanced: "max" },
+      );
+      expect(frontmatterValue(output.content, "reasoning-effort")).toBeUndefined();
+    }
+  });
+
+  it("writes an operator's level narrowed to this client's scale, and discloses each narrowing once", async () => {
+    // `ultra` is above this client's documented top and `minimal` is its legacy level below the
+    // floor; `xhigh` is a level the scale holds, the control that an operator level is written as
+    // asked. Through the composed planner, so the files and the warnings come from one pass.
+    const efforts: EffortMap = { advanced: "ultra", standard: "xhigh", economy: "minimal" };
+    const ctx = ctxOf({ efforts });
+    const result = await composeEmissionPlanner({ copilot: copilotResiduePlanner }).planWithWarnings(ctx);
+
+    const effortOf = (id: string): string | undefined =>
+      frontmatterValue(rowAt(result.outputs, `.github/agents/stamity-${id}.agent.md`).content, "reasoning-effort");
+    expect(effortOf("reviewer")).toBe("max");
+    expect(effortOf("fixer")).toBe("xhigh");
+    expect(effortOf("test-runner")).toBe("low");
+
+    const disclosed = result.warnings.filter((warning) => warning.startsWith("effort ["));
+    expect(disclosed).toEqual([
+      "effort [copilot]: advanced asks for ultra; this client's scale ends at max, emitted max",
+      "effort [copilot]: economy asks for minimal; this client's scale starts at low, emitted low",
+    ]);
+    expect(disclosed).toEqual(effortDisclosures(ctx.manifest));
   });
 });
 
@@ -1219,9 +1290,18 @@ describe("hooks", () => {
     expect(urls).toContain("prompt-files");
     expect(urls).toContain("add-repository-instructions-in-your-ide");
     expect(urls).toContain("customize-the-agent-environment");
+
+    // The CLI command reference joined the list on 2026-10-10 (unit q6c-copilot-effort-key): the
+    // effort scale, the fallback for a level a model does not offer, and the
+    // `--no-custom-instructions` flag's priority are read from it, under its own date.
+    expect(
+      COPILOT_DIALECT_FACTS.citations.find((citation) =>
+        citation.url.endsWith("/copilot-cli-reference/cli-command-reference"),
+      )?.accessDate,
+    ).toBe("2026-10-10");
   });
 
-  it("declares the command surface and the effort omission as capability rows", () => {
+  it("declares the command surface and the effort key as capability rows", () => {
     expect(capOf("command-surface")).toContain(".github/prompts/");
     expect(capOf("command-surface")).toContain("/st-<id>");
     // REQ-FLOW-026 (sw17): the double listing beside the shared touchpoint skills is declared,
@@ -1229,10 +1309,15 @@ describe("hooks", () => {
     expect(capOf("command-surface")).toContain("`.agents/skills/`");
     expect(capOf("command-surface")).toContain("list twice");
     expect(capOf("command-surface")).toContain("out of the model's own skills list");
-    // TEST CHANGE, justified: the pin read "omitted". The row now says "not emitted", because the
-    // client does accept a `reasoning-effort` key (1.0.66; applied on agent selection since
-    // 1.0.88) and the omission is this engine's, not the surface's (sw14-client-currency-sweep).
-    expect(capOf("effort-axis")).toContain("not emitted");
+    // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the pin read "not emitted",
+    // while the engine left the client's `reasoning-effort` key unwritten. It writes the key now
+    // (REQ-LADDER-004), so the row opens "emitted" on the key and its scale, and never claims the
+    // cloud agent honours it; `test/emit/capabilityMatrix.test.ts` holds the row's whole text.
+    const effortAxis = capOf("effort-axis");
+    expect(effortAxis).toMatch(/^emitted — `reasoning-effort: <level>` per agent, on the scale `low` … `max` /);
+    expect(effortAxis).toContain("the cloud agent's handling of the key is undocumented");
+    expect(effortAxis).not.toContain("does not write it");
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("`reasoning-effort:`");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("model:");
     expect(COPILOT_DIALECT_FACTS.ruleShape).toContain("patterns comma-separated");
 
@@ -1254,7 +1339,15 @@ describe("hooks", () => {
     expect(row).toContain("1.0.89 loader's frontmatter keys");
     expect(row).toContain("live sub-agent check on Copilot CLI 1.0.89 (2026-10-10)");
     expect(row).toContain("loads no `AGENTS.md`");
-    expect(row).toContain("`--no-custom-instructions` still overrides it");
+    // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key; ledger rows review/21 and
+    // review/23): the pin read "`--no-custom-instructions` still overrides it", a clause with no
+    // source and no mark. The clause now names the page it was read from, which the citation
+    // list carries, and says no live run on 1.0.89 passed the flag.
+    expect(row).toContain(
+      "`--no-custom-instructions` overrides it (Copilot CLI command reference, accessed 2026-10-10; " +
+        "unverified on 1.0.89, where no live run passed the flag)",
+    );
+    expect(row).not.toContain("still overrides it");
     // Never a claim that the cloud agent honours the key.
     expect(row).toContain("the cloud agent's handling of the key is undocumented");
     expect(row).toContain("custom-agents configuration page, accessed 2026-10-10");

@@ -93,6 +93,14 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q6c-copilot-effort-key (run
+ *     2026-10-10_next-tier; REQ-LADDER-004). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's one emitted change is a
+ *     frontmatter line, `reasoning-effort: <level>`, closing the ten Copilot
+ *     agent files. A Copilot residue file is not a substitution target, not
+ *     the catalog, not the policy document and not a core hook script, so no
+ *     golden here carries it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script, its review
  *     round 1 fix (run 2026-10-10_next-tier; review/12 with build/7;
  *     REQ-FLOW-070). NOTHING moved in this suite; the row keeps the two

@@ -108,17 +108,17 @@
  * two of these clients publish no symbolic vocabulary to map onto at all. An
  * operator who wants the ladder enforced in the emitted files sets the pins.
  *
- * ONE EFFORT AXIS, TWO CARRIERS, FOUR SCALES. Effort is carried per client
- * where supported and omitted on Copilot cloud (documented) — one axis, and
- * exactly one client that drops it. The three that carry it do NOT document
- * the same levels, so each row declares its own
+ * ONE EFFORT AXIS, TWO CARRIERS, FOUR SCALES. Effort is carried per client,
+ * and no client drops it: Copilot's row named no carrier until its CLI's
+ * custom-agent loader was read to take a `reasoning-effort` key (2026-10-10).
+ * The four do NOT document the same levels, so each row declares its own
  * {@link ClientModelProjection.effortScale} with its own citation, and
  * {@link nearestExpressibleEffort} is where a level asked for on one client's
  * vocabulary lands on another's. `stamity config` refuses a level the CURRENT
  * selection cannot express; the clamp exists for the client that joins after,
  * and for a level a row lists in {@link ClientModelProjection.effortLegacy},
- * which that client's own parser still takes. The rest do not agree on WHERE it goes:
- * two publish a key of their own, and one carries it as a bracket parameter of
+ * which that client's own parser still takes. Nor do they agree on WHERE it goes:
+ * three publish a key of their own, and one carries it as a bracket parameter of
  * the model value itself (`<id>[effort=high]`, options comma-separated inside
  * a single group as `[effort=high,context=300k]` —
  * cursor.com/docs/agent/subagents, accessed 2026-08-17). A row therefore names
@@ -127,10 +127,10 @@
  * Reading `effortKey: null` as "this client has no effort" is the mistake the
  * field's name invites: it means no STANDALONE key, and
  * {@link ClientModelProjection.effortCarrier} says whether the axis rides
- * elsewhere or is genuinely absent. Dropping it on the one client is a
- * decision with a citation; dropping it on a client whose carrier merely has a
- * different SHAPE would be the unledgered in-code call this module exists to
- * end, one axis over.
+ * elsewhere or is genuinely absent. Dropping it takes a decision with a
+ * citation, and no row carries one today; dropping it on a client whose
+ * carrier merely has a different SHAPE would be the unledgered in-code call
+ * this module exists to end, one axis over.
  *
  * Consumers: the four adapters project a class through {@link resolveModelValue}
  * and {@link resolveEffortValue}; `stamity config` validates and stores the pin
@@ -233,7 +233,8 @@ export function isModelClass(value: unknown): value is ModelClass {
  *   value resolves: the parameter has nothing to ride on until an id is named.
  * - `null` — the surface this engine emits carries the axis nowhere, so a
  *   class's effort is dropped on that client. Only a documented decision may
- *   take this value; it is not the default for a carrier that is awkward.
+ *   take this value; it is not the default for a carrier that is awkward, and
+ *   no row takes it today.
  *
  * Named for this note rather than inlined into the field below, and module-local
  * because the field is where a consumer meets it: adapters narrow on the literals
@@ -304,7 +305,7 @@ export interface ClientModelProjection {
   /**
    * Levels this client's documented scale dropped that its own parser still
    * accepts, as a subset of `EFFORT_LEVELS` off {@link effortScale}; empty on
-   * every row but one.
+   * every row but two.
    *
    * A legacy level is a word an operator may keep asking for, not a level this
    * engine writes: `stamity config set` accepts it on a selection whose client
@@ -406,24 +407,32 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
   copilot: {
     tool: "copilot",
     modelKey: "model",
-    // Documented omission — effort is omitted on Copilot cloud: the agent
-    // configuration publishes no effort key, and no model-value parameter
-    // either, on the surface this engine emits — the axis has nowhere to go
-    // here, and the `null` carrier records that as the decision it is. The
-    // only row entitled to it.
-    effortCarrier: null,
-    effortKey: null,
+    // A key of its own, in the kebab spelling the CLI's custom-agent loader
+    // (1.0.89) and its changelog (1.0.66, 1.0.88) carry; whether the loader
+    // also takes the `reasoningEffort` spelling of the online reference's table
+    // is unverified. A level the agent's model does not offer is reported by the
+    // CLI and falls back to the session's: it never stops the agent. The cloud
+    // agent's handling of the key is undocumented (custom-agents configuration
+    // page, read 2026-10-10), so this row speaks for the CLI.
+    effortCarrier: "key",
+    effortKey: "reasoning-effort",
     effortTemplate: null,
     acceptsConcreteIds: true,
     aliases: {},
-    // Empty, and empty for the SAME documented reason the carrier is `null`:
-    // there is no effort surface here to hold a level. Nothing to cite beyond
-    // the row's own page, so the scale citation is `null` rather than a second
-    // copy of it dated to a read that did not happen.
-    effortScale: [],
-    effortLegacy: [],
+    // The CLI reference's documented `--reasoning-effort` values. `minimal` is
+    // on the flag's own list and off the reference, so it is legacy as Codex's
+    // is: `stamity config set` keeps accepting it on a copilot-only selection,
+    // as it did while this row carried no scale, and the emission writes `low`.
+    // Published on the CLI reference, not on the agent-configuration page this
+    // row's other claims come from, which is why the scale carries its own
+    // citation.
+    effortScale: ["low", "medium", "high", "xhigh", "max"],
+    effortLegacy: ["minimal"],
     effortScaleNote: null,
-    effortScaleCitation: null,
+    effortScaleCitation: {
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
+    },
     citation: {
       url: "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
       accessDate: "2026-08-17",
@@ -672,10 +681,10 @@ export function resolveEffortValue(
  * plan is already composed, the level lands at the client's nearest rung, and
  * the operator is told which client moved it and to what.
  *
- * Silent about the client that carries the axis nowhere. An absent effort key
- * there is a documented omission the capability matrix already states, not a
- * narrowing of this operator's level, and reporting it per class would put
- * four lines of noise in front of every repository that selects that client.
+ * Silent about a client that carries the axis nowhere (no row does today). An
+ * absent effort key there would be a documented omission the capability matrix
+ * states, not a narrowing of this operator's level, and reporting it per class
+ * would put four lines of noise in front of every repository selecting it.
  */
 export function effortDisclosures(manifest: SetupManifest): string[] {
   const efforts = manifest.models?.effort ?? {};
