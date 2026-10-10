@@ -93,6 +93,24 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, second commit of unit q1t-frame-inbox-read
+ *     (run 2026-10-10_next-tier; REQ-FLOW-068, q1a's security re-review as
+ *     signed off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33164 -> 33157 bytes and
+ *     469 -> 470 lines in the corpus source, three hunks. Frame step 4's
+ *     withheld-row sentence reads "A row it withholds is listed as it prints,
+ *     the person's to read; never open the inbox for it." (nine lines become
+ *     ten, the rest of the step rewrapped and unchanged). The Plan-artifact
+ *     intake bullet loses the label "Discovery:" and reads "keep those whose
+ *     head" and "Two still matching is one ambiguity-gate question",
+ *     rewrapped at an unchanged five lines. The Freshness guard bullet loses
+ *     ", unrestated" and reads "Only two head keys are read", rewrapped at an
+ *     unchanged four lines. All sit above the re-attachment cut (`###
+ *     Specialist pass` moves 17062 -> 17055). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q1t-frame-inbox-read (run
  *     2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-019, ledger row review/1).
  *     ONE golden moved, SUBSTITUTION:

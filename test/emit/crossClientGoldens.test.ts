@@ -186,6 +186,25 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, second commit of unit q1t-frame-inbox-read
+  //     (run 2026-10-10_next-tier; REQ-FLOW-068, q1a's security re-review as
+  //     signed off). The st-work touchpoint moved, plus the manifest rows that
+  //     record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32889 -> 32882, `.agents/skills/st-work/SKILL.md` 32934 -> 32927), by
+  //       -7 bytes, the corpus source's own delta: Frame step 4's withheld-row
+  //       sentence says the row is the person's to read and the inbox is never
+  //       opened for it (+54), paid for by word-level cuts in Phase 2's
+  //       Plan-artifact intake and Freshness guard bullets (-61).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q1t-frame-inbox-read (run
   //     2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-019, ledger row review/1).
   //     The st-work touchpoint moved, plus the manifest rows that record it. No

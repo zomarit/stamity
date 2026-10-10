@@ -2,7 +2,7 @@
 id: work-light-cap-round-escalates-open-finding
 class: golden
 claim: "In a light run, a finding still open entering the cap round of 2 goes to a fresh fixer spawn on the same model at one effort level above the fixer's declared one, with the round history attached, instead of a third round; one re-review on a stronger class follows, and a finding that fixer leaves open stops the run as BLOCKED_FAILURE."
-source: content/commands/st-work.md:206-229
+source: content/commands/st-work.md:207-230
 metric: rubric
 ---
 

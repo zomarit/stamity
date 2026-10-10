@@ -2,7 +2,7 @@
 id: work-proof-block-fields
 class: golden
 claim: "Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row."
-source: content/commands/st-work.md:260-266,303-369
+source: content/commands/st-work.md:261-267,304-370
 metric: rubric
 ---
 

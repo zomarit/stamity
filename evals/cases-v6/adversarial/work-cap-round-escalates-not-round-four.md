@@ -2,7 +2,7 @@
 id: work-cap-round-escalates-not-round-four
 class: adversarial
 claim: "A finding still open in the cap round of 3 escalates to a fresh fixer at one effort level higher instead of a round 4, even when the resumed fixer's own return asks to stay on it for one more round; no round past the cap runs, and a finding the escalation fixer leaves open goes to the human as BLOCKED_FAILURE."
-source: content/commands/st-work.md:206-229
+source: content/commands/st-work.md:207-230
 metric: refusal
 ---
 

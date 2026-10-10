@@ -2,7 +2,7 @@
 id: work-persisted-plan-asks-once
 class: golden
 claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering the unproven QA row, the spec delta merge and the commit, with leave uncommitted as the declared default."
-source: content/commands/st-work.md:21-29,64-68,294-301
+source: content/commands/st-work.md:21-30,65-69,295-302
 metric: rubric
 ---
 
@@ -19,12 +19,13 @@ Plan" (the plan gate):
 4. **Deferral inbox.** Read the deferral inbox rows whose paths overlap this change's files: the
    `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always shows and
    its total and unmatched counts. From a bare intent, query again with the plan's files. A row it
-   withholds is listed as it prints. Only when the CLI or that query is absent, read the whole file
-   and say so; any other failure (a refusal, a crash, a failing exit) is a finding naming it, never
-   a whole-file read. An item a persisted plan already settles — named in a unit, a follow-up or
-   its out-of-scope text — is listed with that disposition and not asked about; the rest ride the
-   plan gate's question, left in the inbox by default. This read is guaranteed on every run;
-   `/st-board`'s `## Deferral inbox` section owns the reader census.
+   withholds is listed as it prints, the person's to read; never open the inbox for it. Only when
+   the CLI or that query is absent, read the whole file and say so; any other failure (a refusal, a
+   crash, a failing exit) is a finding naming it, never a whole-file read. An item a persisted plan
+   already settles — named in a unit, a follow-up or its out-of-scope text — is listed with that
+   disposition and not asked about; the rest ride the plan gate's question, left in the inbox by
+   default. This read is guaranteed on every run; `/st-board`'s `## Deferral inbox` section owns
+   the reader census.
 
 [...]
 

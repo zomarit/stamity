@@ -21,12 +21,13 @@ spawns: [researcher, implementer, reviewer, fixer, test-runner, spec-author, sec
 4. **Deferral inbox.** Read the deferral inbox rows whose paths overlap this change's files: the
    `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always shows and
    its total and unmatched counts. From a bare intent, query again with the plan's files. A row it
-   withholds is listed as it prints. Only when the CLI or that query is absent, read the whole file
-   and say so; any other failure (a refusal, a crash, a failing exit) is a finding naming it, never
-   a whole-file read. An item a persisted plan already settles — named in a unit, a follow-up or
-   its out-of-scope text — is listed with that disposition and not asked about; the rest ride the
-   plan gate's question, left in the inbox by default. This read is guaranteed on every run;
-   `/st-board`'s `## Deferral inbox` section owns the reader census.
+   withholds is listed as it prints, the person's to read; never open the inbox for it. Only when
+   the CLI or that query is absent, read the whole file and say so; any other failure (a refusal, a
+   crash, a failing exit) is a finding naming it, never a whole-file read. An item a persisted plan
+   already settles — named in a unit, a follow-up or its out-of-scope text — is listed with that
+   disposition and not asked about; the rest ride the plan gate's question, left in the inbox by
+   default. This read is guaranteed on every run; `/st-board`'s `## Deferral inbox` section owns
+   the reader census.
 5. **Run record head.** Open `.stamity/runs/<run-id>/record.md` (`<run-id>` is `<UTC date>_<slug>`)
    with the head lines and the `reports/` folder the Proof block names. Records are files: create
    and extend `record.md`, `plan.md`, reports and the inbox with the client's file write and edit
@@ -43,14 +44,14 @@ are carried into the plan, not silently dropped.
 ## Phase 2 — Plan
 
 - **Plan-artifact intake.** This phase plans in-flow — persisted nowhere under `docs/plans/`; the
-  reviewable plan artifact on disk belongs to `/st-plan`. Discovery: read `docs/plans/*.md`, keep
-  the artifacts whose head `intent:` and Context cover this request, and take the newest `stamp:`.
-  Two artifacts still matching after that is one ambiguity-gate question, never a pick. Nothing
-  found is a normal outcome: say so and plan in-flow.
+  reviewable plan artifact on disk belongs to `/st-plan`. Read `docs/plans/*.md`, keep those whose
+  head `intent:` and Context cover this request, and take the newest `stamp:`. Two still matching
+  is one ambiguity-gate question, never a pick. Nothing found is a normal outcome: say so and plan
+  in-flow.
 - **Freshness guard.** `/st-plan` owns the intake contract: its `## Plan artifact shape` section
-  and the freshness guard beside it apply here, unrestated. Two head keys are read and no others:
-  `stamp:` and `reads:`. On a failed guard, re-plan with the stale artifact as input; a stale plan
-  is never executed silently. Staleness is a guard verdict in the run report, not a return status.
+  and the freshness guard beside it apply here. Only two head keys are read: `stamp:` and `reads:`.
+  On a failed guard, re-plan with the stale artifact as input; a stale plan is never executed
+  silently. Staleness is a guard verdict in the run report, not a return status.
 - **Decompose** into reviewable units: one unit = one concern, ≤~400 changed lines and ≤8 files.
   The 400 is a ceiling, not a target; split at Plan, not mid-build. Each unit carries complete
   interfaces so a context-free implementer can execute it, and names the spec requirement ids it
