@@ -323,6 +323,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--paths <paths...>` | the paths a change touches; the inbox rows naming them are printed | — |
 | `--plan <path>` | a plan path; the inbox rows whose Ref: or location names it are printed | — |
 | `--area <words...>` | whole words matched in an inbox row that names no path | — |
+| `--due [date]` | a day as YYYY-MM-DD, today when no value is given; the inbox rows whose by: day is on or before it are printed | — |
 
 ## `stamity gate`
 

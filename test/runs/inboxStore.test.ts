@@ -2,18 +2,21 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parseDisposition } from "../../src/runs/disposition.ts";
 import {
   ALWAYS_SHOW_TAGS,
   INBOX_PATH,
   locationPaths,
   matchInbox,
   parseInbox,
+  SCHEDULE_RULE_HEADING,
   type InboxRow,
 } from "../../src/runs/inboxStore.ts";
 
 /**
- * The deferral inbox's reader (q1a-inbox-store, REQ-FLOW-068, REQ-FLOW-075):
- * the row grammar and the query `stamity ledger inbox` answers.
+ * The deferral inbox's reader (q1a-inbox-store, REQ-FLOW-068, REQ-FLOW-075;
+ * q9b-inbox-schedule-grammar, REQ-FLOW-076): the row grammar, the schedule
+ * rule's section, and the query `stamity ledger inbox` answers.
  *
  * Pure functions over strings, so the cases feed them hand-built rows; no
  * fixture copies a real inbox row. The one read of this repository's own inbox
@@ -41,9 +44,18 @@ function row(line: number, location: string, extra: Partial<InboxRow> = {}): Inb
     source: "/st-work",
     ref: null,
     tag: null,
+    by: null,
+    when: null,
+    files: [],
+    deferredOn: null,
+    rationale: null,
+    belowRule: false,
     ...extra,
   };
 }
+
+/** The schedule fields of a row that carries none: what every row written before the rule parses to. */
+const UNSCHEDULED = { by: null, when: null, files: [], deferredOn: null, rationale: null, belowRule: false } as const;
 
 /** `<line>:<matchedBy>` for every matched row, in order: the whole answer in one comparable value. */
 function answer(rows: readonly InboxRow[], query: Parameters<typeof matchInbox>[1]): string[] {
@@ -61,6 +73,12 @@ describe("parseInbox", () => {
     expect(bullets).toBeGreaterThan(0);
     expect(parsed.problems).toEqual([]);
     expect(parsed.rows).toHaveLength(bullets);
+    // The schedule rule's heading (D28) is there once, so a close has a section to append under,
+    // and every row below it is read as one the rule binds.
+    const lines = text.split("\n");
+    const heading = lines.indexOf(SCHEDULE_RULE_HEADING);
+    expect(lines.filter((line) => line === SCHEDULE_RULE_HEADING)).toHaveLength(1);
+    for (const parsedRow of parsed.rows) expect(parsedRow.belowRule).toBe(parsedRow.line > heading + 1);
   });
 
   it("reads every field of a full row, and the line it sits on", () => {
@@ -74,6 +92,10 @@ describe("parseInbox", () => {
     const parsed = parseInbox(text);
 
     expect(parsed.problems).toEqual([]);
+    // TEST CHANGE, justified (2026-10-10, q9b-inbox-schedule-grammar): a parsed row gained the
+    // schedule rule's six fields (`by`, `when`, `files`, `deferredOn`, `rationale`, `belowRule`),
+    // so this whole-row pin names them. The seven fields it pinned before read as they did: a
+    // row carrying no schedule field parses to the empty values.
     expect(parsed.rows).toEqual([
       {
         line: 3,
@@ -83,8 +105,18 @@ describe("parseInbox", () => {
         source: "rework main",
         ref: "r.jsonl#a/1",
         tag: "critical-deferred",
+        ...UNSCHEDULED,
       },
-      { line: 4, severity: "Minor", location: "—", description: "d", source: "rework main", ref: ".stamity/runs/x/record.md", tag: null },
+      {
+        line: 4,
+        severity: "Minor",
+        location: "—",
+        description: "d",
+        source: "rework main",
+        ref: ".stamity/runs/x/record.md",
+        tag: null,
+        ...UNSCHEDULED,
+      },
     ]);
   });
 
@@ -114,6 +146,191 @@ describe("parseInbox", () => {
     const parsed = parseInbox(text);
     expect(parsed.problems.map((problem) => problem.line)).toEqual([5]);
     expect(parsed.rows.map((parsedRow) => parsedRow.line)).toEqual([6]);
+  });
+});
+
+/** The first problem `parseInbox` names for one bullet standing below the rule's heading, or "". */
+function ruled(bullet: string): string {
+  const parsed = parseInbox([SCHEDULE_RULE_HEADING, "", `- ${bullet}`].join("\n"));
+  expect(parsed.rows.length + parsed.problems.length).toBe(1);
+  expect(parsed.problems.every((problem) => problem.line === 3)).toBe(true);
+  return parsed.problems[0]?.message ?? "";
+}
+
+describe("parseInbox — the schedule fields (q9b)", () => {
+  it("parses /st-rework's critical-deferred row as written, with its trigger, tag, date and rationale", () => {
+    // The template of `/st-rework`'s protocol text with D11's field and the placeholders filled.
+    const bullet =
+      "- Critical · src/a.ts:9 · c · source: rework main · when: touched · critical-deferred · 2026-10-10 · rationale: we ship, the flag is off";
+
+    const parsed = parseInbox(bullet);
+
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.rows).toEqual([
+      {
+        line: 1,
+        severity: "Critical",
+        location: "src/a.ts:9",
+        description: "c",
+        source: "rework main",
+        ref: null,
+        tag: "critical-deferred",
+        by: null,
+        when: "touched",
+        files: [],
+        deferredOn: "2026-10-10",
+        rationale: "we ship, the flag is off",
+        belowRule: false,
+      },
+    ]);
+  });
+
+  it("reads the fields after source: and Ref: by prefix, in any order, and a description holding the separator", () => {
+    const parsed = parseInbox(
+      [
+        "- Minor · — · one · two · three · source: /st-work · Ref: r.jsonl#a/1 · 2026-10-10 · decision-waiting · files: src/b.ts, `docs/c.md:4`, Makefile · by: 2026-11-01",
+        "- Minor · src/a.ts:1 · d · source: x · rationale: first · when: later · owner: nobody · by: never",
+      ].join("\n"),
+    );
+
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.rows[0]).toMatchObject({
+      description: "one · two · three",
+      ref: "r.jsonl#a/1",
+      tag: "decision-waiting",
+      by: "2026-11-01",
+      when: null,
+      files: ["src/b.ts", "docs/c.md", "Makefile"],
+      deferredOn: "2026-10-10",
+      rationale: null,
+    });
+    // `rationale:` is last and takes the rest of the line, separators and field-shaped words included.
+    expect(parsed.rows[1]).toMatchObject({
+      by: null,
+      when: null,
+      tag: null,
+      rationale: "first · when: later · owner: nobody · by: never",
+    });
+  });
+
+  it.each([
+    ["by: 2026-11-01 · by: 2026-12-01", "`by:` appears twice"],
+    ["when: touched · when: the next release", "`when:` appears twice"],
+    ["files: src/a.ts · files: src/b.ts", "`files:` appears twice"],
+    ["2026-10-10 · 2026-10-11", "a second deferral date `2026-10-11`; the bare date appears once"],
+    ["by: 2026-11-01 · when: touched", "`by:` and `when:` both appear; a row carries one of them"],
+    ["when: touched · by: 2026-11-01", "`by:` and `when:` both appear; a row carries one of them"],
+    ["owner: x", "unknown field `owner:`"],
+    ["by: 2026-02-30", "`by:` names no real calendar day as YYYY-MM-DD"],
+    ["by: soon", "`by:` names no real calendar day as YYYY-MM-DD"],
+    ["by:", "`by:` names no real calendar day as YYYY-MM-DD"],
+    ["2026-02-30", "the deferral date `2026-02-30` is no real calendar day"],
+    ["when:", "`when:` names no trigger"],
+    ["files: src/a.ts, , src/b.ts", "`files:` names an empty path"],
+    ["files:", "`files:` names an empty path"],
+    ["rationale:", "`rationale:` gives no reason"],
+    ["by: 2026-11-01 · Ref: r.jsonl#a/1", "`Ref:` comes straight after `source:`, before any other field"],
+    ["Ref: r.jsonl#a/1 · Ref: r.jsonl#a/2", "`Ref:` appears twice"],
+    ["source: y", "`source:` appears twice"],
+    // The two shapes whose message stays as it was: a bare field holding a space, and a second tag word.
+    ["by: 2026-11-01 · two words", "trailing field(s) beyond one optional tag word — by: 2026-11-01 · two words"],
+    ["tag-one · when: touched · tag-two", "trailing field(s) beyond one optional tag word — tag-one · when: touched · tag-two"],
+    ["when:touched", "trailing field(s) beyond one optional tag word — when:touched"],
+  ])("refuses the trailing fields %j", (fields, message) => {
+    const parsed = parseInbox(`intro\n- Minor · src/a.ts:1 · d · source: /st-work · ${fields}`);
+    expect(parsed.rows).toEqual([]);
+    expect(parsed.problems).toEqual([{ line: 2, message }]);
+  });
+
+  it("holds every row below the rule's heading to a date or a trigger, to the end of the file", () => {
+    const text = [
+      "# Deferral inbox",
+      "",
+      "- Minor · src/a.ts:1 · an older row · source: x",
+      "",
+      SCHEDULE_RULE_HEADING,
+      "",
+      "Rows appended from 2026-10-10 on carry a date or a trigger.",
+      "- Minor · src/a.ts:2 · dated · source: x · by: 2026-11-01",
+      "- Minor · src/a.ts:3 · neither · source: x",
+      "",
+      "## A later heading",
+      "",
+      "- Minor · src/a.ts:4 · still inside the rule's section · source: x · some-tag",
+      "- Minor · src/a.ts:5 · triggered · source: x · when: the next edit of src/a.ts",
+    ].join("\n");
+
+    const parsed = parseInbox(text);
+
+    const neither = "a row under `## Rows under the schedule rule` carries `by: <YYYY-MM-DD>` or `when: <trigger>`; this one carries neither";
+    expect(parsed.problems).toEqual([
+      { line: 9, message: neither },
+      { line: 13, message: neither },
+    ]);
+    expect(parsed.rows.map((parsedRow) => [parsedRow.line, parsedRow.belowRule])).toEqual([
+      [3, false],
+      [8, true],
+      [14, true],
+    ]);
+  });
+
+  it("reads the heading only as the whole line it is", () => {
+    const text = [`${SCHEDULE_RULE_HEADING} (draft)`, `  ${SCHEDULE_RULE_HEADING}`, "- Minor · — · d · source: x"].join("\n");
+    expect(parseInbox(text)).toMatchObject({ problems: [], rows: [{ line: 3, belowRule: false }] });
+    // A carriage return before the line break is the line's ending, not part of the heading.
+    expect(parseInbox(`${SCHEDULE_RULE_HEADING}\r\n- Minor · — · d · source: x`).problems).toHaveLength(1);
+  });
+
+  it.each([
+    ["src/a.ts:1", "when: later", "`when:` names the vague trigger `later`, which no event brings back"],
+    ["src/a.ts:1", "when: later on", "`when:` names the vague trigger `later`, which no event brings back"],
+    ["src/a.ts:1", "when: Maybe someday.", "`when:` names the vague trigger `someday`, which no event brings back"],
+    ["src/a.ts:1", "when: the next hygiene batch", "`when:` names the vague trigger `hygiene batch`, which no event brings back"],
+    // review/24, plan/43: the shared rule answers null for a trigger with no word, so the inbox asks for one itself.
+    ["src/a.ts:1", "when: —", "`when:` names no trigger"],
+    ["src/a.ts:1", "when: ...", "`when:` names no trigger"],
+    ["—", "when: touched", "`when: touched` needs a path, in the location or in `files:`"],
+    ["the ledger grammar", "when: Touched.", "`when: touched` needs a path, in the location or in `files:`"],
+  ])("refuses a row at %j carrying %j", (location, field, message) => {
+    expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe(message);
+  });
+
+  it.each([
+    ["src/a.ts:1", "when: touched"],
+    ["—", "when: touched · files: src/b.ts"],
+    ["—", "files: src/b.ts · when: touched"],
+    ["—", "when: the next edit of src/a.ts"],
+    ["—", "when: the next hygiene pass after the release"],
+    ["—", "by: 2026-11-01"],
+  ])("accepts a row at %j carrying %j below the heading", (location, field) => {
+    expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe("");
+  });
+
+  it("holds a trigger to the same rule wherever the row stands, above the heading too", () => {
+    const parsed = parseInbox("- Minor · src/a.ts:1 · d · source: x · when: tbd");
+    expect(parsed.rows).toEqual([]);
+    expect(parsed.problems).toEqual([{ line: 1, message: "`when:` names the vague trigger `tbd`, which no event brings back" }]);
+  });
+
+  it.each([
+    "later",
+    "later on",
+    "maybe someday",
+    "TBD",
+    "eventually, perhaps",
+    "the hygiene batch",
+    "—",
+    "",
+    "touched",
+    "the next edit of src/a.ts",
+    "the next release",
+    "later than the 1.14.0 release",
+    "on the day",
+    "next attended close",
+  ])("gives the trigger %j the verdict the `retired` grammar gives it after `scheduled <place> · when`", (trigger) => {
+    const retired = parseDisposition(`scheduled board #42 · when ${trigger}`);
+    const inbox = parseInbox(`- Minor · src/a.ts:1 · d · source: x · when: ${trigger}`);
+    expect(inbox.problems.length === 0, `${trigger}: ${inbox.problems[0]?.message ?? "accepted"}`).toBe(retired.ok);
   });
 });
 
@@ -206,6 +423,57 @@ describe("matchInbox", () => {
     const result = matchInbox(rows, { paths: [] });
     expect(result.matched.map((match) => `${match.row.line}:${match.matchedBy}`)).toEqual(["1:all", "2:all", "3:all"]);
     expect(result.unmatched).toBe(0);
+  });
+
+  it("matches a row by a files: entry as it does by a location entry", () => {
+    const rows = [
+      row(1, "—", { files: ["src/b.ts", "docs/guide"] }),
+      row(2, "—", { files: ["src/c.ts"] }),
+      row(3, "src/a.ts:1", { files: ["gate.ts"] }),
+    ];
+    expect(answer(rows, { paths: ["src/b.ts"] })).toEqual(["1:path"]);
+    expect(answer(rows, { paths: ["docs/guide/page.md"] })).toEqual(["1:path"]);
+    expect(answer(rows, { paths: ["src/cli/commands/gate.ts"] })).toEqual(["3:path"]);
+    expect(answer(rows, { paths: [], plan: "src/c.ts" })).toEqual(["2:plan"]);
+  });
+
+  it("still reaches a row at a dash by an area word when it names files", () => {
+    const rows = [row(1, "—", { description: "the ledger note", files: ["src/b.ts"] })];
+    expect(answer(rows, { paths: ["src/z.ts"], area: ["ledger"] })).toEqual(["1:area"]);
+  });
+
+  it("matches a row whose by: is on or before the due day, and counts the waiting triggers", () => {
+    const rows = [
+      row(1, "—", { by: "2026-11-30" }),
+      row(2, "—", { by: "2026-12-01" }),
+      row(3, "—", { by: "2026-12-02" }),
+      row(4, "—", { when: "the next release" }),
+      row(5, "src/a.ts:1", { when: "touched" }),
+      row(6, "—"),
+      row(7, "docs/x.md:1", { by: "2026-01-01", tag: "decision-waiting" }),
+    ];
+
+    const due = matchInbox(rows, { paths: [], due: "2026-12-01" });
+    expect(due.matched.map((match) => `${match.row.line}:${match.matchedBy}`)).toEqual(["1:due", "2:due", "7:due"]);
+    expect(due.unmatched).toBe(4);
+    expect(due.triggers).toBe(2);
+
+    // A touched trigger is matched by its path, so it no longer waits.
+    const touched = matchInbox(rows, { paths: ["src/a.ts"], due: "2026-11-30" });
+    expect(touched.matched.map((match) => `${match.row.line}:${match.matchedBy}`)).toEqual(["1:due", "5:path", "7:due"]);
+    expect(touched.triggers).toBe(1);
+
+    // With no due day a date matches nothing, and the tagged row falls back to always.
+    const noDue = matchInbox(rows, { paths: ["src/z.ts"] });
+    expect(noDue.matched.map((match) => `${match.row.line}:${match.matchedBy}`)).toEqual(["7:always"]);
+    expect(noDue.triggers).toBe(2);
+  });
+
+  it("counts no waiting trigger when the query names no filter, since every row matched", () => {
+    const rows = [row(1, "—", { when: "the next release" }), row(2, "—", { by: "2026-12-02" })];
+    const result = matchInbox(rows, { paths: [] });
+    expect(result.matched.map((match) => match.matchedBy)).toEqual(["all", "all"]);
+    expect(result.triggers).toBe(0);
   });
 
   it("leaves a dash location with no tag out of a filtered query", () => {

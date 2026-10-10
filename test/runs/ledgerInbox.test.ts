@@ -2,15 +2,17 @@ import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
 import { INBOX_BULLET_MAX_CHARS, INBOX_OVER_LENGTH, INBOX_SCREEN } from "../../src/cli/commands/ledger.ts";
+import { runCli } from "../../src/cli/kit/program.ts";
 import { SESSION_START_SCREEN, SESSION_START_SCREEN_PATTERN_IDS } from "../../src/hooks/scripts.ts";
-import { INBOX_PATH } from "../../src/runs/inboxStore.ts";
+import { INBOX_PATH, SCHEDULE_RULE_HEADING } from "../../src/runs/inboxStore.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
 /**
- * `stamity ledger inbox` (q1a-inbox-store, REQ-FLOW-068, REQ-FLOW-075): the
- * deferral inbox's query, through the in-process funnel, so each case also
- * covers the exit code and the single JSON document.
+ * `stamity ledger inbox` (q1a-inbox-store, REQ-FLOW-068, REQ-FLOW-075;
+ * q9b-inbox-schedule-grammar, REQ-FLOW-076): the deferral inbox's query,
+ * through the in-process funnel, so each case also covers the exit code and
+ * the single JSON document.
  *
  * Real-filesystem lane: the read refuses a link and an oversized file by what
  * `lstat` sees, which a virtual volume cannot show. Every inbox here is
@@ -70,6 +72,39 @@ async function inbox(dir: TempDirHandle, ...args: string[]): Promise<{ code: num
   return await runInProcess(COMMANDS, ["ledger", "inbox", ...args], { cwd: dir.dir });
 }
 
+/**
+ * `ledger inbox` through the funnel on a fixed clock, as `cliAt` of
+ * `test/runs/ledgerClose.test.ts` runs a retirement. The kit's own clock seam
+ * (`RunCliOptions.clock`), not a mock: `runInProcess` forwards no clock, and a
+ * `--due` with no value reads its day from the one the funnel is handed.
+ */
+async function inboxAt(
+  dir: TempDirHandle,
+  now: Date,
+  ...args: string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const code = await runCli(["ledger", "inbox", ...args], COMMANDS, {
+    cwd: dir.dir,
+    env: {},
+    io: {
+      out: (text) => {
+        stdout.push(text);
+      },
+      err: (text) => {
+        stderr.push(text);
+      },
+    },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: false },
+    clock: { now: () => now },
+  });
+  return { code, stdout: stdout.join(""), stderr: stderr.join("") };
+}
+
+/** A string the `exfiltrate` row matches with no space in it, so it survives as one `files:` entry. */
+const SPACELESS_HIT = ["exfil", "trate"].join("");
+
 describe("stamity ledger inbox", () => {
   it("prints the count line, the matched rows, the unparsed lines and the skipped lines", async () => {
     const dir = tempDir();
@@ -103,6 +138,9 @@ describe("stamity ledger inbox", () => {
     const doc = JSON.parse(result.stdout) as Record<string, unknown>;
     expect(doc).toMatchObject({ ok: true, command: "ledger" });
     const { ok: _ok, command: _command, version: _version, ...payload } = doc;
+    // TEST CHANGE, justified (2026-10-10, q9b-inbox-schedule-grammar): the document gained `due`
+    // and `triggers`, and each matched row `by`, `when` and `files` (REQ-FLOW-076), so this
+    // whole-document pin names them. Every key it pinned before keeps its value.
     expect(payload).toEqual({
       inbox: INBOX_PATH,
       total: 6,
@@ -115,6 +153,9 @@ describe("stamity ledger inbox", () => {
           source: "/st-work",
           ref: ".stamity/runs/r/ledger.jsonl#r/build/1",
           tag: null,
+          by: null,
+          when: null,
+          files: [],
           matchedBy: "path",
           withheld: null,
         },
@@ -126,6 +167,9 @@ describe("stamity ledger inbox", () => {
           source: "/st-rework",
           ref: null,
           tag: "critical-deferred",
+          by: null,
+          when: null,
+          files: [],
           matchedBy: "always",
           withheld: null,
         },
@@ -137,6 +181,9 @@ describe("stamity ledger inbox", () => {
           source: null,
           ref: null,
           tag: null,
+          by: null,
+          when: null,
+          files: [],
           matchedBy: "path",
           withheld: "fake-instruction-header",
         },
@@ -148,6 +195,8 @@ describe("stamity ledger inbox", () => {
         { line: 8, pattern: "fake-instruction-header" },
         { line: 9, pattern: "send-data-external" },
       ],
+      due: null,
+      triggers: 0,
     });
     expect(result.stdout).not.toContain("quiet");
   });
@@ -280,6 +329,8 @@ describe("stamity ledger inbox", () => {
       );
       for (const word of ["quiet", "hidden"]) expect(json.stdout).not.toContain(word);
       const { ok: _ok, command: _command, version: _version, ...payload } = JSON.parse(json.stdout) as Record<string, unknown>;
+      // TEST CHANGE, justified (2026-10-10, q9b-inbox-schedule-grammar): as the document pin
+      // above, the new `due`, `triggers`, `by`, `when` and `files` keys are named; no value moved.
       expect(payload).toEqual({
         inbox: INBOX_PATH,
         total: 2,
@@ -292,6 +343,9 @@ describe("stamity ledger inbox", () => {
             source: null,
             ref: null,
             tag: null,
+            by: null,
+            when: null,
+            files: [],
             matchedBy: "path",
             withheld: "never-verify",
           },
@@ -303,6 +357,9 @@ describe("stamity ledger inbox", () => {
             source: "x",
             ref: null,
             tag: null,
+            by: null,
+            when: null,
+            files: [],
             matchedBy: "path",
             withheld: null,
           },
@@ -311,6 +368,8 @@ describe("stamity ledger inbox", () => {
         unmatched: 0,
         problems: [],
         skipped: [{ line: 3, pattern: "never-verify" }],
+        due: null,
+        triggers: 0,
       });
     });
 
@@ -415,6 +474,241 @@ describe("stamity ledger inbox", () => {
     });
   });
 
+  // q9b (REQ-FLOW-076, S16): rows come back when their day arrives or their files are touched.
+  describe("--due and the schedule fields", () => {
+    /** Rows above and below the rule's heading: three dated, two triggered, one of them touched by its files. */
+    const SCHEDULED = [
+      "# Deferral inbox",
+      "",
+      "- Minor · docs/old.md:1 · an older row · source: x",
+      "",
+      SCHEDULE_RULE_HEADING,
+      "",
+      "- Warning · docs/b.md:3 · overdue · source: x · by: 2026-11-01",
+      "- Minor · — · due on the day · source: x · files: src/b.ts, src/c.ts · by: 2026-12-01 · 2026-10-10",
+      "- Minor · docs/d.md:1 · not yet · source: x · by: 2026-12-02",
+      "- Minor · — · waits on an event · source: x · when: the next release",
+      "- Minor · — · waits on a touch · source: x · when: touched · files: src/e.ts",
+      "- Minor · docs/f.md:1 · no day and no trigger · source: x",
+      "",
+    ].join("\n");
+
+    it("matches the rows whose by: is on or before the day as due, and only counts the triggers", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, SCHEDULED);
+
+      const human = await inbox(dir, "--due", "2026-12-01");
+      const json = await inbox(dir, "--due", "2026-12-01", "--json");
+
+      expect(human.code).toBe(0);
+      expect(human.stdout).toBe(
+        [
+          "inbox: 7 rows · 2 matched · 4 unmatched · 1 unparsed · 0 skipped · 2026-12-01 due · 2 triggers",
+          "7 Warning · docs/b.md:3 · overdue (due)",
+          "8 Minor · — · due on the day (due)",
+          "unparsed: 12: a row under `## Rows under the schedule rule` carries `by: <YYYY-MM-DD>` or `when: <trigger>`; this one carries neither",
+          "",
+        ].join("\n"),
+      );
+      const { ok: _ok, command: _command, version: _version, ...payload } = JSON.parse(json.stdout) as Record<string, unknown>;
+      expect(payload).toEqual({
+        inbox: INBOX_PATH,
+        total: 7,
+        matched: [
+          {
+            line: 7,
+            severity: "Warning",
+            location: "docs/b.md:3",
+            description: "overdue",
+            source: "x",
+            ref: null,
+            tag: null,
+            by: "2026-11-01",
+            when: null,
+            files: [],
+            matchedBy: "due",
+            withheld: null,
+          },
+          {
+            line: 8,
+            severity: "Minor",
+            location: "—",
+            description: "due on the day",
+            source: "x",
+            ref: null,
+            tag: null,
+            by: "2026-12-01",
+            when: null,
+            files: ["src/b.ts", "src/c.ts"],
+            matchedBy: "due",
+            withheld: null,
+          },
+        ],
+        counts: { Critical: 0, Warning: 1, Minor: 1, Info: 0 },
+        unmatched: 4,
+        problems: [
+          {
+            line: 12,
+            message:
+              "a row under `## Rows under the schedule rule` carries `by: <YYYY-MM-DD>` or `when: <trigger>`; this one carries neither",
+          },
+        ],
+        skipped: [],
+        due: "2026-12-01",
+        triggers: 2,
+      });
+    });
+
+    it("matches a row by a files: entry, and a touched trigger stops waiting", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, SCHEDULED);
+
+      const result = await inbox(dir, "--paths", "src/c.ts", "src/e.ts", "--due", "2026-10-31", "--json");
+
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        matched: [
+          { line: 8, matchedBy: "path", by: "2026-12-01", files: ["src/b.ts", "src/c.ts"] },
+          { line: 11, matchedBy: "path", when: "touched", files: ["src/e.ts"] },
+        ],
+        unmatched: 4,
+        due: "2026-10-31",
+        triggers: 1,
+      });
+    });
+
+    it("reads the day from the clock when --due carries no value", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, SCHEDULED);
+      const now = new Date("2026-11-02T23:30:00Z");
+
+      const human = await inboxAt(dir, now, "--due");
+      const json = await inboxAt(dir, now, "--due", "--paths", "src/z.ts", "--json");
+
+      expect(human.code).toBe(0);
+      expect(human.stdout.split("\n").slice(0, 2)).toEqual([
+        "inbox: 7 rows · 1 matched · 5 unmatched · 1 unparsed · 0 skipped · 2026-11-02 due · 2 triggers",
+        "7 Warning · docs/b.md:3 · overdue (due)",
+      ]);
+      expect(JSON.parse(json.stdout)).toMatchObject({ due: "2026-11-02", matched: [{ line: 7, matchedBy: "due" }], triggers: 2 });
+    });
+
+    it("prints no due part without --due, and matches every row as all", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, SCHEDULED);
+
+      const result = await inbox(dir);
+
+      expect(result.stdout.split("\n")[0]).toBe("inbox: 7 rows · 6 matched · 0 unmatched · 1 unparsed · 0 skipped");
+    });
+
+    it.each([["2026-02-30"], ["tomorrow"], ["2026-12-01T00:00:00Z"], ["src/a.ts"]])(
+      "refuses --due %s as a usage error, before the inbox is read",
+      async (value) => {
+        const dir = tempDir();
+
+        const human = await inbox(dir, "--due", value);
+        const json = await inbox(dir, "--due", value, "--json");
+
+        expect(human.code).toBe(1);
+        expect(human.stdout).toBe("");
+        expect(human.stderr).toContain("ledger inbox --due takes a day as YYYY-MM-DD");
+        expect(human.stderr).not.toContain(value);
+        expect(JSON.parse(json.stdout)).toMatchObject({ ok: false, error: { code: "USAGE" } });
+      },
+    );
+
+    // plan/30, D38: a withheld row still comes back by its files, its day and its always-shown tag,
+    // each read only when it passes the screen alone; its trigger, rationale and description never print.
+    describe("a row the screen withholds", () => {
+      const HELD = `- Warning · — · a row ${NEVER_HIT} · source: hidden-writer · files: src/b.ts · by: 2026-11-01 · 2026-10-10 · rationale: hidden reason`;
+
+      it("matches by a files: entry as path and by its day as due, and prints none of its words", async () => {
+        const dir = tempDir();
+        await seedInbox(dir, `${SCHEDULE_RULE_HEADING}\n\n${HELD}\n`);
+
+        const byPath = await inbox(dir, "--paths", "src/b.ts");
+        const byDue = await inbox(dir, "--due", "2026-12-01");
+        const early = await inbox(dir, "--due", "2026-10-31", "--paths", "src/z.ts");
+        const json = await inbox(dir, "--due", "2026-12-01", "--json");
+
+        expect(byPath.stdout).toBe(
+          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped\n3 Warning · — · withheld by the screen (never-verify); read it by hand (path)\n",
+        );
+        expect(byDue.stdout).toBe(
+          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped · 2026-12-01 due · 0 triggers\n3 Warning · — · withheld by the screen (never-verify); read it by hand (due)\n",
+        );
+        expect(early.stdout).toBe(
+          "inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped · 2026-10-31 due · 0 triggers\nskipped: 3 (never-verify)\n",
+        );
+        for (const word of ["quiet", "hidden"]) expect(json.stdout).not.toContain(word);
+        expect(JSON.parse(json.stdout)).toMatchObject({
+          matched: [
+            {
+              line: 3,
+              description: null,
+              source: null,
+              ref: null,
+              tag: null,
+              by: "2026-11-01",
+              when: null,
+              files: ["src/b.ts"],
+              matchedBy: "due",
+              withheld: "never-verify",
+            },
+          ],
+          skipped: [{ line: 3, pattern: "never-verify" }],
+        });
+      });
+
+      it("shows by its always-shown tag when nothing else matches, with the tag and never its trigger", async () => {
+        const dir = tempDir();
+        await seedInbox(
+          dir,
+          `- Warning · — · a row ${NEVER_HIT} · source: x · when: the hidden event · files: src/b.ts · decision-waiting · rationale: hidden reason\n`,
+        );
+
+        const human = await inbox(dir, "--paths", "src/z.ts", "--due", "2026-12-01");
+        const json = await inbox(dir, "--paths", "src/z.ts", "--due", "2026-12-01", "--json");
+
+        expect(human.stdout).toBe(
+          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped · 2026-12-01 due · 0 triggers\n1 Warning · — · withheld by the screen (never-verify); read it by hand · decision-waiting (always)\n",
+        );
+        for (const word of ["quiet", "hidden"]) expect(json.stdout).not.toContain(word);
+        expect(JSON.parse(json.stdout)).toMatchObject({
+          matched: [{ line: 1, tag: "decision-waiting", by: null, when: null, files: ["src/b.ts"], matchedBy: "always" }],
+          triggers: 0,
+        });
+      });
+
+      it("reads none of its files when one entry fails the screen alone", async () => {
+        const dir = tempDir();
+        await seedInbox(dir, `- Warning · — · d · source: x · files: src/b.ts, ${SPACELESS_HIT}/x.ts · by: 2026-11-01\n`);
+
+        const byPath = await inbox(dir, "--paths", "src/b.ts");
+        const byDue = await inbox(dir, "--due", "2026-12-01", "--json");
+
+        expect(byPath.stdout).toBe("inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped\nskipped: 1 (exfiltrate)\n");
+        // The pattern id spells the same word, so the entry is looked for whole.
+        expect(byDue.stdout).not.toContain(`${SPACELESS_HIT}/x.ts`);
+        expect(JSON.parse(byDue.stdout)).toMatchObject({
+          matched: [{ line: 1, by: "2026-11-01", files: [], matchedBy: "due", withheld: "exfiltrate" }],
+        });
+      });
+    });
+
+    it("withholds a clean-looking row whose trigger alone carries a screened string", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, `- Minor · src/a.ts:1 · d · source: x · when: ${NEVER_HIT}\n`);
+
+      const result = await inbox(dir, "--paths", "src/a.ts", "--json");
+
+      expect(result.stdout).not.toContain("quiet");
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        matched: [{ line: 1, description: null, when: null, withheld: "never-verify" }],
+      });
+    });
+  });
+
   it("flattens a control character in a printed field", async () => {
     const dir = tempDir();
     await seedInbox(dir, "- Minor · src/a.ts:1 · tab\there · source: x\n");
@@ -441,7 +735,12 @@ describe("stamity ledger inbox", () => {
       unmatched: 0,
       problems: [],
       skipped: [],
+      due: null,
+      triggers: 0,
     });
+    const due = await inbox(dir, "--due", "2026-12-01", "--json");
+    expect(due.stdout).not.toBe("");
+    expect(JSON.parse(due.stdout)).toMatchObject({ total: 0, due: "2026-12-01", triggers: 0 });
   });
 
   it("refuses a repository with no state directory", async () => {
@@ -484,6 +783,9 @@ describe("stamity ledger inbox", () => {
     [["ledger", "status", "--paths", "a"], "ledger status takes no --paths; it is a flag of ledger inbox"],
     [["ledger", "close", "--plan", "a"], "ledger close takes no --plan; it is a flag of ledger inbox"],
     [["ledger", "append", "--area", "a"], "ledger append takes no --area; it is a flag of ledger inbox"],
+    [["ledger", "append", "--due", "2026-12-01"], "ledger append takes no --due; it is a flag of ledger inbox"],
+    [["ledger", "close", "--due"], "ledger close takes no --due; it is a flag of ledger inbox"],
+    [["ledger", "status", "--due"], "ledger status takes no --due; it is a flag of ledger inbox"],
   ])("refuses %j as a usage error naming the owner", async (argv, message) => {
     const dir = tempDir();
     await mkdir(dir.path(".stamity"));

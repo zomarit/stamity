@@ -4,7 +4,13 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseDisposition, SCHEDULE_RULE_FROM } from "../../src/runs/disposition.ts";
-import { INBOX_PATH, INBOX_SEVERITIES, parseInbox, type InboxProblem } from "../../src/runs/inboxStore.ts";
+import {
+  INBOX_PATH,
+  INBOX_SEVERITIES,
+  parseInbox,
+  SCHEDULE_RULE_HEADING,
+  type InboxProblem,
+} from "../../src/runs/inboxStore.ts";
 import { LEDGER_SUFFIX, SEVERITIES, parseLedger, type LedgerRow } from "../support/ledgerGrammar.ts";
 
 /**
@@ -263,6 +269,13 @@ describe("the deferral inbox", () => {
     // behind, and the parser's own non-vacuity is proven by the fixtures below, not by
     // the tree happening to carry a deferral today.
     expect(rows.length, "the inbox holds a negative number of rows").toBeGreaterThanOrEqual(0);
+  });
+
+  it("carries the schedule rule's heading once, so a close has a section to append under", () => {
+    // The parser holds every row below this line to `by:` or `when:` (REQ-FLOW-076). With the
+    // line gone, or respelled, no row is below it and the rule binds nothing, silently.
+    const headings = INBOX_TEXT.split("\n").filter((line) => line.trimEnd() === SCHEDULE_RULE_HEADING);
+    expect(headings, `${INBOX_PATH} carries \`${SCHEDULE_RULE_HEADING}\` ${headings.length} time(s)`).toHaveLength(1);
   });
 
   it("points every ledger `Ref:` at a row that exists", () => {
@@ -549,6 +562,37 @@ describe("fixtures — the gate fails where it must", () => {
     const bare = parseInbox("- Minor · — · d · source: rework main · Ref: .stamity/runs/x/record.md");
     expect(bare.problems.map(renderProblem)).toEqual([]);
     expect(bare.rows[0]?.ref).toBe(".stamity/runs/x/record.md");
+  });
+
+  it("(s) fails on a row below the schedule rule's heading that names no day and no trigger", () => {
+    // The gate reads the committed inbox through `parseInbox`, so what the parser refuses below
+    // the heading "parses every bullet" fails on. Two rows the rule binds, one of them scheduled,
+    // under one older row it does not bind.
+    const inbox = [
+      "# Deferral inbox",
+      "",
+      "- Minor · src/a.ts:1 · an older row, valid as it was written · source: /st-work",
+      "",
+      SCHEDULE_RULE_HEADING,
+      "",
+      "- Minor · src/a.ts:2 · comes back when its file is touched · source: /st-work · when: touched",
+      "- Minor · src/a.ts:3 · names no day and no trigger · source: /st-work",
+      "- Minor · — · a touch with no file to touch · source: /st-work · when: touched",
+      "- Minor · src/a.ts:5 · a trigger no event brings back · source: /st-work · when: later on",
+      "",
+    ].join("\n");
+    const { rows, problems } = parseInbox(inbox);
+    expect(rows.map((parsed) => parsed.line)).toEqual([3, 7]);
+    expect(problems.map(renderProblem)).toEqual([
+      `${INBOX_PATH}:8: a row under \`${SCHEDULE_RULE_HEADING}\` carries \`by: <YYYY-MM-DD>\` or \`when: <trigger>\`; this one carries neither`,
+      `${INBOX_PATH}:9: \`when: touched\` needs a path, in the location or in \`files:\``,
+      `${INBOX_PATH}:10: \`when:\` names the vague trigger \`later\`, which no event brings back`,
+    ]);
+    // The same rows with the heading gone: the row naming no day and no trigger is an older row
+    // again, and a trigger is still held to its rule wherever its row stands.
+    const above = parseInbox(inbox.replace(`${SCHEDULE_RULE_HEADING}\n`, ""));
+    expect(above.rows.map((parsed) => parsed.line)).toEqual([3, 6, 7]);
+    expect(above.problems.map((problem) => problem.line)).toEqual([8, 9]);
   });
 
   it("admits on the inbox exactly the severities the ledger admits", () => {

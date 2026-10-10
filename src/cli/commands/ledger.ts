@@ -29,8 +29,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
  * prints the run's resume card, the same lines the session-start hook prints
  * after a compaction or a resume, and writes nothing; `inbox` prints the
- * deferral inbox's rows a change's paths touch, each line screened first in
- * the form it prints in, and writes nothing.
+ * deferral inbox's rows a change's paths touch and, under `--due`, the rows
+ * whose day has come, each line screened first in the form it prints in, and
+ * writes nothing.
  * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -131,7 +132,7 @@ function missingFlag(subcommand: string, flag: string): CliFailure {
  * The flags a subcommand does not read, keyed by subcommand: each as its
  * commander option key, its spelling, and the subcommands that do read it.
  * `--run` is read by every subcommand but inbox; `--report` by append and close;
- * `--paths`, `--plan` and `--area` by inbox alone.
+ * `--paths`, `--plan`, `--area` and `--due` by inbox alone.
  */
 const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string, readonly string[]])[]>> = {
   [APPEND]: [
@@ -143,6 +144,7 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["paths", "--paths", [INBOX]],
     ["plan", "--plan", [INBOX]],
     ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
   ],
   [CLOSE]: [
     ["phase", "--phase", [APPEND]],
@@ -151,6 +153,7 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["paths", "--paths", [INBOX]],
     ["plan", "--plan", [INBOX]],
     ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
   ],
   [STATUS]: [
     ["phase", "--phase", [APPEND]],
@@ -165,6 +168,7 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["paths", "--paths", [INBOX]],
     ["plan", "--plan", [INBOX]],
     ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
   ],
   [INBOX]: [
     ["run", "--run", [APPEND, CLOSE, STATUS]],
@@ -760,7 +764,9 @@ function screenInboxFields(fields: readonly string[]): string {
  * A parsed row's screen over what prints of it: its fields in the order the
  * human line joins them, then each field as the string of its own the JSON
  * document carries, where a pattern anchored to a line's start can match a
- * field it misses in the middle of the bullet.
+ * field it misses in the middle of the bullet. The schedule fields the
+ * document carries (`by`, `when`, each `files` entry) are among them; the
+ * deferral date and the rationale print nowhere.
  */
 function screenInboxRow(row: InboxRow): string {
   return screenInboxFields([
@@ -771,7 +777,62 @@ function screenInboxRow(row: InboxRow): string {
     row.source,
     row.ref ?? "",
     row.tag ?? "",
+    row.by ?? "",
+    row.when ?? "",
+    ...screenedFiles(row.files),
   ]);
+}
+
+/** A row's `files:` entries as the strings the screen reads: the list as one line, then each entry alone. */
+function screenedFiles(files: readonly string[]): string[] {
+  return files.length === 0 ? [] : [files.join(", "), ...files];
+}
+
+/**
+ * The copy of a withheld row the match reads: its line, severity and
+ * location, which the caller has screened, and three more fields, each only
+ * when it passes the screen alone: its tag when that is an always-shown word,
+ * its `by:` day, and its `files:` entries (all of them or none). So the row
+ * still shows by that tag, still comes back when its day arrives, and still
+ * matches a path its files name. Its description, writer, `Ref:`, trigger,
+ * deferral date and rationale are left out: none reaches the match or the
+ * output.
+ */
+function withheldCopy(row: InboxRow, alwaysShown: readonly string[]): InboxRow {
+  const passes = (fields: readonly string[]): boolean => screenInboxFields(fields) === "";
+  return {
+    line: row.line,
+    severity: row.severity,
+    location: row.location,
+    description: "",
+    source: "",
+    ref: null,
+    tag: row.tag !== null && alwaysShown.includes(row.tag) && passes([row.tag]) ? row.tag : null,
+    by: row.by !== null && passes([row.by]) ? row.by : null,
+    when: null,
+    files: passes(screenedFiles(row.files)) ? row.files : [],
+    deferredOn: null,
+    rationale: null,
+    belowRule: row.belowRule,
+  };
+}
+
+/**
+ * The day `--due` names: its value, the clock's UTC day when it carries none,
+ * and null when the flag is absent. A value that is not a real day as
+ * `YYYY-MM-DD` is a usage error; the refusal does not repeat it.
+ */
+function inboxDue(ctx: CliContext, opts: Record<string, unknown>): string | null {
+  const value = opts["due"];
+  if (value === undefined || value === false) return null;
+  if (value === true) return ctx.app.runtime.clock.now().toISOString().slice(0, 10);
+  if (typeof value === "string" && ctx.engine.runs.disposition.isIsoDate(value)) return value;
+  throw new CliFailure({
+    code: "USAGE",
+    message: "ledger inbox --due takes a day as YYYY-MM-DD",
+    why: "the value given names no real calendar day in that form, and a row's `by:` day is compared against it",
+    next: "re-run with --due <YYYY-MM-DD>, or with --due alone for today's date",
+  });
 }
 
 /**
@@ -841,7 +902,8 @@ async function readInbox(rootDir: string, inboxPath: string): Promise<string | n
 /**
  * A row as the JSON document carries it: every text field sanitised.
  * `withheld` is null on a clean row and the pattern id on a withheld one,
- * whose description, writer and `Ref:` are null rather than empty.
+ * whose description, writer and `Ref:` are null rather than empty, whose
+ * `when` is null, and whose `by` and `files` are what passed the screen alone.
  */
 function inboxRowJson(row: InboxRow, matchedBy: MatchedBy, withheld: string | null): Record<string, unknown> {
   return {
@@ -852,6 +914,9 @@ function inboxRowJson(row: InboxRow, matchedBy: MatchedBy, withheld: string | nu
     source: withheld === null ? sanitizeLabel(row.source) : null,
     ref: withheld === null && row.ref !== null ? sanitizeLabel(row.ref) : null,
     tag: row.tag === null ? null : sanitizeLabel(row.tag),
+    by: row.by === null ? null : sanitizeLabel(row.by),
+    when: row.when === null ? null : sanitizeLabel(row.when),
+    files: row.files.map((file) => sanitizeLabel(file)),
     matchedBy,
     withheld,
   };
@@ -866,11 +931,16 @@ function inboxRowLine(row: InboxRow, matchedBy: MatchedBy, withheld: string | nu
 }
 
 /**
- * `ledger inbox`: the deferral inbox's rows a change touches — by `--paths`,
- * by `--plan`, by `--area` word for a row naming no path, every row tagged
- * `critical-deferred` or `decision-waiting`, and every row when no filter is
- * given. The inbox is user-tier state any writer can author and these lines
- * land in a run's context, so every bullet, parsed or not, is screened before
+ * `ledger inbox`: the deferral inbox's rows a change touches — by `--paths`
+ * (a row's location or its `files:`), by `--plan`, by `--area` word for a row
+ * whose location names no path — the rows whose `by:` day is on or before
+ * `--due`, every row tagged `critical-deferred` or `decision-waiting`, and
+ * every row when no filter is given. Under `--due` the count line also names
+ * the day and how many unmatched rows wait on a `when:` trigger, which no
+ * query can see arrive.
+ *
+ * The inbox is user-tier state any writer can author and these lines land in
+ * a run's context, so every bullet, parsed or not, is screened before
  * anything of it prints, as written and as it prints: the bullet first, then
  * a parsed row's printed fields and an unparsed line's message. A bullet past
  * {@link INBOX_BULLET_MAX_CHARS} is skipped unscreened. A hit prints
@@ -878,14 +948,16 @@ function inboxRowLine(row: InboxRow, matchedBy: MatchedBy, withheld: string | nu
  * message.
  *
  * One hit prints more. A row that parses, and whose severity and location each
- * pass the screen alone, is withheld rather than dropped: a copy holding only
- * its line, severity and location goes to the match, with its tag when that is
- * an always-shown word, so the row still matches by its location and still
- * shows by that tag. Matched, it prints `<line> <severity> · <location> ·
- * withheld by the screen (<pattern id>); read it by hand` in place of its skip
- * line; its description, writer and `Ref:` never reach the match or the
- * output. A deferral whose text the screen refuses still comes back to the
- * run that touches its file, for a person to read.
+ * pass the screen alone, is withheld rather than dropped: a copy
+ * ({@link withheldCopy}) holding its line, severity and location goes to the
+ * match, with its always-shown tag, its `by:` day and its `files:` where each
+ * passes the screen alone, so the row still matches by its location, its
+ * files and its day, and still shows by that tag. Matched, it prints `<line>
+ * <severity> · <location> · withheld by the screen (<pattern id>); read it by
+ * hand` in place of its skip line; its description, writer, `Ref:`, trigger
+ * and rationale never reach the match or the output. A deferral whose text
+ * the screen refuses still comes back to the run that touches its file, or on
+ * its day, for a person to read.
  *
  * Every printed field is sanitised. Each bullet counts once under matched,
  * unmatched, unparsed or skipped, but for a matched withheld row, which counts
@@ -896,6 +968,7 @@ function inboxRowLine(row: InboxRow, matchedBy: MatchedBy, withheld: string | nu
  * line.
  */
 async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+  const due = inboxDue(ctx, opts);
   const rootDir = ctx.app.runtime.cwd;
   await requireStateDir(rootDir, "to read the deferral inbox from");
   const { inboxStore } = ctx.engine.runs;
@@ -906,7 +979,17 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     ctx.io.out("inbox: absent\n");
     return {
       exitCode: 0,
-      json: { inbox: inboxStore.INBOX_PATH, total: 0, matched: [], counts, unmatched: 0, problems: [], skipped: [] },
+      json: {
+        inbox: inboxStore.INBOX_PATH,
+        total: 0,
+        matched: [],
+        counts,
+        unmatched: 0,
+        problems: [],
+        skipped: [],
+        due,
+        triggers: 0,
+      },
     };
   }
 
@@ -932,9 +1015,8 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     skipped.push({ line: row.line, pattern });
     if (pattern === INBOX_OVER_LENGTH) continue;
     if (screenInboxFields([row.severity, row.location, `${row.severity} · ${row.location}`]) !== "") continue;
-    const tag = row.tag !== null && alwaysShown.includes(row.tag) && screenInboxLine(row.tag) === "" ? row.tag : null;
     withheld.set(row.line, pattern);
-    rows.push({ line: row.line, severity: row.severity, location: row.location, description: "", source: "", ref: null, tag });
+    rows.push(withheldCopy(row, alwaysShown));
   }
   const problems: InboxProblem[] = [];
   for (const problem of parsed.problems) {
@@ -951,6 +1033,7 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     paths,
     ...(plan === undefined ? {} : { plan }),
     ...(area === undefined ? {} : { area }),
+    ...(due === null ? {} : { due }),
   });
   for (const { row } of result.matched) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
   const total = parsed.rows.length + parsed.problems.length;
@@ -958,8 +1041,9 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   const shown = new Set(result.matched.filter(({ row }) => withheld.has(row.line)).map(({ row }) => row.line));
   const unmatched = result.unmatched - (withheld.size - shown.size);
 
+  const dueNote = due === null ? "" : ` · ${due} due · ${result.triggers} triggers`;
   const lines = [
-    `inbox: ${total} rows · ${result.matched.length} matched · ${unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped`,
+    `inbox: ${total} rows · ${result.matched.length} matched · ${unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped${dueNote}`,
     ...result.matched.map(({ row, matchedBy }) => inboxRowLine(row, matchedBy, withheld.get(row.line) ?? null)),
     ...problems.map((problem) => sanitizeLabel(`unparsed: ${problem.line}: ${problem.message}`)),
     ...skipped.filter((skip) => !shown.has(skip.line)).map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
@@ -976,6 +1060,8 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
       unmatched,
       problems: problems.map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) })),
       skipped,
+      due,
+      triggers: result.triggers,
     },
   };
 }
@@ -1007,7 +1093,11 @@ export const ledgerCommand: CommandModule = {
       )
       .option("--paths <paths...>", "the paths a change touches; the inbox rows naming them are printed")
       .option("--plan <path>", "a plan path; the inbox rows whose Ref: or location names it are printed")
-      .option("--area <words...>", "whole words matched in an inbox row that names no path");
+      .option("--area <words...>", "whole words matched in an inbox row that names no path")
+      .option(
+        "--due [date]",
+        "a day as YYYY-MM-DD, today when no value is given; the inbox rows whose by: day is on or before it are printed",
+      );
   },
 
   async run(ctx, opts, args): Promise<CommandResult> {
