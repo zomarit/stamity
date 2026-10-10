@@ -45,6 +45,11 @@ other row is auto-proven: where no artifact covers it yet, the run's
 test-runner executes its check before this table is built, and the row points
 at that result as the Auto-prove pass reads one. A row whose check is missing,
 cannot run or fails stays on the human path under that pass's rule 2.
+The exception is the negative row a security-adjacent path derives: it is
+auto-proven only where a committed test's assertion covers it (that pass's
+rule 1: the test source `file:line` beside the runner's command and outcome);
+a check run once for the row is not proof for it, and with no such test it
+stays on the human path.
 
 A change whose class (`gate classify`'s, which the caller passes) is `docs`,
 `records` or `tests` emits the line "no walk-through required — <class> only",

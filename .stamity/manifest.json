@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T16:27:18.154Z",
+  "updatedAt": "2026-10-10T17:17:25.207Z",
   "tools": [
     "claude"
   ],
@@ -141,7 +141,7 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "063e527adb38f7e4fe104864a22b7c65c4e413c5ff523a0438fea40757aea623",
+      "contentHash": "b1a589a3dc1ab15083efe16cd22f509c56294ed4b7c053134bc6c914c7ef18e3",
       "path": ".claude/commands/st-board.md"
     },
     {
@@ -176,7 +176,7 @@
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "11be542b63d01dc939bb04f82fec63c4ac286a64fd8b68b678fb6ed5e22e4abe",
+      "contentHash": "0d2e4cdb3a9c7bc29f30214801d3df9ec484eed3fca6a122850993e2f24a6e01",
       "path": ".claude/commands/st-rework.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "a34e22adb9faed333b1b3164eeba0896c22a5c11f30afe03a507167be81d9683",
+      "contentHash": "64ad307d9567e719d2f23b735045cdfbb22031d9b7c098cd58221a21fa72b5b1",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -386,7 +386,7 @@
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "1b434ec6a6197ce7368852ce494bd8eded675080f7cc423d7764e0f307784609",
+      "contentHash": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203",
       "path": ".claude/skills/st-qa/SKILL.md"
     },
     {
