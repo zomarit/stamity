@@ -28,10 +28,11 @@
  * frontmatter, and a parity case holds the shipped table to this array: its
  * class column to this order, and each row's role column to `roles` in BOTH
  * directions, so a dropped role fails as loudly as one borrowed from another
- * rung. Two placements no frontmatter can declare ARE recorded here, each named
+ * rung. Three placements no frontmatter can declare ARE recorded here, each named
  * in the `rationale` of the row carrying it: the reviewer's escalation to the
- * top class for the whole-branch pass, and the fixer's drop to the cheapest
- * class once a round is mechanical.
+ * top class for the whole-branch pass, the one closure re-review after a fixer
+ * escalation, which the review loop runs a class above the reviewer's own, and
+ * the fixer's drop to the cheapest class once a round is mechanical.
  *
  * TWO FLOW PLACEMENTS ARE NOT RECORDED HERE, and a reader has to know which.
  * The first is the review loop's escalation: a fresh fixer spawn at one effort
@@ -114,7 +115,9 @@
  * {@link ClientModelProjection.effortScale} with its own citation, and
  * {@link nearestExpressibleEffort} is where a level asked for on one client's
  * vocabulary lands on another's. `stamity config` refuses a level the CURRENT
- * selection cannot express; the clamp exists for the client that joins after. The rest do not agree on WHERE it goes:
+ * selection cannot express; the clamp exists for the client that joins after,
+ * and for a level a row lists in {@link ClientModelProjection.effortLegacy},
+ * which that client's own parser still takes. The rest do not agree on WHERE it goes:
  * two publish a key of their own, and one carries it as a bracket parameter of
  * the model value itself (`<id>[effort=high]`, options comma-separated inside
  * a single group as `[effort=high,context=300k]` —
@@ -181,7 +184,7 @@ export const MODEL_LADDER: readonly ModelLadderRow[] = [
     roles: ["reviewer"],
     defaultEffort: "high",
     rationale:
-      "The whole-branch pass at deep intensity: the one review that reads a finished branch end to end, where a missed cross-unit defect costs a rework cycle instead of a round. No agent file declares this class — it is an escalation the flow applies to the reviewer, whose default sits one rung down.",
+      "The whole-branch pass at deep intensity: the one review that reads a finished branch end to end, where a missed cross-unit defect costs a rework cycle instead of a round. No agent file declares this class — it is an escalation the flow applies to the reviewer, whose default sits one rung down. It also takes the one closure re-review after a fixer escalation, which the review loop runs a class above the reviewer's own.",
   },
   {
     modelClass: "advanced",
@@ -299,6 +302,20 @@ export interface ClientModelProjection {
    */
   readonly effortScale: readonly EffortLevel[];
   /**
+   * Levels this client's documented scale dropped that its own parser still
+   * accepts, as a subset of `EFFORT_LEVELS` off {@link effortScale}; empty on
+   * every row but one.
+   *
+   * A legacy level is a word an operator may keep asking for, not a level this
+   * engine writes: `stamity config set` accepts it on a selection whose client
+   * lists it here, and the emission writes the nearest documented level
+   * through {@link nearestExpressibleEffort}, disclosed as any other narrowing
+   * is. Refusing it would break a repository that set it while the vendor still
+   * documented it; emitting it would write a level the current reference does
+   * not list.
+   */
+  readonly effortLegacy: readonly EffortLevel[];
+  /**
    * What the scale does NOT guarantee, where that needs saying; `null` where
    * the scale is the whole claim.
    *
@@ -351,6 +368,7 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // is `low`, so the one level another client documents underneath it rises
     // to `low` here rather than being dropped.
     effortScale: ["low", "medium", "high", "xhigh", "max"],
+    effortLegacy: [],
     effortScaleNote: null,
     effortScaleCitation: {
       url: "https://code.claude.com/docs/en/sub-agents",
@@ -377,6 +395,7 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // HERE and none is clamped here either — and the note is what keeps that
     // from reading as a guarantee the level lands.
     effortScale: [...EFFORT_LEVELS],
+    effortLegacy: [],
     effortScaleNote: "pass-through — parameter ids and values vary by model",
     effortScaleCitation: {
       url: "https://cursor.com/docs/sdk/typescript",
@@ -402,6 +421,7 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // the row's own page, so the scale citation is `null` rather than a second
     // copy of it dated to a read that did not happen.
     effortScale: [],
+    effortLegacy: [],
     effortScaleNote: null,
     effortScaleCitation: null,
     citation: {
@@ -417,16 +437,18 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortTemplate: null,
     acceptsConcreteIds: true,
     aliases: {},
-    // One rung lower and one rung shorter than the other key carrier: this is
-    // the only client documenting `minimal`, and the only one that cannot be
-    // asked for `max`. Published on the config-file page rather than on the
-    // subagents page this row's other claims come from, which is why the scale
-    // carries its own citation.
-    effortScale: ["minimal", "low", "medium", "high", "xhigh"],
+    // The config reference lists `low` through `ultra`, one rung above the
+    // other key carrier's ceiling, and which of them a run gets depends on the
+    // model. `minimal`, which the page used to list, is legacy: the parser still
+    // takes it, so it sits in `effortLegacy` and is written as `low`. Published
+    // on the config-file page rather than on the subagents page this row's other
+    // claims come from, which is why the scale carries its own citation.
+    effortScale: ["low", "medium", "high", "xhigh", "max", "ultra"],
+    effortLegacy: ["minimal"],
     effortScaleNote: null,
     effortScaleCitation: {
       url: "https://learn.chatgpt.com/docs/config-file/config-reference",
-      accessDate: "2026-09-17",
+      accessDate: "2026-10-10",
     },
     citation: {
       url: "https://learn.chatgpt.com/docs/agent-configuration/subagents",
@@ -517,7 +539,8 @@ function requestedEffort(modelClass: ModelClass, efforts: EffortMap): EffortLeve
  * Never silent about it: every clamp this makes is reported by
  * {@link effortDisclosures}, and `stamity config` refuses the level outright
  * when the narrow client is already selected, so a clamp is only ever reached
- * by a client that joined AFTER the level was set.
+ * by a client that joined AFTER the level was set, or by a level that client
+ * lists in {@link ClientModelProjection.effortLegacy}.
  */
 export function nearestExpressibleEffort(level: EffortLevel, tool: Tool): EffortLevel | undefined {
   const { effortScale } = CLIENT_MODEL_PROJECTION[tool];

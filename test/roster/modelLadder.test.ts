@@ -723,9 +723,21 @@ describe("the ladder's own exposure disclosures", () => {
     expect(prose).toMatch(/capacity rung/i);
     expect(prose).toMatch(/`limit-no-reset`/);
     expect(prose).toMatch(/that drop is prompt-carried too/i);
-    // The two placements that ARE recorded stay recorded, so the correction narrows the
+    // The placements that ARE recorded stay recorded, so the correction narrows the
     // claim rather than dropping it.
-    expect(prose).toMatch(/two placements no frontmatter can declare ARE recorded here/i);
+    // TEST CHANGE, justified (2026-10-10, q4b-codex-scale, build/87): the review loop's one
+    // closure re-review after a fixer escalation runs a class above the reviewer's own, a third
+    // placement no frontmatter declares; the header now counts three and the frontier row names
+    // it. "TWO FLOW PLACEMENTS ARE NOT RECORDED HERE" above is unchanged.
+    expect(prose).toMatch(/three placements no frontmatter can declare ARE recorded here/i);
+    expect(prose).not.toMatch(/two placements no frontmatter can declare ARE recorded here/i);
+    expect(prose).toContain(
+      "the one closure re-review after a fixer escalation, which the review loop runs a class above the reviewer's own",
+    );
+    const frontier = MODEL_LADDER.find((entry) => entry.modelClass === "frontier");
+    expect(frontier?.rationale).toContain(
+      "It also takes the one closure re-review after a fixer escalation, which the review loop runs a class above the reviewer's own.",
+    );
   });
 });
 
@@ -746,7 +758,10 @@ function manifestWith(tools: readonly Tool[], effort: EffortMap = {}): SetupMani
 describe("the per-client effort scales", () => {
   it("declares each client's documented scale, as the vendor pages state it", () => {
     expect(projection("claude").effortScale).toEqual(["low", "medium", "high", "xhigh", "max"]);
-    expect(projection("codex").effortScale).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's config reference, re-read
+    // 2026-10-10, lists `low` through `ultra` and no longer lists `minimal`; the pin follows the
+    // vendor page, and `minimal` moves to the row's legacy list below.
+    expect(projection("codex").effortScale).toEqual(["low", "medium", "high", "xhigh", "max", "ultra"]);
     // The pass-through client accepts whatever the model does, so its row is
     // the whole union plus the note that says why it is not a guarantee.
     expect(projection("cursor").effortScale).toEqual([...EFFORT_LEVELS]);
@@ -757,6 +772,24 @@ describe("the per-client effort scales", () => {
     // narrow one, and the same row that records the documented omission.
     expect(projection("copilot").effortScale).toEqual([]);
     expect(projection("copilot").effortCarrier).toBeNull();
+  });
+
+  it("names the levels a client's scale dropped and its parser still takes, on Codex alone", () => {
+    expect(projection("codex").effortLegacy).toEqual(["minimal"]);
+    for (const tool of TOOLS) {
+      if (tool === "codex") continue;
+      expect(projection(tool).effortLegacy, tool).toEqual([]);
+    }
+    // A legacy level is a union level off the documented scale, and it lands on a level the
+    // scale holds — the emission never writes the legacy word itself.
+    for (const tool of TOOLS) {
+      const { effortLegacy, effortScale } = projection(tool);
+      for (const level of effortLegacy) {
+        expect(EFFORT_LEVELS as readonly string[], `${tool}/${level}`).toContain(level);
+        expect(effortScale, `${tool}/${level}`).not.toContain(level);
+        expect(effortScale, `${tool}/${level}`).toContain(nearestExpressibleEffort(level, tool));
+      }
+    }
   });
 
   it("orders every scale by the union's own ranking, with no off-ladder level", () => {
@@ -770,10 +803,19 @@ describe("the per-client effort scales", () => {
     }
   });
 
-  it("cites a vendor page with a 2026-09-17 access date for every non-empty scale", () => {
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): the case held every scale to one
+  // access date, 2026-09-17. The Codex scale was re-read on 2026-10-10 and the others were not, so
+  // each row is held to its own read; the rule that every non-empty scale is cited and dated is
+  // unchanged.
+  it("cites a vendor page with its own access date for every non-empty scale", () => {
     // The spec's invariant: every per-client scale carries a vendor citation
     // with an access date. The empty row has no scale to cite and says so with
     // `null` rather than with a page it did not read.
+    const readOn: Partial<Record<Tool, string>> = {
+      claude: "2026-09-17",
+      codex: "2026-10-10",
+      cursor: "2026-09-17",
+    };
     for (const tool of TOOLS) {
       const declared = projection(tool);
       const cited = declared.effortScaleCitation;
@@ -783,7 +825,7 @@ describe("the per-client effort scales", () => {
       }
       expect(cited, tool).not.toBeNull();
       expect(cited?.url, tool).toMatch(/^https:\/\/\S+$/);
-      expect(cited?.accessDate, tool).toBe("2026-09-17");
+      expect(cited?.accessDate, tool).toBe(readOn[tool]);
     }
     expect(projection("claude").effortScaleCitation?.url).toBe(
       "https://code.claude.com/docs/en/sub-agents",
@@ -807,11 +849,14 @@ describe("the per-client effort scales", () => {
     }
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's scale now runs to `ultra`, so
+  // `max` and `ultra` are levels it holds rather than requests it clamps; the downward case left
+  // is `ultra` on the client whose scale ends at `max`, and Codex's two now answer unchanged.
   it("falls to the highest entry below a level the scale tops out under", () => {
-    expect(nearestExpressibleEffort("max", "codex")).toBe("xhigh");
-    // `ultra`, the union's top, clamps to each narrower client's ceiling.
+    // `ultra`, the union's top, clamps to a narrower client's ceiling.
     expect(nearestExpressibleEffort("ultra", "claude")).toBe("max");
-    expect(nearestExpressibleEffort("ultra", "codex")).toBe("xhigh");
+    expect(nearestExpressibleEffort("max", "codex")).toBe("max");
+    expect(nearestExpressibleEffort("ultra", "codex")).toBe("ultra");
   });
 
   it("rises to the lowest entry above a level the scale starts over", () => {
@@ -819,6 +864,9 @@ describe("the per-client effort scales", () => {
     // floor is `low`. Rising is the honest answer — a client that cannot be
     // asked for less than `low` is asked for `low`, never dropped.
     expect(nearestExpressibleEffort("minimal", "claude")).toBe("low");
+    // Codex's own legacy level rises the same way: its parser takes the word,
+    // and the emission writes the documented floor.
+    expect(nearestExpressibleEffort("minimal", "codex")).toBe("low");
   });
 
   it("answers nothing at all on an empty scale", () => {
@@ -827,14 +875,18 @@ describe("the per-client effort scales", () => {
     }
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's re-read scale holds `max` and
+  // `ultra` and drops `minimal` to legacy, so its `max` is written as `max` and its `minimal` as
+  // `low`; the clamp the case exists for now shows on `ultra`, which one of the two clients holds.
   it("emits the nearest expressible level from the standalone effort key", () => {
-    // Two clients, one request. The operator asked for `max`; one client has
+    // Two clients, one request. The operator asked for `ultra`; one client has
     // it and the other tops out a rung below, and neither is silently dropped.
-    const asked: EffortMap = { frontier: "max" };
+    const asked: EffortMap = { frontier: "ultra" };
     expect(resolveEffortValue("frontier", "claude", asked)).toBe("max");
-    expect(resolveEffortValue("frontier", "codex", asked)).toBe("xhigh");
+    expect(resolveEffortValue("frontier", "codex", asked)).toBe("ultra");
+    expect(resolveEffortValue("frontier", "codex", { frontier: "max" })).toBe("max");
     expect(resolveEffortValue("economy", "claude", { economy: "minimal" })).toBe("low");
-    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("minimal");
+    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("low");
   });
 
   it("leaves every class default expressible on every carrier, so nothing clamps unasked", () => {
@@ -863,10 +915,23 @@ describe("the per-client effort scales", () => {
     );
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's scale now holds `max`, so a
+  // `max` request moves nothing there; the case asks for `ultra`, which Codex holds and Claude
+  // does not, and still asserts one line for exactly the client that moved the level.
   it("discloses exactly the clients whose scale moved the operator's level", () => {
-    const lines = effortDisclosures(manifestWith(["claude", "codex"], { frontier: "max" }));
+    const lines = effortDisclosures(manifestWith(["claude", "codex"], { frontier: "ultra" }));
     expect(lines).toEqual([
-      "effort [codex]: frontier asks for max; this client's scale ends at xhigh, emitted xhigh",
+      "effort [claude]: frontier asks for ultra; this client's scale ends at max, emitted max",
+    ]);
+  });
+
+  it("discloses a legacy level the client accepts as the documented level it is written as", () => {
+    // `stamity config` accepts `minimal` on a Codex-only selection, because Codex's own parser
+    // still takes it; the emission writes `low`, and says so rather than letting the stored
+    // word and the emitted one disagree in silence.
+    const lines = effortDisclosures(manifestWith(["codex"], { economy: "minimal" }));
+    expect(lines).toEqual([
+      "effort [codex]: economy asks for minimal; this client's scale starts at low, emitted low",
     ]);
   });
 

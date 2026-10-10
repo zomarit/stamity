@@ -958,35 +958,62 @@ describe("config — the model ladder's nine keys", () => {
     expect(rowFor((await run(handle, ["list"])).stdout, "effort.frontier")).toContain("xhigh");
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's re-read scale runs to `ultra`,
+  // so `max` on a Codex selection is no longer a refusal. The case keeps its contract (a level a
+  // selected client cannot express is refused, naming that client and its ceiling) on the level
+  // that is still out of reach: `ultra` on a selection whose other client ends at `max`.
   it("refuses a level a selected client cannot express, naming the client and its ceiling", async () => {
     // Exit 1 with `VALIDATION_ERROR` in `error.code` — this CLI retired the
     // sysexits translation (`src/types/errors.ts`), so every refusal exits 1
     // and the kind travels in the code, exactly as the gate rows refuse.
     const handle = tempDir();
-    await seedManifest(handle, { tools: ["codex"] });
+    await seedManifest(handle, { tools: ["claude", "codex"] });
     const before = await manifestBytes(handle);
 
-    const result = await run(handle, ["set", "effort.frontier", "max"]);
+    const result = await run(handle, ["set", "effort.frontier", "ultra"]);
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain(
-      "effort.frontier max is not expressible on codex (its scale ends at xhigh)",
+      "effort.frontier ultra is not expressible on claude (its scale ends at max)",
     );
-    expect(result.stderr).toContain("set xhigh or lower, or deselect the client");
+    expect(result.stderr).toContain("set max or lower, or deselect the client");
+    expect(result.stderr).not.toContain("codex");
     expect(await manifestBytes(handle)).toBe(before);
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): the control follows the refusal above
+  // onto `ultra`; with the client that ends at `max` deselected, Codex alone takes both `ultra`
+  // and `max`, which it refused before its scale was re-read.
   it("accepts the same level once the client that could not express it is gone", async () => {
-    // The control for the refusal above: `max` is not an illegal level, it is a
+    // The control for the refusal above: `ultra` is not an illegal level, it is a
     // level one client cannot express. The refusal has to be about the
     // selection, not about the word.
     const handle = tempDir();
-    await seedManifest(handle, { tools: ["claude"] });
+    await seedManifest(handle, { tools: ["codex"] });
 
-    const result = await run(handle, ["set", "effort.frontier", "max"]);
+    const result = await run(handle, ["set", "effort.frontier", "ultra"]);
 
     expect(result.code).toBe(0);
-    expect((await readManifest(handle.dir))?.models?.effort?.frontier).toBe("max");
+    expect((await readManifest(handle.dir))?.models?.effort?.frontier).toBe("ultra");
+
+    const max = await run(handle, ["set", "effort.advanced", "max"]);
+
+    expect(max.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.advanced).toBe("max");
+  });
+
+  it("accepts Codex's legacy `minimal` on a Codex-only selection, where its parser still takes it", async () => {
+    // `minimal` left Codex's documented scale but not its parser, so a Codex-only
+    // repository may keep asking for it; the emission writes `low`. The refusal below,
+    // on a selection that also holds a client with no such level, is unchanged.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["codex"] });
+
+    const result = await run(handle, ["set", "effort.economy", "minimal"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.economy).toBe("minimal");
+    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("low");
   });
 
   it("refuses a level below a selected client's floor, naming its lowest", async () => {
@@ -1008,6 +1035,9 @@ describe("config — the model ladder's nine keys", () => {
     expect(await manifestBytes(handle)).toBe(before);
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's re-read scale holds `max`, so
+  // a stored `max` clamps on neither client; the case stores `ultra`, which Codex holds and Claude
+  // narrows to `max`, and still asserts the marker on exactly the narrowed client.
   it("marks the clamped client in the list when a narrower client joined later", async () => {
     // Written straight into the manifest, because `config set` would have
     // refused it — this is the state a repository reaches by widening `tools`
@@ -1015,13 +1045,14 @@ describe("config — the model ladder's nine keys", () => {
     const handle = tempDir();
     await seedManifest(handle, {
       tools: ["claude", "codex"],
-      models: { effort: { frontier: "max" } },
+      models: { effort: { frontier: "ultra" } },
     });
 
     const row = rowFor((await run(handle, ["list"])).stdout, "effort.frontier");
 
-    expect(row).toContain("claude=max");
-    expect(row).toContain("codex=xhigh (clamped from max)");
+    expect(row).toContain("claude=max (clamped from ultra)");
+    expect(row).toContain("codex=ultra");
+    expect(row).not.toContain("codex=ultra (clamped");
   });
 
   it("refuses a cap below the floor, above the ceiling, or fractional", async () => {

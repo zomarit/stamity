@@ -363,6 +363,10 @@ const withEffort = (
 });
 
 describe("the effort disclosures the plan carries", () => {
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's config reference, re-read
+  // 2026-10-10, lists `max` and `ultra`, so a `max` request narrows on neither client and the
+  // case's level moved to `ultra`, which Codex holds and Claude narrows to `max`. The contract —
+  // one line, for exactly the client whose scale moved the level — is unchanged.
   it("names the one selected client whose scale narrowed the operator's level", async () => {
     // The later-selection case REQ-LADDER-001 describes: the level was legal
     // when it was set, and a narrower client joined afterwards. The level is
@@ -370,16 +374,16 @@ describe("the effort disclosures the plan carries", () => {
     // operator has to be told, once, which client moved it and to what.
     const corpus = await seedCorpus();
     const tools: Tool[] = ["claude", "codex"];
-    const ctx = withEffort(ctxOf(tools, corpus), { frontier: "max" });
+    const ctx = withEffort(ctxOf(tools, corpus), { frontier: "ultra" });
 
     const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(ctx);
 
     const disclosures = result.warnings.filter((warning) => warning.startsWith("effort ["));
     expect(disclosures).toEqual([
-      "effort [codex]: frontier asks for max; this client's scale ends at xhigh, emitted xhigh",
+      "effort [claude]: frontier asks for ultra; this client's scale ends at max, emitted max",
     ]);
     // Exactly one line, and not for the client that can express the level.
-    expect(disclosures.some((line) => line.includes("[claude]"))).toBe(false);
+    expect(disclosures.some((line) => line.includes("[codex]"))).toBe(false);
   });
 
   it("says nothing at all for a repository with no operator effort map", async () => {

@@ -431,14 +431,19 @@ function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string 
  * vocabulary claim the engine has no basis for. The one client that carries
  * the axis nowhere is skipped — setting a level there is legal and inert, as
  * it has always been, and turning that into a refusal would break every
- * copilot-only repository that ever set the key.
+ * copilot-only repository that ever set the key. So is a client whose row lists
+ * the level as legacy: its own parser still takes the word, the emission writes
+ * the nearest documented level and discloses it, and refusing it would break a
+ * repository that set it while the vendor still documented it.
  */
 function unexpressibleOn(
   tools: readonly Tool[],
   level: EffortLevel,
 ): { tool: Tool; edge: "ends at" | "starts at"; bound: EffortLevel } | null {
   for (const tool of tools) {
-    if (CLIENT_MODEL_PROJECTION[tool].effortCarrier === null) continue;
+    const projection = CLIENT_MODEL_PROJECTION[tool];
+    if (projection.effortCarrier === null) continue;
+    if (projection.effortLegacy.includes(level)) continue;
     const nearest = nearestExpressibleEffort(level, tool);
     if (nearest === undefined || nearest === level) continue;
     return {
@@ -452,7 +457,7 @@ function unexpressibleOn(
 
 function applyEffort(draft: SetupManifest, modelClass: ModelClass, raw: string): void {
   // Membership is the schema's call: an out-of-band level comes back from
-  // validation naming the six the clients document between them.
+  // validation naming the seven the clients document between them.
   if ((EFFORT_LEVELS as readonly string[]).includes(raw)) {
     // Expressibility is NOT the schema's call, because it depends on which
     // clients this repository selects. A level the selection cannot express

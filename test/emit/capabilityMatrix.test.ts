@@ -277,6 +277,13 @@ describe("allowlist-coverage section", () => {
 describe("the declared effort scales", () => {
   const page = renderCapabilityMatrix();
 
+  /** The date each client's scale was last read, as its projection row cites it. */
+  const SCALE_READ_ON: Partial<Record<Tool, string>> = {
+    claude: "2026-09-17",
+    codex: "2026-10-10",
+    cursor: "2026-09-17",
+  };
+
   it("renders one `effort-scale` row per client that carries the axis", () => {
     // Three carriers declare a scale; the one documented omitter declares
     // `effort-axis` instead, which is a different claim and stays where it is.
@@ -292,7 +299,10 @@ describe("the declared effort scales", () => {
       expect(group, `${tool} renders no effort-scale row`).toContain(value);
       // Every scale claim is a vendor claim, so it carries its own dated
       // source inline the way the hook rows on this page already do.
-      expect(value, `${tool} scale row is undated`).toMatch(/accessed 2026-09-17/);
+      // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): the case held every scale row to
+      // one date, 2026-09-17. The Codex row was re-read on 2026-10-10 and the others were not,
+      // so each row is held to its own read; the rule that each row is dated did not change.
+      expect(value, `${tool} scale row is undated`).toContain(`accessed ${SCALE_READ_ON[tool]}`);
     }
   });
 
