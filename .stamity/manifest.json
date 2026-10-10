@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T14:18:47.862Z",
+  "updatedAt": "2026-10-10T14:48:24.189Z",
   "tools": [
     "claude"
   ],
@@ -309,7 +309,7 @@
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "1144fb51d04c17b247d8d0f9f488ca99ca773ba806679e2396c29b2b30dd1e0d",
+      "contentHash": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0",
       "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {
