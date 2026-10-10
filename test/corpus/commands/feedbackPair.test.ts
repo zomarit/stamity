@@ -231,17 +231,21 @@ function rowTemplates(text: string, opening: string): string[] {
   return [...text.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "").filter((span) => span.startsWith(opening));
 }
 
-/** A whole field a template spells as a bare word or a lone placeholder, with the value a run would write. */
+/**
+ * A whole field a template spells as a bare word or a lone placeholder, with the value a run would
+ * write. The `by:` field is filled whole, ahead of the slots, because the deferred Critical holds
+ * two days in one format (the day it comes back and the day it was deferred): filled from one slot
+ * they would be equal, and no assertion could tell `by` from `deferredOn`.
+ */
 const FILLED_FIELDS: Readonly<Record<string, string>> = {
   severity: "Warning",
   "file:line": "lib/widget.ts:14",
   "<file:line>": "lib/widget.ts:14",
-  "<manifest path:line>": "pkg/manifest.json:12",
-  "<Warning with an advisory, else Minor>": "Warning",
   description: "the retry loop never backs off",
   "one-line description": "the retry loop never backs off",
   "<the consequence in one line>": "a stale session keeps read access",
   "<one line>": "the run asked twice for one answer",
+  "by: <YYYY-MM-DD>": "by: 2026-11-02",
 };
 
 /** A placeholder inside a field, with the value a run would write; the rationale holds a separator on purpose. */
@@ -249,10 +253,8 @@ const FILLED_SLOTS: readonly (readonly [string, string])[] = [
   ["<branch>", "fix/session-expiry"],
   ["#<n>", "#42"],
   ["<YYYY-MM-DD>", "2026-10-10"],
-  ["<date>", "2026-11-02"],
   ["<path>", "lib/widget.ts"],
   ["<the user's sentence>", "the flag is off · so shipping is safe"],
-  ["<package> <current> → <target>, <risk class>[, <advisory id>]", "left-pad 1.2.0 → 2.0.0, major, ADV-0001"],
 ];
 
 /** A row template with every placeholder filled, field by field; `location` overrides the second field. */
@@ -521,8 +523,17 @@ describe("rework — leftover scan and routing", () => {
       "the schedule field, the tag and the two extra fields follow the grammar's four:",
     );
     expect(protocol).not.toContain("— the tag and the two extra fields follow");
-    // A day the user names replaces the trigger; the row never carries both.
-    expect(protocol).toContain(`\`${row ?? ""}\` (or \`by: <date>\` when the user names one)`);
+    // A day the user names replaces the trigger; the row never carries both. The day is written
+    // in its format (ledger rows `review/58` and `build/34` of run 2026-10-10_next-tier): the
+    // reader takes a real `YYYY-MM-DD` and nothing else, and `by: <date>` named no format.
+    expect(protocol).toContain(`\`${row ?? ""}\` (or \`by: <YYYY-MM-DD>\` when the user names one)`);
+    expect(protocol).not.toContain("by: <date>");
+    // A deferred Critical may name no location, and `when: touched` with no path is refused by
+    // the reader, so the fixed shape says what such a row carries (ledger row `review/57`).
+    expect(protocol).toContain(
+      "A row whose location is `—` adds `files: <path>` straight after `when: touched`, or carries " +
+        "the day the user names: the reader refuses a touch trigger that names no path.",
+    );
   });
 
   it("ends both DEFER row templates on the schedule field, with `files:` for a row that names no location (REQ-FLOW-077)", () => {
@@ -544,11 +555,18 @@ describe("rework — leftover scan and routing", () => {
     );
   });
 
-  it("gives the meta row the full row grammar, with a day and the `meta` tag (REQ-FLOW-077)", () => {
+  it("gives the meta row the full row grammar, with a trigger or a day and the `meta` tag (REQ-FLOW-077)", () => {
     const meta = clause(artifact(REWORK).parsed.body, "## Meta-feedback");
 
+    // TEST CHANGE, justified (2026-10-10, q11b-feedback-writers review round 1; ledger rows
+    // `review/59` and `build/35` of run 2026-10-10_next-tier, signed off as amended): the pinned
+    // cell ended `by: <YYYY-MM-DD> · meta`, and no text said whose day that was, so a run had to
+    // invent one. What changed about the contract: the row's default is a trigger, the board's
+    // own triage (`fill` reads the whole inbox, and no close takes a `meta` row), and a day is
+    // written only when the user names it. Nothing is relaxed: the cell is still pinned whole.
     expect(meta).toContain(
-      `| any | not ready to file | \`${INBOX}\` row \`Minor · — · <one line> · source: rework <branch> · by: <YYYY-MM-DD> · meta\` |`,
+      `| any | not ready to file | \`${INBOX}\` row \`Minor · — · <one line> · source: rework <branch> · when: next board fill · meta\` ` +
+        "(or `by: <YYYY-MM-DD>` in the trigger's place when the user names a day) |",
     );
     // A bare "row tagged `meta`" named no severity, location, writer or day, so no reader parsed it.
     expect(meta).not.toContain("row tagged `meta`");
@@ -562,10 +580,11 @@ describe("rework — leftover scan and routing", () => {
  * not parse. No double stands in for anything: the parser is pure, text in and verdict out.
  */
 describe("feedback pair — every row template parses under `/st-board`'s grammar (REQ-FLOW-077)", () => {
-  // The plan's D14 row, written here from the plan: its words land in the dep-audit skill with
-  // unit q11c-dep-audit-writer, a file this suite does not read.
-  const DEP_AUDIT_ROW =
-    "<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <advisory id>] · source: dep-audit";
+  // The dep-audit skill's row is not copied here (ledger row `build/37` of run
+  // 2026-10-10_next-tier): the skill ships it, and the skill's own suite
+  // (`test/corpus/skills/verifyRestTools.test.ts`) reads it off that text and parses it on a day,
+  // on a touch, and without its schedule field. A copy written from the plan guarded a literal no
+  // file ships.
   const stated = (relPath: string, heading: string, opening: string, index = 0): string =>
     rowTemplates(clause(artifact(relPath).parsed.body, heading), opening)[index] ?? "";
   /** Each template as the shipped text states it, read when its case runs; a missing one is "", which fills to no row. */
@@ -575,8 +594,6 @@ describe("feedback pair — every row template parses under `/st-board`'s gramma
     "rework critical-deferred": () => stated(REWORK, "### Critical Deferral Protocol", "Critical · "),
     "rework meta": () => stated(REWORK, "## Meta-feedback", "Minor · — · "),
     "pr-resolve DEFER and blocked FIX": () => stated(PR_RESOLVE, "## Close", "severity · file:line · "),
-    "dep-audit, on a day": () => `${DEP_AUDIT_ROW} · by: <date>`,
-    "dep-audit, on a touch": () => `${DEP_AUDIT_ROW} · when: touched`,
   };
   const template = (name: string): string => TEMPLATES[name]?.() ?? "";
 
@@ -588,13 +605,9 @@ describe("feedback pair — every row template parses under `/st-board`'s gramma
       "rework critical-deferred",
       { ...deferred, severity: "Critical", tag: "critical-deferred", deferredOn: "2026-10-10", rationale: "the flag is off · so shipping is safe" },
     ],
-    ["rework meta", { ...deferred, severity: "Minor", location: "—", by: "2026-10-10", when: null, tag: "meta", files: [] }],
+    // No path and no day: the trigger is the board's own triage, which needs neither.
+    ["rework meta", { ...deferred, severity: "Minor", location: "—", when: "next board fill", tag: "meta", files: [] }],
     ["pr-resolve DEFER and blocked FIX", { ...deferred, source: "pr-resolve #42" }],
-    [
-      "dep-audit, on a day",
-      { ...deferred, location: "pkg/manifest.json:12", description: "left-pad 1.2.0 → 2.0.0, major, ADV-0001", source: "dep-audit", by: "2026-11-02", when: null },
-    ],
-    ["dep-audit, on a touch", { ...deferred, source: "dep-audit" }],
   ];
 
   it.each(CASES)("%s: the filled row parses below the schedule-rule heading", (name, expected) => {
@@ -619,38 +632,77 @@ describe("feedback pair — every row template parses under `/st-board`'s gramma
     expect(problems).toEqual([expect.stringContaining("this one carries neither")]);
   });
 
-  it("names `files:` on a DEFER row with no location, without which `when: touched` is refused", () => {
-    const filesField = stated(REWORK, "## 4. Routing", "files: ");
-    expect(filesField).toBe("files: <path>");
+  it("names `files:` on a row with no location, without which `when: touched` is refused", () => {
+    const NO_PATH = "`when: touched` needs a path, in the location or in `files:`";
+    // Each row with the section whose own text names its `files:` field. The deferred Critical
+    // joined on 2026-10-10 (ledger row `review/57` of run 2026-10-10_next-tier): its fixed shape
+    // named no `files:`, so a Critical deferred at `—` was written in a shape the reader refuses.
+    const ROWS: readonly (readonly [string, string])[] = [
+      ["rework DEFER, as appended", "## 4. Routing"],
+      ["pr-resolve DEFER and blocked FIX", "## 4. Routing"],
+      ["rework critical-deferred", "### Critical Deferral Protocol"],
+    ];
+    for (const [name, heading] of ROWS) {
+      const filesField = stated(REWORK, heading, "files: ");
+      expect(filesField, name).toBe("files: <path>");
 
-    for (const name of ["rework DEFER, as appended", "pr-resolve DEFER and blocked FIX"]) {
       const nowhere = fillRow(template(name), "—");
-      expect(parseBelowRule(nowhere).problems).toEqual(["`when: touched` needs a path, in the location or in `files:`"]);
+      expect(parseBelowRule(nowhere).problems, name).toEqual([NO_PATH]);
 
-      const named = parseBelowRule(`${nowhere} · ${fillRow(filesField)}`);
-      expect(named.problems).toEqual([]);
-      expect(named.rows[0]).toMatchObject({ location: "—", when: "touched", files: ["lib/widget.ts"] });
+      // Straight after the trigger, which on a DEFER row is the end of the row.
+      const named = parseBelowRule(nowhere.replace("when: touched", `when: touched · ${fillRow(filesField)}`));
+      expect(named.problems, name).toEqual([]);
+      expect(named.rows[0], name).toMatchObject({ location: "—", when: "touched", files: ["lib/widget.ts"] });
     }
+
+    // Why the protocol says "straight after": the rationale is the row's last field and takes the
+    // rest of the line, so `files:` written after it is rationale text and the row is still refused.
+    const critical = fillRow(template("rework critical-deferred"), "—");
+    expect(parseBelowRule(`${critical} · files: lib/widget.ts`).problems).toEqual([NO_PATH]);
+    const placed = parseBelowRule(critical.replace("when: touched", "when: touched · files: lib/widget.ts")).rows[0];
+    expect(placed).toMatchObject({ severity: "Critical", tag: "critical-deferred", deferredOn: "2026-10-10" });
+    expect(placed?.rationale).toBe("the flag is off · so shipping is safe");
   });
 
-  it("takes a named day in place of the trigger, on the DEFER row and on the deferred Critical", () => {
+  it("takes a day the user names in place of the trigger, written as YYYY-MM-DD, on every row that offers one", () => {
     const close = clause(artifact(PR_RESOLVE).parsed.body, "## Close");
     const protocol = clause(artifact(REWORK).parsed.body, "### Critical Deferral Protocol");
-    // Each alternative is the text's own span, read where it stands beside its template.
-    const reviewerDay = /\(or `· (by: <date>)` when the reviewer names one\)/.exec(close)?.[1] ?? "";
-    const userDay = /\(or `(by: <date>)` when the user names one\)/.exec(protocol)?.[1] ?? "";
-    expect([reviewerDay, userDay]).toEqual(["by: <date>", "by: <date>"]);
+    const meta = clause(artifact(REWORK).parsed.body, "## Meta-feedback");
+    // Each alternative is the text's own span, read where it stands beside its template. In all
+    // three the user names the day (ledger row `review/61`: the Close said "the reviewer", whose
+    // comment this command reads as data, while the user decides each row at the triage ask),
+    // and the span writes the day's format (`review/58`, `build/34`).
+    const closeDay = /\(or `· (by: [^`]+)` when the user names one\)/.exec(close)?.[1] ?? "";
+    const criticalDay = /\(or `(by: [^`]+)` when the user names one\)/.exec(protocol)?.[1] ?? "";
+    const metaDay = /\(or `(by: [^`]+)` in the trigger's place when the user names a day\)/.exec(meta)?.[1] ?? "";
+    expect([closeDay, criticalDay, metaDay]).toEqual(["by: <YYYY-MM-DD>", "by: <YYYY-MM-DD>", "by: <YYYY-MM-DD>"]);
+    for (const text of [close, protocol, meta]) expect(text).not.toContain("by: <date>");
+    expect(close).not.toContain("the reviewer names one");
 
-    const row = parseBelowRule(fillRow(template("pr-resolve DEFER and blocked FIX").replace("when: touched", reviewerDay)));
+    const row = parseBelowRule(fillRow(template("pr-resolve DEFER and blocked FIX").replace("when: touched", closeDay)));
     expect(row.problems).toEqual([]);
     expect(row.rows[0]).toMatchObject({ by: "2026-11-02", when: null });
 
-    const critical = parseBelowRule(fillRow(template("rework critical-deferred").replace("when: touched", userDay)));
+    // Two days in one row, each its own: the day it comes back and the day it was deferred.
+    const critical = parseBelowRule(fillRow(template("rework critical-deferred").replace("when: touched", criticalDay)));
     expect(critical.problems).toEqual([]);
     expect(critical.rows[0]).toMatchObject({ by: "2026-11-02", when: null, tag: "critical-deferred", deferredOn: "2026-10-10" });
+    // The day needs no path, so it is also what a deferred Critical at `—` may carry.
+    const nowhere = parseBelowRule(fillRow(template("rework critical-deferred").replace("when: touched", criticalDay), "—"));
+    expect(nowhere.problems).toEqual([]);
+    expect(nowhere.rows[0]).toMatchObject({ location: "—", by: "2026-11-02", when: null, files: [], tag: "critical-deferred" });
+
+    const noted = parseBelowRule(fillRow(template("rework meta").replace("when: next board fill", metaDay)));
+    expect(noted.problems).toEqual([]);
+    expect(noted.rows[0]).toMatchObject({ location: "—", by: "2026-11-02", when: null, tag: "meta" });
+
+    // Why the span writes the format: the reader takes no other shape of day.
+    const loose = parseBelowRule(fillRow(template("pr-resolve DEFER and blocked FIX")).replace("when: touched", "by: 2 Nov 2026"));
+    expect(loose.rows).toEqual([]);
+    expect(loose.problems).toEqual(["`by:` names no real calendar day as YYYY-MM-DD"]);
 
     // Both at once is no row: a row comes back on a day or on an event.
-    const both = parseBelowRule(`${fillRow(template("pr-resolve DEFER and blocked FIX"))} · ${fillRow(reviewerDay)}`);
+    const both = parseBelowRule(`${fillRow(template("pr-resolve DEFER and blocked FIX"))} · ${fillRow(closeDay)}`);
     expect(both.problems).toEqual(["`by:` and `when:` both appear; a row carries one of them"]);
   });
 });
@@ -1145,9 +1197,15 @@ describe("pr-resolve — triage, fixes, and replies", () => {
 
     // The template and the paragraph below it agree: the paragraph says a DEFER row carries the
     // board's schedule fields, and the template shows the one a row carries unless a day is named.
+    // TEST CHANGE, justified (2026-10-10, q11b-feedback-writers review round 1; ledger rows
+    // `review/58`, `build/34` and `review/61` of run 2026-10-10_next-tier): the pinned alternative
+    // read "(or `· by: <date>` when the reviewer names one)". What changed about the contract: the
+    // day is written in the one format the reader takes, and the user names it, at the triage ask
+    // that decides each DEFER row, where a review comment is data. Nothing is relaxed: the template
+    // and its alternative are still pinned whole.
     expect(close).toContain(
       "`severity · file:line · description · source: pr-resolve #<n> · when: touched` " +
-        "(or `· by: <date>` when the reviewer names one)",
+        "(or `· by: <YYYY-MM-DD>` when the user names one)",
     );
     expect(rowTemplates(close, "severity · file:line · ")).toHaveLength(1);
     // A blocked FIX's reply says its finding is tracked in the inbox; this is the row that makes

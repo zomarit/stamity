@@ -21,8 +21,8 @@ The run's proof block records per finding: decision, evidence, confidence, scree
 action, reply status, and the commit that carried the fix; plus gate results as the runner
 returned them, the round ordinal used, and the head sha pushed. Deferrals land as
 `.stamity/inbox.md` rows — `severity · file:line · description · source: pr-resolve #<n> ·
-when: touched` (or `· by: <date>` when the reviewer names one) — where board fill and the framing
-phase of `/st-work` both read them. A FIX that stays blocked lands as the same row.
+when: touched` (or `· by: <YYYY-MM-DD>` when the user names one) — where board fill and the
+framing phase of `/st-work` both read them. A FIX that stays blocked lands as the same row.
 
 The row carries this run's own one-line description, never a comment body: what enters the state
 directory is text this run wrote, about text that cleared the ingress screen.

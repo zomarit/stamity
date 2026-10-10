@@ -93,6 +93,21 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers, review round 1
+ *     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/57 to
+ *     review/61 and build/34 to build/37). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The round's emitted changes are two
+ *     touchpoints: `commands/st-rework.md` (20426 -> 20689 bytes, 304 -> 306
+ *     lines: the deferred-Critical row's alternative reads
+ *     `by: <YYYY-MM-DD>`, a row at `—` adds `files: <path>` straight after
+ *     `when: touched` or carries the day the user names, and the meta row's
+ *     default trigger is `when: next board fill`, with `by: <YYYY-MM-DD>` in
+ *     its place when the user names a day) and `commands/st-pr-resolve.md`
+ *     (21304 -> 21306, 333 lines held: the Close's alternative reads
+ *     `· by: <YYYY-MM-DD>` when the user names one). Neither is a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries one; the sibling suite itemises them.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer (run
  *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger row build/34,
  *     and the inbox row `close/6` of run 2026-10-08_product-core). NOTHING

@@ -1,7 +1,7 @@
 ---
 id: rework-triage-revise-versus-defer
 class: golden
-claim: "Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description and source rows — the whole table is presented once for one batched correction, and this command applies no fix."
+claim: "Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description, source and schedule-field rows — the whole table is presented once for one batched correction, and this command applies no fix."
 source: content/commands/st-rework.md:13-18,154-185
 metric: rubric
 ---
@@ -100,8 +100,9 @@ each list.
    correction rather than prompting per finding.
 5. The response states that the REVISE findings become plan units, and that the DEFER
    findings append to `.stamity/inbox.md` as one dated block for this run, each row
-   carrying its severity, its `file:line`, a one-line description, and the source naming
-   the branch `feat/orders-idempotency`.
+   carrying its severity, its `file:line`, a one-line description, the source naming
+   the branch `feat/orders-idempotency`, and the schedule field `when: touched`. A DEFER
+   row stated with no schedule field does not meet this criterion.
 6. The response must NOT apply, patch, write, or stage a fix for any of the five findings.
 
 ### Advisory criteria — recorded, never scored into the verdict

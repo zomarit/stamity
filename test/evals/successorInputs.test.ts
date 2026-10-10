@@ -198,13 +198,23 @@ export const EXPECTED_MOVES: Record<string, string> = {
   "rework-critical-deferral-record":
     "Expectation re-synced 2026-10-10 to the landed corpus (plan 019 file 3, unit q11b-feedback-writers; " +
     "REQ-FLOW-077, the plan's D11): `/st-rework`'s fixed deferred-Critical row gained its schedule field, " +
-    "`when: touched`, straight after `/st-board`'s four fields and ahead of the tag (or `by: <date>` when the user " +
-    "names one), because a row under the inbox's schedule rule that carries neither does not parse " +
-    "(`content/commands/st-rework.md:195-201`, quoted in the Brief). B4 and the claim said three fields follow the " +
+    "`when: touched`, straight after `/st-board`'s four fields and ahead of the tag (or `by: <YYYY-MM-DD>` when the " +
+    "user names one), because a row under the inbox's schedule rule that carries neither does not parse " +
+    "(`content/commands/st-rework.md:195-203`, quoted in the Brief). B4 and the claim said three fields follow the " +
     "grammar's four; B4 now names four, the schedule field first, and reads it as `when: touched`, since the " +
     "scenario's user names no day. What B4 now refuses that it admitted: a row that carries no schedule field, " +
     "which the governing text no longer describes. It still refuses a row led by the tag. No other row moves, and " +
     "the B / A counts hold at 6 / 0.",
+  "rework-triage-revise-versus-defer":
+    "Expectation re-synced 2026-10-10 to the landed corpus (plan 019 file 3, unit q11b-feedback-writers, review " +
+    "round 1; REQ-FLOW-077; ledger rows `review/60` and `build/36` of run 2026-10-10_next-tier, signed off): both " +
+    "of `/st-rework`'s DEFER row templates end `· when: touched` (`content/commands/st-rework.md:174-185`, quoted " +
+    "in the Brief), because a row under the inbox's schedule rule with neither `by:` nor `when:` does not parse. B5 " +
+    "and the claim named four things a DEFER row carries (severity, `file:line`, a one-line description and the " +
+    "source), so a response that wrote the rows without the field still passed. B5 now names five, the schedule " +
+    "field `when: touched` last; the routing text offers a DEFER row no `by:` alternative, so the criterion names " +
+    "none. What B5 now refuses that it admitted: a DEFER row stated with no schedule field, which the governing " +
+    "text no longer describes. No other row moves, and the B / A counts hold at 6 / 0.",
 };
 
 const markdown = (directory: string): string[] =>

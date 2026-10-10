@@ -186,6 +186,41 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers, review round 1
+  //     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/57 to
+  //     review/61 and build/34 to build/37). Two touchpoints moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 20203 -> 20466,
+  //       `.agents/skills/st-rework/SKILL.md` 20250 -> 20513), by +263 bytes,
+  //       the corpus source's own delta (304 -> 306 lines), in two hunks.
+  //       `### Critical Deferral Protocol`: the fixed row's alternative reads
+  //       "(or `by: <YYYY-MM-DD>` when the user names one)", where it read
+  //       `by: <date>`, followed by "A row whose location is `—` adds
+  //       `files: <path>` straight after `when: touched`, or carries the day
+  //       the user names: the reader refuses a touch trigger that names no
+  //       path." (seven lines become nine). `## Meta-feedback`: the last
+  //       table row names its inbox row as
+  //       `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta`
+  //       "(or `by: <YYYY-MM-DD>` in the trigger's place when the user names a
+  //       day)", where it ended `by: <YYYY-MM-DD> · meta` (its one line held).
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 21114 -> 21116,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 21165 -> 21167), by +2
+  //       bytes, the source's own delta (333 lines held), in the Close's first
+  //       paragraph: the alternative reads "(or `· by: <YYYY-MM-DD>` when the
+  //       user names one)", where it read "(or `· by: <date>` when the
+  //       reviewer names one)", rewrapped within its two lines.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       two touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer (run
   //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger row build/34,
   //     and the inbox row `close/6` of run 2026-10-08_product-core). One skill
