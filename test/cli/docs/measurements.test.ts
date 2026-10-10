@@ -1735,11 +1735,13 @@ describe("the rule, exercised against fixture trees", () => {
   });
 
   // Added 2026-10-10 (plan 019 file 3, unit q5-usage-lines; REQ-CTX-019, D17): `/st-work` now has a
-  // run add `- <UTC> usage: …` lines to its record after the proof block's field list, never
-  // directly above a table. A table's lead is the nearest non-empty line above it, so the placement
-  // is what keeps a usage line from becoming the gate table's lead; the misplaced control shows the
-  // reader would otherwise drop the run as "gates in prose only".
-  it("keeps a table's lead when usage lines sit after the field list, and loses it when one sits directly above", () => {
+  // run append `- <UTC> usage: …` lines to its record as each phase or review round ends, each a
+  // line of its own, never directly above a table. A table's lead is the nearest non-empty line
+  // above it, so the placement is what keeps a usage line from becoming the gate table's lead; the
+  // misplaced control shows the reader would otherwise drop the run as "gates in prose only".
+  // Comment and title reworded 2026-10-10 (q5's fix round 1, `review/8`): they said "after the
+  // field list", the place the rule no longer names. The fixtures and assertions are unchanged.
+  it("keeps a table's lead when usage lines sit on lines of their own, and loses it when one sits directly above", () => {
     const usage = [
       "- 2026-01-03T09:40Z usage: build minutes=42 tokens=180000 (claude-code)",
       "- 2026-01-03T10:05Z usage: review r1 minutes=11 tokens=unreported (claude-code)",

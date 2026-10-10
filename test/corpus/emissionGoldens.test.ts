@@ -93,6 +93,21 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q5-usage-lines (run
+ *     2026-10-10_next-tier; review/8 as signed off). ONE golden moved,
+ *     SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32722 -> 32764 bytes at an
+ *     unchanged 467 lines in the corpus source: the Proof block's usage-lines
+ *     paragraph has the line appended to the run record as each phase or
+ *     review round ends, the way a capacity line is, a line of its own and
+ *     never directly above a table, where it named a place after the proof
+ *     block's field list, which no record holds mid-run. Both of its lines
+ *     moved; it still sits below the re-attachment cut (`### Specialist pass`
+ *     stays at 16662). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q6t-test-runner-ci-line (run
  *     2026-10-10_next-tier; REQ-FLOW-063, inbox rows build/61 and build/85).
  *     ONE golden moved, SUBSTITUTION:

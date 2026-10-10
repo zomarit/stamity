@@ -1239,19 +1239,34 @@ describe("/st-work — Prove", () => {
   });
 
   // Added 2026-10-10 (plan 019 file 3, unit q5-usage-lines; REQ-CTX-019, D17): what a phase and a
-  // review round cost is one record line in a fixed grammar, placed after the field list and never
-  // directly above a table, because `src/cli/docs/measurements.ts` takes a table's lead from the
-  // nearest non-empty line above it (`test/cli/docs/measurements.test.ts` holds that side).
-  it("names the usage line a phase or review round adds, below the re-attachment cut (REQ-CTX-019)", async () => {
+  // review round cost is one record line in a fixed grammar, a line of its own and never directly
+  // above a table, because `src/cli/docs/measurements.ts` takes a table's lead from the nearest
+  // non-empty line above it (`test/cli/docs/measurements.test.ts` holds that side).
+  //
+  // TEST CHANGE, justified (2026-10-10, plan 019 file 3, q5's fix round 1, `review/8` as signed
+  // off): the pin read "An ended phase or review round adds `…` to the record, minutes from the
+  // orchestrator's clock, after this list and never directly above a table." "After this list"
+  // named the proof block's field list, which no record holds while Frame, Build or a review round
+  // is ending, so the line had no place to go when it was due. The sentence now has the line
+  // appended to the run record as the phase or round ends, the way a capacity line is, and names no
+  // place inside the proof block. The text still sits where it sat, below the cut, and takes no
+  // character from the re-attached index: the Resume bullet, above the cut, has a resumed run
+  // "re-read this command's own file past the part the client re-attached" (pinned below, in the
+  // Dispatch contract's tests).
+  it("names the usage line a phase or review round appends, below the re-attachment cut (REQ-CTX-019)", async () => {
     const raw = (await workFile).raw;
     const proof = collapse(section(await body(), "### Proof block"));
     const usage =
-      "**Usage lines.** An ended phase or review round adds `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)` to the record, minutes from the orchestrator's clock, after this list and never directly above a table.";
+      "**Usage lines.** As each phase or review round ends, append `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)` to the run record, as a capacity line is appended: minutes from the orchestrator's clock, a line of its own, never directly above a table.";
     expect(proof).toContain(usage);
-    // After the field list's last item, before the citation paragraph.
+    // The text sits after the field list's last item, before the citation paragraph.
     const at = proof.indexOf(usage);
     expect(at).toBeGreaterThan(proof.indexOf("says so in the same line."));
     expect(at).toBeLessThan(proof.indexOf("Cite native platform artifacts"));
+    // The paragraph is that one sentence: nothing beside it names a place inside the proof block,
+    // which no record holds while the run is still going.
+    const paragraph = proof.slice(at, proof.indexOf("Cite native platform artifacts")).trim();
+    expect(paragraph).toBe(usage);
     // Below the cut: the paragraph costs nothing a resumed run re-attaches.
     expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
     expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);

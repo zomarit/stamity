@@ -7337,8 +7337,8 @@ audit record:
   uncovered, the inbox rows it appended. A run that closed with none of those
   says so in the same line.
 
-**Usage lines.** An ended phase or review round adds \`- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)\`
-to the record, minutes from the orchestrator's clock, after this list and never directly above a table.
+**Usage lines.** As each phase or review round ends, append \`- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)\`
+to the run record, as a capacity line is appended: minutes from the orchestrator's clock, a line of its own, never directly above a table.
 
 Cite native platform artifacts where they exist — per-sub-agent transcripts,
 hook-gate outcomes, session logs. A self-quoted completion marker is the
