@@ -93,6 +93,15 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script (run
+ *     2026-10-10_next-tier; REQ-FLOW-070). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's one emitted change is
+ *     `skills/st-verify/scripts/spec-plan-coverage.mjs`, 15373 -> 17656 bytes
+ *     and 262 -> 302 lines: plan-lint L5's four advisory size codes and the
+ *     unindented-heading rule for units. A skill script is not a substitution
+ *     target, not the catalog, not the policy document and not a core hook
+ *     script, so no golden here carries it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q1t-frame-inbox-read
  *     (run 2026-10-10_next-tier; REQ-FLOW-019, REQ-FLOW-068, review/28 with
  *     build/15 and review/29 as signed off). ONE golden moved, SUBSTITUTION:

@@ -186,6 +186,22 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script (run
+  //     2026-10-10_next-tier; REQ-FLOW-070). The coverage script moved, plus
+  //     the manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `st-verify/scripts/spec-plan-coverage.mjs` in every selection
+  //       that carries it (`.claude/skills/` and `.agents/skills/`) by +2283
+  //       bytes, 15373 -> 17656, and 262 -> 302 lines: the four advisory L5
+  //       codes (`unit-size`, `unit-oversize`, `unit-prewritten`,
+  //       `delta-verbose`) and a unit read only at an unindented `### `.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint,
+  //       companion, hook script, guard, policy document and every other
+  //       skill file.
+  //
   //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q1t-frame-inbox-read
   //     (run 2026-10-10_next-tier; REQ-FLOW-019, REQ-FLOW-068, review/28 with
   //     build/15 and review/29 as signed off). The st-work touchpoint moved,

@@ -5,16 +5,20 @@ import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const clean = (text) => text.replaceAll("`", "").replaceAll("**", "").trim();
+/**
+ * Each line with fenced text blanked in `text`; `raw` keeps the line as written and `marker` flags a
+ * fence marker line, so the plan-size codes can measure what the structural reading ignores.
+ */
 const linesOf = (content) => {
   let fence = "";
-  return content.split(/\r?\n/).map((text, index) => {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(text)?.[1];
+  return content.split(/\r?\n/).map((raw, index) => {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(raw)?.[1];
     if (marker) {
       if (!fence) fence = marker;
       else if (marker[0] === fence[0] && marker.length >= fence.length) fence = "";
-      return { text: "", line: index + 1 };
+      return { text: "", raw, marker: true, line: index + 1 };
     }
-    return { text: fence ? "" : text, line: index + 1 };
+    return { text: fence ? "" : raw, raw, marker: false, line: index + 1 };
   });
 };
 
@@ -91,8 +95,18 @@ const isUnits = (section) => /^units\b/.test(section);
  * be read as wholly removed, which dropped its added IDs out of scope entirely.
  */
 const deltaSegments = (text) => text.split(/(?=\b(?:ADDED|MODIFIED|REMOVED)\b)/).filter((part) => part.trim());
-/** Findings that record how the plan was read without condemning it. */
-const ADVISORY_CODES = new Set(["provisional-definition", "missing-spec-input"]);
+/** Findings that record how the plan was read without condemning it; the last four are plan-lint L5, plan size. */
+const ADVISORY_CODES = new Set(["provisional-definition", "missing-spec-input", "unit-size", "unit-oversize", "unit-prewritten", "delta-verbose"]);
+/** The first fence marker, or the first line of a run of five or more `>` lines, among a unit's lines. */
+const prewrittenAt = (rows) => {
+  let run = 0;
+  for (const [index, row] of rows.entries()) {
+    if (row.marker) return row.line;
+    run = /^\s*>/.test(row.raw) ? run + 1 : 0;
+    if (run === 5) return rows[index - 4].line;
+  }
+  return undefined;
+};
 
 export function checkCoverage(plan, specs, options = {}) {
   const findings = [];
@@ -125,14 +139,25 @@ export function checkCoverage(plan, specs, options = {}) {
   const removed = new Set();
   const provisional = new Map();
   const units = [];
+  // Plan size: a unit's lines run from its heading to the next unfenced, unindented `### ` or `## `;
+  // a delta entry's from its `REQ-` heading to the next unfenced heading of any level.
+  const entries = [];
+  let span;
+  let entry;
   let sawSpecDelta = false;
   let section = "";
   let unit;
   let field;
   for (const row of linesOf(plan.text)) {
     const heading = /^## (.+?)\s*$/.exec(row.text);
-    if (heading) { section = heading[1].replace(/^\d+[.)]\s+/, "").toLowerCase(); unit = undefined; field = undefined; sawSpecDelta ||= isSpecDelta(section); continue; }
+    if (heading) { section = heading[1].replace(/^\d+[.)]\s+/, "").toLowerCase(); unit = undefined; field = undefined; span = undefined; entry = undefined; sawSpecDelta ||= isSpecDelta(section); continue; }
     if (isSpecDelta(section)) {
+      if (/^#{1,6}\s/.test(row.text)) {
+        entry = /^#{3,6}\s+REQ-/.test(row.text)
+          ? { id: refs(row.text, plan.path, row.line, true)[0] ?? clean(row.text.replace(/^#+/, "")), line: row.line, lines: 0 }
+          : undefined;
+        if (entry) entries.push(entry);
+      } else if (entry && row.raw.trim()) entry.lines += 1;
       // A `### REQ-` heading in the delta defines the requirement for a plan whose spec is not
       // written yet. It is read as a definition only where no spec supplies one — a spec always
       // wins — and the reading is reported so nobody mistakes the plan for the contract.
@@ -157,12 +182,18 @@ export function checkCoverage(plan, specs, options = {}) {
       }
     }
     if (!isUnits(section)) continue;
-    // A trailing colon belongs to the heading's prose, not to the unit's ID: `### U1: guard`.
-    const unitHeading = /^###\s+(\S+?):?(?:\s|$)/.exec(clean(row.text));
+    // A unit starts only at an unindented `### ` outside a fence: an indented `` `### Item` `` line
+    // inside a unit's prose is text, not a unit. A trailing colon belongs to the heading's prose,
+    // not to the unit's ID: `### U1: guard`.
+    const unitLine = row.text.startsWith("### ");
+    if (unitLine) span = undefined;
+    const unitHeading = unitLine && /^###\s+(\S+?):?(?:\s|$)/.exec(clean(row.text));
     if (unitHeading) {
-      unit = { id: unitHeading[1], line: row.line, fields: new Map() };
+      unit = { id: unitHeading[1], line: row.line, fields: new Map(), rows: [row] };
+      span = unit.rows;
       units.push(unit); field = undefined; continue;
     }
+    span?.push(row);
     if (!unit) continue;
     const bullet = /^[-*]\s+(?:\*\*|`)?([A-Za-z_]+)(?:\*\*|`)?\s*:\s*(.*)$/.exec(row.text);
     const table = /^\|\s*([^|]+)\|\s*(.*?)\s*\|\s*$/.exec(row.text);
@@ -232,6 +263,15 @@ export function checkCoverage(plan, specs, options = {}) {
     for (const target of graph.get(id) ?? []) visit(target, [...trail, id]);
   };
   for (const id of graph.keys()) visit(id, []);
+  for (const item of units) {
+    let size = item.rows.length;
+    while (size > 1 && !item.rows[size - 1].raw.trim()) size -= 1;
+    if (size > 100) add("unit-oversize", plan.path, item.line, `${item.id} spans ${size} lines`);
+    else if (size > 60) add("unit-size", plan.path, item.line, `${item.id} spans ${size} lines`);
+    const prewritten = prewrittenAt(item.rows.slice(0, size));
+    if (prewritten) add("unit-prewritten", plan.path, item.line, `${item.id} carries prewritten text at line ${prewritten}`);
+  }
+  for (const item of entries) if (item.lines > 6) add("delta-verbose", plan.path, item.line, `${item.id} runs ${item.lines} lines`);
   const failing = findings.some((row) => !ADVISORY_CODES.has(row.code));
   return { status: failing ? "fail" : "pass", semanticReview: "required", scope: [...scoped], units: units.map((item) => item.id), findings };
 }
