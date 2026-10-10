@@ -801,6 +801,13 @@ describe("model allocation", () => {
     expect(row).toContain("low, medium, high, xhigh, max, ultra");
     expect(row).toContain("learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-10-10");
     expect(row).toMatch(/depend on the model/);
+    // TEST CHANGE, justified (2026-10-10, q4b-codex-scale, review/5): the case held the row to
+    // "depend on the model" alone, which also passed while the row promised that a level the
+    // model does not offer "falls back to that model's own default". The reference read on
+    // 2026-10-10 says only "Available levels depend on the model and client", so the row is
+    // held to those words and to making no fallback promise.
+    expect(row).toContain("the available levels depend on the model and client");
+    expect(row).not.toMatch(/falls? back|own default/);
     expect(row).toContain("`minimal` is accepted and written as `low`");
     expect(row).not.toMatch(/accessed 2026-09-17/);
     expect(row).not.toMatch(/cannot be asked for `max`/);

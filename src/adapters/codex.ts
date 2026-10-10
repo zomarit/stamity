@@ -336,8 +336,7 @@ const AGENTS_OVERRIDE_ARTIFACT_ID = "codex-agents-override";
  */
 const EFFORT_SCALE_CAP =
   `${CLIENT_MODEL_PROJECTION.codex.effortScale.join(", ")} — the levels this client's ` +
-  "`model_reasoning_effort` key accepts, and which of them a run gets depend on the model, so " +
-  "a level the chosen model does not offer falls back to that model's own default " +
+  "`model_reasoning_effort` key accepts; the available levels depend on the model and client " +
   "(learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-10-10). This is the " +
   "only supported client documenting `ultra`. The reference no longer lists `minimal`; this " +
   "client's parser still takes it, so `minimal` is accepted and written as `low`, with a " +
