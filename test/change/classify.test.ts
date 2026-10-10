@@ -222,19 +222,28 @@ describe("matchGlob", () => {
   });
 
   // review/50: matching is linear in the path, whatever wildcards the glob holds, so no glob stalls `gate classify`.
+  /*
+   * TEST CHANGE, justified: 2026-10-10, run 2026-10-10_next-tier, prove/1 (signed off). The two timed cases below
+   * asserted under 500 ms and were titled "well under a second". On CI's Node 22 floor leg, a shared runner under
+   * the coverage instrument, the class-file case took 612 ms (run 38067956174) and 508 ms (run 38073678021) and
+   * failed the leg with no code under it changed. The bound tells linear matching from backtracking, not one fast
+   * run from another, so both are 2,000 ms: more than three times the slowest CI figure, and under half the 4.7 s
+   * the backtracking matcher this replaced took on its quickest row (8 stars, 40 letters) on an Apple M1 Pro. Its
+   * other three rows and the class-file case had not finished after 60 s each.
+   */
   it.each([
     ["an alternating-star glob, 8 stars, against 40 letters", `${"*a".repeat(8)}*b`, "a".repeat(40)],
     ["an alternating-star glob, 20 stars, against 20,000 letters", `${"*a".repeat(20)}*b`, "a".repeat(20_000)],
     ["four ** between letters against a deep path", "**a**a**a**a*b", `${"a/".repeat(5_000)}a`],
     ["four **/ against a deep path", "**/a/**/a/**/a/**/a/*b", `${"a/".repeat(5_000)}a`],
-  ])("matches %s well under a second", (_label, glob, path) => {
+  ])("matches %s in under two seconds", (_label, glob, path) => {
     const started = performance.now();
     expect(matchGlob(path, glob)).toBe(false);
     expect(matchGlob(path, glob, { foldCase: true })).toBe(false);
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(performance.now() - started).toBeLessThan(2_000);
   });
 
-  it("classifies a long name against a hostile glob a class file accepts, well under a second (review/50)", () => {
+  it("classifies a long name against a hostile glob a class file accepts, in under two seconds (review/50)", () => {
     const glob = `${"*a".repeat(20)}*b`;
     expect(glob.length).toBeLessThanOrEqual(200);
     const parsed = parseClassFile(JSON.stringify({ classes: { "security-sensitive": [glob], tests: [glob] } }));
@@ -242,7 +251,7 @@ describe("matchGlob", () => {
     if (!parsed.ok) return;
     const started = performance.now();
     const result = classifyChange({ paths: [`${"a".repeat(20_000)}.md`], base: "given" }, mergeRules(BUILT_IN_RULES, parsed.rules));
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(performance.now() - started).toBeLessThan(2_000);
     expect(result.class).toBe("docs");
   });
 });
