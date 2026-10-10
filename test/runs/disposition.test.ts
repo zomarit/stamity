@@ -106,8 +106,9 @@ describe("isIsoDate", () => {
 });
 
 // review/89: a day in the trigger's slot names no event, and only `by` is read as a day, so a
-// value scheduled on one would never come back. The shape refused is the trigger that, its
-// `YYYY-MM-DD` runs taken out, has no word left or only words `vagueTrigger` names.
+// value scheduled on one would never come back.
+// review/99: the rule is the simple one, with no word list. No `YYYY-MM-DD`-shaped day stands
+// in a trigger at all, alone or among other words.
 describe("dayTrigger", () => {
   it.each([
     "2026-11-15",
@@ -119,23 +120,29 @@ describe("dayTrigger", () => {
     "until the 2026-11-15, maybe",
     "later, 2026-11-15",
     "2026-11-15 or 2026-11-20",
-  ])("reads %j as a day and no event", (trigger) => {
-    expect(dayTrigger(trigger)).toBe(true);
-  });
-
-  it.each([
+    // review/99: the day beside a word outside both lists, and the day with a time.
+    "by 2026-11-15",
+    "before 2026-11-15",
+    "2026-11-15 09:00",
+    "2026-11-15T09:00Z",
+    // TEST CHANGE, justified (2026-10-10, review/99): these three stood below as no day, under
+    // review/89's first rule, "a word outside both lists beside the date leaves a trigger". That
+    // rule let `by 2026-11-15` through, which never comes back on its day either. The rule is now
+    // that no day stands in a trigger; the event is named without it, or the day goes under `by`.
+    // The third is a run id, which opens with a day and is read as one.
     "the 2026-11-15 release ships",
     "the first close after 2026-11-15",
     "2026-11-15_next-tier closes",
-    "touched",
-    "the 1.14.0 release",
-    "plan 020 starts",
-    "later",
-    "",
-    "—",
-  ])("reads %j as no day: a word outside both lists stands beside the date, or it holds no date", (trigger) => {
-    expect(dayTrigger(trigger)).toBe(false);
+  ])("reads %j as holding a day", (trigger) => {
+    expect(dayTrigger(trigger)).toBe(true);
   });
+
+  it.each(["touched", "the 1.14.0 release", "plan 020 starts", "later", "", "—"])(
+    "reads %j as holding no day: no `YYYY-MM-DD` run stands in it",
+    (trigger) => {
+      expect(dayTrigger(trigger)).toBe(false);
+    },
+  );
 });
 
 describe("vagueTrigger", () => {
@@ -342,6 +349,15 @@ describe("parseDisposition", () => {
     ["a day in backticks for a trigger", "scheduled board #42 · when `2026-11-15`.", WHEN_DAY],
     ["a day beside filler words for a trigger", "scheduled board #42 · when on the 2026-11-15", WHEN_DAY],
     ["a day beside a vague word for a trigger", "scheduled board #42 · when later, 2026-11-15", WHEN_DAY],
+    // review/99: no day stands in the trigger's slot at all, whatever stands beside it.
+    ["a day after `by` for a trigger", "scheduled board #42 · when by 2026-11-15", WHEN_DAY],
+    ["a day after `before` for a trigger", "scheduled board #42 · when: before 2026-11-15", WHEN_DAY],
+    ["a day with a time for a trigger", "scheduled board #42 · when 2026-11-15 09:00", WHEN_DAY],
+    // TEST CHANGE, justified (2026-10-10, review/99): these two stood among the accepted values
+    // below, as "a date among words that name an event is a trigger still". No day stands in the
+    // trigger's slot now, so they moved here.
+    ["an event named with its day for a trigger", "scheduled board #42 · when the 2026-11-15 release ships", WHEN_DAY],
+    ["an event after a day for a trigger", "scheduled board #42 · when the first close after 2026-11-15", WHEN_DAY],
     ["a symbol-only board item", "scheduled board # · when touched", "the place is none of"],
     ["a lone dot as a handoff place", "scheduled handoff . · by 2026-11-01", "the place is none of"],
     ["a lone slash as a handoff place", "scheduled handoff / · by 2026-11-01", "the place is none of"],
@@ -390,9 +406,6 @@ describe("parseDisposition", () => {
     "scheduled board #42 · when next attended close",
     "scheduled board #42 · when later today's release ships",
     "scheduled board 7 · when: the next client release",
-    // review/89: a date among words that name an event is a trigger still.
-    "scheduled board #42 · when the 2026-11-15 release ships",
-    "scheduled board #42 · when the first close after 2026-11-15",
     "scheduled handoff notes.md · by 2026-11-01",
     // review/47: a board item with a digit, or a filler word beside a real one.
     "scheduled board #42 · by 2026-11-01",

@@ -345,7 +345,7 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ],
     // review/89: a day under `when:` names no event, and `--due` reads `by:` alone, so the row
     // would never come back on its day. It is refused whether or not the day is a real one, in
-    // backticks, and with only filler or vague words beside it; the message names `by:`.
+    // backticks, and whatever words stand beside it; the message names `by:`.
     ["src/a.ts:1", "when: 2026-11-15", WHEN_DAY],
     ["src/a.ts:1", "when: 2026-02-30", WHEN_DAY],
     ["src/a.ts:1", "when: `2026-11-15`.", WHEN_DAY],
@@ -353,6 +353,17 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["—", "when: until the 2026-11-15, maybe", WHEN_DAY],
     ["—", "when: later, 2026-11-15", WHEN_DAY],
     ["—", "when: 2026-11-15 or 2026-11-20", WHEN_DAY],
+    // review/99: no day stands under `when:` at all, whatever stands beside it.
+    ["src/a.ts:1", "when: by 2026-11-15", WHEN_DAY],
+    ["src/a.ts:1", "when: before 2026-11-15", WHEN_DAY],
+    ["—", "when: 2026-11-15 09:00", WHEN_DAY],
+    ["—", "when: 2026-11-15T09:00Z", WHEN_DAY],
+    // TEST CHANGE, justified (2026-10-10, review/99): these two stood among the accepted rows
+    // below, as "a date among words that name an event is a trigger still". No day stands under
+    // `when:` now, so they moved here; the event is named without its day, or the day goes
+    // under `by:`.
+    ["—", "when: the 2026-11-15 release ships", WHEN_DAY],
+    ["—", "when: the first close after 2026-11-15", WHEN_DAY],
   ])("refuses a row at %j carrying %j", (location, field, message) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe(message);
   });
@@ -364,9 +375,6 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["—", "when: the next edit of src/a.ts"],
     ["—", "when: the next hygiene pass after the release"],
     ["—", "by: 2026-11-01"],
-    // review/89: a date among words that name an event is a trigger still.
-    ["—", "when: the 2026-11-15 release ships"],
-    ["—", "when: the first close after 2026-11-15"],
   ])("accepts a row at %j carrying %j below the heading", (location, field) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe("");
   });
@@ -392,10 +400,11 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     "later than the 1.14.0 release",
     "on the day",
     "next attended close",
-    // review/89: a day, alone or beside filler words, and a date beside an event.
+    // review/89, review/99: a day, alone or beside other words.
     "2026-11-15",
     "on 2026-11-15",
     "the 2026-11-15 release ships",
+    "by 2026-11-15",
   ])("gives the trigger %j the verdict the `retired` grammar gives it after `scheduled <place> · when`", (trigger) => {
     const retired = parseDisposition(`scheduled board #42 · when ${trigger}`);
     const inbox = parseInbox(`- Minor · src/a.ts:1 · d · source: x · when: ${trigger}`);

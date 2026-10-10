@@ -24,8 +24,9 @@ import { LEDGER_FILE } from "./layout.ts";
  * carries `by:` or `when:`. Rows above it are older and stay valid without. A
  * trigger is held to one rule wherever its row stands: the one
  * `./disposition.ts` holds a `retired` value's trigger to, so this module
- * keeps no word list of its own. By that rule a `when:` holding a day and no
- * event is refused: a query finds a day under `by:` alone.
+ * keeps no word list of its own. By that rule a `when:` holding a
+ * `YYYY-MM-DD` day, alone or among other words, is refused: a query finds a
+ * day under `by:` alone.
  *
  * Two callers read one grammar: `stamity ledger inbox`, which prints the rows a
  * run's Frame folds in, and the records gate (`test/records/ledgers.test.ts`),
