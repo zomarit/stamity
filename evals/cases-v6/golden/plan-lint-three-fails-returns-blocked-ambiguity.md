@@ -2,7 +2,7 @@
 id: plan-lint-three-fails-returns-blocked-ambiguity
 class: golden
 claim: "Three consecutive plan-lint passes failing the same check stop the run: it returns BLOCKED_AMBIGUITY naming the check and the unit that keeps failing, and the blocked write means no plan artifact is persisted."
-source: content/commands/st-plan.md:274-312,393-403
+source: content/commands/st-plan.md:274-312,400-411
 metric: rubric
 ---
 
@@ -69,7 +69,8 @@ Close the run with:
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
 - Structural coverage result and unresolved semantic readings; structural pass alone is not handoff approval.
-- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory`.
+- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run`
+  (`L5 not run` where the coverage script could not run, never a claimed pass).
 ```
 
 Scenario state — the run so far, given to you as fact:

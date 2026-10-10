@@ -93,6 +93,18 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-070, ledger row review/39).
+ *     NOTHING moved in this suite; the row keeps the two ledgers in step. The
+ *     unit's one emitted change is `commands/st-plan.md`, 26954 -> 27668 bytes
+ *     and 412 -> 420 lines: the shape's optional Follow-ups and Drop list
+ *     sections, the schedule rule in the Side effects' inbox bullet, the
+ *     return line's `L5 none|<n> advisory|not run` with the line that says
+ *     when `L5 not run` applies, and the last return row's "with `by:` or
+ *     `when:`; the Drop list appends nothing". It is not a substitution
+ *     target, the catalog, the policy document or a core hook script, so no
+ *     golden here carries it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q10a-work-close, review round 1 (run
  *     2026-10-10_next-tier; ledger rows review/48 and review/49). NOTHING
  *     moved in this suite; the row keeps the two ledgers in step. The round's

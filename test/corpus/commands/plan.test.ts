@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { typeIdKey } from "../../../src/content/catalog.ts";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { scanAntiSlop } from "../../../src/denyscan/denyScan.ts";
+import { parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
 import {
   CORPUS_ROOT,
   assertDenyClean,
@@ -18,6 +19,9 @@ import {
 
 // Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
 const INBOX = [".stamity", "inbox.md"].join("/");
+
+/** The plan a fixture follow-up cites. Made up: no tracked file carries the name. */
+const FOLLOW_UP_PLAN = "docs/plans/900-made-up.md";
 
 /**
  * `/st-plan` — the intent-routing planner, one command absorbing the
@@ -95,6 +99,29 @@ const URL_OR_DOMAIN = /https?:\/\/|www\./i;
  */
 function phrase(literal: string): RegExp {
   return new RegExp(literal.trim().replace(/\s+/g, "\\s+"), "i");
+}
+
+/** A text with every run of whitespace as one space, so a sentence is pinned whole, whatever column it wraps at. */
+function flat(text: string): string {
+  return text.replace(/\s+/g, " ");
+}
+
+/**
+ * An inbox holding the schedule-rule heading and, below it, the rows given.
+ * Every path in a row is made up: no tracked file is named, so the fixture
+ * reads nothing of this repository.
+ */
+function ruledInbox(...rows: string[]): string {
+  return `${SCHEDULE_RULE_HEADING}\n\n${rows.map((row) => `- ${row}`).join("\n")}\n`;
+}
+
+/**
+ * One follow-up row as the Side effects bullet has `/st-plan` write it: the
+ * grammar's four fields, the plan path it cites as its `Ref:`, then the
+ * schedule fields the bullet names.
+ */
+function followUpRow(location: string, schedule: string): string {
+  return `Minor · ${location} · the alias prints a notice until its removal · source: /st-plan · Ref: ${FOLLOW_UP_PLAN} · ${schedule}`;
 }
 
 /** The body of one `## `-level section, heading line included. Throws when the heading moved. */
@@ -626,6 +653,35 @@ describe("/st-plan — plan artifact shape", () => {
     expect(shape).toMatch(phrase("own context, units, spec-delta slice, and stamp"));
     expect(shape).toMatch(phrase("every file stands alone"));
   });
+
+  it("names optional Follow-ups and Drop list sections after Open questions (REQ-FLOW-077)", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+    const read = flat(shape);
+
+    // The numbered list is the artifact's section order. `/st-board`'s Removal rule schedules a
+    // row to `plan docs/plans/<file>.md#<unit-id or follow-ups>`, a section this shape did not
+    // define; and a follow-up with no day and no trigger needs a place that is not the inbox.
+    expect([...shape.matchAll(/^(\d)\. \*\*([^*]+)\*\*/gm)].map((match) => `${match[1]} ${match[2]}`)).toEqual([
+      "1 Context",
+      "2 Spec delta",
+      "3 Units",
+      "4 Risks",
+      "5 Open questions",
+      "6 Follow-ups",
+      "7 Drop list",
+    ]);
+    expect(read).toContain(
+      "6. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append as the Side effects say.",
+    );
+    expect(read).toContain(
+      "7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with only a revisit trigger; they append nowhere.",
+    );
+    // Both are optional and close the list: a plan with neither is a valid plan, and the criteria
+    // paragraph still follows the last section.
+    expect(read).toMatch(/they append nowhere\. \*\*Fresh-context criteria\.\*\*/);
+    // The five sections before them keep their words, the blocking marker among them.
+    expect(read).toContain("5. **Open questions** — a `[NEEDS CLARIFICATION]` marker blocks handoff to `/st-work` until it is resolved. 6. **Follow-ups**");
+  });
 });
 
 describe("/st-plan — side effects", () => {
@@ -654,6 +710,53 @@ describe("/st-plan — side effects", () => {
     expect(returns).toMatch(phrase("Learnings written, with their paths"));
     expect(returns).toContain(INBOX);
   });
+
+  it("gives every appended follow-up a day or a trigger, below the inbox's schedule-rule heading (REQ-FLOW-077)", () => {
+    const effects = flat(sectionOf(plan.parsed.body, "## Side effects"));
+
+    // The bullet keeps its words and its path and gains the schedule rule. The heading is read
+    // from the parser that looks for it, so the text cannot name one the parser does not.
+    expect(effects).toContain(
+      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading; a follow-up with neither belongs in the plan's Drop list with its revisit trigger. That inbox is the rendezvous \`/st-board fill\` triages`,
+    );
+    // Still two side effects: the rule adds no third bullet.
+    expect(sectionOf(plan.parsed.body, "## Side effects").split("\n").filter((line) => line.startsWith("- **"))).toHaveLength(2);
+  });
+
+  it("writes follow-up rows the inbox's one parser reads below that heading", () => {
+    // Each row is written from the bullet's words: the four fields, the plan path cited, then a
+    // day, or a trigger, and `files:` where the location is `—`. No double: the parser is the
+    // real one, the one `/st-board` and the `ledger` verb's `inbox` query read rows with.
+    const dated = followUpRow("lib/alias.ts:12", "by: 2027-01-15");
+    const touched = followUpRow("lib/alias.ts", "when: touched");
+    const unlocated = followUpRow("—", "when: the 2.0.0 release is cut · files: lib/alias.ts, lib/entry.ts");
+    const read = parseInbox(ruledInbox(dated, touched, unlocated));
+
+    expect(read.problems).toEqual([]);
+    expect(read.rows).toHaveLength(3);
+    for (const row of read.rows) {
+      expect(row).toMatchObject({ severity: "Minor", source: "/st-plan", ref: FOLLOW_UP_PLAN, belowRule: true });
+    }
+    expect(read.rows[0]).toMatchObject({ location: "lib/alias.ts:12", by: "2027-01-15", when: null, files: [] });
+    expect(read.rows[1]).toMatchObject({ by: null, when: "touched", files: [] });
+    expect(read.rows[2]).toMatchObject({
+      location: "—",
+      by: null,
+      when: "the 2.0.0 release is cut",
+      files: ["lib/alias.ts", "lib/entry.ts"],
+    });
+
+    // What the bullet keeps out of the inbox is what the parser refuses there: a row with no day
+    // and no trigger (the plan's Drop list is its place), and `touched` with no path to touch.
+    const bare = `Minor · lib/alias.ts:12 · the alias prints a notice until its removal · source: /st-plan · Ref: ${FOLLOW_UP_PLAN}`;
+    for (const refused of [bare, followUpRow("—", "when: touched")]) {
+      const verdict = parseInbox(ruledInbox(refused));
+      expect(verdict.rows, `${refused} is refused`).toEqual([]);
+      expect(verdict.problems).toHaveLength(1);
+    }
+    // Above the heading the bare row is an older row and still parses, so the heading is what binds it.
+    expect(parseInbox(`- ${bare}\n`).problems).toEqual([]);
+  });
 });
 
 describe("/st-plan — return contract", () => {
@@ -681,9 +784,14 @@ describe("/st-plan — return contract", () => {
     // TEST CHANGE, justified (2026-10-10, q3b-plan-size-text): an assertion added, none loosened.
     // The return line gains L5 (REQ-FLOW-070), and its vocabulary is not the other four's: it
     // never fails, so it reads `none` or a count, and a `pass|fail` there would report a gate.
+    // TEST CHANGE, justified (2026-10-10, q11a-plan-writer; ledger row review/39, signed off): the
+    // pinned token gains a third value. A run whose coverage script could not run had no honest L5
+    // value, since `none` says no size code fired when none was looked for; it now reads
+    // `not run`. The two-value token is asserted gone; nothing is loosened.
     expect(returns).toContain(
-      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory`",
+      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run`",
     );
+    expect(returns).not.toContain("L5 none|<n> advisory`");
     expect(returns).not.toContain("L5 pass|fail");
     expect(returns).toContain("sub_agents_spawned:");
     expect(returns).toContain("task_structure: parallelizable | sequential | mixed");
@@ -694,6 +802,32 @@ describe("/st-plan — return contract", () => {
 
     expect(returns).toContain(INBOX);
     expect(returns).toContain("/st-board fill --source docs/plans/<file>");
+  });
+
+  it("reports the follow-ups with their day or trigger, and appends nothing for the Drop list (REQ-FLOW-077)", () => {
+    const returns = flat(sectionOf(plan.parsed.body, "## Return contract"));
+
+    expect(returns).toContain(
+      `- Follow-ups outside this plan's scope append to \`${INBOX}\`, one line each, citing the plan path, with \`by:\` or \`when:\`; the Drop list appends nothing.`,
+    );
+    // It stays the block's last row, after the next step.
+    expect(returns.trimEnd().endsWith("the Drop list appends nothing.")).toBe(true);
+  });
+
+  it("reads `L5 not run` where the coverage script could not run, in the values `/st-rework`'s line carries (REQ-FLOW-070)", async () => {
+    const returns = flat(sectionOf(plan.parsed.body, "## Return contract"));
+    const gate = flat(sectionOf(plan.parsed.body, "## Plan-lint gate"));
+    const rework = flat(await readFile(join(CORPUS_ROOT, "commands/st-rework.md"), "utf8"));
+    const token = "L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run";
+
+    // The gate already forbids a claimed pass for a script that did not run; the return line had
+    // no value to say so with.
+    expect(gate).toContain("report that check unrun; do not replace a missing result with a claimed pass");
+    expect(returns).toContain(
+      `- Plan-lint result per check: \`${token}\` (\`L5 not run\` where the coverage script could not run, never a claimed pass).`,
+    );
+    // One token, two commands: rework's line is this one with its own check after it.
+    expect(rework).toContain(`\`${token} · R1 pass|fail\``);
   });
 
   it("derives the next step from this run's own state rather than a fixed menu", () => {

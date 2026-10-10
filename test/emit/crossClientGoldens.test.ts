@@ -186,6 +186,36 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer (run
+  //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-070, ledger row
+  //     review/39). The st-plan touchpoint moved, plus the manifest rows that
+  //     record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 26785 -> 27499,
+  //       `.agents/skills/st-plan/SKILL.md` 26828 -> 27542), by +714 bytes,
+  //       the corpus source's own delta (412 -> 420 lines), in four hunks.
+  //       `## Plan artifact shape` lists two optional sections after Open
+  //       questions: "6. **Follow-ups** (optional)", items the plan leaves
+  //       out, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and
+  //       `files:` when it names no location, and "7. **Drop list**
+  //       (optional)", a table `Item | Revisit when` whose items append
+  //       nowhere. `## Side effects`: the Deferral-inbox append bullet has
+  //       each row carry `by:` or `when:`, and `files:` when its location is
+  //       `—`, below the inbox's `## Rows under the schedule rule` heading,
+  //       and sends a follow-up with neither to the plan's Drop list.
+  //       `## Return contract`: the plan-lint line's last token reads
+  //       `L5 none|<n> advisory|not run`, followed by "(`L5 not run` where the
+  //       coverage script could not run, never a claimed pass)", and the last
+  //       row ends "with `by:` or `when:`; the Drop list appends nothing".
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-plan skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q10a-work-close, review round 1 (run
   //     2026-10-10_next-tier; ledger rows review/48 and review/49). The
   //     st-board touchpoint moved, plus the manifest rows that record it. No
