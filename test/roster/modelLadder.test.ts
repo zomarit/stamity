@@ -809,6 +809,9 @@ describe("the per-client effort scales", () => {
 
   it("falls to the highest entry below a level the scale tops out under", () => {
     expect(nearestExpressibleEffort("max", "codex")).toBe("xhigh");
+    // `ultra`, the union's top, clamps to each narrower client's ceiling.
+    expect(nearestExpressibleEffort("ultra", "claude")).toBe("max");
+    expect(nearestExpressibleEffort("ultra", "codex")).toBe("xhigh");
   });
 
   it("rises to the lowest entry above a level the scale starts over", () => {
@@ -894,7 +897,9 @@ describe("the per-client effort scales", () => {
     // Same defence one layer down: an unknown level yields no emitted value at
     // all rather than a fabricated rank or a clamp toward a scale end. The
     // manifest carrying it is refused by `collectManifestErrors` first.
-    const unknown = { frontier: "ultra" as EffortLevel };
+    // TEST CHANGE, justified (2026-10-10, q4a-effort-union): `ultra` joined the
+    // union, so it no longer stands for an unknown level; `unbounded` does.
+    const unknown = { frontier: "unbounded" as EffortLevel };
     expect(resolveEffortValue("frontier", "codex", unknown)).toBeUndefined();
     expect(resolveModelValue("frontier", "cursor", { frontier: "vendor-x-1" }, unknown)).toBe(
       "vendor-x-1",
@@ -905,7 +910,9 @@ describe("the per-client effort scales", () => {
     // A manifest written by a newer engine is refused by `collectManifestErrors`
     // long before a plan is composed; this is the belt-and-braces answer for a
     // caller that skipped validation — silence, not a fabricated rank.
-    const unknown = manifestWith(["codex"], { frontier: "ultra" as EffortLevel });
+    // TEST CHANGE, justified (2026-10-10, q4a-effort-union): `ultra` joined the
+    // union, so it no longer stands for an unknown level; `unbounded` does.
+    const unknown = manifestWith(["codex"], { frontier: "unbounded" as EffortLevel });
     expect(effortDisclosures(unknown)).toEqual([]);
   });
 });

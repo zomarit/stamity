@@ -183,7 +183,7 @@ Declared caps:
 | `user hook enforcement` | explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts, and no output counts as one of those failures (cursor.com/docs/hooks, accessed 2026-09-17), so a row that decides nothing is emitted as an explicit allow. Session-start and session-end responses cannot block |
 | `MCP tool surface` | servers expose tools through mcp.json; the current contract documents no fixed per-session tool-count cap |
 | `workdir guard` | not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release |
-| `effort-scale` | minimal, low, medium, high, xhigh, max: pass-through — parameter ids and values vary by model (cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model value as `[effort=<level>]` and this client parses the group rather than ruling on the value, so nothing is narrowed here: a level the chosen model does not offer is the model's to reject, and no key is emitted at all until a model id is pinned |
+| `effort-scale` | minimal, low, medium, high, xhigh, max, ultra: pass-through — parameter ids and values vary by model (cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model value as `[effort=<level>]` and this client parses the group rather than ruling on the value, so nothing is narrowed here: a level the chosen model does not offer is the model's to reject, and no key is emitted at all until a model id is pinned |
 
 Sources:
 

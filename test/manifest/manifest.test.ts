@@ -709,7 +709,7 @@ describe("collectManifestErrors", () => {
     ).toEqual([]);
   });
 
-  it("refuses an effort level outside the six the clients document between them", () => {
+  it("refuses an effort level outside the seven the clients document between them", () => {
     // TEST CHANGE, justified (2026-09-20, REQ-LADDER-001): the name and the
     // assertion still described the three-level scale. The vocabulary widened
     // to the six the clients document between them, so a case that accepted
@@ -723,7 +723,9 @@ describe("collectManifestErrors", () => {
     });
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("minimal | low | medium | high | xhigh | max");
+    // TEST CHANGE, justified (2026-10-10, q4a-effort-union): the union the
+    // refusal names gained `ultra` at the top; the refusal itself is unchanged.
+    expect(errors[0]).toContain("minimal | low | medium | high | xhigh | max | ultra");
   });
 
   it("refuses a listed effort class carrying no level, rather than reading it as unset", () => {

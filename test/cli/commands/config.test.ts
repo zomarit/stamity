@@ -897,7 +897,10 @@ describe("config — the model ladder's nine keys", () => {
   // refusal names widened from the three levels every client shared to the six
   // the clients document between them. The behaviour asserted — an off-vocabulary
   // level is refused, names the vocabulary, and writes nothing — is unchanged.
-  it("refuses an out-of-band effort level, naming the six", async () => {
+  // TEST CHANGE, justified (2026-10-10, q4a-effort-union): the union gained
+  // `ultra` at the top, so the refusal names seven levels; an off-vocabulary
+  // level is still refused, names the vocabulary, and writes nothing.
+  it("refuses an out-of-band effort level, naming the seven", async () => {
     const handle = tempDir();
     await seedManifest(handle);
     const before = await manifestBytes(handle);
@@ -905,8 +908,38 @@ describe("config — the model ladder's nine keys", () => {
     const result = await run(handle, ["set", "effort.standard", "nonsense"]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("minimal | low | medium | high | xhigh | max");
+    expect(result.stderr).toContain("minimal | low | medium | high | xhigh | max | ultra");
     expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("refuses `ultra` on a selection whose client tops out at max, naming the client", async () => {
+    // `ultra` is a level of the union now, so the refusal is about the
+    // selection's ceiling, not about an unknown word: the message names the
+    // client and the level its scale ends at.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"] });
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "effort.frontier", "ultra"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(
+      "effort.frontier ultra is not expressible on claude (its scale ends at max)",
+    );
+    expect(result.stderr).toContain("set max or lower, or deselect the client");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("writes `ultra` on a selection whose only client passes the level through", async () => {
+    // The control for the refusal above: the pass-through client's scale is
+    // the whole union, so the top level persists there and nothing clamps.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["cursor"] });
+
+    const result = await run(handle, ["set", "effort.frontier", "ultra"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.frontier).toBe("ultra");
   });
 
   it("writes a level every selected client documents, and each emits it in its own dialect", async () => {

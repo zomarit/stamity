@@ -55,20 +55,28 @@ describe("model ladder enums", () => {
   // not the per-class defaults, which this file's neighbours still pin. The
   // ordering claim is strengthened rather than relaxed: weakest to strongest is
   // now load-bearing, because `effortRank` compares on it.
-  it("lists the six documented effort levels weakest to strongest, with the type in lockstep", () => {
-    expect(EFFORT_LEVELS).toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
+  // TEST CHANGE, justified (2026-10-10, q4a-effort-union): the union gained
+  // `ultra` at the top, the level Codex's config reference now lists above
+  // `max`. The vocabulary grew by one; the ordering claim and the type lockstep
+  // are asserted exactly as before, now over seven levels.
+  it("lists the seven documented effort levels weakest to strongest, with the type in lockstep", () => {
+    expect(EFFORT_LEVELS).toEqual(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]);
     expectTypeOf<EffortLevel>().toEqualTypeOf<
-      "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+      "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"
     >();
   });
 
   it("ranks every level by its position, strictly increasing and total", () => {
     // `effortRank` is what the refusal and the clamp compare on, so a rank that
     // did not follow the tuple's order would silently invert "nearest below".
+    // TEST CHANGE, justified (2026-10-10, q4a-effort-union): the ranks run to 6
+    // because `ultra` joined the top; `ultra` is pinned above `max` so the new
+    // level cannot land anywhere but the strongest end.
     const ranks = EFFORT_LEVELS.map((level) => effortRank(level));
-    expect(ranks).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(ranks).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(effortRank("minimal")).toBeLessThan(effortRank("max"));
     expect(effortRank("high")).toBeLessThan(effortRank("xhigh"));
+    expect(effortRank("max")).toBeLessThan(effortRank("ultra"));
   });
 
   it("keeps each VALID_* set in parity with its tuple, with no duplicate member", () => {

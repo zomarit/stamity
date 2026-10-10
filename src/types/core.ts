@@ -113,10 +113,14 @@ export const VALID_MODEL_CLASSES: Set<string> = new Set(MODEL_CLASSES);
  * A level in this tuple is therefore NOT a level every client can express; ask
  * the row, never this list.
  *
+ * `ultra`, the top level, is one client's alone: Codex's config reference lists
+ * it above `max`. Every other client with an effort key tops out lower and has
+ * a request for it clamped down to its own ceiling.
+ *
  * No `DEFAULT_EFFORT_LEVEL` either: effort is a property of the CLASS, not of
  * the system, so each ladder row carries its own default.
  */
-export const EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export const EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 export const VALID_EFFORT_LEVELS: Set<string> = new Set(EFFORT_LEVELS);
 
