@@ -141,6 +141,26 @@ describe("parseInbox", () => {
     expect(parsed.problems).toEqual([{ line: 2, message }]);
   });
 
+  // qa/6: a `Ref:` straight after `source:` is in its place however much space stands before it;
+  // the fields after it are read trimmed, and so is this one. It was refused as out of place.
+  it("reads a Ref: with more than one space before it as the field in its place", () => {
+    const parsed = parseInbox(
+      [
+        "- Minor · — · d · source: x ·  Ref: r.jsonl#a/1 · by: 2026-11-01",
+        "- Minor · — · d · source: x ·   Ref: .stamity/runs/x/ledger.jsonl",
+      ].join("\n"),
+    );
+
+    expect(parsed.rows).toMatchObject([{ line: 1, ref: "r.jsonl#a/1", by: "2026-11-01" }]);
+    // Its value is still held to the `Ref:` grammar, and named as written.
+    expect(parsed.problems).toEqual([
+      {
+        line: 2,
+        message: "`Ref: .stamity/runs/x/ledger.jsonl` names a ledger, which is addressable only as `<path>#<row id>`",
+      },
+    ]);
+  });
+
   it("ignores prose, headings, blanks and indented bullets, and keeps parsing past a bad bullet", () => {
     const text = "# Deferral inbox\n\nRows: 3.\n  - indented\n- Minor · — · d\n- Warning · a.ts:1 · d · source: x";
     const parsed = parseInbox(text);

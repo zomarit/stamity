@@ -231,8 +231,10 @@ function parseBullet(line: number, bullet: string, belowRule: boolean): InboxRow
 
   const rest = fields.slice(sourceIndex + 1);
   let ref: string | null = null;
-  if (rest[0]?.startsWith("Ref: ") === true) {
-    ref = rest[0].slice("Ref: ".length).trim();
+  // Space before `Ref:` does not move it out of its place: the fields after it are read trimmed too.
+  const first = rest[0]?.trimStart() ?? "";
+  if (first.startsWith("Ref: ")) {
+    ref = first.slice("Ref: ".length).trim();
     const problem = refProblem(ref);
     if (problem !== null) return fail(problem);
     rest.shift();
