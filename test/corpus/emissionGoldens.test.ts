@@ -93,6 +93,17 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q3b-plan-size-text (run
+ *     2026-10-10_next-tier; REQ-FLOW-070). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's two emitted changes are
+ *     `commands/st-plan.md`, 26510 -> 26954 bytes and 411 -> 412 lines (the
+ *     Plan-lint gate's L5 row and the return line's `L5 none|<n> advisory`),
+ *     and `skills/st-verify/SKILL.md`, 7007 -> 7135 bytes at an unchanged 129
+ *     lines (one line naming the four L5 codes, and the closing paragraph's
+ *     last word pulled up a line). Neither is a substitution target, the
+ *     catalog, the policy document or a core hook script, so no golden here
+ *     carries them; the sibling suite itemises both.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q6c-copilot-effort-key (run
  *     2026-10-10_next-tier; REQ-LADDER-004). NOTHING moved in this suite; the
  *     row keeps the two ledgers in step. The unit's one emitted change is a

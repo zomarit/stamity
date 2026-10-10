@@ -60,6 +60,12 @@ const PLAN_LINT_CHECKS = [
   "Requirement ids cited",
 ] as const;
 
+/**
+ * The plan-size codes the structural coverage pass reports, L5 in the gate table. Advisory: they
+ * are no fifth entry of {@link PLAN_LINT_CHECKS}, whose four are the checks that can fail.
+ */
+const PLAN_SIZE_CODES = ["unit-size", "unit-oversize", "unit-prewritten", "delta-verbose"] as const;
+
 /** Per-unit fields a context-free implementer needs; the fresh-context criteria rest on them. */
 const UNIT_FIELDS = [
   "`id`",
@@ -420,6 +426,52 @@ describe("/st-plan — plan-lint gate", () => {
     }
   });
 
+  it("names L5, the coverage script's plan-size codes, as an advisory row that blocks no write", async () => {
+    const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
+    const row = gate.split("\n").find((line) => line.startsWith("| L5 |")) ?? "";
+
+    // REQ-FLOW-070 (2026-10-10, q3b-plan-size-text): the structural coverage pass reports four
+    // plan-size codes that never fail it, and until this row the gate table named none of them,
+    // so a writer met `unit-size` in the JSON with nothing saying what it meant or what to do.
+    // The row sits after L4, in the same table, and says twice that it is no gate: a reader who
+    // takes the fifth row for a fifth blocking check is the failure this pin holds off.
+    expect(row, "the gate table carries no L5 row").not.toBe("");
+    expect(gate.indexOf("| L4 |")).toBeLessThan(gate.indexOf("| L5 |"));
+    expect(gate.indexOf("| L5 |")).toBeLessThan(gate.indexOf("**Structural coverage pass.**"));
+    expect(row).toContain("**Plan size (advisory)**");
+    expect(row).toContain("the structural coverage pass reports");
+    for (const pinned of [
+      "`unit-size` (a unit past 60 lines)",
+      "`unit-oversize` (past 100)",
+      "`unit-prewritten` (a fenced block, or five or more `>` lines, inside a unit)",
+      "`delta-verbose` (a requirement entry past six lines)",
+    ]) {
+      expect(row).toContain(pinned);
+    }
+    expect(row).toContain("none fails the pass");
+    expect(row).toContain("the write is never blocked");
+
+    // The row describes a script, so the script is read: a code the row names and the script no
+    // longer treats as advisory would turn "none fails the pass" into a false statement, and a
+    // threshold that moved there would leave the row's numbers behind.
+    const script = await readFile(join(CORPUS_ROOT, "skills/st-verify/scripts/spec-plan-coverage.mjs"), "utf8");
+    const advisory = /const ADVISORY_CODES = new Set\(\[([^\]]*)\]\)/.exec(script)?.[1] ?? "";
+    for (const code of PLAN_SIZE_CODES) {
+      expect(row).toContain(`\`${code}\``);
+      expect(advisory, `the coverage script does not hold ${code} as advisory`).toContain(`"${code}"`);
+    }
+    expect(script).toContain('if (size > 100) add("unit-oversize"');
+    expect(script).toContain('else if (size > 60) add("unit-size"');
+    expect(script).toContain("if (run === 5)");
+    expect(script).toContain('if (item.lines > 6) add("delta-verbose"');
+
+    // The verify skill owns the script, so it names the same four codes under the same number.
+    const skill = await readFile(join(CORPUS_ROOT, "skills/st-verify/SKILL.md"), "utf8");
+    expect(skill).toContain(
+      "Its advisory plan-size codes are L5 — `unit-size`, `unit-oversize`, `unit-prewritten`, `delta-verbose` — and never fail it.",
+    );
+  });
+
   it("checks every unit cites a requirement id, with a stated escape for a spec that has none", () => {
     const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
 
@@ -626,6 +678,13 @@ describe("/st-plan — return contract", () => {
     // The lint gate grew a fourth check; a return contract that still reports
     // three would hide L4's verdict at the only seam an operator reads.
     expect(returns).toContain("L4 pass|fail");
+    // TEST CHANGE, justified (2026-10-10, q3b-plan-size-text): an assertion added, none loosened.
+    // The return line gains L5 (REQ-FLOW-070), and its vocabulary is not the other four's: it
+    // never fails, so it reads `none` or a count, and a `pass|fail` there would report a gate.
+    expect(returns).toContain(
+      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory`",
+    );
+    expect(returns).not.toContain("L5 pass|fail");
     expect(returns).toContain("sub_agents_spawned:");
     expect(returns).toContain("task_structure: parallelizable | sequential | mixed");
   });

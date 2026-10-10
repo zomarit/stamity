@@ -283,6 +283,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L2 | **Dependencies resolve** | every `depends_on` names a unit in this plan, a path that exists on disk, or an external prerequisite with a named owner. Zero dangling references. | add the missing prerequisite or correct the reference, re-run the pass |
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
 | L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
+| L5 | **Plan size (advisory)** | the structural coverage pass reports `unit-size` (a unit past 60 lines), `unit-oversize` (past 100), `unit-prewritten` (a fenced block, or five or more `>` lines, inside a unit) and `delta-verbose` (a requirement entry past six lines); none fails the pass | split the unit, or point at the file that will carry the text instead of writing it into the unit; the write is never blocked |
 
 **Structural coverage pass.** Before handoff, locate the installed verify skill and run
 `node <verify-skill>/scripts/spec-plan-coverage.mjs <plan.md> <spec.md|spec-directory> ...`.
@@ -399,7 +400,7 @@ Close the run with:
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
 - Structural coverage result and unresolved semantic readings; structural pass alone is not handoff approval.
-- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail`.
+- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory`.
 - `sub_agents_spawned: <count> · task_structure: parallelizable | sequential | mixed`.
 - Open questions carried; a non-empty list blocks handoff.
 - Learnings written, with their paths; `none` when the run met no qualifying failure.

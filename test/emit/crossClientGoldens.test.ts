@@ -186,6 +186,33 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q3b-plan-size-text (run
+  //     2026-10-10_next-tier; REQ-FLOW-070). The st-plan touchpoint and the
+  //     verify skill moved, plus the manifest rows that record them. No emitted
+  //     path was added or removed.
+  //
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and `.github/prompts/st-plan.prompt.md`
+  //       26341 -> 26785, `.agents/skills/st-plan/SKILL.md` 26384 -> 26828), by
+  //       +444 bytes, the corpus source's own delta: the Plan-lint gate table
+  //       gains its L5 row, "Plan size (advisory)", naming the coverage
+  //       script's four size codes, and the Return contract's lint line ends
+  //       `· L5 none|<n> advisory`.
+  //     CHANGED `st-verify/SKILL.md` in every selection that carries it
+  //       (`.claude/skills/` and `.agents/skills/`) by +128 bytes,
+  //       7045 -> 7173, at an unchanged line count: one line after the
+  //       coverage-script paragraph, "Its advisory plan-size codes are L5 —
+  //       `unit-size`, `unit-oversize`, `unit-prewritten`, `delta-verbose` —
+  //       and never fail it.", and the closing paragraph's last word pulled up
+  //       a line (a line break became a space, 0 bytes) so the body holds its
+  //       130-line cap.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, every other
+  //       touchpoint and skill, the coverage script, every companion, hook
+  //       script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q6c-copilot-effort-key (run
   //     2026-10-10_next-tier; REQ-LADDER-004). The ten Copilot agent files
   //     moved, plus the manifest rows that record them. No emitted path was
