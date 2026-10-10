@@ -93,6 +93,16 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script, its review
+ *     round 1 fix (run 2026-10-10_next-tier; review/12 with build/7;
+ *     REQ-FLOW-070). NOTHING moved in this suite; the row keeps the two
+ *     ledgers in step. The fix's one emitted change is
+ *     `skills/st-verify/scripts/spec-plan-coverage.mjs`, 17656 -> 17916 bytes
+ *     and 302 -> 304 lines: `delta-verbose` also reads a delta entry headed
+ *     `### ADDED REQ-…`, `### MODIFIED REQ-…` or `### REMOVED REQ-…`. A skill
+ *     script is no golden of this suite, as the unit's own row below says;
+ *     the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q6b-copilot-instructions-key (run
  *     2026-10-10_next-tier; REQ-FLOW-071). NOTHING moved in this suite; the
  *     row keeps the two ledgers in step. The unit's one emitted change is a

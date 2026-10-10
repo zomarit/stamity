@@ -140,7 +140,8 @@ export function checkCoverage(plan, specs, options = {}) {
   const provisional = new Map();
   const units = [];
   // Plan size: a unit's lines run from its heading to the next unfenced, unindented `### ` or `## `;
-  // a delta entry's from its `REQ-` heading to the next unfenced heading of any level.
+  // a delta entry's from its `REQ-` heading to the next unfenced heading of any level. An entry
+  // heading may carry its disposition first (`### ADDED REQ-…`, MODIFIED, REMOVED): plans write both.
   const entries = [];
   let span;
   let entry;
@@ -153,14 +154,15 @@ export function checkCoverage(plan, specs, options = {}) {
     if (heading) { section = heading[1].replace(/^\d+[.)]\s+/, "").toLowerCase(); unit = undefined; field = undefined; span = undefined; entry = undefined; sawSpecDelta ||= isSpecDelta(section); continue; }
     if (isSpecDelta(section)) {
       if (/^#{1,6}\s/.test(row.text)) {
-        entry = /^#{3,6}\s+REQ-/.test(row.text)
+        entry = /^#{3,6}\s+(?:(?:ADDED|MODIFIED|REMOVED)\s+)?REQ-/.test(row.text)
           ? { id: refs(row.text, plan.path, row.line, true)[0] ?? clean(row.text.replace(/^#+/, "")), line: row.line, lines: 0 }
           : undefined;
         if (entry) entries.push(entry);
       } else if (entry && row.raw.trim()) entry.lines += 1;
       // A `### REQ-` heading in the delta defines the requirement for a plan whose spec is not
       // written yet. It is read as a definition only where no spec supplies one — a spec always
-      // wins — and the reading is reported so nobody mistakes the plan for the contract.
+      // wins — and the reading is reported so nobody mistakes the plan for the contract. Only the
+      // bare form defines: a `### REMOVED REQ-…` heading is a size entry above, never a definition.
       if (/^#{3,6}\s+REQ-/.test(row.text)) {
         const id = refs(row.text, plan.path, row.line, true)[0];
         if (id && provisional.has(id)) add("duplicate-requirement", plan.path, row.line, `${id} is already provisionally defined at ${provisional.get(id)}.`);

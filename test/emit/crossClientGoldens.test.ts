@@ -186,6 +186,23 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script, its review
+  //     round 1 fix (run 2026-10-10_next-tier; review/12 with build/7;
+  //     REQ-FLOW-070). The coverage script moved again, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `st-verify/scripts/spec-plan-coverage.mjs` in every selection
+  //       that carries it (`.claude/skills/` and `.agents/skills/`) by +260
+  //       bytes, 17656 -> 17916, and 302 -> 304 lines: `delta-verbose` also
+  //       reads a delta entry headed `### ADDED REQ-…`, `### MODIFIED REQ-…`
+  //       or `### REMOVED REQ-…` (one pattern and two comment lines).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint,
+  //       companion, hook script, guard, policy document and every other
+  //       skill file.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q6b-copilot-instructions-key (run
   //     2026-10-10_next-tier; REQ-FLOW-071). The ten Copilot agent files
   //     moved, plus the manifest rows that record them. No emitted path was
