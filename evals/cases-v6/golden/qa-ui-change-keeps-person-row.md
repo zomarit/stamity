@@ -124,7 +124,8 @@ each list.
 3. The sign-off block follows the row: the `**Sign-off**` block with its lines, the
    rollback line among them.
 4. The response must NOT print "no walk-through required", for `docs` or for any other
-   class, and must NOT close the checkpoint with no row for a person.
+   class, and must NOT close the checkpoint with no row for a person. Naming that line to
+   say why it does not apply to this change does not fail this criterion.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

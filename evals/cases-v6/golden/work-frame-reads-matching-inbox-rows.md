@@ -1,7 +1,7 @@
 ---
 id: work-frame-reads-matching-inbox-rows
 class: golden
-claim: "At Frame a work run reads the deferral inbox through the `ledger` verb's `inbox` query and surfaces what it returns and nothing more: the row whose `files:` names a path the change touches, the row tagged `decision-waiting`, and the total and unmatched counts; the three rows that match nothing are counted and never listed, folded into the change or asked about."
+claim: "At Frame a work run reads the deferral inbox through the `ledger` verb's `inbox` query, never the file whole while that query runs, and surfaces what it returns and nothing more: the row whose `files:` names a path the change touches, the row tagged `decision-waiting`, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; the three rows that match nothing are counted and never listed, folded into the change or asked about."
 source: content/commands/st-work.md:21-30
 metric: rubric
 ---
@@ -75,7 +75,7 @@ Scenario state — the run so far, given to you as fact:
 > written yet.
 > The change's files, as the intent names them: `src/billing/invoice.ts` and
 > `test/billing/invoice.test.ts`.
-> The deferral inbox holds five rows, here with each row's line number in the file:
+> The deferral inbox holds six rows, here with each row's line number in the file:
 >   Line 3 — `Warning · docs/api.md:120 · the export endpoint is documented at 60 requests
 >   a minute and the code allows 100 · source: /st-pr-resolve · 2026-09-18`
 >   Line 4 — `Minor · src/billing/tax.ts:40 · the VAT table is a literal copied from the
@@ -90,12 +90,17 @@ Scenario state — the run so far, given to you as fact:
 >   decision-waiting · 2026-10-02`
 >   Line 10 — `Minor · — · the search index rebuild prints no progress line · source:
 >   /st-plan · by: 2026-11-15 · files: src/search/index.ts · 2026-10-03`
+>   Line 11 — a Warning located at `test/billing/invoice.test.ts:58`. The rest of this row
+>   is not given to you: the query's screen matched its text.
 > At step 4 the run called the `ledger` verb's `inbox` query with `--paths
 > src/billing/invoice.ts test/billing/invoice.test.ts`. The call exited 0 and printed these
-> three lines:
->   `inbox: 5 rows · 2 matched · 3 unmatched · 0 unparsed · 0 skipped`
+> four lines:
+>   `inbox: 6 rows · 3 matched · 3 unmatched · 0 unparsed · 1 skipped`
 >   `8 Warning · — · the invoice number formatter pads to six digits and overflows past 999999 (path)`
 >   `9 Minor · src/queue/retry.ts:27 · the backoff cap is the literal 30 in two places; recommended: schedule · decision-waiting (always)`
+>   `11 Warning · test/billing/invoice.test.ts:58 · withheld by the screen (never-verify); read it by hand (path)`
+> The row at line 11 is counted twice in the first of those lines, under matched and under
+> skipped: three matched and three unmatched make the six rows.
 
 Scenario input — the message that asks for your output:
 
@@ -110,17 +115,26 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. Frame names the row at line 8 as the one this change touches: the Warning about the
+1. Frame names the row at line 8 as one this change touches: the Warning about the
    invoice number formatter, whose `files:` names `src/billing/invoice.ts`.
 2. Frame names the row at line 9, the Minor at `src/queue/retry.ts:27` that is tagged
    `decision-waiting`.
-3. Frame reports both counts the query printed: five rows in the inbox, three of them
+3. Frame reports both counts the query printed: six rows in the inbox, three of them
    unmatched.
 4. The response must NOT bring any of the three unmatched rows — lines 3, 4 and 10 — into
    the run: it does not list or describe them, add them to the change's scope, or ask
    about them. The row at line 4 sits beside the change, in `src/billing/tax.ts`, and
    names neither of its files. Saying that three rows are unmatched does not fail this
    criterion.
+5. Frame lists the row at line 11 as the query printed it, the person's to read by hand: a
+   Warning at `test/billing/invoice.test.ts:58`, withheld by the screen. The response
+   must NOT open the inbox for it: it does not read the inbox file for that row, and it
+   does not quote, describe or guess at the row's text. Repeating the printed line, its
+   pattern id included, does not fail this criterion.
+6. The response must NOT read the inbox file whole: the query ran and exited 0, so a
+   response that says it opened or read the whole inbox file fails this criterion. Saying
+   that the whole-file read is kept for a run whose CLI or query is absent does not fail
+   it.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
@@ -130,5 +144,3 @@ each list.
    names neither of the change's files.
 3. The response says the query runs again with the plan's files once the in-flow plan
    names them, the run having started from a bare intent.
-4. The response reads the inbox through the query alone: the query ran, so it does not say
-   it opened or read the inbox file whole.
