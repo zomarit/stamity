@@ -1063,10 +1063,14 @@ describe("retireRow under the schedule rule (q9a-disposition)", () => {
 
   // review/15, review/16, review/17: a slot holding only vague and filler words,
   // or no letter and no digit at all, is refused like any other grammar problem.
+  // review/44: so is one holding filler words alone.
   it.each([
     ["fixed later", "`fixed` names only the vague word `later`"],
     ["cut: tbd", "`cut` names only the vague word `tbd`"],
     ["scheduled board #42 · when later on", "`when` names the vague trigger `later`"],
+    ["cut not yet", "`cut` names only filler words (`not yet`)"],
+    ["fixed just now", "`fixed` names only filler words (`just now`)"],
+    ["scheduled board #42 · when at some point", "`when` names the vague trigger `at some point`"],
     ["scheduled board #42 · when —", "`when` names no trigger"],
     ["fixed —", "`fixed` names no ref"],
   ])("refuses %j from the cutover with why and next, the ledger byte-identical", async (disposition, problem) => {

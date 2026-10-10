@@ -424,18 +424,23 @@ describe("fixtures — the gate fails where it must", () => {
       retiredAs(23, "2026-10-10 scheduled board #42 · when —"),
       retiredAs(24, "2026-10-10 fixed —"),
       retiredAs(25, "2026-10-10 fixed in r2"),
+      // review/44: filler words alone, with no vague word among them.
+      retiredAs(26, "2026-10-10 cut not yet"),
+      retiredAs(27, "2026-10-10 scheduled board #42 · when at some point"),
     ].join("\n");
     const { rows, problems } = parseLedger(LEDGER, text);
     expect(problems).toEqual([]);
     const named = retiredProblems(LEDGER, rows);
     expect(named.map((problem) => problem.slice(0, problem.indexOf(": ")))).toEqual(
-      [20, 21, 22, 23, 24].map((n) => `${LEDGER}#r1/prove/${n}`),
+      [20, 21, 22, 23, 24, 26, 27].map((n) => `${LEDGER}#r1/prove/${n}`),
     );
     expect(named[0]).toContain("`fixed` names only the vague word `later`");
     expect(named[1]).toContain("`cut` names only the vague word `tbd`");
     expect(named[2]).toContain("vague trigger `later`");
     expect(named[3]).toContain("`when` names no trigger");
     expect(named[4]).toContain("`fixed` names no ref");
+    expect(named[5]).toContain("`cut` names only filler words (`not yet`)");
+    expect(named[6]).toContain("vague trigger `at some point`");
   });
 
   it("(q) holds every `retired` value of a run dated from the cutover, a back-dated one included", () => {

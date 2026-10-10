@@ -18,10 +18,12 @@
  *
  * Free text has to say something a reader can check. A trigger, a `fixed` ref
  * and a `cut` reason whose every word is a vague or a filler word
- * ({@link FILLER_WORDS}), at least one of them vague, are refused; and each of
- * them, a board item and a handoff path must hold at least one letter or
- * digit, so a lone dash is no trigger, no ref, no reason and no place. Words
- * are compared as written, lower-cased: a look-alike letter is not folded.
+ * ({@link FILLER_WORDS}) are refused, filler words alone included (`at some
+ * point`, `not yet`, `just now`); a board item keeps the narrower rule, and
+ * such an item is refused when one of its words is vague. Each of the four,
+ * and a handoff path, must hold at least one letter or digit, so a lone dash
+ * is no trigger, no ref, no reason and no place. Words are compared as
+ * written, lower-cased: a look-alike letter is not folded.
  *
  * Pure: text in, verdict out. A place is text and is never resolved or opened,
  * and a problem never quotes the caller's own words, only the grammar's and the
@@ -39,7 +41,8 @@ export const VAGUE_TRIGGERS = ["later", "someday", "eventually", "tbd", "hygiene
 
 /**
  * Words that add no event, run or reason to a vague word beside them, so
- * `later on` and `maybe someday` say no more than `later` and `someday`.
+ * `later on` and `maybe someday` say no more than `later` and `someday`, and
+ * that name none on their own, so `at some point` and `not yet` say nothing.
  * Closed-class words and hedges only, each one lower-case letters: a word a
  * real trigger is made of (`touched`, `next`, `attended`, `close`, `release`)
  * never belongs here, or `when touched` and `when next attended close` would
@@ -158,18 +161,40 @@ function onlyVague(words: readonly string[]): string | null {
 }
 
 /**
- * The {@link VAGUE_TRIGGERS} word `trigger` amounts to, or `null`. A trigger is
- * vague when its every word ({@link wordsOf}) is a vague or a
- * {@link FILLER_WORDS} word and at least one is vague (`later`, `Later.`,
- * `maybe later`, a backticked `later`), or when, lower-cased with its spaces
- * collapsed, it holds `hygiene batch` anywhere. Any other trigger is `null`,
- * the empty and the wordless one included; whether a trigger with no word is
- * allowed is the caller's to say.
+ * The words of `words`, each once and in the order written, joined by a space,
+ * when there is a word and every word is a {@link FILLER_WORDS} word; `null`
+ * otherwise. What it returns is made of list words alone, at most the list
+ * long, so a caller may name it in a problem.
+ */
+function onlyFiller(words: readonly string[]): string | null {
+  if (words.length === 0 || !words.every((word) => FILLERS.has(word))) return null;
+  return [...new Set(words)].join(" ");
+}
+
+/**
+ * The {@link VAGUE_TRIGGERS} word `text` amounts to, or `null`: its every word
+ * ({@link wordsOf}) is a vague or a {@link FILLER_WORDS} word and at least one
+ * is vague (`later`, `Later.`, `maybe later`, a backticked `later`), or,
+ * lower-cased with its spaces collapsed, it holds `hygiene batch` anywhere.
+ */
+function vagueWord(text: string): string | null {
+  const vague = onlyVague(wordsOf(text));
+  if (vague !== null) return vague;
+  return text.toLowerCase().replace(/\s+/gu, " ").includes("hygiene batch") ? "hygiene batch" : null;
+}
+
+/**
+ * What a trigger that names no event amounts to, or `null`. The
+ * {@link VAGUE_TRIGGERS} word, when its every word is a vague or a filler word
+ * and one is vague, or when it holds `hygiene batch` anywhere
+ * ({@link vagueWord}); its filler words, each once and as the list spells them
+ * ({@link onlyFiller}), when its every word is a {@link FILLER_WORDS} word (`at
+ * some point`, `not yet`). Any other trigger is `null`, the empty and the
+ * wordless one included; whether a trigger with no word is allowed is the
+ * caller's to say.
  */
 export function vagueTrigger(trigger: string): string | null {
-  const vague = onlyVague(wordsOf(trigger));
-  if (vague !== null) return vague;
-  return trigger.toLowerCase().replace(/\s+/gu, " ").includes("hygiene batch") ? "hygiene batch" : null;
+  return vagueWord(trigger) ?? onlyFiller(wordsOf(trigger));
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; problem: string };
@@ -224,7 +249,8 @@ function parsePlace(text: string): Parsed<Place> {
   // A place with no letter and no digit (a lone dash, a lone dot) names nothing.
   if (wordsOf(target).length === 0) return refused;
   if (match[1] === "board") {
-    return vagueTrigger(target) === null ? { ok: true, value: { kind: "board", item: target } } : refused;
+    // The vague-word rule, not the trigger's filler-alone one: only the three free-text slots carry that.
+    return vagueWord(target) === null ? { ok: true, value: { kind: "board", item: target } } : refused;
   }
   return /^\S+$/u.test(target) && /[/.]/u.test(target)
     ? { ok: true, value: { kind: "handoff", path: target } }
@@ -274,6 +300,7 @@ export function parseDisposition(text: string): { ok: true; value: Disposition }
   // The only-words rule, not `vagueTrigger`'s `hygiene batch` anywhere: a ref
   // such as `in the hygiene batch of 2026-10-08` names a run a reader can find.
   const vague = onlyVague(words);
+  const filler = onlyFiller(words);
   if (match[1] === "fixed") {
     if (words.length === 0) {
       return { ok: false, problem: "`fixed` names no ref: say what fixed it, as `fixed in <run id>`" };
@@ -282,6 +309,12 @@ export function parseDisposition(text: string): { ok: true; value: Disposition }
       return {
         ok: false,
         problem: `\`fixed\` names only the vague word \`${vague}\`, which no reader can check: say what fixed it, as \`fixed in <run id>\``,
+      };
+    }
+    if (filler !== null) {
+      return {
+        ok: false,
+        problem: `\`fixed\` names only filler words (\`${filler}\`), which no reader can check: say what fixed it, as \`fixed in <run id>\``,
       };
     }
     return { ok: true, value: { kind: "fixed", ref: said } };
@@ -293,6 +326,12 @@ export function parseDisposition(text: string): { ok: true; value: Disposition }
     return {
       ok: false,
       problem: `\`cut\` names only the vague word \`${vague}\`, which is no reason: say why it was dropped, as \`cut <reason>\``,
+    };
+  }
+  if (filler !== null) {
+    return {
+      ok: false,
+      problem: `\`cut\` names only filler words (\`${filler}\`), which is no reason: say why it was dropped, as \`cut <reason>\``,
     };
   }
   return { ok: true, value: { kind: "cut", reason: said } };

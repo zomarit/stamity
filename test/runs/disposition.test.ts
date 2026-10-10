@@ -139,17 +139,37 @@ describe("vagueTrigger", () => {
     expect(vagueTrigger(trigger)).toBe(word);
   });
 
+  it.each(["next attended close", "later, when the release ships", "the hygiene of the batch", "—", "?!"])(
+    "returns null for %j: a word outside both lists, or no word at all",
+    (trigger) => {
+      expect(vagueTrigger(trigger)).toBeNull();
+    },
+  );
+
+  // TEST CHANGE, justified (2026-10-10, review/44): `maybe` and `not yet` were
+  // pinned above as null, under review/15's "at least one of them vague"
+  // clause. That clause is withdrawn: a trigger whose every word is a filler
+  // word names no event either, so a row scheduled on one would never come
+  // back. It is named by its filler words, each once and as the list spells
+  // them, never by the caller's spelling.
   it.each([
-    "next attended close",
-    "later, when the release ships",
-    "maybe",
-    "not yet",
-    "the hygiene of the batch",
-    "—",
-    "?!",
-  ])("returns null for %j: a word outside both lists, or no vague word at all", (trigger) => {
-    expect(vagueTrigger(trigger)).toBeNull();
+    ["maybe", "maybe"],
+    ["not yet", "not yet"],
+    ["at some point", "at some point"],
+    ["Not yet.", "not yet"],
+    ["`Just` — NOW", "just now"],
+    ["a, A; a", "a"],
+    ["until then, or not until then", "until then or not"],
+  ])("names %j, filler words alone, by those words: %j", (trigger, words) => {
+    expect(vagueTrigger(trigger)).toBe(words);
   });
+
+  it.each(["touched", "next attended close", "at the next release", "not until plan 020 starts"])(
+    "still returns null for %j, whose filler words sit beside a word that names an event",
+    (trigger) => {
+      expect(vagueTrigger(trigger)).toBeNull();
+    },
+  );
 });
 
 describe("parseDisposition", () => {
@@ -265,6 +285,13 @@ describe("parseDisposition", () => {
     ["`cut` with a vague word for a reason", "cut someday", "`cut` names only the vague word `someday`"],
     ["`cut:` with a vague word for a reason", "cut: tbd", "`cut` names only the vague word `tbd`"],
     ["`cut` with vague and filler words for a reason", "cut: maybe later, or not", "`cut` names only the vague word `later`"],
+    // review/44: filler words alone, in each of the three free-text slots.
+    ["a trigger of filler words alone", "scheduled board #42 · when at some point", "vague trigger `at some point`"],
+    ["a one-word filler trigger after a colon", "scheduled board #42 · when: maybe", "vague trigger `maybe`"],
+    ["`fixed` with filler words for a ref", "fixed just now", "`fixed` names only filler words (`just now`)"],
+    ["`fixed:` with one filler word for a ref", "fixed: Now.", "`fixed` names only filler words (`now`)"],
+    ["`cut` with filler words for a reason", "cut not yet", "`cut` names only filler words (`not yet`)"],
+    ["`cut:` with filler words for a reason", "cut: not now", "`cut` names only filler words (`not now`)"],
     // review/17: the zero-word rows, a slot holding no letter and no digit.
     ["a dash-only trigger", "scheduled board #42 · when —", "`when` names no trigger"],
     ["a hyphen-only trigger after a colon", "scheduled board #42 · when: -", "`when` names no trigger"],
@@ -296,8 +323,13 @@ describe("parseDisposition", () => {
     "cut: out of scope",
     "cut accepted risk: no exploit path",
     "cut: later is fine, the flag is off",
-    // Filler words alone name no vague word, so the rule has nothing to refuse.
-    "cut: not now",
+    // TEST CHANGE, justified (2026-10-10, review/44): `cut: not now` stood here
+    // as accepted, "filler words alone name no vague word". The rule now
+    // refuses a slot whose every word is vague or filler, so that value moved
+    // to the refusals above; these hold a filler word beside a real one.
+    "cut: not in scope",
+    "fixed just now in r2",
+    "fixed in 2026-10-10_x",
     "scheduled board #42 · when touched",
     "scheduled board #42 · when next attended close",
     "scheduled board #42 · when later today's release ships",
@@ -333,5 +365,15 @@ describe("parseDisposition", () => {
       expect(problem).toMatch(/names only the vague word `(later|someday)`/u);
       for (const written of ["LATER", "Maybe", "Perhaps", "SOMEDAY"]) expect(problem).not.toContain(written);
     }
+  });
+
+  it("names filler words as the list spells them, each once, never the caller's spelling or count", () => {
+    // review/44: the filler words a refusal names come from the closed list,
+    // so a padded or re-cased value cannot grow or shape the problem line.
+    const padded = `cut: ${"Not YET, ".repeat(40)}`;
+    expect(problemOf(padded)).toContain("`cut` names only filler words (`not yet`)");
+    expect(problemOf(padded)).not.toMatch(/Not|YET/u);
+    expect(problemOf("fixed: Maybe… MAYBE")).toContain("`fixed` names only filler words (`maybe`)");
+    expect(problemOf(`scheduled board #1 · when ${"Some Day ".repeat(40)}`)).toContain("vague trigger `some day`");
   });
 });
