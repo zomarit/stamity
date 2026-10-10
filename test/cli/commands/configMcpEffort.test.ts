@@ -293,15 +293,24 @@ describe("config effort rows — only a level an emitted file would carry", () =
     expect(rowFor(result.stdout, "effort.standard")).not.toMatch(/\bmedium\b/);
   });
 
-  it("prints the marker on the client that publishes no effort surface", async () => {
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "prints the marker
+  // on the client that publishes no effort surface" and held a copilot-only repo to an undefined
+  // resolver answer and a `(not expressed)` row. The engine now writes Copilot's
+  // `reasoning-effort` key (REQ-LADDER-004), so the class's level reaches the emitted agent file
+  // and the row prints it. The suite's rule is unchanged: a printed level is one a file carries.
+  it("prints the level on a copilot-only repo, whose agents carry it in a key of their own", async () => {
     const handle = tempDir();
     await seedManifest(handle, { tools: ["copilot"] });
 
     const result = await run(handle, []);
 
-    expect(resolveEffortValue("advanced", "copilot", { advanced: "high" })).toBeUndefined();
-    expect(rowFor(result.stdout, "effort.advanced")).toContain("(not expressed)");
-    expect(rowFor(result.stdout, "effort.advanced")).not.toMatch(/\bhigh\b/);
+    // Cross-checked against the resolver the adapter itself calls, at two
+    // classes so the row is shown to follow the class and not one literal.
+    expect(resolveEffortValue("advanced", "copilot", {})).toBe("high");
+    expect(resolveEffortValue("economy", "copilot", {})).toBe("low");
+    expect(rowFor(result.stdout, "effort.advanced")).toMatch(/high\s+\(default\)/);
+    expect(rowFor(result.stdout, "effort.economy")).toMatch(/low\s+\(default\)/);
+    expect(rowFor(result.stdout, "effort.advanced")).not.toContain("(not expressed)");
   });
 
   it("prints the level on a client that does write it — the positive control", async () => {
