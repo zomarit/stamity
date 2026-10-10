@@ -12,13 +12,17 @@ import { CliFailure } from "../../../src/cli/kit/output.ts";
 import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
 import { readManifest } from "../../../src/manifest/manifest.ts";
 import { getSourceEnvMcpCommand } from "../../../src/mcp/env.ts";
-import { resolveEffortValue, resolveModelValue } from "../../../src/roster/modelLadder.ts";
+import {
+  CLIENT_MODEL_PROJECTION,
+  resolveEffortValue,
+  resolveModelValue,
+} from "../../../src/roster/modelLadder.ts";
 import {
   DEFAULT_MAX_REVIEW_ITERATIONS,
   HARD_MAX_REVIEW_ITERATIONS,
   MIN_MAX_REVIEW_ITERATIONS,
 } from "../../../src/roster/reviewCaps.ts";
-import { MODEL_CLASSES } from "../../../src/types/core.ts";
+import { MODEL_CLASSES, TOOLS } from "../../../src/types/core.ts";
 import { CONTENT_CLASSES, type ContentSelection } from "../../../src/types/content.ts";
 import {
   MANIFEST_FILE,
@@ -1059,6 +1063,43 @@ describe("config — the model ladder's nine keys", () => {
     expect(result.code).toBe(0);
     expect((await readManifest(handle.dir))?.models?.effort?.economy).toBe("minimal");
     expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("low");
+  });
+
+  // Added 2026-10-10, run 2026-10-10_next-tier, the QA walk's fix round (ledger row qa/3): the
+  // hint, which `docs/configuration.md` renders, said a level a selected client cannot express is
+  // refused and named no exception, while `minimal` is accepted on the two clients whose rows
+  // list it as legacy. The hint now states that exception, read from those rows.
+  it("states the legacy exception in the effort hint, for the level and clients the code accepts", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["copilot", "codex"] });
+
+    // The behaviour the hint describes: accepted, stored as asked, written as `low` on both.
+    const set = await run(handle, ["set", "effort.economy", "minimal"]);
+    expect(set.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.economy).toBe("minimal");
+    expect(resolveEffortValue("economy", "copilot", { economy: "minimal" })).toBe("low");
+    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("low");
+
+    // The hint as an operator meets it: a refusal quotes it, and the reference page renders it.
+    const refused = await run(handle, ["set", "effort.economy", "nonsense"]);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain(
+      "so one a selected client cannot express is refused here, except a legacy level, which " +
+        "is accepted and written as the nearest level that client documents: minimal is " +
+        "written as low on copilot, codex",
+    );
+
+    // Every row that lists a legacy level is named with it, so the two cannot drift apart.
+    const legacy = TOOLS.flatMap((tool) =>
+      CLIENT_MODEL_PROJECTION[tool].effortLegacy.map((level) => ({ tool, level })),
+    );
+    expect(legacy.length).toBeGreaterThan(0);
+    for (const { tool, level } of legacy) {
+      const written = resolveEffortValue("economy", tool, { economy: level });
+      expect(refused.stderr).toMatch(
+        new RegExp(`\\b${level} is written as ${String(written)} on [a-z, ]*\\b${tool}\\b`),
+      );
+    }
   });
 
   it("refuses a level below a selected client's floor, naming its lowest", async () => {

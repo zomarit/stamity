@@ -269,13 +269,37 @@ const EFFORT_OMITTERS = TOOLS.filter(
   (tool) => CLIENT_MODEL_PROJECTION[tool].effortCarrier === null,
 );
 
+/**
+ * The legacy exception to the refusal, read from the rows that grant it: each
+ * level a carrier lists in `effortLegacy`, the level the emission writes for it
+ * there, and the clients it holds on. {@link unexpressibleOn} skips exactly
+ * these pairs, so the hint cannot promise a refusal the code does not make.
+ */
+const EFFORT_LEGACY_CLAUSES = EFFORT_LEVELS.flatMap((level) => {
+  const clientsByWritten = new Map<EffortLevel, Tool[]>();
+  for (const tool of EFFORT_CARRIERS) {
+    if (!CLIENT_MODEL_PROJECTION[tool].effortLegacy.includes(level)) continue;
+    const written = nearestExpressibleEffort(level, tool);
+    if (written === undefined) continue;
+    clientsByWritten.set(written, [...(clientsByWritten.get(written) ?? []), tool]);
+  }
+  return [...clientsByWritten].map(
+    ([written, tools]) => `${level} is written as ${written} on ${renderList(tools)}`,
+  );
+});
+
 // The "omitted on" clause is printed only while a row drops the axis; none does
-// today, and "omitted on none" would read as a client named `none`.
+// today, and "omitted on none" would read as a client named `none`. The legacy
+// clause follows the same rule: it is printed only while a row lists a level.
 const EFFORT_HINT =
   `one of ${EFFORT_LEVELS.join(" | ")} — carried on ${renderList(EFFORT_CARRIERS)}` +
   (EFFORT_OMITTERS.length === 0 ? "" : `, omitted on ${renderList(EFFORT_OMITTERS)}`) +
   `; the levels are the union of the clients' documented scales, so one a ` +
-  `selected client cannot express is refused here`;
+  `selected client cannot express is refused here` +
+  (EFFORT_LEGACY_CLAUSES.length === 0
+    ? ""
+    : `, except a legacy level, which is accepted and written as the nearest level ` +
+      `that client documents: ${EFFORT_LEGACY_CLAUSES.join("; ")}`);
 
 /** The persisted pin for one class, or null when the operator set none. */
 function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null {
