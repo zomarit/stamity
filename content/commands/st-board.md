@@ -430,8 +430,16 @@ command is what parses it.
   `decision-waiting`, stays as it is, with no copy. Each is listed on
   `Not done:` and counted as scheduled in the leftovers line; the record's
   `Status:` names how many wait tagged `decision-waiting`, and the next
-  attended close asks about every `decision-waiting` row first. A real defect
-  is never dropped by default.
+  attended close asks about every `decision-waiting` row first. Stop, at a
+  run's close that asks this question, fixes nothing and otherwise handles
+  rows as no answer does: each leftover from the run's own ledger closes
+  `deferred` and is appended tagged `decision-waiting` with
+  `when: next attended close`, each inbox row stays as it is, each is listed
+  on `Not done:` and counted as scheduled, and nothing is fixed, merged or
+  committed; another ask's own `stop`, as at a plan handoff, keeps its
+  meaning. In the leftovers line, `real` counts the Critical and Warning rows
+  among those shown, and `changed` the rows whose recommendation the person
+  changed. A real defect is never dropped by default.
 
 ## Return contract
 

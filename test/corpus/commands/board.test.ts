@@ -937,6 +937,71 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(matchInbox(untagged.rows, { paths: ["lib/gear.ts"] })).toMatchObject({ matched: [], unmatched: 1, triggers: 1 });
   });
 
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close, review round 1; `review/48`, signed
+  // off): the third answer read "or stop, every leftover on `Not done:`" and nothing said what a
+  // leftover's ledger row or inbox field became, while `/st-work` refuses its record on an `open`
+  // row and appends a `deferred` one only with `by:` or `when:`. Stop now takes the no-answer
+  // rule's row handling and makes no fix, so the record can be written and no trigger is invented.
+  it("gives the stop answer the no-answer rule's row handling, with nothing fixed (REQ-FLOW-074)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const leftovers = inboxBullet(inbox, "Leftovers at a close");
+    const stop =
+      "Stop, at a run's close that asks this question, fixes nothing and otherwise handles rows as no answer does: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled, and nothing is fixed, merged or committed; another ask's own `stop`, as at a plan handoff, keeps its meaning.";
+    expect(leftovers).toContain(stop);
+
+    // After the rule it borrows from, and before the block's closing floor.
+    const at = leftovers.indexOf(stop);
+    expect(at).toBeGreaterThan(leftovers.indexOf("the next attended close asks about every `decision-waiting` row first."));
+    expect(at).toBeLessThan(leftovers.indexOf("A real defect is never dropped by default."));
+    // The answer itself still reads as it did; the clause says what it does to a row.
+    expect(leftovers).toContain("or stop, every leftover on `Not done:`");
+
+    // The row a stopped close appends is the one an unattended close appends:
+    // the same tag and the same trigger, so it parses below the heading.
+    const fields = /is appended tagged `([a-z-]+)` with `(when: [a-z ]+)`/.exec(stop);
+    expect(fields?.[1]).toBe("decision-waiting");
+    expect(ALWAYS_SHOW_TAGS).toContain(fields?.[1]);
+    expect(parseInbox(ruledInbox("lib/widget.ts:3", ` · ${fields?.[1]} · ${fields?.[2]}`)).problems).toEqual([]);
+
+    // The record `/st-work` refuses on an `open` row and the append it makes
+    // only for a `deferred` one are the two sentences the clause answers.
+    const files = await walkAllMarkdown();
+    const text = (relPath: string): string => flat(files.find((file) => file.relPath === relPath)?.parsed.body ?? "");
+    const work = text("commands/st-work.md");
+    expect(work).toContain("refuses while any row reads `open`");
+    expect(work).toContain("At exit every row that closed `deferred` is appended to");
+    // Scoped to a close that asks the leftovers question: a plan handoff's own
+    // `stop` is that flow's, in that flow's words, and the clause names no flow.
+    expect(stop).not.toMatch(/`\/st-/);
+    expect(text("commands/st-rework.md")).toContain("On `stop`, the plan and the inbox rows are the run's output.");
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close, review round 1; `review/49`, signed
+  // off): the leftovers line's grammar is `/st-work`'s, and two of its counts were defined in no
+  // shipped text, so two closes could count them differently. The rule's home defines both; the
+  // grammar itself did not move.
+  it("defines the leftovers line's `real` and `changed` counts (REQ-CTX-020)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const leftovers = inboxBullet(inbox, "Leftovers at a close");
+    const counts =
+      "In the leftovers line, `real` counts the Critical and Warning rows among those shown, and `changed` the rows whose recommendation the person changed.";
+    expect(leftovers).toContain(counts);
+    expect(leftovers.indexOf(counts)).toBeLessThan(leftovers.indexOf("A real defect is never dropped by default."));
+
+    // Each word the sentence defines is a field of the line as `/st-work` writes it.
+    const work = flat(
+      (await walkAllMarkdown()).find((file) => file.relPath === "commands/st-work.md")?.parsed.body ?? "",
+    );
+    const grammar =
+      "`- <UTC> leftovers: shown=<n> real=<a> fixed=<f> scheduled=<s> dropped=<d> accepted=<k> notes=<p|unknown> changed=<c>`";
+    expect(work).toContain(grammar);
+    const defined = [...counts.matchAll(/`([a-z]+)`/g)].map((match) => match[1]);
+    expect(defined).toEqual(["real", "changed"]);
+    for (const field of defined) expect(grammar).toContain(` ${field}=<`);
+    // The count the line opens with is the one `real` is taken from.
+    expect(grammar).toContain("shown=<n> real=<a>");
+  });
+
   it("returns a typed status with the write ledger and handoff", async () => {
     const text = flat(section((await board()).parsed.body, "Return contract"));
 

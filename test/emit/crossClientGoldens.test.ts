@@ -186,6 +186,32 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q10a-work-close, review round 1 (run
+  //     2026-10-10_next-tier; ledger rows review/48 and review/49). The
+  //     st-board touchpoint moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 27127 -> 27732,
+  //       `.agents/skills/st-board/SKILL.md` 27173 -> 27778), by +605 bytes,
+  //       the corpus source's own delta (454 -> 462 lines), all of it at the
+  //       end of the "Leftovers at a close" bullet of `## Deferral inbox`, set
+  //       before its last sentence: the stop answer fixes nothing and
+  //       otherwise handles rows as no answer does (a ledger leftover closes
+  //       `deferred` and is appended tagged `decision-waiting` with
+  //       `when: next attended close`, an inbox row stays, nothing is fixed,
+  //       merged or committed, and another ask's own `stop` keeps its
+  //       meaning); and the leftovers line's `real` counts the Critical and
+  //       Warning rows among those shown, its `changed` the rows whose
+  //       recommendation the person changed.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-board skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q10b-flow-close-pointers (run
   //     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-070, REQ-FLOW-077). Three
   //     touchpoints moved, plus the manifest rows that record them. No emitted

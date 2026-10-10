@@ -93,6 +93,16 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q10a-work-close, review round 1 (run
+ *     2026-10-10_next-tier; ledger rows review/48 and review/49). NOTHING
+ *     moved in this suite; the row keeps the two ledgers in step. The round's
+ *     one emitted change is `commands/st-board.md`, 27308 -> 27913 bytes and
+ *     454 -> 462 lines, all of it at the end of the "Leftovers at a close"
+ *     bullet of `## Deferral inbox` (what the stop answer does to a row, and
+ *     what the leftovers line's `real` and `changed` count). It is not a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q10b-flow-close-pointers (run
  *     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-070, REQ-FLOW-077).
  *     NOTHING moved in this suite; the row keeps the two ledgers in step. The
