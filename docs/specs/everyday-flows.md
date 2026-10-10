@@ -1352,53 +1352,69 @@ REQ-FLOW-077 reads at `a60cb496`, but for the three `content/commands/st-plan.md
 re-pointed to `9a0ba4cf` (REQ-FLOW-070's return line; REQ-FLOW-077's `/st-plan` bullet). The ranges of
 `content/commands/st-board.md`, `content/commands/st-rework.md` and `content/skills/st-qa/SKILL.md` that the
 whole-branch review's fix round moved, and the `content/commands/st-work.md` ones inside lines 24 to 30, read at
-`5cd61743`.
+`5cd61743`. The ranges of `src/cli/commands/ledger.ts` that reach past its line 896 and of `src/runs/inboxStore.ts`
+that reach past its line 296, here and under `## Risks` and `## Concerns`, read at `cb73f8f1`: the fix batch for the
+pull request's review bot (`review/105` to `review/107`) moved them, and each was re-pointed to the lines that hold
+its text.
 
 Frame reads and surfaces the deferral inbox rows whose paths overlap the change's files through the `ledger` verb's
 `inbox` query, which returns those rows, the rows it always shows, and its total and unmatched counts; from a bare
 intent it queries again with the plan's files (`content/commands/st-work.md:21-23`).
 
 - **The query.** `stamity ledger inbox` is the fourth subcommand of the hidden `ledger` verb, and it writes nothing
-  (`src/cli/commands/ledger.ts:22-36`, `:1169-1174`, `:1201-1203`). A row matches by `--paths` when its location or
+  (`src/cli/commands/ledger.ts:22-36`, `:1208-1213`, `:1240-1242`). A row matches by `--paths` when its location or
   one of its `files:` entries names a query path — the same path, a folder on either side, or a bare file name against
   a path's last segment — by `--plan` when its `Ref:` path or its location is the plan, by `--area` on a whole word
   when its location names no path, and by `--due [date]` when its `by:` day is on or before the day, the clock's UTC
   day when the flag carries none. A row tagged `critical-deferred` or `decision-waiting` matches every query, and a
-  query with no filter matches every row (`src/runs/inboxStore.ts:46-47`, `:320-332`, `:350-375`, `:387-406`;
+  query with no filter matches every row (`src/runs/inboxStore.ts:46-47`, `:345-357`, `:375-400`, `:412-431`;
   `src/cli/commands/ledger.ts:858-874`).
 - **The output.** A count line, `inbox: <total> rows · <matched> matched · <unmatched> unmatched · <unparsed>
   unparsed · <skipped> skipped`, ending `· <n> due by <day> · <n> triggers` under `--due`; one line per matched row,
   `<line> <severity> · <location> · <description>[ · <tag>] (<matched by>)`; then the unparsed lines and the skip
   lines. The JSON document carries `inbox`, `total`, `matched`, `counts`, `unmatched`, `problems`, `skipped`,
-  `truncated`, `due` and `triggers`. An absent inbox prints `inbox: absent`, and every report exits 0 (`:968-976`,
-  `:1045-1063`, `:1126-1162`).
+  `truncated`, `due` and `triggers`. An absent inbox prints `inbox: absent`, and every report exits 0 (`:1004-1012`,
+  `:1082-1100`, `:1165-1201`).
 - **The screen.** The inbox is user-tier state any writer can author, and these lines land in a run's context, so
   every bullet, parsed or not, is screened before anything of it prints: against the block-severity rows of the three
   catalogs the session-start screen composes, without that screen's network-vocabulary filter, so the exfil-signal
   rows stay in (`:696-710`). A line is read as written and as it prints, each beside its copy with invisible
   characters stripped and that copy's normalized form (`:737-769`); a parsed row's printed fields are then screened
   one by one, an unparsed line's message alone, and each matched row's line once more as composed (`:771-822`,
-  `:1090-1096`, `:1106-1116`). A hit prints `skipped: <line> (<pattern id>)`, never the row's text nor its parse
+  `:1127-1133`, `:1143-1153`). A hit prints `skipped: <line> (<pattern id>)`, never the row's text nor its parse
   message. A bullet longer than 4,096 UTF-16 code units is skipped unscreened, as `over-length` (`:712-724`,
-  `:1065-1070`). Every printed field passes `sanitizeLabel` (`:940-961`, `:1131-1134`).
+  `:1102-1107`). Every printed field passes `sanitizeLabel` (`:976-997`, `:1170-1173`).
 - **Withheld rows.** A row the screen hits that still parses, and whose severity and location each pass the screen
   alone, is withheld rather than dropped. A copy holding its line, severity and location goes to the match, with its
   always-shown tag, its `by:` day and its `files:` entries where each passes the screen alone, so the row still
   matches by its location, its files, its day and that tag. Matched, it prints `<line> <severity> · <location> ·
   withheld by the screen (<pattern id>); read it by hand` in place of its skip line; its description, writer, `Ref:`,
   trigger, deferral date and rationale reach neither the match nor the output, and its JSON entry carries the pattern
-  id under `withheld` with `description`, `source` and `ref` null (`:829-856`, `:940-966`, `:1077-1089`).
+  id under `withheld` with `description`, `source` and `ref` null (`:829-856`, `:976-1002`, `:1114-1126`).
 - **The caps.** The unparsed lines and the skip lines are listed up to 50 each, then one `unparsed: … +<n> more` or
   `skipped: … +<n> more` line. The count line keeps the whole numbers, and the JSON `problems` and `skipped` hold the
   first 50 of each, with the number left out of each under `truncated`. The matched rows are not capped (`:726-735`,
-  `:978-985`, `:1151-1158`). Amended 2026-10-10 (the whole-branch review's fix round, its code part; `review/78`): the
+  `:1014-1021`, `:1190-1197`). Amended 2026-10-10 (the whole-branch review's fix round, its code part; `review/78`): the
   JSON `skipped` lists the bullets the skip lines name, up to 50, the rest counted under `truncated.skipped`; a withheld
   row the query matches has no skip line and is not among them, and stands under `matched` with its pattern id as
   `withheld`. Before it the list was cut to 50 with those rows still in it (`src/cli/commands/ledger.ts`, by file).
 - **A refused read.** The query reads the inbox only as a regular file of at most 1,048,576 bytes inside the
   repository: each path segment is `lstat`ed top down, and the open takes `O_NOFOLLOW` where the platform has it. A
   symbolic link, a non-file or a larger file is refused as `VALIDATION_ERROR`, and the refusal's `next` says not to
-  read the file whole in the query's place and to report the refusal as a finding (`:693-694`, `:876-938`).
+  read the file whole in the query's place and to report the refusal as a finding (`:693-694`, `:876-974`). Amended
+  2026-10-10 (the fix batch for the pull request's review bot; `review/105`, `review/106`): a hard link is refused as
+  a symbolic link is, and the ceiling is held by the read itself. A regular file with more than one link is a second
+  name for bytes another name owns, and that name can sit outside the repository; the query refuses it before any
+  byte is read, on the walk's `lstat` and again on the open descriptor's own stats, since a name made between the
+  two shows only there. It reads the link count through the one predicate the write paths use
+  (`src/merge/atomicWrite.ts:136-138`), and its message reads `ledger inbox refused .stamity/inbox.md: inbox.md is a
+  hard link`. The two size checks before the read are fast refusals on a size taken earlier; the read takes
+  1,048,577 bytes at most from the open descriptor and refuses when the last one is there, naming the size as `more
+  than 1048576 bytes`, so a writer that grows the file after its size was read gains nothing, and an inbox of
+  exactly 1,048,576 bytes is read. The refusal's `next` ends on the condition the query runs again under: a regular
+  file with one link, of at most 1048576 bytes, inside the repository (`src/cli/commands/ledger.ts:876-974`). Before
+  it a hard-linked inbox was read as the repository's own, and the ceiling was checked only on the size taken before
+  the read.
 - **In Frame and at the close.** A row the query withholds or skips is listed as it prints, the person's to read, and
   Frame never opens the inbox for it. Frame reads the whole file, and says so, only when the CLI or that query is
   absent; any other failure — a refusal, a crash, a failing exit — is a finding naming it, never a whole-file read
@@ -1598,7 +1614,7 @@ about every `decision-waiting` row first. A real defect is never dropped by defa
 (`content/commands/st-board.md:434-442`, `:451`).
 
 - **Always shown.** A row tagged `decision-waiting` matches every `inbox` query (`src/runs/inboxStore.ts:46-47`,
-  `:373`), and board triage takes such rows second, after `critical-deferred`
+  `:398`), and board triage takes such rows second, after `critical-deferred`
   (`content/commands/st-board.md:372-378`).
 - **Stop.** The answer `stop`, at a close that asks the leftovers question, handles rows as no answer does and fixes
   nothing: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with
@@ -1650,7 +1666,7 @@ From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9a-d
   named a `fixed` reference and a `cut` reason alone).
 - **Coming back.** The query's `--due` returns the rows whose `by:` day is on or before the day and counts, beside
   them, the unmatched rows that wait on a `when:` trigger, which no query sees arrive
-  (`src/runs/inboxStore.ts:372`, `:399-405`; `content/commands/st-board.md:387-390`). A row whose day has come, or
+  (`src/runs/inboxStore.ts:397`, `:424-430`; `content/commands/st-board.md:387-390`). A row whose day has come, or
   whose paths a run changes, comes back to that run's close as a leftover; a kept row is never re-dated in place
   (`content/commands/st-board.md:385-387`, `:397-398`).
 - **The records gate** holds the committed inbox to the parser, and holds to the grammar every `retired` value of a
@@ -2302,9 +2318,13 @@ exists, it is the normative record for that requirement.
   first 50 bullets the skip lines name and `truncated.skipped` the number of the rest, and the withheld row stands under
   `matched` with its pattern id as `withheld` and not under `skipped` (added 2026-10-10, the whole-branch review's fix
   round, `review/78`).
-- GIVEN an inbox that is a symbolic link, or larger than 1,048,576 bytes, THEN the query refuses with
-  `VALIDATION_ERROR`, and its `next` says not to read the file whole and to report the refusal as a finding; GIVEN no
-  inbox THEN it prints `inbox: absent` and exits 0.
+- GIVEN an inbox that is a symbolic link, a hard link (a regular file with more than one link), larger than
+  1,048,576 bytes, or grown past that size after its size was read, THEN the query refuses with `VALIDATION_ERROR`
+  and prints none of the file's text, and its `next` says not to read the file whole and to report the refusal as a
+  finding; GIVEN an inbox of exactly 1,048,576 bytes THEN it is read; GIVEN no inbox THEN it prints `inbox: absent`
+  and exits 0 (amended 2026-10-10, the fix batch for the pull request's review bot, `review/105` and `review/106`; it
+  read "an inbox that is a symbolic link, or larger than 1,048,576 bytes, THEN the query refuses with
+  `VALIDATION_ERROR`, and its `next` says", and held no exact-size case).
 - GIVEN `content/commands/st-work.md` WHEN Frame step 4 is read THEN it names the `ledger` verb's `inbox` query with
   `--paths` and `--plan`, the second query from a bare intent, a row the query withholds, skips or cannot parse listed
   as it prints, the person's to read or fix, with "never open the inbox for it", the whole-file read only when the CLI
@@ -2508,7 +2528,16 @@ exists, it is the normative record for that requirement.
 - A close that drops or re-dates an inbox row edits a row another run wrote (REQ-FLOW-074). It does so only on the
   person's answer; each removal is a retirement with a record line, and a re-dated row keeps its `Ref:`.
 - A path match misses a prose location and a root manifest with no dot in its name (REQ-FLOW-068, REQ-FLOW-077; that
-  run's ledger `review/77`). `--area`, `files:` and the unmatched count bound it.
+  run's ledger `review/77`). `--area`, `files:` and the unmatched count bound it. Amended 2026-10-10 (the fix batch
+  for the pull request's review bot; `review/107`, with `review/77`): a location entry that carries a line suffix
+  names a path even with no slash and no dot. The suffix is a name holding a letter, one `:`, then a line number or
+  a line range and nothing more, as in `Makefile:12`, `Dockerfile:3-9` or `Gemfile:12`, read after the entry's
+  backticks are stripped and it is cut at its first space. Such a row matches by `--paths`, is no longer reached by
+  `--area`, and may carry `when: touched` with no `files:` (`src/runs/inboxStore.ts:294-335`). What the match still
+  misses: a prose location, a bare word with no line suffix (`Makefile`), a `:` followed by anything else
+  (`Makefile:all`, `Makefile:12:5`), and a suffix with no letter before it (`12:30`, `—:12`). The rule's limit,
+  accepted: a prose location whose first word reads `<word>:<number>` (`step:2 of the plan`) names a path too, and
+  `--area` no longer reaches its row.
 
 ## Concerns
 
@@ -2578,14 +2607,14 @@ exists, it is the normative record for that requirement.
   - **The query's caps are in no command text** (`review/70`). `/st-board` says a skipped row is listed as it prints;
     one past the fiftieth has no line of its own, only the `+<n> more` count. The JSON `skipped` list is cut to 50
     before the matched withheld rows are left out of it, where the human form drops them first
-    (`src/cli/commands/ledger.ts:1136-1139`, `:1154`; `review/78`). Settled 2026-10-10 in the whole-branch review's fix
+    (`src/cli/commands/ledger.ts:1175-1178`, `:1193`; `review/78`). Settled 2026-10-10 in the whole-branch review's fix
     round, its code part: the JSON list leaves those rows out before its cap, as the human form does (REQ-FLOW-068, the
     caps).
   - **`files:` at `—`** (`review/62`). `/st-board` asks a row at `—` to name `files:`; the reader holds only a
     `when: touched` row to a path, and `/st-rework`'s meta row stands at `—` with none (REQ-FLOW-076, REQ-FLOW-077).
   - **What the grammar still lets through.** A row placed above the heading passes with no day and no trigger
     (`build/19`); one prose word in `files:` passes as a path (`review/37`); and the screen reads the inbox row by row,
-    so a pattern split over two adjacent rows passes (`src/cli/commands/ledger.ts:1065-1070`; `review/26`).
+    so a pattern split over two adjacent rows passes (`src/cli/commands/ledger.ts:1102-1107`; `review/26`).
   - **The close edits the inbox whole.** It removes and appends bullets with the file tools, and no text limits its
     read to the lines it changes, so a whole-file read there brings a withheld row's text into the orchestrator's
     context, which the query kept out (`content/commands/st-work.md:380-390`; `review/50`). Amended 2026-10-10 (the
