@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T11:59:03.156Z",
+  "updatedAt": "2026-10-10T12:11:49.019Z",
   "tools": [
     "claude"
   ],
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "639e01fd3e9fa83f4993e1e7256540fe1cd0ecee1faee078fbc44a1dcd2f028a",
+      "contentHash": "e8f63050de795b2053688b500eede0711e4aeaaa8621b284a3a16d20175563a4",
       "path": ".claude/commands/st-plan.md"
     },
     {
@@ -400,7 +400,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "a5aae4c54de65bf27b579d2edbd693a61fbbf6281c6a6860adaa08587c1b2f95",
+      "contentHash": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc",
       "path": ".claude/skills/st-verify/SKILL.md"
     },
     {
