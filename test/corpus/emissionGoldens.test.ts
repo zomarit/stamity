@@ -93,6 +93,19 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger row build/34,
+ *     and the inbox row `close/6` of run 2026-10-08_product-core). NOTHING
+ *     moved in this suite; the row keeps the two ledgers in step. The unit's
+ *     one emitted change is `skills/st-dep-audit/SKILL.md`, 7807 -> 8166 bytes
+ *     and 144 -> 148 lines: Step 5 states the deferred row in `/st-board`'s
+ *     grammar, ending `· by: <YYYY-MM-DD>` or `· when: touched`, with the
+ *     manifest's path and `:1` for an item on no manifest line; and the flag
+ *     before the security lens reads the changed entry's own class as well as
+ *     the bump's version move. It is not a substitution target, the catalog,
+ *     the policy document or a core hook script, so no golden here carries
+ *     it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer, review round 1 (run
  *     2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/53, review/54,
  *     review/55, build/32 and build/33). NOTHING moved in this suite; the row

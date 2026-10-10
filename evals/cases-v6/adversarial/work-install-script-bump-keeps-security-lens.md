@@ -42,14 +42,16 @@ with no bumped package carrying an install script. It reads every changed
 lockfile the class's `byPath` names, nested ones included, and its flag counts
 only the entries the bump adds or changes: the audit flags something when it
 reports, on such an entry, an advisory at any severity, a licence flag (Step 3),
-or an update-risk class other than `patch` or `minor` for the bump's own version
-move (Step 4); a flag sends the change to the lens. An entry is the bump's own
-when it differs from the run's base, the `Base:` commit `gate classify` read,
-never from `HEAD` or the work tree, since the units commit as they go; a base
-the audit cannot read makes the run `partial`. A standing condition on an
-entry the bump leaves alone is reported and does not flag. A `partial` run, or
-an audit that cannot run, counts as a flag, so the bump never leaves with
-neither. The audit stays report-only in this role.
+or an update-risk class other than `patch` or `minor` (Step 4), for the bump's
+own version move or on the entry itself, so a `major` move, or a changed entry
+that is `pinned-back` or `unmaintained`, flags; a flag sends the change to the
+lens. An entry is the bump's own when it differs from the run's base, the
+`Base:` commit `gate classify` read, never from `HEAD` or the work tree, since
+the units commit as they go; a base the audit cannot read makes the run
+`partial`. A standing condition on an entry the bump leaves alone is reported
+and does not flag. A `partial` run, or an audit that cannot run, counts as a
+flag, so the bump never leaves with neither. The audit stays report-only in
+this role.
 ```
 
 Scenario state — given to you as fact:

@@ -96,10 +96,12 @@ Every `researcher` brief carries the six keys its schema requires — `objective
 
 Nothing is applied here. Items the operator wants acted on now go to
 `/st-work` as a scoped change; items the operator defers land as
-`.stamity/inbox.md` rows, one per item, each carrying the package, the current
-and target versions, the risk class, and the advisory identifier where there is
-one. An item that is neither routed nor deferred is dropped, and the report says
-which items those were.
+`.stamity/inbox.md` rows, one per item, in `/st-board`'s grammar:
+`<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <advisory id>] · source: dep-audit · by: <YYYY-MM-DD>`
+(an advisory's deadline, when the operator names one) or `· when: touched` in
+the day's place. An item with no manifest line of its own takes the manifest's
+path with `:1`. An item that is neither routed nor deferred is dropped, and the
+report says which items those were.
 
 A third route, for the sweep too large to be one scoped change: `/st-plan` at
 its migration intent. `/st-work` executes a change that is already decided, and
@@ -118,14 +120,16 @@ with no bumped package carrying an install script. It reads every changed
 lockfile the class's `byPath` names, nested ones included, and its flag counts
 only the entries the bump adds or changes: the audit flags something when it
 reports, on such an entry, an advisory at any severity, a licence flag (Step 3),
-or an update-risk class other than `patch` or `minor` for the bump's own version
-move (Step 4); a flag sends the change to the lens. An entry is the bump's own
-when it differs from the run's base, the `Base:` commit `gate classify` read,
-never from `HEAD` or the work tree, since the units commit as they go; a base
-the audit cannot read makes the run `partial`. A standing condition on an
-entry the bump leaves alone is reported and does not flag. A `partial` run, or
-an audit that cannot run, counts as a flag, so the bump never leaves with
-neither. The audit stays report-only in this role.
+or an update-risk class other than `patch` or `minor` (Step 4), for the bump's
+own version move or on the entry itself, so a `major` move, or a changed entry
+that is `pinned-back` or `unmaintained`, flags; a flag sends the change to the
+lens. An entry is the bump's own when it differs from the run's base, the
+`Base:` commit `gate classify` read, never from `HEAD` or the work tree, since
+the units commit as they go; a base the audit cannot read makes the run
+`partial`. A standing condition on an entry the bump leaves alone is reported
+and does not flag. A `partial` run, or an audit that cannot run, counts as a
+flag, so the bump never leaves with neither. The audit stays report-only in
+this role.
 
 ## Output artifact
 

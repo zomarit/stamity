@@ -186,6 +186,35 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer (run
+  //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger row build/34,
+  //     and the inbox row `close/6` of run 2026-10-08_product-core). One skill
+  //     moved, plus the manifest rows that record it. No emitted path was
+  //     added or removed.
+  //
+  //     CHANGED the dep-audit skill wherever it is emitted
+  //       (`.claude/skills/st-dep-audit/SKILL.md` and
+  //       `.agents/skills/st-dep-audit/SKILL.md`, both 7853 -> 8212), by +359
+  //       bytes, the corpus source's own delta (144 -> 148 lines), in two
+  //       hunks. `## Step 5 — Report and route out`: the deferred rows land
+  //       "in `/st-board`'s grammar:", stated as
+  //       `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <advisory id>] · source: dep-audit · by: <YYYY-MM-DD>`
+  //       "(an advisory's deadline, when the operator names one) or
+  //       `· when: touched` in the day's place", and an item with no manifest
+  //       line of its own takes the manifest's path with `:1` (six lines
+  //       become eight). `## Before the security lens`: the flag's third
+  //       outcome reads "an update-risk class other than `patch` or `minor`
+  //       (Step 4), for the bump's own version move or on the entry itself, so
+  //       a `major` move, or a changed entry that is `pinned-back` or
+  //       `unmaintained`, flags", the paragraph rewrapped from that clause
+  //       down (fourteen lines become sixteen).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved copies.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint and
+  //       every other skill, companion, hook script, guard and policy
+  //       document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer, review round 1
   //     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/53,
   //     review/54, review/55, build/32 and build/33). Two touchpoints moved,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
+import { matchInbox, parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
 import {
   assertDenyClean,
   assertLineCap,
@@ -729,5 +730,170 @@ describe("dep-audit — report-only", () => {
     // The Output section counts the same classes the step flags.
     expect(output).toMatch(/the two flag classes above/i);
     expect(output).toMatch(/not written to a new artifact family/i);
+  });
+});
+
+/**
+ * REQ-FLOW-077: every inbox writer follows the schedule rule. Step 5's row template is read off
+ * the shipped text, filled the way a run fills it, and handed to the inbox's one reader
+ * (`parseInbox`) below the schedule-rule heading, where a row with neither `by:` nor `when:` does
+ * not parse. No double stands in for anything: the parser is pure, text in and verdict out.
+ */
+describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ-FLOW-077)", () => {
+  const DEP_AUDIT = "skills/st-dep-audit/SKILL.md";
+  const ROW_OPENING = "<Warning with an advisory, else Minor> · ";
+  const DESCRIPTION = "<package> <current> → <target>, <risk class>[, <advisory id>]";
+
+  /** Step 5 with every whitespace run collapsed, so a rewrapped sentence still reads as one. */
+  const stepFive = async (): Promise<string> =>
+    section(await load(DEP_AUDIT), "Step 5 — Report and route out").replace(/\s+/g, " ");
+  /** Every backticked span of Step 5, in document order. */
+  const spans = (step: string): string[] => [...step.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "");
+  /** The row template as the text states it; "" when the text states none, which fills to no row. */
+  const rowTemplate = (step: string): string => spans(step).find((span) => span.startsWith(ROW_OPENING)) ?? "";
+
+  interface Item {
+    /** The manifest location a run writes; an item with no manifest line takes the path with `:1`. */
+    location: string;
+    package: string;
+    move: readonly [current: string, target: string];
+    riskClass: string;
+    advisory?: string;
+  }
+
+  /** The template with every placeholder filled from one audited item, field by field. */
+  function fillRow(template: string, item: Item, day = "2026-11-02"): string {
+    return template
+      .split(" · ")
+      .map((field) => {
+        if (field === "<Warning with an advisory, else Minor>") return item.advisory === undefined ? "Minor" : "Warning";
+        if (field === "<manifest path:line>") return item.location;
+        if (field === DESCRIPTION) {
+          const tail = item.advisory === undefined ? "" : `, ${item.advisory}`;
+          return `${item.package} ${item.move[0]} → ${item.move[1]}, ${item.riskClass}${tail}`;
+        }
+        return field.replace("<YYYY-MM-DD>", day);
+      })
+      .join(" · ");
+  }
+
+  /** One filled row as the only bullet below the inbox's schedule-rule heading. */
+  function parseBelowRule(row: string): ReturnType<typeof parseInbox> {
+    return parseInbox(`${SCHEDULE_RULE_HEADING}\n\n- ${row}\n`);
+  }
+
+  const ADVISED: Item = {
+    location: "package.json:14",
+    package: "left-pad",
+    move: ["1.2.0", "2.0.0"],
+    riskClass: "major",
+    advisory: "GHSA-made-up0-0001",
+  };
+  const PLAIN: Item = { location: "services/api/package.json:31", package: "tiny-clock", move: ["3.1.0", "3.4.2"], riskClass: "minor" };
+  /** A transitive package: it stands on no line of the manifest. */
+  const TRANSITIVE: Item = { ...PLAIN, location: "package.json:1", package: "deep-leaf", riskClass: "unmaintained" };
+
+  it("states the row in the board's grammar, with a day in its format or a touch (REQ-FLOW-077)", async () => {
+    const step = await stepFive();
+
+    expect(step).toContain("land as `.stamity/inbox.md` rows, one per item, in `/st-board`'s grammar:");
+    // Sign-off on ledger row `build/34` of run 2026-10-10_next-tier: every `by:` in a template
+    // writes its format, since the reader takes a real `YYYY-MM-DD` and nothing else.
+    expect(rowTemplate(step)).toBe(`${ROW_OPENING}<manifest path:line> · ${DESCRIPTION} · source: dep-audit · by: <YYYY-MM-DD>`);
+    expect(step).not.toContain("by: <date>");
+    // Whose day it is, and what the row carries when nobody names one.
+    expect(step).toContain("(an advisory's deadline, when the operator names one) or `· when: touched` in the day's place.");
+    // A transitive package has no manifest line, and a touch trigger needs a path to watch.
+    expect(step).toContain("An item with no manifest line of its own takes the manifest's path with `:1`.");
+    // The rest of the paragraph stays.
+    expect(step).toContain("An item that is neither routed nor deferred is dropped, and the report says which items those were.");
+  });
+
+  it("parses, filled, below the schedule-rule heading: an advisory on a named day", async () => {
+    const filled = fillRow(rowTemplate(await stepFive()), ADVISED);
+    // Every placeholder was filled: a `<…>` or `[…]` left standing would parse as prose and prove nothing.
+    expect(filled).not.toMatch(/[<>[\]]/);
+
+    const { rows, problems } = parseBelowRule(filled);
+    expect(problems).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      severity: "Warning",
+      location: "package.json:14",
+      description: "left-pad 1.2.0 → 2.0.0, major, GHSA-made-up0-0001",
+      source: "dep-audit",
+      by: "2026-11-02",
+      when: null,
+      tag: null,
+      belowRule: true,
+    });
+    // The day brings it back: a close on that day sees it, a close the day before does not.
+    expect(matchInbox(rows, { paths: [], due: "2026-11-02" }).matched.map((match) => match.matchedBy)).toEqual(["due"]);
+    expect(matchInbox(rows, { paths: [], due: "2026-11-01" }).matched).toEqual([]);
+  });
+
+  it.each([
+    ["an item with no advisory", PLAIN, "services/api/package.json", "tiny-clock 3.1.0 → 3.4.2, minor"],
+    ["an item with no manifest line", TRANSITIVE, "package.json", "deep-leaf 3.1.0 → 3.4.2, unmaintained"],
+  ] as const)("parses, filled, with the touch trigger in the day's place: %s", async (_name, item, manifest, description) => {
+    const step = await stepFive();
+    const template = rowTemplate(step);
+    // The alternative is the text's own span, put where the text says it goes: the day's place.
+    const touch = spans(step).find((span) => span.startsWith("· when: ")) ?? "";
+    expect(touch).toBe("· when: touched");
+    expect(template.endsWith(" · by: <YYYY-MM-DD>")).toBe(true);
+    const filled = fillRow(template.replace(/ · by: <YYYY-MM-DD>$/, ` ${touch}`), item);
+    expect(filled).not.toMatch(/[<>[\]]/);
+
+    const { rows, problems } = parseBelowRule(filled);
+    expect(problems).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ severity: "Minor", description, source: "dep-audit", by: null, when: "touched", belowRule: true });
+    // `when: touched` needs a path, and the location gives it: a run that changes that manifest
+    // gets the row back, and a run that changes another file does not.
+    expect(matchInbox(rows, { paths: [manifest] }).matched.map((match) => match.matchedBy)).toEqual(["path"]);
+    expect(matchInbox(rows, { paths: ["docs/unrelated.md"] }).matched).toEqual([]);
+  });
+
+  it("is refused below the heading without its schedule field, and with a day in another shape", async () => {
+    const filled = fillRow(rowTemplate(await stepFive()), ADVISED);
+    // The rule is live: this is the row Step 5 described before it carried the field.
+    const bare = filled.split(" · ").filter((field) => !/^(?:by|when): /.test(field)).join(" · ");
+    expect(bare).not.toBe(filled);
+    const unscheduled = parseBelowRule(bare);
+    expect(unscheduled.rows).toEqual([]);
+    expect(unscheduled.problems.map((problem) => problem.message)).toEqual([expect.stringContaining("this one carries neither")]);
+
+    // Why the template writes the format: the reader takes no other shape of day.
+    const loose = parseBelowRule(fillRow(rowTemplate(await stepFive()), ADVISED, "2 Nov 2026"));
+    expect(loose.rows).toEqual([]);
+    expect(loose.problems.map((problem) => problem.message)).toEqual(["`by:` names no real calendar day as YYYY-MM-DD"]);
+  });
+});
+
+describe("dep-audit — the flag before the security lens reads the entry (REQ-FLOW-065)", () => {
+  it("flags a changed entry's own class as well as the bump's version move", async () => {
+    const file = await load("skills/st-dep-audit/SKILL.md");
+    const role = section(file, "Before the security lens").replace(/\s+/g, " ");
+
+    // Added 2026-10-10 (plan 019 file 3, unit q11c-dep-audit-writer; the inbox row `close/6` of run
+    // 2026-10-08_product-core): the flag read only the bump's own version move, so a bump that
+    // changed an entry Step 4 classes `pinned-back` or `unmaintained` by a patch step left with
+    // neither a flag nor the lens. The clause now reads the entry too.
+    expect(role).toContain(
+      "or an update-risk class other than `patch` or `minor` (Step 4), for the bump's own version move or on the entry itself, so a `major` move, or a changed entry that is `pinned-back` or `unmaintained`, flags; a flag sends the change to the lens.",
+    );
+    expect(role).not.toContain("`patch` or `minor` for the bump's own version move (Step 4)");
+
+    // The classes the clause names are Step 4's own, all of them but the two it lets through.
+    const classes = section(file, "Step 4 — Update risk")
+      .split("\n")
+      .filter((line) => line.startsWith("| ") && !line.startsWith("| Class") && !line.startsWith("|---"))
+      .map((line) => line.split("|")[1]?.trim() ?? "");
+    expect(classes).toEqual(["patch", "minor", "major", "pinned-back", "unmaintained"]);
+    const flagging = /so (a `major` move.*?), flags;/.exec(role)?.[1] ?? "";
+    expect([...flagging.matchAll(/`([a-z-]+)`/g)].map((match) => match[1])).toEqual(
+      classes.filter((klass) => klass !== "patch" && klass !== "minor"),
+    );
   });
 });
