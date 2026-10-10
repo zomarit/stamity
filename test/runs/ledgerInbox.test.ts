@@ -1,7 +1,12 @@
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
-import { INBOX_BULLET_MAX_CHARS, INBOX_OVER_LENGTH, INBOX_SCREEN } from "../../src/cli/commands/ledger.ts";
+import {
+  INBOX_BULLET_MAX_CHARS,
+  INBOX_LISTED_MAX,
+  INBOX_OVER_LENGTH,
+  INBOX_SCREEN,
+} from "../../src/cli/commands/ledger.ts";
 import { runCli } from "../../src/cli/kit/program.ts";
 import { SESSION_START_SCREEN, SESSION_START_SCREEN_PATTERN_IDS } from "../../src/hooks/scripts.ts";
 import { INBOX_PATH, SCHEDULE_RULE_HEADING } from "../../src/runs/inboxStore.ts";
@@ -141,6 +146,9 @@ describe("stamity ledger inbox", () => {
     // TEST CHANGE, justified (2026-10-10, q9b-inbox-schedule-grammar): the document gained `due`
     // and `triggers`, and each matched row `by`, `when` and `files` (REQ-FLOW-076), so this
     // whole-document pin names them. Every key it pinned before keeps its value.
+    // TEST CHANGE, justified (2026-10-10, review/27): the document gained `truncated`, the count of
+    // the `problems` and `skipped` entries past the cap, so the three whole-document pins of this
+    // file name it. Every key they pinned before keeps its value.
     expect(payload).toEqual({
       inbox: INBOX_PATH,
       total: 6,
@@ -195,6 +203,7 @@ describe("stamity ledger inbox", () => {
         { line: 8, pattern: "fake-instruction-header" },
         { line: 9, pattern: "send-data-external" },
       ],
+      truncated: { problems: 0, skipped: 0 },
       due: null,
       triggers: 0,
     });
@@ -368,6 +377,7 @@ describe("stamity ledger inbox", () => {
         unmatched: 0,
         problems: [],
         skipped: [{ line: 3, pattern: "never-verify" }],
+        truncated: { problems: 0, skipped: 0 },
         due: null,
         triggers: 0,
       });
@@ -559,6 +569,7 @@ describe("stamity ledger inbox", () => {
           },
         ],
         skipped: [],
+        truncated: { problems: 0, skipped: 0 },
         due: "2026-12-01",
         triggers: 2,
       });
@@ -762,6 +773,181 @@ describe("stamity ledger inbox", () => {
     });
   });
 
+  // review/25: a line is screened as it prints, composed. The engine's own suffix, or a withheld
+  // line's pattern id, can complete a screen row after fields that each pass alone; a row whose
+  // line hits prints in the skip form, in the human output and in the document alike.
+  describe("a row whose printed line hits the screen", () => {
+    /** A word the `tool-call-injection` row matches only once an opening parenthesis follows it. */
+    const CALL_WORD = ["func", "tion_c", "all"].join("");
+    /** The opening clause of the `cross-agent-directive` row: no hit until a word of its last group follows. */
+    const AGENT_CLAUSE = ["when the ag", "ent reads"].join("");
+
+    it("prints a clean row in the skip form when the match suffix completes a screen row", async () => {
+      const dir = tempDir();
+      await seedInbox(
+        dir,
+        [`- Minor · src/a.ts:1 · see the ${CALL_WORD} · source: x`, "- Minor · src/a.ts:2 · clean · source: x", ""].join("\n"),
+      );
+
+      const human = await inbox(dir, "--paths", "src/a.ts");
+      const json = await inbox(dir, "--paths", "src/a.ts", "--json");
+      const elsewhere = await inbox(dir, "--paths", "docs/b.md");
+
+      expect(human.stdout).toBe(
+        [
+          "inbox: 2 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped",
+          "2 Minor · src/a.ts:2 · clean (path)",
+          "skipped: 1 (tool-call-injection)",
+          "",
+        ].join("\n"),
+      );
+      expect(json.stdout).not.toContain(CALL_WORD);
+      expect(JSON.parse(json.stdout)).toMatchObject({
+        total: 2,
+        matched: [{ line: 2, description: "clean", withheld: null }],
+        counts: { Critical: 0, Warning: 0, Minor: 1, Info: 0 },
+        unmatched: 0,
+        skipped: [{ line: 1, pattern: "tool-call-injection" }],
+      });
+      // A row the query does not match prints no line, so there is no line to screen.
+      expect(elsewhere.stdout).toBe("inbox: 2 rows · 0 matched · 2 unmatched · 0 unparsed · 0 skipped\n");
+    });
+
+    it("prints a clean row in the skip form when its tag and the suffix complete a screen row", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, `- Minor · src/a.ts:1 · d · source: x · ${CALL_WORD}\n`);
+
+      const result = await inbox(dir);
+
+      expect(result.stdout).toBe("inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped\nskipped: 1 (tool-call-injection)\n");
+    });
+
+    it("prints a withheld row's skip line when its location and the pattern id complete a screen row", async () => {
+      const dir = tempDir();
+      // The full stop keeps the bullet itself clear of the row its withheld line completes.
+      await seedInbox(dir, `- Warning · ${AGENT_CLAUSE} · a row. ${NEVER_HIT} · source: x · critical-deferred\n`);
+
+      const human = await inbox(dir, "--paths", "src/a.ts");
+      const json = await inbox(dir, "--json");
+
+      expect(human.stdout).toBe("inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped\nskipped: 1 (never-verify)\n");
+      expect(json.stdout).not.toContain("quiet");
+      expect(JSON.parse(json.stdout)).toMatchObject({
+        total: 1,
+        matched: [],
+        counts: { Critical: 0, Warning: 0, Minor: 0, Info: 0 },
+        unmatched: 0,
+        skipped: [{ line: 1, pattern: "never-verify" }],
+      });
+    });
+
+    // Two pattern ids spell a word their own screen row matches. That hit is the engine's own
+    // words, in the skip line as much as in the withheld one, so it withholds no line by itself.
+    it("still prints a withheld line whose only hit is the pattern id's own word", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, `- Warning · src/a.ts:1 · a row to ${SPACELESS_HIT} · source: x\n`);
+
+      const result = await inbox(dir, "--paths", "src/a.ts");
+
+      expect(result.stdout).toBe(
+        `inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped\n1 Warning · src/a.ts:1 · withheld by the screen (${SPACELESS_HIT}); read it by hand (path)\n`,
+      );
+    });
+
+    it("prints the skip line when such an id also completes another screen row after the location", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, `- Warning · ${AGENT_CLAUSE} · a row. To ${SPACELESS_HIT} · source: x\n`);
+
+      const result = await inbox(dir);
+
+      expect(result.stdout).toBe(`inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped\nskipped: 1 (${SPACELESS_HIT})\n`);
+    });
+  });
+
+  // review/27: the unparsed and the skip lines are capped in number, since both print whatever
+  // the query and a file of short bullets would otherwise print many times its own size.
+  describe("the cap on unparsed and skip lines", () => {
+    const unparsedBullets = (count: number): string[] => Array.from({ length: count }, () => "- x");
+    const skippedBullets = (count: number): string[] =>
+      Array.from({ length: count }, (_, index) => `- Minor · src/a.ts:${index + 1} · d · source: x · tagword · ${EXFIL_HIT}`);
+
+    it("pins the cap", () => {
+      expect(INBOX_LISTED_MAX).toBe(50);
+    });
+
+    it("prints the first fifty of each, then one line naming how many more, and keeps the counts whole", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, [...unparsedBullets(60), ...skippedBullets(55), ""].join("\n"));
+
+      const human = await inbox(dir, "--paths", "src/a.ts");
+      const json = await inbox(dir, "--paths", "src/a.ts", "--json");
+
+      const lines = human.stdout.split("\n");
+      expect(lines).toHaveLength(104);
+      expect(lines[0]).toBe("inbox: 115 rows · 0 matched · 0 unmatched · 60 unparsed · 55 skipped");
+      lines.slice(1, 51).forEach((line, index) => {
+        expect(line.startsWith(`unparsed: ${index + 1}: `), line).toBe(true);
+      });
+      expect(lines[51]).toBe("unparsed: … +10 more");
+      expect(lines.slice(52, 102)).toEqual(
+        Array.from({ length: 50 }, (_, index) => `skipped: ${index + 61} (send-data-external)`),
+      );
+      expect(lines.slice(102)).toEqual(["skipped: … +5 more", ""]);
+
+      const doc = JSON.parse(json.stdout) as {
+        total: number;
+        problems: { line: number }[];
+        skipped: { line: number; pattern: string }[];
+        truncated: unknown;
+      };
+      expect(doc.total).toBe(115);
+      expect(doc.problems.map((problem) => problem.line)).toEqual(Array.from({ length: 50 }, (_, index) => index + 1));
+      expect(doc.skipped).toEqual(
+        Array.from({ length: 50 }, (_, index) => ({ line: index + 61, pattern: "send-data-external" })),
+      );
+      expect(doc.truncated).toEqual({ problems: 10, skipped: 5 });
+    });
+
+    it("prints no such line, and truncates nothing, at exactly the cap", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, [...unparsedBullets(INBOX_LISTED_MAX), ...skippedBullets(INBOX_LISTED_MAX), ""].join("\n"));
+
+      const human = await inbox(dir);
+      const json = await inbox(dir, "--json");
+
+      const lines = human.stdout.split("\n");
+      expect(lines).toHaveLength(102);
+      expect(lines[0]).toBe("inbox: 100 rows · 0 matched · 0 unmatched · 50 unparsed · 50 skipped");
+      expect(human.stdout).not.toContain("more");
+      const doc = JSON.parse(json.stdout) as { problems: unknown[]; skipped: unknown[]; truncated: unknown };
+      expect(doc.problems).toHaveLength(50);
+      expect(doc.skipped).toHaveLength(50);
+      expect(doc.truncated).toEqual({ problems: 0, skipped: 0 });
+    });
+
+    it("caps each list on its own: a shown withheld row has no skip line to count", async () => {
+      const dir = tempDir();
+      const withheldRows = Array.from(
+        { length: 51 },
+        (_, index) => `- Minor · src/a.ts:${index + 1} · a row ${NEVER_HIT} · source: x`,
+      );
+      await seedInbox(dir, [...withheldRows, ""].join("\n"));
+
+      const human = await inbox(dir);
+      const json = await inbox(dir, "--json");
+
+      const lines = human.stdout.split("\n");
+      expect(lines[0]).toBe("inbox: 51 rows · 51 matched · 0 unmatched · 0 unparsed · 51 skipped");
+      // Every row prints its withheld line, uncapped, and none prints a skip line.
+      expect(lines).toHaveLength(53);
+      expect(human.stdout).not.toContain("skipped: ");
+      const doc = JSON.parse(json.stdout) as { matched: unknown[]; skipped: unknown[]; truncated: unknown };
+      expect(doc.matched).toHaveLength(51);
+      expect(doc.skipped).toHaveLength(50);
+      expect(doc.truncated).toEqual({ problems: 0, skipped: 1 });
+    });
+  });
+
   it("flattens a control character in a printed field", async () => {
     const dir = tempDir();
     await seedInbox(dir, "- Minor · src/a.ts:1 · tab\there · source: x\n");
@@ -788,6 +974,7 @@ describe("stamity ledger inbox", () => {
       unmatched: 0,
       problems: [],
       skipped: [],
+      truncated: { problems: 0, skipped: 0 },
       due: null,
       triggers: 0,
     });
