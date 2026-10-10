@@ -454,10 +454,16 @@ describe("agents → .github/agents", () => {
     for (const id of CORPUS_AGENT_IDS) {
       const row = rowAt(plan, `.github/agents/stamity-${id}.agent.md`);
 
+      // TEST CHANGE, justified (2026-10-10, q6b-copilot-instructions-key): the exact list gains
+      // `include-custom-instructions: true` between `target` and `tools`. The contract moved
+      // because a live sub-agent check on Copilot CLI 1.0.89 found that an agent dispatched
+      // through `task` without the key loads no `AGENTS.md` (REQ-FLOW-071); every other line is
+      // unchanged.
       expect(frontmatterLines(row.content)).toEqual([
         `name: stamity-${id}`,
         `description: ${frontmatterValue(row.content, "description")}`,
         "target: github-copilot",
+        "include-custom-instructions: true",
         `tools: ${toCopilotToolsFrontmatter(rosterAllow(`stamity-${id}`))}`,
       ]);
       expect(frontmatterValue(row.content, "tools")).not.toBe("[]");
@@ -467,6 +473,35 @@ describe("agents → .github/agents", () => {
     expect(pathsOf(plan).filter((path) => path.endsWith(".agent.md"))).toHaveLength(
       CORPUS_AGENT_IDS.length,
     );
+  });
+
+  it("opts every agent into the repository instructions, and no prompt file (REQ-FLOW-071)", async () => {
+    const plan = await planResidue({ pins: { advanced: "some-vendor/frontier-1" } });
+
+    const agents = plan.filter((row) => row.path.endsWith(".agent.md"));
+    expect(agents).toHaveLength(CORPUS_AGENT_IDS.length);
+    for (const row of agents) {
+      const keys = frontmatterLines(row.content).map((line) => line.split(":")[0]);
+      expect(frontmatterValue(row.content, "include-custom-instructions"), row.path).toBe("true");
+      // After `target`, before `tools`, and still ahead of a pinned model line.
+      expect(keys.indexOf("include-custom-instructions"), row.path).toBe(keys.indexOf("target") + 1);
+      expect(keys.indexOf("tools"), row.path).toBe(keys.indexOf("include-custom-instructions") + 1);
+    }
+    // Non-degenerate: the pin reaches at least one agent, so the order check above
+    // ran against a frontmatter that carries a model line too.
+    expect(
+      frontmatterLines(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content).at(-1),
+    ).toBe('model: "some-vendor/frontier-1"');
+
+    // A prompt file runs in the session that already carries the instructions: no key.
+    const prompts = plan.filter((row) => row.path.startsWith(".github/prompts/"));
+    expect(prompts.length).toBeGreaterThan(0);
+    for (const row of prompts) {
+      expect(row.content, row.path).not.toContain("include-custom-instructions");
+    }
+
+    // The declared agent format names the key the files carry.
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("`include-custom-instructions: true`");
   });
 
   it("emits the three specialist lenses with read-only tool maps", async () => {
@@ -1207,6 +1242,31 @@ describe("hooks", () => {
     expect(matrix).toContain(capOf("command-surface"));
     expect(matrix).toContain(capOf("effort-axis"));
     expect(matrix).toContain(COPILOT_DIALECT_FACTS.agentsFormat);
+  });
+
+  it("declares the sub-agent instructions key with its evidence and its limits (REQ-FLOW-071)", () => {
+    const row = capOf("sub-agent-instructions");
+    expect(row).toBeDefined();
+    expect(row).toMatch(/^emitted — /);
+    expect(row).toContain("`include-custom-instructions: true` on every agent");
+    // The key's effect is claimed from the changelog; the live check only shows the gap.
+    expect(row).toContain("Copilot CLI changelog 1.0.86");
+    expect(row).toContain("1.0.89 loader's frontmatter keys");
+    expect(row).toContain("live sub-agent check on Copilot CLI 1.0.89 (2026-10-10)");
+    expect(row).toContain("loads no `AGENTS.md`");
+    expect(row).toContain("`--no-custom-instructions` still overrides it");
+    // Never a claim that the cloud agent honours the key.
+    expect(row).toContain("the cloud agent's handling of the key is undocumented");
+    expect(row).toContain("custom-agents configuration page, accessed 2026-10-10");
+
+    // Dated inline: the all-or-nothing citation stamp is not re-stamped by one claim.
+    expect(
+      COPILOT_DIALECT_FACTS.citations.find((citation) =>
+        citation.url.includes("custom-agents-configuration"),
+      )?.accessDate,
+    ).toBe("2026-09-10");
+
+    expect(renderCapabilityMatrix()).toContain(row);
   });
 });
 

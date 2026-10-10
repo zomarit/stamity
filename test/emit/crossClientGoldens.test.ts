@@ -186,6 +186,29 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q6b-copilot-instructions-key (run
+  //     2026-10-10_next-tier; REQ-FLOW-071). The ten Copilot agent files
+  //     moved, plus the manifest rows that record them. No emitted path was
+  //     added or removed, and no corpus source moved.
+  //
+  //     CHANGED all ten `.github/agents/stamity-<id>.agent.md` files in the two
+  //       selections that carry them (copilot and all-four) by +34 bytes each
+  //       (creator 13968 -> 14002, design-quality 11919 -> 11953, fixer
+  //       10543 -> 10577, implementer 10008 -> 10042, performance
+  //       13894 -> 13928, researcher 8411 -> 8445, reviewer 15653 -> 15687,
+  //       security 12898 -> 12932, spec-author 12212 -> 12246, test-runner
+  //       8512 -> 8546): one frontmatter line, `include-custom-instructions:
+  //       true`, between `target` and `tools`, so a Copilot sub-agent loads
+  //       the repository instructions. The prompt below the frontmatter is
+  //       byte-identical.
+  //     CHANGED `.stamity/manifest.json` in those two selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the ten files.
+  //
+  //     What did NOT move: the claude, codex and cursor selections, every
+  //       Copilot prompt file, instructions file, hook document and the setup
+  //       workflow, and every other agent dialect, rule, skill, hook script
+  //       and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script (run
   //     2026-10-10_next-tier; REQ-FLOW-070). The coverage script moved, plus
   //     the manifest rows that record it. No emitted path was added or removed.

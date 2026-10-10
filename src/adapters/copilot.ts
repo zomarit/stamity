@@ -156,7 +156,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
   hooksConfigPath: COPILOT_HOOKS_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `tools:` alias list, `model:` only under an operator pin) over a markdown prompt",
+    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` only under an operator pin) over a markdown prompt",
   mcpDialect: "vscode-json",
   entryFile: null,
   caps: [
@@ -183,6 +183,19 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         "not emitted — Copilot CLI custom agents accept `reasoning-effort` (1.0.66; applied on " +
         "agent selection since 1.0.88; release notes, accessed 2026-09-30); this engine does not " +
         "write it yet",
+    },
+    // Dated inline, and ACCESS_DATE is not re-stamped: this one claim was read
+    // on 2026-10-10 (the CLI changelog, the 1.0.89 loader, the live check and
+    // the custom-agents page), so the all-or-nothing rule holds. The key's
+    // effect is the changelog's claim; the live check proved only the gap.
+    {
+      name: "sub-agent-instructions",
+      value:
+        "emitted — `include-custom-instructions: true` on every agent (Copilot CLI changelog " +
+        "1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on " +
+        "Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`; " +
+        "`--no-custom-instructions` still overrides it; the cloud agent's handling of the key is " +
+        "undocumented (custom-agents configuration page, accessed 2026-10-10)",
     },
     {
       name: "hook-enforcement",
@@ -424,9 +437,13 @@ export function buildInstructionsFile(
  * is emitted rather than left off deliberately: unset "defaults to both
  * environments", and this setup's agents are written for the cloud surface the
  * rest of this file emits for, so naming the target states the scope instead of
- * inheriting one. `tools:` is always present (see the module header), and
- * `model:` appears only when the operator pinned an id for the class the agent
- * declares.
+ * inheriting one. `include-custom-instructions: true` opts the agent into the
+ * repository instruction files: a live sub-agent check on Copilot CLI 1.0.89
+ * (2026-10-10) found that an agent dispatched through `task` without it loads
+ * no `AGENTS.md`, so the charter, the invariants and the repo facts never reach
+ * it (REQ-FLOW-071; the key since CLI 1.0.86, per its changelog). `tools:` is
+ * always present (see the module header), and `model:` appears only when the
+ * operator pinned an id for the class the agent declares.
  *
  * The prompt is measured before the document is composed: the cap applies to
  * the markdown below the frontmatter, which is exactly what the platform
@@ -456,6 +473,7 @@ export function buildAgentFile(
         `name: ${id}`,
         `description: ${yamlScalar(render(item.description))}`,
         "target: github-copilot",
+        "include-custom-instructions: true",
         `tools: ${toCopilotToolsFrontmatter(grant.allow)}`,
         ...modelLine(item, pins),
       ],

@@ -198,7 +198,7 @@ Sources:
 | Fact | Declared value |
 |---|---|
 | Rule shape | `.github/instructions/<id>.instructions.md` with `applyTo:` — ONE glob string, patterns comma-separated, never a YAML list |
-| Agent format | `.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `tools:` alias list, `model:` only under an operator pin) over a markdown prompt |
+| Agent format | `.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` only under an operator pin) over a markdown prompt |
 | Hook config | `.github/hooks/stamity.json` |
 | Reads `.agents/skills/` | yes |
 | MCP dialect | `vscode-json` |
@@ -212,6 +212,7 @@ Declared caps:
 | `charter-budget` | ~2 pages; AGENTS.md is native, so no mirror is emitted |
 | `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin. With Codex or Cursor selected beside it, the same nine also ship in `.agents/skills/` with `disable-model-invocation: true`, a tree this client reads, so they list twice for the operator: Copilot CLI 1.0.89 shows them as project skills (`copilot skill list`) beside the prompt files, and keeps them out of the model's own skills list (measured 2026-09-30) |
 | `effort-axis` | not emitted — Copilot CLI custom agents accept `reasoning-effort` (1.0.66; applied on agent selection since 1.0.88; release notes, accessed 2026-09-30); this engine does not write it yet |
+| `sub-agent-instructions` | emitted — `include-custom-instructions: true` on every agent (Copilot CLI changelog 1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`; `--no-custom-instructions` still overrides it; the cloud agent's handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10) |
 | `hook-enforcement` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `deny-gate` | Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry. |
 | `rule-activation` | glob only; no description-pull mode, so an agent-requested rule emits applyTo: "**" |
