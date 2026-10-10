@@ -29,8 +29,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
  * prints the run's resume card, the same lines the session-start hook prints
  * after a compaction or a resume, and writes nothing; `inbox` prints the
- * deferral inbox's rows a change's paths touch, each line screened first, and
- * writes nothing.
+ * deferral inbox's rows a change's paths touch, each line screened first in
+ * the form it prints in, and writes nothing.
  * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -705,14 +705,39 @@ export const INBOX_SCREEN: readonly { readonly id: string; readonly re: RegExp }
   .map((entry) => ({ id: entry.id, re: new RegExp(entry.pattern.source, entry.pattern.flags) }));
 
 /**
- * The first {@link INBOX_SCREEN} id, in list order, whose pattern matches the
- * line, the line with invisible smuggling characters stripped, or the
- * normalized form of the stripped line; "" when none does. The union
- * `screenCard` composes (`../../runs/resumeCard.ts`).
+ * The longest bullet the screen reads, in UTF-16 code units: about four times
+ * the longest row of this repository's own inbox. Two screen rows
+ * (`remote-exec-pipe`, and `image-url-exfiltration`'s tag alternative) rescan
+ * to the end of the line from every start, so their cost grows with the square
+ * of a line's length; the read's byte ceiling bounds the file and not a line.
+ * A bullet past the cap is skipped by its line number, unscreened, as
+ * {@link INBOX_OVER_LENGTH}.
+ */
+export const INBOX_BULLET_MAX_CHARS = 4096;
+
+/** The reason an over-long bullet's skip names where a hit names a pattern id; no screen row carries it. */
+export const INBOX_OVER_LENGTH = "over-length";
+
+/**
+ * The first {@link INBOX_SCREEN} id, in list order, whose pattern matches a
+ * view of the line; "" when none does. The views are the line as written and
+ * the line as it prints (`sanitizeLabel`), each beside its copy with invisible
+ * smuggling characters stripped and that copy's normalized form: the union
+ * `screenCard` composes (`../../runs/resumeCard.ts`), taken twice.
+ *
+ * The printed form is screened because it is not the written one:
+ * `sanitizeLabel` drops the C0 and C1 controls, which no other view removes,
+ * so a keyword one of them splits passes the written views and prints joined.
+ * The written form is still screened, since the printed one has lost what the
+ * tag-block and control rows match on.
  */
 function screenInboxLine(line: string): string {
-  const stripped = line.replace(INVISIBLE_SMUGGLING_CHARS, "");
-  const copies = [line, stripped, normalizeForDenyScan(stripped)];
+  const views = new Set<string>();
+  for (const form of [line, sanitizeLabel(line)]) {
+    const stripped = form.replace(INVISIBLE_SMUGGLING_CHARS, "");
+    views.add(form).add(stripped).add(normalizeForDenyScan(stripped));
+  }
+  const copies = [...views];
   const hit = INBOX_SCREEN.find((entry) =>
     copies.some((copy) => {
       entry.re.lastIndex = 0;
@@ -722,12 +747,46 @@ function screenInboxLine(line: string): string {
   return hit === undefined ? "" : hit.id;
 }
 
+/** The first hit {@link screenInboxLine} reports over the fields, in their order; "" when each passes. */
+function screenInboxFields(fields: readonly string[]): string {
+  for (const field of fields) {
+    const pattern = screenInboxLine(field);
+    if (pattern !== "") return pattern;
+  }
+  return "";
+}
+
+/**
+ * A parsed row's screen over what prints of it: its fields in the order the
+ * human line joins them, then each field as the string of its own the JSON
+ * document carries, where a pattern anchored to a line's start can match a
+ * field it misses in the middle of the bullet.
+ */
+function screenInboxRow(row: InboxRow): string {
+  return screenInboxFields([
+    `${row.severity} · ${row.location} · ${row.description}${row.tag === null ? "" : ` · ${row.tag}`}`,
+    row.severity,
+    row.location,
+    row.description,
+    row.source,
+    row.ref ?? "",
+    row.tag ?? "",
+  ]);
+}
+
+/**
+ * A refused read. Its `next` leads with what the caller must not do: a refusal
+ * is no licence to read the file whole by another route, which would hand a
+ * run the unscreened text this query exists to screen (a writer can force the
+ * refusal by padding the file or replacing it with a link). The refusal is
+ * reported as a finding instead.
+ */
 function inboxRefusal(message: string, why: string): CliFailure {
   return new CliFailure({
     code: "VALIDATION_ERROR",
     message,
     why,
-    next: `make ${STATE_DIR}/inbox.md a regular file of at most ${INBOX_READ_MAX_BYTES} bytes inside the repository, then re-run`,
+    next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once the inbox is a regular file of at most ${INBOX_READ_MAX_BYTES} bytes inside the repository`,
   });
 }
 
@@ -779,18 +838,31 @@ async function readInbox(rootDir: string, inboxPath: string): Promise<string | n
   }
 }
 
-/** A row as the JSON document carries it: every text field sanitised. */
-function inboxRowJson(row: InboxRow, matchedBy: MatchedBy): Record<string, unknown> {
+/**
+ * A row as the JSON document carries it: every text field sanitised.
+ * `withheld` is null on a clean row and the pattern id on a withheld one,
+ * whose description, writer and `Ref:` are null rather than empty.
+ */
+function inboxRowJson(row: InboxRow, matchedBy: MatchedBy, withheld: string | null): Record<string, unknown> {
   return {
     line: row.line,
     severity: sanitizeLabel(row.severity),
     location: sanitizeLabel(row.location),
-    description: sanitizeLabel(row.description),
-    source: sanitizeLabel(row.source),
-    ref: row.ref === null ? null : sanitizeLabel(row.ref),
+    description: withheld === null ? sanitizeLabel(row.description) : null,
+    source: withheld === null ? sanitizeLabel(row.source) : null,
+    ref: withheld === null && row.ref !== null ? sanitizeLabel(row.ref) : null,
     tag: row.tag === null ? null : sanitizeLabel(row.tag),
     matchedBy,
+    withheld,
   };
+}
+
+/** A matched row's human line; a withheld row's names the pattern where its description would stand. */
+function inboxRowLine(row: InboxRow, matchedBy: MatchedBy, withheld: string | null): string {
+  const body = withheld === null ? row.description : `withheld by the screen (${withheld}); read it by hand`;
+  return sanitizeLabel(
+    `${row.line} ${row.severity} · ${row.location} · ${body}${row.tag === null ? "" : ` · ${row.tag}`} (${matchedBy})`,
+  );
 }
 
 /**
@@ -799,12 +871,29 @@ function inboxRowJson(row: InboxRow, matchedBy: MatchedBy): Record<string, unkno
  * `critical-deferred` or `decision-waiting`, and every row when no filter is
  * given. The inbox is user-tier state any writer can author and these lines
  * land in a run's context, so every bullet, parsed or not, is screened before
- * anything of it prints: a hit prints `skipped: <line> (<pattern id>)` and
- * never the row's text nor its parse message. Every printed field is
- * sanitised. The count line's numbers add up to the bullets: matched,
- * unmatched, unparsed and skipped; a skip line prints whatever the query, and
- * the JSON `counts` tallies the matched rows by severity. Reads only;
- * `--dry-run` is accepted and changes nothing, so it prints no dry-run line.
+ * anything of it prints, as written and as it prints: the bullet first, then
+ * a parsed row's printed fields and an unparsed line's message. A bullet past
+ * {@link INBOX_BULLET_MAX_CHARS} is skipped unscreened. A hit prints
+ * `skipped: <line> (<pattern id>)` and never the row's text nor its parse
+ * message.
+ *
+ * One hit prints more. A row that parses, and whose severity and location each
+ * pass the screen alone, is withheld rather than dropped: a copy holding only
+ * its line, severity and location goes to the match, with its tag when that is
+ * an always-shown word, so the row still matches by its location and still
+ * shows by that tag. Matched, it prints `<line> <severity> · <location> ·
+ * withheld by the screen (<pattern id>); read it by hand` in place of its skip
+ * line; its description, writer and `Ref:` never reach the match or the
+ * output. A deferral whose text the screen refuses still comes back to the
+ * run that touches its file, for a person to read.
+ *
+ * Every printed field is sanitised. Each bullet counts once under matched,
+ * unmatched, unparsed or skipped, but for a matched withheld row, which counts
+ * under matched and skipped both; a skip line prints whatever the query, and
+ * the JSON `skipped` lists every screened bullet, a matched withheld row
+ * included. The JSON `counts` tallies the matched rows by severity. Reads
+ * only; `--dry-run` is accepted and changes nothing, so it prints no dry-run
+ * line.
  */
 async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
   const rootDir = ctx.app.runtime.cwd;
@@ -821,19 +910,40 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     };
   }
 
-  const skipped: { line: number; pattern: string }[] = [];
-  const skippedLines = new Set<number>();
+  // Each bullet's own verdict, before anything of it is read further: its length, then the screen.
+  const bulletScreen = new Map<number, string>();
   inboxText.split("\n").forEach((raw, index) => {
     if (!raw.startsWith("- ")) return;
-    const pattern = screenInboxLine(raw);
-    if (pattern === "") return;
-    skipped.push({ line: index + 1, pattern });
-    skippedLines.add(index + 1);
+    bulletScreen.set(index + 1, raw.length > INBOX_BULLET_MAX_CHARS ? INBOX_OVER_LENGTH : screenInboxLine(raw));
   });
 
   const parsed = inboxStore.parseInbox(inboxText);
-  const rows = parsed.rows.filter((row) => !skippedLines.has(row.line));
-  const problems: InboxProblem[] = parsed.problems.filter((problem) => !skippedLines.has(problem.line));
+  const skipped: { line: number; pattern: string }[] = [];
+  const withheld = new Map<number, string>();
+  const alwaysShown: readonly string[] = inboxStore.ALWAYS_SHOW_TAGS;
+  const rows: InboxRow[] = [];
+  for (const row of parsed.rows) {
+    const bullet = bulletScreen.get(row.line) ?? "";
+    const pattern = bullet === "" ? screenInboxRow(row) : bullet;
+    if (pattern === "") {
+      rows.push(row);
+      continue;
+    }
+    skipped.push({ line: row.line, pattern });
+    if (pattern === INBOX_OVER_LENGTH) continue;
+    if (screenInboxFields([row.severity, row.location, `${row.severity} · ${row.location}`]) !== "") continue;
+    const tag = row.tag !== null && alwaysShown.includes(row.tag) && screenInboxLine(row.tag) === "" ? row.tag : null;
+    withheld.set(row.line, pattern);
+    rows.push({ line: row.line, severity: row.severity, location: row.location, description: "", source: "", ref: null, tag });
+  }
+  const problems: InboxProblem[] = [];
+  for (const problem of parsed.problems) {
+    const bullet = bulletScreen.get(problem.line) ?? "";
+    const pattern = bullet === "" ? screenInboxLine(problem.message) : bullet;
+    if (pattern === "") problems.push(problem);
+    else skipped.push({ line: problem.line, pattern });
+  }
+  skipped.sort((a, b) => a.line - b.line);
   const paths = Array.isArray(opts["paths"]) ? (opts["paths"] as string[]) : [];
   const area = Array.isArray(opts["area"]) ? (opts["area"] as string[]) : undefined;
   const plan = text(opts, "plan");
@@ -844,16 +954,15 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   });
   for (const { row } of result.matched) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
   const total = parsed.rows.length + parsed.problems.length;
+  // A withheld row is counted under `skipped`, matched or not, so `unmatched` counts the clean rows alone.
+  const shown = new Set(result.matched.filter(({ row }) => withheld.has(row.line)).map(({ row }) => row.line));
+  const unmatched = result.unmatched - (withheld.size - shown.size);
 
   const lines = [
-    `inbox: ${total} rows · ${result.matched.length} matched · ${result.unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped`,
-    ...result.matched.map(({ row, matchedBy }) =>
-      sanitizeLabel(
-        `${row.line} ${row.severity} · ${row.location} · ${row.description}${row.tag === null ? "" : ` · ${row.tag}`} (${matchedBy})`,
-      ),
-    ),
+    `inbox: ${total} rows · ${result.matched.length} matched · ${unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped`,
+    ...result.matched.map(({ row, matchedBy }) => inboxRowLine(row, matchedBy, withheld.get(row.line) ?? null)),
     ...problems.map((problem) => sanitizeLabel(`unparsed: ${problem.line}: ${problem.message}`)),
-    ...skipped.map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
+    ...skipped.filter((skip) => !shown.has(skip.line)).map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
   ];
   ctx.io.out(`${lines.join("\n")}\n`);
 
@@ -862,9 +971,9 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     json: {
       inbox: inboxStore.INBOX_PATH,
       total,
-      matched: result.matched.map(({ row, matchedBy }) => inboxRowJson(row, matchedBy)),
+      matched: result.matched.map(({ row, matchedBy }) => inboxRowJson(row, matchedBy, withheld.get(row.line) ?? null)),
       counts,
-      unmatched: result.unmatched,
+      unmatched,
       problems: problems.map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) })),
       skipped,
     },
