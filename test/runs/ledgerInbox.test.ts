@@ -475,6 +475,11 @@ describe("stamity ledger inbox", () => {
   });
 
   // q9b (REQ-FLOW-076, S16): rows come back when their day arrives or their files are touched.
+  //
+  // 2026-10-10, build/17 with review/30 and review/33 (signed off): under `--due` the count line's
+  // tail is `· <n> due by <day> · <n> triggers`, the first <n> counting the matched rows whose `by:`
+  // day is on or before the day, whatever each matched by. The five count lines pinned below moved
+  // with it from `· <day> due · <n> triggers`; the JSON keys `due` and `triggers` did not move.
   describe("--due and the schedule fields", () => {
     /** Rows above and below the rule's heading: three dated, two triggered, one of them touched by its files. */
     const SCHEDULED = [
@@ -503,7 +508,7 @@ describe("stamity ledger inbox", () => {
       expect(human.code).toBe(0);
       expect(human.stdout).toBe(
         [
-          "inbox: 7 rows · 2 matched · 4 unmatched · 1 unparsed · 0 skipped · 2026-12-01 due · 2 triggers",
+          "inbox: 7 rows · 2 matched · 4 unmatched · 1 unparsed · 0 skipped · 2 due by 2026-12-01 · 2 triggers",
           "7 Warning · docs/b.md:3 · overdue (due)",
           "8 Minor · — · due on the day (due)",
           "unparsed: 12: a row under `## Rows under the schedule rule` carries `by: <YYYY-MM-DD>` or `when: <trigger>`; this one carries neither",
@@ -576,6 +581,31 @@ describe("stamity ledger inbox", () => {
       });
     });
 
+    it("counts a row both touched and overdue as due, though it matches as path", async () => {
+      const dir = tempDir();
+      await seedInbox(dir, SCHEDULED);
+
+      const human = await inbox(dir, "--paths", "docs/b.md", "docs/d.md", "--due", "2026-12-01");
+      const json = await inbox(dir, "--paths", "docs/b.md", "docs/d.md", "--due", "2026-12-01", "--json");
+
+      // Row 7 is overdue and touched, row 8 is due, and row 9 is touched a day before its own.
+      expect(human.stdout.split("\n").slice(0, 4)).toEqual([
+        "inbox: 7 rows · 3 matched · 3 unmatched · 1 unparsed · 0 skipped · 2 due by 2026-12-01 · 2 triggers",
+        "7 Warning · docs/b.md:3 · overdue (path)",
+        "8 Minor · — · due on the day (due)",
+        "9 Minor · docs/d.md:1 · not yet (path)",
+      ]);
+      expect(JSON.parse(json.stdout)).toMatchObject({
+        matched: [
+          { line: 7, by: "2026-11-01", matchedBy: "path" },
+          { line: 8, by: "2026-12-01", matchedBy: "due" },
+          { line: 9, by: "2026-12-02", matchedBy: "path" },
+        ],
+        due: "2026-12-01",
+        triggers: 2,
+      });
+    });
+
     it("reads the day from the clock when --due carries no value", async () => {
       const dir = tempDir();
       await seedInbox(dir, SCHEDULED);
@@ -586,7 +616,7 @@ describe("stamity ledger inbox", () => {
 
       expect(human.code).toBe(0);
       expect(human.stdout.split("\n").slice(0, 2)).toEqual([
-        "inbox: 7 rows · 1 matched · 5 unmatched · 1 unparsed · 0 skipped · 2026-11-02 due · 2 triggers",
+        "inbox: 7 rows · 1 matched · 5 unmatched · 1 unparsed · 0 skipped · 1 due by 2026-11-02 · 2 triggers",
         "7 Warning · docs/b.md:3 · overdue (due)",
       ]);
       expect(JSON.parse(json.stdout)).toMatchObject({ due: "2026-11-02", matched: [{ line: 7, matchedBy: "due" }], triggers: 2 });
@@ -635,10 +665,10 @@ describe("stamity ledger inbox", () => {
           "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped\n3 Warning · — · withheld by the screen (never-verify); read it by hand (path)\n",
         );
         expect(byDue.stdout).toBe(
-          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped · 2026-12-01 due · 0 triggers\n3 Warning · — · withheld by the screen (never-verify); read it by hand (due)\n",
+          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped · 1 due by 2026-12-01 · 0 triggers\n3 Warning · — · withheld by the screen (never-verify); read it by hand (due)\n",
         );
         expect(early.stdout).toBe(
-          "inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped · 2026-10-31 due · 0 triggers\nskipped: 3 (never-verify)\n",
+          "inbox: 1 rows · 0 matched · 0 unmatched · 0 unparsed · 1 skipped · 0 due by 2026-10-31 · 0 triggers\nskipped: 3 (never-verify)\n",
         );
         for (const word of ["quiet", "hidden"]) expect(json.stdout).not.toContain(word);
         expect(JSON.parse(json.stdout)).toMatchObject({
@@ -671,7 +701,7 @@ describe("stamity ledger inbox", () => {
         const json = await inbox(dir, "--paths", "src/z.ts", "--due", "2026-12-01", "--json");
 
         expect(human.stdout).toBe(
-          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped · 2026-12-01 due · 0 triggers\n1 Warning · — · withheld by the screen (never-verify); read it by hand · decision-waiting (always)\n",
+          "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped · 0 due by 2026-12-01 · 0 triggers\n1 Warning · — · withheld by the screen (never-verify); read it by hand · decision-waiting (always)\n",
         );
         for (const word of ["quiet", "hidden"]) expect(json.stdout).not.toContain(word);
         expect(JSON.parse(json.stdout)).toMatchObject({
@@ -696,15 +726,38 @@ describe("stamity ledger inbox", () => {
       });
     });
 
-    it("withholds a clean-looking row whose trigger alone carries a screened string", async () => {
+    // review/31: each case is red without the screen of the field as a string of its own. The bullet
+    // passes the screen as written, so nothing but that field's own read withholds the row.
+    it("withholds a row whose trigger hits the screen only as a string of its own", async () => {
       const dir = tempDir();
-      await seedInbox(dir, `- Minor · src/a.ts:1 · d · source: x · when: ${NEVER_HIT}\n`);
+      // The heading shape stands mid-line in the bullet and at the start of the trigger.
+      await seedInbox(dir, `- Minor · src/a.ts:1 · d · source: x · when: ${HEADER_FIELD_HIT}\n`);
+
+      const human = await inbox(dir, "--paths", "src/a.ts");
+      const json = await inbox(dir, "--paths", "src/a.ts", "--json");
+
+      expect(human.stdout).toBe(
+        "inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 1 skipped\n1 Minor · src/a.ts:1 · withheld by the screen (fake-instruction-header); read it by hand (path)\n",
+      );
+      expect(json.stdout).not.toContain("quiet");
+      expect(JSON.parse(json.stdout)).toMatchObject({
+        matched: [{ line: 1, description: null, when: null, withheld: "fake-instruction-header" }],
+        skipped: [{ line: 1, pattern: "fake-instruction-header" }],
+      });
+    });
+
+    it("withholds a row whose files: entry hits the screen only once its backticks are stripped", async () => {
+      const dir = tempDir();
+      // A backtick splits the word in the bullet; the parsed entry, which the document carries, joins it.
+      const split = ["exfil", "`", "trate/x.ts"].join("");
+      await seedInbox(dir, `- Minor · src/a.ts:1 · d · source: x · files: src/b.ts, ${split} · by: 2026-11-01\n`);
 
       const result = await inbox(dir, "--paths", "src/a.ts", "--json");
 
-      expect(result.stdout).not.toContain("quiet");
+      expect(result.stdout).not.toContain(`${SPACELESS_HIT}/x.ts`);
       expect(JSON.parse(result.stdout)).toMatchObject({
-        matched: [{ line: 1, description: null, when: null, withheld: "never-verify" }],
+        matched: [{ line: 1, description: null, by: "2026-11-01", files: [], matchedBy: "path", withheld: "exfiltrate" }],
+        skipped: [{ line: 1, pattern: "exfiltrate" }],
       });
     });
   });

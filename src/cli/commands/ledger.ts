@@ -935,9 +935,11 @@ function inboxRowLine(row: InboxRow, matchedBy: MatchedBy, withheld: string | nu
  * (a row's location or its `files:`), by `--plan`, by `--area` word for a row
  * whose location names no path — the rows whose `by:` day is on or before
  * `--due`, every row tagged `critical-deferred` or `decision-waiting`, and
- * every row when no filter is given. Under `--due` the count line also names
- * the day and how many unmatched rows wait on a `when:` trigger, which no
- * query can see arrive.
+ * every row when no filter is given. Under `--due` the count line ends
+ * `· <n> due by <day> · <n> triggers`: how many matched rows carry a `by:` day
+ * on or before the day, whatever each matched by, so a row both touched and
+ * overdue is counted, and how many unmatched rows wait on a `when:` trigger,
+ * which no query can see arrive.
  *
  * The inbox is user-tier state any writer can author and these lines land in
  * a run's context, so every bullet, parsed or not, is screened before
@@ -1041,7 +1043,9 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   const shown = new Set(result.matched.filter(({ row }) => withheld.has(row.line)).map(({ row }) => row.line));
   const unmatched = result.unmatched - (withheld.size - shown.size);
 
-  const dueNote = due === null ? "" : ` · ${due} due · ${result.triggers} triggers`;
+  // Counted by the day and not by the `due` label: a row a path matched first may be overdue too.
+  const overdue = due === null ? 0 : result.matched.filter(({ row }) => row.by !== null && row.by <= due).length;
+  const dueNote = due === null ? "" : ` · ${overdue} due by ${due} · ${result.triggers} triggers`;
   const lines = [
     `inbox: ${total} rows · ${result.matched.length} matched · ${unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped${dueNote}`,
     ...result.matched.map(({ row, matchedBy }) => inboxRowLine(row, matchedBy, withheld.get(row.line) ?? null)),

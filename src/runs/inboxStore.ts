@@ -11,7 +11,8 @@ import { LEDGER_FILE } from "./layout.ts";
  * After those come the optional fields, in any order and each at most once,
  * read by their prefix: `by: <YYYY-MM-DD>` or `when: <trigger>` (when the row
  * comes back), `files: <path>, <path>` (the files it is about, for a location
- * that names none), one tag word (`critical-deferred` on a deferred Critical,
+ * that names none; each entry is one path, and one holding a space is
+ * refused), one tag word (`critical-deferred` on a deferred Critical,
  * `decision-waiting` on a row a person must answer), one bare `<YYYY-MM-DD>`
  * (the day it was deferred), and `rationale: <text>`, which is last and takes
  * the rest of the line, separators included. Non-bullet lines — headings,
@@ -62,7 +63,7 @@ export interface InboxRow {
   readonly by: string | null;
   /** The event the row comes back on, from `when: `; never beside {@link by}. */
   readonly when: string | null;
-  /** The paths `files: ` names, each cleaned as a location entry is; empty when the field is absent. */
+  /** The paths `files: ` names, each one path with no space, cleaned as a location entry is; empty when the field is absent. */
   readonly files: readonly string[];
   /** The bare `YYYY-MM-DD` field: the day the row was deferred. */
   readonly deferredOn: string | null;
@@ -183,12 +184,20 @@ function parseTrailing(rest: readonly string[], hasRef: boolean): ScheduleFields
       fields.when = value;
     } else if (key === "files") {
       if (fields.files !== null) return twice(key);
-      const paths = value.split(",").map(entryPath);
+      const entries = value.split(",");
+      const paths = entries.map(entryPath);
       if (paths.includes("")) return "`files:` names an empty path";
+      // A location entry may carry a word after its path; a `files:` entry is the path alone, so prose is refused, not cut.
+      const spaced = entries.findIndex((entry) => /\s/u.test(entry.replaceAll("`", "").trim()));
+      if (spaced !== -1) {
+        return `\`files:\` entry starting \`${paths[spaced] ?? ""}\` holds a space; an entry is one path, parted from the next by a comma`;
+      }
       fields.files = paths;
     } else if (key === "source" || (key === "Ref" && hasRef)) {
       return twice(key);
     } else if (key === "Ref") {
+      // First after `source:` and still here: the field is in its place, and its value is what is missing.
+      if (index === 0 && value === "") return "`Ref:` names no path";
       return "`Ref:` comes straight after `source:`, before any other field";
     } else {
       return `unknown field \`${key}:\``;

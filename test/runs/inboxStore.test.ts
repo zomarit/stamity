@@ -228,9 +228,21 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["when:", "`when:` names no trigger"],
     ["files: src/a.ts, , src/b.ts", "`files:` names an empty path"],
     ["files:", "`files:` names an empty path"],
+    // review/32: an entry is one path, so prose in the slot is refused where it was cut to its first word.
+    [
+      "files: that rule and its copies",
+      "`files:` entry starting `that` holds a space; an entry is one path, parted from the next by a comma",
+    ],
+    [
+      "files: src/b.ts, `src/c.ts and src/d.ts`",
+      "`files:` entry starting `src/c.ts` holds a space; an entry is one path, parted from the next by a comma",
+    ],
     ["rationale:", "`rationale:` gives no reason"],
     ["by: 2026-11-01 · Ref: r.jsonl#a/1", "`Ref:` comes straight after `source:`, before any other field"],
     ["Ref: r.jsonl#a/1 · Ref: r.jsonl#a/2", "`Ref:` appears twice"],
+    // review/34: a `Ref:` in its place with no value is told its value is missing, not to move.
+    ["Ref:", "`Ref:` names no path"],
+    ["by: 2026-11-01 · Ref:", "`Ref:` comes straight after `source:`, before any other field"],
     ["source: y", "`source:` appears twice"],
     // The two shapes whose message stays as it was: a bare field holding a space, and a second tag word.
     ["by: 2026-11-01 · two words", "trailing field(s) beyond one optional tag word — by: 2026-11-01 · two words"],
@@ -291,6 +303,11 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["src/a.ts:1", "when: ...", "`when:` names no trigger"],
     ["—", "when: touched", "`when: touched` needs a path, in the location or in `files:`"],
     ["the ledger grammar", "when: Touched.", "`when: touched` needs a path, in the location or in `files:`"],
+    [
+      "—",
+      "when: touched · files: that rule and its copies",
+      "`files:` entry starting `that` holds a space; an entry is one path, parted from the next by a comma",
+    ],
   ])("refuses a row at %j carrying %j", (location, field, message) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe(message);
   });
