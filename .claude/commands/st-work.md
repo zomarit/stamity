@@ -12,11 +12,16 @@ description: "Execute a change end to end: frame, research, plan, build with sub
 2. **Derive intensity.** The tier, by the Dials signals; `--effort` wins.
 3. **Model plan + cost preview.** Before any spawn, emit the spawn plan — role, class (Dials
    ladder), count per phase — with a cost order of magnitude.
-4. **Deferral inbox.** Read the deferral inbox and surface every item whose paths overlap the files
-   this change will touch. An item a persisted plan already settles — named in a unit, a follow-up
-   or its out-of-scope text — is listed with that disposition and not asked about; the rest ride
-   the plan gate's question, left in the inbox by default. This read is guaranteed on every run;
-   `/st-board`'s `## Deferral inbox` section owns the reader census.
+4. **Deferral inbox.** Read and surface the deferral inbox rows whose paths overlap this change's
+   files: the `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always
+   shows and its total and unmatched counts. From a bare intent, query again with the plan's files.
+   A row it withholds or skips is listed as it prints, the person's to read; never open the inbox
+   for it. Only when the CLI or that query is absent, read the whole file and say so; any other
+   failure (a refusal, a crash, a failing exit) is a finding naming it, never a whole-file read. An
+   item a persisted plan already settles — named in a unit, a follow-up or its out-of-scope text —
+   is listed with that disposition and not asked about; the rest ride the plan gate's question, left
+   in the inbox by default. This read is guaranteed on every run; `/st-board`'s `## Deferral inbox`
+   section owns the reader census.
 5. **Run record head.** Open `.stamity/runs/<run-id>/record.md` (`<run-id>` is `<UTC date>_<slug>`)
    with the head lines and the `reports/` folder the Proof block names. Records are files: create
    and extend `record.md`, `plan.md`, reports and the inbox with the client's file write and edit
@@ -33,26 +38,24 @@ are carried into the plan, not silently dropped.
 ## Phase 2 — Plan
 
 - **Plan-artifact intake.** This phase plans in-flow — persisted nowhere under `docs/plans/`; the
-  reviewable plan artifact on disk belongs to `/st-plan`. Discovery: read `docs/plans/*.md`, keep
-  the artifacts whose head `intent:` and Context cover this request, and take the newest `stamp:`.
-  Two artifacts still matching after that is one ambiguity-gate question, never a pick. Nothing
-  found is a normal outcome: say so and plan in-flow.
+  reviewable plan artifact on disk belongs to `/st-plan`. Read `docs/plans/*.md`, keep those whose
+  head `intent:` and Context cover this request, and take the newest `stamp:`. Two still matching
+  is one ambiguity-gate question, never a pick. Nothing found is a normal outcome: say so and plan
+  in-flow.
 - **Freshness guard.** `/st-plan` owns the intake contract: its `## Plan artifact shape` section
-  and the freshness guard beside it apply here, unrestated. Two head keys are read and no others:
-  `stamp:` and `reads:`. On a failed guard, re-plan with the stale artifact as input; a stale plan
-  is never executed silently. Staleness is a guard verdict recorded in the run report, not a
-  return status.
+  and the freshness guard beside it apply here. Only two head keys are read: `stamp:` and `reads:`.
+  On a failed guard, re-plan with the stale artifact as input; a stale plan is never executed
+  silently. Staleness is a guard verdict in the run report, not a return status.
 - **Decompose** into reviewable units: one unit = one concern, ≤~400 changed lines and ≤8 files.
   The 400 is a ceiling, not a target; split at Plan, not mid-build. Each unit carries complete
   interfaces so a context-free implementer can execute it, and names the spec requirement ids it
   implements — or records that the spec carries none — the join key the plan unit, the
   implementer's delta and the test name share. An in-flow plan is written once to
   `.stamity/runs/<run-id>/plan.md` in `/st-plan`'s unit shape: the copy every dispatch points at,
-  not a reviewable artifact.
+  not a reviewable artifact; the record's `Plan:` line names it.
 - **Coverage before Build.** Persisted plans get `/st-plan`'s structural coverage pass and semantic
   review, in-flow units the same bidirectional review against their requirement IDs; fix missing
-  references and conflicting readings before handoff. A structural pass alone does not establish
-  clarity.
+  references and conflicting readings before handoff. A structural pass alone is not clarity.
 - **Plan gate.** light: auto-continue. standard: a persisted plan that
   passed the freshness guard is the go-ahead — take execute-now and log
   `Default applied: plan gate → option 1, execute now (persisted plan <path>)`;
@@ -268,10 +271,11 @@ The mandatory closing checkpoint, human-facing, at every intensity:
 
 1. Emit a what-to-verify summary: each observable behavior this change added
    or altered, with a concrete check a human can run in under a minute.
-2. Invoke the qa skill by name for the guided pass. The step belongs to the
-   command already running, not to a trigger match: a request arriving here —
-   "what should I check by hand?" — is what this checkpoint answers, and stays
-   with this command.
+2. Invoke the qa skill by name for the guided pass, handing it the class and
+   lenses `gate classify` named (`unclear` when none ran). The step belongs to
+   the command already running, not to a trigger match: a request arriving
+   here — "what should I check by hand?" — is what this checkpoint answers,
+   and stays with this command.
 3. When the change has a user-facing surface, offer a browser-evidence skill
    run; captured screenshots and console output attach to the proof block.
 
@@ -311,6 +315,9 @@ audit record:
   suggestion: the findings it deferred, the acceptance criteria it left
   uncovered, the inbox rows it appended. A run that closed with none of those
   says so in the same line.
+
+**Usage lines.** As each phase or review round ends, append `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)`
+to the run record, as a capacity line is appended: minutes from the orchestrator's clock, a line of its own, never directly above a table.
 
 Cite native platform artifacts where they exist — per-sub-agent transcripts,
 hook-gate outcomes, session logs. A self-quoted completion marker is the

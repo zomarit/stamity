@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T09:26:54.554Z",
+  "updatedAt": "2026-10-10T11:59:03.156Z",
   "tools": [
     "claude"
   ],
@@ -127,7 +127,7 @@
       "adapter": "claude",
       "artifactId": "test-runner",
       "artifactType": "agent",
-      "contentHash": "945185ecf681d3419e8f2ced43d68d355e08d204c50a1b616c015114935f3809",
+      "contentHash": "d23d0b5c2776864d45f2967510a74b5b0d5862325d0e98daeb83df9e30118759",
       "path": ".claude/agents/stamity-test-runner.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "4efd9b4220eff28256964aa7ec90bd4b7197bd9639cde2aa9db29a5ecf172520",
+      "contentHash": "2818f73a1e10d199e75e7705e66a4b3e8d38dd0e21567a1a381d4df92fa1bb0e",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -386,7 +386,7 @@
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "afc98652aae052682bc6111ed46ad3777007f89e28363e7c7da5d8b750b03f57",
+      "contentHash": "1b434ec6a6197ce7368852ce494bd8eded675080f7cc423d7764e0f307784609",
       "path": ".claude/skills/st-qa/SKILL.md"
     },
     {
@@ -484,7 +484,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "b8f4e5232d8548c7012f4e85e556060647a1bc9f2d2ec3f71241bec18e9f0d61",
+      "contentHash": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250",
       "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
     },
     {
