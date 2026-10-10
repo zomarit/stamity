@@ -1741,6 +1741,10 @@ describe("/st-work — dials", () => {
     const frontierRow = ladderRoleCells(dials).get("frontier") ?? "";
     expect(frontierRow).toContain("whole-branch deep review");
     expect(frontierRow).toContain(anchor);
+    // The frontier rung carries a second flow placement since 2026-10-10 (unit
+    // q4t-ladder-placement-text, REQ-LADDER-003): the one closure re-review after
+    // an escalation, which MODEL_LADDER's frontier rationale records too.
+    expect(frontierRow).toContain("closure re-review after an escalation");
     // The anchor names real sub-sections, in the order Phase 4 declares them.
     const prove = section(raw, "## Phase 4 — Prove");
     expect(prove.indexOf("### Review loop")).toBeGreaterThanOrEqual(0);
@@ -1751,10 +1755,21 @@ describe("/st-work — dials", () => {
     const dials = collapse(section(await body(), "## Dials"));
 
     // The ladder's prose claimed exactly two flow placements; the capacity rung
-    // adds a third that no row carries, and a reader checking a role's class
+    // adds one that no row carries, and a reader checking a role's class
     // against the table has to be told so rather than find a missing rung.
-    expect(dials).toContain("The two placements no agent file can declare that this table records");
-    expect(dials).toContain("the capacity rung's one-class drop for a build role (Dispatch contract) is a third, which no row records");
+    //
+    // TEST CHANGE, justified (2026-10-10, q4t-ladder-placement-text): the two pins
+    // below moved with the contract. The ladder now records a third placement, the
+    // frontier rung's closure re-review after an escalation, so the count the table
+    // records is three; and it names a second placement no row records, the
+    // escalation fixer's effort step, beside the capacity rung's drop. The old
+    // pins read "The two placements [...] this table records" and "[...] (Dispatch
+    // contract) is a third, which no row records". The capacity rung's clause is
+    // still pinned, inside the longer sentence.
+    expect(dials).toContain("The three placements no agent file can declare that this table records");
+    expect(dials).toContain(
+      "the capacity rung's one-class drop for a build role (Dispatch contract) and the escalation fixer's effort step (Review loop) are two more, which no row records",
+    );
     expect(dials).not.toContain("The only two placements");
   });
 

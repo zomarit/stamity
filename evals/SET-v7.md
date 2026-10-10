@@ -1690,6 +1690,24 @@ three times and the second on two meanings of one requirement, so no `## Expecte
 Under the incremental rule the five re-measure, because their case-file bytes moved. The dated
 citations above stay as they were.
 
+**One `/st-work` range moved and one Brief re-quoted, 2026-10-10 (plan 019 file 3, unit
+`q4t-ladder-placement-text`).** `/st-work`'s Model ladder paragraph now counts three placements the
+table records and names two that no row records: "The three placements no agent file can declare
+that this table records are the flow's own escalations and drop, marked as such below; the capacity
+rung's one-class drop for a build role (Dispatch contract) and the escalation fixer's effort step
+(Review loop) are two more, which no row records." The sentence goes from three lines to four (+1).
+The table's frontier cell names the second escalation, edited in place (0): "[...] and for the one
+closure re-review after an escalation (Review loop) — flow placements, declared by no agent file".
+So every `/st-work` range after line 452 moves by one, and one case sources lines there. The move
+lands in the case file and its case-index cell above: `work-capacity-rung-classes-stop-notices`
+98-102,110-125,454-459 → 98-102,110-125,455-460, re-quoting the frontier row byte-identical to the
+landed file; its two Dispatch-contract ranges and its other three table rows hold. The other
+thirteen `/st-work` cases source no line past 370 and hold. The scenario's reviewer stops in round 1
+of a unit's review loop, before any escalation, so the re-review clause decides nothing in it and no
+`## Expected` block moves. The case has no cases-v5 copy, so `EXPECTED_MOVES` gains no row, and no
+claim, identical/moved count, threshold or roster count moves. Under the incremental rule the one
+case re-measures, because its case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1910,7 +1928,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `test-runner-red-verdict-never-digested` | golden · rubric | 7 / 1 | Dispatched with a report path and asked for the digest form a green pass returned, a test-runner whose verdict is red returns in full: one row per gate with its exact command, status, exit code, duration and verbatim excerpt, and a red verdict line naming the failing row, with status DONE and the failing gate graded Critical; no digest and no pointer to the report stands in for the rows, and no gate is re-run or edited toward green. | `content/agents/stamity-test-runner.md:14-17,52-65,80-82,126-146` |
 | `ui-error-state-announces-recovery` | golden · rubric | 4 / 0 | A failed data read renders an accessible error state with an actionable recovery instead of a false success. | `content/rules/stamity-ui-states.md:12-76` |
 | `unattended-run-applies-declared-default` | golden · rubric *(floor)* | 7 / 0 | In an unattended run the declared default executes and the run records one Default-applied line naming the question, the option and the reason; a silent pick is the single disallowed outcome. | `content/rules/stamity-question-protocol.md:51-56,68-69` |
-| `work-capacity-rung-classes-stop-notices` | golden · rubric | 7 / 2 | A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round. | `content/commands/st-work.md:98-102,110-125,454-459` |
+| `work-capacity-rung-classes-stop-notices` | golden · rubric | 7 / 2 | A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round. | `content/commands/st-work.md:98-102,110-125,455-460` |
 | `work-gate-red-after-fix-escalates-fixer` | golden · rubric | 5 / 2 | A gate red after a fix is an escalation trigger on its own, before any not-fixed note: the work goes to a fresh fixer spawn on the same model at one effort level above the declared one, with the round history and the test-runner's failing excerpt attached, never back to the resumed fixer, and the fixer's own green claim is not gate evidence. | `content/agents/stamity-fixer.md:70-94,96-99` |
 | `work-light-cap-round-escalates-open-finding` | golden · rubric | 6 / 1 | In a light run, a finding still open entering the cap round of 2 goes to a fresh fixer spawn on the same model at one effort level above the fixer's declared one, with the round history attached, instead of a third round; one re-review on a stronger class follows, and a finding that fixer leaves open stops the run as BLOCKED_FAILURE. | `content/commands/st-work.md:207-230` |
 | `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 2 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:115-128` |

@@ -2,7 +2,7 @@
 id: work-capacity-rung-classes-stop-notices
 class: golden
 claim: "A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round."
-source: content/commands/st-work.md:98-102,110-125,454-459
+source: content/commands/st-work.md:98-102,110-125,455-460
 metric: rubric
 ---
 
@@ -45,7 +45,7 @@ Governing text — the same file, "Model ladder" (the class table):
 ```text
 | Class | Assigned to |
 |---|---|
-| frontier | `reviewer`, escalated for the whole-branch deep review that runs once the review loop converges and before the QA checkpoint — a flow placement, declared by no agent file |
+| frontier | `reviewer`, escalated for the whole-branch deep review that runs once the review loop converges and before the QA checkpoint, and for the one closure re-review after an escalation (Review loop) — flow placements, declared by no agent file |
 | advanced | `reviewer` every round; `implementer`; `spec-author`; the `security` and `design-quality` specialists |
 | standard | `researcher`; `creator`; the `performance` specialist; `fixer` on rounds that still need judgement — its declared class |
 | economy | `test-runner`; `fixer` dropped here once a round is mechanical — lint, format, rename sweeps — a flow placement |

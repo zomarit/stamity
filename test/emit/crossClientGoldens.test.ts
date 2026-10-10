@@ -186,6 +186,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q4t-ladder-placement-text (run
+  //     2026-10-10_next-tier; REQ-LADDER-003, the plan's `build/87` row). The
+  //     st-work touchpoint moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32903 -> 33029, `.agents/skills/st-work/SKILL.md` 32948 -> 33074), by
+  //       +126 bytes, the corpus source's own delta: the Model ladder paragraph
+  //       counts three placements the table records and names the escalation
+  //       fixer's effort step as a second one no row records (+58), and the
+  //       table's frontier cell names the one closure re-review after an
+  //       escalation (+68).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q3b-plan-size-text (run
   //     2026-10-10_next-tier; REQ-FLOW-070). The st-plan touchpoint and the
   //     verify skill moved, plus the manifest rows that record them. No emitted

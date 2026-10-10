@@ -93,6 +93,24 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q4t-ladder-placement-text (run
+ *     2026-10-10_next-tier; REQ-LADDER-003, the plan's `build/87` row). ONE
+ *     golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33178 -> 33304 bytes and
+ *     470 -> 471 lines in the corpus source, one hunk. The Model ladder
+ *     paragraph's last sentence opens "The three placements no agent file can
+ *     declare that this table records are the flow's own escalations and
+ *     drop" and ends "and the escalation fixer's effort step (Review loop)
+ *     are two more, which no row records" (+58, three lines become four). The
+ *     table's frontier cell gains ", and for the one closure re-review after
+ *     an escalation (Review loop)" and closes "flow placements, declared by
+ *     no agent file" (+68, edited in place). Both sit below the re-attachment
+ *     cut (`### Specialist pass` holds at 17076). No token sits in the moved
+ *     text.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q3b-plan-size-text (run
  *     2026-10-10_next-tier; REQ-FLOW-070). NOTHING moved in this suite; the
  *     row keeps the two ledgers in step. The unit's two emitted changes are
