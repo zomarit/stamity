@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T14:08:10.256Z",
+  "updatedAt": "2026-10-10T14:18:47.862Z",
   "tools": [
     "claude"
   ],
@@ -162,7 +162,7 @@
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "8e4d96e708ad9c2f1a3c28caeb89914574b10fb613a2ae85149b566c40a05bb3",
+      "contentHash": "266e6260d9b5fc1f48e2aaac682757e615e0ee6c5adc7b964bed4a7dd866847a",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
@@ -176,7 +176,7 @@
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "2597e51dee585eedd16a62524e39ef5eab9c7da7a946d3c8a4cb10b05e8f0355",
+      "contentHash": "11be542b63d01dc939bb04f82fec63c4ac286a64fd8b68b678fb6ed5e22e4abe",
       "path": ".claude/commands/st-rework.md"
     },
     {

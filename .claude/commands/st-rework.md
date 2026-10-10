@@ -191,8 +191,10 @@ A Critical finding the user wants deferred **is deferred** — with a record:
    it opens with `/st-board`'s declared row grammar so the reader that must surface it can parse
    it — the schedule field, the tag and the two extra fields follow the grammar's four: `Critical ·
    <file:line> · <the consequence in one line> · source: rework <branch> · when: touched ·
-   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>` (or `by: <date>` when the
-   user names one). A row missing the date or the rationale is not this record.
+   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>` (or `by: <YYYY-MM-DD>` when
+   the user names one). A row whose location is `—` adds `files: <path>` straight after
+   `when: touched`, or carries the day the user names: the reader refuses a touch trigger that
+   names no path. A row missing the date or the rationale is not this record.
 
 Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
 the branch next. **Default if the rationale question goes unanswered:** the deferral stands and
@@ -279,7 +281,7 @@ Feedback about how the agent behaved — not about the branch's code — leaves 
 | negative, suggestion | reusable insight about this repo | `st-learn` skill → `.stamity/learnings/` |
 | negative | defect in the tooling itself | issue on the project's own tracker, drafted here, filed only after the user confirms the body |
 | positive | what to keep | learning record — reinforcement is signal, not noise |
-| any | not ready to file | `.stamity/inbox.md` row `Minor · — · <one line> · source: rework <branch> · by: <YYYY-MM-DD> · meta` |
+| any | not ready to file | `.stamity/inbox.md` row `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta` (or `by: <YYYY-MM-DD>` in the trigger's place when the user names a day) |
 
 Every destination in that table is a persistence path, so every row clears the persistence
 guard above — a learning record, an inbox row, and a drafted issue body alike. The guard is
