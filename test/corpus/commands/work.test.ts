@@ -480,9 +480,17 @@ describe("/st-work — Frame and Plan", () => {
     // the line number and the pattern id, and a writer forces one by padding a row past the
     // length the screen reads. The rule now keeps the session out of the inbox for that row too;
     // the rest of the sentence is as the second commit pinned it.
+    // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; `review/90`,
+    // signed off): the pin read "A row it withholds or skips is listed as it prints, the person's
+    // to read; never open the inbox for it." What changed about the contract: the query prints a
+    // third kind of line for a row it does not show, `unparsed: <line>: <message>`, and no text
+    // named its reader, so a row with a grammar slip that overlapped the change was handed to
+    // nobody. The subject grows to the row the query cannot parse, which is the person's to fix;
+    // the never-open rule is as it was and now covers that row too.
     expect(frame).toContain(
-      "A row it withholds or skips is listed as it prints, the person's to read; never open the inbox for it.",
+      "A row it withholds, skips or cannot parse is listed as it prints, the person's to read or fix; never open the inbox for it.",
     );
+    expect(frame).not.toContain("A row it withholds or skips is listed");
     // The whole-file read has one trigger: no installed CLI, or a copy older than the query. No
     // failed run of the query is it. A writer can force a refusal (a link, a file padded past
     // the ceiling) and perhaps a crash, and a whole read would be unscreened. The plan's r4 text
@@ -1652,8 +1660,14 @@ describe("/st-work — Prove", () => {
     // No sentence here hands such a row to the Removal rule.
     expect(proof).not.toMatch(/withh[^.]*\bRemoval rule/);
     // Frame says the same of the same rows, in the same words.
+    // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; `review/90`,
+    // signed off): the pin read "A row it withholds or skips is listed as it prints, the person's
+    // to read". What changed about the contract: Frame's subject gained the row the query cannot
+    // parse, the person's to fix (the note on Frame's own pin says why). The words the two
+    // sentences share for a withheld or skipped row are held as they were; the close's sentence
+    // above did not move, and `/st-board`'s bullet names the unparsed line's reader at the close.
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
-    expect(frame).toContain("A row it withholds or skips is listed as it prints, the person's to read");
+    expect(frame).toContain("A row it withholds, skips or cannot parse is listed as it prints, the person's to read");
   });
 
   it("closes with a next step derived from the run's own state", async () => {

@@ -2,7 +2,7 @@
 id: qa-bare-signoff-records-unwalked
 class: golden
 claim: "A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked."
-source: content/skills/st-qa/SKILL.md:62-64,69-73,106-144
+source: content/skills/st-qa/SKILL.md:67-69,74-78,111-149
 metric: rubric
 ---
 

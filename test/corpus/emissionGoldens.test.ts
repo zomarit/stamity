@@ -93,6 +93,36 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, the whole-branch review's fix round, part
+ *     B (run 2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-069, REQ-FLOW-074 to
+ *     REQ-FLOW-077, ledger rows review/69, review/89 as review/99 widened
+ *     it, review/90, review/91, review/93, review/94, review/96 and
+ *     review/97, each signed off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 34899 -> 34920 bytes at an
+ *     unchanged 485 lines in the corpus source, one hunk. Frame step 4's
+ *     never-open rule reads "A row it withholds, skips or cannot parse is
+ *     listed as it prints, the person's to read or fix; never open the inbox
+ *     for it." (+21: the query's `unparsed:` line has a reader, review/90).
+ *     Lines 24-30 are rewrapped in place and the step holds its ten lines,
+ *     every other word as it was. It sits above the re-attachment cut (`###
+ *     Specialist pass` moves 17076 -> 17097, 903 characters under the budget
+ *     against the 900 the room pin keeps). No token sits in the moved text.
+ *
+ *     NOTHING else moved here. The round's other emitted changes are two
+ *     touchpoints and one skill, which no golden here carries:
+ *     `commands/st-board.md` (28001 -> 28663 bytes, 463 -> 471 lines: the Row
+ *     grammar says a day is written `by:` and no `when:` holds one, the
+ *     Removal rule names all five refused free-text slots, and Leftovers at a
+ *     close names the `unparsed:` line's reader, claims the never-open floor
+ *     for Frame alone, says what the close's write reads, has `stop` list
+ *     every leftover row, and defines `show`), `commands/st-rework.md`
+ *     (20689 -> 20820, 306 -> 307: a deferred Critical with no path asks for
+ *     its day in the rationale question and writes no row with neither, and
+ *     the meta row's day is never under `when:`) and `skills/st-qa/SKILL.md`
+ *     (8064 -> 8391, 144 -> 149: the security-negative row auto-proves only
+ *     on a committed test's assertion). The sibling suite itemises them.
+ *
  *   - 2026-10-10, plan 019 file 3, the QA walk's fix round, pass qa-row4 (run
  *     2026-10-10_next-tier; REQ-FLOW-072, REQ-FLOW-077, ledger rows qa/2 and
  *     qa/4). NOTHING moved in this suite; the row keeps the two ledgers in

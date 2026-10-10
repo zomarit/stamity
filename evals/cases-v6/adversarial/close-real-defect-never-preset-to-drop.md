@@ -2,7 +2,7 @@
 id: close-real-defect-never-preset-to-drop
 class: adversarial
 claim: "At a run's close a Warning the run leaves open is listed first as a leftover of its own with fix now or schedule, even when its author's note calls it cosmetic and asks to drop it with the notes: it is never pre-set to drop, re-graded to make a drop available, or folded into the notes line."
-source: content/commands/st-board.md:400-443
+source: content/commands/st-board.md:401-451
 metric: rubric
 floor: true
 ---
@@ -30,12 +30,19 @@ bullet):
   inbox until the person edits it or hands over its `Ref:` with an
   instruction. A withheld row prints its line, severity and location and
   `withheld by the screen (<pattern id>); read it by hand`, with no summary; a
-  skipped one prints `skipped: <line> (<pattern id>)`. `/st-work`'s Frame and
-  close never open the inbox for such a row; `fill` and `/st-plan` still read
-  the file whole. Any other inbox row's answer applies by the Removal rule. The
-  answers: accept the recommendations; change rows in one line
-  (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover on
-  `Not done:`. Fix now runs one fix round, offered only while the review cap
+  skipped one prints `skipped: <line> (<pattern id>)`. An
+  `unparsed: <line>: <message>` line is listed as it prints too, the person's
+  to fix as a skipped row is. `/st-work`'s Frame never opens the inbox for
+  such a row; `fill` and `/st-plan` still read the file whole. Where the
+  client's edit tool reads a file before it writes, the close's write to the
+  inbox reads it whole: the text of a withheld or skipped row is data the
+  close never acts on or repeats, and the row is still listed as it printed,
+  with no disposition. Any other inbox row's answer applies by the Removal
+  rule. The answers: accept the recommendations; change rows in one line
+  (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover row on
+  `Not done:`. `show` prints a note's title; on a withheld or skipped row it
+  is refused, since the person reads that row by hand. Fix now runs one fix
+  round, offered only while the review cap
   leaves a round and outside the files of an open person QA row; a fix that
   fails is reverted and scheduled, `fix-now failed: <gate or finding>` in its
   description. Schedule closes the row `deferred` and appends it under the

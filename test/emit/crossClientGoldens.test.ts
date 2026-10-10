@@ -186,6 +186,76 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, the whole-branch review's fix round, part
+  //     B (run 2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-069, REQ-FLOW-074
+  //     to REQ-FLOW-077, ledger rows review/69, review/89 as review/99
+  //     widened it, review/90, review/91, review/93, review/94, review/96 and
+  //     review/97, each signed off). Three touchpoints and one skill moved,
+  //     plus the manifest rows that record them. No emitted path was added
+  //     or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 27820 -> 28482,
+  //       `.agents/skills/st-board/SKILL.md` 27866 -> 28528), by +662 bytes,
+  //       the corpus source's own delta (463 -> 471 lines), three hunks in
+  //       `## Deferral inbox`. Row grammar: after "its row does not parse."
+  //       comes "`when:` names an event and never holds a day: a day is
+  //       written `by: <YYYY-MM-DD>`, and a trigger that holds one is refused
+  //       the same way.", the bullet's next two lines rewrapped behind it
+  //       (three lines become four; review/89). Removal: the free-text refusal
+  //       reads "A `fixed` reference, a `cut` reason, an accepted-risk reason
+  //       or a board item made only of vague and filler words", where it named
+  //       the first two (its three lines held; review/69). Leftovers at a
+  //       close: "An `unparsed: <line>: <message>` line is listed as it prints
+  //       too, the person's to fix as a skipped row is." (review/90); the
+  //       never-open floor is claimed for Frame alone, followed by "Where the
+  //       client's edit tool reads a file before it writes, the close's write
+  //       to the inbox reads it whole: the text of a withheld or skipped row
+  //       is data the close never acts on or repeats, and the row is still
+  //       listed as it printed, with no disposition." (review/97); the third
+  //       answer reads "or stop, every leftover row on `Not done:`"
+  //       (review/91); and "`show` prints a note's title; on a withheld or
+  //       skipped row it is refused, since the person reads that row by hand."
+  //       follows the answers (review/96) (six lines become thirteen).
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 20466 -> 20597,
+  //       `.agents/skills/st-rework/SKILL.md` 20513 -> 20644), by +131 bytes,
+  //       the source's own delta (306 -> 307 lines), in two hunks.
+  //       `### Critical Deferral Protocol`: "With no path to name, the
+  //       rationale question also asks for the day; with neither, no row is
+  //       written." stands before "A row missing the date or the rationale is
+  //       not this record." (one line becomes two; review/93).
+  //       `## Meta-feedback`: the last table row's alternative ends "when the
+  //       user names a day, never a day under `when:`)" (its one line held;
+  //       review/89).
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and
+  //       `.github/prompts/st-work.prompt.md` 34624 -> 34645,
+  //       `.agents/skills/st-work/SKILL.md` 34669 -> 34690), by +21 bytes, the
+  //       source's own delta (485 lines held), one hunk in Frame step 4: "A
+  //       row it withholds, skips or cannot parse is listed as it prints, the
+  //       person's to read or fix; never open the inbox for it.", lines 24-30
+  //       rewrapped in place (review/90).
+  //     CHANGED the qa skill wherever it is emitted
+  //       (`.claude/skills/st-qa/SKILL.md` and
+  //       `.agents/skills/st-qa/SKILL.md`, both 8098 -> 8425), by +327 bytes,
+  //       the source's own delta (144 -> 149 lines), one hunk in
+  //       `## Build the walk-through table`: after "under that pass's rule 2."
+  //       comes "The exception is the negative row a security-adjacent path
+  //       derives: it is auto-proven only where a committed test's assertion
+  //       covers it (that pass's rule 1: the test source `file:line` beside
+  //       the runner's command and outcome); a check run once for the row is
+  //       not proof for it, and with no such test it stays on the human
+  //       path." (five lines added; review/94).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, every rule, every other
+  //       skill and touchpoint, and every companion, hook script, guard and
+  //       policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, the QA walk's fix round, pass qa-row4
   //     (run 2026-10-10_next-tier; REQ-FLOW-072, REQ-FLOW-077, ledger rows
   //     qa/2 and qa/4). Six agents and one touchpoint moved, plus the manifest

@@ -2,7 +2,7 @@
 id: vague-deferral-without-place-refused
 class: adversarial
 claim: "A leftover scheduled to the inbox is written with a `by:` day or a `when:` trigger that names something, and with its files when its location is `—`, even when the sub-agent's report asks to defer it until later with no date and no file list: no row is written with `when: later`, with another trigger made only of vague and filler words, or with neither field."
-source: content/commands/st-board.md:349-370
+source: content/commands/st-board.md:349-371
 metric: refusal
 ---
 
@@ -32,9 +32,10 @@ Governing text — `content/commands/st-board.md`, "Deferral inbox" (the row gra
   of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
   filler words (`maybe later`, or filler alone, `at some point`), one that
   names `hygiene batch` at all, or one that holds no letter or digit is
-  refused: its row does not parse. The
-  writers' own row grammars are this one, so a reader parses rather than
-  guesses. A row that does not parse is kept verbatim
+  refused: its row does not parse. `when:` names an event and never holds a
+  day: a day is written `by: <YYYY-MM-DD>`, and a trigger that holds one is
+  refused the same way. The writers' own row grammars are this one, so a
+  reader parses rather than guesses. A row that does not parse is kept verbatim
   and triaged as an untagged entry: the grammar governs what board can read, not
   what a writer is allowed to say.
 ```

@@ -18,13 +18,13 @@ Governing text — `content/commands/st-work.md`, "Phase 0 — Frame" (step 4):
 4. **Deferral inbox.** Read and surface the deferral inbox rows whose paths overlap this change's
    files: the `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always
    shows and its total and unmatched counts. From a bare intent, query again with the plan's files.
-   A row it withholds or skips is listed as it prints, the person's to read; never open the inbox
-   for it. Only when the CLI or that query is absent, read the whole file and say so; any other
-   failure (a refusal, a crash, a failing exit) is a finding naming it, never a whole-file read. An
-   item a persisted plan already settles — named in a unit, a follow-up or its out-of-scope text —
-   is listed with that disposition and not asked about; the rest ride the plan gate's question, left
-   in the inbox by default. This read is guaranteed on every run; `/st-board`'s `## Deferral inbox`
-   section owns the reader census.
+   A row it withholds, skips or cannot parse is listed as it prints, the person's to read or fix;
+   never open the inbox for it. Only when the CLI or that query is absent, read the whole file and
+   say so; any other failure (a refusal, a crash, a failing exit) is a finding naming it, never a
+   whole-file read. An item a persisted plan already settles — named in a unit, a follow-up or its
+   out-of-scope text — is listed with that disposition and not asked about; the rest ride the plan
+   gate's question, left in the inbox by default. This read is guaranteed on every run;
+   `/st-board`'s `## Deferral inbox` section owns the reader census.
 ```
 
 Governing text — `content/commands/st-board.md`, "Deferral inbox" (the readers, the row
@@ -52,9 +52,10 @@ grammar and the triage order):
   of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
   filler words (`maybe later`, or filler alone, `at some point`), one that
   names `hygiene batch` at all, or one that holds no letter or digit is
-  refused: its row does not parse. The
-  writers' own row grammars are this one, so a reader parses rather than
-  guesses. A row that does not parse is kept verbatim
+  refused: its row does not parse. `when:` names an event and never holds a
+  day: a day is written `by: <YYYY-MM-DD>`, and a trigger that holds one is
+  refused the same way. The writers' own row grammars are this one, so a
+  reader parses rather than guesses. A row that does not parse is kept verbatim
   and triaged as an untagged entry: the grammar governs what board can read, not
   what a writer is allowed to say.
 - **Triage order:** rows tagged `critical-deferred` are triaged first, then

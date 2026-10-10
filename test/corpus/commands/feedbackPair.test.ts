@@ -534,6 +534,21 @@ describe("rework — leftover scan and routing", () => {
       "A row whose location is `—` adds `files: <path>` straight after `when: touched`, or carries " +
         "the day the user names: the reader refuses a touch trigger that names no path.",
     );
+    // Added 2026-10-10 (the whole-branch review's fix round, part B; ledger row `review/93` of run
+    // 2026-10-10_next-tier, signed off): a Critical about no file, deferred by a user who names no
+    // day, had no row shape, so a run invented a path or a day. The question the protocol already
+    // asks takes the day too, and with neither the row is not written; the default below then
+    // names it as the run's open item.
+    const noPath =
+      "With no path to name, the rationale question also asks for the day; with neither, no row is written.";
+    expect(protocol).toContain(noPath);
+    expect(protocol.indexOf(noPath)).toBeGreaterThan(protocol.indexOf("the reader refuses a touch trigger that names no path."));
+    expect(protocol.indexOf(noPath)).toBeLessThan(
+      protocol.indexOf("A row missing the date or the rationale is not this record."),
+    );
+    expect(protocol).toContain(
+      "**Default if the rationale question goes unanswered:** the deferral stands and the row waits — the run closes naming the unwritten `critical-deferred` row as its open item.",
+    );
   });
 
   it("ends both DEFER row templates on the schedule field, with `files:` for a row that names no location (REQ-FLOW-077)", () => {
@@ -564,9 +579,14 @@ describe("rework — leftover scan and routing", () => {
     // invent one. What changed about the contract: the row's default is a trigger, the board's
     // own triage (`fill` reads the whole inbox, and no close takes a `meta` row), and a day is
     // written only when the user names it. Nothing is relaxed: the cell is still pinned whole.
+    // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; ledger row
+    // `review/89` of run 2026-10-10_next-tier, signed off): the cell ended "when the user names a
+    // day) |". What changed about the contract: a day written under `when:` parsed and never came
+    // back, and "in the trigger's place" is the wording that invites it, so the cell says which
+    // key the day takes. Nothing is relaxed: the cell is still pinned whole, one clause longer.
     expect(meta).toContain(
       `| any | not ready to file | \`${INBOX}\` row \`Minor · — · <one line> · source: rework <branch> · when: next board fill · meta\` ` +
-        "(or `by: <YYYY-MM-DD>` in the trigger's place when the user names a day) |",
+        "(or `by: <YYYY-MM-DD>` in the trigger's place when the user names a day, never a day under `when:`) |",
     );
     // A bare "row tagged `meta`" named no severity, location, writer or day, so no reader parsed it.
     expect(meta).not.toContain("row tagged `meta`");
@@ -674,7 +694,8 @@ describe("feedback pair — every row template parses under `/st-board`'s gramma
     // and the span writes the day's format (`review/58`, `build/34`).
     const closeDay = /\(or `· (by: [^`]+)` when the user names one\)/.exec(close)?.[1] ?? "";
     const criticalDay = /\(or `(by: [^`]+)` when the user names one\)/.exec(protocol)?.[1] ?? "";
-    const metaDay = /\(or `(by: [^`]+)` in the trigger's place when the user names a day\)/.exec(meta)?.[1] ?? "";
+    // The span's close moved with the cell's last clause (`review/89`; the note is on the cell's pin above).
+    const metaDay = /\(or `(by: [^`]+)` in the trigger's place when the user names a day, never a day under `when:`\)/.exec(meta)?.[1] ?? "";
     expect([closeDay, criticalDay, metaDay]).toEqual(["by: <YYYY-MM-DD>", "by: <YYYY-MM-DD>", "by: <YYYY-MM-DD>"]);
     for (const text of [close, protocol, meta]) expect(text).not.toContain("by: <date>");
     expect(close).not.toContain("the reviewer names one");
