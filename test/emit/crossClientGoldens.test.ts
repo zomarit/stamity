@@ -186,6 +186,27 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q2-qa-rows (run 2026-10-10_next-tier;
+  //     REQ-FLOW-069). The st-work touchpoint and the qa skill moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32121 -> 32205, `.agents/skills/st-work/SKILL.md` 32166 -> 32250), by
+  //       +84 bytes, the corpus source's own delta: the QA checkpoint's step 2
+  //       hands the qa skill the class and lenses `gate classify` named.
+  //     CHANGED the qa skill wherever it is emitted (`.claude/skills/st-qa/` and
+  //       `.agents/skills/st-qa/` SKILL.md, 7229 -> 7961), by +732 bytes, the
+  //       corpus source's own delta: a paragraph naming the three kinds of row
+  //       a person walks, and the documentation-only clause turned into a class
+  //       clause that keeps one person row when a rendered page changes.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       qa skill and the st-work skill copy, every other touchpoint,
+  //       companion, hook script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit f0-make-room (run 2026-10-10_next-tier;
   //     inbox rows 2026-10-08_product-core/build/1 and close/10). The st-work
   //     touchpoint moved, plus the manifest rows that record it. No emitted path

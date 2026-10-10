@@ -703,6 +703,34 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/Sort by `Risk` descending/i);
   });
 
+  it("keeps a person row for three kinds only, and skips the walk by class unless a page renders (REQ-FLOW-069)", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+
+    // The three kinds a person adds something to; every other row is the test-runner's.
+    expect(text).toContain("**A row needs a person for one of three kinds only:**");
+    expect(text).toContain("a rendered surface a person must look at");
+    expect(text).toContain("a live third-party client or account");
+    expect(text).toContain("a step that cannot be undone");
+    expect(text).toContain("Every other row is auto-proven");
+    expect(text).toContain("the run's test-runner executes its check before this table is built");
+    // The class the caller passes skips the walk, unless a rendered page changed.
+    expect(text).toContain("`docs`, `records` or `tests`");
+    expect(text).toContain('"no walk-through required — <class> only"');
+    expect(text).toContain("site build renders");
+    expect(text).toContain("`design-quality` lens");
+    expect(text).toContain("one person row, the changed page renders and reads right");
+    expect(text).toContain("With no class passed, the triggers above decide.");
+    // The diff-shape escape it replaces is gone: a docs page renders, so it is no longer walk-free.
+    expect(text).not.toContain("no walk-through required — documentation only");
+    // Placed after the trigger table and before the column contract, as one rule with it.
+    const kinds = text.indexOf("**A row needs a person for one of three kinds only:**");
+    expect(kinds).toBeGreaterThan(text.indexOf("breakpoints or themes"));
+    expect(text.indexOf("With no class passed")).toBeGreaterThan(kinds);
+    expect(text.indexOf("Seven columns, every one filled")).toBeGreaterThan(
+      text.indexOf("With no class passed"),
+    );
+  });
+
   it("derives the duration its sort and session split are computed from", async () => {
     const text = flow(await load("skills/st-qa/SKILL.md"));
 

@@ -2,7 +2,7 @@
 id: work-unclear-class-runs-the-full-gate
 class: golden
 claim: "A /st-work Prove pass whose run record carries no Base line has an unclear class: the scan takes HEAD, the final tree runs the full gate unclassified with its class reported as unclear, the committed work lists secret scan: not run under Not done:, and a docs-only change does not narrow those gates."
-source: content/commands/st-work.md:185-202,305-307
+source: content/commands/st-work.md:185-202,306-308
 metric: rubric
 ---
 

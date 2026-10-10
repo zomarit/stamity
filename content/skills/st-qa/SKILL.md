@@ -35,9 +35,20 @@ Each trigger fires once per instance, not once per diff:
 | a security-adjacent path changed (auth, permissions, input validation, secret handling) | one negative row: attempt exactly what the change should deny, and record the refusal expected |
 | UI changed and the repo declares breakpoints or themes | one per declared combination the change renders in |
 
-A diff that is documentation only emits one row (the pages render and their
-links resolve) or the line "no walk-through required — documentation only",
-followed by the sign-off block.
+**A row needs a person for one of three kinds only:** a rendered surface a
+person must look at (a page, a screen, a style or an image as it renders), a
+live third-party client or account, and a step that cannot be undone. Every
+other row is auto-proven: where no artifact covers it yet, the run's
+test-runner executes its check before this table is built, and the row points
+at that result as the Auto-prove pass reads one.
+
+A change whose class (`gate classify`'s, which the caller passes) is `docs`,
+`records` or `tests` emits the line "no walk-through required — <class> only",
+with no sign-off block and no ask — unless it changes a path the project's
+site build renders (its pages, styles or images) or a path the classify hands
+the `design-quality` lens; then it emits one person row, the changed page
+renders and reads right, followed by the sign-off block. With no class passed,
+the triggers above decide.
 
 Seven columns, every one filled: `#`, `Scenario`, `Steps`, `Expected`, `Risk`,
 `Minutes`, `Proof`.

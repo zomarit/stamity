@@ -1216,6 +1216,18 @@ describe("/st-work — Prove", () => {
     expect(qa.indexOf("**The close asks once.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
   });
 
+  it("hands the qa skill the class and lenses gate classify named (REQ-FLOW-069)", async () => {
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    // The skill skips the walk by class, so the checkpoint passes what the classify named.
+    expect(qa).toContain(
+      "Invoke the qa skill by name for the guided pass, handing it the class and lenses `gate classify` named (`unclear` when none ran).",
+    );
+    // Step 2 keeps its ownership sentence, after the hand-off.
+    expect(qa.indexOf("The step belongs to the command already running")).toBeGreaterThan(
+      qa.indexOf("handing it the class and lenses"),
+    );
+  });
+
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("`report`, the repo-relative path of the report it came from");

@@ -93,6 +93,19 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q2-qa-rows (run 2026-10-10_next-tier;
+ *     REQ-FLOW-069). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32396 -> 32480 bytes and
+ *     463 -> 464 lines in the corpus source: the QA checkpoint's step 2 hands
+ *     the qa skill the class and lenses `gate classify` named (`unclear` when
+ *     none ran), its sentence rewrapped from four lines to five. The edit sits
+ *     below the re-attachment cut (`### Specialist pass` stays at 16662). No
+ *     token sits in the moved text.
+ *
+ *     NOTHING else moved here; the qa skill's own change is goldened in the
+ *     sibling suite, which itemises the emitted copies.
+ *
  *   - 2026-10-10, plan 019 file 3, unit f0-make-room (run
  *     2026-10-10_next-tier; inbox rows 2026-10-08_product-core/build/1 and
  *     close/10). ONE golden moved, SUBSTITUTION:
