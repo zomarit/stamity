@@ -351,6 +351,16 @@ describe("CLIENT_MODEL_PROJECTION", () => {
     }
   });
 
+  it("cites Copilot's key names to the CLI command reference, the page that lists an effort key", () => {
+    // review/35: the row names `reasoning-effort`, and the custom-agents configuration page it
+    // cited (read 2026-08-17) lists no effort key, so a currency pass re-reading that page for
+    // the row's key names would find one of them missing.
+    expect(projection("copilot").citation).toEqual({
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
+    });
+  });
+
   it("declares only ladder classes in an alias table", () => {
     for (const tool of TOOLS) {
       for (const [modelClass, alias] of Object.entries(projection(tool).aliases)) {

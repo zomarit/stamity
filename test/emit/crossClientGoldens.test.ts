@@ -567,7 +567,7 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //       security 12932 -> 12955, spec-author 12246 -> 12269. `medium`, +25
   //       bytes: creator 14002 -> 14027, fixer 10577 -> 10602, performance
   //       13928 -> 13953, researcher 8445 -> 8470. `low`, +22 bytes:
-  //       test-runner 8546 -> 8568. The prompt below the frontmatter is
+  //       test-runner 8664 -> 8686. The prompt below the frontmatter is
   //       byte-identical.
   //     CHANGED `.stamity/manifest.json` in those two selections at UNCHANGED
   //       byte length — the fixed-width sha256 rows of the ten files.
@@ -605,7 +605,7 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //       10543 -> 10577, implementer 10008 -> 10042, performance
   //       13894 -> 13928, researcher 8411 -> 8445, reviewer 15653 -> 15687,
   //       security 12898 -> 12932, spec-author 12212 -> 12246, test-runner
-  //       8512 -> 8546): one frontmatter line, `include-custom-instructions:
+  //       8630 -> 8664): one frontmatter line, `include-custom-instructions:
   //       true`, between `target` and `tools`, so a Copilot sub-agent loads
   //       the repository instructions. The prompt below the frontmatter is
   //       byte-identical.

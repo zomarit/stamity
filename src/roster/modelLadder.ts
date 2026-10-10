@@ -331,7 +331,7 @@ export interface ClientModelProjection {
    * there is no scale to cite — the documented omission is already carried by
    * {@link citation} on that row.
    *
-   * Separate from {@link citation} because three of the four scales are
+   * Separate from {@link citation} because two of the four scales are
    * published on a DIFFERENT vendor page from the key names and aliases, and
    * moving one date to cover both would date a claim nobody re-read.
    */
@@ -423,9 +423,8 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // on the flag's own list and off the reference, so it is legacy as Codex's
     // is: `stamity config set` keeps accepting it on a copilot-only selection,
     // as it did while this row carried no scale, and the emission writes `low`.
-    // Published on the CLI reference, not on the agent-configuration page this
-    // row's other claims come from, which is why the scale carries its own
-    // citation.
+    // Published on the CLI reference, the page the key names are cited to
+    // below; the scale keeps a citation of its own, as every scale does.
     effortScale: ["low", "medium", "high", "xhigh", "max"],
     effortLegacy: ["minimal"],
     effortScaleNote: null,
@@ -433,9 +432,14 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
       url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
       accessDate: "2026-10-10",
     },
+    // The CLI command reference's custom-agent frontmatter table, which lists
+    // `model` and the effort key (spelled `reasoningEffort` there; the kebab
+    // spelling is the loader's, as the comment above says). The custom-agents
+    // configuration page, this row's citation until 2026-10-10, lists no effort
+    // key.
     citation: {
-      url: "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
-      accessDate: "2026-08-17",
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
     },
   },
   codex: {
