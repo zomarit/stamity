@@ -328,8 +328,10 @@ command is what parses it.
 
 - **Writers, five:** `/st-rework` deferrals, `/st-pr-resolve` findings
   routed out of the current change, `/st-plan` follow-ups appended while
-  planning, `/st-work`'s close, which appends every `deferred` ledger row at
-  run exit, and the dep-audit skill's deferred upgrades.
+  planning, `/st-work`'s close, which at run exit appends the `deferred`
+  ledger rows it schedules to the inbox (a dropped row, or one placed in a
+  plan, board or handoff, never reaches it), and the dep-audit skill's
+  deferred upgrades.
 - **Retirers, two:** `/st-work`'s close and `/st-quick`'s batch, each
   removing a row its own change fixed, by the Removal rule below; `/st-work`'s
   close also removes a row its one question dropped, placed elsewhere or
@@ -352,8 +354,9 @@ command is what parses it.
   which a row there does not parse, and name `files:` when the location is `—`;
   `when: touched` needs a path in the location or `files:`. A trigger made only
   of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
-  filler words (`maybe later`), one that names `hygiene batch` at all, or one
-  that holds no letter or digit is refused: its row does not parse. The
+  filler words (`maybe later`, or filler alone, `at some point`), one that
+  names `hygiene batch` at all, or one that holds no letter or digit is
+  refused: its row does not parse. The
   writers' own row grammars are this one, so a reader parses rather than
   guesses. A row that does not parse is kept verbatim
   and triaged as an untagged entry: the grammar governs what board can read, not
@@ -380,7 +383,10 @@ command is what parses it.
   each row it decided: a drop retires it (`cut <reason>`) and removes its
   bullet; a plan, board or handoff place retires it there and removes its
   bullet; a new date or trigger removes its bullet and appends one row under
-  the schedule rule carrying the same `Ref:`. Nothing retires a row without an
+  the schedule rule carrying the same `Ref:`. A place's retire value reads
+  `scheduled <place> · by <YYYY-MM-DD>` or `scheduled <place> · when <trigger>`,
+  the place written `plan docs/plans/<file>.md#<unit-id or follow-ups>`,
+  `board <item ref>` or `handoff <path>`. Nothing retires a row without an
   answer, and a kept row is never re-dated in place. A `fixed` reference or a
   `cut` reason made only of vague and filler words, or holding no letter or
   digit, is refused as such a trigger is.
@@ -391,19 +397,23 @@ command is what parses it.
   (one line, titles on request). Each line reads
   `L<n> <severity> · <location> · <summary> → fix now | schedule: <place>, <by or when>, <files> | drop — <evidence>; would change if <condition>`,
   after the `decision-waiting` rows, Critical and Warning first and never
-  pre-set to drop, then `Notes (<p>): drop`. A row the query withholds is
-  listed as it prints, by its line, severity and location and
-  `withheld by the screen (<pattern id>); read it by hand`, with no summary:
-  its text is the person's to read, and it is recommended to stay as it is
-  until the person has read it. No agent opens the inbox for a row the query
-  withholds or skips. An inbox row's answer applies by the Removal rule. The
+  pre-set to drop, then `Notes (<p>): drop`. A row the query withholds or
+  skips is listed as it prints, the person's to read, and never decided: the
+  close offers no disposition for it and applies none, and it stays in the
+  inbox until the person edits it or hands over its `Ref:` with an
+  instruction. A withheld row prints its line, severity and location and
+  `withheld by the screen (<pattern id>); read it by hand`, with no summary; a
+  skipped one prints `skipped: <line> (<pattern id>)`. `/st-work`'s Frame and
+  close never open the inbox for such a row; `fill` and `/st-plan` still read
+  the file whole. Any other inbox row's answer applies by the Removal rule. The
   answers: accept the recommendations; change rows in one line
   (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover on
   `Not done:`. Fix now runs one fix round, offered only while the review cap
   leaves a round and outside the files of an open person QA row; a fix that
   fails is reverted and scheduled, `fix-now failed: <gate or finding>` in its
   description. Schedule closes the row `deferred` and appends it under the
-  schedule rule, or retires it to a plan, board or handoff place. Drop closes
+  schedule rule, or retires it to a plan, board or handoff place with the
+  Removal rule's `scheduled` value. Drop closes
   the row `deferred` and retires it at once (`cut <reason>`), so it never
   reaches the inbox; only the person drops a Critical or Warning, retired
   `cut accepted risk: <reason>` and kept on `Not done:`. With no answer, only
