@@ -95,6 +95,7 @@ import * as runsBlocks from "../runs/blocks.ts";
 import * as runsLedgerStore from "../runs/ledgerStore.ts";
 import * as runsResumeCard from "../runs/resumeCard.ts";
 import * as runsInboxStore from "../runs/inboxStore.ts";
+import * as runsDisposition from "../runs/disposition.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
@@ -247,8 +248,8 @@ export interface EngineRegistry {
    * A work run's on-disk shape (the run folder, its record head, its ledger and
    * reports, the resume card's bounds), the resume card's embeddable body, the
    * findings-block reader, the ledger's one serialized writer, the engine's
-   * own reader of the resume card, the hook body's twin, and the deferral
-   * inbox's grammar and query.
+   * own reader of the resume card, the hook body's twin, the deferral
+   * inbox's grammar and query, and the schedule rule's `retired` grammar.
    */
   readonly runs: {
     readonly layout: typeof runsLayout;
@@ -257,6 +258,7 @@ export interface EngineRegistry {
     readonly ledgerStore: typeof runsLedgerStore;
     readonly resumeCard: typeof runsResumeCard;
     readonly inboxStore: typeof runsInboxStore;
+    readonly disposition: typeof runsDisposition;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -450,6 +452,7 @@ export function createEngine(): EngineRegistry {
       ledgerStore: runsLedgerStore,
       resumeCard: runsResumeCard,
       inboxStore: runsInboxStore,
+      disposition: runsDisposition,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts },
     tools: { categories: toolCategories, allowlist, translator },

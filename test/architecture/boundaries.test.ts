@@ -288,6 +288,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the error type, nothing else — so it sits at kernel depth, below every
   // reader of a run folder.
   "src/runs/layout.ts": { unit: "ctx-hook-card", wave: 1 },
+  // The schedule rule's grammar: pure, zero imports, read by the wave-4 ledger store.
+  "src/runs/disposition.ts": { unit: "q9a-disposition", wave: 1 },
   // wave 2
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },
