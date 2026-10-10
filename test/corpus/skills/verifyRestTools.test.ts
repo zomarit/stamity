@@ -908,12 +908,18 @@ describe("dep-audit — the deferred row parses under `/st-board`'s grammar (REQ
     const filled = fillRow(rowTemplate(step).replace(/ · by: <YYYY-MM-DD>$/, " · when: touched"), DOTLESS);
     expect(filled).not.toMatch(/[<>[\]]/);
 
-    // The reader takes no path from `Gemfile:12`, so without `files:` it refuses the touch trigger.
+    // TEST CHANGE, justified (2026-10-10, the review bot's fix batch, `review/107`): this stood as
+    // "The reader takes no path from `Gemfile:12`, so without `files:` it refuses the touch
+    // trigger", and expected the one problem "`when: touched` needs a path, in the location or in
+    // `files:`". A line suffix now names a path with no slash and no dot, so the row parses
+    // without `files:` and comes back for its manifest; the lockfile is still `files:`'s to name.
     const withoutFiles = filled.split(" · ").filter((field) => !field.startsWith("files: ")).join(" · ");
     expect(withoutFiles).not.toBe(filled);
-    expect(parseBelowRule(withoutFiles).problems.map((problem) => problem.message)).toEqual([
-      "`when: touched` needs a path, in the location or in `files:`",
-    ]);
+    const bare = parseBelowRule(withoutFiles);
+    expect(bare.problems).toEqual([]);
+    expect(bare.rows).toHaveLength(1);
+    expect(matchInbox(bare.rows, { paths: ["Gemfile"] }).matched.map((match) => match.matchedBy)).toEqual(["path"]);
+    expect(matchInbox(bare.rows, { paths: ["Gemfile.lock"] }).matched).toEqual([]);
 
     const { rows, problems } = parseBelowRule(filled);
     expect(problems).toEqual([]);
