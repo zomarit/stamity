@@ -126,12 +126,15 @@ function asString(value: Value): string {
 
 class Parser {
   private position = 0;
+  private readonly tokens: readonly Token[];
+  private readonly context: ExpressionContext;
+  private readonly expression: string;
 
-  constructor(
-    private readonly tokens: readonly Token[],
-    private readonly context: ExpressionContext,
-    private readonly expression: string,
-  ) {}
+  constructor(tokens: readonly Token[], context: ExpressionContext, expression: string) {
+    this.tokens = tokens;
+    this.context = context;
+    this.expression = expression;
+  }
 
   parse(): Value {
     const value = this.or();
