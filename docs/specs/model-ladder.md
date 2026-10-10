@@ -40,7 +40,13 @@ level nor, when a model runs out of capacity, a verdict role's class.
   separate, measured decision.
 - A level a selected client cannot express is refused when set, naming the client and its top or
   bottom level; a level a later-selected client cannot express is emitted as that client's nearest
-  expressible level with a disclosure line, never dropped.
+  expressible level with a disclosure line, never dropped. Amended 2026-10-10 (`review/84`; read
+  at `9a0ba4cf`): one exception, a legacy level. A client whose row lists a level in
+  `effortLegacy`, today `minimal` on Codex and Copilot, raises no refusal for it: `config set`
+  accepts it, and that client's emission writes its nearest documented level, `low`, with a
+  disclosure line (`src/cli/commands/config.ts:459-463`, `:472`; the effort hint, `:298-302`;
+  `src/roster/modelLadder.ts:305-318`, `:429`, `:460`; REQ-LADDER-004). A selected client that
+  does not list the level still refuses it, as Claude refuses `minimal`.
 - Every per-client scale carries a vendor citation with an access date.
 
 ## Requirements
@@ -78,7 +84,8 @@ matrix are regenerated from them.
 
 Amended 2026-10-10 (run `2026-10-10_next-tier`, units `q4a-effort-union`, `q4b-codex-scale` and
 `q6c-copilot-effort-key`, with lane D's fix rounds; every `path:line` in this paragraph reads at
-`a60cb496`). `EFFORT_LEVELS` is seven wide: `ultra` joins at the top, the level one client
+`a60cb496`, but for its two `src/cli/commands/config.ts` ranges, re-pointed to `9a0ba4cf` the same
+day). `EFFORT_LEVELS` is seven wide: `ultra` joins at the top, the level one client
 documents (`src/types/core.ts:116-123`). The per-client scales now read: Claude `low … max`,
 unchanged; Codex `low … ultra`, re-read on 2026-10-10, with `minimal` a legacy level; Cursor the
 whole list as a pass-through; Copilot `low … max` on a key of its own, with `minimal` legacy
@@ -86,12 +93,12 @@ whole list as a pass-through; Copilot `low … max` on a key of its own, with `m
 row gains `effortLegacy`, the levels a client's documented scale dropped that its own parser
 still accepts: `stamity config set` accepts such a level on a selection whose client lists it,
 and the emission writes the nearest documented level with a disclosure line (`:305-318`;
-`src/cli/commands/config.ts:441-458`). So the examples of the Given paragraph above move with
+`src/cli/commands/config.ts:465-482`). So the examples of the Given paragraph above move with
 the scales. `stamity config set effort.frontier max` on a manifest selecting `codex` is now
 written, and Codex emits `max` as `max`. The refusal it describes is now `ultra` on a manifest
 selecting `claude` or `copilot`: exit 1 with `VALIDATION_ERROR`, naming the client and "its scale
 ends at max", with the remedies "set max or lower, or deselect the client"
-(`src/cli/commands/config.ts:470-481`). The disclosure it describes is now a manifest carrying
+(`src/cli/commands/config.ts:494-505`). The disclosure it describes is now a manifest carrying
 `effort.frontier: ultra` that selects `claude` and `codex`: the next `sync` emits `max` on Claude
 with the line `effort [claude]: frontier asks for ultra; this client's scale ends at max, emitted
 max`, and `ultra` on Codex (`src/roster/modelLadder.ts:558-571`, `:693-711`). Copilot no longer
@@ -194,7 +201,9 @@ change of 1.10.0; this change moved the header and the frontier row's `rationale
 ### REQ-LADDER-004 — Each client gets the effort levels it accepts
 
 Added 2026-10-10 (run `2026-10-10_next-tier`, units `q4a-effort-union`, `q4b-codex-scale` and
-`q6c-copilot-effort-key`, with lane D's fix rounds; every `path:line` below reads at `a60cb496`).
+`q6c-copilot-effort-key`, with lane D's fix rounds; every `path:line` below reads at `a60cb496`,
+but for the one `src/cli/commands/config.ts` range under "As built", re-pointed to `9a0ba4cf` the
+same day).
 
 Given the per-client scales of REQ-LADDER-001 as amended 2026-10-10, When Codex is emitted, Then
 each agent's `model_reasoning_effort` is a level of Codex's documented scale, `low` to `ultra`:
@@ -225,7 +234,7 @@ stopping the agent (`src/roster/modelLadder.ts:410-418`). The emitted line comes
 `effort-axis` capability row says emitted, on the scale's two ends, with the cloud agent's
 handling of the key undocumented (`:196-204`). The legacy level: `minimal` sits in `effortLegacy`
 on the Codex and Copilot rows, which `config set` reads before its clamp test
-(`src/roster/modelLadder.ts:305-318`, `:429`, `:460`; `src/cli/commands/config.ts:446-448`).
+(`src/roster/modelLadder.ts:305-318`, `:429`, `:460`; `src/cli/commands/config.ts:470-472`).
 
 Where the delta differed, and what is not verified. The delta named no legacy field; it said a
 stored `minimal` is "still accepted by `config set`", which the field carries. Whether Copilot's
@@ -269,7 +278,12 @@ and `docs/capability-matrix.md`, regenerated.
   text is gone, and the 2026-10-09 paragraph cites what replaced it. Every other citation in
   those two requirements stays at `d227ca57`: `test/corpus/commands/work.test.ts:1000-1003`,
   `test/roster/modelLadder.test.ts:130-142`, `docs/capability-matrix.md:240` and
-  `src/roster/modelLadder.ts:36`, `:48-56`, which the run also moved.
+  `src/roster/modelLadder.ts:36`, `:48-56`, which the run also moved. A follow-up pass on that
+  unit the same day re-pointed this file's three citations of `src/cli/commands/config.ts` to
+  `9a0ba4cf`, after the run's QA fix round put the effort hint's legacy clause above them
+  (`501d4997`, 24 lines): `:441-458` became `:465-482`, `:470-481` became `:494-505` and
+  `:446-448` became `:470-472`. The Invariants' second bullet and the closed Concerns bullet carry
+  that pass's two dated amendments.
 
 ## Concerns
 
@@ -289,8 +303,11 @@ and `docs/capability-matrix.md`, regenerated.
   names the escalation's effort step beside the capacity rung's drop as the two no row records
   (REQ-LADDER-003, amended 2026-10-10). Of this bullet's citations,
   `content/commands/st-work.md:214` was re-pointed to `a60cb496`; `src/roster/modelLadder.ts:36-58`
-  and `:484-489` are left as the 2026-10-09 merge wrote them, since the text they cite is the text
-  this change replaced.
+  and `content/commands/st-work.md:484-489`, which the bullet writes as a bare `:484-489`, are left
+  as the 2026-10-09 merge wrote them, since the text they cite is the text this change replaced;
+  that command's Model ladder paragraph now stands at `content/commands/st-work.md:462-467`, read
+  at `9a0ba4cf` (amended 2026-10-10, `review/86`; it read "`src/roster/modelLadder.ts:36-58` and
+  `:484-489` are left").
 - **A sixth placement no text names** (ledger `review/40` of run `2026-10-10_next-tier`, open, a
   decision). The Failure ladder's second rung reassigns a twice-failed sub-agent's work "to a
   stronger model class" (`content/commands/st-work.md:98-102`). Neither `/st-work`'s Model ladder

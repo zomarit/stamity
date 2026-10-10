@@ -38,7 +38,13 @@ re-pointed to `a60cb496` every citation in this file of `content/commands/st-wor
 line that run moved, and found every citation of `content/commands/st-quick.md`, and all but one of that agent file,
 on the same lines at both heads. Citations of any other file stay at the heads the paragraphs around them name. A ledger id in the
 text dated 2026-10-10 (`build/16`, `review/62`) is that run's own unless a run is named beside it. The run's own eval
-cases land after this merge and are not cited here.
+cases land after this merge and are not cited here. A follow-up pass on that unit the same day read at the integration
+head `9a0ba4cf` every citation in this file of `content/commands/st-plan.md` and of the six agent bodies the run's QA
+fix round changed after the merge (`6348d944`): the reviewer, the fixer, the implementer and the security, performance
+and design-quality lenses. It re-pointed to that head the ones the round moved, which are the six `## Severity`
+sections (REQ-FLOW-073), the security lens's `git log` sentence (REQ-FLOW-065), `/st-plan`'s return line
+(REQ-FLOW-070) and its inbox-append and follow-ups bullets (REQ-FLOW-077), and found every other citation of those
+seven files on its text there, above the lines the round moved.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -1177,7 +1183,7 @@ rounds.
   `review/116`). With no class — neither CLI form runs, the classify exits non-zero, or its `reason` names a failed
   read — a batch with a path the security agent's `## Trigger` table names moves the same way, and a batch whose
   paths that table does not name, a docs-only one among them, stays (`:169-173`; `review/179`, `review/189`). The
-  lens reads `git log <range>` only after its findings are formed (`content/agents/stamity-security.md:178-179`).
+  lens reads `git log <range>` only after its findings are formed (`content/agents/stamity-security.md:179-180`).
 - **Audit first.** When every path the rules placed `security-sensitive` is a `package-lock.json` and no
   `package.json` changed, the checks gain `dependency-audit` and the lens leaves, the class staying
   `security-sensitive` and the reason reading `lockfile-only bump: dependency audit first`, only when each lockfile
@@ -1317,9 +1323,9 @@ The reviewer, the security, performance and design-quality lenses, the implement
 change's path; Warning, wrong or missing behaviour a user or maintainer meets in a supported use, or a change that
 makes an existing instance worse; Minor, a true defect with a small, named consequence; each with one example; then
 "A note with no consequence is not a finding; no findings is a good result."
-(`content/agents/stamity-reviewer.md:215-226`; `content/agents/stamity-security.md:181-192`;
-`content/agents/stamity-performance.md:199-210`; `content/agents/stamity-design-quality.md:174-185`;
-`content/agents/stamity-implementer.md:146-157`; `content/agents/stamity-fixer.md:156-167`). One test holds the six
+(`content/agents/stamity-reviewer.md:217-228`; `content/agents/stamity-security.md:182-193`;
+`content/agents/stamity-performance.md:200-211`; `content/agents/stamity-design-quality.md:175-186`;
+`content/agents/stamity-implementer.md:147-158`; `content/agents/stamity-fixer.md:158-169`). One test holds the six
 sections byte-identical. `/st-rework`'s severity vocabulary reads the same three definitions
 (`content/commands/st-rework.md:20-22`).
 
@@ -1333,7 +1339,8 @@ sections byte-identical. `/st-rework`'s severity vocabulary reads the same three
 
 From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q1a-inbox-store`, `q1b-records-gate-parser`,
 `q9b-inbox-schedule-grammar` and `q1t-frame-inbox-read` and their fix rounds. Every `path:line` in REQ-FLOW-068 to
-REQ-FLOW-077 reads at `a60cb496`.
+REQ-FLOW-077 reads at `a60cb496`, but for the three `content/commands/st-plan.md` ranges the lead's follow-up pass
+re-pointed to `9a0ba4cf` (REQ-FLOW-070's return line; REQ-FLOW-077's `/st-plan` bullet).
 
 Frame reads and surfaces the deferral inbox rows whose paths overlap the change's files through the `ledger` verb's
 `inbox` query, which returns those rows, the rows it always shows, and its total and unmatched counts; from a bare
@@ -1446,14 +1453,14 @@ runs to the line before the next such `### ` or `## ` heading, trailing blank li
 
 `/st-plan` names them as plan-lint check L5, "Plan size (advisory)", whose action never blocks the write
 (`content/commands/st-plan.md:286`), and its return line reads
-`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run` (`:415-416`). `/st-rework`
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run` (`:416-417`). `/st-rework`
 runs the same gate, names `L5` as advisory, and closes its own line with `R1 pass|fail`
 (`content/commands/st-rework.md:244-250`, `:273-274`). The verify skill names the four codes as L5
 (`content/skills/st-verify/SKILL.md:26`).
 
 - **As built, where the delta differed:**
   - The return lines carry a third value, `L5 not run`, where the coverage script could not run, never a claimed pass
-    (`content/commands/st-plan.md:415-416`; `review/39`).
+    (`content/commands/st-plan.md:416-417`; `review/39`).
   - A delta entry is measured whether its heading is the bare `### REQ-…` or carries its disposition first
     (`### ADDED REQ-…`, MODIFIED, REMOVED); only the bare form defines a requirement provisionally
     (`spec-plan-coverage.mjs:157-166`; `build/7`, `review/12`).
@@ -1635,7 +1642,7 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   or `· when: <trigger>` in the date's place. A follow-up's trigger is something a run can check from the repository
   or its record; one with neither, or whose trigger only the outside world fires, belongs in the plan's Drop list.
   The plan shape names two optional sections, 6 Follow-ups and 7 Drop list, and the Drop list appends nothing
-  (`content/commands/st-plan.md:363-367`, `:393-403`, `:424-425`).
+  (`content/commands/st-plan.md:363-367`, `:393-404`, `:425-426`).
 - **`/st-pr-resolve`.** A deferral lands as `severity · file:line · description · source: pr-resolve #<n> ·
   when: touched`, or `· by: <YYYY-MM-DD>` when the user names one, and a FIX that stays blocked lands as the same row
   (`content/commands/st-pr-resolve.md:315-318`).
@@ -2265,7 +2272,10 @@ exists, it is the normative record for that requirement.
   emitted, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off
   block, and "no walk-through required" is not printed. `judgment: reviewer`
 - GIVEN a `product` change to one CLI source file, with no rendered surface, no third-party account and no step that
-  cannot be undone, THEN no person row is created and no QA question is asked. `judgment: reviewer`
+  cannot be undone, THEN none of the three kinds creates a person row, and where every row's check ran and passed no
+  QA question is asked; a row whose check is missing, cannot run or fails stays on the human path, the person's, and
+  is asked (`content/skills/st-qa/SKILL.md:43-44`, `:100-102`, `:108`; amended 2026-10-10, `review/83`; it read "THEN
+  no person row is created and no QA question is asked"). `judgment: reviewer`
 
 **REQ-FLOW-070**
 

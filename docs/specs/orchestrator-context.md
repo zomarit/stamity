@@ -55,7 +55,9 @@ pass re-pointed to `a60cb496`, outside the Context section, every citation in th
 `content/commands/st-work.md`, `content/commands/st-plan.md` and `src/runs/ledgerStore.ts`, each read at that head
 and whatever tree the paragraphs around it name; the paragraphs marked "amended 2026-10-09" cite `a60cb496` for
 those three files since. The Context section's citations stay at `fed39ac`, and a citation of any other file stays at
-the tree its paragraph names.
+the tree its paragraph names. One exception, from a follow-up pass on that unit the same day: four of REQ-CTX-002's
+citations, the `Report and digest` rule in the reviewer's, the security lens's, the implementer's and the fixer's
+body, were re-pointed to `9a0ba4cf`, since that run's QA fix round lengthened the rule after the merge (`6348d944`).
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -267,10 +269,10 @@ new return shape.
 Amended 2026-10-09 (run `2026-10-08_product-core`, units `p8b-capture-reviewer` to `p8f-capture-work-digest`;
 REQ-FLOW-072). The `findings:` line of the reviewer, each lens, the implementer and the fixer ends
 `notes left out: <n>`, the count of the notes with no consequence its report lists, and an inline result carries the
-count, never the notes (`content/commands/st-work.md:170-172`; `content/agents/stamity-reviewer.md:192-197`;
-`content/agents/stamity-security.md:155-159`; `content/agents/stamity-performance.md:176-177`;
-`content/agents/stamity-design-quality.md:151-152`; `content/agents/stamity-implementer.md:127-132`;
-`content/agents/stamity-fixer.md:138-143`). A note with a security consequence is a finding, carried on `security:` in
+count, never the notes (`content/commands/st-work.md:170-172`; `content/agents/stamity-reviewer.md:192-198`;
+`content/agents/stamity-security.md:155-160`; `content/agents/stamity-performance.md:176-177`;
+`content/agents/stamity-design-quality.md:151-152`; `content/agents/stamity-implementer.md:127-133`;
+`content/agents/stamity-fixer.md:138-144`). A note with a security consequence is a finding, carried on `security:` in
 full. The spec-author's digest and the test-runner's green digest do not change.
 
 Implements C4.
@@ -1082,9 +1084,9 @@ not in `/st-work`'s paragraph (`review/49`); the delta defined neither.
 One set per requirement, plus one for the invariants. There are one hundred and forty-four
 criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 144 (amended
 2026-10-10, when REQ-CTX-019 and REQ-CTX-020 added seven; it read 137, amended 2026-09-30, where
-it read 111, while the command already returned 119 before that merge, ledger `build/5`). Each is
-machine-checkable unless tagged `judgment:`. Run the command again whenever this section grows;
-do not count by eye.
+it read 111, while the command already returned 119 before that merge, ledger `build/5` of run
+`2026-09-30_optimization-sweep`). Each is machine-checkable unless tagged `judgment:`. Run the
+command again whenever this section grows; do not count by eye.
 
 **Invariants**
 
