@@ -306,6 +306,18 @@ describe("parseDisposition", () => {
     ["a punctuation-only ref", "fixed: ...", "`fixed` names no ref"],
     ["a hyphen-only reason", "cut -", "`cut` names no reason"],
     ["a punctuation-only reason", "cut: ?!", "`cut` names no reason"],
+    // review/47: a board item is held to the rule the trigger is, filler words alone included.
+    ["a board place whose item is one filler word", "scheduled board now · by 2026-11-01", "the place is none of"],
+    ["a board place whose item is filler words alone", "scheduled board at some point · when touched", "the place is none of"],
+    ["a board place whose filler item is re-cased and quoted", "scheduled board `Not Yet.` · by 2026-11-01", "the place is none of"],
+    // review/51: in `cut accepted risk: <reason>` the reason is held to the rule alone.
+    ["an accepted risk whose reason is a vague word", "cut accepted risk: tbd", "`cut accepted risk:` names only the vague word `tbd`"],
+    ["an accepted risk whose reason is vague and filler words", "cut: accepted risk: maybe later", "`cut accepted risk:` names only the vague word `later`"],
+    ["an accepted risk whose reason is filler words alone", "cut accepted risk: not yet", "`cut accepted risk:` names only filler words (`not yet`)"],
+    ["an accepted risk with no reason", "cut accepted risk:", "`cut accepted risk:` names no reason"],
+    ["an accepted risk whose reason holds no letter or digit", "cut accepted risk: —", "`cut accepted risk:` names no reason"],
+    ["an accepted risk re-cased, a dash where the colon stands", "cut Accepted Risk — TBD", "`cut accepted risk:` names only the vague word `tbd`"],
+    ["an accepted risk with no colon before a vague word", "cut accepted risk someday", "`cut accepted risk:` names only the vague word `someday`"],
   ])("refuses %s, naming its problem", (_label, text, fragment) => {
     const result = parseDisposition(text);
     expect(result.ok).toBe(false);
@@ -335,6 +347,17 @@ describe("parseDisposition", () => {
     "scheduled board #42 · when later today's release ships",
     "scheduled board 7 · when: the next client release",
     "scheduled handoff notes.md · by 2026-11-01",
+    // review/47: a board item with a digit, or a filler word beside a real one.
+    "scheduled board #42 · by 2026-11-01",
+    "scheduled board 7 · by 2026-11-01",
+    "scheduled board PROJ-7 · by 2026-11-01",
+    "scheduled board the release card · by 2026-11-01",
+    "scheduled board Now and Next, card 3 · when touched",
+    // review/51: an accepted risk whose reason names a word outside both lists.
+    "cut accepted risk: later is fine, the flag is off",
+    "cut accepted risk: one caller, behind a flag",
+    "cut: accepted risk: not in scope for now",
+    "cut accepted risks are low",
   ])("still accepts %j, which names a word outside both lists", (text) => {
     expect(parseDisposition(text).ok, problemOf(text)).toBe(true);
   });
@@ -365,6 +388,17 @@ describe("parseDisposition", () => {
       expect(problem).toMatch(/names only the vague word `(later|someday)`/u);
       for (const written of ["LATER", "Maybe", "Perhaps", "SOMEDAY"]) expect(problem).not.toContain(written);
     }
+  });
+
+  it("keeps an accepted risk's reason as written, marker included, and never quotes it in a problem", () => {
+    // review/51: the value's shape does not move; only what is refused does.
+    expect(parseDisposition("cut accepted risk: one caller, behind a flag")).toEqual({
+      ok: true,
+      value: { kind: "cut", reason: "accepted risk: one caller, behind a flag" },
+    });
+    const problem = problemOf(`cut Accepted RISK: ${"Not YET, ".repeat(40)}`);
+    expect(problem).toContain("`cut accepted risk:` names only filler words (`not yet`)");
+    expect(problem).not.toMatch(/Accepted|RISK|Not|YET/u);
   });
 
   it("names filler words as the list spells them, each once, never the caller's spelling or count", () => {

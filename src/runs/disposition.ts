@@ -16,14 +16,15 @@
  * calendar day, and any other shape are refused with a one-line problem naming
  * what is missing. Values dated before the cutover are never read against it.
  *
- * Free text has to say something a reader can check. A trigger, a `fixed` ref
- * and a `cut` reason whose every word is a vague or a filler word
+ * Free text has to say something a reader can check. A trigger, a `fixed` ref,
+ * a `cut` reason and a board item whose every word is a vague or a filler word
  * ({@link FILLER_WORDS}) are refused, filler words alone included (`at some
- * point`, `not yet`, `just now`); a board item keeps the narrower rule, and
- * such an item is refused when one of its words is vague. Each of the four,
- * and a handoff path, must hold at least one letter or digit, so a lone dash
- * is no trigger, no ref, no reason and no place. Words are compared as
- * written, lower-cased: a look-alike letter is not folded.
+ * point`, `not yet`, `just now`). In `cut accepted risk: <reason>` the reason
+ * is held to that rule alone: the marker's two words are neither vague nor
+ * filler, so read with them any reason would pass. Each of the four, and a
+ * handoff path, must hold at least one letter or digit, so a lone dash is no
+ * trigger, no ref, no reason and no place. Words are compared as written,
+ * lower-cased: a look-alike letter is not folded.
  *
  * Pure: text in, verdict out. A place is text and is never resolved or opened,
  * and a problem never quotes the caller's own words, only the grammar's and the
@@ -249,8 +250,8 @@ function parsePlace(text: string): Parsed<Place> {
   // A place with no letter and no digit (a lone dash, a lone dot) names nothing.
   if (wordsOf(target).length === 0) return refused;
   if (match[1] === "board") {
-    // The vague-word rule, not the trigger's filler-alone one: only the three free-text slots carry that.
-    return vagueWord(target) === null ? { ok: true, value: { kind: "board", item: target } } : refused;
+    // The trigger's rule: an item of vague and filler words, or of filler words alone, names no item.
+    return vagueTrigger(target) === null ? { ok: true, value: { kind: "board", item: target } } : refused;
   }
   return /^\S+$/u.test(target) && /[/.]/u.test(target)
     ? { ok: true, value: { kind: "handoff", path: target } }
@@ -319,19 +320,28 @@ export function parseDisposition(text: string): { ok: true; value: Disposition }
     }
     return { ok: true, value: { kind: "fixed", ref: said } };
   }
-  if (words.length === 0) {
-    return { ok: false, problem: "`cut` names no reason: say why it was dropped, as `cut <reason>`" };
-  }
-  if (vague !== null) {
+  // `cut accepted risk: <reason>`: the marker is read by its two words, whatever
+  // case or punctuation they are written with, and the reason after them is
+  // held to the rule alone. The value keeps the marker, as written.
+  const accepted = words[0] === "accepted" && words[1] === "risk";
+  const reason = accepted ? words.slice(2) : words;
+  const slot = accepted ? "`cut accepted risk:`" : "`cut`";
+  const say = accepted
+    ? "say why the risk is accepted, as `cut accepted risk: <reason>`"
+    : "say why it was dropped, as `cut <reason>`";
+  if (reason.length === 0) return { ok: false, problem: `${slot} names no reason: ${say}` };
+  const vagueReason = onlyVague(reason);
+  if (vagueReason !== null) {
     return {
       ok: false,
-      problem: `\`cut\` names only the vague word \`${vague}\`, which is no reason: say why it was dropped, as \`cut <reason>\``,
+      problem: `${slot} names only the vague word \`${vagueReason}\`, which is no reason: ${say}`,
     };
   }
-  if (filler !== null) {
+  const fillerReason = onlyFiller(reason);
+  if (fillerReason !== null) {
     return {
       ok: false,
-      problem: `\`cut\` names only filler words (\`${filler}\`), which is no reason: say why it was dropped, as \`cut <reason>\``,
+      problem: `${slot} names only filler words (\`${fillerReason}\`), which is no reason: ${say}`,
     };
   }
   return { ok: true, value: { kind: "cut", reason: said } };
