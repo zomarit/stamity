@@ -16,16 +16,16 @@ Governing text — `content/commands/st-work.md`, "Phase 0 — Frame" (step 4) a
 Plan" (the plan gate):
 
 ```text
-4. **Deferral inbox.** Read the deferral inbox rows whose paths overlap this change's files: the
-   `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always shows and
-   its total and unmatched counts. From a bare intent, query again with the plan's files. A row it
-   withholds is listed as it prints, the person's to read; never open the inbox for it. Only when
-   the CLI or that query is absent, read the whole file and say so; any other failure (a refusal, a
-   crash, a failing exit) is a finding naming it, never a whole-file read. An item a persisted plan
-   already settles — named in a unit, a follow-up or its out-of-scope text — is listed with that
-   disposition and not asked about; the rest ride the plan gate's question, left in the inbox by
-   default. This read is guaranteed on every run; `/st-board`'s `## Deferral inbox` section owns
-   the reader census.
+4. **Deferral inbox.** Read and surface the deferral inbox rows whose paths overlap this change's
+   files: the `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always
+   shows and its total and unmatched counts. From a bare intent, query again with the plan's files.
+   A row it withholds or skips is listed as it prints, the person's to read; never open the inbox
+   for it. Only when the CLI or that query is absent, read the whole file and say so; any other
+   failure (a refusal, a crash, a failing exit) is a finding naming it, never a whole-file read. An
+   item a persisted plan already settles — named in a unit, a follow-up or its out-of-scope text —
+   is listed with that disposition and not asked about; the rest ride the plan gate's question, left
+   in the inbox by default. This read is guaranteed on every run; `/st-board`'s `## Deferral inbox`
+   section owns the reader census.
 
 [...]
 

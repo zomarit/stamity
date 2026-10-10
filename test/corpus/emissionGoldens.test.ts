@@ -93,6 +93,23 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q1t-frame-inbox-read
+ *     (run 2026-10-10_next-tier; REQ-FLOW-019, REQ-FLOW-068, review/28 with
+ *     build/15 and review/29 as signed off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33157 -> 33178 bytes at an
+ *     unchanged 470 lines in the corpus source, one hunk. Frame step 4's first
+ *     sentence opens "Read and surface the deferral inbox rows whose paths
+ *     overlap this change's files" (+12: the duty to show the matched rows,
+ *     which the unit's first commit dropped), and its never-open rule reads
+ *     "A row it withholds or skips is listed as it prints" (+9: a row the
+ *     query skips is named too). The step is rewrapped in place at an
+ *     unchanged ten lines, every other word as it was. It sits above the
+ *     re-attachment cut (`### Specialist pass` moves 17055 -> 17076). No token
+ *     sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, second commit of unit q1t-frame-inbox-read
  *     (run 2026-10-10_next-tier; REQ-FLOW-068, q1a's security re-review as
  *     signed off). ONE golden moved, SUBSTITUTION:

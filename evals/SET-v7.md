@@ -1651,6 +1651,24 @@ so `EXPECTED_MOVES` gains no row, and no claim, identical/moved count, threshold
 moves. Under the incremental rule the fourteen re-measure, because their case-file bytes moved.
 The dated citations above stay as they were.
 
+**No range moved and one Brief re-quoted, 2026-10-10 (plan 019 file 3, unit
+`q1t-frame-inbox-read`, review round 1; `review/28` with `build/15`, and `review/29`, as signed
+off).** Frame step 4's first sentence regains the duty to show the rows it reads: "Read and
+surface the deferral inbox rows whose paths overlap this change's files: [...]". The unit's first
+commit had dropped the verb, so where the plan gate asks nothing (light, or standard on a fresh
+persisted plan) a matched row the plan does not settle was read and never shown. The never-open
+rule also names a row the query skips: "A row it withholds or skips is listed as it prints, the
+person's to read; never open the inbox for it." The step is rewrapped in place at 21-30 and stays
+at ten lines (the body stays at 461 lines), so no `source:` range or case-index cell moves.
+`work-persisted-plan-asks-once` re-quotes step 4 by script, byte-identical to the landed file (the
+case stays at 130 lines). Its scenario is the one the first sentence decides: Row B overlaps the
+change, the plan does not settle it and the plan gate asks nothing. The case's advisory criterion
+1 already expects that row "surfaced at Frame", and the quoted block says so again; the scenario
+withholds and skips no row, so the second sentence decides nothing in it. No `## Expected` block
+moves. The case has no cases-v5 copy, so `EXPECTED_MOVES` gains no row, and no claim,
+identical/moved count, threshold or roster count moves. Under the incremental rule the one case
+re-measures, because its case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
