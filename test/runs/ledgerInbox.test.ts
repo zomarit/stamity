@@ -1,5 +1,6 @@
-import { mkdir, symlink, writeFile } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { linkSync, statSync, type Stats } from "node:fs";
+import { link, mkdir, open, symlink, writeFile, type FileHandle } from "node:fs/promises";
+import { describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
 import {
   INBOX_BULLET_MAX_CHARS,
@@ -105,6 +106,44 @@ async function inboxAt(
     clock: { now: () => now },
   });
   return { code, stdout: stdout.join(""), stderr: stderr.join("") };
+}
+
+/**
+ * `ledger inbox` with a second writer acting on the inbox while the query holds
+ * its descriptor: `act` runs once, at the descriptor's own `stat`, and the
+ * query is handed the stats taken `before` or `after` it. The descriptor is
+ * reached by its class, taken off a live one, and told apart by its inode; the
+ * module is not mocked, so the query still runs on the real filesystem. Fails
+ * when the query took no `stat` of the inbox's descriptor, since the case
+ * would then prove nothing.
+ */
+async function inboxRaced(
+  dir: TempDirHandle,
+  act: () => void,
+  report: "before" | "after",
+  ...args: string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const inboxFile = dir.path(INBOX_PATH);
+  const { dev, ino } = statSync(inboxFile);
+  const probe = await open(inboxFile, "r");
+  const handleClass = Object.getPrototypeOf(probe) as { stat: (this: FileHandle) => Promise<Stats> };
+  await probe.close();
+  const realStat = handleClass.stat;
+  let acted = false;
+  const spy = vi.spyOn(handleClass, "stat").mockImplementation(async function raced(this: FileHandle): Promise<Stats> {
+    const before = await realStat.call(this);
+    if (acted || before.dev !== dev || before.ino !== ino) return before;
+    acted = true;
+    act();
+    return report === "before" ? before : await realStat.call(this);
+  });
+  try {
+    const result = await inbox(dir, ...args);
+    expect(acted, "the query took no stat of the inbox's own descriptor").toBe(true);
+    return result;
+  } finally {
+    spy.mockRestore();
+  }
 }
 
 /** A string the `exfiltrate` row matches with no space in it, so it survives as one `files:` entry. */
@@ -1100,6 +1139,45 @@ describe("stamity ledger inbox", () => {
     expect(result.stderr).toContain("is a symbolic link");
     expect(result.stderr).toContain(REFUSAL_NEXT);
     expect(result.stderr).not.toContain("outside words");
+  });
+
+  // review/105: a hard link is a second name for bytes another name owns, and that name can sit
+  // outside the checkout. `lstat` and the descriptor both report a regular file, and no open flag
+  // refuses it, so the tell is the link count. Skipped on Windows as this tree's other hard-link
+  // cases are (`test/merge/reclaim.test.ts`, `test/manifest/mcpFilter.test.ts`).
+  it.skipIf(WINDOWS)("refuses an inbox that is a hard link to a file outside the checkout, and never reads it", async () => {
+    const dir = tempDir();
+    await dir.seedFiles({ "outside/elsewhere.md": "- Minor · src/a.ts:1 · outside words · source: x\n" });
+    await mkdir(dir.path("repo", ".stamity"), { recursive: true });
+    await link(dir.path("outside/elsewhere.md"), dir.path("repo", INBOX_PATH));
+
+    const human = await runInProcess(COMMANDS, ["ledger", "inbox"], { cwd: dir.path("repo") });
+    const json = await runInProcess(COMMANDS, ["ledger", "inbox", "--json"], { cwd: dir.path("repo") });
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toBe("");
+    expect(human.stderr).toContain("ledger inbox refused .stamity/inbox.md: inbox.md is a hard link");
+    expect(human.stderr).toContain(REFUSAL_NEXT);
+    expect(human.stderr).not.toContain("outside words");
+    const doc = JSON.parse(json.stdout) as { ok: boolean; error: { code: string; message: string; next: string } };
+    expect(doc).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+    expect(doc.error.next).toContain(REFUSAL_NEXT);
+    expect(json.stdout).not.toContain("outside words");
+  });
+
+  // The walk's `lstat` is a fast refusal, not the proof: a second name made after it is seen only
+  // by the descriptor the read itself holds.
+  it.skipIf(WINDOWS)("refuses an inbox given a second name after the walk, by its descriptor's own link count", async () => {
+    const dir = tempDir();
+    await seedInbox(dir, "- Minor · src/a.ts:1 · inside words · source: x\n");
+
+    const result = await inboxRaced(dir, () => linkSync(dir.path(INBOX_PATH), dir.path("twin.md")), "after");
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("ledger inbox refused .stamity/inbox.md: inbox.md is a hard link");
+    expect(result.stderr).toContain(REFUSAL_NEXT);
+    expect(result.stderr).not.toContain("inside words");
   });
 
   it.each([

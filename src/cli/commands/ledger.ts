@@ -885,7 +885,7 @@ function inboxRefusal(message: string, why: string): CliFailure {
     code: "VALIDATION_ERROR",
     message,
     why,
-    next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once the inbox is a regular file of at most ${INBOX_READ_MAX_BYTES} bytes inside the repository`,
+    next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once the inbox is a regular file with one link, of at most ${INBOX_READ_MAX_BYTES} bytes, inside the repository`,
   });
 }
 
@@ -894,8 +894,22 @@ function inboxRefusal(message: string, why: string): CliFailure {
  * down, so a link at `.stamity` or at the inbox is refused rather than read
  * through, and the open takes `O_NOFOLLOW` where the platform has it, so a
  * leaf swapped for a link after the walk is refused too.
+ *
+ * A hard link is refused as a symbolic link is: a regular file with more than
+ * one link is a second name for bytes another name owns, and that name can sit
+ * outside the checkout, with nothing in the entry type or the open flags to
+ * say so. `isShared` is the substrate's one predicate for that tell
+ * (`../../merge/atomicWrite.ts::isSharedRegularFile`, its policy in
+ * `../../merge/safeWrite.ts`), handed in rather than spelled again here. It is
+ * asked of the walk's `lstat` as a fast refusal and of the descriptor's own
+ * stats as the proof, since a name made between the two shows only there; both
+ * come before any byte is read, so a refusal carries none of the file's text.
  */
-async function readInbox(rootDir: string, inboxPath: string): Promise<string | null> {
+async function readInbox(
+  rootDir: string,
+  inboxPath: string,
+  isShared: (entry: Stats) => boolean,
+): Promise<string | null> {
   let walked = rootDir;
   let leaf: Stats | null = null;
   for (const segment of inboxPath.split("/")) {
@@ -923,13 +937,20 @@ async function readInbox(rootDir: string, inboxPath: string): Promise<string | n
     `ledger inbox refused ${inboxPath}: it is not a regular file`,
     "the inbox is one markdown file of rows",
   );
+  const hardLink = (links: number): CliFailure =>
+    inboxRefusal(
+      `ledger inbox refused ${inboxPath}: ${inboxPath.slice(inboxPath.lastIndexOf("/") + 1)} is a hard link`,
+      `the inbox is read only as a file of its own inside the repository; this one has ${links} links, so its text is shared with another name, which may sit outside the repository`,
+    );
   if (leaf === null || !leaf.isFile()) throw notFile;
+  if (isShared(leaf)) throw hardLink(leaf.nlink);
   if (leaf.size > INBOX_READ_MAX_BYTES) throw tooLarge(leaf.size);
 
   const handle = await open(walked, FS.O_RDONLY | (FS.O_NOFOLLOW ?? 0));
   try {
     const stats = await handle.stat();
     if (!stats.isFile()) throw notFile;
+    if (isShared(stats)) throw hardLink(stats.nlink);
     if (stats.size > INBOX_READ_MAX_BYTES) throw tooLarge(stats.size);
     return await handle.readFile({ encoding: "utf8" });
   } finally {
@@ -1043,7 +1064,7 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   const { inboxStore } = ctx.engine.runs;
   const counts: Record<string, number> = Object.fromEntries(inboxStore.INBOX_SEVERITIES.map((severity) => [severity, 0]));
 
-  const inboxText = await readInbox(rootDir, inboxStore.INBOX_PATH);
+  const inboxText = await readInbox(rootDir, inboxStore.INBOX_PATH, ctx.engine.merge.atomicWrite.isSharedRegularFile);
   if (inboxText === null) {
     ctx.io.out("inbox: absent\n");
     return {
