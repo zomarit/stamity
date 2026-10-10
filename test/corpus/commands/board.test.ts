@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
+import { parseDisposition, VAGUE_TRIGGERS } from "../../../src/runs/disposition.ts";
+import { ALWAYS_SHOW_TAGS, matchInbox, parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
 import {
   assertDenyClean,
   assertLineCap,
@@ -99,6 +101,28 @@ function board(): Promise<CorpusFile> {
 /** Collapse every whitespace run to one space, so line wrapping is not load-bearing. */
 function flat(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * One bullet of the flattened `## Deferral inbox` section, by the opening
+ * words of its bold label: the text from the label's close to the next
+ * `- **` or, for the last bullet, to the section's end. A missing bullet
+ * fails here rather than as an empty match.
+ */
+function inboxBullet(inbox: string, label: string): string {
+  const found = new RegExp(`- \\*\\*${label}[^*]*\\*\\*(.*?)(?= - \\*\\*|$)`).exec(inbox)?.[1];
+  if (found === undefined) throw new Error(`${ARTIFACT_PATH}: the deferral inbox has no ${JSON.stringify(label)} bullet`);
+  return found.trim();
+}
+
+/**
+ * An inbox holding the schedule-rule heading and, below it, one bullet built
+ * from the fields after its `source:`. The location and the writer are made
+ * up: no tracked file is named, so the fixture reads nothing of this
+ * repository.
+ */
+function ruledInbox(location: string, trailing: string): string {
+  return `${SCHEDULE_RULE_HEADING}\n\n- Warning · ${location} · a leftover nobody answered · source: /st-work${trailing}\n`;
 }
 
 /**
@@ -660,6 +684,198 @@ describe("st-board — sources, signals, and the inbox", () => {
     // against the anchored form board declares, never the prose inside the
     // angle brackets.
     expect(workRef.replaceAll(/<[^>]+>/g, "x")).toMatch(/^[^\s#]+#\S+$/);
+  });
+
+  it("declares the schedule fields a row carries and the triggers it refuses (REQ-FLOW-076)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const grammar = inboxBullet(inbox, "Row grammar");
+
+    expect(grammar).toContain("After `source:` and `Ref:` come optional fields in any order, each at most once:");
+    for (const field of [
+      "`by: <YYYY-MM-DD>` or `when: <trigger>`",
+      "`files: <path>, <path>` (each entry one path, with no word after it)",
+      "the tag word",
+      "a bare `<YYYY-MM-DD>` (the deferral date)",
+      "`rationale: <rest of line>` last",
+    ]) {
+      expect(grammar, `the grammar names ${field}`).toContain(field);
+    }
+    // The heading and the vague words are read from the code that enforces
+    // them, so the text cannot name a heading the parser does not look for,
+    // or leave out a word it refuses.
+    expect(grammar).toContain(`Rows below the inbox's heading \`${SCHEDULE_RULE_HEADING}\` carry \`by:\` or \`when:\``);
+    expect(grammar).toContain("`when: touched` needs a path in the location or `files:`");
+    expect(grammar).toContain(`made only of vague words (${VAGUE_TRIGGERS.map((word) => `\`${word}\``).join(", ")}) and filler words`);
+    expect(grammar).toContain("names `hygiene batch` at all");
+    expect(grammar).toContain("holds no letter or digit is refused");
+    // The pre-existing rule the new sentences sit beside still closes the bullet.
+    expect(grammar).toMatch(/A row that does not parse is kept verbatim and triaged as an untagged entry/);
+
+    // What the bullet says is what the one parser does. A row carrying every
+    // optional field it names parses below the heading, each field read...
+    const full = parseInbox(
+      ruledInbox(
+        "—",
+        " · Ref: runs/made-up/ledger.jsonl#made-up/build/1 · files: lib/widget.ts, lib/gear.ts · decision-waiting · 2026-10-10 · when: next attended close · rationale: waits · on a person",
+      ),
+    );
+    expect(full.problems).toEqual([]);
+    expect(full.rows).toHaveLength(1);
+    expect(full.rows[0]).toMatchObject({
+      when: "next attended close",
+      files: ["lib/widget.ts", "lib/gear.ts"],
+      tag: "decision-waiting",
+      deferredOn: "2026-10-10",
+      rationale: "waits · on a person",
+      belowRule: true,
+    });
+    // ...and each refusal it names is one: no day and no trigger below the
+    // heading, `touched` with no path, a trigger of vague and filler words, one
+    // naming the batch, one with no letter or digit, and a word after a path.
+    for (const [location, trailing] of [
+      ["lib/widget.ts:3", ""],
+      ["—", " · when: touched"],
+      ["lib/widget.ts:3", " · when: maybe later"],
+      ["lib/widget.ts:3", " · when: the next hygiene batch"],
+      ["lib/widget.ts:3", " · when: —"],
+      ["—", " · by: 2026-11-01 · files: lib/widget.ts the parser"],
+    ] as const) {
+      const refused = parseInbox(ruledInbox(location, trailing));
+      expect(refused.rows, `${location}${trailing} is refused`).toEqual([]);
+      expect(refused.problems).toHaveLength(1);
+    }
+    expect(parseInbox(ruledInbox("—", " · when: touched · files: lib/widget.ts")).problems).toEqual([]);
+  });
+
+  it("triages `critical-deferred` rows first, then `decision-waiting`, as the query always shows both", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const triage = inboxBullet(inbox, "Triage order");
+
+    expect(triage).toMatch(
+      /^rows tagged `critical-deferred` are triaged first, then rows tagged `decision-waiting`, both ahead of every other row/,
+    );
+    // The two tags the order names are the two the query shows whatever it is
+    // asked, in the same order: a third always-shown tag would have no place
+    // in the triage order until this bullet named it.
+    expect([...triage.matchAll(/rows tagged `([a-z-]+)`/g)].map((match) => match[1])).toEqual([...ALWAYS_SHOW_TAGS]);
+  });
+
+  it("brings a scheduled row back to a close and applies the close's answer to it (REQ-FLOW-076, REQ-FLOW-024)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const removal = inboxBullet(inbox, "Removal");
+
+    expect(removal).toContain("scheduled to a place with a date or a trigger");
+    expect(inbox).not.toContain("scheduled with a lane, a trigger and an owner");
+    expect(removal).toContain(
+      "A row whose `by:` day has come, or whose paths a run changes, comes back to that run's close as a leftover (the `ledger` verb's `inbox` query with `--due` and `--paths`), and so does every `decision-waiting` row.",
+    );
+    // The count line's tail as `ledger inbox --due` prints it; the code side
+    // of this pin is `test/runs/ledgerInbox.test.ts`.
+    expect(removal).toContain("Under `--due` the query's count line ends `· <n> due by <day> · <n> triggers`");
+    expect(removal).toContain("a drop retires it (`cut <reason>`) and removes its bullet");
+    expect(removal).toContain("a plan, board or handoff place retires it there and removes its bullet");
+    expect(removal).toContain(
+      "a new date or trigger removes its bullet and appends one row under the schedule rule carrying the same `Ref:`",
+    );
+    expect(removal).toContain("Nothing retires a row without an answer, and a kept row is never re-dated in place.");
+    expect(removal).toContain(
+      "A `fixed` reference or a `cut` reason made only of vague and filler words, or holding no letter or digit, is refused",
+    );
+    // A body with no CLI-calls paragraph names a verb without the binary's name.
+    expect(inbox).not.toMatch(/`stamity /);
+
+    // The retire values the bullet names are read by the grammar it points at:
+    // the drop's two shapes pass, and the refusals it states are refusals.
+    expect(parseDisposition("cut the vendor dropped the endpoint")).toMatchObject({ ok: true, value: { kind: "cut" } });
+    expect(parseDisposition("cut accepted risk: one caller, behind a flag")).toMatchObject({
+      ok: true,
+      value: { kind: "cut", reason: "accepted risk: one caller, behind a flag" },
+    });
+    for (const vague of ["cut maybe later", "cut —", "fixed someday", "fixed —"]) {
+      expect(parseDisposition(vague).ok, `${vague} is refused`).toBe(false);
+    }
+  });
+
+  it("widens the `/st-work` retirer to the rows its close decided, and names no third retirer", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const retirers = inboxBullet(inbox, "Retirers");
+
+    expect(retirers).toMatch(
+      /each removing a row its own change fixed, by the Removal rule below; `\/st-work`'s close also removes a row its one question dropped, placed elsewhere or re-dated\.$/,
+    );
+    expect(new Set([...retirers.matchAll(/`\/(st-[a-z-]+)`/g)].map((match) => match[1]))).toEqual(
+      new Set(["st-work", "st-quick"]),
+    );
+  });
+
+  it("states the leftovers a close asks about, once and last in the section (REQ-FLOW-074, REQ-FLOW-075)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+    const leftovers = inboxBullet(inbox, "Leftovers at a close");
+
+    // Last, after Removal: the census test reads a bullet up to the next
+    // `- **`, so a bullet placed among the first three would be read into one.
+    expect(inbox.endsWith(leftovers)).toBe(true);
+    expect([...inbox.matchAll(/- \*\*([A-Z][a-z]+)/g)].map((match) => match[1])).toEqual([
+      "Writers",
+      "Retirers",
+      "Readers",
+      "Row",
+      "Triage",
+      "Removal",
+      "Leftovers",
+    ]);
+
+    for (const phrase of [
+      "a run's close asks once about every leftover",
+      "every inbox row tagged `decision-waiting`, listed first",
+      "each ledger row neither fixed nor rejected, Minor rows included",
+      "each inbox row its change touched but did not fix or whose `by:` day has come",
+      "the notes left out (one line, titles on request)",
+      "`L<n> <severity> · <location> · <summary> → fix now | schedule: <place>, <by or when>, <files> | drop — <evidence>; would change if <condition>`",
+      "Critical and Warning first and never pre-set to drop",
+      "`Notes (<p>): drop`",
+      "An inbox row's answer applies by the Removal rule.",
+      "`L2 fix; drop L1: <reason>; show L3`",
+      "or stop, every leftover on `Not done:`",
+      "offered only while the review cap leaves a round and outside the files of an open person QA row",
+      "`fix-now failed: <gate or finding>` in its description",
+      "Schedule closes the row `deferred` and appends it under the schedule rule, or retires it to a plan, board or handoff place.",
+      "Drop closes the row `deferred` and retires it at once (`cut <reason>`), so it never reaches the inbox",
+      "only the person drops a Critical or Warning, retired `cut accepted risk: <reason>` and kept on `Not done:`",
+      "With no answer, only notes are dropped and only fixes the run's plan covers are made",
+      "every other leftover from the run's own ledger is appended tagged `decision-waiting`, its recommendation in the description and `when: next attended close`",
+      "or one already tagged `decision-waiting`, stays as it is, with no copy",
+      "counted as scheduled in the leftovers line",
+      "the next attended close asks about every `decision-waiting` row first",
+      "A real defect is never dropped by default.",
+    ]) {
+      expect(leftovers, `the leftovers rule states: ${phrase}`).toContain(phrase);
+    }
+
+    // A withheld row is listed as the query prints it and never summarised:
+    // the screen refused its text, so no agent reads it back in.
+    expect(leftovers).toContain(
+      "listed as it prints, by its line, severity and location and `withheld by the screen (<pattern id>); read it by hand`, with no summary",
+    );
+    expect(leftovers).toContain(
+      "its text is the person's to read, and it is recommended to stay as it is until the person has read it",
+    );
+    // The same floor `/st-work`'s Frame states for its own read: a skip line is
+    // a row the screen refused too, and a writer can force one by padding a row.
+    expect(leftovers).toContain("No agent opens the inbox for a row the query withholds or skips.");
+
+    // The row an unattended close appends, built from the two fields the
+    // bullet names, parses below the heading and shows on a query for a path
+    // it does not name, which is what keeps it in front of the next close.
+    const when = /`(when: [a-z ]+)`/.exec(leftovers)?.[1] ?? "";
+    expect(when).toBe("when: next attended close");
+    const waiting = parseInbox(ruledInbox("lib/widget.ts:3", ` · decision-waiting · ${when}`));
+    expect(waiting.problems).toEqual([]);
+    const other = matchInbox(waiting.rows, { paths: ["lib/gear.ts"] });
+    expect(other.matched.map(({ matchedBy }) => matchedBy)).toEqual(["always"]);
+    // The same row with no tag is one that query does not show: the tag, not the trigger, brings it forward.
+    const untagged = parseInbox(ruledInbox("lib/widget.ts:3", ` · ${when}`));
+    expect(matchInbox(untagged.rows, { paths: ["lib/gear.ts"] })).toMatchObject({ matched: [], unmatched: 1, triggers: 1 });
   });
 
   it("returns a typed status with the write ledger and handoff", async () => {

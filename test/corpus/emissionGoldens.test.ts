@@ -93,6 +93,18 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules (run
+ *     2026-10-10_next-tier; REQ-FLOW-076, REQ-FLOW-074, REQ-FLOW-075,
+ *     REQ-FLOW-024). NOTHING moved in this suite; the row keeps the two
+ *     ledgers in step. The unit's one emitted change is `commands/st-board.md`,
+ *     22255 -> 26656 bytes and 383 -> 444 lines, all of it inside
+ *     `## Deferral inbox` (the schedule fields of the row grammar, the
+ *     `decision-waiting` triage order, the come-back and answer rules of
+ *     Removal, the widened `/st-work` retirer and the new last bullet,
+ *     "Leftovers at a close"). It is not a substitution target, the catalog,
+ *     the policy document or a core hook script, so no golden here carries
+ *     it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q4t-ladder-placement-text (run
  *     2026-10-10_next-tier; REQ-LADDER-003, the plan's `build/87` row). ONE
  *     golden moved, SUBSTITUTION:

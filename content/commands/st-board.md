@@ -337,7 +337,9 @@ command is what parses it.
   planning, `/st-work`'s close, which appends every `deferred` ledger row at
   run exit, and the dep-audit skill's deferred upgrades.
 - **Retirers, two:** `/st-work`'s close and `/st-quick`'s batch, each
-  removing a row its own change fixed, by the Removal rule below.
+  removing a row its own change fixed, by the Removal rule below; `/st-work`'s
+  close also removes a row its one question dropped, placed elsewhere or
+  re-dated.
 - **Readers, three, all mandatory:** `fill` triages the inbox on every run,
   `/st-work` surfaces overlapping entries at its framing phase when a run
   touches the files an entry names, and `/st-plan` folds overlapping entries
@@ -347,20 +349,79 @@ command is what parses it.
   word. The anchored form names one line inside the referenced file, and a
   `Ref:` at a ledger always carries it — a ledger is addressable only by row id,
   which is the form `/st-work`'s close writes. `file:line` is `—`
-  when the row names no location. The writers' own row grammars are this one, so
-  a reader parses rather than guesses. A row that does not parse is kept verbatim
+  when the row names no location. After `source:` and `Ref:` come optional
+  fields in any order, each at most once: `by: <YYYY-MM-DD>` or
+  `when: <trigger>`, `files: <path>, <path>` (each entry one path, with no word
+  after it), the tag word, a bare `<YYYY-MM-DD>` (the deferral date) and
+  `rationale: <rest of line>` last. Rows below the inbox's
+  heading `## Rows under the schedule rule` carry `by:` or `when:`, without
+  which a row there does not parse, and name `files:` when the location is `—`;
+  `when: touched` needs a path in the location or `files:`. A trigger made only
+  of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
+  filler words (`maybe later`), one that names `hygiene batch` at all, or one
+  that holds no letter or digit is refused: its row does not parse. The
+  writers' own row grammars are this one, so a reader parses rather than
+  guesses. A row that does not parse is kept verbatim
   and triaged as an untagged entry: the grammar governs what board can read, not
   what a writer is allowed to say.
-- **Triage order:** rows tagged `critical-deferred` are triaged first, ahead of
-  every other row and regardless of file order. That tag is the elevated-triage
-  signal a deferred Critical carries; with no reader pulling it forward, a
-  deferred Critical is indistinguishable from a Minor.
+- **Triage order:** rows tagged `critical-deferred` are triaged first, then
+  rows tagged `decision-waiting`, both ahead of every other row and regardless
+  of file order. The first tag is the elevated-triage signal a deferred
+  Critical carries; with no reader pulling it forward, a deferred Critical is
+  indistinguishable from a Minor. The second marks a row that waits on a
+  person's answer, which an unattended close appends (Leftovers at a close,
+  below).
 - **Removal:** an entry leaves when its destination item exists, when its
   proposal id is recorded per `fill` step 5, when the user drops it by name,
   when a completeness pass retires it with one line — fixed in a commit, cut
-  with a reason, or scheduled with a lane, a trigger and an owner — recorded in
+  with a reason, or scheduled to a place with a date or a trigger — recorded in
   that pass's run record, or when the `/st-work` or `/st-quick` run that
   fixed it retires it at its close. Triage does not rewrite an entry in place.
+  A row whose `by:` day has come, or whose paths a run changes, comes back to
+  that run's close as a leftover (the `ledger` verb's `inbox` query with
+  `--due` and `--paths`), and so does every `decision-waiting` row. Under
+  `--due` the query's count line ends `· <n> due by <day> · <n> triggers`: the
+  matched rows whose day has come, then the unmatched rows that wait on a
+  `when:` trigger, which no query sees arrive. The close's answer applies to
+  each row it decided: a drop retires it (`cut <reason>`) and removes its
+  bullet; a plan, board or handoff place retires it there and removes its
+  bullet; a new date or trigger removes its bullet and appends one row under
+  the schedule rule carrying the same `Ref:`. Nothing retires a row without an
+  answer, and a kept row is never re-dated in place. A `fixed` reference or a
+  `cut` reason made only of vague and filler words, or holding no letter or
+  digit, is refused as such a trigger is.
+- **Leftovers at a close:** a run's close asks once about every leftover:
+  every inbox row tagged `decision-waiting`, listed first; each ledger row
+  neither fixed nor rejected, Minor rows included; each inbox row its change
+  touched but did not fix or whose `by:` day has come; and the notes left out
+  (one line, titles on request). Each line reads
+  `L<n> <severity> · <location> · <summary> → fix now | schedule: <place>, <by or when>, <files> | drop — <evidence>; would change if <condition>`,
+  after the `decision-waiting` rows, Critical and Warning first and never
+  pre-set to drop, then `Notes (<p>): drop`. A row the query withholds is
+  listed as it prints, by its line, severity and location and
+  `withheld by the screen (<pattern id>); read it by hand`, with no summary:
+  its text is the person's to read, and it is recommended to stay as it is
+  until the person has read it. No agent opens the inbox for a row the query
+  withholds or skips. An inbox row's answer applies by the Removal rule. The
+  answers: accept the recommendations; change rows in one line
+  (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover on
+  `Not done:`. Fix now runs one fix round, offered only while the review cap
+  leaves a round and outside the files of an open person QA row; a fix that
+  fails is reverted and scheduled, `fix-now failed: <gate or finding>` in its
+  description. Schedule closes the row `deferred` and appends it under the
+  schedule rule, or retires it to a plan, board or handoff place. Drop closes
+  the row `deferred` and retires it at once (`cut <reason>`), so it never
+  reaches the inbox; only the person drops a Critical or Warning, retired
+  `cut accepted risk: <reason>` and kept on `Not done:`. With no answer, only
+  notes are dropped and only fixes the run's plan covers are made; every other
+  leftover from the run's own ledger is appended tagged `decision-waiting`,
+  its recommendation in the description and `when: next attended close`; an
+  inbox row the change touched or found due, or one already tagged
+  `decision-waiting`, stays as it is, with no copy. Each is listed on
+  `Not done:` and counted as scheduled in the leftovers line; the record's
+  `Status:` names how many wait tagged `decision-waiting`, and the next
+  attended close asks about every `decision-waiting` row first. A real defect
+  is never dropped by default.
 
 ## Return contract
 

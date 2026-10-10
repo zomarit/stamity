@@ -186,6 +186,36 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules (run
+  //     2026-10-10_next-tier; REQ-FLOW-076, REQ-FLOW-074, REQ-FLOW-075,
+  //     REQ-FLOW-024). The st-board touchpoint moved, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 22074 -> 26475,
+  //       `.agents/skills/st-board/SKILL.md` 22120 -> 26521), by +4401 bytes,
+  //       the corpus source's own delta (383 -> 444 lines), all of it inside
+  //       `## Deferral inbox`: the Row grammar bullet names the optional
+  //       fields after `source:` and `Ref:` (`by:` or `when:`, `files:`, the
+  //       tag word, the bare deferral date, `rationale:` last), the
+  //       schedule-rule heading and the triggers refused; the Triage order
+  //       puts `decision-waiting` rows second; the Removal bullet reads
+  //       "scheduled to a place with a date or a trigger", says when a row
+  //       comes back to a close and how the close's answer applies to it, and
+  //       names the count line's `--due` tail; the Retirers bullet gains the
+  //       rows `/st-work`'s one question decided; and a new last bullet,
+  //       "Leftovers at a close", states the close's one ask, its three
+  //       answers, the withheld row (listed as it prints, never opened) and
+  //       the unattended rule. The Writers and Readers bullets are byte for
+  //       byte as they were.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-board skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q4t-ladder-placement-text (run
   //     2026-10-10_next-tier; REQ-LADDER-003, the plan's `build/87` row). The
   //     st-work touchpoint moved, plus the manifest rows that record it. No
