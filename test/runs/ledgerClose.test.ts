@@ -1052,6 +1052,8 @@ describe("retireRow under the schedule rule (q9a-disposition)", () => {
     "cut accepted risk: no exploit path",
     "scheduled plan docs/plans/020-next.md#u1 · by 2026-11-01",
     "scheduled board #42 · when touched",
+    // review/100: a run named by its id is an event; the date that opens the id is no day.
+    "scheduled board #42 · when the 2026-10-10_next-tier run closes",
   ])("writes %j from the cutover on, dated", async (disposition) => {
     const dir = tempDir();
     await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });

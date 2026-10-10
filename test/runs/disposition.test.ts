@@ -109,6 +109,8 @@ describe("isIsoDate", () => {
 // value scheduled on one would never come back.
 // review/99: the rule is the simple one, with no word list. No `YYYY-MM-DD`-shaped day stands
 // in a trigger at all, alone or among other words.
+// review/100: a run id is not a day. A `YYYY-MM-DD` run followed directly by `_` and a letter or
+// digit opens a run id (`<UTC date>_<slug>`) and is not counted; every other one still is.
 describe("dayTrigger", () => {
   it.each([
     "2026-11-15",
@@ -125,14 +127,21 @@ describe("dayTrigger", () => {
     "before 2026-11-15",
     "2026-11-15 09:00",
     "2026-11-15T09:00Z",
-    // TEST CHANGE, justified (2026-10-10, review/99): these three stood below as no day, under
+    // TEST CHANGE, justified (2026-10-10, review/99): these two stood below as no day, under
     // review/89's first rule, "a word outside both lists beside the date leaves a trigger". That
     // rule let `by 2026-11-15` through, which never comes back on its day either. The rule is now
     // that no day stands in a trigger; the event is named without it, or the day goes under `by`.
-    // The third is a run id, which opens with a day and is read as one.
+    // A third, a run id, moved here with them and back again under review/100, below.
     "the 2026-11-15 release ships",
     "the first close after 2026-11-15",
-    "2026-11-15_next-tier closes",
+    // review/100: the other side of the run-id line. A `_` with no letter or digit straight
+    // after it opens no id, a `_` after a space belongs to no date, and a day beside a run id
+    // is a day still.
+    "2026-11-15_",
+    "2026-11-15_ x",
+    "2026-11-15 _x",
+    "2026-11-15_-x",
+    "the 2026-10-10_next-tier run closes, by 2026-11-15",
   ])("reads %j as holding a day", (trigger) => {
     expect(dayTrigger(trigger)).toBe(true);
   });
@@ -143,6 +152,21 @@ describe("dayTrigger", () => {
       expect(dayTrigger(trigger)).toBe(false);
     },
   );
+
+  // TEST CHANGE, justified (2026-10-10, review/100): `2026-11-15_next-tier closes` stood above
+  // as holding a day, with the note "a run id, which opens with a day and is read as one". A
+  // run id is not a day: naming a run is naming an event, and the refusal told its writer that
+  // it named none. The last row is the accepted limit: a day disguised as an id passes, since
+  // the gate guards a sloppy deferral and not a disguised one.
+  it.each([
+    "2026-11-15_next-tier closes",
+    "the 2026-10-10_next-tier run closes",
+    "2026-10-10_next-tier",
+    "`2026-10-10_next-tier` or 2026-10-08_product-core closes",
+    "2026-11-15_x",
+  ])("reads %j as holding no day: its `YYYY-MM-DD` run opens a run id", (trigger) => {
+    expect(dayTrigger(trigger)).toBe(false);
+  });
 });
 
 describe("vagueTrigger", () => {
@@ -358,6 +382,10 @@ describe("parseDisposition", () => {
     // trigger's slot now, so they moved here.
     ["an event named with its day for a trigger", "scheduled board #42 · when the 2026-11-15 release ships", WHEN_DAY],
     ["an event after a day for a trigger", "scheduled board #42 · when the first close after 2026-11-15", WHEN_DAY],
+    // review/100: what a run id's opening date does not excuse.
+    ["a day with a bare underscore for a trigger", "scheduled board #42 · when 2026-11-15_", WHEN_DAY],
+    ["a day, a space and an underscored word for a trigger", "scheduled board #42 · when 2026-11-15 _x", WHEN_DAY],
+    ["a day beside a run id for a trigger", "scheduled board #42 · when the 2026-10-10_next-tier run closes, by 2026-11-15", WHEN_DAY],
     ["a symbol-only board item", "scheduled board # · when touched", "the place is none of"],
     ["a lone dot as a handoff place", "scheduled handoff . · by 2026-11-01", "the place is none of"],
     ["a lone slash as a handoff place", "scheduled handoff / · by 2026-11-01", "the place is none of"],
@@ -406,6 +434,8 @@ describe("parseDisposition", () => {
     "scheduled board #42 · when next attended close",
     "scheduled board #42 · when later today's release ships",
     "scheduled board 7 · when: the next client release",
+    // review/100: a run named by its id is an event; the date that opens the id is no day.
+    "scheduled board #42 · when the 2026-10-10_next-tier run closes",
     "scheduled handoff notes.md · by 2026-11-01",
     // review/47: a board item with a digit, or a filler word beside a real one.
     "scheduled board #42 · by 2026-11-01",

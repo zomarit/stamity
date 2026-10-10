@@ -199,8 +199,12 @@ export function vagueTrigger(trigger: string): string | null {
   return vagueWord(trigger) ?? onlyFiller(wordsOf(trigger));
 }
 
-/** A run shaped as a date, `YYYY-MM-DD`; whether it names a real day is not asked. */
-const DAY_RUN = /\d{4}-\d{2}-\d{2}/u;
+/**
+ * A run shaped as a date, `YYYY-MM-DD`, that opens no run id: one followed
+ * directly by `_` and a letter or digit is the date of a `<UTC date>_<slug>`
+ * id and is passed over. Whether the run names a real day is not asked.
+ */
+const DAY_RUN = /\d{4}-\d{2}-\d{2}(?!_[\p{L}\p{N}])/u;
 
 /**
  * Whether a trigger holds a day: a `YYYY-MM-DD`-shaped run anywhere in it,
@@ -210,6 +214,12 @@ const DAY_RUN = /\d{4}-\d{2}-\d{2}/u;
  * scheduled on a trigger that leans on one never comes back on it. A writer
  * names the event without the day, or writes the day under `by`. No word list
  * is read: whatever stands beside the day, the answer is the same.
+ *
+ * A run id is not a day: `the 2026-10-10_next-tier run closes` names a run,
+ * which is an event, so the date that opens the id is not counted, while a
+ * day beside the id still is. A day written as an id (`2026-11-15_x`) passes
+ * with it. That is the accepted limit: this guards a deferral written
+ * carelessly, not one disguised.
  */
 export function dayTrigger(trigger: string): boolean {
   return DAY_RUN.test(trigger);

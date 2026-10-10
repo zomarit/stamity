@@ -26,7 +26,7 @@ import { LEDGER_FILE } from "./layout.ts";
  * `./disposition.ts` holds a `retired` value's trigger to, so this module
  * keeps no word list of its own. By that rule a `when:` holding a
  * `YYYY-MM-DD` day, alone or among other words, is refused: a query finds a
- * day under `by:` alone.
+ * day under `by:` alone. The date that opens a run id is no such day.
  *
  * Two callers read one grammar: `stamity ledger inbox`, which prints the rows a
  * run's Frame folds in, and the records gate (`test/records/ledgers.test.ts`),

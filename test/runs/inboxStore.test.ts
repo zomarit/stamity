@@ -364,6 +364,10 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     // under `by:`.
     ["—", "when: the 2026-11-15 release ships", WHEN_DAY],
     ["—", "when: the first close after 2026-11-15", WHEN_DAY],
+    // review/100: what a run id's opening date does not excuse.
+    ["—", "when: 2026-11-15_", WHEN_DAY],
+    ["—", "when: 2026-11-15 _x", WHEN_DAY],
+    ["—", "when: the 2026-10-10_next-tier run closes, by 2026-11-15", WHEN_DAY],
   ])("refuses a row at %j carrying %j", (location, field, message) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe(message);
   });
@@ -375,6 +379,8 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     ["—", "when: the next edit of src/a.ts"],
     ["—", "when: the next hygiene pass after the release"],
     ["—", "by: 2026-11-01"],
+    // review/100: a run named by its id is an event; the date that opens the id is no day.
+    ["—", "when: the 2026-10-10_next-tier run closes"],
   ])("accepts a row at %j carrying %j below the heading", (location, field) => {
     expect(ruled(`Minor · ${location} · d · source: x · ${field}`)).toBe("");
   });
@@ -405,6 +411,9 @@ describe("parseInbox — the schedule fields (q9b)", () => {
     "on 2026-11-15",
     "the 2026-11-15 release ships",
     "by 2026-11-15",
+    // review/100: a run id, and a day with a bare underscore.
+    "the 2026-10-10_next-tier run closes",
+    "2026-11-15_",
   ])("gives the trigger %j the verdict the `retired` grammar gives it after `scheduled <place> · when`", (trigger) => {
     const retired = parseDisposition(`scheduled board #42 · when ${trigger}`);
     const inbox = parseInbox(`- Minor · src/a.ts:1 · d · source: x · when: ${trigger}`);
