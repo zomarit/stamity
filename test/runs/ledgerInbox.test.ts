@@ -1,4 +1,4 @@
-import { linkSync, statSync, type Stats } from "node:fs";
+import { appendFileSync, linkSync, statSync, type Stats } from "node:fs";
 import { link, mkdir, open, symlink, writeFile, type FileHandle } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
@@ -1124,6 +1124,46 @@ describe("stamity ledger inbox", () => {
     const doc = JSON.parse(result.stdout) as { ok: boolean; error: { code: string; next: string } };
     expect(doc).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
     expect(doc.error.next).toContain(REFUSAL_NEXT);
+  });
+
+  // review/106: the size checks before the read are fast refusals, not the bound. A writer that
+  // grows the file after the descriptor's `stat` is held by the read itself, which takes the
+  // ceiling plus one byte at most and refuses when that byte is there.
+  it("refuses an inbox that grows past 1 MiB after its size was read, and prints none of it", async () => {
+    const dir = tempDir();
+    await seedInbox(dir, "- Minor · src/a.ts:1 · small words · source: x\n");
+    const grow = (): void => {
+      appendFileSync(dir.path(INBOX_PATH), `${"x".repeat(1024 * 1024)}\n`);
+    };
+
+    const result = await inboxRaced(dir, grow, "before");
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "ledger inbox refused .stamity/inbox.md: it is more than 1048576 bytes, over the 1048576 byte ceiling",
+    );
+    expect(result.stderr).toContain(REFUSAL_NEXT);
+    expect(result.stderr).not.toContain("small words");
+  });
+
+  it("reads an inbox of exactly 1 MiB, and one that grows to exactly 1 MiB after its size was read", async () => {
+    const row = "- Minor · src/a.ts:1 · small words · source: x\n";
+    const pad = `${"x".repeat(1024 * 1024 - Buffer.byteLength(row) - 1)}\n`;
+    const whole = tempDir();
+    await seedInbox(whole, `${row}${pad}`);
+    expect(statSync(whole.path(INBOX_PATH)).size).toBe(1024 * 1024);
+
+    const atCeiling = await inbox(whole);
+    // The file is now at the ceiling; the descriptor's `stat` is the one taken when it held the row alone.
+    await seedInbox(whole, row);
+    const grown = await inboxRaced(whole, () => appendFileSync(whole.path(INBOX_PATH), pad), "before");
+
+    for (const result of [atCeiling, grown]) {
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("1 Minor · src/a.ts:1 · small words (all)\n");
+    }
+    expect(statSync(whole.path(INBOX_PATH)).size).toBe(1024 * 1024);
   });
 
   it.skipIf(WINDOWS)("refuses an inbox that is a symbolic link, and never reads through it", async () => {

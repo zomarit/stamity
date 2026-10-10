@@ -904,6 +904,12 @@ function inboxRefusal(message: string, why: string): CliFailure {
  * asked of the walk's `lstat` as a fast refusal and of the descriptor's own
  * stats as the proof, since a name made between the two shows only there; both
  * come before any byte is read, so a refusal carries none of the file's text.
+ *
+ * The ceiling is held by the read itself. The two size checks are fast
+ * refusals on a size taken before the read, and a writer can grow the file
+ * after them; so the read takes {@link INBOX_READ_MAX_BYTES} plus one byte at
+ * most from the open descriptor and refuses when that byte is there, naming
+ * the size as more than the ceiling, the only thing it knows of it.
  */
 async function readInbox(
   rootDir: string,
@@ -928,9 +934,9 @@ async function readInbox(
       );
     }
   }
-  const tooLarge = (size: number): CliFailure =>
+  const tooLarge = (size: number | "more than the ceiling"): CliFailure =>
     inboxRefusal(
-      `ledger inbox refused ${inboxPath}: it is ${size} bytes, over the ${INBOX_READ_MAX_BYTES} byte ceiling`,
+      `ledger inbox refused ${inboxPath}: it is ${typeof size === "number" ? size : `more than ${INBOX_READ_MAX_BYTES}`} bytes, over the ${INBOX_READ_MAX_BYTES} byte ceiling`,
       "the inbox's rows are printed into a run's context, so its size is bounded",
     );
   const notFile = inboxRefusal(
@@ -952,7 +958,16 @@ async function readInbox(
     if (!stats.isFile()) throw notFile;
     if (isShared(stats)) throw hardLink(stats.nlink);
     if (stats.size > INBOX_READ_MAX_BYTES) throw tooLarge(stats.size);
-    return await handle.readFile({ encoding: "utf8" });
+    const bytes = Buffer.alloc(INBOX_READ_MAX_BYTES + 1);
+    let filled = 0;
+    while (filled < bytes.length) {
+      // eslint-disable-next-line no-await-in-loop -- one descriptor read in order: each read starts where the last one ended
+      const { bytesRead } = await handle.read(bytes, filled, bytes.length - filled, null);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    if (filled > INBOX_READ_MAX_BYTES) throw tooLarge("more than the ceiling");
+    return bytes.toString("utf8", 0, filled);
   } finally {
     await handle.close();
   }
