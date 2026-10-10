@@ -713,12 +713,18 @@ describe("qa — the human checkpoint", () => {
     expect(text).toContain("a step that cannot be undone");
     expect(text).toContain("Every other row is auto-proven");
     expect(text).toContain("the run's test-runner executes its check before this table is built");
+    // A row no check proves is not auto-proven: it stays a person's, as rule 2 already says.
+    expect(text).toContain(
+      "A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2.",
+    );
     // The class the caller passes skips the walk, unless a rendered page changed.
     expect(text).toContain("`docs`, `records` or `tests`");
-    expect(text).toContain('"no walk-through required — <class> only"');
+    expect(text).toContain('"no walk-through required — <class> only", with no sign-off block and no ask');
     expect(text).toContain("site build renders");
     expect(text).toContain("`design-quality` lens");
-    expect(text).toContain("one person row, the changed page renders and reads right");
+    expect(text).toContain(
+      "one person row, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off block.",
+    );
     expect(text).toContain("With no class passed, the triggers above decide.");
     // The diff-shape escape it replaces is gone: a docs page renders, so it is no longer walk-free.
     expect(text).not.toContain("no walk-through required — documentation only");

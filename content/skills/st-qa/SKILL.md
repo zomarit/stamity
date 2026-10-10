@@ -40,15 +40,16 @@ person must look at (a page, a screen, a style or an image as it renders), a
 live third-party client or account, and a step that cannot be undone. Every
 other row is auto-proven: where no artifact covers it yet, the run's
 test-runner executes its check before this table is built, and the row points
-at that result as the Auto-prove pass reads one.
+at that result as the Auto-prove pass reads one. A row whose check is missing,
+cannot run or fails stays on the human path under that pass's rule 2.
 
 A change whose class (`gate classify`'s, which the caller passes) is `docs`,
 `records` or `tests` emits the line "no walk-through required — <class> only",
 with no sign-off block and no ask — unless it changes a path the project's
 site build renders (its pages, styles or images) or a path the classify hands
 the `design-quality` lens; then it emits one person row, the changed page
-renders and reads right, followed by the sign-off block. With no class passed,
-the triggers above decide.
+renders and reads right and the links to and from it resolve, followed by the
+sign-off block. With no class passed, the triggers above decide.
 
 Seven columns, every one filled: `#`, `Scenario`, `Steps`, `Expected`, `Risk`,
 `Minutes`, `Proof`.

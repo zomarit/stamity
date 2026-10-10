@@ -186,6 +186,24 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q2-qa-rows (run
+  //     2026-10-10_next-tier; review/2, review/3, review/4). The qa skill
+  //     moved, plus the manifest rows that record it. No emitted path was
+  //     added or removed.
+  //
+  //     CHANGED the qa skill wherever it is emitted (`.claude/skills/st-qa/` and
+  //       `.agents/skills/st-qa/` SKILL.md, 7961 -> 8098), by +137 bytes, the
+  //       corpus source's own delta: a row whose check is missing, cannot run
+  //       or fails stays on the human path under the Auto-prove pass's rule 2,
+  //       and the class clause's person row also checks that the links to and
+  //       from the changed page resolve.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint, skill
+  //       other than the qa skill, companion, hook script, guard and policy
+  //       document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q5-usage-lines (run
   //     2026-10-10_next-tier; REQ-CTX-019). The st-work touchpoint moved, plus
   //     the manifest rows that record it. No emitted path was added or removed.

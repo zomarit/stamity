@@ -1543,6 +1543,18 @@ it, so no `## Expected` block moves; `EXPECTED_MOVES` gains no row, and no claim
 count, threshold or roster count moves. Under the incremental rule the two re-measure, because
 their case-file bytes moved. The dated citations above stay as they were.
 
+**One qa-skill range moved, 2026-10-10 (plan 019 file 3, unit `q2-qa-rows`, review round 1).**
+The qa skill's person-rows paragraph gains a sentence keeping a row whose check is missing, cannot
+run or fails on the human path under the Auto-prove pass's rule 2, rewrapped from six lines to
+seven (+1), and the class clause's person row also checks the links to and from the changed page,
+rewrapped within its three lines (0), so every qa-skill range from line 44 on moves by one. The
+move lands in the case file and its case-index cell above: `qa-bare-signoff-records-unwalked`
+61-63,68-72,105-143 → 62-64,69-73,106-144, range only, its quoted text byte-identical at the new
+lines. `probe-qa-select` (6-6) sits above the edit and holds. No scenario turns on the two
+clauses, so no `## Expected` block moves; `EXPECTED_MOVES` gains no row, and no claim,
+identical/moved count, threshold or roster count moves. Under the incremental rule the one case
+re-measures, because its case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1729,7 +1741,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:274-411` |
 | `plugin-mode-invocation` | golden · rubric | 6 / 1 | Running as the Claude Code plugin invoked at `/stamity:st-plan`, a plan run fans its research out under the namespaced agent form `@stamity:stamity-researcher`, reaches its coverage pass through the skill form `/stamity:st-verify` inside the root, keeps itself the single writer of the artifact, and cites the charter-reference phrase the root renders rather than an unresolved gate token. | `content/commands/st-plan.md:88-97,166-168,287-292` |
 | `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:311-328` |
-| `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:61-63,68-72,105-143` |
+| `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:62-64,69-73,106-144` |
 | `question-shape-and-default` | golden · rubric *(floor)* | 7 / 0 | An ambiguity question carries two to four numbered options with a one-line trade-off each, and declares which option runs if no answer arrives — the lowest-blast-radius reversible one. | `content/rules/stamity-question-protocol.md:22-25,38-46` |
 | `question-shape-and-default-charter-only` | golden · rubric *(floor)* | 5 / 0 | Charter-only twin of `question-shape-and-default`: On a live ambiguity trigger the response asks exactly one numbered-option question, applies no edit first, and declares what runs if no answer arrives — it does not echo the request back, ask a second question, or pick an interpretation silently. | `content/charter/stamity-charter.md:48-50` |
 | `quick-docs-change-without-map-runs-full-suite` | golden · rubric *(floor)* | 6 / 2 | A docs change in a repository without a declared test-input map runs the full suite: when the class step returns docs with the selection reading full and naming no file, the quick lane's step 3 runs the test command over the whole suite, never the scan alone a docs class with an empty selection would run, and the batch is not done until that run returns green. | `content/commands/st-quick.md:150-188` |
