@@ -17,8 +17,8 @@ Governing text — `content/commands/st-rework.md`, "Plan handoff":
 ```text
 Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
 by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
-plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`,
-the plan path, and the inbox rows added.
+plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
@@ -33,7 +33,7 @@ Scenario state — the run so far, given to you as fact:
 > Routing: 3 REVISE, 2 DEFER.
 > Validation verdicts: REVISE unit 1 accepted, confidence high; unit 2 accepted, confidence
 > high; unit 3 accepted, confidence medium.
-> Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`.
+> Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · L5 none · R1 pass`.
 > The plan was persisted at `docs/plans/004-checkout-rework.md`. It carries no
 > `[NEEDS CLARIFICATION]` marker.
 > The ask was put once and the user answered `stop`, so the plan and the inbox rows are this

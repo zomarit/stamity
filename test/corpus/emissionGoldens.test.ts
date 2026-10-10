@@ -93,6 +93,19 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, unit q10b-flow-close-pointers (run
+ *     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-070, REQ-FLOW-077).
+ *     NOTHING moved in this suite; the row keeps the two ledgers in step. The
+ *     unit's emitted changes are three touchpoints: `commands/st-pr-resolve.md`
+ *     (20960 -> 21190 bytes, 328 -> 332 lines: the Close's DEFER-row
+ *     paragraph), `commands/st-rework.md` (19765 -> 20035, 302 lines held:
+ *     L5 in the gate enumeration and the close's plan-lint line, and the
+ *     handoff ask's pointer at `/st-board`'s Leftovers at a close) and
+ *     `commands/st-quick.md` (14136 -> 14297, 221 -> 224: the last paragraph,
+ *     "This lane appends no inbox row."). None is a substitution target, the
+ *     catalog, the policy document or a core hook script, so no golden here
+ *     carries one; the sibling suite itemises them.
+ *
  *   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules, review round 1
  *     (run 2026-10-10_next-tier; ledger rows review/41 to review/45, build/25
  *     and build/26). NOTHING moved in this suite; the row keeps the two

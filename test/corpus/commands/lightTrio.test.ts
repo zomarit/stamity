@@ -370,6 +370,40 @@ describe("light trio — the closing next step", () => {
     expect(text).toContain("a pre-existing failure left alone makes naming it the step");
     expect(text).toContain("A batch with none of those says so in the line");
   });
+
+  it("quick appends no inbox row and sends what a batch cannot finish to `/st-work`, whose close asks (REQ-FLOW-077)", async () => {
+    const file = await load("commands/st-quick.md");
+    const paragraphs = file.parsed.body
+      .trim()
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.replace(/\s+/g, " ").trim());
+    const last = paragraphs.at(-1) ?? "";
+
+    // The whole paragraph, as the body's last one: two sentences and nothing else. The lane is
+    // a retirer of inbox rows and never a writer, and the census in the board suite filters
+    // this file out by name, so it cannot catch an append here: this sentence is the guard.
+    expect(last).toBe(
+      "This lane appends no inbox row. What a batch cannot finish escalates to `/st-work` by " +
+        "the Escalation table above, and that run's close asks about what is left.",
+    );
+    expect(paragraphs.at(-2)).toContain("A batch with none of those says so in the line.");
+
+    // It gives the lane no leftovers ask of its own (the sign-off on `plan/40`): no choice to
+    // fix, drop or schedule, no "asks once", and no pointer at the board's rule, whose branches
+    // append. A scan hit, a red gate and a refused item keep the routes the lane already has,
+    // so no second text can disagree with them.
+    for (const absent of ["fix now", "drop", "schedule", "asks once", "the board", "/st-board", "Leftovers"]) {
+      expect(last, `the closing paragraph offers or points at "${absent}"`).not.toContain(absent);
+    }
+    expect(last).not.toMatch(/\?/);
+
+    // The table it leans on is the one above it, still user-gated.
+    const escalation = section(file, "Escalation");
+    expect(escalation).toContain("Never automatic; user-gated in session");
+    expect(escalation.indexOf("| Trigger | Switch to | Evidence carried |")).toBeLessThan(
+      escalation.indexOf("This lane appends no inbox row."),
+    );
+  });
 });
 
 describe("ask — read-only is a frontmatter contract", () => {

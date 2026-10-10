@@ -319,6 +319,10 @@ board fill and the framing phase of `/st-work` both read them.
 The row carries this run's own one-line description, never a comment body: what enters the state
 directory is text this run wrote, about text that cleared the ingress screen.
 
+Each DEFER row is decided in the phase-3 triage ask, which stays this round's one ask: its row
+carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the location is `—`),
+and the round adds no closing ask.
+
 The PR-thread reply is the fourth write-back channel, and it exists only here: progress comment,
 PR link, and status transition are the other three. This command writes no other platform state.
 

@@ -186,6 +186,48 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-10, plan 019 file 3, unit q10b-flow-close-pointers (run
+  //     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-070, REQ-FLOW-077). Three
+  //     touchpoints moved, plus the manifest rows that record them. No emitted
+  //     path was added or removed.
+  //
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 20770 -> 21000,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 20821 -> 21051), by +230
+  //       bytes, the corpus source's own delta (328 -> 332 lines): the Close
+  //       gains one paragraph after its row paragraph, "Each DEFER row is
+  //       decided in the phase-3 triage ask, which stays this round's one ask",
+  //       its row carrying `/st-board`'s schedule fields, and the round adding
+  //       no closing ask.
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 19542 -> 19812,
+  //       `.agents/skills/st-rework/SKILL.md` 19589 -> 19859), by +270 bytes,
+  //       the source's own delta (302 lines held, each edit rewrapped into
+  //       the lines its paragraph had), all of it inside
+  //       `## 6. Plan handoff`: the gate enumeration names "`L5` plan size,
+  //       advisory, whose codes fail no unit and block nothing" after L4; the
+  //       one ask ends "; its DEFER rows and notes ride that ask, by
+  //       `/st-board`'s Leftovers at a close"; and the close's plan-lint line
+  //       carries `L5 none|<n> advisory|not run` before `R1`, with the line
+  //       that says when `L5 not run` applies and that no L5 value blocks the
+  //       handoff.
+  //     CHANGED the st-quick touchpoint wherever it is emitted
+  //       (`.claude/commands/st-quick.md` and
+  //       `.github/prompts/st-quick.prompt.md` 14076 -> 14237,
+  //       `.agents/skills/st-quick/SKILL.md` 14120 -> 14281), by +161 bytes,
+  //       the source's own delta (221 -> 224 lines): one last paragraph of two
+  //       sentences, "This lane appends no inbox row. What a batch cannot
+  //       finish escalates to `/st-work` by the Escalation table above, and
+  //       that run's close asks about what is left."
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       three touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules, review round 1
   //     (run 2026-10-10_next-tier; ledger rows review/41 to review/45, build/25
   //     and build/26). The st-board touchpoint moved, plus the manifest rows

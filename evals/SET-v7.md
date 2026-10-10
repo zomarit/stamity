@@ -1748,6 +1748,43 @@ No B / A count moves (5 / 1 and 8 / 0), and no identical/moved count, threshold 
 moves: `work-proof-block-fields` already counted as moved. Under the incremental rule the four
 re-measure, because their case-file bytes moved. The dated citations above stay as they were.
 
+**One range moved and two Briefs re-quoted, 2026-10-10 (plan 019 file 3, unit
+`q10b-flow-close-pointers`).** The other flows' closes point at `/st-board`'s rule, and
+`/st-rework` names L5, in five edits across three files. `/st-pr-resolve`'s Close gains one
+paragraph after its row paragraph, a blank line and three lines (+4): "Each DEFER row is decided in
+the phase-3 triage ask, which stays this round's one ask: its row carries `/st-board`'s schedule
+fields (`by:` or `when:`, and `files:` when the location is `—`), and the round adds no closing
+ask." `/st-rework`'s Plan handoff takes three edits, each rewrapped into the lines its paragraph
+held (0): its gate enumeration names "`L5` plan size, advisory, whose codes fail no unit and block
+nothing" after L4 (ten lines stay ten); its one ask ends "; its DEFER rows and notes ride that ask,
+by `/st-board`'s Leftovers at a close" (six lines stay six); and its close's plan-lint token reads
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`,
+followed by "(`L5 not run` where the coverage script could not run; no `L5` value blocks the
+handoff)" (four lines stay four, the last two past the file's usual width). The file stays at 302
+lines, as `test/corpus/agents/severityScale.test.ts` pins its proof paragraph at line 267 and at
+four lines. `/st-quick` gains a last paragraph after its next-step paragraph, a blank line and two
+lines (+3 at the file's end): "This lane appends no inbox row. What a batch cannot finish escalates
+to `/st-work` by the Escalation table above, and that run's close asks about what is left." So a
+`/st-pr-resolve` range that spans lines 320-321 grows by four, and no `/st-rework` or `/st-quick`
+range moves. The move lands in the case file and its case-index cell above:
+`pr-resolve-next-step-derived-from-run-state` 311-328 → 311-332, its `## Close` block re-quoted by
+script, byte-identical to the landed file. `rework-next-step-derived-from-run-state` (267-275)
+keeps its range and re-quotes lines 269-270 by script, byte-identical. The other `/st-pr-resolve`
+case (`pr-comment-ingress-screen`, 79-115) and the other three `/st-rework` cases source no line
+past 207 and hold. All twelve `/st-quick` cases hold, `quick-next-step-derived-from-batch-state`
+(207-221) among them: its range ends where the next-step paragraph ends, and the new paragraph sits
+after it, unquoted; checked by hand, its quoted block is still lines 207-221 byte for byte. The
+rework case's scenario state gains the reading the new token asks for, `L5 none`, in its plan-lint
+line (`L1 pass · L2 pass · L3 pass · L4 pass · L5 none · R1 pass`), so the response has a stated
+value to carry and invents none. No `## Expected` block moves: the pr-resolve scenario defers one
+finding whose row was appended and turns on the failed reply, so the new paragraph decides nothing
+in it; the rework case's B2 names `L1`, `L2`, `L3`, `L4` and `R1` each with its own pass or fail,
+which a line that also carries `L5 none` still meets, and B1's seven things are the same seven.
+Both cases have a cases-v5 copy and both Expected blocks stay byte-identical to it, so
+`EXPECTED_MOVES` gains no row, and no claim, identical/moved count, threshold or roster count moves.
+Under the incremental rule the two re-measure, because their case-file bytes moved. The dated
+citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -1933,7 +1970,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `plan-security-unit-carries-threat-note` | golden · rubric | 5 / 2 | A plan unit whose files gate classify places security-sensitive carries a threat row naming its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines, while a unit in the same plan whose files classify as docs carries no threat row. | `content/commands/st-plan.md:342-357` |
 | `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:274-412` |
 | `plugin-mode-invocation` | golden · rubric | 6 / 1 | Running as the Claude Code plugin invoked at `/stamity:st-plan`, a plan run fans its research out under the namespaced agent form `@stamity:stamity-researcher`, reaches its coverage pass through the skill form `/stamity:st-verify` inside the root, keeps itself the single writer of the artifact, and cites the charter-reference phrase the root renders rather than an unresolved gate token. | `content/commands/st-plan.md:88-97,166-168,288-293` |
-| `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:311-328` |
+| `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:311-332` |
 | `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:62-64,69-73,106-144` |
 | `question-shape-and-default` | golden · rubric *(floor)* | 7 / 0 | An ambiguity question carries two to four numbered options with a one-line trade-off each, and declares which option runs if no answer arrives — the lowest-blast-radius reversible one. | `content/rules/stamity-question-protocol.md:22-25,38-46` |
 | `question-shape-and-default-charter-only` | golden · rubric *(floor)* | 5 / 0 | Charter-only twin of `question-shape-and-default`: On a live ambiguity trigger the response asks exactly one numbered-option question, applies no edit first, and declares what runs if no answer arrives — it does not echo the request back, ask a second question, or pick an interpretation silently. | `content/charter/stamity-charter.md:48-50` |

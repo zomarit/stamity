@@ -243,12 +243,12 @@ Plan-lint runs once, deterministically, before anything is persisted. The gate i
 `/st-plan` defines — `L1` testable acceptance criteria (a unit with no acceptance criterion
 stated as an observable outcome fails it), `L2` dependencies resolve, `L3` edge cases non-empty,
 `L4` every unit's `requirements` field cites a requirement id carried by the spec or the literal
-`spec carries no ids`, blank never passing — run here unchanged rather than restated with
-different content under the same name. One rework-only check runs beside it, labelled so the
-difference is visible: `R1`, every unit cites validated `file:line` evidence or is explicitly
-marked `unvalidated`. Apply `/st-plan`'s structural coverage pass and semantic
-coverage review at the same handoff; a structural pass alone does not resolve
-incompatible requirement and unit meanings.
+`spec carries no ids`, blank never passing, `L5` plan size, advisory, whose codes fail no unit
+and block nothing — run here unchanged rather than restated with different content under the
+same name. One rework-only check runs beside it, labelled so the difference is visible: `R1`,
+every unit cites validated `file:line` evidence or is explicitly marked `unvalidated`. Apply
+`/st-plan`'s structural coverage pass and semantic coverage review at the same handoff; a
+structural pass alone does not resolve incompatible requirement and unit meanings.
 
 A unit that fails a check goes back to the user to sharpen or defer. It never enters the plan
 in a state where the implementer would have to guess what "done" means.
@@ -256,9 +256,9 @@ in a state where the implementer would have to guess what "done" means.
 Persist through the same plan artifact `/st-plan` writes — through the persistence guard,
 since the plan carries the user's own words and `/st-work` reads it back — so `/st-work`
 detects and consumes it under its freshness guard. Then ask once, execute-now default:
-`execute now (default) / show the plan first / stop`. On `execute now`, continue into
-`/st-work` in this session with the persisted plan as its input. On `stop`, the plan and the
-inbox rows are the run's output.
+`execute now (default) / show the plan first / stop`; its DEFER rows and notes ride that ask, by
+`/st-board`'s Leftovers at a close. On `execute now`, continue into `/st-work` in this session with
+the persisted plan as its input. On `stop`, the plan and the inbox rows are the run's output.
 
 A plan carrying a `[NEEDS CLARIFICATION]` marker has no execute-now default. The ask becomes
 `show the plan first (default) / resolve marker n / stop`, and the handoff stays blocked until
@@ -266,8 +266,8 @@ the last marker clears — which is what makes the low-confidence marking of pha
 
 Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
 by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
-plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`,
-the plan path, and the inbox rows added.
+plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what

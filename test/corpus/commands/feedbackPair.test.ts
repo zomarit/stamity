@@ -108,6 +108,9 @@ const PR_RESOLVE = "commands/st-pr-resolve.md";
  */
 const BOARD = "commands/st-board.md";
 
+/** Read as the owner of the plan-lint gate `/st-rework` cites: its L5 row is the one rework names. */
+const PLAN = "commands/st-plan.md";
+
 /**
  * Declared spawn roster per artifact — the command discriminator made explicit.
  *
@@ -127,7 +130,7 @@ const files = new Map<string, CorpusFile>();
 
 beforeAll(async () => {
   const loaded = await Promise.all(
-    [REWORK, PR_RESOLVE, BOARD].map(async (relPath) => {
+    [REWORK, PR_RESOLVE, BOARD, PLAN].map(async (relPath) => {
       const raw = await readFile(join(CORPUS_ROOT, relPath), "utf8");
       return corpusFileOf(relPath, raw);
     }),
@@ -487,9 +490,51 @@ describe("rework — validation and handoff", () => {
     // reporting three verdicts hides L4 at the one seam the operator reads.
     expect(handoff).toMatch(/`L1`[^.]*`L2`[^.]*`L3`[^.]*`L4`/);
     expect(handoff).toMatch(/run here unchanged rather than restated with different content/i);
-    expect(handoff).toMatch(
-      /L1 pass\|fail · L2 pass\|fail · L3 pass\|fail · L4 pass\|fail · R1 pass\|fail/,
+    // TEST CHANGE, justified (2026-10-10, q10b-flow-close-pointers; REQ-FLOW-070): the close's
+    // plan-lint line gains `/st-plan`'s fifth check, so the pinned token moves from
+    // `… L4 pass|fail · R1 pass|fail` to the one below. What changed about the contract: a
+    // rework-written plan now reports its plan-size reading as `/st-plan`'s own line does, in
+    // L5's vocabulary and not the other four's, ahead of the one rework-only check. Nothing is
+    // relaxed: the whole token is still pinned, and the old five-token line is asserted gone.
+    expect(handoff).toContain(
+      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`",
     );
+    expect(handoff).not.toContain("L4 pass|fail · R1 pass|fail");
+    expect(handoff).not.toContain("L5 pass|fail");
+  });
+
+  it("names L5 as `/st-plan`'s advisory plan-size check, one that never blocks the handoff (REQ-FLOW-070)", () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+
+    // The enumeration is `/st-plan`'s gate cited check by check, so a fifth row there with no
+    // fifth name here would be the gate restated with different content under the same name.
+    expect(handoff).toMatch(/`L4`[^.]*`L5` plan size, advisory[^.]*run here unchanged/);
+    // An advisory code is not a failed check: the next paragraph sends a unit that FAILS a
+    // check back to the user, and L5 must not be readable as one of those.
+    expect(handoff).toContain("whose codes fail no unit and block nothing");
+    // The third value is for a run whose coverage script could not run. `L5 none` there would
+    // tell the operator no size code fired when none was looked for.
+    expect(handoff).toContain("`L5 not run` where the coverage script could not run");
+    expect(handoff).toContain("no `L5` value blocks the handoff");
+    // The rework-only check keeps its label and stays last on the line.
+    expect(handoff.indexOf("L5 none|<n> advisory|not run")).toBeLessThan(handoff.indexOf("R1 pass|fail"));
+
+    // `/st-plan` owns the row this cites; read its own table rather than a copied literal.
+    const planGate = artifact(PLAN).parsed.body.split("\n").find((line) => line.startsWith("| L5 |")) ?? "";
+    expect(planGate, "`/st-plan`'s gate table carries no L5 row for rework to cite").toContain("Plan size (advisory)");
+  });
+
+  it("carries its DEFER rows and notes on the one handoff ask, by `/st-board`'s rule (REQ-FLOW-074)", () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+
+    // One ask, not two: the leftovers of a rework run are its DEFER rows and its notes, and
+    // they are decided where the execute-now question already is.
+    expect(handoff).toContain(
+      "Then ask once, execute-now default: `execute now (default) / show the plan first / stop`; " +
+        "its DEFER rows and notes ride that ask, by `/st-board`'s Leftovers at a close.",
+    );
+    // The pointer has a target: board's own bullet, read here so the two cannot drift apart.
+    expect(clause(artifact(BOARD).parsed.body, "## Deferral inbox")).toContain("- **Leftovers at a close:**");
   });
 
   it("gives the low-confidence marking a consumer instead of a note", () => {
@@ -850,6 +895,35 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(close).toMatch(/fourth write-back channel/i);
     expect(close).toContain(INBOX);
     expect(close).toMatch(/proof block/i);
+  });
+
+  it("decides each DEFER row in the phase-3 triage ask and adds no closing ask (REQ-FLOW-074, REQ-FLOW-077)", () => {
+    const body = artifact(PR_RESOLVE).parsed.body;
+    const close = clause(body, "## Close");
+
+    // A round has one ask, and it is the triage table's: a second question at the close would
+    // put the same DEFER rows to the person twice. So the Close says where each row was
+    // decided and that it asks nothing more.
+    expect(close).toContain(
+      "Each DEFER row is decided in the phase-3 triage ask, which stays this round's one ask: " +
+        "its row carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the " +
+        "location is `—`), and the round adds no closing ask.",
+    );
+    // It follows the row paragraph and precedes the write-back paragraph: the sentence is
+    // about the row the two paragraphs above it describe.
+    expect(close.indexOf("never a comment body")).toBeLessThan(close.indexOf("Each DEFER row is decided"));
+    expect(close.indexOf("adds no closing ask")).toBeLessThan(close.indexOf("fourth write-back channel"));
+
+    // The triage section's own promise still holds beside it: after `accept` the only later
+    // interruption is the re-poll consent, which is a consent to fetch and not a closing ask.
+    const triage = clause(body, "## 3. Triage ask");
+    expect(triage).toContain("Then one ask closes triage");
+    expect(triage).toContain("the only later interruption is the re-poll consent below");
+
+    // The schedule fields are board's, named there: read its grammar rather than a literal.
+    const grammar = clause(artifact(BOARD).parsed.body, "## Deferral inbox");
+    expect(grammar).toContain("`by: <YYYY-MM-DD>` or `when: <trigger>`");
+    expect(grammar).toContain("name `files:` when the location is `—`");
   });
 
   it("closes on a next step derived from the run's own state", () => {
