@@ -6812,9 +6812,9 @@ A class's checks map to gates: \`tests-selected\` → \`test\` with the selected
 appended, the whole suite when the selection reads \`full\`, and no row when it
 names none; \`lint\` → \`lint\`; \`typecheck\` → \`typecheck\`; \`gates-all\`, an
 \`unclear\` class, or a test command that takes no file list → \`all\`. The other
-checks are the orchestrator's. On the final tree a \`product\` or stronger class
-runs \`all\`. This repository's CI provider is github-actions; where that
-reads \`unknown\`, the final tree runs \`all\` whatever the class.
+checks are the orchestrator's. On the final tree a \`product\` or stronger class runs \`all\`. This
+repository's CI provider is github-actions; where that reads \`unknown\` or is still an
+unresolved \`STAMITY\` substitution token, the final tree runs \`all\` whatever the class.
 
 \`all\` is a \`&&\` chain and stops at the first failing link. A gate the chain
 never reached is reported \`not-run\`, not \`pass\` — reporting an unreached gate as

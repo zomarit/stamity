@@ -93,6 +93,20 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit
+ *     q6t-test-runner-ci-line (run 2026-10-10_next-tier; review/14 as signed
+ *     off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on agents/stamity-test-runner.md, 8754 -> 8809 bytes
+ *     at an unchanged 157 lines in the corpus source: the Gate set's
+ *     `unknown`-provider sentence also fires where the provider "is still an
+ *     unresolved `STAMITY` substitution token", so a surface that copies the
+ *     body without substitution (the APM package) runs every gate. Three
+ *     lines moved, the paragraph's last three, rewrapped in place; the
+ *     detected fixture still renders the token as `github-actions`.
+ *
+ *     NOTHING else moved here.
+ *
  *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q5-usage-lines (run
  *     2026-10-10_next-tier; review/8 as signed off). ONE golden moved,
  *     SUBSTITUTION:

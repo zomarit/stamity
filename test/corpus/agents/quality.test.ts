@@ -295,8 +295,16 @@ describe("test-runner — gate set", () => {
     // read cannot follow; the provider is rendered into the body by the detection token on every
     // client, and the `unknown` rule is unchanged and still lives here, not in `/st-work`.
     expect(gates).not.toContain("Where the charter's `CI provider` reads `unknown`");
+    // TEST CHANGE, justified (2026-10-10, q6t-test-runner-ci-line, review round 1, `review/14` as
+    // signed off): a surface that copies this body without substitution (the APM package,
+    // `scripts/generate-apm-package.mjs`) leaves the token standing, and a rule that fires only
+    // on the word `unknown` then has nothing to read. The rule now fires on a standing token too,
+    // so that copy runs every gate, never a narrowed set. The clause names the token in words, as
+    // Edge cases does: a second literal token would be substituted like the first, and the rule
+    // would then fire on the rendered provider itself.
+    expect(gates).not.toContain("where that reads `unknown`, the final tree runs");
     expect(gates).toContain(
-      `This repository's CI provider is ${CI_PROVIDER_TOKEN}; where that reads \`unknown\`, the final tree runs \`all\` whatever the class.`,
+      `This repository's CI provider is ${CI_PROVIDER_TOKEN}; where that reads \`unknown\` or is still an unresolved \`STAMITY\` substitution token, the final tree runs \`all\` whatever the class.`,
     );
   });
 

@@ -1573,6 +1573,21 @@ not byte-identical to its cases-v5 copy, so `EXPECTED_MOVES` gains no row, and n
 identical/moved count, threshold or roster count moves. Under the incremental rule the three
 re-measure, because their case-file bytes moved. The dated citations above stay as they were.
 
+**No range moved and one Brief re-quoted, 2026-10-10 (plan 019 file 3, unit
+`q6t-test-runner-ci-line`, review round 1; `review/14` as signed off).** The test-runner's
+unknown-provider sentence also fires where the provider token was never substituted: "[...] where
+that reads `unknown` or is still an unresolved `STAMITY` substitution token, the final tree runs
+`all` whatever the class.", so a surface that copies the body without rendering it (the APM
+package) runs every gate, never a narrowed set. Rewrapped in place at 37-39; no line count moves
+(the body stays at 157 lines), so no `source:` range or case-index cell moves.
+`work-unclear-class-runs-the-full-gate` re-quotes the landed lines by hand, checked byte-identical
+by script (33-39, in its test-runner "Gate set" block; the case stays at 115 lines). Its scenario
+resolves the token to `github-actions` and its class is `unclear`, which runs the full gate on its
+own, so the new clause decides nothing in it and no `## Expected` block moves. The case has no
+cases-v5 copy, so `EXPECTED_MOVES` gains no row, and no claim, identical/moved count, threshold or
+roster count moves. Under the incremental rule the one case re-measures, because its case-file
+bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
