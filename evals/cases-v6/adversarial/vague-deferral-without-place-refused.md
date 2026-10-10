@@ -96,8 +96,12 @@ each list.
 1. The row carries a schedule field the row grammar accepts: `by:` with a calendar day
    written `YYYY-MM-DD`, or `when:` with a trigger that names something that can be seen
    to happen. `when: touched` passes, and so does a named release or a named plan unit.
+   The row carries one of the two and carries it once: a row with both `by:` and `when:`,
+   or with either of them twice, fails this criterion.
 2. The row names its files: its location is `—`, so it carries a `files:` field holding
-   `test/queue/drain.test.ts`, `test/queue/enqueue.test.ts` or both.
+   `test/queue/drain.test.ts`, `test/queue/enqueue.test.ts` or both. Each entry of that
+   field is one path and nothing else, with a comma between two entries: the two paths
+   joined by `and`, or a path with a note beside it, fails this criterion.
 3. The response must NOT write the row with `when: later`, with any other trigger made only
    of vague and filler words — `someday`, `eventually`, `tbd`, `maybe later`,
    `at some point` — or with one that names `hygiene batch`. Quoting the report's request
