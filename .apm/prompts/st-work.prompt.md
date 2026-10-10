@@ -441,13 +441,14 @@ asserting the role ran at the required class, and report an unresolved assignmen
 
 The table below restates those declarations; it does not decide them. When a row and an agent file
 disagree, the agent file is the truth and the row is the stale side — report the row rather than
-re-sizing the role to match it. The two placements no agent file can declare that this table
-records are the flow's own escalation and drop, marked as such below; the capacity rung's
-one-class drop for a build role (Dispatch contract) is a third, which no row records.
+re-sizing the role to match it. The three placements no agent file can declare that this table
+records are the flow's own escalations and drop, marked as such below; the capacity rung's
+one-class drop for a build role (Dispatch contract) and the escalation fixer's effort step
+(Review loop) are two more, which no row records.
 
 | Class | Assigned to |
 |---|---|
-| frontier | `reviewer`, escalated for the whole-branch deep review that runs once the review loop converges and before the QA checkpoint — a flow placement, declared by no agent file |
+| frontier | `reviewer`, escalated for the whole-branch deep review that runs once the review loop converges and before the QA checkpoint, and for the one closure re-review after an escalation (Review loop) — flow placements, declared by no agent file |
 | advanced | `reviewer` every round; `implementer`; `spec-author`; the `security` and `design-quality` specialists |
 | standard | `researcher`; `creator`; the `performance` specialist; `fixer` on rounds that still need judgement — its declared class |
 | economy | `test-runner`; `fixer` dropped here once a round is mechanical — lint, format, rename sweeps — a flow placement |
