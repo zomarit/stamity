@@ -1061,6 +1061,26 @@ describe("retireRow under the schedule rule (q9a-disposition)", () => {
     expect(rowsOf(await readText(dir, LEDGER))[0]?.["retired"]).toBe(`2026-10-10 ${disposition}`);
   });
 
+  // review/15, review/16, review/17: a slot holding only vague and filler words,
+  // or no letter and no digit at all, is refused like any other grammar problem.
+  it.each([
+    ["fixed later", "`fixed` names only the vague word `later`"],
+    ["cut: tbd", "`cut` names only the vague word `tbd`"],
+    ["scheduled board #42 · when later on", "`when` names the vague trigger `later`"],
+    ["scheduled board #42 · when —", "`when` names no trigger"],
+    ["fixed —", "`fixed` names no ref"],
+  ])("refuses %j from the cutover with why and next, the ledger byte-identical", async (disposition, problem) => {
+    const dir = tempDir();
+    const before = `${row(2)}\n${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const refusal = retire(dir, disposition, CUTOVER_AT);
+
+    await expect(refusal).rejects.toThrow(`ledger close --retired refused: ${problem}`);
+    await expect(refusal).rejects.toMatchObject({ code: "VALIDATION_ERROR", why: GRAMMAR_WHY, next: GRAMMAR_NEXT });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
   it("reads the grammar after the strip, so a control character cannot split a keyword past it", async () => {
     const dir = tempDir();
     await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });

@@ -16,6 +16,13 @@
  * calendar day, and any other shape are refused with a one-line problem naming
  * what is missing. Values dated before the cutover are never read against it.
  *
+ * Free text has to say something a reader can check. A trigger, a `fixed` ref
+ * and a `cut` reason whose every word is a vague or a filler word
+ * ({@link FILLER_WORDS}), at least one of them vague, are refused; and each of
+ * them, a board item and a handoff path must hold at least one letter or
+ * digit, so a lone dash is no trigger, no ref, no reason and no place. Words
+ * are compared as written, lower-cased: a look-alike letter is not folded.
+ *
  * Pure: text in, verdict out. A place is text and is never resolved or opened,
  * and a problem never quotes the caller's own words, only the grammar's and the
  * list's. No internal import, so it sits at kernel depth and both the ledger's
@@ -29,6 +36,44 @@ export const SCHEDULE_RULE_FROM = "2026-10-10";
 
 /** Triggers that name no event, so a row scheduled on one would never come back. */
 export const VAGUE_TRIGGERS = ["later", "someday", "eventually", "tbd", "hygiene batch"] as const;
+
+/**
+ * Words that add no event, run or reason to a vague word beside them, so
+ * `later on` and `maybe someday` say no more than `later` and `someday`.
+ * Closed-class words and hedges only, each one lower-case letters: a word a
+ * real trigger is made of (`touched`, `next`, `attended`, `close`, `release`)
+ * never belongs here, or `when touched` and `when next attended close` would
+ * stop parsing.
+ */
+export const FILLER_WORDS = [
+  "a",
+  "an",
+  "the",
+  "on",
+  "in",
+  "at",
+  "for",
+  "to",
+  "of",
+  "or",
+  "and",
+  "maybe",
+  "perhaps",
+  "probably",
+  "some",
+  "point",
+  "time",
+  "day",
+  "much",
+  "bit",
+  "not",
+  "yet",
+  "until",
+  "till",
+  "then",
+  "now",
+  "just",
+] as const;
 
 /** When a scheduled item comes back: on a day, or on an event. */
 export type Due = { readonly by: string } | { readonly when: string };
@@ -71,19 +116,60 @@ export function isIsoDate(text: string): boolean {
 }
 
 /**
- * The {@link VAGUE_TRIGGERS} word `trigger` amounts to, or `null`: the trigger
- * lower-cased, its inner spaces collapsed and its leading and trailing
- * punctuation and space trimmed, equals a list word, or holds `hygiene batch`
- * anywhere. Any other trigger, the empty one included, is `null`; whether an
- * empty trigger is allowed is the caller's to say.
+ * The words of `text`, lower-cased: its runs of letters and digits, everything
+ * else read as a gap. Punctuation, symbols, quotes and space therefore never
+ * make a word, and a text of those alone has none.
+ */
+function wordsOf(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word !== "");
+}
+
+/** Each {@link VAGUE_TRIGGERS} entry as its words, so the two-word entry matches as a phrase. */
+const VAGUE_PHRASES = VAGUE_TRIGGERS.map((entry) => ({ entry, words: entry.split(" ") }));
+
+const FILLERS: ReadonlySet<string> = new Set(FILLER_WORDS);
+
+/**
+ * The first {@link VAGUE_TRIGGERS} entry among `words` when every word belongs
+ * to a vague entry or is a {@link FILLER_WORDS} word, or `null`: when some word
+ * is neither, or when no word is vague (filler alone, or no word at all).
+ */
+function onlyVague(words: readonly string[]): string | null {
+  let found: string | null = null;
+  let at = 0;
+  while (at < words.length) {
+    const start = at;
+    const phrase = VAGUE_PHRASES.find((candidate) =>
+      candidate.words.every((word, offset) => words[start + offset] === word),
+    );
+    if (phrase !== undefined) {
+      found ??= phrase.entry;
+      at += phrase.words.length;
+    } else if (FILLERS.has(words[at] ?? "")) {
+      at += 1;
+    } else {
+      return null;
+    }
+  }
+  return found;
+}
+
+/**
+ * The {@link VAGUE_TRIGGERS} word `trigger` amounts to, or `null`. A trigger is
+ * vague when its every word ({@link wordsOf}) is a vague or a
+ * {@link FILLER_WORDS} word and at least one is vague (`later`, `Later.`,
+ * `maybe later`, a backticked `later`), or when, lower-cased with its spaces
+ * collapsed, it holds `hygiene batch` anywhere. Any other trigger is `null`,
+ * the empty and the wordless one included; whether a trigger with no word is
+ * allowed is the caller's to say.
  */
 export function vagueTrigger(trigger: string): string | null {
-  const folded = trigger
-    .toLowerCase()
-    .replace(/\s+/gu, " ")
-    .replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, "");
-  for (const word of VAGUE_TRIGGERS) if (folded === word) return word;
-  return folded.includes("hygiene batch") ? "hygiene batch" : null;
+  const vague = onlyVague(wordsOf(trigger));
+  if (vague !== null) return vague;
+  return trigger.toLowerCase().replace(/\s+/gu, " ").includes("hygiene batch") ? "hygiene batch" : null;
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; problem: string };
@@ -111,7 +197,7 @@ function parseDue(text: string): Parsed<Due> {
       ? { ok: true, value: { by: rest } }
       : { ok: false, problem: "`by` names no real calendar day as YYYY-MM-DD" };
   }
-  if (rest === "") return { ok: false, problem: "`when` names no trigger" };
+  if (wordsOf(rest).length === 0) return { ok: false, problem: "`when` names no trigger" };
   const vague = vagueTrigger(rest);
   if (vague !== null) {
     return {
@@ -135,6 +221,8 @@ function parsePlace(text: string): Parsed<Place> {
       ? refused
       : { ok: true, value: { kind: "plan", path, anchor } };
   }
+  // A place with no letter and no digit (a lone dash, a lone dot) names nothing.
+  if (wordsOf(target).length === 0) return refused;
   if (match[1] === "board") {
     return vagueTrigger(target) === null ? { ok: true, value: { kind: "board", item: target } } : refused;
   }
@@ -182,12 +270,30 @@ export function parseDisposition(text: string): { ok: true; value: Disposition }
   const rest = value.slice(match[0].length);
   if (match[1] === "scheduled") return parseScheduled(rest);
   const said = rest.trim();
+  const words = wordsOf(said);
+  // The only-words rule, not `vagueTrigger`'s `hygiene batch` anywhere: a ref
+  // such as `in the hygiene batch of 2026-10-08` names a run a reader can find.
+  const vague = onlyVague(words);
   if (match[1] === "fixed") {
-    return said === ""
-      ? { ok: false, problem: "`fixed` names no ref: say what fixed it, as `fixed in <run id>`" }
-      : { ok: true, value: { kind: "fixed", ref: said } };
+    if (words.length === 0) {
+      return { ok: false, problem: "`fixed` names no ref: say what fixed it, as `fixed in <run id>`" };
+    }
+    if (vague !== null) {
+      return {
+        ok: false,
+        problem: `\`fixed\` names only the vague word \`${vague}\`, which no reader can check: say what fixed it, as \`fixed in <run id>\``,
+      };
+    }
+    return { ok: true, value: { kind: "fixed", ref: said } };
   }
-  return said === ""
-    ? { ok: false, problem: "`cut` names no reason: say why it was dropped, as `cut <reason>`" }
-    : { ok: true, value: { kind: "cut", reason: said } };
+  if (words.length === 0) {
+    return { ok: false, problem: "`cut` names no reason: say why it was dropped, as `cut <reason>`" };
+  }
+  if (vague !== null) {
+    return {
+      ok: false,
+      problem: `\`cut\` names only the vague word \`${vague}\`, which is no reason: say why it was dropped, as \`cut <reason>\``,
+    };
+  }
+  return { ok: true, value: { kind: "cut", reason: said } };
 }

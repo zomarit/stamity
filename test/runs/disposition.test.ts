@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  FILLER_WORDS,
   isIsoDate,
   parseDisposition,
   SCHEDULE_RULE_FROM,
@@ -14,7 +15,8 @@ import {
  *
  * Pure functions over strings, so every case feeds them hand-built text; no
  * value here is copied from a committed ledger. Plan paths are text the grammar
- * never opens, so none of them needs to exist.
+ * never opens, so none of them needs to exist, and none names a tracked file:
+ * the test-input guard reads a tracked path literal as a read this file declares.
  */
 
 /** The problem text of a refused value, or a marker that makes an accepted one fail the case. */
@@ -27,6 +29,49 @@ describe("SCHEDULE_RULE_FROM and VAGUE_TRIGGERS", () => {
   it("cuts over on 2026-10-10 and lists the five vague triggers", () => {
     expect(SCHEDULE_RULE_FROM).toBe("2026-10-10");
     expect([...VAGUE_TRIGGERS]).toEqual(["later", "someday", "eventually", "tbd", "hygiene batch"]);
+  });
+});
+
+describe("FILLER_WORDS", () => {
+  it("pins the words that add no event to a vague one", () => {
+    expect([...FILLER_WORDS]).toEqual([
+      "a",
+      "an",
+      "the",
+      "on",
+      "in",
+      "at",
+      "for",
+      "to",
+      "of",
+      "or",
+      "and",
+      "maybe",
+      "perhaps",
+      "probably",
+      "some",
+      "point",
+      "time",
+      "day",
+      "much",
+      "bit",
+      "not",
+      "yet",
+      "until",
+      "till",
+      "then",
+      "now",
+      "just",
+    ]);
+  });
+
+  it("holds no word the product's own triggers use, and no vague word", () => {
+    // `when touched` and `when next attended close` are the triggers the inbox
+    // and the handoff write; a filler word among them would refuse those.
+    const fillers: readonly string[] = FILLER_WORDS;
+    for (const word of ["touched", "next", "attended", "close", "release"]) expect(fillers).not.toContain(word);
+    for (const vague of VAGUE_TRIGGERS) for (const word of vague.split(" ")) expect(fillers).not.toContain(word);
+    for (const word of fillers) expect(word).toMatch(/^[a-z]+$/u);
   });
 });
 
@@ -77,6 +122,34 @@ describe("vagueTrigger", () => {
       expect(vagueTrigger(trigger)).toBeNull();
     },
   );
+
+  // review/15: a trigger whose every word is a vague or a filler word, one of
+  // them vague, names no event either, however it is padded or quoted.
+  it.each([
+    ["later on", "later"],
+    ["maybe later", "later"],
+    ["`later`", "later"],
+    ["Later — maybe", "later"],
+    ["not until LATER, probably", "later"],
+    ["at some point, eventually", "eventually"],
+    ["tbd/later", "tbd"],
+    ["some day or someday", "someday"],
+    ["in the hygiene-batch", "hygiene batch"],
+  ])("names %j, only vague and filler words, as the vague word %j", (trigger, word) => {
+    expect(vagueTrigger(trigger)).toBe(word);
+  });
+
+  it.each([
+    "next attended close",
+    "later, when the release ships",
+    "maybe",
+    "not yet",
+    "the hygiene of the batch",
+    "—",
+    "?!",
+  ])("returns null for %j: a word outside both lists, or no vague word at all", (trigger) => {
+    expect(vagueTrigger(trigger)).toBeNull();
+  });
 });
 
 describe("parseDisposition", () => {
@@ -104,11 +177,11 @@ describe("parseDisposition", () => {
   });
 
   it("accepts a scheduled plan unit with a date", () => {
-    expect(parseDisposition("scheduled plan docs/plans/015-board-writes.md#b1-board-contract · by 2026-11-01")).toEqual({
+    expect(parseDisposition("scheduled plan docs/plans/990-example.md#b1-board-contract · by 2026-11-01")).toEqual({
       ok: true,
       value: {
         kind: "scheduled",
-        place: { kind: "plan", path: "docs/plans/015-board-writes.md", anchor: "b1-board-contract" },
+        place: { kind: "plan", path: "docs/plans/990-example.md", anchor: "b1-board-contract" },
         due: { by: "2026-11-01" },
       },
     });
@@ -178,12 +251,60 @@ describe("parseDisposition", () => {
     ["a handoff place that is no path", "scheduled handoff later · by 2026-11-01", "the place is none of"],
     ["a board place whose item is a vague word", "scheduled board tbd · by 2026-11-01", "the place is none of"],
     ["a board place with no item", "scheduled board · by 2026-11-01", "the place is none of"],
+    // review/15: a trigger of vague and filler words only.
+    ["a vague trigger with a filler word after it", "scheduled board #42 · when later on", "vague trigger `later`"],
+    ["a vague trigger with a filler word before it", "scheduled board #42 · when: maybe later", "vague trigger `later`"],
+    ["a vague trigger in backticks", "scheduled board #42 · when `later`", "vague trigger `later`"],
+    ["a vague trigger among several filler words", "scheduled board #42 · when not until some point, eventually", "vague trigger `eventually`"],
+    ["a board place whose item is vague and filler words", "scheduled board the later · by 2026-11-01", "the place is none of"],
+    // review/16: a `fixed` ref and a `cut` reason of vague and filler words only.
+    ["`fixed` with a vague word for a ref", "fixed later", "`fixed` names only the vague word `later`"],
+    ["`fixed:` with a vague word for a ref", "fixed: tbd", "`fixed` names only the vague word `tbd`"],
+    ["`fixed` with a vague word in backticks", "fixed `later`", "`fixed` names only the vague word `later`"],
+    ["`fixed` in the hygiene batch, no run named", "fixed in the hygiene batch", "`fixed` names only the vague word `hygiene batch`"],
+    ["`cut` with a vague word for a reason", "cut someday", "`cut` names only the vague word `someday`"],
+    ["`cut:` with a vague word for a reason", "cut: tbd", "`cut` names only the vague word `tbd`"],
+    ["`cut` with vague and filler words for a reason", "cut: maybe later, or not", "`cut` names only the vague word `later`"],
+    // review/17: the zero-word rows, a slot holding no letter and no digit.
+    ["a dash-only trigger", "scheduled board #42 · when —", "`when` names no trigger"],
+    ["a hyphen-only trigger after a colon", "scheduled board #42 · when: -", "`when` names no trigger"],
+    ["a punctuation-only trigger", "scheduled board #42 · when ?!...", "`when` names no trigger"],
+    ["a symbol-only trigger", "scheduled board #42 · when ~ + = ` $", "`when` names no trigger"],
+    ["a dash-only board item", "scheduled board — · by 2026-11-01", "the place is none of"],
+    ["a symbol-only board item", "scheduled board # · when touched", "the place is none of"],
+    ["a lone dot as a handoff place", "scheduled handoff . · by 2026-11-01", "the place is none of"],
+    ["a lone slash as a handoff place", "scheduled handoff / · by 2026-11-01", "the place is none of"],
+    ["dots and slashes as a handoff place", "scheduled handoff ../.. · by 2026-11-01", "the place is none of"],
+    ["a dash-only ref", "fixed —", "`fixed` names no ref"],
+    ["a punctuation-only ref", "fixed: ...", "`fixed` names no ref"],
+    ["a hyphen-only reason", "cut -", "`cut` names no reason"],
+    ["a punctuation-only reason", "cut: ?!", "`cut` names no reason"],
   ])("refuses %s, naming its problem", (_label, text, fragment) => {
     const result = parseDisposition(text);
     expect(result.ok).toBe(false);
     expect(problemOf(text)).toContain(fragment);
     // One line, so the refusal reads as the one `error:` line it lands in.
     expect(problemOf(text)).not.toMatch(/[\r\n]/u);
+  });
+
+  it.each([
+    "fixed in r2",
+    "fixed by /st-quick",
+    "fixed later in r2",
+    "fixed in the hygiene batch of 2026-10-08",
+    "fixed 7",
+    "cut: out of scope",
+    "cut accepted risk: no exploit path",
+    "cut: later is fine, the flag is off",
+    // Filler words alone name no vague word, so the rule has nothing to refuse.
+    "cut: not now",
+    "scheduled board #42 · when touched",
+    "scheduled board #42 · when next attended close",
+    "scheduled board #42 · when later today's release ships",
+    "scheduled board 7 · when: the next client release",
+    "scheduled handoff notes.md · by 2026-11-01",
+  ])("still accepts %j, which names a word outside both lists", (text) => {
+    expect(parseDisposition(text).ok, problemOf(text)).toBe(true);
   });
 
   it("names both problems when the place and the due part are wrong together", () => {
@@ -203,6 +324,14 @@ describe("parseDisposition", () => {
     ]) {
       const problem = problemOf(text);
       for (const word of words) expect(problem).not.toContain(word);
+    }
+  });
+
+  it("names the list word, never the caller's spelling of it, when a ref or a reason is vague", () => {
+    for (const text of ["fixed LATER, Maybe", "cut: Perhaps  SOMEDAY"]) {
+      const problem = problemOf(text);
+      expect(problem).toMatch(/names only the vague word `(later|someday)`/u);
+      for (const written of ["LATER", "Maybe", "Perhaps", "SOMEDAY"]) expect(problem).not.toContain(written);
     }
   });
 });

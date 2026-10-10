@@ -95,22 +95,42 @@ const duplicateIds = (ledgerPath: string, rows: readonly LedgerRow[]): string[] 
 /** A `retired` value's leading date, and the disposition after it (empty when the date stands alone). */
 const RETIRED_LEAD = /^(\d{4}-\d{2}-\d{2})(?:\s+|$)/u;
 
+/** The UTC date a run folder's name opens with, read from its ledger's path; `null` when the folder carries none. */
+const runDateOf = (ledgerPath: string): string | null =>
+  /^\.stamity\/runs\/(\d{4}-\d{2}-\d{2})_[^/]*\/ledger\.jsonl$/u.exec(ledgerPath)?.[1] ?? null;
+
 /**
- * `<ledger>#<id>: <problem>` for every `retired` value dated on or after
- * {@link SCHEDULE_RULE_FROM} whose disposition, its leading date stripped, does
- * not parse under the schedule rule's grammar (REQ-FLOW-076). A value dated
- * earlier, or carrying no leading date, is not read here: the rule binds new
- * values only, and an undated one is the unaccounted check's to name.
+ * `<ledger>#<id>: <problem>` for every `retired` value the schedule rule
+ * (REQ-FLOW-076) binds whose disposition, its leading date stripped, does not
+ * parse under the rule's grammar.
+ *
+ * Which values it binds is read from two dates. In a ledger whose run is dated
+ * on or after {@link SCHEDULE_RULE_FROM}, every `retired` value is bound,
+ * whatever date it carries or none: the leading date is text in the committed
+ * line, so it cannot take its own value out of the rule (review/18). There a
+ * date earlier than the run's is a problem of its own, since no row is retired
+ * before its run exists; a missing date stays the unaccounted check's to name.
+ * In any other ledger a value is bound by its own leading date alone, as
+ * before: one dated earlier than the cutover, or undated, is not read here.
  */
-const retiredProblems = (ledgerPath: string, rows: readonly LedgerRow[]): string[] =>
-  rows.flatMap((row) => {
-    const value = row.retired?.trim() ?? "";
+const retiredProblems = (ledgerPath: string, rows: readonly LedgerRow[]): string[] => {
+  const runDate = runDateOf(ledgerPath);
+  const ruledRun = runDate !== null && runDate >= SCHEDULE_RULE_FROM;
+  return rows.flatMap((row) => {
+    if (row.retired === null) return [];
+    const value = row.retired.trim();
     const lead = RETIRED_LEAD.exec(value);
     const date = lead?.[1];
-    if (lead === null || date === undefined || date < SCHEDULE_RULE_FROM) return [];
-    const parsed = parseDisposition(value.slice(lead[0].length));
-    return parsed.ok ? [] : [`${ledgerPath}#${row.id}: ${parsed.problem}`];
+    if (!ruledRun && (date === undefined || date < SCHEDULE_RULE_FROM)) return [];
+    const problems: string[] = [];
+    if (ruledRun && date !== undefined && date < runDate) {
+      problems.push(`\`retired\` is dated ${date}, before its run's date ${runDate}`);
+    }
+    const parsed = parseDisposition(value.slice(lead?.[0].length ?? 0));
+    if (!parsed.ok) problems.push(parsed.problem);
+    return problems.map((problem) => `${ledgerPath}#${row.id}: ${problem}`);
   });
+};
 
 /** `<ledger>#<id>` for every row a committed ledger left `open`. */
 const openRowLabels = (ledgerPath: string, rows: readonly LedgerRow[]): string[] =>
@@ -220,7 +240,8 @@ describe("committed run ledgers", () => {
   it("holds every `retired` value dated from the cutover to the schedule rule's grammar", () => {
     // From 2026-10-10 a retirement names how the deferral left — fixed, cut, or
     // scheduled to a place with a date or a trigger — so a row cannot leave the
-    // inbox on "scheduled later" and never come back. Earlier values stay valid.
+    // inbox on "scheduled later" and never come back. Earlier values stay valid,
+    // except in a run dated from the cutover, where every value is read.
     const problems = LEDGERS.flatMap((path) => retiredProblems(path, PARSED.get(path)?.rows ?? []));
     expect(problems, `${problems.length} \`retired\` value(s) outside the schedule rule`).toEqual([]);
   });
@@ -376,6 +397,79 @@ describe("fixtures — the gate fails where it must", () => {
     expect(problems).toEqual([]);
     expect(retiredProblems(LEDGER, rows)).toEqual([]);
     expect(unaccountedDeferrals(LEDGER, rows, new Set())).toEqual([]);
+  });
+
+  it("(p) names a value from the cutover whose slot holds only vague and filler words, or no word", () => {
+    // review/15, review/16, review/17: the gate reads the writer's grammar, so
+    // what `ledger close --retired` refuses a hand-written line cannot carry.
+    const retiredAs = (n: number, retired: string): string =>
+      row({ id: `r1/prove/${n}`, state: "deferred", rationale: "r", retired });
+    const text = [
+      retiredAs(20, "2026-10-10 fixed later"),
+      retiredAs(21, "2026-10-10 cut: tbd"),
+      retiredAs(22, "2026-10-10 scheduled board #42 · when maybe later"),
+      retiredAs(23, "2026-10-10 scheduled board #42 · when —"),
+      retiredAs(24, "2026-10-10 fixed —"),
+      retiredAs(25, "2026-10-10 fixed in r2"),
+    ].join("\n");
+    const { rows, problems } = parseLedger(LEDGER, text);
+    expect(problems).toEqual([]);
+    const named = retiredProblems(LEDGER, rows);
+    expect(named.map((problem) => problem.slice(0, problem.indexOf(": ")))).toEqual(
+      [20, 21, 22, 23, 24].map((n) => `${LEDGER}#r1/prove/${n}`),
+    );
+    expect(named[0]).toContain("`fixed` names only the vague word `later`");
+    expect(named[1]).toContain("`cut` names only the vague word `tbd`");
+    expect(named[2]).toContain("vague trigger `later`");
+    expect(named[3]).toContain("`when` names no trigger");
+    expect(named[4]).toContain("`fixed` names no ref");
+  });
+
+  it("(q) holds every `retired` value of a run dated from the cutover, a back-dated one included", () => {
+    // review/18: a value's own leading date is text in the committed line, so it
+    // cannot take the value out of the rule. A run that started on or after the
+    // cutover has every `retired` value read, and a date before the run's own
+    // is a problem by itself: no row is retired before its run exists.
+    const ruled = ".stamity/runs/2026-10-12_fixture/ledger.jsonl";
+    const retiredAs = (n: number, retired: string): string =>
+      row({ id: `r1/prove/${n}`, state: "deferred", rationale: "r", retired });
+    const text = [
+      retiredAs(30, "2026-10-09 scheduled to L2, trigger: x"),
+      retiredAs(31, "2026-10-11 fixed in r2"),
+      retiredAs(32, "2026-10-12 fixed in r2"),
+      retiredAs(33, "2026-10-13 scheduled board #42 · when touched"),
+      retiredAs(34, "scheduled later"),
+      retiredAs(35, "2026-09-30"),
+    ].join("\n");
+    const { rows, problems } = parseLedger(ruled, text);
+    expect(problems).toEqual([]);
+    expect(retiredProblems(ruled, rows)).toEqual([
+      `${ruled}#r1/prove/30: \`retired\` is dated 2026-10-09, before its run's date 2026-10-12`,
+      `${ruled}#r1/prove/30: \`scheduled\` names no \` · by <YYYY-MM-DD>\` or \` · when <trigger>\` after its place`,
+      `${ruled}#r1/prove/31: \`retired\` is dated 2026-10-11, before its run's date 2026-10-12`,
+      `${ruled}#r1/prove/34: \`scheduled\` names no \` · by <YYYY-MM-DD>\` or \` · when <trigger>\` after its place`,
+      `${ruled}#r1/prove/35: \`retired\` is dated 2026-09-30, before its run's date 2026-10-12`,
+      `${ruled}#r1/prove/35: the disposition is empty: write \`fixed <ref>\`, \`cut <reason>\` or \`scheduled <place> · by <YYYY-MM-DD> | when <trigger>\``,
+    ]);
+    // The back-dated value passed both checks before: the older one reads only its shape.
+    expect(unaccountedDeferrals(ruled, rows.slice(0, 1), new Set())).toEqual([]);
+  });
+
+  it("(r) keeps a run dated before the cutover on its values' own dates", () => {
+    // The same rows under a run of the day before: a value dated before the
+    // cutover stays unread, and one dated from it is held to the grammar.
+    const earlier = ".stamity/runs/2026-10-09_fixture/ledger.jsonl";
+    const text = [
+      row({ id: "r1/prove/40", state: "deferred", rationale: "r", retired: "2026-10-09 scheduled to L2, trigger: x" }),
+      row({ id: "r1/prove/41", state: "deferred", rationale: "r", retired: "2026-10-08 later" }),
+      row({ id: "r1/prove/42", state: "deferred", rationale: "r", retired: "2026-10-10 scheduled later" }),
+      row({ id: "r1/prove/43", state: "deferred", rationale: "r", retired: "scheduled later" }),
+    ].join("\n");
+    const { rows, problems } = parseLedger(earlier, text);
+    expect(problems).toEqual([]);
+    const named = retiredProblems(earlier, rows);
+    expect(named).toHaveLength(1);
+    expect(named[0]?.startsWith(`${earlier}#r1/prove/42: \`scheduled\` names no `), named[0]).toBe(true);
   });
 
   it("(g) fails on two rows sharing one id", () => {
