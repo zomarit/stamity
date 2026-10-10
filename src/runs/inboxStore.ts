@@ -219,7 +219,8 @@ function parseBullet(line: number, bullet: string, belowRule: boolean): InboxRow
   const fail = (message: string): InboxProblem => ({ line, message });
   const fields = bullet.split(" · ");
 
-  const sourceIndex = fields.findIndex((field) => field.startsWith("source: "));
+  // Space before `source:` does not hide it: each field after it is read with that space dropped too.
+  const sourceIndex = fields.findIndex((field) => field.trimStart().startsWith("source: "));
   if (sourceIndex === -1) return fail("no `source: <writer>` field");
   if (sourceIndex < 3) return fail("`source:` arrives before severity, location and description are all present");
   const severity = fields[0] ?? "";
@@ -228,7 +229,7 @@ function parseBullet(line: number, bullet: string, belowRule: boolean): InboxRow
   if (location.trim() === "") return fail("the location field is a `file:line` or `—`, never empty");
   const description = fields.slice(2, sourceIndex).join(" · ");
   if (description.trim() === "") return fail("the description field is empty");
-  const writer = (fields[sourceIndex] ?? "").slice("source: ".length).trim();
+  const writer = (fields[sourceIndex] ?? "").trimStart().slice("source: ".length).trim();
   if (writer === "") return fail("`source:` names no writer");
 
   const rest = fields.slice(sourceIndex + 1);

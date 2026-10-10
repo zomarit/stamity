@@ -161,6 +161,18 @@ describe("parseInbox", () => {
     ]);
   });
 
+  // review/98: `source:` is found however much space stands before it, as `Ref:` is (qa/6). It
+  // was refused as a row with no `source:` field, and a writer was sent looking for one.
+  it("reads a source: with more than one space before it as the row's source field", () => {
+    const parsed = parseInbox(
+      ["- Minor · src/a.ts:1 · d ·  source: /st-work · Ref: r.jsonl#a/1", "- Minor · src/a.ts:1 · d ·   source: "].join("\n"),
+    );
+
+    expect(parsed.rows).toMatchObject([{ line: 1, description: "d", source: "/st-work", ref: "r.jsonl#a/1" }]);
+    // The field is found, so what it lacks is named.
+    expect(parsed.problems).toEqual([{ line: 2, message: "`source:` names no writer" }]);
+  });
+
   it("ignores prose, headings, blanks and indented bullets, and keeps parsing past a bad bullet", () => {
     const text = "# Deferral inbox\n\nRows: 3.\n  - indented\n- Minor · — · d\n- Warning · a.ts:1 · d · source: x";
     const parsed = parseInbox(text);
