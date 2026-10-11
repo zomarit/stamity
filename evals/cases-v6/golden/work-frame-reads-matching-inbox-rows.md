@@ -4,6 +4,7 @@ class: golden
 claim: "At Frame a work run reads the deferral inbox through the `ledger` verb's `inbox` query, never the file whole while that query runs, and surfaces what it returns and nothing more: the row whose `files:` names a path the change touches, the row tagged `decision-waiting`, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; the three rows that match nothing are counted and never listed, folded into the change or asked about."
 source: content/commands/st-work.md:21-30
 metric: rubric
+floor: true
 ---
 
 ## Brief

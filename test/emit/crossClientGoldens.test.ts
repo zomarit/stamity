@@ -186,6 +186,33 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-11, plan 019 file 3, the close's fix round (run
+  //     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,
+  //     review/101, each decided by the person at the run's close). One
+  //     touchpoint moved, plus the manifest rows that record it. No emitted
+  //     path was added or removed.
+  //
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 20597 -> 20726,
+  //       `.agents/skills/st-rework/SKILL.md` 20644 -> 20773), by +129 bytes,
+  //       the corpus source's own delta (20820 -> 20949, 307 -> 309 lines),
+  //       in two hunks. `## 4. Routing`: the DEFER bullet reads "That inbox
+  //       has three guaranteed readers — `/st-board` fill triages it,
+  //       `/st-work` surfaces overlapping items when its framing phase touches
+  //       the same files, and `/st-plan` folds overlapping items into its
+  //       shared intake", where it named two; `/st-board`'s census, which owns
+  //       the count, lists three (three lines become four; qa/5).
+  //       `### Critical Deferral Protocol`: "The run then closes naming the
+  //       unwritten row as its open item." stands after "with neither, no row
+  //       is written." (two lines become three; review/101).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 row of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, every rule, every
+  //       skill, every other touchpoint, and every companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-10, plan 019 file 3, the whole-branch review's fix round, part
   //     B (run 2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-069, REQ-FLOW-074
   //     to REQ-FLOW-077, ledger rows review/69, review/89 as review/99

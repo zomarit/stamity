@@ -93,6 +93,19 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-11, plan 019 file 3, the close's fix round (run
+ *     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,
+ *     review/101, each decided by the person at the run's close). NOTHING
+ *     moved in this suite; the row keeps the two ledgers in step. The round's
+ *     one emitted change is a touchpoint, `commands/st-rework.md` (20820 ->
+ *     20949 bytes, 307 -> 309 lines): the Routing section's DEFER bullet
+ *     names the inbox's three guaranteed readers, `/st-plan`'s intake the
+ *     third, as `/st-board`'s census lists them, and the Critical Deferral
+ *     Protocol says the run closes naming the unwritten row as its open item
+ *     when no row is written for want of both a path and a day. It is not a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries it; the sibling suite itemises it.
+ *
  *   - 2026-10-10, plan 019 file 3, the whole-branch review's fix round, part
  *     B (run 2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-069, REQ-FLOW-074 to
  *     REQ-FLOW-077, ledger rows review/69, review/89 as review/99 widened

@@ -2,7 +2,7 @@
 id: rework-next-step-derived-from-run-state
 class: golden
 claim: "A /st-rework run closes on its proof block and also on one recommended next step derived from that run's own state — a standing [NEEDS CLARIFICATION] marker, a plan persisted on stop, or DEFER rows alone — rather than from a fixed menu."
-source: content/commands/st-rework.md:272-280
+source: content/commands/st-rework.md:274-282
 metric: rubric
 ---
 

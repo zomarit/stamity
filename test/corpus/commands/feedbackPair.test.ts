@@ -419,9 +419,19 @@ describe("rework — leftover scan and routing", () => {
     expect(routing).toMatch(/\bREVISE\b/);
     expect(routing).toMatch(/\bDEFER\b/);
     expect(routing).toContain(INBOX);
-    // The inbox is read, not just written: both readers are named where the rows land.
+    // The inbox is read, not just written: its readers are named where the rows land.
     expect(routing).toMatch(/\/st-board/);
     expect(routing).toMatch(/\/st-work/);
+    // Added 2026-10-11 (run 2026-10-10_next-tier, the close's fix round; ledger row `qa/5`): the
+    // sentence said "two guaranteed readers" while `/st-board`'s census, which owns the count,
+    // lists three, `/st-plan`'s intake the third. The count is read off the census here, so the
+    // two texts cannot part again unseen, and the third reader is named beside the other two.
+    const census = /\*\*Readers, (\w+), all mandatory:\*\*/.exec(
+      clause(artifact(BOARD).parsed.body, "## Deferral inbox"),
+    )?.[1];
+    expect(census, "`/st-board`'s census states no reader count").toBeDefined();
+    expect(routing).toContain(`That inbox has ${census ?? ""} guaranteed readers`);
+    expect(routing).toContain("and `/st-plan` folds overlapping items into its shared intake");
   });
 
   it("routes every (severity, scope) pair — the table is total over its own scan", () => {
@@ -545,6 +555,14 @@ describe("rework — leftover scan and routing", () => {
     expect(protocol.indexOf(noPath)).toBeGreaterThan(protocol.indexOf("the reader refuses a touch trigger that names no path."));
     expect(protocol.indexOf(noPath)).toBeLessThan(
       protocol.indexOf("A row missing the date or the rationale is not this record."),
+    );
+    // Added 2026-10-11 (run 2026-10-10_next-tier, the close's fix round; ledger row `review/101`):
+    // only the unanswered default said how the run closes with no row written, so a user who gave
+    // the rationale and named no day had no such sentence, while REQ-FLOW-077's criterion asserts
+    // it for that case too. It stands straight after the sentence that writes no row.
+    const closes = "The run then closes naming the unwritten row as its open item.";
+    expect(protocol).toContain(
+      `${noPath} ${closes} A row missing the date or the rationale is not this record.`,
     );
     expect(protocol).toContain(
       "**Default if the rationale question goes unanswered:** the deferral stands and the row waits — the run closes naming the unwritten `critical-deferred` row as its open item.",

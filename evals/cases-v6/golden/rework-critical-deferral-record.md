@@ -2,7 +2,7 @@
 id: rework-critical-deferral-record
 class: golden
 claim: "A Critical finding the user wants deferred is deferred rather than vetoed, and the record is what the run insists on: the specific consequence named in one line, a written rationale that a bare 'defer' does not satisfy, and an inbox row that opens with /st-board's four-field grammar and then carries its schedule field, the critical-deferred tag, the date and that rationale."
-source: content/commands/st-rework.md:187-210
+source: content/commands/st-rework.md:188-212
 metric: rubric
 ---
 
@@ -32,7 +32,8 @@ A Critical finding the user wants deferred **is deferred** — with a record:
    the user names one). A row whose location is `—` adds `files: <path>` straight after
    `when: touched`, or carries the day the user names: the reader refuses a touch trigger that
    names no path. With no path to name, the rationale question also asks for the day; with neither,
-   no row is written. A row missing the date or the rationale is not this record.
+   no row is written. The run then closes naming the unwritten row as its open item. A row missing
+   the date or the rationale is not this record.
 
 Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
 the branch next. **Default if the rationale question goes unanswered:** the deferral stands and

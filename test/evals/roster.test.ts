@@ -7,8 +7,10 @@
 // range could all drift away from the case file while the set stayed green — which is
 // exactly what happened to `work-proof-block-fields` when its eighth binding criterion
 // landed. This gate recomputes each cell from the files.
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type CaseFile, SET_FILE, caseFiles, readRepoFile } from "./support.ts";
+import { type CaseFile, REPO_ROOT, SET_FILE, caseFiles, readRepoFile } from "./support.ts";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
 import { nonNegotiableRows, parseCase } from "../../scripts/eval/instrument.mjs";
 
@@ -138,6 +140,56 @@ for (const file of cases) {
   });
 }
 
+/**
+ * Added 2026-10-11 (run 2026-10-10_next-tier, the close's fix round; ledger row `qa/7`). The
+ * section's opening sentence typed two counts, the cases the set added and the groups they stand
+ * in, and each batch of new cases moved the first and left the second: it read "in four groups"
+ * over eight. Both are derived here. A group is a paragraph of `## What v7 adds` whose bold head
+ * opens with the number of cases it adds ("Seven cases added, ...", "Three charter-floor
+ * twins."); a head that moves, fixes or re-quotes cases is none. The heads' numbers have to sum
+ * to the cases the case tree holds past the carried roster, so a head this pattern misses, or one
+ * it takes by mistake, fails here by name and not as a silent miscount.
+ */
+const CARRIED_CASES_DIR = "evals/cases-v5";
+const SMALL = [
+  "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+  "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+/** One to ninety-nine as the set page spells them: `sixty-three`. */
+const numberWord = (value: number): string =>
+  value < 20
+    ? (SMALL[value] ?? "")
+    : `${TENS[Math.floor(value / 10)] ?? ""}${value % 10 === 0 ? "" : `-${SMALL[value % 10] ?? ""}`}`;
+const WORD_VALUES = new Map(Array.from({ length: 99 }, (_, index) => [numberWord(index + 1), index + 1]));
+const GROUP_HEAD =
+  /^\*\*([A-Z][a-z]+(?:-[a-z]+)?) (?:[a-z-]+ )?(?:probes|twins|cases?)(?: added)?(?=[.,]| and )/;
+
+describe("SET-v7 What v7 adds — the opening counts are derived, not typed", () => {
+  it("states the cases the set added and the groups their heads make", () => {
+    const section = readRepoFile(SET_FILE).split("\n## What v7 adds\n")[1]?.split("\n## ")[0] ?? "";
+    const heads = section.split("\n").flatMap((line) => {
+      const word = GROUP_HEAD.exec(line)?.[1];
+      return word === undefined ? [] : [{ line, count: WORD_VALUES.get(word.toLowerCase()) ?? Number.NaN }];
+    });
+    const carried = readdirSync(join(REPO_ROOT, ...CARRIED_CASES_DIR.split("/")), {
+      recursive: true,
+      encoding: "utf8",
+    }).filter((path) => path.endsWith(".md")).length;
+    const added = cases.length - carried;
+
+    expect(added, `the case tree holds no case past the roster ${CARRIED_CASES_DIR} carries`).toBeGreaterThan(0);
+    expect(
+      heads.reduce((sum, head) => sum + head.count, 0),
+      `${SET_FILE}: the group heads do not add up to the ${String(added)} cases the set added:\n` +
+        heads.map((head) => head.line).join("\n"),
+    ).toBe(added);
+    const opening = numberWord(added);
+    expect(section).toContain(
+      `\n${opening.charAt(0).toUpperCase()}${opening.slice(1)} cases, in ${numberWord(heads.length)} groups, and one change`,
+    );
+  });
+});
 
 /** `| \`case-id\` | class | yes/no | B3, B4 |` rows of the appendix table only. */
 const appendixRows = (): { id: string; rows: string[] }[] =>
