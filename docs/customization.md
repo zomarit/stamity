@@ -179,7 +179,27 @@ and skills reach them through the core projection.
 ## What does a skill override carry with it?
 
 A skill override's directory is projected entire. That means `SKILL.md` plus every support file
-beneath it, and the override's own files rather than those of the skill whose id it took.
+beneath it. Those files are all that `sync` writes for the skill: it writes none of the files of
+the skill whose id the override took.
+
+It does not delete them either. A support file the replaced skill had, and your override has no
+file for, stays on disk. `sync` deletes a file under an engine name only when its bytes are a
+rendering the running engine produces at that path, and with your override in place it produces
+none there. So the file is kept, its ledger row is dropped, and it stays until you delete it by
+hand. Every bundled skill ships one such file, the Codex companion `agents/openai.yaml`. After an
+override of `qa` the bundled one is still in `.agents/skills/st-qa/`, where Codex reads it beside
+your `SKILL.md`, and in `.claude/skills/st-qa/`. An override of `verify` leaves that skill's
+`references/` and `scripts/` files the same way. A file your override carries at the same path
+is written over the bundled one instead.
+
+`sync` names every file it keeps, one line each under `Reclaim sweep:`, ending
+`the file is kept; delete it by hand if it is yours to remove`, and the list closes on its
+`kept file(s) are yours now` line. Delete each path on that list that you do not want beside
+your override. To see the paths before anything is written, run `stamity check` before that
+`sync`: they are the `keep` lines under its drift line. After the `sync`, no ledger row names
+them, so `check` reads clean while the files are still in place. If you no longer have the list
+and the manifest is committed, `git diff .stamity/manifest.json` shows the rows that `sync`
+dropped.
 
 It lands in `.agents/skills/` whenever a selected client reads that tree. Cursor, Copilot and
 Codex each declare that they do. (Where Codex has a rules appendix it reads the root
