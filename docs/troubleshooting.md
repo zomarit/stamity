@@ -152,15 +152,39 @@ refuses the whole manifest rather than being acted on. Remove each row the messa
 re-run the command. `check --json` lists the paths a release writes under `ownedPaths`.
 
 A row inside those paths still proves nothing on its own. `sync` and `clean` delete or overwrite
-a file without a backup only when its bytes still hash to what the row recorded and the place
-proves the rest. In an agent, skill, rule or command folder, the name must be engine-minted (`st-`
-or `stamity-`). Under `.stamity/generated/`, `.stamity/mcp/` or a pack's own folder, the hash is
-enough. At a platform file or charter the ledger records the engine writing, the hash is enough
-too, except at `AGENTS.md`, `AGENTS.override.md` and the Copilot setup workflow, where the bytes
-must also show the engine's own shape. A managed block that spans the file also proves it, and is
-the only proof at `CLAUDE.md`. A row with no content hash keeps its file unless a managed block
-spans it, and an overwrite of one takes a verified `.bak` first. So does removing the engine's
-keys from a shared settings or MCP document such a row names.
+a file without a backup only when its bytes still hash to what the row recorded, or a managed
+block spans the file, and the place proves the rest. A row with no content hash keeps its file
+unless a managed block spans it, and an overwrite of one takes a verified `.bak` first. So does
+removing the engine's keys from a shared settings or MCP document such a row names.
+
+**What a delete needs.** Under `.stamity/generated/`, `.stamity/mcp/` or a pack's own folder, the
+hash is enough. In an agent, skill, rule or command folder the name must be engine-minted (`st-`
+or `stamity-`), and the name and the hash together are still not enough: the bytes must also hash
+to a rendering the running engine produces at that path for the clients the setup wrote for. The
+same holds at an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md`, the Copilot setup
+workflow, `.github/hooks/stamity.json` and Cursor's two 1.11.0 guard names, where the rendering is
+the guard 1.11.0 rendered for that setup. A managed block that spans the file proves a delete at
+any of them. There a forged row and hash, and an owner's copy of the charter's headings, no longer
+prove a delete: a file no rendering proves is kept and named, on a line that ends
+`the file is kept; delete it by hand if it is yours to remove`, and a `sync` drops its row from
+the ledger. Such a file is an owner's, or an unedited `stamity-*` or `st-*` copy the running
+engine does not render at that path: one an earlier release rendered, or the copy of an override
+you removed ([Customization](customization.md) says how to clear those). When the renderings
+could not be built at all, the file is kept with its row, and the next `sync` tries the proof
+again.
+
+**What an overwrite without a backup needs.** At an `AGENTS.md` in any folder,
+`AGENTS.override.md` and the Copilot setup workflow the bytes must also show the engine's own
+shape, and `CLAUDE.md` is proved only by a managed block that spans it. Elsewhere inside those
+paths a whole-file overwrite rests on the matching hash alone. At those four files and at
+`.github/hooks/stamity.json` the hash and the shape do not settle whose bytes they are, because an
+owner's file can carry both. So unless a managed block spans the file, or the bytes on disk
+already equal the new rendering once `\r\n` reads as `\n`, the overwrite keeps the previous
+content recoverable. When git tracks the file with no uncommitted change, in a repository whose
+top level is the setup root, the write takes no `.bak` and prints a notice: the previous content
+is in git history, and the overwrite shows in `git status`. Otherwise it takes a verified `.bak`
+and warns: for an uncommitted or untracked file, a setup in a monorepo subfolder, a charter
+inside a submodule, and whenever git is absent or a git check fails.
 
 ### `check` reports drift after you edited a managed file
 
