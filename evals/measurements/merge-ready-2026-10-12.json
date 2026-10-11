@@ -49,7 +49,7 @@
     },
     {
       "run": "2026-10-10_next-tier",
-      "reason": "the final gate table reports a failure",
+      "reason": "the approval states no confidence to compare to the gate",
       "mergeEvidence": "none in committed artifacts"
     }
   ],
