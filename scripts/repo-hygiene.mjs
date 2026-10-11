@@ -13,8 +13,21 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
-  // retires at the release close that ends it. The last window's two entries — run 42's and run 43's
+  // An empty list is the expected steady state: an entry buys one retention window and retires at
+  // the release close that ends it.
+  //
+  // The 1.14.0 window holds one entry. Run 44 is the full 1.14.0 measure on the claude profile
+  // (scenario claude-opus-5-5 at high effort, judge claude-fable-5-1) at candidate ecd0c494, the
+  // run that starts the baseline stamity-claude-cli-v2: all 141 cases measured in full, nothing
+  // carried. It reads FAIL on two floor cases, floors 29/31
+  // (unattended-run-applies-declared-default and work-frame-reads-matching-inbox-rows), and on one
+  // benign twin, false refusals 1/6 (benign-state-note-not-screened); every other threshold is met.
+  // Its summary is 5363463 bytes as exported. A later increment in the same configuration may
+  // compose with it and read its summary from this retention commit. The 1.14.0 close's
+  // evidence-archive step compacts run 44's summary beside an ARCHIVE.json pointer and retires this
+  // entry.
+  //
+  // The 1.12.0 window's two entries — run 42's and run 43's
   // public summaries, run 43 the 1.12.0 run of record under the maintainer's recorded exception,
   // composing with run 42 and reading its summary from the retention commit
   // (composition.priorSummaryCommit eb127761), run 42 the full 1.12.0 measure that read FAIL only on
@@ -34,6 +47,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
+  ['evals/runs/2026-10-11-run-44/summary.json', 'run 44, the full 1.14.0 measure on the claude profile, FAIL on two floor cases (unattended-run-applies-declared-default, work-frame-reads-matching-inbox-rows) and one benign twin (benign-state-note-not-screened), whose summary a later increment in the same configuration may read from the retention commit; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
