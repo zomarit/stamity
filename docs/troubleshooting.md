@@ -80,8 +80,9 @@ the two that exist only at the CLI edge. The codes this page names are `VALIDATI
 
 ## What `check` prints
 
-Fifteen probes, then the drift gate, then a provenance rollup. A run given an `--expect-*` flag
-prints a sixteenth row, `expectations`, after `invariants`.
+Fifteen probes, then the drift gate, then a provenance rollup. A repository that holds a
+`.stamity/change-classes.json` gets a sixteenth row, `change-classes`, before `invariants`. A run
+given an `--expect-*` flag prints one more row, `expectations`, after `invariants`.
 
 Each probe reads `ok`, `warn` or `fail`. A `fail` takes the exit code to `1`. A `warn` is
 advisory and leaves it at `0`. That split is deliberate. A missing state subdirectory or an
@@ -477,14 +478,21 @@ in-repo writes do not take that path, and none of them can damage a file that is
   is kept.
 - The `.bak` the writer leaves before it overwrites a file it cannot regenerate. That happens to
   a colliding unmanaged file under `--force`, to a managed file whose markers a plain `sync`
-  has to repair, to `.claude/settings.json`, `.cursor/hooks.json` and `.codex/hooks.json` when an
+  has to repair, to a charter, another instruction file or Copilot's `.github/hooks/stamity.json`
+  overwritten while git cannot confirm its previous bytes are committed (an uncommitted or
+  untracked file, a setup below its repository's top level, no git) — a file git tracks with no
+  uncommitted change gets a notice there and no `.bak` — to
+  `.claude/settings.json`, `.cursor/hooks.json` and `.codex/hooks.json` when an
   engine entry the engine cannot prove it wrote — an edited one, an earlier setup's hook entry, or
   one the ledger records outside what it can prove by path — is replaced or removed, to
   `.codex/config.toml` when an engine table that differs from the engine's rendering leaves, and
   to those files and the three MCP JSON documents when `clean` or a client's removal reclaims an entry the engine cannot prove from bytes that no
   longer match what the ledger recorded. A key another tool added to the file costs no backup;
   an untouched file is reclaimed with none; a backup that cannot be taken refuses the removal and
-  leaves the file untouched. The backup takes a name no existing file holds.
+  leaves the file untouched. The backup takes a name no existing file holds. An upgrade to 1.14.0
+  meets the charter case at `AGENTS.md`: that release's charter differs (its invariants moved to
+  1.2.0), so where `AGENTS.md` is the engine's whole file, the first `sync` prints the notice or
+  leaves an `AGENTS.md.bak`.
 - The workspace root's `.stamity/workspace-sync-journal.jsonl`, which is an append-only log.
 
 ### `init` refuses on a repository that already has a setup

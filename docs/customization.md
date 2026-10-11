@@ -106,10 +106,12 @@ start with `stamity-` or `st-`. And the id must not already be patched by an ove
 overlay section below explains.
 
 Both prefixes are stamity's own filename namespace. The reclaim sweep (`src/merge/reclaim.ts`)
-reads a `stamity-` or `st-` basename as proof that stamity authored the file. It then deletes
-such a file without the verified backup a user-lane overwrite takes. A prefixed id also shadows
-nothing extra, because the corpus strips the prefix when it derives ids. `st-` is the easy one to
-reach for by accident, since it is the stem of every touchpoint.
+reads a `stamity-` or `st-` basename as the engine's name, the first part of its proof that
+stamity authored the file. The name is never a proof on its own: the bytes must also hash to
+what the ledger recorded and to a rendering the running engine produces at that path. A file
+that passes all three is deleted without the verified backup a user-lane overwrite takes. A
+prefixed id also shadows nothing extra, because the corpus strips the prefix when it derives
+ids. `st-` is the easy one to reach for by accident, since it is the stem of every touchpoint.
 
 `stamity validate` does not re-check the prefix. Once a file exists, its filename already answers
 the question. So if you hand-author a file straight into `.stamity/overrides/`, avoid the prefix

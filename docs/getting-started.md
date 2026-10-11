@@ -244,8 +244,13 @@ those same gates. `ledger` appends a run's findings to its ledger, closes its ro
 resume card of a run in progress (or, with none, of the newest closed run dated within the last two
 days, with its closing status), as the one serialized writer. The card also lists the run ids of
 open debug rounds on a line of their own, and when those are all there is, it prints a card that
-names no run. `gate` classifies a change by its paths — the class, the checks that class calls for
-and the review lenses it adds — and writes nothing. All four are plumbing an agent calls; the
+names no run. `ledger inbox` reads the deferral inbox and writes nothing: it prints the rows that
+name a change's paths (`--paths`) or a plan (`--plan`), the rows with no path that hold the words
+given (`--area`), and with `--due` the rows whose day has come, which is how a dated row comes
+back. `gate` does two things and writes nothing. `gate classify` names a change's class, the
+checks that class calls for and the review lenses it adds: by its paths and, where it reads the
+change from git, by its changed lines and a changed `package-lock.json` too. `gate scan` reads
+the change's added lines for secrets and exits 1 on a hit. All four are plumbing an agent calls; the
 session-start hook prints the card after a compaction or on a resume, when the client's payload
 says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
@@ -289,8 +294,9 @@ two touchpoints' `gh` calls.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs fifteen environment probes. Then it asks the one question that
-matters more than the rest: **would a sync change anything?**
+`check` is the diagnosis. It runs fifteen environment probes, and a sixteenth where
+`.stamity/change-classes.json` exists. Then it asks the one question that matters more than the
+rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a
 generated file was deleted, or a pack's content no longer matches what was installed. A failing
@@ -329,6 +335,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |
 | `.stamity/inbox.md` | deferred rows, one dated block per run that filed them; each new row carries a date or a trigger that brings it back, and a row a close dropped or scheduled elsewhere never lands there |
 | `.stamity/worktree.json` | the worktree lane's policy — yours to write; absent, its two defaults apply |
+| `.stamity/change-classes.json` | this repository's own change classes and test-input map — yours to write; `gate classify` reads it from a change's base commit, never from the change itself, and `check` validates it as its `change-classes` row; absent, the built-in classes apply |
 | `.stamity/workspace-sync-journal.jsonl` | at a workspace root: the cascade's crash trail, two lines per attempted member per run |
 | `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |
 
