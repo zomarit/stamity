@@ -647,6 +647,28 @@ const GATE_PASS = /\bpass(?:ed|es)?\b/i;
  */
 const GATE_FAIL = /\bfail(?:ed|s)?\b/i;
 
+/**
+ * A count of zero failures, as a suite's summary writes it inside a passing row: `13,701 passed,
+ * 16 skipped, 0 failed`.
+ *
+ * It carries the word {@link GATE_FAIL} reads and reports no failure (run
+ * 2026-10-11_release-1-14-0, ledger build/21): the all-pass final gate table of run
+ * `2026-10-10_next-tier` was read as failing on that one cell, and the page said so of the run.
+ * The lookbehind keeps a count that only ends in a zero whole: `10 failed` and `1,000 failed` are
+ * failures.
+ */
+const ZERO_FAILED = /(?<![\d.,])0\s+fail(?:ed|s)?\b/gi;
+
+/**
+ * Whether a gate row reports a failure: {@link GATE_FAIL}, read with every {@link ZERO_FAILED}
+ * count set aside. A real count in the same row is still read, so `2 failed on the first attempt,
+ * 0 failed on the second` reports one, and a row is cleared only of the failures it says it had
+ * none of — whether it states a pass is {@link GATE_PASS}'s question, asked separately.
+ */
+function reportsFailure(row: string): boolean {
+  return GATE_FAIL.test(row.replace(ZERO_FAILED, ""));
+}
+
 /** A review verdict token. `needs-fixes` is round one's spelling of a change request. */
 const VERDICT = /\b(?:approve[ds]?|request-changes|needs-fixes)\b/i;
 
@@ -1048,7 +1070,7 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
       denominator.push({ run, reason, mergeEvidence: merge });
     };
 
-    const failing = gateRows.filter((row) => GATE_FAIL.test(row) || !GATE_PASS.test(row));
+    const failing = gateRows.filter((row) => reportsFailure(row) || !GATE_PASS.test(row));
     if (failing.length > 0) {
       missed("the final gate table reports a failure");
       continue;

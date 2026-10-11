@@ -154,6 +154,46 @@ function record(options: {
   ].join("\n");
 }
 
+/**
+ * A record whose proof block is shaped the way run `2026-10-10_next-tier` wrote its own: a bold
+ * `**Gate results**` lead in prose and one `| Gate | Command | Result |` table of eight gates, each
+ * result a verdict word with its detail in brackets. `tests` is the result cell of the tests row,
+ * the one cell that carries a suite's counts. The review table states its confidence as a number,
+ * which that run's did not, so the gate table alone decides where the run lands.
+ */
+function countedGatesRecord(tests: string): string {
+  return [
+    "# A run",
+    "",
+    "## Proof block",
+    "",
+    "**Gate results** — class `security-sensitive`, on the final tree, each gate once:",
+    "",
+    "| Gate | Command | Result |",
+    "|---|---|---|",
+    "| secret scan | `node dist/cli.js gate scan --base 359610a5` | pass (hits none; 160 scanned; unscanned none) |",
+    "| lint | `npm run lint` | pass (0 errors; one warning older than the run) |",
+    "| typecheck | `npm run typecheck` | pass |",
+    `| tests | \`node scripts/ci/test-run.mjs --coverage\` | ${tests} |`,
+    "| knip | `npm run knip` | pass |",
+    "| leak gate | `node scripts/leak-gate.mjs` | pass (0 hits, 1,855 files) |",
+    "| drift | `node dist/cli.js check` | pass (drift clean) |",
+    "| CI | run 38103020797 on the final tree | pass on its first attempt: `check` on lts, floor, `windows-1` and `windows-2` |",
+    "",
+    "**Review verdicts** — a cell reads round: verdict, confidence.",
+    "",
+    "| Unit or pass | Reviewer | Security lens |",
+    "|---|---|---|",
+    "| the whole branch | r1: request-changes, 0.70 | r1: 1 Warning |",
+    "| the close's fix round | approve, 0.90 | 0 findings |",
+    "",
+    "## Next",
+    "",
+    "Nothing deferred.",
+    "",
+  ].join("\n");
+}
+
 /** A closed ledger — the run-exit invariant every record is supposed to leave behind. */
 const CLOSED_LEDGER = `${JSON.stringify({ id: "r/prove/1", state: "fixed" })}\n`;
 const OPEN_LEDGER = `${JSON.stringify({ id: "r/prove/1", state: "open" })}\n`;
@@ -1565,6 +1605,53 @@ describe("the rule, exercised against fixture trees", () => {
     ]);
     expect(reasonFor(report.denominator, "2026-01-03_red-gate")).toContain("failure");
     expect(report.rate).toEqual({ n: 2, d: 6, value: 0.333 });
+  });
+
+  // ADDED 2026-10-11 (run 2026-10-11_release-1-14-0, ledger build/21; REQ-PROVE-020). The tests
+  // row below is the one run 2026-10-10_next-tier wrote in its all-pass final gate table. The word
+  // "failed" in its "0 failed" was read as a failing gate, so the page said of that run "the final
+  // gate table reports a failure". A count of zero failures reports none.
+  it("reads a passing gate row that counts zero failed as a pass", () => {
+    const root = fixture({
+      "2026-01-02_counted-pass": {
+        "record.md": countedGatesRecord(
+          "pass (292 files; 13,701 passed, 16 skipped, 0 failed; the per-file coverage floors met)",
+        ),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.denominator).toEqual([]);
+    expect(report.numerator).toEqual([
+      { run: "2026-01-02_counted-pass", mergeEvidence: MERGE_EVIDENCE_NONE },
+    ]);
+  });
+
+  // The other way, in the same table: a row that reports a failure is still one. The second and
+  // third rows say "pass" and count failures that only end in a zero, and the fourth counts a real
+  // failure beside a zero one, so no reading of "0 failed" clears a count that is not zero.
+  it.each([
+    "fail (292 files; 13,699 passed, 16 skipped, 2 failed; the per-file coverage floors met)",
+    "pass (292 files; 13,691 passed, 16 skipped, 10 failed; the per-file coverage floors met)",
+    "pass (292 files; 12,701 passed, 16 skipped, 1,000 failed; the per-file coverage floors met)",
+    "pass on the second attempt (the first: 2 failed; the second: 13,701 passed, 0 failed)",
+  ])("still reads the gate row %j as a failure", (tests) => {
+    const root = fixture({
+      "2026-01-02_counted-red": { "record.md": countedGatesRecord(tests), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.numerator).toEqual([]);
+    expect(report.denominator).toEqual([
+      {
+        run: "2026-01-02_counted-red",
+        reason: "the final gate table reports a failure",
+        mergeEvidence: MERGE_EVIDENCE_NONE,
+      },
+    ]);
   });
 
   it("reads the confidence gate a record states over the fallback", () => {
