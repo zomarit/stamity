@@ -224,8 +224,8 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
 }
 
 /**
- * Git availability. A repository without git is legal — the CLI needs none of
- * it — so absence is a warn that says what is lost, never a failure.
+ * Git availability. A repository without git is legal — only `worktree` and
+ * `gate` need it — so absence is a warn that says what is lost, never a failure.
  */
 function checkGit(rootDir: string): DoctorCheck {
   const id = "git-available";
@@ -236,7 +236,9 @@ function checkGit(rootDir: string): DoctorCheck {
       status: "warn",
       detail:
         "git did not answer here — no binary on PATH, or this directory is not a repository. " +
-        "Nothing in stamity requires it; sync's dirty-tree warning simply stays silent.",
+        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "so gate scan exits 1 and /st-quick and /st-work list `secret scan: not run` under " +
+        "`Not done:`. sync's dirty-tree warning simply stays silent.",
     };
   }
   return {

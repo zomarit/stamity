@@ -1181,6 +1181,29 @@ describe("check — advisory warnings", () => {
     expect(row(doc, "learnings").status).toBe("warn");
     expect(row(doc, "learnings").detail).toContain(npxCommand("validate"));
   });
+
+  it("names the two verbs that need git on the git-available row where git does not answer", async () => {
+    // The row said "Nothing in stamity requires it". Two verbs do: `worktree` refuses outside a
+    // repository, and `gate scan` exits 1 there, so a flow's report lists the secret scan as not
+    // run (run 2026-10-11_release-1-14-0, build/12 — both exits read on the built CLI in a
+    // directory with no repository). This row is where an operator with no git lands, so it is
+    // the one that has to say so. The temp fixture is not a git repository; the `warn` status is
+    // asserted first so the detail under test is the no-git branch's and not the passing one's.
+    const root = await seedRepo(getRepo());
+
+    const { code, doc } = await runJson(root);
+    const git = row(doc, "git-available");
+
+    expect(code).toBe(0);
+    expect(git.status).toBe("warn");
+    expect(git.detail).not.toContain("Nothing in stamity requires it");
+    expect(git.detail).toContain("Two verbs need git");
+    expect(git.detail).toContain("worktree refuses without it");
+    expect(git.detail).toContain("gate scan exits 1");
+    expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+    // The sentence the row already carried stays: what `sync` loses without git.
+    expect(git.detail).toContain("sync's dirty-tree warning simply stays silent");
+  });
 });
 
 describe("check — a managed block copied into the preserved region", () => {
