@@ -36,7 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Upgrading from 1.12.0
 
 Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
-read what it will write. Run that `sync` before any `clean`, as the second item says.
+read what it will write. The second item says when a `clean` waits for that `sync`, and names the
+one case where a pack is re-installed before it.
 
 - **The first `sync` rewrites the charter.** Invariant 4 changes (invariants 1.2.0), so
   `AGENTS.md` moves, and with Codex selected `AGENTS.override.md` too. Where the file is tracked
@@ -44,10 +45,18 @@ read what it will write. Run that `sync` before any `clean`, as the second item 
   takes no `.bak`: the previous text is in git history. For an uncommitted or untracked file, a
   setup in a monorepo subfolder, or a git check that fails, `sync` keeps your previous file as
   `AGENTS.md.bak` (and `AGENTS.override.md.bak`) and warns.
-- **`clean` and `clean --pack` refuse until this version's `sync` has run.** After the upgrade
-  they stop with `CLEAN_ERROR` before touching anything, naming files this version renders
-  differently. Run `sync`, then `clean -y`. The CLI's remedies and the plugin's `st-setup` body
-  print the route in that order.
+- **`clean` refuses until this version's `sync` has run, and `clean --pack` refuses for some
+  packs.** Each stops with `clean refused` (`CLEAN_ERROR` under `--json`) before touching
+  anything, `--dry-run` included, while a file it would keep is one this version's `sync`
+  rewrites: the ledger records the file as unedited, and this version renders other bytes there.
+  The message names the files. For the full `clean`, the charter 1.12.0 wrote is such a file, so
+  run `sync`, then `clean -y`; the CLI's remedies and the plugin's `st-setup` body print the route
+  in that order. `clean --pack <id>` reads only that pack's client copies: it refuses when one of
+  them is such a file, and removes the pack with no `sync` first when none is. The exception to
+  `sync` first is a pack that fails `check`'s `pack-integrity` row: it is never synced first, on
+  this upgrade either, because a `sync` carries its edited bytes into the clients' folders.
+  Re-install it in that row's order before the upgrade's `sync`: the edited file moved out of the
+  pack's directory, then `clean --pack <id>`, and on as the row says.
 - **`.claude/settings.json` loses the `Read`, `Grep` and `Glob` allow rows.** The first `sync`
   removes the three rows 1.12.0 wrote, with no backup, and from now on the engine writes only its
   hook entries there, so Claude Code may ask before a read outside the project. A scoped row such
@@ -66,12 +75,21 @@ read what it will write. Run that `sync` before any `clean`, as the second item 
 - **A secret-shaped value in a change stops the run.** Both flows scan the change's added lines
   first, and a hit stops them, naming the path, the line and the rule. There is no allow-list: a
   hit on a deliberate test fixture is yours to settle before the run goes on.
-- **More changes reach the security lens, and fewer fit the quick lane.** A change to a CI
-  workflow, a shell script, a container build file, a package manager's install-steering file, or
-  a client's hooks, settings or MCP file is now `security-sensitive`, and so is a changed line in
-  JavaScript, TypeScript or Python code that spawns a process, deletes or overwrites a file,
-  calls the network or assigns a secret name. `/st-work` runs the `security` lens on it at every
-  tier, and `/st-quick` hands such a batch to `/st-work`.
+- **More changes reach the security lens, and fewer fit the quick lane.** A change is
+  `security-sensitive` when it touches any path the security lens reads. That is every path the
+  lens read at 1.12.0: a file under an `auth/`, `middleware/`, `crypto/`, `api/`, `routes/` or
+  `handlers/` folder, a `*.pem` or `*.key` file, and `package.json`, the lockfiles,
+  `requirements.txt`, `go.mod`, `Cargo.toml` and `Gemfile`. It is also every path this release
+  adds: a CI workflow or composite action, a shell or PowerShell script, a container build file,
+  a package manager's install-steering file, and a client's hooks, settings or MCP file. The
+  engine's `.stamity/manifest.json`, `.stamity/overrides/` and `.stamity/change-classes.json` are
+  in the class too, and so is a changed line in JavaScript, TypeScript or Python code that spawns
+  a process, deletes or overwrites a file, calls the network or assigns a secret name. `/st-work`
+  runs the `security` lens on such a change at every tier (on a lockfile-only bump, only when the
+  dependency audit flags something), and `/st-quick` hands the whole batch to `/st-work`, with no
+  size floor. At 1.12.0 the quick lane judged this by what an item touched (authentication,
+  credentials, key material, payments, access control); now the class decides, so a one-line edit
+  under `routes/` or `api/`, or to `package.json`, leaves the quick lane.
 - **The review loop's default cap is 3 rounds, down from 4.** A setup that never set
   `review.maxIterations` takes the new default on the first `sync`, which also rewrites the cap
   in Claude Code's generated review-gate hook. A value you set stays. To keep four rounds, run
@@ -100,6 +118,13 @@ read what it will write. Run that `sync` before any `clean`, as the second item 
 - **`clean --pack <id>` also removes the pack's client copies.** It keeps and names a copy you
   edited or one it cannot prove the engine wrote, and the pack remedies gain a step by hand for
   those: delete each kept copy, unless it is yours, then run `sync`.
+- **A manifest whose `generatedBy` is not a semantic version is refused.** Every release wrote a
+  plain version there, such as `1.12.0`, so this meets only a `.stamity/manifest.json` edited by
+  hand or by another tool. A leading `v`, a space, `latest` or a range now fails, where 1.12.0
+  took any non-empty string. A verb that reads the manifest then stops with `Invalid manifest`,
+  naming the file and `generatedBy`, and `check` fails its `manifest` row with the same message.
+  Write the release that last wrote the setup there, as `1.12.0` is written, then go on with the
+  upgrade's `sync`.
 
 1.13.0 was skipped on purpose: no release carries that number, and 1.14.0 follows 1.12.0.
 
@@ -158,6 +183,21 @@ read what it will write. Run that `sync` before any `clean`, as the second item 
   a child process, a file delete or overwrite, a network or registry call, or a token or secret
   name given a literal or an environment value. So does a code file whose lines could not be
   read. A `/st-quick` batch in that class moves to `/st-work` as it stands, with no size floor.
+- **`sync`, `check` and `init` pin git before they read the working tree.** Up to 1.12.0 the
+  working-tree read the three verbs make (`git status`) and the history read `init` makes ran
+  plain `git` at the setup root, in the caller's environment. Where the setup root has no `.git`
+  of its own, a monorepo subfolder for one, and holds files in the shape of a bare repository,
+  git read that folder as the repository and took its configuration: a command that
+  configuration names as a file-system monitor ran, with your rights, when one of the three verbs
+  ran there. Such a folder can be committed, so it can arrive on a branch someone else wrote, and
+  `check` is the verb a workflow runs on a pull request. Both reads now run git with
+  `safe.bareRepository=explicit`, so a folder shaped like a bare repository does not answer, and
+  with `core.fsmonitor=false`, so no file-system monitor command runs whatever any configuration
+  says. They also drop every `GIT_*` variable, so a `GIT_DIR` inherited inside a git hook no
+  longer points the read at another repository. What the verbs print does not change: where git
+  refuses, they report git as not answering, as they do with no repository. Git older than 2.38
+  ignores the first option: there such a folder is still read as a repository, with only its
+  file-system monitor off.
 
 ### Added
 
@@ -371,6 +411,22 @@ read what it will write. Run that `sync` before any `clean`, as the second item 
   key is undocumented, and the APM package's Copilot agents do not carry it yet.
 - **The plan coverage script no longer reads an indented `### ` line inside a unit as a new
   unit,** so a plan that quotes a heading in a unit's prose is read as written.
+- **The `plugin setup` refusal no longer tells you to copy a pack back.** On a repository that
+  already has a manifest, `plugin setup` refuses, and its next step says to copy out what you want
+  to keep before `clean -y` and to put it back afterwards. It named packs among those, but a pack
+  copied back is not installed: no ledger row records it, `check` reports no pack, `sync` projects
+  nothing from it, and `add` refuses over the copied files until they are removed. The step now
+  says everything but a pack goes back, and that each pack is installed again after
+  `plugin setup` with `add <source>`, the catalog id, local path or package name you installed it
+  from. If you followed the old step and copied a pack back, `check` passes and the pack is still
+  not installed: its `pack-integrity` row says no installed pack content is recorded in the
+  ledger, and no client folder holds a copy. Move the copied folder out of `.stamity/packs/` or
+  delete it, run `add <source>`, then `sync`.
+- **`check`'s `pack-integrity` next step says what `clean --pack` and `sync` each do.** Its
+  closing reason still said that after the clean, `sync` only removes the pack's client copies,
+  which was true of 1.12.0. `clean --pack` now removes those copies itself and keeps and names any
+  it cannot prove, and the `sync` after it regenerates the clients' files without the pack; the
+  step says so. The instruction not to run `sync` first stays.
 
 ## [1.12.0] - 2026-10-08
 
