@@ -2,7 +2,7 @@
 slug: /migration-from-hatch3r
 title: Migrating from hatch3r
 ---
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0ee31417. Re-attested 2026-10-08 for the Claude allow rows. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
 <!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
      strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
      `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
