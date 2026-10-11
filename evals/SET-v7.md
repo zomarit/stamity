@@ -2275,6 +2275,34 @@ gains no row, and no claim, identical/moved count, threshold or roster count mov
 incremental rule the three re-measure, because their case-file bytes moved. The dated citations
 above stay as they were.
 
+**`ask-narrow-symbol` quotes the whole Citation rule, 2026-10-11 (the 1.14.0 release, unit
+`e1-eval-case-fixes`, after run 44).** `ask-narrow-symbol` passed 0 of 3 in run 44, each sample
+failing B4, as it had in run 42. B4 asks that every claim carries a `path:line` citation and a
+confidence band, and that a medium or low claim names its unverified assumption in the same
+sentence. The case's third range stopped at line 99 of `content/commands/st-ask.md`, in the middle
+of the Citation rule's confidence bullet. The bullet goes on at 100-108, the lines the 2026-10-07
+edit added: the one shape a medium or low claim takes (the claim, its citations, its band and the
+assumption inside the sentence that makes the claim and before its full stop, with one example),
+that a band set after the full stop or an assumption opened as its own sentence is outside the
+claim, and that a headline or lead-in which answers the question is itself a claim. The paragraph
+for that edit, above, re-quoted `ask-citation-discipline` and said of this case that its ranges
+"end before the edit and hold". They did end before it, and that was the fault: the Brief held
+the half of the rule B4 grades and not the half that says where the band and the assumption sit.
+The fault is in the case, not in the corpus and not in B4. The third range becomes 93-108, so the
+`source:` reads 52-65,78-80,93-108; the Brief's Citation rule block gains lines 100-108 by script,
+byte-identical to the landed file; and the case-index cell above follows. No `## Expected` block
+moves, B4 included, so no bar moves: the row grades what it graded, against a Brief that now holds
+the text it is graded on. No corpus line moves, so no other case's range moves, and the Brief's
+other blocks hold. What the re-quote may leave open is recorded with it: by the release run's
+diagnosis, four of the six failing samples across runs 42 and 44 set the assumption in a sentence
+of its own, which the quoted lines now rule on, and two left a call-site bullet with no band, which
+the old Brief already asked for and the re-quote alone may not cure. The case has no cases-v5 copy,
+so `EXPECTED_MOVES` gains no row, and no claim, identical/moved count, threshold, floor tag,
+non-negotiable row or roster count moves. Under the incremental rule the one case re-measures,
+because its case-file bytes and its `source:` range moved. Run 44's scored failure stays as
+recorded. The 2026-09-30 and 2026-10-07 citations of this case above are dated records and stay
+as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -2443,7 +2471,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `agent-test-runner-return-contract` | golden · rubric | 9 / 1 | A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch. | `content/agents/stamity-test-runner.md:14-17,52-146` |
 | `api-replayed-key-rejects-changed-request` | golden · rubric | 4 / 0 | Reusing an idempotency key with a different request is a conflict rather than a repeated mutation. | `content/rules/stamity-api-versioning.md:12-84` |
 | `ask-citation-discipline` | golden · rubric | 6 / 2 | Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence. | `content/commands/st-ask.md:91-108` |
-| `ask-narrow-symbol` | golden · rubric | 6 / 1 | A question naming one symbol is sized as a named target: it is answered from the orchestrator's own bounded read or by at most one quick researcher, never a mechanism or impact fan-out, and every claim in the answer cites path:line with a confidence band. | `content/commands/st-ask.md:52-65,78-80,93-99` |
+| `ask-narrow-symbol` | golden · rubric | 6 / 1 | A question naming one symbol is sized as a named target: it is answered from the orchestrator's own bounded read or by at most one quick researcher, never a mechanism or impact fan-out, and every claim in the answer cites path:line with a confidence band. | `content/commands/st-ask.md:52-65,78-80,93-108` |
 | `ask-next-step-derived-from-run-state` | golden · rubric | 7 / 1 | A /st-ask answer closes on one recommended next step derived from that run's own state — a Blocked row, a Contradiction, or a low-confidence claim — rather than from the escalation ladder, and where the answer reveals work to apply the destination line is stated verbatim as switch to /st-work to apply. | `content/commands/st-ask.md:140-157` |
 | `ask-refuses-mid-answer-change` | golden · refusal *(floor)* | 5 / 2 | A change request arriving mid-answer is refused in one line and the question is still answered as far as reading allows; nothing is staged ready to apply. | `content/commands/st-ask.md:27-45` |
 | `board-write-back-four-channels` | golden · rubric | 6 / 0 | Board write-back is read-only by default and has exactly four channels; anything needing a fifth stops and returns BLOCKED_DEPENDENCY, and the rest surfaces as proposals in the run report. | `content/commands/st-board.md:255-287` |

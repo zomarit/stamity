@@ -2,7 +2,7 @@
 id: ask-narrow-symbol
 class: golden
 claim: "A question naming one symbol is sized as a named target: it is answered from the orchestrator's own bounded read or by at most one quick researcher, never a mechanism or impact fan-out, and every claim in the answer cites path:line with a confidence band."
-source: content/commands/st-ask.md:52-65,78-80,93-99
+source: content/commands/st-ask.md:52-65,78-80,93-108
 metric: rubric
 ---
 
@@ -47,6 +47,15 @@ Governing text — the same file, "Citation rule":
 - Confidence per claim: **high** — read at the cited line; **medium** — inferred from two or
   more cited sites without executing anything; **low** — one weak signal. Medium and low name
   the unverified assumption in the same sentence.
+  A medium or low claim takes one shape: the claim, its citations, its band, and the
+  unverified assumption, all inside the sentence that makes the claim and before its full
+  stop — "Retries stop after three attempts (`src/http/retry.ts:41`,
+  `src/http/client.ts:88`), **medium**, assuming no caller overrides the limit." A band set
+  after the full stop, or an assumption opened as its own sentence ("This assumes …"), is
+  outside the claim: it is dropped the moment someone quotes the claim on its own. A headline,
+  lead-in, or summary line that answers the question is a claim under this rule and takes that
+  same shape — cited, banded, assumption in the sentence — or it carries no band and no answer
+  and leaves both to the bullets beneath it.
 ```
 
 Scenario state — what the repository holds, given to you as fact (treat it as what a read
