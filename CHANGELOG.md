@@ -37,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
 read what it will write. The second item says when a `clean` waits for that `sync`, and names the
-one case where a pack is re-installed before it.
+one case where an edited pack file is moved out before it. The last item says what the verbs do
+where git would read a bare repository.
 
 - **The first `sync` rewrites the charter.** Invariant 4 changes (invariants 1.2.0), so
   `AGENTS.md` moves, and with Codex selected `AGENTS.override.md` too. Where the file is tracked
@@ -52,11 +53,19 @@ one case where a pack is re-installed before it.
   The message names the files. For the full `clean`, the charter 1.12.0 wrote is such a file, so
   run `sync`, then `clean -y`; the CLI's remedies and the plugin's `st-setup` body print the route
   in that order. `clean --pack <id>` reads only that pack's client copies: it refuses when one of
-  them is such a file, and removes the pack with no `sync` first when none is. The exception to
-  `sync` first is a pack that fails `check`'s `pack-integrity` row: it is never synced first, on
-  this upgrade either, because a `sync` carries its edited bytes into the clients' folders.
-  Re-install it in that row's order before the upgrade's `sync`: the edited file moved out of the
-  pack's directory, then `clean --pack <id>`, and on as the row says.
+  them is such a file, and removes the pack with no `sync` first when none is. The refusal's own
+  next step names the one exception to `sync` first: when the `pack-integrity` row of `check`
+  names an edited pack file, one that no longer hashes to what its install recorded, do not run
+  `sync`, which would carry the edited bytes into the clients' files. Move that file out of the
+  pack's directory first, as that row says, and run the same `clean` again. So when you upgrade with
+  such a file in place, move it out before the upgrade's `sync` too. With the file out, the
+  `clean` runs with no `sync`, unless another file is stale for the first reason, as after this
+  upgrade: the charter for the full `clean`, and for `clean --pack` any copy of the pack this
+  version renders with other bytes. Then it refuses once more. The row now reports the moved file
+  missing, not edited, and a `sync` carries nothing of it, so run `sync`, then the same `clean`
+  again. On either route the moved file's own client copy, which never held the edit, is kept and
+  named: delete it by hand unless it is yours. After `clean --pack`, install the pack again as
+  the row says.
 - **`.claude/settings.json` loses the `Read`, `Grep` and `Glob` allow rows.** The first `sync`
   removes the three rows 1.12.0 wrote, with no backup, and from now on the engine writes only its
   hook entries there, so Claude Code may ask before a read outside the project. A scoped row such
@@ -125,6 +134,26 @@ one case where a pack is re-installed before it.
   naming the file and `generatedBy`, and `check` fails its `manifest` row with the same message.
   Write the release that last wrote the setup there, as `1.12.0` is written, then go on with the
   upgrade's `sync`.
+- **Where git would read a bare repository, the verbs that read git report git as not
+  answering.** Before it starts git, the engine now looks at the folder a verb runs in and at
+  each folder above it, as far as git's own search goes. A folder on that path that has the
+  layout of a bare repository, met before any `.git` that git stops at, is not handed to git.
+  The look goes by the names of the entries alone, so a folder that only looks like one counts.
+  This meets a setup root inside a real bare repository, and a checkout that keeps such a folder
+  at the setup root or between it and the checkout's own `.git`. There, on any git version,
+  `check`'s `git-available` row warns. `sync` prints no dirty-tree warning, and keeps a `.bak`
+  where it rewrites the charter, as the first item says of a git check that fails. `gate scan`
+  exits 1 and `gate classify`, reading the change from git, answers `product`, so `/st-quick` and
+  `/st-work` run every gate and list `secret scan: not run` under `Not done:`. `init` treats the
+  folder as it does one with no repository: at a terminal it asks before it writes, and it prints
+  its no-git note. `init` and `plugin setup` seed no maturity tier from the history and record no
+  hosting platform, and `config detect` reads none and leaves the recorded one. `handoff prepare`
+  records no git ref and says so, and `handoff resume` cannot measure drift. Every `worktree`
+  verb refuses with `VALIDATION_ERROR`. Move the folder off that path, or run the verbs from a
+  checkout that does not keep it there. One more change comes with the same hardening: every
+  verb but the `worktree` ones now drops the caller's `GIT_*` variables when it reads git,
+  `handoff` included. An inherited `GIT_DIR` no longer points them at another repository, and a
+  setup whose repository is named only by `GIT_DIR` reads as having none.
 
 1.13.0 was skipped on purpose: no release carries that number, and 1.14.0 follows 1.12.0.
 
@@ -183,21 +212,37 @@ one case where a pack is re-installed before it.
   a child process, a file delete or overwrite, a network or registry call, or a token or secret
   name given a literal or an environment value. So does a code file whose lines could not be
   read. A `/st-quick` batch in that class moves to `/st-work` as it stands, with no size floor.
-- **`sync`, `check` and `init` pin git before they read the working tree.** Up to 1.12.0 the
-  working-tree read the three verbs make (`git status`) and the history read `init` makes ran
-  plain `git` at the setup root, in the caller's environment. Where the setup root has no `.git`
-  of its own, a monorepo subfolder for one, and holds files in the shape of a bare repository,
-  git read that folder as the repository and took its configuration: a command that
-  configuration names as a file-system monitor ran, with your rights, when one of the three verbs
-  ran there. Such a folder can be committed, so it can arrive on a branch someone else wrote, and
-  `check` is the verb a workflow runs on a pull request. Both reads now run git with
+- **Every git read the engine makes is pinned, and the engine looks at the folder before it
+  starts git.** Up to 1.12.0 each verb that reads git ran plain `git` in the caller's
+  environment: at the setup root, for `workspace sync` in each member's folder, and for the
+  `worktree` verbs in the folder they are started in. `sync`, `workspace sync`, `check` and
+  `init` read the working tree (`git status`). `init` and `plugin setup` read the history and
+  the `origin` remote, `config detect` the remote, and `handoff` the branch and commit. The
+  `worktree` verbs made every call that way. Where that folder has no `.git` of its own, a
+  monorepo subfolder or a workspace member for one, and holds files in the shape of a bare
+  repository, git read the folder as the repository and took its configuration. A command that
+  configuration names as a file-system monitor then ran, with your rights, when `sync`,
+  `workspace sync`, `check`, `init` or a `worktree` verb ran there. The other reads recorded
+  what the folder answered: a maturity seed, a hosting platform, a branch and commit. Such a
+  folder can be committed, so it can arrive on a branch someone else wrote, and `check` is the
+  verb a workflow runs on a pull request. Each of those reads now runs git with
   `safe.bareRepository=explicit`, so a folder shaped like a bare repository does not answer, and
   with `core.fsmonitor=false`, so no file-system monitor command runs whatever any configuration
-  says. They also drop every `GIT_*` variable, so a `GIT_DIR` inherited inside a git hook no
-  longer points the read at another repository. What the verbs print does not change: where git
-  refuses, they report git as not answering, as they do with no repository. Git older than 2.38
-  ignores the first option: there such a folder is still read as a repository, with only its
-  file-system monitor off.
+  says. So do the two reads this release adds: the `gate` verb's, and the tracked-and-clean
+  check that lets an overwrite take no `.bak`. All but the `worktree` verbs also drop every
+  `GIT_*` variable, so a `GIT_DIR` inherited inside a git hook no longer points a read at
+  another repository. The `worktree` verbs keep the caller's git environment: an external
+  `GIT_DIR` is a layout they accept, and `fetch` and `worktree add` run with your own transport
+  and identity variables. Git older than 2.38 ignores the first option, so the engine also looks
+  before it starts git, with `lstat` only and reading no file. It walks from the folder upward
+  as far as git's own search goes, and where it meets a folder that passes git's own test for a
+  repository folder, before any `.git` that git stops at, git is not started. For a tree git
+  checked out, the refusal therefore holds on git 2.38 and later by the option and on older git
+  by the look. Three narrow residuals remain, and `SECURITY.md` names them. Each needs something
+  a checkout cannot carry: a damaged `.git` folder of your own, on older git, or a git variable
+  in the environment a `worktree` verb inherits. Where a folder is refused, the verbs report git
+  as not answering, as they do with no repository, and the `worktree` verbs refuse; the last
+  item under "Upgrading from 1.12.0" says what that looks like.
 
 ### Added
 
@@ -286,6 +331,16 @@ one case where a pack is re-installed before it.
   the root typecheck. Any other path, or a diff that cannot be read, runs the full matrix, which
   also builds the docs site when a website page changed or no diff was read. CONTRIBUTING and
   GOVERNANCE say so.
+- **A test a fork adds declares the documents it reads.** The suite now carries a test-input
+  census, `test/ci/testInputsGuard.test.ts`. A test whose source names a tracked page, a record
+  or any path an entry of the `testInputs` map in `.stamity/change-classes.json` matches needs
+  an entry whose glob matches that path and whose `tests` list names the test, or a folder
+  holding it. The fork guide's sample gate test, added as printed, fails the census once for
+  each document it reads, until its path joins the `tests` list of the map's `*.md` entry.
+  `docs/enterprise-forks.md`, **Write the gates that decide the upgrade**, gives the line, and
+  names the map as the third thing a fork keeps true, beside its identity step and its branch
+  filters. This is a repository surface: the census is a test, and the published package does
+  not carry it.
 - **The eval price list covers Sonnet 5.5 and Haiku 4.5.** `evals/price-list.json` gains
   `claude-sonnet-5-5` and `claude-haiku-4-5-20251001`, read off the vendor's pricing page on
   2026-10-08.
@@ -302,6 +357,27 @@ one case where a pack is re-installed before it.
   full `clean` keeps such a file too, but it removes the setup, ledger included, so its report
   says to delete the file by hand unless it is yours. Either report names why the rendering could
   not be built.
+- **The `clean` refusal's next step names one exception to `sync` first.** `clean` and
+  `clean --pack` refuse while a file they would keep is one this version's `sync` rewrites, and
+  the next step says to run `sync` with this version, then the same `clean`. A pack file edited
+  after its install makes its client copy such a file too, and there that `sync` is the one
+  `check`'s `pack-integrity` row forbids, since it carries the edited bytes into the clients'
+  files. So the step goes on: when that row names an edited pack file, one that no longer hashes
+  to what its install recorded, do not run `sync`; move the file out of the pack's directory
+  first, as the row says, and run the same `clean` again. `docs/plugins.md`,
+  `docs/packs-and-trust.md` and the troubleshooting page's `plugin-duplicates` row give the same
+  route, and what follows when the `clean` refuses once more.
+- **A removed override's client copies, and the files of a skill an override replaces, stay on
+  disk until you delete them.** A delete at an engine-named file now needs a rendering this
+  version produces at that path, as the Security entry above says, and two ordinary cases have
+  none. Remove an override that added an id of its own, and `sync` keeps each client copy it had
+  written, where your client goes on loading it. Add a skill override, and `sync` keeps each
+  support file of the replaced skill that your override has no file for: every bundled skill
+  ships one, the Codex companion `agents/openai.yaml`, which Codex reads beside your `SKILL.md`.
+  Up to 1.12.0 the name and the recorded hash were enough for a delete there. `sync` names each
+  kept file under `Reclaim sweep:` and drops its ledger row, so a later `check` reads clean
+  while the file is still there: delete each one you do not want. `docs/customization.md` has
+  both cases, and how to find the files afterwards.
 - **Charter invariant 4 names the gates of the change's class (invariants 1.2.0).** It read "Done
   means the verification gates above exit 0" and now reads "Done means the gates `gate classify`
   names exit 0 (all if it did not run)". A change nothing classified still runs every gate, and
@@ -448,6 +524,15 @@ one case where a pack is re-installed before it.
   which was true of 1.12.0. `clean --pack` now removes those copies itself and keeps and names any
   it cannot prove, and the `sync` after it regenerates the clients' files without the pack; the
   step says so. The instruction not to run `sync` first stays.
+- **Where git does not answer, `check` and `init` no longer say that nothing needs git.**
+  `check`'s `git-available` row and the note `init` prints there both said nothing in stamity
+  requires git. Two verbs do, and both texts now name them: `worktree` refuses without it, and
+  `gate` reads every change from it, so with no git or no repository `gate scan` exits 1 and
+  `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The row also says
+  that git may only have been slow to answer the check, that `git status` in the folder tells
+  which, and that both verbs may still run in that case. The row stays a warning and no exit
+  code moves. The README, `docs/getting-started.md` and the troubleshooting page's
+  `git-available` row say the same.
 
 ## [1.12.0] - 2026-10-08
 
