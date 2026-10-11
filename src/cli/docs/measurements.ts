@@ -183,9 +183,9 @@ export function readRunOfRecord(root: string): RunOfRecord {
  * run's number back off it through {@link runOfRecordNumber}, and the four figures, the floor
  * clause and each threshold miss off its results file, rather than spelling any of them beside the
  * link, because the spellings that used to sit there were left describing an older run by the
- * release that moved the path. Since 2026-10-08 it names the composed 1.12.0 run, run 43, which
- * reads FAIL on one ungraded floor sample, and 1.12.0 ships on it under the maintainer's recorded
- * exception, which the file carries.
+ * release that moved the path. This comment names no run for the same reason: a run typed here is
+ * one more spelling the next release leaves behind. The file is what says which run is of record,
+ * the release it measured, and the exception a FAIL shipped under or `null` for a PASS.
  */
 
 /**

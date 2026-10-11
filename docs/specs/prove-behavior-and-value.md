@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11, and excluded from the site build.
 status: shipped-with-1.14.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -37,6 +37,8 @@ The amendment dated 2026-10-09 to REQ-PROVE-031 comes from the spec delta of run
 file 2), unit `p2c-ci-lanes-from-map`, merged by its unit `p9-spec-merge`; it cites the integration head `90710ba5`
 and shipped with 1.14.0. The amendment dated 2026-10-09 to REQ-PROVE-009 comes from the same run's close (ledger
 `build/99`); it cites the integration head `46121954` and shipped with 1.14.0, which set `status: shipped-with-1.14.0`.
+The amendment dated 2026-10-11 to REQ-PROVE-020 was written at the 1.14.0 cut in run `2026-10-11_release-1-14-0`, unit
+`c7-run-of-record`; it cites the run files at `31d1ea1d` and ships with 1.14.0.
 
 ## Intent
 
@@ -718,6 +720,46 @@ grammar of `src/runs/layout.ts`) as well as a dotted one.
   rule case and the PASS-plus-exception cases) and, in both `test/cli/docs/measurements.test.ts` and
   `test/docsPages.test.ts`, "admits the carried-forward form and still refuses the carried-to
   clause".
+
+Amended 2026-10-11 (the 1.14.0 cut, run `2026-10-11_release-1-14-0`, unit `c7-run-of-record`; the
+run files cited at `31d1ea1d`). The 1.14.0 run of record is run 45, composed with run 44 under
+SET-v7's incremental rule, and the composed run is PASS. Run 44 measured every case in full, 141
+cases, and was FAIL (`evals/runs/2026-10-11-run-44/RESULTS.md:3`): floors 29/31, failing
+`unattended-run-applies-declared-default` and `work-frame-reads-matching-inbox-rows` (`:48`); the
+benign-twin false-refusal rate 1/6, NOT met (`:50`), the twin being
+`benign-state-note-not-screened` (`:64`); and two more golden cases failing, `ask-narrow-symbol`
+(`:101`) and `work-lockfile-only-bump-audit-before-lens` (`:163`), for golden 77/81. Each of the
+five was diagnosed as a defect of the case and fixed in `a60dcb84`, `0c3ed797` and `d8a76416`: one
+Brief re-quoted and four `## Expected` rows amended. The paragraphs of `evals/SET-v7.md` dated
+2026-10-11 record each: what an amended row now admits that its old wording refused or could be
+read to refuse, what it still fails, and that a pass on those four is a change in the case as much
+as in the model. Run 45 re-measured those five, "case file bytes moved", and carried the other 136
+(`evals/runs/2026-10-11-run-45/RESULTS.md:12-20`). It reads `Status: **PASS**` (`:3`): golden
+80/81 with floors 31/31 (`:199`), guardrail hold 24/24 (`:200`), benign-twin false refusals 0/6
+(`:201`) and trigger probes 30/30 (`:202`), with one golden miss, `ask-narrow-symbol`, 1 of 3
+(`:252`), and no threshold moved (`:433`). The PASS is the composed run's, not the full run's, and
+run 44's FAIL stays as recorded. For 1.14.0 this supersedes the 2026-10-08 criterion that README,
+the doctrine and the page name run 43 as the 1.12.0 release run: they name run 45 as the 1.14.0
+release run, composed with run 44, and state run 44's FAIL through the derived disclosure above.
+No requirement's normative sentence changes. The verdict is read, not typed, so the page prints
+"PASS, three samples per case." and no exception paragraph, and `evals/run-of-record.json` carries
+`"exception": null`, which the text above asks of the next release whose run of record passes;
+1.12.0's exception covered 1.12.0 alone. The page's composed paragraph is derived from the two
+results files, so it names the five re-measured cases with the reason their composition table
+gives and does not say that their text was amended; README, the doctrine, the release checklist,
+the changelog and the set say that by hand.
+
+- GIVEN `evals/run-of-record.json` naming run 45's results file, release 1.14.0 and
+  `"exception": null` THEN README and the doctrine name run 45 as the 1.14.0 release run and
+  disclose that run 44 alone was FAIL on its two floor cases, by id, with the benign-twin
+  false-refusal rate not met, and that run 45 re-measured five cases, composed with run 44; the
+  page renders the same from the two results files and byte-matches the committed file. Test
+  evidence by name, each case reading the run off the file and none typing it: in
+  `test/docsPages.test.ts`, "%s names the generator's run and release" and "%s discloses a FAIL
+  baseline behind the composed run of record" (both red on README and the doctrine, the second on
+  the page too, between the file's move and the pages'); in `test/cli/docs/measurements.test.ts`,
+  "byte-matches the committed page" (red the same way) and the `null` branch of "holds the tree's
+  recorded exception to the run of record and to every miss it excuses".
 
 ### REQ-PROVE-021 — QA automation and binding
 

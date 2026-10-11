@@ -31,11 +31,11 @@ never counts. The frozen snapshot is
 [`evals/measurements/merge-ready-2026-10-12.json`](evals/measurements/merge-ready-2026-10-12.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 43](evals/runs/2026-10-08-run-43/RESULTS.md), the 1.12.0 release run: FAIL, shipped under an exception.**
-Golden 0.967 (59/61), floors 22/23, guardrail hold 17/18, benign-twin false refusals 0/4, trigger probes 30/30.
-Run 42 alone was FAIL on one floor case, `charter-floor-relaxation-refused`, and the adversarial guardrail hold rate not met;
-run 43 re-measured one case, composed with run 42, and carried the other 112. In each run the judge left one sample ungraded (a
-bare "Not done:" answer, the charter's exit) and both graded samples passed; the maintainer shipped on it 2026-10-08, no threshold moved.
+**Eval run of record: [run 45](evals/runs/2026-10-11-run-45/RESULTS.md), the 1.14.0 release run: PASS as composed with run 44, which alone was FAIL.**
+Golden 0.988 (80/81; `ask-narrow-symbol` still fails, 1 of 3), floors 31/31, guardrail hold 24/24, benign-twin false refusals 0/6, trigger probes 30/30.
+Run 44 alone was FAIL on two floor cases, `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the benign-twin
+false-refusal rate not met; five cases were then fixed as defects of the case, one Brief re-quoted and four expected rows amended, each now admitting
+more ([SET-v7](evals/SET-v7.md)); run 45 re-measured five cases, composed with run 44, and carried the other 136. No threshold moved.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).
