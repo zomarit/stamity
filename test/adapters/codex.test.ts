@@ -683,23 +683,29 @@ describe("model allocation", () => {
     expect(tomlValue(toml, "model_reasoning_effort")).toBe('"xhigh"');
   });
 
-  it("emits its own top level for a request above its documented scale", () => {
-    // `max` is on another client's scale and one rung above this one's. The
-    // emitted key carries the nearest expressible level — never nothing, and
-    // never a level this client does not document.
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): the config reference, re-read
+  // 2026-10-10, lists `max` and `ultra` on this client's scale, so an operator `max` is written
+  // as `max` rather than clamped to `xhigh`; the rule that the key carries a level the scale
+  // holds is unchanged.
+  it("emits `max` as `max` now that its documented scale runs to `ultra`", () => {
     const toml = buildAgentToml(agentItem("frontier"), grantOf(agentItem("frontier")), "Body.", {
       efforts: { frontier: "max" },
     });
-    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"xhigh"');
+    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"max"');
+    const top = buildAgentToml(agentItem("frontier"), grantOf(agentItem("frontier")), "Body.", {
+      efforts: { frontier: "ultra" },
+    });
+    expect(tomlValue(top, "model_reasoning_effort")).toBe('"ultra"');
   });
 
-  it("emits the lowest documented level when the operator asks for it", () => {
-    // The other end of the same scale: `minimal` is this client's floor, and
-    // it is below what two of the other clients can express.
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): `minimal` left this client's
+  // documented scale and is accepted as a legacy level; the emission writes the documented floor,
+  // `low`, so no emitted file carries a level the current reference does not list.
+  it("writes a legacy `minimal` as the documented floor, `low`", () => {
     const toml = buildAgentToml(agentItem("economy"), grantOf(agentItem("economy")), "Body.", {
       efforts: { economy: "minimal" },
     });
-    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"minimal"');
+    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"low"');
   });
 
   it("emits the client's model key with the operator's pinned id", () => {
@@ -762,6 +768,49 @@ describe("model allocation", () => {
 
     expect(reviewer).toContain('model = "gpt-fixture-pro"');
     expect(reviewer).toContain('model_reasoning_effort = "low"');
+  });
+
+  it("writes no agent at the legacy `minimal` across the shipped roster", async () => {
+    // The shipped corpus rather than the one-agent fixture, so the economy class has a real
+    // member to carry the operator's legacy level: the test-runner is written at `low`, and
+    // the reviewer, whose class the operator did not touch, keeps its `high`.
+    const index = await buildContentIndex();
+    const ctx = ctxOf({
+      contentRoot: resolveBundledContentRoot(),
+      agents: index.items.filter((item) => item.type === "agent").map((item) => item.id),
+      models: { effort: { economy: "minimal" } },
+    });
+
+    const outputs = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
+    const agentFiles = outputs.filter((row) => row.path.startsWith(`${CODEX_AGENTS_DIR}/`));
+    expect(agentFiles.length).toBeGreaterThan(1);
+    for (const row of agentFiles) {
+      expect(row.content, row.path).not.toContain('model_reasoning_effort = "minimal"');
+    }
+    const rows = byPath(outputs);
+    expect(rows.get(`${CODEX_AGENTS_DIR}/stamity-test-runner.toml`)!.content).toContain(
+      'model_reasoning_effort = "low"',
+    );
+    expect(rows.get(`${CODEX_AGENTS_DIR}/stamity-reviewer.toml`)!.content).toContain(
+      'model_reasoning_effort = "high"',
+    );
+  });
+
+  it("states the re-read scale, the model dependence and the legacy level in its capability row", () => {
+    const row = codexResiduePlanner.facts.caps.find((cap) => cap.name === "effort-scale")?.value ?? "";
+    expect(row).toContain("low, medium, high, xhigh, max, ultra");
+    expect(row).toContain("learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-10-10");
+    expect(row).toMatch(/depend on the model/);
+    // TEST CHANGE, justified (2026-10-10, q4b-codex-scale, review/5): the case held the row to
+    // "depend on the model" alone, which also passed while the row promised that a level the
+    // model does not offer "falls back to that model's own default". The reference read on
+    // 2026-10-10 says only "Available levels depend on the model and client", so the row is
+    // held to those words and to making no fallback promise.
+    expect(row).toContain("the available levels depend on the model and client");
+    expect(row).not.toMatch(/falls? back|own default/);
+    expect(row).toContain("`minimal` is accepted and written as `low`");
+    expect(row).not.toMatch(/accessed 2026-09-17/);
+    expect(row).not.toMatch(/cannot be asked for `max`/);
   });
 });
 

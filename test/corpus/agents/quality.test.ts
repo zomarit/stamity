@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { LEAN_LINE_THRESHOLDS } from "../../../src/content/userContent.ts";
 import {
+  CI_PROVIDER_TOKEN,
   VERIFY_GATE_ALL_TOKEN,
   VERIFY_GATE_LINT_TOKEN,
   VERIFY_GATE_TEST_TOKEN,
@@ -289,7 +290,22 @@ describe("test-runner — gate set", () => {
     // Gates, where the maintainer's opening answer 2 put it (`work.test.ts` pins it there); the
     // runner keeps the mapping, the full gates from `product` up and the `unknown`-provider rule.
     expect(gates).not.toContain("The narrower gates rest on one condition");
-    expect(gates).toContain("Where the charter's `CI provider` reads `unknown`, the final tree runs `all` whatever the class.");
+    // TEST CHANGE, justified (2026-10-10, q6t-test-runner-ci-line, `build/61`): the runner no
+    // longer sends its reader to the charter for the CI provider, which a client with no charter
+    // read cannot follow; the provider is rendered into the body by the detection token on every
+    // client, and the `unknown` rule is unchanged and still lives here, not in `/st-work`.
+    expect(gates).not.toContain("Where the charter's `CI provider` reads `unknown`");
+    // TEST CHANGE, justified (2026-10-10, q6t-test-runner-ci-line, review round 1, `review/14` as
+    // signed off): a surface that copies this body without substitution (the APM package,
+    // `scripts/generate-apm-package.mjs`) leaves the token standing, and a rule that fires only
+    // on the word `unknown` then has nothing to read. The rule now fires on a standing token too,
+    // so that copy runs every gate, never a narrowed set. The clause names the token in words, as
+    // Edge cases does: a second literal token would be substituted like the first, and the rule
+    // would then fire on the rendered provider itself.
+    expect(gates).not.toContain("where that reads `unknown`, the final tree runs");
+    expect(gates).toContain(
+      `This repository's CI provider is ${CI_PROVIDER_TOKEN}; where that reads \`unknown\` or is still an unresolved \`STAMITY\` substitution token, the final tree runs \`all\` whatever the class.`,
+    );
   });
 
   // Added 2026-10-09 (plan 019 file 2, unit p3c-work-gates): a class's selected files are the one
@@ -433,6 +449,20 @@ describe("test-runner — independence and status mapping", () => {
     // workspace read as a failing test suite.
     expect(contract).toMatch(/a red verdict is still `DONE`/i);
     expect(contract).toMatch(/`BLOCKED_FAILURE` is for producing no evidence at all/i);
+  });
+
+  // Added 2026-10-10 (q6t-test-runner-ci-line, `build/85`, D36): only a green verdict writes the
+  // report; a red one states the absence, so a dispatch naming a path never finds a stale report
+  // standing in for the rows it returned in full.
+  it("writes nothing to the named path on a red verdict", async () => {
+    const contract = section(await load("agents/stamity-test-runner.md"), "Return contract").replace(
+      /\s+/g,
+      " ",
+    );
+
+    expect(contract).toContain(
+      "A `red` verdict writes nothing to the named path and is returned in full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence.",
+    );
   });
 });
 

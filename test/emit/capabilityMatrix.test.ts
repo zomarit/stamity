@@ -277,9 +277,17 @@ describe("allowlist-coverage section", () => {
 describe("the declared effort scales", () => {
   const page = renderCapabilityMatrix();
 
+  /** The date each client's scale was last read, as its projection row cites it. */
+  const SCALE_READ_ON: Partial<Record<Tool, string>> = {
+    claude: "2026-09-17",
+    codex: "2026-10-10",
+    cursor: "2026-09-17",
+  };
+
   it("renders one `effort-scale` row per client that carries the axis", () => {
-    // Three carriers declare a scale; the one documented omitter declares
-    // `effort-axis` instead, which is a different claim and stays where it is.
+    // Three carriers declare an `effort-scale` row; Copilot states its scale
+    // inside its `effort-axis` row instead (pinned below), a different row
+    // that stays where it is.
     const carriers = TOOLS.filter(
       (tool) => factsFor(tool).caps.some((row) => row.name === "effort-scale"),
     );
@@ -292,7 +300,10 @@ describe("the declared effort scales", () => {
       expect(group, `${tool} renders no effort-scale row`).toContain(value);
       // Every scale claim is a vendor claim, so it carries its own dated
       // source inline the way the hook rows on this page already do.
-      expect(value, `${tool} scale row is undated`).toMatch(/accessed 2026-09-17/);
+      // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): the case held every scale row to
+      // one date, 2026-09-17. The Codex row was re-read on 2026-10-10 and the others were not,
+      // so each row is held to its own read; the rule that each row is dated did not change.
+      expect(value, `${tool} scale row is undated`).toContain(`accessed ${SCALE_READ_ON[tool]}`);
     }
   });
 
@@ -581,19 +592,38 @@ describe("the 2026-09-30 client currency pass", () => {
   it("re-stamps Claude's citations, and leaves Copilot's, Codex's and Cursor's where they were", () => {
     expect(datesOf("claude").length).toBeGreaterThan(0);
     expect(new Set(datesOf("claude"))).toEqual(new Set(["2026-09-30"]));
-    expect(datesOf("copilot")).toEqual(["2026-09-10", "2026-09-10", "2026-09-10", "2026-09-10", "2026-09-17"]);
+    // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): Copilot's list gained a sixth
+    // page, the CLI command reference, read 2026-10-10 for the effort scale and the
+    // `--no-custom-instructions` flag. The five dates the pass left where they were are unchanged.
+    expect(datesOf("copilot")).toEqual([
+      "2026-09-10",
+      "2026-09-10",
+      "2026-09-10",
+      "2026-09-10",
+      "2026-09-17",
+      "2026-10-10",
+    ]);
     expect(datesOf("codex")).toEqual(["2026-09-10", "2026-09-17", "2026-09-15", "2026-09-10"]);
     expect(datesOf("cursor")).toEqual(["2026-09-10", "2026-09-10", "2026-09-17", "2026-09-10", "2026-09-10"]);
   });
 
-  it("states that Copilot agents accept `reasoning-effort` and that this engine does not write it", () => {
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "states that Copilot
+  // agents accept `reasoning-effort` and that this engine does not write it" and held the row to
+  // "not emitted … this engine does not write it yet". The engine writes the key now
+  // (REQ-LADDER-004), so the row is held to "emitted", its scale and its sources. The two release
+  // versions and the refuted "publishes no effort key" wording are pinned as before.
+  it("states that Copilot agents carry `reasoning-effort`, on what scale and from which sources", () => {
     const value = capOf("copilot", "effort-axis");
-    expect(value).toMatch(/^not emitted/);
-    expect(value).toContain("`reasoning-effort`");
-    expect(value).toContain("1.0.66");
-    expect(value).toContain("1.0.88");
-    expect(value).toContain("this engine does not write it yet");
+    expect(value).toBe(
+      "emitted — `reasoning-effort: <level>` per agent, on the scale `low` … `max` (Copilot CLI " +
+        "reference, accessed 2026-10-10; the key in the 1.0.89 loader and its changelog, 1.0.66 and " +
+        "1.0.88); a level the model does not offer is reported and falls back to the session's; the " +
+        "cloud agent's handling of the key is undocumented (custom-agents configuration page, " +
+        "accessed 2026-10-10)",
+    );
     expect(value).not.toContain("publishes no effort key");
+    // And the row reaches the published page, in Copilot's own group.
+    expect(section(renderCapabilityMatrix(), "### `copilot`").join("\n")).toContain(value);
   });
 
   it("calls Cursor's no-spaces glob list this engine's choice, not the vendor's rule", () => {

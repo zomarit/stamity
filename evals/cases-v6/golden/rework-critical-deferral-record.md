@@ -1,8 +1,8 @@
 ---
 id: rework-critical-deferral-record
 class: golden
-claim: "A Critical finding the user wants deferred is deferred rather than vetoed, and the record is what the run insists on: the specific consequence named in one line, a written rationale that a bare 'defer' does not satisfy, and an inbox row that opens with /st-board's four-field grammar and then carries the critical-deferred tag, the date and that rationale."
-source: content/commands/st-rework.md:187-207
+claim: "A Critical finding the user wants deferred is deferred rather than vetoed, and the record is what the run insists on: the specific consequence named in one line, a written rationale that a bare 'defer' does not satisfy, and an inbox row that opens with /st-board's four-field grammar and then carries its schedule field, the critical-deferred tag, the date and that rationale."
+source: content/commands/st-rework.md:188-212
 metric: rubric
 ---
 
@@ -26,10 +26,14 @@ A Critical finding the user wants deferred **is deferred** — with a record:
 3. **Elevated-triage tag.** The inbox row carries `critical-deferred`, the rationale, and the
    date, so board triage surfaces it ahead of ordinary follow-ups. The row's shape is fixed, and
    it opens with `/st-board`'s declared row grammar so the reader that must surface it can parse
-   it — the tag and the two extra fields follow the grammar's four:
-   `Critical · <file:line> · <the consequence in one line> · source: rework <branch> ·
-   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`. A row missing the date
-   or the rationale is not this record.
+   it — the schedule field, the tag and the two extra fields follow the grammar's four: `Critical ·
+   <file:line> · <the consequence in one line> · source: rework <branch> · when: touched ·
+   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>` (or `by: <YYYY-MM-DD>` when
+   the user names one). A row whose location is `—` adds `files: <path>` straight after
+   `when: touched`, or carries the day the user names: the reader refuses a touch trigger that
+   names no path. With no path to name, the rationale question also asks for the day; with neither,
+   no row is written. The run then closes naming the unwritten row as its open item. A row missing
+   the date or the rationale is not this record.
 
 Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
 the branch next. **Default if the rationale question goes unanswered:** the deferral stands and
@@ -71,10 +75,12 @@ each list.
 4. The response states the inbox row in the shape the protocol fixes, and in that order: it
    opens with `/st-board`'s four-field row grammar — the severity `Critical`, the location
    `src/auth/session.ts:73`, the consequence in one line, and a `source:` field naming this
-   run as the writer and `fix/session-expiry` as its branch — and the three fields this
-   record adds follow those four: the `critical-deferred` tag, the date `2026-09-07`, and
-   the rationale. A row led by the tag rather than by the severity does not meet this
-   criterion, because it is not a row `/st-board` parses.
+   run as the writer and `fix/session-expiry` as its branch — and the four fields this
+   record adds follow those four: the schedule field `when: touched` (the user named no
+   day, so no `by:` field stands in for it), the `critical-deferred` tag, the date
+   `2026-09-07`, and the rationale. A row led by the tag rather than by the severity does
+   not meet this criterion, because it is not a row `/st-board` parses, and neither does a
+   row that carries no schedule field.
 5. The response must NOT file the inbox row with no rationale, nor with "defer" or "not
    doing that one now" standing in as the rationale.
 6. The response must NOT keep F1 at REVISE or carry it into the plan as a unit against the

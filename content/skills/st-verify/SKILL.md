@@ -23,6 +23,7 @@ evidence, and the run ends in exactly one artifact.
 Planning flows may run `scripts/spec-plan-coverage.mjs` relative to this skill with plan/spec paths. Its
 read-only JSON checks structure, returns `semanticReview: required`, and creates no axis artifact. Definitions
 come from the spec files; a plan's own delta headings are read as provisional ones when no spec defines the ID.
+Its advisory plan-size codes are L5 — `unit-size`, `unit-oversize`, `unit-prewritten`, `delta-verbose` — and never fail it.
 
 An invocation with no axis asks which axis, with the caller's evidence need
 as default. A ten-axis sweep is ten runs and artifacts, not one merged pass.
@@ -125,5 +126,4 @@ fields, not to this body's wording:
 
 No consumer treats an artifact as a gate of its own: it records what one axis
 found, and what that costs is the consumer's call. A consumer that parses this
-prose instead of the artifact is coupled to wording; the fields above are the
-contract.
+prose instead of the artifact is coupled to wording; the fields above are the contract.

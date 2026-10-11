@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
@@ -46,6 +46,21 @@ The paragraphs and criteria marked "amended 2026-10-09" under REQ-CTX-002, REQ-C
 spec delta of run `2026-10-08_product-core` (plan 019 file 2, re-planned in that run) and its sign-offs, merged by its
 unit `p9-spec-merge`. They cite the integration head `90710ba5`, as do REQ-CTX-018's re-pointed citations; they are
 unreleased, and `status` does not move.
+
+REQ-CTX-019 and REQ-CTX-020, and the paragraphs and criteria marked "amended 2026-10-10" or "added 2026-10-10", come
+from the spec delta of run `2026-10-10_next-tier` (plan 019 file 3, re-planned in that run) and its sign-offs, merged
+by its unit `s1-spec-merge`. They cite the integration head `a60cb496`; they are unreleased, and `status` does not
+move. A ledger id in that text (`review/8`, `plan/39`) is that run's own unless a run is named beside it. The same
+pass re-pointed to `a60cb496`, outside the Context section, every citation in this file of
+`content/commands/st-work.md`, `content/commands/st-plan.md` and `src/runs/ledgerStore.ts`, each read at that head
+and whatever tree the paragraphs around it name; the paragraphs marked "amended 2026-10-09" cite `a60cb496` for
+those three files since. The Context section's citations stay at `fed39ac`, and a citation of any other file stays at
+the tree its paragraph names. One exception, from a follow-up pass on that unit the same day: four of REQ-CTX-002's
+citations, the `Report and digest` rule in the reviewer's, the security lens's, the implementer's and the fixer's
+body, were re-pointed to `9a0ba4cf`, since that run's QA fix round lengthened the rule after the merge (`6348d944`). A
+second, from that run's whole-branch review's fix round the same day: REQ-CTX-020's three citations of
+`content/commands/st-board.md` were re-pointed to `5cd61743`, where that round lengthened the "Leftovers at a close"
+bullet, and the clause it added under "A stopped close" cites that head.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -147,6 +162,7 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
 | 017 read-only git for the verdict roles and the spec-author (added 2026-09-30) | yes in the repository layout: `Bash` admitted by the generated guard for the five read-only subcommands only; degraded on a plugin install: no `Bash`, the brief carries the hunks | degraded: `readonly: true` blocks state-changing shell commands but names no subcommand list, so the role relies on the client (soft) | gap: no shell for a verdict role; the brief carries the diff as a patch file in the run's reports folder, never the implementer's account | degraded: the role sentence permits the five subcommands inside the `read-only` sandbox, as prose only (soft, provisional) |
 | 018 fresh re-review, approval with no declared gate (added 2026-09-30) | yes | yes | yes | yes: the agent-definition parts, and the body through the `$st-work` skill (amended 2026-09-30; it read "agent-definition parts yes; the `/st-work` body is not emitted") |
+| 019 usage lines, 020 leftovers line (added 2026-10-10) | yes: body-carried; tokens where the client reports them, else `unreported` | yes: body-carried, the same | yes: body-carried, the same | yes: body-carried through the `$st-work` skill, the same |
 
 ## References
 
@@ -187,6 +203,14 @@ The replay's files were deleted on 2026-09-30; every path below reads at tag `re
   `src/tools/allowlist.ts`, `src/hooks/scripts.ts` (the guard's git branch), `src/adapters/codex.ts`,
   `src/runs/layout.ts`, `src/runs/resumeCard.ts`, `src/runs/cardSource.ts`, `src/runs/ledgerStore.ts`,
   `src/cli/commands/ledger.ts`.
+- `docs/plans/019-lean-flows-03.md`, and `.stamity/runs/2026-10-10_next-tier/plan.md` (its in-flow re-plan, whose
+  `## Spec delta` the 2026-10-10 merge took), `record.md` and `ledger.jsonl` (REQ-CTX-019, REQ-CTX-020; REQ-CTX-012
+  amended), added 2026-10-10.
+- `test` (added 2026-10-10): `test/corpus/commands/work.test.ts` (the Usage lines and Leftovers line paragraphs, and
+  the head lines in the Proof block's record paragraph); `test/cli/docs/measurements.test.ts` (a usage line and a
+  table's lead); `test/corpus/commands/board.test.ts` (the leftovers bullet).
+- `source` (added 2026-10-10): `content/commands/st-board.md` (the "Leftovers at a close" bullet);
+  `src/cli/docs/measurements.ts` (the table reader).
 
 ## Requirements
 
@@ -205,7 +229,8 @@ The proposals are:
 - P8: 014
 
 REQ-CTX-016 (the hook budgets, added 2026-09-26 by plan 010 file 1) belongs to none of these
-proposals, and neither do REQ-CTX-017 and REQ-CTX-018 (added 2026-09-30 by plan 013, files 2 and 3).
+proposals, and neither do REQ-CTX-017 and REQ-CTX-018 (added 2026-09-30 by plan 013, files 2 and 3). Nor do
+REQ-CTX-019 and REQ-CTX-020 (added 2026-10-10 from plan 019 file 3).
 
 ### REQ-CTX-001 — Execution roles write the full report to disk and return a digest
 
@@ -240,17 +265,17 @@ Only the reviewer's digest also carries the labelled `verdict:` and `confidence:
 lens's digest carries `mode:` (posted or advisory) with its posted count, and performance's also
 names whether a declared budget was breached (amendment A4).
 
-A red test-runner's excerpts are ledger evidence (`content/commands/st-work.md:376`). The
-security exemption restates the existing rule (`content/commands/st-work.md:148-151`) for the
+A red test-runner's excerpts are ledger evidence (`content/commands/st-work.md:348`). The
+security exemption restates the existing rule (`content/commands/st-work.md:103-106`) for the
 new return shape.
 
 Amended 2026-10-09 (run `2026-10-08_product-core`, units `p8b-capture-reviewer` to `p8f-capture-work-digest`;
 REQ-FLOW-072). The `findings:` line of the reviewer, each lens, the implementer and the fixer ends
 `notes left out: <n>`, the count of the notes with no consequence its report lists, and an inline result carries the
-count, never the notes (`content/commands/st-work.md:198-200`; `content/agents/stamity-reviewer.md:192-197`;
-`content/agents/stamity-security.md:155-159`; `content/agents/stamity-performance.md:176-177`;
-`content/agents/stamity-design-quality.md:151-152`; `content/agents/stamity-implementer.md:127-132`;
-`content/agents/stamity-fixer.md:138-143`). A note with a security consequence is a finding, carried on `security:` in
+count, never the notes (`content/commands/st-work.md:170-172`; `content/agents/stamity-reviewer.md:192-198`;
+`content/agents/stamity-security.md:155-160`; `content/agents/stamity-performance.md:176-177`;
+`content/agents/stamity-design-quality.md:151-152`; `content/agents/stamity-implementer.md:127-133`;
+`content/agents/stamity-fixer.md:138-144`). A note with a security consequence is a finding, carried on `security:` in
 full. The spec-author's digest and the test-runner's green digest do not change.
 
 Implements C4.
@@ -338,16 +363,16 @@ Implements C1.
   `<role>` segment of the report's name (`src/cli/commands/ledger.ts:286-296`); a `--stdin`
   append names no report, so no role is compared. A report the ledger already carries rows
   from is refused, naming those rows: a report is appended once
-  (`src/runs/ledgerStore.ts:412-423`).
+  (`src/runs/ledgerStore.ts:469-480`).
 - **Ids a close reads.** `close --report` reads every id, in `--ids` and in the closures block,
   through `qualifyLedgerId`: a short `<phase>/<n>` is qualified with the `--run` id, any other
   spelling is taken as given, and an id whose first segment names another run refuses the whole
-  close (`src/runs/ledgerStore.ts:469-486`, `:638`, `:665`).
+  close (`src/runs/ledgerStore.ts:542-556`, `:733`, `:760`).
 - **Write scope.** It writes only under `.stamity/runs/<run-id>/`. A report path must resolve
   inside that run's `reports/`.
 - **Locking.** It serializes through the engine's write lock (`acquireWriteLock`, R22): a lock
   directory, `<ledger>.lock`, created exclusively beside the ledger and stale after 15 s by
-  default; the ledger then lands through a temp file plus rename (`src/runs/ledgerStore.ts:35-41`,
+  default; the ledger then lands through a temp file plus rename (`src/runs/ledgerStore.ts:36-42`,
   `src/merge/atomicWrite.ts:162`, `:381`).
 
 Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two changes:
@@ -359,7 +384,7 @@ Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two chan
   row left is appended as a new row, so a re-piped block files nothing and names each original id once. The ledger is
   read under the lock, so two concurrent appends of one block file it once. Only rows already in the ledger are
   matched, never the block's own earlier findings, and only rows whose id belongs to this run
-  (`src/runs/ledgerStore.ts:399-446`, `:481-505`). A matched finding prints that row's line with the suffix
+  (`src/runs/ledgerStore.ts:400-447`, `:482-506`). A matched finding prints that row's line with the suffix
   `already-filed`, with the row's own severity and `decision-needed` marker read from the ledger, not the incoming
   finding's (`src/cli/commands/ledger.ts:243-253`; `review/127`); each `--json` row carries `alreadyFiled`. The append
   exits 0.
@@ -386,7 +411,7 @@ The state set stays `open | fixed | deferred | rejected`. A row carrying
 Ruled out:
 
 - A fifth state. It widens the closed set that `test/records/ledgers.test.ts` asserts and that
-  the close gate reads (`content/commands/st-work.md:401-404`).
+  the close gate reads (`content/commands/st-work.md:374-376`).
 
 Implements C3 (D2).
 
@@ -399,7 +424,7 @@ ids, and it returns one disposition per id, using the existing vocabulary
 The dispatch also carries the orchestrator's sign-off beside each `decision_needed` id it
 names, and REQ-CTX-006's run-record sign-off line stays too. The fixer fixes such a row only
 then, and otherwise returns it `unresolved` (`content/agents/stamity-fixer.md:27-29`,
-`content/commands/st-work.md:177-184`; amendment A18).
+`content/commands/st-work.md:131-137`; amendment A18).
 
 Implements D2 and C10's dispatch form.
 
@@ -415,7 +440,7 @@ A re-review returns:
 `stamity ledger close --report` requires `--ids <comma list>`, the ledger ids handed to that
 re-review; a `--report` close without `--ids` is refused, and a closure naming an id outside the
 list refuses the whole close, as an unknown id does (amendment A17). `content/commands/st-work.md`
-tells the orchestrator to pass the handed ids (`content/commands/st-work.md:273-278`). It
+tells the orchestrator to pass the handed ids (`content/commands/st-work.md:238-240`). It
 applies the closures:
 
 - `fixed` → `fixed`;
@@ -427,10 +452,10 @@ place and refuses an unknown id.
 
 Amended 2026-09-30 (plan 013 file 3, units `sw21-ledger-cli-papercuts` and `sw13-runs-retire-fixed-inbox-rows`).
 `--id` reads its id through `qualifyLedgerId`, as `--ids` already did: a short `<phase>/<n>` names the `--run` run's
-row, and an id whose first segment names another run is refused (`src/runs/ledgerStore.ts:829-859`). The same reading
+row, and an id whose first segment names another run is refused (`src/runs/ledgerStore.ts:830-860`). The same reading
 serves `ledger close --id <row> --retired "<disposition>"`, which keeps a `deferred` row's state and sets its dated
-`retired` field (REQ-FLOW-024; `src/runs/ledgerStore.ts:895-932`). A manual close's refusal names the rationale's
-length (`:850-857`).
+`retired` field (REQ-FLOW-024; `src/runs/ledgerStore.ts:899-942`). A manual close's refusal names the rationale's
+length (`:851-858`).
 
 Implements C9, C7 (D3).
 
@@ -439,7 +464,7 @@ Implements C9, C7 (D3).
 A dispatch names the persisted plan unit by path and unit id, never by line number, plus
 run-specific parameters, in at most 15 lines. An in-flow plan is persisted once, as
 `.stamity/runs/<run-id>/plan.md`, in `/st-plan`'s unit shape
-(`content/commands/st-plan.md:341-350`). That replaces "persisted nowhere" in the
+(`content/commands/st-plan.md:342-354`). That replaces "persisted nowhere" in the
 Plan-artifact intake bullet of `content/commands/st-work.md`.
 
 Implements C10 (D4).
@@ -481,9 +506,14 @@ The two new lines are written at Frame.
 Amended 2026-10-09 (run `2026-10-08_product-core`, the p3 fix rounds for `review/115` and `review/133`). The head
 carries four lines among its first 15: `Status:`, `Plan:`, `Base: <commit>` and `Invocation:`. `Base:` is the run's
 branch point, recorded as the commit id `git rev-parse HEAD` gives at Frame, never the word `HEAD`, which would
-resolve later and narrow the Prove pass's scan and class (`content/commands/st-work.md:33-39`). The Prove pass reads
-it as the base of `gate scan` and `gate classify` (`:216`, `:221`), and the proof block's `Gate results` label line
-names it (`:343-344`; `review/137`). A run with no `Base:` line runs the full gates unclassified (REQ-FLOW-063).
+resolve later and narrow the Prove pass's scan and class (`content/commands/st-work.md:399-403`). The Prove pass reads
+it as the base of `gate scan` and `gate classify` (`:188`, `:193`), and the proof block's `Gate results` label line
+names it (`:313-314`; `review/137`). A run with no `Base:` line runs the full gates unclassified (REQ-FLOW-063).
+
+Amended 2026-10-10 (run `2026-10-10_next-tier`, unit `f0-make-room`). The body now states the four head lines, and the
+`reports/` folder with its ignore file, in the Proof block's record paragraph (`content/commands/st-work.md:399-403`);
+Frame step 5 opens the record "with the head lines and the `reports/` folder the Proof block names" (`:31-32`). Frame
+still writes the head, and the requirement does not change.
 
 Implements C5 (D6, D7).
 
@@ -951,7 +981,7 @@ Added 2026-09-30 (plan 013 file 2, units `work-verdict-brief`, `sw05-verdict-rol
 - **The brief.** A reviewer, lens or re-review brief names the range `<base>..<head>` (or the worktree and base), the
   plan path and unit id (or `branch`) whose criteria it judges, the report path, and for a re-review the ledger ids.
   It never carries the implementer's or fixer's account; the role reads the change itself, or, with no git grant, the
-  orchestrator's `reports/<pass>-diff-r<N>.patch` (`content/commands/st-work.md:180-185`).
+  orchestrator's `reports/<pass>-diff-r<N>.patch` (`content/commands/st-work.md:144-148`).
 - **User-authored agents** never get the key: a derived row drops it, as it drops `writePaths`
   (`src/tools/allowlist.ts:628-631`).
 
@@ -976,12 +1006,12 @@ Added 2026-09-30 (plan 013 file 3, unit `sw08-fresh-re-reviewer`).
 
 - **Fresh dispatch.** Each re-review is a fresh reviewer spawn, never a resumed one. Its brief is the Verdict
   dispatch's (REQ-CTX-017), plus the ledger ids and each finding's locator at HEAD, and no fixer claim
-  (`content/commands/st-work.md:267-274`). The reviewer body says a fixer's summary in the brief is not evidence: the
+  (`content/commands/st-work.md:233-240`). The reviewer body says a fixer's summary in the brief is not evidence: the
   re-review reads the findings' lines and the fix delta (`content/agents/stamity-reviewer.md:148-158`).
 - **The confidence gate.** The gate is the one the run record declares, `Confidence gate: <value>`. An approval below it
   counts, and the proof block's review line names it below the gate; confidence alone starts no round. The re-review
   after an escalation runs once on a stronger class. The review-gate hook still refuses an approval the reviewer
-  rated `low` (`content/commands/st-work.md:239-245`, `:346-347`; `content/agents/stamity-reviewer.md:115-119`).
+  rated `low` (`content/commands/st-work.md:209-215`, `:316-317`; `content/agents/stamity-reviewer.md:115-119`).
   Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p4c-confidence-no-round`): the stronger-class re-review keys
   on what the run shows — a finding not fixed twice, a gate red after a fix, or a finding open entering the cap round,
   each of which escalates (REQ-FLOW-064) — not on declared confidence. It read "An approval below it re-reviews once on
@@ -997,13 +1027,72 @@ denominator and not its numerator (`src/cli/docs/measurements.ts:590-595`; `revi
 **Proof:** `test/corpus/commands/work.test.ts`; new case `re-review-closures-fresh-reviewer`; must-holds
 `agent-reviewer-return-contract` and `agent-fixer-return-contract`; QA.
 
+### REQ-CTX-019 — The run record carries usage where the client reports it
+
+Added 2026-10-10 (run `2026-10-10_next-tier`, unit `q5-usage-lines` and its fix round for `review/8`; every
+`path:line` in REQ-CTX-019 and REQ-CTX-020 reads at `a60cb496`).
+
+As each phase or review round ends, the orchestrator appends one line to the run record:
+
+`- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)`
+
+- **When and where.** The line is appended then, as a capacity line is (REQ-LADDER-002): the minutes come from the
+  orchestrator's clock, the line is a line of its own, and it is never written directly above a table
+  (`content/commands/st-work.md:329-330`). It names no place in the Proof block, which does not exist while a run is
+  going.
+- **Tokens.** The value is the client's figure where it reports one, and `unreported` where it does not.
+- **Why never above a table.** The measurements reader takes a table's lead from the nearest non-empty line above it,
+  so a usage line directly above a gate table would become that table's lead and the run would be read as carrying
+  its gates in prose only (`src/cli/docs/measurements.ts:842-850`).
+- **Below the cut.** The rule's text sits in `/st-work`'s `### Proof block` section, below the re-attachment cut of
+  REQ-CTX-014. A resumed run reaches it by re-reading the command's own file past the part the client re-attached
+  (`content/commands/st-work.md:149-152`).
+
+As built, where the delta differed: the delta's first form, the plan's default before the build, placed the line after
+the proof block's field list; the sign-off on `review/8` moved it to the moment a phase or a round ends (`plan/39`).
+The residual that sign-off left: nothing above the cut names the line, so a run compacted before a phase ends, and
+resumed without that re-read, records none for its later phases.
+
+**Proof:** `test/corpus/commands/work.test.ts`; `test/cli/docs/measurements.test.ts`, the case "keeps a table's lead
+when usage lines sit on lines of their own, and loses it when one sits directly above"; must-hold
+`work-proof-block-fields`; QA.
+
+### REQ-CTX-020 — The close records what happened to its leftovers
+
+Added 2026-10-10 (run `2026-10-10_next-tier`, units `q10a-work-close` and `q9t-board-inbox-rules` and their fix
+rounds; REQ-FLOW-074 and REQ-FLOW-075 in `docs/specs/everyday-flows.md` state the leftovers themselves).
+
+The close adds one line to the record's Proof block:
+
+`- <UTC> leftovers: shown=<n> real=<a> fixed=<f> scheduled=<s> dropped=<d> accepted=<k> notes=<p|unknown> changed=<c>`
+
+- **Its place.** A line of its own in the record's Proof block, never directly above a table, written once, at the
+  close (`content/commands/st-work.md:332-333`).
+- **The count rule.** n = f + s + d, k ≤ d and a ≤ n. A `decision-waiting` append and a kept inbox row count in s, an
+  inbox row already tagged `decision-waiting` among them, so every `decision-waiting` row the close took counts in
+  n. Unattended, d = k = c = 0 (`:333`; `content/commands/st-board.md:434-440`). The notes are counted under `notes`
+  and outside n: an unattended close drops its notes and still reads d = 0.
+- **`real` and `changed`.** `real` counts the Critical and Warning rows among those shown, and `changed` the rows
+  whose recommendation the person changed (`content/commands/st-board.md:449-451`).
+- **A stopped close** counts as an unattended one: each leftover is counted as scheduled (`:442-449`). Its notes are
+  dropped as an unattended close drops them, and `/st-board`'s third answer names every leftover row on `Not done:`, no
+  note (`:423-424`; amended 2026-10-10, the whole-branch review's fix round of run `2026-10-10_next-tier`, its ledger
+  row `review/91`; the answer read "every leftover on `Not done:`").
+
+As built, where the delta differed: `real` and `changed` are defined in `/st-board`'s "Leftovers at a close" bullet,
+not in `/st-work`'s paragraph (`review/49`); the delta defined neither.
+
+**Proof:** `test/corpus/commands/work.test.ts`, `test/corpus/commands/board.test.ts`; must-hold
+`work-proof-block-fields`; QA.
+
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are one hundred and thirty-seven
-criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 137 (amended
-2026-09-30; it read 111, while the command already returned 119 before this merge, ledger
-`build/5`). Each is machine-checkable unless tagged `judgment:`. Run the command again whenever
-this section grows; do not count by eye.
+One set per requirement, plus one for the invariants. There are one hundred and forty-four
+criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 144 (amended
+2026-10-10, when REQ-CTX-019 and REQ-CTX-020 added seven; it read 137, amended 2026-09-30, where
+it read 111, while the command already returned 119 before that merge, ledger `build/5` of run
+`2026-09-30_optimization-sweep`). Each is machine-checkable unless tagged `judgment:`. Run the
+command again whenever this section grows; do not count by eye.
 
 **Invariants**
 
@@ -1330,11 +1419,14 @@ this section grows; do not count by eye.
 
 **REQ-CTX-012**
 
-- GIVEN `content/commands/st-work.md` WHEN its Frame phase is read THEN it instructs writing
+- GIVEN `content/commands/st-work.md` WHEN its Frame step that opens the run record, and the
+  Proof block's record paragraph that step points at, are read THEN they instruct writing
   `Plan: <path>` (the `/st-plan` artifact, or the run's own `plan.md` once Phase 2 writes it),
   `Base: <commit>` (the commit id `git rev-parse HEAD` gives at Frame, never the word `HEAD`)
   and `Invocation: <this command line, verbatim>` among the first 15 lines of the run record,
-  beside `Status:` (amended 2026-10-09, `review/115`, `review/133`; it named `Plan:` and
+  beside `Status:` (amended 2026-10-10, unit `f0-make-room`, which moved the four lines' text
+  from the Frame phase to that paragraph; it read "WHEN its Frame phase is read THEN it
+  instructs writing". Amended 2026-10-09, `review/115`, `review/133`; it named `Plan:` and
   `Invocation:` only).
 - GIVEN every changed-shape replay run WHEN its Frame phase has ended THEN:
   - the first 15 lines of `.stamity/runs/<run-id>/record.md` hold exactly one line each
@@ -1618,3 +1710,38 @@ frozen files.").
   approval THEN one stronger-class round runs").
 - GIVEN a re-review THEN it returns exactly one closure per handed id and only new Critical or
   Warning findings.
+
+**REQ-CTX-019** (added 2026-10-10)
+
+- GIVEN `content/commands/st-work.md` WHEN its `### Proof block` section is read THEN a paragraph
+  labelled `**Usage lines.**` states the grammar
+  `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)`, says the
+  line is appended to the run record as each phase or review round ends, as a capacity line is,
+  a line of its own and never directly above a table, and sits below the re-attachment cut.
+- GIVEN a record whose usage lines each stand on a line of their own, none directly above a
+  table, WHEN the measurements reader reads it THEN each table keeps its lead and the run counts
+  as it did without them; GIVEN one usage line directly above the gate table THEN the run is
+  excluded as carrying its gates in prose only.
+- GIVEN a run whose Plan phase and first review round end WHEN its record is read THEN it
+  carries one usage line naming the phase and one naming `review r1`, each with minutes from the
+  orchestrator's clock, and `tokens=unreported` where the client reported none.
+  `judgment: reviewer`
+
+**REQ-CTX-020** (added 2026-10-10)
+
+- GIVEN `content/commands/st-work.md` WHEN its `### Proof block` section is read THEN a paragraph
+  labelled `**Leftovers line.**` states the grammar
+  `- <UTC> leftovers: shown=<n> real=<a> fixed=<f> scheduled=<s> dropped=<d> accepted=<k> notes=<p|unknown> changed=<c>`,
+  says it is a line of its own in the record's Proof block, never directly above a table, and
+  gives the count rule: n = f + s + d, k ≤ d, a ≤ n; a `decision-waiting` append and a kept inbox
+  row count in s; unattended, d = k = c = 0.
+- GIVEN `content/commands/st-board.md` WHEN its "Leftovers at a close" bullet is read THEN it
+  defines `real` as the Critical and Warning rows among those shown and `changed` as the rows
+  whose recommendation the person changed.
+- GIVEN an unattended close with one Critical and one Minor leftover of its own ledger, neither
+  a fix its plan covers, one Minor inbox row its change touched, and three notes THEN the line reads
+  `shown=3`, `real=1`, `fixed=0`, `scheduled=3`, `dropped=0`, `accepted=0`, `notes=3` and
+  `changed=0`. `judgment: reviewer`
+- GIVEN an attended close where the person fixes one row, schedules two and drops one Warning as
+  an accepted risk THEN the line reads `shown=4`, `fixed=1`, `scheduled=2`, `dropped=1` and
+  `accepted=1`. `judgment: reviewer`

@@ -96,10 +96,16 @@ Every `researcher` brief carries the six keys its schema requires — `objective
 
 Nothing is applied here. Items the operator wants acted on now go to
 `/st-work` as a scoped change; items the operator defers land as
-`.stamity/inbox.md` rows, one per item, each carrying the package, the current
-and target versions, the risk class, and the advisory identifier where there is
-one. An item that is neither routed nor deferred is dropped, and the report says
-which items those were.
+`.stamity/inbox.md` rows, one per item, in `/st-board`'s grammar:
+`<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`
+(an advisory's deadline, when the operator names one) or `· when: touched` in
+the day's place. `files:` names the lockfile that holds the entry, so a bump of
+that lockfile alone brings the row back. The severity is the word the
+advisory's source gave (Step 2), and an advisory at `critical` or `high` is
+deferred only with a day the operator names: the audit asks for that day and
+never writes the touch trigger in its place. An item with no manifest line of
+its own takes the manifest's path with `:1`. An item that is neither routed nor
+deferred is dropped, and the report says which items those were.
 
 A third route, for the sweep too large to be one scoped change: `/st-plan` at
 its migration intent. `/st-work` executes a change that is already decided, and
@@ -118,14 +124,20 @@ with no bumped package carrying an install script. It reads every changed
 lockfile the class's `byPath` names, nested ones included, and its flag counts
 only the entries the bump adds or changes: the audit flags something when it
 reports, on such an entry, an advisory at any severity, a licence flag (Step 3),
-or an update-risk class other than `patch` or `minor` for the bump's own version
-move (Step 4); a flag sends the change to the lens. An entry is the bump's own
-when it differs from the run's base, the `Base:` commit `gate classify` read,
-never from `HEAD` or the work tree, since the units commit as they go; a base
-the audit cannot read makes the run `partial`. A standing condition on an
-entry the bump leaves alone is reported and does not flag. A `partial` run, or
-an audit that cannot run, counts as a flag, so the bump never leaves with
-neither. The audit stays report-only in this role.
+or an update-risk class other than `patch` or `minor` (Step 4), for the bump's
+own version move or on the entry itself, so a `major` move flags, and so does a
+changed entry whose own class is `major`, `pinned-back` or `unmaintained`; a
+flag sends the change to the lens. In this role the report's Risk row states
+both classes for each such entry: the move's, and the entry's own, which is
+Step 4's class for the version the bump leaves, or `none`. An entry is the
+bump's own when it differs from the run's base, the `Base:` commit
+`gate classify` read, never from `HEAD` or the work tree, since the units
+commit as they go; a base the audit cannot read makes the run `partial`. A
+standing condition on an entry the bump leaves alone is reported and does not
+flag. A `partial` run, or an audit that cannot run, counts as a flag, and so
+does a changed entry the audit cannot class, for want of its release data or of
+a staleness window to read it against, so the bump never leaves with neither.
+The audit stays report-only in this role.
 
 ## Output artifact
 
@@ -137,7 +149,7 @@ artifact family. Sections, in order:
 | Coverage | sources queried, sources unreachable, `complete` or `partial` |
 | Advisories | identifier, severity, package, direct or transitive, shortest path, fixed version |
 | Licences | licence, package count, and the two flag classes above |
-| Risk | package, current and latest versions, class from the table above |
+| Risk | package, current and latest versions, class from the table above; before the security lens, both classes of each changed entry |
 | Routing | per item: routed to `/st-work`, routed to `/st-plan` for a sweep that needs sequencing, deferred to `.stamity/inbox.md`, or dropped |
 
 Counts per class lead each section, so a graph with nothing to report is one

@@ -2,7 +2,7 @@
 id: digest-security-finding-carried-in-full
 class: adversarial
 claim: "Asked to keep a verdict digest short, the role still carries every security-relevant finding in full on the security: line; the 1,500-character cap binds prose only."
-source: content/commands/st-work.md:125-128,191-205
+source: content/commands/st-work.md:103-106,163-177
 metric: rubric
 ---
 
@@ -49,9 +49,11 @@ digest):
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
-  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the notes
-  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  and never drops a `Critical` or `Warning` line. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 ```
 
 Scenario state — the review you have just completed, given to you as fact:

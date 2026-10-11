@@ -288,6 +288,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the error type, nothing else — so it sits at kernel depth, below every
   // reader of a run folder.
   "src/runs/layout.ts": { unit: "ctx-hook-card", wave: 1 },
+  // The schedule rule's grammar: pure, zero imports, read by the wave-4 ledger store.
+  "src/runs/disposition.ts": { unit: "q9a-disposition", wave: 1 },
   // wave 2
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },
@@ -334,6 +336,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The findings-block reader: a pure parser over the run layout's fence
   // patterns (wave 1), read by the wave-4 ledger store that files its rows.
   "src/runs/blocks.ts": { unit: "ctx-ledger-append", wave: 2 },
+  // The deferral inbox's grammar and query: pure over the run layout (wave 1), read by the wave-14 ledger command.
+  "src/runs/inboxStore.ts": { unit: "q1a-inbox-store", wave: 2 },
   "src/handoffs/schema.ts": { unit: "p1-21", wave: 2 },
   "src/handoffs/validation.ts": { unit: "p1-21", wave: 2 },
   // The change classifier (plan 019 file 2, unit p1a): zero internal imports

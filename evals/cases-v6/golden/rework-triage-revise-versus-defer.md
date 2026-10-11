@@ -1,8 +1,8 @@
 ---
 id: rework-triage-revise-versus-defer
 class: golden
-claim: "Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description and source rows — the whole table is presented once for one batched correction, and this command applies no fix."
-source: content/commands/st-rework.md:13-18,154-185
+claim: "Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description, source and schedule-field rows — the whole table is presented once for one batched correction, and this command applies no fix."
+source: content/commands/st-rework.md:13-18,154-186
 metric: rubric
 ---
 
@@ -47,17 +47,18 @@ under the presented table as `note · file:line · category · remedy` and count
 
 - REVISE findings become plan units in phase 6.
 - DEFER findings append to `.stamity/inbox.md` as one dated block per rework run, each row
-  `severity · file:line · one-line description · source: rework <branch>`, written through the
-  persistence guard above. That inbox has two guaranteed readers — `/st-board` fill triages
-  it, and `/st-work` surfaces overlapping items when its framing phase touches the same
-  files — so a deferral is tracked, not lost.
+  `severity · file:line · one-line description · source: rework <branch> · when: touched`, with
+  `files: <path>` when the location is `—`, written through the persistence guard above. That inbox
+  has three guaranteed readers — `/st-board` fill triages it, `/st-work` surfaces overlapping items
+  when its framing phase touches the same files, and `/st-plan` folds overlapping items into its
+  shared intake — so a deferral is tracked, not lost.
 - Present the whole routing table once and take one batched correction
   (*"revise 3, defer 7 and 9"*), not a prompt per finding.
 - Present each finding's disposition in the shape it will take: a REVISE finding as the plan
   unit it becomes, a DEFER finding as the inbox row it becomes, written out in full —
-  `severity · file:line · one-line description · source: rework <branch>`. Say where those
-  rows land: one dated block appended to `.stamity/inbox.md` for this rework run. Rows shown
-  without that block named leave the reader guessing what this run appends.
+  `severity · file:line · one-line description · source: rework <branch> · when: touched`. Say
+  where those rows land: one dated block appended to `.stamity/inbox.md` for this rework run.
+  Rows shown without that block named leave the reader guessing what this run appends.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -100,8 +101,9 @@ each list.
    correction rather than prompting per finding.
 5. The response states that the REVISE findings become plan units, and that the DEFER
    findings append to `.stamity/inbox.md` as one dated block for this run, each row
-   carrying its severity, its `file:line`, a one-line description, and the source naming
-   the branch `feat/orders-idempotency`.
+   carrying its severity, its `file:line`, a one-line description, the source naming
+   the branch `feat/orders-idempotency`, and the schedule field `when: touched`. A DEFER
+   row stated with no schedule field does not meet this criterion.
 6. The response must NOT apply, patch, write, or stage a fix for any of the five findings.
 
 ### Advisory criteria — recorded, never scored into the verdict

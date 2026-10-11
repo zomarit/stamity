@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
 status: shipped-with-1.12.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
@@ -18,13 +18,42 @@ REQ-FLOW-061 to REQ-FLOW-067, REQ-FLOW-072 and REQ-FLOW-073, and the text dated 
 of run `2026-10-08_product-core` (plan 019 file 2, re-planned in that run), merged by its unit `p9-spec-merge` against
 the integration head `90710ba5`, where every citation of `content/commands/st-work.md` and
 `content/agents/stamity-test-runner.md` in this file was re-pointed to the lines that hold its text; unreleased at that
-merge, so `status` does not move. REQ-FLOW-039 to 050 are held for plan 016's later files, 051 to 060 are unallocated
-and 068 to 071 are held for plan 019 file 3, so the ids leave gaps. The run's own eval cases land after this merge and
+merge, so `status` does not move. REQ-FLOW-039 to 050 are held for plan 016's later files and 051 to 060 are
+unallocated, so the ids leave gaps; 068 to 071, which that merge held for plan 019 file 3, were allocated on 2026-10-10
+with 074 to 077 (amended 2026-10-10; it read "051 to 060 are unallocated and 068 to 071 are held for plan 019 file 3,
+so the ids leave gaps"). The run's own eval cases land after this merge and
 are not cited here. The merge's second round re-read that text at `f3315229`, after the p5 group's fix round 2
 (`review/177` to `review/183`), and took the semantic review's `review/184` to `review/188`: it re-pointed every
 citation of `src/cli/commands/gate.ts`, `src/change/classify.ts`, `src/roster/triggers.ts`,
 `content/commands/st-quick.md` and `content/skills/st-dep-audit/SKILL.md`, restated the text that fix round changed,
 and found every other citation on the same text at both heads.
+
+REQ-FLOW-068 to REQ-FLOW-071 and REQ-FLOW-074 to REQ-FLOW-077, and the text dated 2026-10-10, come from the spec delta
+of run `2026-10-10_next-tier` (plan 019 file 3, re-planned in that run), merged by its unit `s1-spec-merge` against the
+integration head `a60cb496`; unreleased at that merge, so `status` does not move. Where a delta entry and the landed
+text differed, the text states what that head holds, and a line headed "As built" says what moved. The same pass
+re-pointed to `a60cb496` every citation in this file of `content/commands/st-work.md`, `content/commands/st-board.md`,
+`content/commands/st-plan.md`, `content/commands/st-rework.md`, `content/skills/st-qa/SKILL.md`,
+`content/skills/st-dep-audit/SKILL.md`, `content/agents/stamity-test-runner.md` and `src/runs/ledgerStore.ts` whose
+line that run moved, and found every citation of `content/commands/st-quick.md`, and all but one of that agent file,
+on the same lines at both heads. Citations of any other file stay at the heads the paragraphs around them name. A ledger id in the
+text dated 2026-10-10 (`build/16`, `review/62`) is that run's own unless a run is named beside it. The run's own eval
+cases land after this merge and are not cited here. A follow-up pass on that unit the same day read at the integration
+head `9a0ba4cf` every citation in this file of `content/commands/st-plan.md` and of the six agent bodies the run's QA
+fix round changed after the merge (`6348d944`): the reviewer, the fixer, the implementer and the security, performance
+and design-quality lenses. It re-pointed to that head the ones the round moved, which are the six `## Severity`
+sections (REQ-FLOW-073), the security lens's `git log` sentence (REQ-FLOW-065), `/st-plan`'s return line
+(REQ-FLOW-070) and its inbox-append and follow-ups bullets (REQ-FLOW-077), and found every other citation of those
+seven files on its text there, above the lines the round moved. The run's whole-branch review then had a fix round the
+same day (pass `branch`). Its text part settled the ledger rows `review/69`, `review/89` (as `review/99` and
+`review/100` shaped it), `review/90`, `review/91`, `review/93`, `review/94`, `review/96` and `review/97` in four shipped
+texts (`5cd61743`), and the lines below marked "the whole-branch review's fix round" state them, under REQ-FLOW-068,
+REQ-FLOW-069 and REQ-FLOW-074 to REQ-FLOW-077. The same pass re-pointed to `5cd61743` every citation in this file of
+`content/commands/st-board.md`, `content/commands/st-rework.md` and `content/skills/st-qa/SKILL.md` at or below the
+first line that round moved in each, and the four citations of `content/commands/st-work.md` that reach into lines 24 to
+30, which it rewrapped in place; every other `/st-work` citation holds its line. What those lines say of the parser, the
+retire grammar and the query's JSON document is that round's code part (`review/78`, `review/89`), which landed beside
+the texts; it is cited there by file and not by line.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
@@ -90,7 +119,7 @@ at every site and on one physical line:
 
 The sentence is the constant `RUNNING_CLI_SENTENCE` (`test/corpus/cliCallForm.test.ts:32-33`), which is its text of
 record. Skills and `/st-debug` open it with `**Running the CLI.** `, and `/st-work` carries it as the Dispatch-contract
-bullet `- **CLI calls.** ` (`test/corpus/cliCallForm.test.ts:53-77`; `content/commands/st-work.md:149`). No condition
+bullet `- **CLI calls.** ` (`test/corpus/cliCallForm.test.ts:53-77`; `content/commands/st-work.md:126`). No condition
 is left for an agent to judge (`review/102`).
 
 `${STAMITY:CLI}` is a wired substitution token, one of the ten in `REPO_SUBSTITUTION_TOKENS`
@@ -135,7 +164,7 @@ When neither an installed copy nor the pinned npx call can run the verb (for exa
 - `/st-debug` names the install as the unresolved input when both forms are `not-runnable`
   (`content/commands/st-debug.md:30`);
 - the ledger step alone may be written by hand, by the orchestrator, the one ledger writer, in the row grammar under
-  Proof block; the run record then says `ledger: by hand (no CLI)` (`content/commands/st-work.md:150`).
+  Proof block; the run record then says `ledger: by hand (no CLI)` (`content/commands/st-work.md:127`).
 
 - **As built:** the `/st-work` fallback points at the row grammar under Proof block, not at
   `test/records/ledgers.test.ts`, because that test exists only in this repository and not in the repositories the
@@ -152,7 +181,7 @@ Every flow that dispatches a researcher names all six required keys: `objective`
   `/st-ask` spawns a researcher too, plus the one skill. Six sites carry one shared line (`/st-pr-resolve`,
   `/st-plan`, `/st-board`, `/st-rework`, `/st-debug`, `st-dep-audit`); `/st-debug` carries it at
   `content/commands/st-debug.md:61-62`. `/st-work`, `/st-spec` and `/st-ask` keep their own enumeration of the keys
-  (plan decision 6; `content/commands/st-work.md:46-50`, `content/commands/st-ask.md:72-74`). The researcher body
+  (plan decision 6; `content/commands/st-work.md:39-42`, `content/commands/st-ask.md:72-74`). The researcher body
   says so (`content/agents/stamity-researcher.md:20-27`).
 - **Evidence:** a spawn missing a required key returns `BLOCKED_AMBIGUITY` (`content/agents/stamity-researcher.md:20-21`;
   the keys at `:29-37`).
@@ -349,8 +378,8 @@ written, the exit code read from the tool, and a long command waited on in the f
 
 A Prove pass may cite this run's earlier gate result on a byte-identical tree — same HEAD, same diff, untracked files
 included. The final tree always gets a run of its own, and citing is never a lighter pass
-(`content/commands/st-work.md:231-232`). The proof block records per gate the result, or the earlier result a
-byte-identical tree cites (`:343-345`).
+(`content/commands/st-work.md:203-204`). The proof block records per gate the result, or the earlier result a
+byte-identical tree cites (`:313-315`).
 
 - **As built, where the delta differed:** the body has no sentence saying a cited result covers only the gates it ran;
   the proof block's per-gate line carries it only implicitly (`review/32`, open).
@@ -358,7 +387,7 @@ byte-identical tree cites (`:343-345`).
   and `review/133`): the gates the final tree must pass are the ones its change class requires (REQ-FLOW-063). The
   proof block's gate results open with the change's class as `gate classify` named it, `unclear` when none ran, and
   the run's base commit, both on the `Gate results` label line itself, then per gate the command, pass, fail or
-  unknown, a failing excerpt, or the earlier result a byte-identical tree cites (`content/commands/st-work.md:343-345`).
+  unknown, a failing excerpt, or the earlier result a byte-identical tree cites (`content/commands/st-work.md:313-315`).
   The class sits on the label line, not between the label and its table, so the measurements page's reader keeps the
   table (`review/117`).
 - **Proof:** `test/corpus/commands/work.test.ts`; QA.
@@ -386,7 +415,7 @@ name them (`review/67`).
 
 ### REQ-FLOW-017 — QA rows record walked, auto-proven or accepted-unwalked
 
-Each QA row records exactly one state (`content/skills/st-qa/SKILL.md:57-61`; `content/commands/st-work.md:329-330`
+Each QA row records exactly one state (`content/skills/st-qa/SKILL.md:74-78`; `content/commands/st-work.md:295-296`
 points at those states):
 
 - `walked`, only when the person's reply says so for that row or for all of them, and that reply is quoted in the
@@ -396,9 +425,13 @@ points at those states):
 
 A bare sign-off ("signed off", "ok") records each open row `accepted-unwalked`, never `walked`, and so does any
 sign-off for each open row it does not name. A reply that withholds sign-off records no row as accepted and leaves the
-checkpoint open (`content/skills/st-qa/SKILL.md:96-103`). The proof block lists the QA rows per state, then the
-sign-off or `not signed` (`content/commands/st-work.md:348-349`).
+checkpoint open (`content/skills/st-qa/SKILL.md:115-118`). The proof block lists the QA rows per state, then the
+sign-off or `not signed` (`content/commands/st-work.md:318-319`).
 
+- **Amended 2026-10-10** (run `2026-10-10_next-tier`, unit `q2-qa-rows`, with its fix round for `review/2` and
+  `review/4`): the rows left for a person are the kinds REQ-FLOW-069 names, and `/st-work`'s QA step hands the qa
+  skill the class and lenses `gate classify` named, `unclear` when none ran (`content/commands/st-work.md:280-281`).
+  The three states above and the sign-off rules do not change.
 - **Proof:** `test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; census `work-proof-block-fields`
   and `probe-none-work-run-qa-checkpoint`; must-holds `probe-qa-select` and the floor
   `unattended-run-applies-declared-default`; new case `qa-bare-signoff-records-unwalked`; QA.
@@ -406,16 +439,16 @@ sign-off or `not signed` (`content/commands/st-work.md:348-349`).
 ### REQ-FLOW-018 — No QA question when every row auto-proved; unattended means not signed; unchanged accepted rows are not asked again
 
 1. When every row is auto-proven, the checkpoint asks no QA question and records "all N rows auto-proven"
-   (`content/skills/st-qa/SKILL.md:96-98`). Inside a work run the skill asks nothing itself; the rows left for a person
-   ride the run's one close question (`:131-132`).
-2. A run with no person to answer asks nothing and records `Shippable: not signed` (`:107-108`).
+   (`content/skills/st-qa/SKILL.md:113-115`). Inside a work run the skill asks nothing itself; the rows left for a person
+   ride the run's one close question (`:148-149`).
+2. A run with no person to answer asks nothing and records `Shippable: not signed` (`:124-125`).
 3. Each row records an input hash, the QA skill's own: the sha256 of the sorted lines `<path> <git hash-object of path>`
-   over the files the row derives from (`:57-61`). It is not the QA harness's `rowHash` (REQ-PROVE-021). A row recorded
+   over the files the row derives from (`:74-78`). It is not the QA harness's `rowHash` (REQ-PROVE-021). A row recorded
    `accepted-unwalked` in an earlier record of this change with the same input hash is carried as
-   `accepted-unwalked (carried from <run-id>)` without asking; a changed hash reopens it (`:103-107`).
+   `accepted-unwalked (carried from <run-id>)` without asking; a changed hash reopens it (`:120-124`).
 4. A row whose Risk is now `H` is never carried on a hash and is asked at every checkpoint until walked or auto-proven.
    `Shippable: YES` is recorded only with no `H` row accepted-unwalked; otherwise `NO`, naming the open `H` row
-   (`:113-118`).
+   (`:130-135`).
 
 - `judgment: reviewer` — the result stays inside charter invariant 1: fewer questions, never fewer checks.
 - **As built, where the delta differed:** the no-ask record reads "all N rows auto-proven", not
@@ -428,18 +461,23 @@ sign-off or `not signed` (`content/commands/st-work.md:348-349`).
 
 1. Frame asks nothing about an inbox row a persisted plan already settles — named in a unit, a follow-up or its
    out-of-scope text; it lists that row with its disposition. The other overlapping rows ride the plan gate's
-   question and stay in the inbox by default (`content/commands/st-work.md:25-32`).
+   question and stay in the inbox by default (`content/commands/st-work.md:27-29`).
 2. At standard intensity, a persisted `/st-plan` artifact that passed the freshness guard is the go-ahead: the gate
    takes execute-now and logs
    `Default applied: plan gate → option 1, execute now (persisted plan <path>)`. An in-flow plan is presented and
-   asked; deep asks; light auto-continues (`:79-83`, `:449`).
+   asked; deep asks; light auto-continues (`:65-69`, `:432`).
 3. The close asks once: one question with numbered options covers the rows no evidence proved, the spec-delta merge
    and the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged. A part
-   with nothing to decide drops out, and with none left there is no ask (`:332-336`). The spec-author applies the merge
-   once that question confirms it (`:424-428`).
+   with nothing to decide drops out, and with none left there is no ask (`:298-306`). The spec-author applies the merge
+   once that question confirms it (`:409-411`).
 
 - **As built, where the delta differed:** the body has no sentence saying no later turn offers a commit again
   (ledger `build/67`, open); the log line takes the long form, which carries the plan path (the run's Frame audit).
+- **Amended 2026-10-10** (run `2026-10-10_next-tier`, units `q1t-frame-inbox-read` and `q10a-work-close`): the inbox
+  rows item 1 speaks of are the ones Frame reads through the `ledger` verb's `inbox` query (REQ-FLOW-068), no longer
+  the whole file (`content/commands/st-work.md:21-27`). The close's one question of item 3 gains the leftovers as a
+  fourth part (REQ-FLOW-074), and with no response the unattended rule applies beside "leave uncommitted"
+  (REQ-FLOW-075; `:302-305`).
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
   `unattended-run-applies-declared-default`; new case `work-persisted-plan-asks-once`; QA.
@@ -561,7 +599,9 @@ session 2 (unit `sw14-copilot-charter-live-check`): Copilot CLI 1.0.88, through 
 agent with no tools available, quoted both the agent body's first line and the charter's first line under
 `## Invariants`; the control run without the agent quoted the charter line too
 (`.stamity/runs/2026-09-30_optimization-sweep/record.md:96-101`). No Copilot fix was built. Nothing supersedes this
-requirement.
+requirement. Amended 2026-10-10 (run `2026-10-10_next-tier`, unit `q6-copilot-charter-check`): that check ran the agent
+as the session's own, with `--agent` (`:96-99`), and its disposition holds for that route; an agent dispatched as a
+sub-agent is REQ-FLOW-071's subject.
 
 ### REQ-FLOW-024 — A run retires the inbox rows it fixed
 
@@ -569,17 +609,30 @@ At its close, `/st-work` removes each `.stamity/inbox.md` row its change fixed �
 persisted plan — and records `- inbox retired: <location> — fixed in <run id>` in its run record. A row whose `Ref:`
 names a ledger row is retired, its state kept, through
 `stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`; a row the run did not fix stays
-as it is (`content/commands/st-work.md:403-408`). `/st-quick`, which keeps no run record, retires a row after the gate
+as it is (`content/commands/st-work.md:380-383`). `/st-quick`, which keeps no run record, retires a row after the gate
 is green — the ledger row first, then the bullet — and names each row retired, and each named row left, in its batch
 report (`content/commands/st-quick.md:120-127`). The board's removal rule names both retirers
-(`content/commands/st-board.md:339-340`, `:358-363`).
+(`content/commands/st-board.md:341-344`, `:379-384`).
 
 `--retired` sets the optional `retired` field to `<UTC YYYY-MM-DD> <disposition>` on a `deferred` row only, keeps its
 state, and reads the date from the caller's clock. A row whose `retired` value already states that disposition is
 `unchanged`, on a later day too, so a retirement is never re-dated; another disposition is refused
-(`src/runs/ledgerStore.ts:895-968`).
+(`src/runs/ledgerStore.ts:899-983`).
 
 - **As built:** the later-day rule was ratified as built (`review/118`, 14:14Z).
+- **Amended 2026-10-10** (run `2026-10-10_next-tier`, units `q9a-disposition`, `q9t-board-inbox-rules` and
+  `q10a-work-close`, with their fix rounds): from 2026-10-10, by the caller's clock in UTC, a new `retired` value must
+  parse under the grammar of REQ-FLOW-076, else the close is refused with `why` and `next` and nothing is written; the
+  check runs after the `unchanged` answer, so a re-run of a value recorded before that day still reads `unchanged`
+  (`src/runs/ledgerStore.ts:907-912`, `:984-993`). A ledger row the close's one question dropped, or scheduled to a
+  plan, board or handoff place, is retired then and never appended to the inbox, and an inbox row that answer decided
+  leaves by the board's Removal rule (`content/commands/st-work.md:365-368`, `:383-387`;
+  `content/commands/st-board.md:390-397`; REQ-FLOW-074). So the body's "a row the run did not fix stays as it is" now
+  reads "A row no answer reached stays as it is" (`content/commands/st-work.md:389-390`). Both commands spell the
+  third kind of retirement "scheduled to a place with a date or a trigger", where they read "scheduled with a lane, a
+  trigger and an owner" (`:373-374`; `content/commands/st-board.md:381-382`). The board still names two retirers, and
+  adds that `/st-work`'s close also removes a row its one question dropped, placed elsewhere or re-dated
+  (`content/commands/st-board.md:341-344`).
 - **Proof:** `test/runs/ledgerClose.test.ts`, `test/cli/docs/cliReference.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/board.test.ts`, `test/records/ledgers.test.ts`;
   must-holds `work-proof-block-fields` and `quick-next-step-derived-from-batch-state`; QA.
@@ -588,8 +641,8 @@ state, and reads the date from the caller's clock. A row whose `retired` value a
 
 `/st-work` tells the agent to create and extend `record.md`, `plan.md`, reports and the inbox with the client's file
 write and edit tools — never a shell redirect, a heredoc or `cat >` — and to move ledger rows only through the
-`ledger` verb (REQ-CTX-005) (`content/commands/st-work.md:40-42`); a build or fix dispatch names the report path,
-written with the file write tool (`:161`).
+`ledger` verb (REQ-CTX-005) (`content/commands/st-work.md:32-35`); a build or fix dispatch names the report path,
+written with the file write tool (`:136`).
 
 Landed 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`, inbox row 324; unreleased at
 that merge): setup writes no permission allowlist. The engine renders no `permissions` member in
@@ -1002,7 +1055,7 @@ Gates run on every batch, a one-line typo fix included (`content/commands/st-qui
 batch in three steps after the last item lands: the secret scan, `stamity gate classify --base HEAD --json`, then the
 class's checks in a `test-runner` spawn (`:155-184`). `/st-work`'s Prove pass scans with the run's base, then runs
 `stamity gate classify --base <the run's base> --json`; the class's checks run on the selected files in the build and
-its gates on the final tree, as the test-runner maps them (`content/commands/st-work.md:216-228`). The run's base is
+its gates on the final tree, as the test-runner maps them (`content/commands/st-work.md:188-200`). The run's base is
 the record head's `Base:` line (REQ-CTX-012).
 
 - **The mapping** is the test-runner's: `tests-selected` runs the test gate with the selected files appended, the
@@ -1012,23 +1065,23 @@ the record head's `Base:` line (REQ-CTX-012).
   and honours `tests.full`; a `docs` class with zero selected tests runs the scan alone and names the class
   (`content/commands/st-quick.md:174-184`; `review/109`).
 - **The condition.** Both flows state that the narrower gates rest on one condition: the repository's CI runs the
-  full matrix on every `product` or stronger change and on a schedule (`content/commands/st-work.md:222-224`;
+  full matrix on every `product` or stronger change and on a schedule (`content/commands/st-work.md:194-196`;
   `content/commands/st-quick.md:186-188`). Where the charter's `CI provider` reads `unknown`, the final tree runs
-  `all` whatever the class (`content/commands/st-quick.md:187-188`; `content/agents/stamity-test-runner.md:38-39`).
+  `all` whatever the class (`content/commands/st-quick.md:187-188`; `content/agents/stamity-test-runner.md:37-39`).
 - **When no class can be read.** A `/st-work` run with no base scans against `HEAD` and runs
   `${STAMITY:VERIFY_GATE_ALL}` on the final tree unclassified (`unclear`). Such a scan reads no committed work, so a
   run with committed work lists `secret scan: not run` under `Not done:`, and one whose work is all uncommitted is
-  scanned whole and lists nothing for it (`content/commands/st-work.md:224-226`; `src/cli/commands/gate.ts:1461`). In
+  scanned whole and lists nothing for it (`content/commands/st-work.md:196-198`; `src/cli/commands/gate.ts:1461`). In
   either flow a CLI that cannot run or has no `gate` verb, and a scan naming a `reason`, take the full gates and list
-  `secret scan: not run` (`content/commands/st-work.md:226-227`; `content/commands/st-quick.md:152-153`,
+  `secret scan: not run` (`content/commands/st-work.md:198-199`; `content/commands/st-quick.md:152-153`,
   `:162-164`). A `/st-quick` scan naming a `reason` still runs step 2's classify (`:162-164`; `review/113`). A
   `gate classify` that exits 1 names no class (REQ-FLOW-061): `/st-quick` then moves a batch that touches a path the
   security agent's `## Trigger` table names to `/st-work`, as for a `security-sensitive` class, and keeps any other
   batch, a docs-only one among them (`:169-173`; `review/179`; REQ-FLOW-065). `/st-work` runs
   `${STAMITY:VERIFY_GATE_ALL}` on the final tree unclassified (`unclear`), as it does with no base
-  (`content/commands/st-work.md:224-225`; `review/190`).
+  (`content/commands/st-work.md:196-197`; `review/190`).
 - **One review pass.** A class whose checks name `review-once` gets one review pass: a Critical or Warning it raises
-  is fixed and closure-reviewed once, and no further round runs (`content/commands/st-work.md:227-228`).
+  is fixed and closure-reviewed once, and no further round runs (`content/commands/st-work.md:199-200`).
 - **The charter.** Invariant 4 reads "Done means the gates `gate classify` names exit 0 (all if it did not run)", the
   `Not done:` line unchanged, and the verification-gates intro says invariant 4 says which of them
   (`content/charter/stamity-charter.md:30`, `:53-54`). The delta's wording, "the gates the change's class names exit
@@ -1037,6 +1090,16 @@ the record head's `Base:` line (REQ-CTX-012).
 - **Expand/contract:** invariants 1.2.0 is a MINOR step: a repository that never re-syncs keeps the old invariant 4
   and runs every gate, a superset of the class's. Rollback is a re-sync at the prior version. The charter's pins moved
   with the text (`test/content/charter.test.ts`, `test/content/invariantsVersion.test.ts`).
+- **Amended 2026-10-10** (run `2026-10-10_next-tier`, unit `q6t-test-runner-ci-line`, with its fix round for
+  `review/14`): the test-runner reads the CI provider from its own body, where the engine renders it as one of its
+  substitution tokens, so a client whose sub-agents load no charter still applies the rule: "This repository's CI
+  provider is ${STAMITY:CI_PROVIDER}; where that reads `unknown` or is still an unresolved `STAMITY` substitution
+  token, the final tree runs `all` whatever the class" (`content/agents/stamity-test-runner.md:37-39`;
+  `src/emit/substitution.ts:102-113`). The unresolved-token clause is as built, beyond the delta: a copy that ships
+  the token raw, as the APM package's bodies do (REQ-FLOW-002), runs every gate on the final tree. `/st-quick` still
+  names the charter's line, which its own session loads (`content/commands/st-quick.md:187-188`). A `red` verdict
+  writes nothing to the named report path and is returned in full, rows and excerpts
+  (`content/agents/stamity-test-runner.md:144-145`).
 - **Proof:** `test/corpus/commands/work.test.ts`, `test/corpus/commands/lightTrio.test.ts`,
   `test/corpus/agents/quality.test.ts`, `test/corpus/cliCallForm.test.ts`, `test/content/charter.test.ts`,
   `test/content/invariantsVersion.test.ts`; QA.
@@ -1047,22 +1110,23 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p4
 `p4b-fixer-escalation` and `p4c-confidence-no-round` and the p4 fix round.
 
 - **The cap.** Three rounds by default (two at light), operator-configurable within 1..10, the engine clamping to that
-  band (`content/commands/st-work.md:246-250`; `DEFAULT_MAX_REVIEW_ITERATIONS`, `src/roster/reviewCaps.ts:20`). The
+  band (`content/commands/st-work.md:216-217`; `DEFAULT_MAX_REVIEW_ITERATIONS`, `src/roster/reviewCaps.ts:20`). The
   light cap is prose: a review-gate hook that cannot see the tier may hold a light run to the engine cap, so a light
-  run there can see a third round (`content/commands/st-work.md:248-250`; `review/25`).
+  run there can see a third round (`content/commands/st-work.md:444-445`, in the Intensity paragraph since 2026-10-10,
+  where the command states the hold and no longer spells out the third round; `review/25`).
 - **One closure re-review per fix.** Critical and Warning findings route to a fixer, and the fix re-enters review as a
-  fresh reviewer spawn on the fix delta (`:239-241`, `:267-274`). Minor findings never trigger a round, and a note
-  with no consequence is not a finding (`:264-266`).
+  fresh reviewer spawn on the fix delta (`:209-211`, `:233-240`). Minor findings never trigger a round, and a note
+  with no consequence is not a finding (`:231-232`).
 - **Escalation, on what the run shows.** A finding whose ledger row carries two `re-review not-fixed` notes, a gate red
   after a fix, or a finding still open entering the cap round goes to a fresh fixer spawn, never the resumed one, with
   the round history attached, on the same model at one effort level above the fixer's declared one where the
   client's dispatch accepts an effort setting; where it accepts none, the fresh spawn is the escalation and the proof
   block records `effort: not settable`. A finding that fixer leaves open stops the run as `BLOCKED_FAILURE` to the
-  person; no round past the cap runs (`:251-260`; `content/agents/stamity-fixer.md:72-91`). The delta's third trigger
+  person; no round past the cap runs (`:218-227`; `content/agents/stamity-fixer.md:72-91`). The delta's third trigger
   read "a finding still open at the cap round"; it landed "entering the cap round", so the escalation fixer takes the
   cap round's fix and the cap round's review is its closure re-review (`review/29`, `review/41`).
 - **The proof block's review line** names an approval below the gate and each escalation's effort step or
-  `effort: not settable` (`content/commands/st-work.md:346-347`).
+  `effort: not settable` (`content/commands/st-work.md:316-317`).
 - **Expand/contract:** the default moves from 4 to 3; a cap an operator configured within 1..10 still applies. The
   generated review-gate hook reads the engine cap (`.stamity/generated/hooks/claude/stamity-review-gate.mjs:52`).
   Rollback is a re-sync at the prior version.
@@ -1097,7 +1161,7 @@ rounds.
   a parity test holds table and row in both directions.
 - **Topic words** gain `workflow`, `release`, `hook`, `shell`, `file deletion` and `network call`
   (`src/roster/triggers.ts:170-175`), and they may add a lens and never remove one
-  (`content/commands/st-work.md:280-281`).
+  (`content/commands/st-work.md:246-247`).
 - **The line rules** are four call-shape families — `process-spawn`, `delete-or-overwrite`, `network-or-registry`,
   `secret-name` — each word-bounded with its opening parenthesis; `secret-name` counts only where a name is assigned,
   or keyed to, a string literal or an environment value, never a literal that is wholly one `${…}` placeholder
@@ -1117,18 +1181,18 @@ rounds.
   and lets a NUL in a file's first 8,000 bytes alone decide binary (`:99-111`).
 - **In the flow.** The `security` lens runs at every tier when `gate classify` names the class `security-sensitive`,
   and on a trigger-path match; with no class from `gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason`
-  naming a failed read, it runs at every tier as for `security-sensitive` (`content/commands/st-work.md:281-285`;
+  naming a failed read, it runs at every tier as for `security-sensitive` (`content/commands/st-work.md:248-251`;
   `review/162`). Both shapes of a classify carry such a reason: one that exits 1 with no class (REQ-FLOW-061), and
   one that exits 0 with `product` because a git read failed, its reason reading "the change could not be read
   (<cause>), so the class is product" (`src/cli/commands/gate.ts:1265`; `review/194`, `review/195`). `## Dials`' light and standard rows
   state the same rule in their own cells, and that a lockfile's own trigger-path match waits for the audit's flag
-  when the checks name `dependency-audit` (`:448-449`; `review/177`). In `/st-quick`, a `security-sensitive` class
+  when the checks name `dependency-audit` (`:431-432`; `review/177`). In `/st-quick`, a `security-sensitive` class
   fires the `Security-sensitive surface` row: the whole batch moves to `/st-work` as it stands, nothing reverted,
   every applied item reported ungated, and no lens runs inside the quick lane (`content/commands/st-quick.md:165-169`;
   `review/116`). With no class — neither CLI form runs, the classify exits non-zero, or its `reason` names a failed
   read — a batch with a path the security agent's `## Trigger` table names moves the same way, and a batch whose
   paths that table does not name, a docs-only one among them, stays (`:169-173`; `review/179`, `review/189`). The
-  lens reads `git log <range>` only after its findings are formed (`content/agents/stamity-security.md:178-179`).
+  lens reads `git log <range>` only after its findings are formed (`content/agents/stamity-security.md:179-180`).
 - **Audit first.** When every path the rules placed `security-sensitive` is a `package-lock.json` and no
   `package.json` changed, the checks gain `dependency-audit` and the lens leaves, the class staying
   `security-sensitive` and the reason reading `lockfile-only bump: dependency audit first`, only when each lockfile
@@ -1145,14 +1209,20 @@ rounds.
   unscanned code file keeps the lens, the reason saying why, and a later raise puts it back
   (`src/change/classify.ts:1366`, `:1410-1428`; `src/cli/commands/gate.ts:1073-1083`).
   `/st-work` then runs the audit first and the lens only if the audit flags something; the lockfiles' own
-  trigger-path match waits for that flag (`content/commands/st-work.md:286-290`; `review/168`). The audit reads every
+  trigger-path match waits for that flag (`content/commands/st-work.md:252-255`; `review/168`). The audit reads every
   changed lockfile the class's `byPath` names, nested ones included, and its flag counts only the entries the bump
-  adds or changes: an advisory at any severity, a licence flag, or an update-risk class other than `patch` or `minor`
-  for the bump's own version move; a standing condition on an entry the bump leaves alone is reported and does not
-  flag; a `partial` run or an audit that cannot run counts as a flag. An entry is the bump's own when it differs from
-  the run's base, the `Base:` commit `gate classify` read, never from `HEAD` or the work tree, since the units commit
-  as they go; a base the audit cannot read makes the run `partial` (`content/skills/st-dep-audit/SKILL.md:113-128`;
-  `review/160`, `review/166`, `review/178`).
+  adds or changes: an advisory at any severity, a licence flag, or an update-risk class other than `patch` or `minor`,
+  for the bump's own version move or on the entry itself, so a `major` move flags and so does a changed entry whose
+  own class is `major`, `pinned-back` or `unmaintained`; in this role the report's Risk row states both classes of
+  each such entry, the move's and the entry's own; a standing condition on an entry the bump leaves alone is reported
+  and does not flag; a `partial` run, an audit that cannot run, or a changed entry the audit cannot class counts as a
+  flag. An entry is the bump's own when it differs from the run's base, the `Base:` commit `gate classify` read, never
+  from `HEAD` or the work tree, since the units commit as they go; a base the audit cannot read makes the run
+  `partial` (`content/skills/st-dep-audit/SKILL.md:121-140`; `review/160`, `review/166`, `review/178`). Amended
+  2026-10-10 (run `2026-10-10_next-tier`, unit `q11c-dep-audit-writer` and its fix round; that run's ledger
+  `build/39`, `review/63`, `review/64` and `review/68`): the flag read "an update-risk class other than `patch` or
+  `minor` for the bump's own version move", and "a `partial` run or an audit that cannot run counts as a flag", cited
+  at `:113-128`.
 - **State read back as authority** is placed by path: the built-in floor holds the engine's own state and the class
   file, and each repository's class file names the code that reads state back, here `src/merge/**`,
   `src/manifest/**`, `src/runs/ledgerStore.ts` and `src/cli/engine/gitStatus.ts` (`src/change/classify.ts:640-653`;
@@ -1192,11 +1262,11 @@ committed and removed again still stops the run, and such a hit names its commit
   never cleared by rewriting the value and scanning again; a hit on a deliberate fixture is the person's to settle. A
   non-empty `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A scan that
   names a `reason` did not read the whole change: a hit beside it still stops, and with none the full gates run and
-  `secret scan: not run` is listed (`content/commands/st-quick.md:157-164`; `content/commands/st-work.md:216-220`,
-  `:226-227`). A CLI that cannot run takes the full gates and lists `secret scan: not run`
-  (`content/commands/st-quick.md:153`; `content/commands/st-work.md:226`). A `/st-work` run with no base scans against
+  `secret scan: not run` is listed (`content/commands/st-quick.md:157-164`; `content/commands/st-work.md:188-192`,
+  `:198-199`). A CLI that cannot run takes the full gates and lists `secret scan: not run`
+  (`content/commands/st-quick.md:153`; `content/commands/st-work.md:198`). A `/st-work` run with no base scans against
   `HEAD`, which reads no committed work, so it lists `secret scan: not run` only when it has committed work
-  (`content/commands/st-work.md:224-226`; REQ-FLOW-063).
+  (`content/commands/st-work.md:196-198`; REQ-FLOW-063).
 - **Proof:** `test/change/scan.test.ts`, `test/cli/commands/gate.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`.
 
@@ -1208,9 +1278,9 @@ round.
 `/st-plan`'s unit table gains a conditional `threat` row: for a unit whose files
 `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`, its trust boundary, what it
 trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise
-(`content/commands/st-plan.md:353`). The table is followed by the shared "Running the CLI." paragraph, whose fallback
+(`content/commands/st-plan.md:354`). The table is followed by the shared "Running the CLI." paragraph, whose fallback
 reads that when neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed
-read, no unit's class can be read, so every unit carries the `threat` row (`:355-356`). The delta's fallback named
+read, no unit's class can be read, so every unit carries the `threat` row (`:356-357`). The delta's fallback named
 only a CLI that cannot run; it was widened (`review/165`, `review/167`). A classify whose base does not resolve, an
 unborn `HEAD` among them, exits 1 with such a `reason` (`src/cli/commands/gate.ts:1215-1217`; REQ-FLOW-061), so
 there too every unit carries the row.
@@ -1240,11 +1310,11 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p8
   `content/agents/stamity-implementer.md:90-92`; `content/agents/stamity-fixer.md:105-108`).
 - **The count.** The `findings:` digest line of the reviewer, each lens, the implementer and the fixer ends
   `notes left out: <n>`, and an inline result carries the count, never the notes (REQ-CTX-002;
-  `content/commands/st-work.md:198-200`).
+  `content/commands/st-work.md:170-172`).
 - **`/st-rework`.** A person's own nit, polish or cosmetic feedback is a Minor finding, never a note: their ask is its
   consequence (`content/commands/st-rework.md:110-114`; `review/72`). A leftover-scan hit with no named consequence
   is a note, listed under the phase-4 table and counted, never routed; the proof block counts notes beside the
-  findings (`:125-126`, `:159-161`, `:267-270`).
+  findings (`:125-126`, `:159-161`, `:274-277`).
 - **The findings grammar** — one JSON object per line, `id`, `severity`, `locator`, a `summary` of at most 300
   characters, and where true `decision_needed` and `security` — is spelled in the implementer's, the fixer's and the
   spec-author's return contracts (`content/agents/stamity-implementer.md:118-122`;
@@ -1262,17 +1332,420 @@ The reviewer, the security, performance and design-quality lenses, the implement
 change's path; Warning, wrong or missing behaviour a user or maintainer meets in a supported use, or a change that
 makes an existing instance worse; Minor, a true defect with a small, named consequence; each with one example; then
 "A note with no consequence is not a finding; no findings is a good result."
-(`content/agents/stamity-reviewer.md:215-226`; `content/agents/stamity-security.md:181-192`;
-`content/agents/stamity-performance.md:199-210`; `content/agents/stamity-design-quality.md:174-185`;
-`content/agents/stamity-implementer.md:146-157`; `content/agents/stamity-fixer.md:156-167`). One test holds the six
+(`content/agents/stamity-reviewer.md:217-228`; `content/agents/stamity-security.md:182-193`;
+`content/agents/stamity-performance.md:200-211`; `content/agents/stamity-design-quality.md:175-186`;
+`content/agents/stamity-implementer.md:147-158`; `content/agents/stamity-fixer.md:158-169`). One test holds the six
 sections byte-identical. `/st-rework`'s severity vocabulary reads the same three definitions
 (`content/commands/st-rework.md:20-22`).
 
 - **Precedence** (`review/53`): where the shared scale reads otherwise, the performance lens's budget rule decides its
   levels — `Critical` only on a breached declared budget, and with no declared budget over the surface the strongest
   finding is a `Warning` — as `/st-work`'s Specialist pass states (`content/agents/stamity-performance.md:122-126`;
-  `content/commands/st-work.md:306-307`). The reviewer's own Critical rows stay (`content/agents/stamity-reviewer.md:51-55`).
+  `content/commands/st-work.md:271-272`). The reviewer's own Critical rows stay (`content/agents/stamity-reviewer.md:51-55`).
 - **Proof:** `test/corpus/agents/severityScale.test.ts`.
+
+### REQ-FLOW-068 — `/st-work` reads the inbox rows that match its change
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q1a-inbox-store`, `q1b-records-gate-parser`,
+`q9b-inbox-schedule-grammar` and `q1t-frame-inbox-read` and their fix rounds. Every `path:line` in REQ-FLOW-068 to
+REQ-FLOW-077 reads at `a60cb496`, but for the three `content/commands/st-plan.md` ranges the lead's follow-up pass
+re-pointed to `9a0ba4cf` (REQ-FLOW-070's return line; REQ-FLOW-077's `/st-plan` bullet). The ranges of
+`content/commands/st-board.md`, `content/commands/st-rework.md` and `content/skills/st-qa/SKILL.md` that the
+whole-branch review's fix round moved, and the `content/commands/st-work.md` ones inside lines 24 to 30, read at
+`5cd61743`. The ranges of `src/cli/commands/ledger.ts` that reach past its line 896 and of `src/runs/inboxStore.ts`
+that reach past its line 296, here and under `## Risks` and `## Concerns`, read at `cb73f8f1`: the fix batch for the
+pull request's review bot (`review/105` to `review/107`) moved them, and each was re-pointed to the lines that hold
+its text. The ranges of `content/commands/st-rework.md` that reach past its line 176 read at `278af670`: the fix round
+at the run's close (2026-10-11; `qa/5`, `review/101`) added one line at 177 to 179 and one at 205 to 206, and each
+was re-pointed to the lines that hold its text.
+
+Frame reads and surfaces the deferral inbox rows whose paths overlap the change's files through the `ledger` verb's
+`inbox` query, which returns those rows, the rows it always shows, and its total and unmatched counts; from a bare
+intent it queries again with the plan's files (`content/commands/st-work.md:21-23`).
+
+- **The query.** `stamity ledger inbox` is the fourth subcommand of the hidden `ledger` verb, and it writes nothing
+  (`src/cli/commands/ledger.ts:22-36`, `:1208-1213`, `:1240-1242`). A row matches by `--paths` when its location or
+  one of its `files:` entries names a query path — the same path, a folder on either side, or a bare file name against
+  a path's last segment — by `--plan` when its `Ref:` path or its location is the plan, by `--area` on a whole word
+  when its location names no path, and by `--due [date]` when its `by:` day is on or before the day, the clock's UTC
+  day when the flag carries none. A row tagged `critical-deferred` or `decision-waiting` matches every query, and a
+  query with no filter matches every row (`src/runs/inboxStore.ts:46-47`, `:345-357`, `:375-400`, `:412-431`;
+  `src/cli/commands/ledger.ts:858-874`).
+- **The output.** A count line, `inbox: <total> rows · <matched> matched · <unmatched> unmatched · <unparsed>
+  unparsed · <skipped> skipped`, ending `· <n> due by <day> · <n> triggers` under `--due`; one line per matched row,
+  `<line> <severity> · <location> · <description>[ · <tag>] (<matched by>)`; then the unparsed lines and the skip
+  lines. The JSON document carries `inbox`, `total`, `matched`, `counts`, `unmatched`, `problems`, `skipped`,
+  `truncated`, `due` and `triggers`. An absent inbox prints `inbox: absent`, and every report exits 0 (`:1004-1012`,
+  `:1082-1100`, `:1165-1201`).
+- **The screen.** The inbox is user-tier state any writer can author, and these lines land in a run's context, so
+  every bullet, parsed or not, is screened before anything of it prints: against the block-severity rows of the three
+  catalogs the session-start screen composes, without that screen's network-vocabulary filter, so the exfil-signal
+  rows stay in (`:696-710`). A line is read as written and as it prints, each beside its copy with invisible
+  characters stripped and that copy's normalized form (`:737-769`); a parsed row's printed fields are then screened
+  one by one, an unparsed line's message alone, and each matched row's line once more as composed (`:771-822`,
+  `:1127-1133`, `:1143-1153`). A hit prints `skipped: <line> (<pattern id>)`, never the row's text nor its parse
+  message. A bullet longer than 4,096 UTF-16 code units is skipped unscreened, as `over-length` (`:712-724`,
+  `:1102-1107`). Every printed field passes `sanitizeLabel` (`:976-997`, `:1170-1173`).
+- **Withheld rows.** A row the screen hits that still parses, and whose severity and location each pass the screen
+  alone, is withheld rather than dropped. A copy holding its line, severity and location goes to the match, with its
+  always-shown tag, its `by:` day and its `files:` entries where each passes the screen alone, so the row still
+  matches by its location, its files, its day and that tag. Matched, it prints `<line> <severity> · <location> ·
+  withheld by the screen (<pattern id>); read it by hand` in place of its skip line; its description, writer, `Ref:`,
+  trigger, deferral date and rationale reach neither the match nor the output, and its JSON entry carries the pattern
+  id under `withheld` with `description`, `source` and `ref` null (`:829-856`, `:976-1002`, `:1114-1126`).
+- **The caps.** The unparsed lines and the skip lines are listed up to 50 each, then one `unparsed: … +<n> more` or
+  `skipped: … +<n> more` line. The count line keeps the whole numbers, and the JSON `problems` and `skipped` hold the
+  first 50 of each, with the number left out of each under `truncated`. The matched rows are not capped (`:726-735`,
+  `:1014-1021`, `:1190-1197`). Amended 2026-10-10 (the whole-branch review's fix round, its code part; `review/78`): the
+  JSON `skipped` lists the bullets the skip lines name, up to 50, the rest counted under `truncated.skipped`; a withheld
+  row the query matches has no skip line and is not among them, and stands under `matched` with its pattern id as
+  `withheld`. Before it the list was cut to 50 with those rows still in it (`src/cli/commands/ledger.ts`, by file).
+- **A refused read.** The query reads the inbox only as a regular file of at most 1,048,576 bytes inside the
+  repository: each path segment is `lstat`ed top down, and the open takes `O_NOFOLLOW` where the platform has it. A
+  symbolic link, a non-file or a larger file is refused as `VALIDATION_ERROR`, and the refusal's `next` says not to
+  read the file whole in the query's place and to report the refusal as a finding (`:693-694`, `:876-974`). Amended
+  2026-10-10 (the fix batch for the pull request's review bot; `review/105`, `review/106`): a hard link is refused as
+  a symbolic link is, and the ceiling is held by the read itself. A regular file with more than one link is a second
+  name for bytes another name owns, and that name can sit outside the repository; the query refuses it before any
+  byte is read, on the walk's `lstat` and again on the open descriptor's own stats, since a name made between the
+  two shows only there. It reads the link count through the one predicate the write paths use
+  (`src/merge/atomicWrite.ts:136-138`), and its message reads `ledger inbox refused .stamity/inbox.md: inbox.md is a
+  hard link`. The two size checks before the read are fast refusals on a size taken earlier; the read takes
+  1,048,577 bytes at most from the open descriptor and refuses when the last one is there, naming the size as `more
+  than 1048576 bytes`, so a writer that grows the file after its size was read gains nothing, and an inbox of
+  exactly 1,048,576 bytes is read. The refusal's `next` ends on the condition the query runs again under: a regular
+  file with one link, of at most 1048576 bytes, inside the repository (`src/cli/commands/ledger.ts:876-974`). Before
+  it a hard-linked inbox was read as the repository's own, and the ceiling was checked only on the size taken before
+  the read.
+- **In Frame and at the close.** A row the query withholds or skips is listed as it prints, the person's to read, and
+  Frame never opens the inbox for it. Frame reads the whole file, and says so, only when the CLI or that query is
+  absent; any other failure — a refusal, a crash, a failing exit — is a finding naming it, never a whole-file read
+  (`content/commands/st-work.md:24-27`). The close lists such a row the same way and never decides it (REQ-FLOW-074).
+  `fill` and `/st-plan` still read the inbox file whole (`content/commands/st-board.md:416-417`).
+- **Amended 2026-10-10** (the whole-branch review's fix round; `review/90`, `review/97`). The row the query cannot parse
+  has a reader too: Frame's sentence reads "A row it withholds, skips or cannot parse is listed as it prints, the
+  person's to read or fix; never open the inbox for it" (`content/commands/st-work.md:24-25`; its subject read "A row it
+  withholds or skips"), and at the close an `unparsed: <line>: <message>` line is listed as it prints, the person's to
+  fix as a skipped row is (`content/commands/st-board.md:414-416`). The never-open floor is Frame's alone, where the
+  board's sentence read "`/st-work`'s Frame and close never open the inbox for such a row". Where the client's edit tool
+  reads a file before it writes, the close's write to the inbox reads it whole: the text of a withheld or skipped row is
+  data the close never acts on or repeats, and the row is still listed as it printed, with no disposition (`:417-421`).
+- **One grammar, two readers.** The parser is `parseInbox` (`src/runs/inboxStore.ts:268-286`); the query and the
+  records gate both read it, and the gate holds the committed inbox to it (`:29-31`). The row grammar is
+  REQ-FLOW-076's.
+- **As built, where the delta differed:**
+  - The delta gave the whole-file read to "a CLI that cannot run at all (absent, or it crashed)". It landed narrower:
+    only an absent CLI or an absent `inbox` query earns it, and a crash is a finding, as a refusal is (`build/16`).
+  - The delta said Frame reads the matched rows. The landed step says "Read and surface", and gives a skipped line the
+    never-open rule a withheld one has (`build/15`, `review/28`, `review/29`, `review/36`).
+  - The delta named three views of a line. The built screen also reads the line as it prints, since `sanitizeLabel`
+    drops control characters no other view removes (`review/9`); it screens the composed line (`review/25`), skips an
+    over-long bullet unscreened (`review/11`) and caps the two lists (`review/27`).
+  - The delta's withheld row matched by location and `files:`. The built copy also keeps its `by:` day and an
+    always-shown tag, each only when it passes the screen alone.
+- **Expand/contract:** an added subcommand of a hidden verb, and a narrower read at Frame. Rollback is a re-sync at
+  the prior version, which restores Frame's whole-file read. The consumers are `/st-work`'s Frame and close and the
+  records gate.
+- **Proof:** `test/runs/inboxStore.test.ts`, `test/runs/ledgerInbox.test.ts`, `test/records/ledgers.test.ts`,
+  `test/corpus/commands/work.test.ts`, `test/architecture/boundaries.test.ts`; must-hold
+  `work-persisted-plan-asks-once`; QA.
+
+### REQ-FLOW-069 — A person QA row has a reason a machine cannot meet
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the unit `q2-qa-rows` and its fix round.
+
+A row needs a person for one of three kinds only: a rendered surface a person must look at (a page, a screen, a style
+or an image as it renders), a live third-party client or account, and a step that cannot be undone. Every other row is
+auto-proven: where no artifact covers it yet, the run's test-runner executes its check before the table is built, and
+the row points at that result (`content/skills/st-qa/SKILL.md:38-43`).
+
+- **The class clause.** A change whose class, `gate classify`'s as the caller passes it, is `docs`, `records` or
+  `tests` emits the line "no walk-through required — <class> only", with no sign-off block and no ask, unless it
+  changes a path the project's site build renders (its pages, styles or images) or a path the classify hands the
+  `design-quality` lens; then it emits one person row, the changed page renders and reads right and the links to and
+  from it resolve, followed by the sign-off block. With no class passed, the trigger table decides (`:51-57`).
+  `/st-work` hands the skill the class and the lenses at its QA step (REQ-FLOW-017, amended 2026-10-10).
+- **Amended 2026-10-10** (the whole-branch review's fix round; `review/94`, a security finding). One row is held to
+  more: the negative row a security-adjacent path derives (`:35`) is auto-proven only where a committed test's assertion
+  covers it, by the Auto-prove pass's rule 1, the test source `file:line` beside the runner's command and outcome. A
+  check run once for the row is not proof for it, and with no such test it stays on the human path (`:45-49`,
+  `:100-104`). Every other row keeps the rule above. `/st-work`'s QA step restates none of it: it hands the skill the
+  class and the lenses (`content/commands/st-work.md:280-281`).
+- **As built, where the delta differed:**
+  - A row whose check is missing, cannot run or fails stays on the human path under the Auto-prove pass's rule 2
+    (`:43-44`, `:105-107`; `review/2`). The three kinds bound which rows are created for a person; missing evidence
+    is still never scored as a pass.
+  - The one person row also checks that the links to and from the changed page resolve (`:55-57`; `review/4`).
+- **Proof:** `test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; must-hold
+  `qa-bare-signoff-records-unwalked`; QA.
+
+### REQ-FLOW-070 — Plan-lint L5 reports plan size
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q3a-plan-size-script`,
+`q3b-plan-size-text`, `q10b-flow-close-pointers` and `q11a-plan-writer` and their fix rounds.
+
+The structural coverage script reports four advisory codes, each with the plan's path, the heading line of the unit or
+the entry, and a message (`content/skills/st-verify/scripts/spec-plan-coverage.mjs:268-276`):
+
+- `unit-size`, a unit spanning more than 60 lines, and `unit-oversize`, more than 100 (`<unit> spans <n> lines`);
+- `unit-prewritten`, a fence marker line, or a run of five or more lines that start with `>`, inside the unit
+  (`<unit> carries prewritten text at line <n>`; `:100-109`);
+- `delta-verbose`, a Spec delta entry holding more than six non-blank lines below its heading (`<id> runs <n> lines`;
+  `:156-161`).
+
+A unit starts only at an unindented `### ` line outside a fence, so an indented heading-like line is text, and its span
+runs to the line before the next such `### ` or `## ` heading, trailing blank lines left out (`:142-144`, `:187-198`,
+`:269-270`). The four codes are advisory: they change neither the script's status nor its exit code (`:98-99`,
+`:277-278`, `:295`).
+
+`/st-plan` names them as plan-lint check L5, "Plan size (advisory)", whose action never blocks the write
+(`content/commands/st-plan.md:286`), and its return line reads
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run` (`:416-417`). `/st-rework`
+runs the same gate, names `L5` as advisory, and closes its own line with `R1 pass|fail`
+(`content/commands/st-rework.md:247-253`, `:276-277`). The verify skill names the four codes as L5
+(`content/skills/st-verify/SKILL.md:26`).
+
+- **As built, where the delta differed:**
+  - The return lines carry a third value, `L5 not run`, where the coverage script could not run, never a claimed pass
+    (`content/commands/st-plan.md:416-417`; `review/39`).
+  - A delta entry is measured whether its heading is the bare `### REQ-…` or carries its disposition first
+    (`### ADDED REQ-…`, MODIFIED, REMOVED); only the bare form defines a requirement provisionally
+    (`spec-plan-coverage.mjs:157-166`; `build/7`, `review/12`).
+- **Proof:** `test/authoring/specPlanCoverage.test.ts`, `test/corpus/commands/plan.test.ts`,
+  `test/corpus/commands/feedbackPair.test.ts`; must-holds `plan-lint-three-fails-returns-blocked-ambiguity` and
+  `rework-next-step-derived-from-run-state`.
+
+### REQ-FLOW-071 — Copilot sub-agents receive the charter
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the live check `q6-copilot-charter-check` and the unit
+`q6b-copilot-instructions-key` and its fix round.
+
+Every Copilot custom agent the engine emits carries `include-custom-instructions: true` in its frontmatter, after
+`target` and before `tools`, so an agent run as a sub-agent loads the repository instruction files. Prompt files carry
+no such key (`src/adapters/copilot.ts:486-520`, the line at `:511`; `:536-549`).
+
+- **The evidence.** The key is the CLI's since 1.0.86, by its changelog, and sits in the 1.0.89 loader's frontmatter
+  keys. A live sub-agent check on Copilot CLI 1.0.89 on 2026-10-10 found that an agent dispatched through `task`
+  without the key loads no `AGENTS.md`, so the charter, the invariants and the repo facts never reach it (`:473-477`;
+  `.stamity/runs/2026-10-10_next-tier/record.md`, which records the live check). That check proved the gap, not the
+  key's effect. REQ-FLOW-023's check of 2026-09-30 ran the agent as the session's own, where the instructions
+  load, and its disposition holds for that route.
+- **The capability row** `sub-agent-instructions` names that evidence, the `--no-custom-instructions` override as the
+  CLI command reference's claim, unverified on 1.0.89, and the cloud agent's undocumented handling of the key
+  (`:205-219`); `agentsFormat` names the key (`:171-172`).
+- **As built, where the delta differed:** the delta said the row names "the `--no-custom-instructions` override". The
+  landed row marks it unverified: no live run passed the flag (`review/21`, `review/23`). No live run has yet loaded
+  an agent carrying the key either, so its effect rests on the changelog and the loader's key list (`build/13`).
+- **Expand/contract:** one added frontmatter key on every emitted Copilot agent. Rollback is a re-sync at the prior
+  version. The APM package writes its own Copilot agents with `name` and `description` only, so an APM install gets
+  no such key (`scripts/generate-apm-package.mjs:601-606`; `build/12`). The accepted risk is in `## Risks`.
+- **Proof:** `test/adapters/copilot.test.ts`, `test/emit/capabilityMatrix.test.ts`; the live check; QA.
+
+### REQ-FLOW-074 — The close decides every leftover
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9t-board-inbox-rules`, `q10a-work-close`
+and `q10b-flow-close-pointers` and their fix rounds. The rule's text is `/st-board`'s "Leftovers at a close" bullet
+(`content/commands/st-board.md:401-451`), which `/st-work`'s close points at (`content/commands/st-work.md:302-305`).
+
+- **The set.** Before asking, the close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every
+  inbox row tagged `decision-waiting` first, then the due and touched rows and each ledger row neither fixed nor
+  rejected, Minor rows included; the notes left out ride as one line, titles on request
+  (`content/commands/st-work.md:302-305`; `content/commands/st-board.md:401-405`).
+- **The line.** Each leftover reads
+  `L<n> <severity> · <location> · <summary> → fix now | schedule: <place>, <by or when>, <files> | drop — <evidence>; would change if <condition>`,
+  after the `decision-waiting` rows, Critical and Warning first and never pre-set to drop, then `Notes (<p>): drop`
+  (`content/commands/st-board.md:405-408`).
+- **The answers.** Accept the recommendations; change rows in one line (`L2 fix; drop L1: <reason>; show L3`); or
+  stop (`:422-424`).
+  - Fix now runs one fix round, offered only while the review cap leaves a round and outside the files of an open
+    person QA row; a fix that fails is reverted and scheduled, `fix-now failed: <gate or finding>` in its description
+    (`:425-429`).
+  - Schedule closes the row `deferred` and appends it under the schedule rule, or retires it to a plan, board or
+    handoff place with the Removal rule's `scheduled` value (`:429-431`).
+  - Drop closes the row `deferred` and retires it at once, `cut <reason>`, so it never reaches the inbox. Only the
+    person drops a Critical or Warning, retired `cut accepted risk: <reason>` and kept on `Not done:` (`:431-434`).
+  - **Amended 2026-10-10** (the whole-branch review's fix round; `review/91`, `review/96`). The third answer reads "or
+    stop, every leftover row on `Not done:`", where it read "every leftover on": the notes are no row of that list, and
+    a stop drops them as no answer does (REQ-FLOW-075). `show` prints a note's title; on a withheld or skipped row it is
+    refused, since the person reads that row by hand (`:423-425`).
+- **An inbox row the answer decided** follows the Removal rule: a drop retires it and removes its bullet; a plan,
+  board or handoff place retires it there and removes its bullet; a new date or trigger removes its bullet and appends
+  one row under the schedule rule carrying the same `Ref:`. Each removal adds an `- inbox retired:` line naming its
+  disposition. Nothing retires a row without an answer, and a row no answer reached stays as it is (`:390-398`;
+  `content/commands/st-work.md:383-390`).
+- **A withheld or skipped row** (REQ-FLOW-068) is listed as it prints, the person's to read, and never decided: the
+  close offers no disposition for it and applies none, and it stays in the inbox until the person edits it or hands
+  over its `Ref:` with an instruction (`content/commands/st-board.md:408-414`; `content/commands/st-work.md:387-389`).
+  An `unparsed:` line is listed as it prints too, the person's to fix as a skipped row is, and the close's write may
+  read the inbox whole (`content/commands/st-board.md:414-421`; REQ-FLOW-068, amended 2026-10-10).
+- **Minor rows reach the person here.** Only Critical and Warning findings reach the QA checkpoint; the run closes its
+  own Minor rows through the close's leftovers part, where each reaches the person as a leftover with its
+  recommendation, and before the close a Minor row reaches the operator only when its disposition is itself ambiguous
+  (`content/commands/st-work.md:261-267`).
+- **An empty part drops out;** with none left, there is no ask (`:306`). With no response the rule is
+  REQ-FLOW-075's, beside "leave uncommitted".
+- **The other flows.** `/st-pr-resolve` decides each DEFER row in its phase-3 triage ask and adds no closing ask
+  (`content/commands/st-pr-resolve.md:323-325`). `/st-rework` decides its DEFER rows at phase 4's routing table and
+  asks no leftovers question at its handoff (`content/commands/st-rework.md:264-267`). `/st-quick` has no leftovers
+  ask (REQ-FLOW-077).
+- **As built, where the delta differed:**
+  - The delta said "the answer is applied before the record is written". No sentence states it in those words; what
+    the body states is the close gate, which reads its own ledger before writing the record and refuses while any row
+    reads `open` (`content/commands/st-work.md:374-376`).
+  - `stop` is defined: at a close that asks this question it fixes nothing and otherwise handles rows as no answer
+    does, and nothing is fixed, merged or committed; another ask's own `stop`, as at a plan handoff, keeps its
+    meaning (`content/commands/st-board.md:442-449`; `review/48`).
+  - A withheld or skipped row is never decided, where the delta had the close list it "among the leftovers the same
+    way" (`review/42`).
+  - `/st-rework`'s rows are decided at phase 4, where the plan had them ride its handoff ask (`review/52`).
+- **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/commands/work.test.ts`,
+  `test/corpus/commands/feedbackPair.test.ts`; must-holds `work-persisted-plan-asks-once` and
+  `work-proof-block-fields`; QA.
+
+### REQ-FLOW-075 — An unattended close never drops a real defect
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9t-board-inbox-rules` and
+`q10a-work-close` and their fix rounds.
+
+With no answer, only notes are dropped and only fixes the run's plan covers are made. Every other leftover from the
+run's own ledger is appended tagged `decision-waiting`, its recommendation in the description and
+`when: next attended close`; an inbox row the change touched or found due, or one already tagged `decision-waiting`,
+stays as it is, with no copy. Each is listed on `Not done:` and counted as scheduled in the leftovers line
+(REQ-CTX-020); the record's `Status:` names how many wait tagged `decision-waiting`, and the next attended close asks
+about every `decision-waiting` row first. A real defect is never dropped by default
+(`content/commands/st-board.md:434-442`, `:451`).
+
+- **Always shown.** A row tagged `decision-waiting` matches every `inbox` query (`src/runs/inboxStore.ts:46-47`,
+  `:398`), and board triage takes such rows second, after `critical-deferred`
+  (`content/commands/st-board.md:372-378`).
+- **Stop.** The answer `stop`, at a close that asks the leftovers question, handles rows as no answer does and fixes
+  nothing: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with
+  `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled
+  (`:442-449`). The notes are dropped there as with no answer, so the answers line names every leftover row on `Not
+  done:` and no note (`:423-424`; amended 2026-10-10, the whole-branch review's fix round, `review/91`).
+- **As built, where the delta differed:** the delta did not define `stop`, and named the `Status:` count in no
+  entry; both are the landed bullet's (`review/48`).
+- **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/commands/work.test.ts`,
+  `test/runs/inboxStore.test.ts`; QA.
+
+### REQ-FLOW-076 — A scheduled item names a place, a date or a trigger, and its files
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q9a-disposition`,
+`q9b-inbox-schedule-grammar` and `q9t-board-inbox-rules` and their fix rounds.
+
+- **Inbox rows.** After `source:` and the optional `Ref:`, a row carries optional fields in any order, each at most
+  once: `by: <YYYY-MM-DD>` or `when: <trigger>`, never both; `files: <path>, <path>`, each entry one path with no
+  space; one tag word; one bare `<YYYY-MM-DD>`, the deferral date; and `rationale: <rest of line>`, last
+  (`src/runs/inboxStore.ts:9-20`, `:140-208`; `content/commands/st-board.md:354-358`). Every row below the inbox's
+  heading `## Rows under the schedule rule`, to the end of the file, carries `by:` or `when:`, without which it does
+  not parse; rows above it are older and stay valid without (`src/runs/inboxStore.ts:22-24`, `:49-50`, `:246-250`,
+  `:277-279`). `when: touched` needs a path, in the location or in `files:` (`:243-245`). A writer appending where
+  the heading is absent adds it first, at the end of the file (`content/commands/st-board.md:361`).
+- **Triggers.** A trigger made only of vague words (`later`, `someday`, `eventually`, `tbd`, `hygiene batch`) and
+  filler words, one of filler words alone (`at some point`), one that names `hygiene batch` at all, or one holding no
+  letter or digit is refused, wherever its row stands (`src/runs/disposition.ts:40-80`, `:175-199`;
+  `src/runs/inboxStore.ts:178-184`). Amended 2026-10-10 (the whole-branch review's fix round; `review/89`, shaped by
+  `review/99` and `review/100`): `when:` names an event and never holds a day. A trigger holding a `YYYY-MM-DD`-shaped
+  day, alone or among other words, is refused, so its row does not parse; a day is written `by: <YYYY-MM-DD>`, the one
+  field the `--due` read takes. A `YYYY-MM-DD` that opens a run id, followed directly by `_` and a letter or digit as in
+  `<UTC date>_<slug>`, is no day and may stand there (`content/commands/st-board.md:366-368` for the rule; the parser's
+  side is that round's code part, `src/runs/disposition.ts` and `src/runs/inboxStore.ts`, by file).
+- **Retire values.** From 2026-10-10 (`SCHEDULE_RULE_FROM`, `src/runs/disposition.ts:37-38`) a new `retired` value
+  is one of three shapes, a keyword optionally followed by a colon: `fixed <ref>`; `cut <reason>`,
+  `cut accepted risk: <reason>` included; or `scheduled <place> · by <YYYY-MM-DD>` or
+  `scheduled <place> · when <trigger>`, split at the last ` · `, the place written
+  `plan docs/plans/<file>.md#<unit-id or follow-ups>`, `board <item ref>` or `handoff <path>` (`:5-17`, `:201-279`,
+  `:287-348`). Any other value is refused by `ledger close --retired` with `why` and `next`, and nothing is written
+  (REQ-FLOW-024, amended 2026-10-10). A place is text and is never resolved or opened (`:29-31`). Amended 2026-10-10
+  (`review/89`): the `when` slot of a `scheduled` value is held to the same day rule, so `scheduled <place> · when <a
+  day>` is refused and a day is written `· by <YYYY-MM-DD>`.
+- **Free text says something a reader can check.** A trigger, a `fixed` reference, a `cut` reason, an accepted-risk
+  reason and a board item whose every word is a vague or a filler word are refused, and each of them, and a handoff
+  path, must hold at least one letter or digit. In `cut accepted risk: <reason>` the reason is held to the rule
+  alone. Words are compared as written, lower-cased: a look-alike letter is not folded (`:19-27`, `:250-258`,
+  `:299-347`). `/st-board`'s Removal rule names the four slots beside the trigger it points at
+  (`content/commands/st-board.md:398-400`; amended 2026-10-10, the whole-branch review's fix round, `review/69`: it
+  named a `fixed` reference and a `cut` reason alone).
+- **Coming back.** The query's `--due` returns the rows whose `by:` day is on or before the day and counts, beside
+  them, the unmatched rows that wait on a `when:` trigger, which no query sees arrive
+  (`src/runs/inboxStore.ts:397`, `:424-430`; `content/commands/st-board.md:387-390`). A row whose day has come, or
+  whose paths a run changes, comes back to that run's close as a leftover; a kept row is never re-dated in place
+  (`content/commands/st-board.md:385-387`, `:397-398`).
+- **The records gate** holds the committed inbox to the parser, and holds to the grammar every `retired` value of a
+  ledger whose run is dated from the cutover, and in any other ledger every value whose own date is; in a run dated
+  from the cutover a value dated before its run is a problem of its own (`test/records/ledgers.test.ts:108-139`).
+  Earlier rows and values stay valid.
+- **As built, where the delta differed:**
+  - The delta listed "an inbox row" among the places. A `retired` value's place is a plan, a board item or a handoff.
+    An item scheduled to the inbox is an inbox row carrying `by:` or `when:`, and a re-dated row keeps its `Ref:`, so
+    its ledger row stays accounted for and takes no `retired` value (`content/commands/st-board.md:393-394`;
+    `plan/36`).
+  - "Its files" binds through the reader for `when: touched` alone: such a row needs a path in its location or in
+    `files:`. `/st-board`'s text also asks a row at `—` to name `files:` (`:359-360`), which the reader does not
+    hold a `by:` row to (`review/62`).
+  - The delta's vague-trigger list grew into the vague-and-filler rule and the letter-or-digit rule, over five
+    free-text slots (`build/10`, `build/11`, `review/17`, `review/44`, `review/47`, `review/51`).
+  - The delta's "the records gate refuses an inbox row … with a vague trigger" holds for a row above the heading
+    too: a trigger is held to one rule wherever its row stands (`src/runs/inboxStore.ts:24-27`).
+- **Expand/contract:** an added grammar with a dated cutover. A `retired` value dated before 2026-10-10 in a ledger
+  of an earlier run is never read against it, and a row above the heading stays valid with no schedule field.
+  Rollback is a re-sync at the prior version: the writer's check leaves, and the committed values stay valid text.
+- **Proof:** `test/runs/disposition.test.ts`, `test/runs/inboxStore.test.ts`, `test/runs/ledgerInbox.test.ts`,
+  `test/runs/ledgerClose.test.ts`, `test/records/ledgers.test.ts`, `test/corpus/commands/board.test.ts`.
+
+### REQ-FLOW-077 — Every inbox writer follows the schedule rule
+
+From the spec delta of run `2026-10-10_next-tier`, as landed by the units `q10a-work-close`,
+`q10b-flow-close-pointers`, `q11a-plan-writer`, `q11b-feedback-writers` and `q11c-dep-audit-writer` and their fix
+rounds. The writers are the five `/st-board` names (`content/commands/st-board.md:335-340`).
+
+- **`/st-plan`.** A follow-up appends one row, citing the plan path in `Ref:`, carrying `by:` or `when:`, and
+  `files:` when its location is `—`, below the heading:
+  `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
+  or `· when: <trigger>` in the date's place. A follow-up's trigger is something a run can check from the repository
+  or its record; one with neither, or whose trigger only the outside world fires, belongs in the plan's Drop list.
+  The plan shape names two optional sections, 6 Follow-ups and 7 Drop list, and the Drop list appends nothing
+  (`content/commands/st-plan.md:363-367`, `:393-404`, `:425-426`). A day is written `by: <YYYY-MM-DD>`, and `when:`
+  names an event (`:399-400`; REQ-FLOW-076, amended 2026-10-10).
+- **`/st-pr-resolve`.** A deferral lands as `severity · file:line · description · source: pr-resolve #<n> ·
+  when: touched`, or `· by: <YYYY-MM-DD>` when the user names one, and a FIX that stays blocked lands as the same row
+  (`content/commands/st-pr-resolve.md:315-318`).
+- **`/st-rework`.** A DEFER row ends `· source: rework <branch> · when: touched`, with `files: <path>` when the
+  location is `—` (`content/commands/st-rework.md:174-176`, `:182-184`). The critical-deferred row reads
+  `Critical · <file:line> · <the consequence in one line> · source: rework <branch> · when: touched ·
+  critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`, or `by: <YYYY-MM-DD>` when the user names
+  one; at `—` it adds `files: <path>` straight after `when: touched`, or carries the user's day (`:196-206`). The
+  meta row reads `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta`, or
+  `by: <YYYY-MM-DD>` in the trigger's place when the user names a day (`:293`). Amended 2026-10-10 (the whole-branch
+  review's fix round; `review/93`, `review/89`): with no path to name, the rationale question also asks for the day, and
+  with neither no row is written (`:204-205`); the meta row's alternative now ends "never a day under `when:`" (`:293`).
+- **The dep-audit skill.** A deferred item lands as
+  `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
+  or `· when: touched` in the day's place. `files:` names the lockfile that holds the entry, so a bump of that
+  lockfile alone brings the row back; the severity is the word the advisory's source gave; and an advisory at
+  `critical` or `high` is deferred only with a day the operator names, never with the touch trigger
+  (`content/skills/st-dep-audit/SKILL.md:97-108`).
+- **`/st-work`.** Its close appends each `deferred` row it schedules to the inbox below the heading, with `by:` or
+  `when:`, and `files:` when the location is `—` (`content/commands/st-work.md:365-371`; REQ-FLOW-074).
+- **`/st-quick` appends no inbox row** and has no leftovers ask: what a batch cannot finish escalates to `/st-work`
+  by its Escalation table, and that run's close asks about what is left (`content/commands/st-quick.md:223-224`).
+  It stays a retirer and no writer (`content/commands/st-board.md:341-344`).
+- **The audit's flag** reads the changed entry's own risk class as well as the bump's move (REQ-FLOW-065, amended
+  2026-10-10).
+- **As built, where the delta differed:**
+  - The delta's "`files:` when its location is `—`" is in the plan, rework, pr-resolve and work texts. The meta row
+    stands at `—` with none: its default trigger, `when: next board fill`, is no touch, and the reader asks a path of
+    `when: touched` alone (REQ-FLOW-076; `review/62`, `build/35`).
+  - The plan's clause that `/st-quick` asks when its batch leaves a leftover was withdrawn before the build, so the
+    lane offers no choice a scan hit, a red gate or a refusal could be closed around (`plan/40`).
+  - `/st-rework` decides its DEFER rows at phase 4's routing table, not at its handoff ask
+    (`content/commands/st-rework.md:264-267`).
+  - The dep-audit row carries `files:` and the advisory's severity word, and the day rule for a `critical` or `high`
+    advisory, none of which the plan's template had (`review/65`, `review/67`).
+- **Proof:** `test/corpus/commands/plan.test.ts`, `test/corpus/commands/feedbackPair.test.ts`,
+  `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/board.test.ts`,
+  `test/corpus/skills/verifyRestTools.test.ts`; must-holds `rework-critical-deferral-record` and
+  `rework-triage-revise-versus-defer`.
 
 ## Acceptance criteria
 
@@ -1477,6 +1950,8 @@ exists, it is the normative record for that requirement.
   three, and its declared default reads "leave uncommitted".
 - GIVEN no answer to that question THEN nothing is committed, no spec file changes, and QA reads `not signed`.
 - GIVEN that question has been answered THEN no later turn of the run asks about committing.
+- GIVEN a close with person rows, a spec delta, uncommitted changes and leftovers THEN exactly one question is asked,
+  naming all four (added 2026-10-10, unit `q10a-work-close`; REQ-FLOW-074).
 
 **REQ-FLOW-020**
 
@@ -1525,7 +2000,9 @@ exists, it is the normative record for that requirement.
 
 - GIVEN an inbox row whose `file:line` the run's change fixes, and which the run names as fixed, WHEN the close runs THEN
   the row is gone from `.stamity/inbox.md` and the record carries its retirement line.
-- GIVEN a row the run did not name as fixed THEN it stays, byte-identical.
+- GIVEN a row the run did not name as fixed and the close's answer did not decide THEN it stays, byte-identical
+  (amended 2026-10-10, unit `q10a-work-close`; it read "GIVEN a row the run did not name as fixed THEN it stays,
+  byte-identical").
 - GIVEN a `/st-quick` batch that fixed a named row THEN the row is gone and the batch report names it.
 - GIVEN a deferred ledger row and a clock fixed at 2026-10-02 WHEN
   `ledger close --run r1 --id prove/3 --retired "fixed in r2"` runs THEN the row keeps `deferred`, gains
@@ -1719,7 +2196,13 @@ exists, it is the normative record for that requirement.
   class's checks in a `test-runner` spawn.
 - GIVEN `/st-work`'s Prove pass THEN it scans and classifies with `--base` set to the record's `Base:` commit, and on
   the final tree a `product` or stronger class runs `${STAMITY:VERIFY_GATE_ALL}`.
-- GIVEN a charter whose `CI provider` reads `unknown` THEN the final tree runs `all` whatever the class.
+- GIVEN a test-runner body whose rendered CI provider reads `unknown`, or that still carries the unresolved `STAMITY`
+  substitution token, THEN the final tree runs `all` whatever the class; GIVEN `/st-quick` and a charter whose
+  `CI provider` reads `unknown` THEN the batch runs `${STAMITY:VERIFY_GATE_ALL}` whatever its class (amended
+  2026-10-10, unit `q6t-test-runner-ci-line`; it read "GIVEN a charter whose `CI provider` reads `unknown` THEN the
+  final tree runs `all` whatever the class").
+- GIVEN a `red` test-runner verdict and a named report path THEN nothing is written to that path, and the rows and
+  excerpts are returned in full (added 2026-10-10, unit `q6t-test-runner-ci-line`).
 - GIVEN a `/st-work` run with no recorded base and committed work, a CLI with no `gate` verb, or a scan naming a
   `reason` THEN the full gates run and `Not done:` lists `secret scan: not run`; GIVEN a `/st-work` run with no
   recorded base whose work is all uncommitted, and a scan against `HEAD` with no hit and no `reason`, THEN the final
@@ -1767,6 +2250,9 @@ exists, it is the normative record for that requirement.
   with no class from `gate classify` and the lockfile's own trigger-path match waiting for the audit's flag.
 - GIVEN `st-dep-audit`'s `## Before the security lens` THEN it finds the bump's entries against the run's `Base:`
   commit, never `HEAD` or the work tree, and a base it cannot read makes the run `partial`.
+- GIVEN a lockfile-only bump that moves an entry by a patch version, where the entry's own class is `unmaintained` or
+  `pinned-back`, THEN the audit's Risk row states both classes, the audit flags, and the lens runs; GIVEN a changed
+  entry the audit cannot class THEN it counts as a flag (added 2026-10-10, unit `q11c-dep-audit-writer`).
 - GIVEN `/st-quick` and a batch `gate classify` names `security-sensitive` THEN the whole batch moves to `/st-work` as
   it stands, nothing reverted, every applied item listed ungated under `Not done:`; GIVEN no class (neither CLI form
   runs, the classify exits non-zero, or its `reason` names a failed read) THEN a batch touching a path the security
@@ -1813,6 +2299,165 @@ exists, it is the normative record for that requirement.
 - GIVEN the six bodies THEN each ends on a `## Severity` section byte-identical to the test's constant.
 - GIVEN the performance lens and no declared budget over the surface THEN its strongest finding is a `Warning`.
 
+**REQ-FLOW-068**
+
+- GIVEN an inbox holding a row at `src/a.ts:3`, a row at `—` with `files: src/b.ts`, a row tagged `decision-waiting`
+  and two rows naming other paths WHEN `ledger inbox --paths src/a.ts src/b.ts` runs THEN the first two match as
+  `path` and the third as `always`, the count line reads 5 rows, 3 matched and 2 unmatched, and the two other rows
+  print nowhere.
+- GIVEN a row at `src/a.ts:3` whose description the screen hits WHEN `ledger inbox --paths src/a.ts --json` runs THEN
+  the human line reads `<line> <severity> · src/a.ts:3 · withheld by the screen (<pattern id>); read it by hand
+  (path)`, the JSON entry carries the pattern id under `withheld` with `description`, `source` and `ref` null, and
+  none of the description's words print; GIVEN the hit in the location field, or on a line that does not parse, THEN
+  only `skipped: <line> (<pattern id>)` prints.
+- GIVEN a screened phrase split by an invisible character, or by a control character `sanitizeLabel` drops, THEN the
+  row is withheld or skipped as the unsplit phrase is.
+- GIVEN a bullet of 4,097 UTF-16 code units THEN it prints `skipped: <line> (over-length)`, and one of 4,096 is
+  screened.
+- GIVEN 60 lines that do not parse THEN 50 are listed, one `unparsed: … +10 more` line follows, the count line reads
+  60 unparsed, and the JSON carries 50 `problems` and `truncated.problems: 10`.
+- GIVEN more than 50 bullets the screen skips and a withheld row the query matches THEN the JSON `skipped` holds the
+  first 50 bullets the skip lines name and `truncated.skipped` the number of the rest, and the withheld row stands under
+  `matched` with its pattern id as `withheld` and not under `skipped` (added 2026-10-10, the whole-branch review's fix
+  round, `review/78`).
+- GIVEN an inbox that is a symbolic link, a hard link (a regular file with more than one link), larger than
+  1,048,576 bytes, or grown past that size after its size was read, THEN the query refuses with `VALIDATION_ERROR`
+  and prints none of the file's text, and its `next` says not to read the file whole and to report the refusal as a
+  finding; GIVEN an inbox of exactly 1,048,576 bytes THEN it is read; GIVEN no inbox THEN it prints `inbox: absent`
+  and exits 0 (amended 2026-10-10, the fix batch for the pull request's review bot, `review/105` and `review/106`; it
+  read "an inbox that is a symbolic link, or larger than 1,048,576 bytes, THEN the query refuses with
+  `VALIDATION_ERROR`, and its `next` says", and held no exact-size case).
+- GIVEN `content/commands/st-work.md` WHEN Frame step 4 is read THEN it names the `ledger` verb's `inbox` query with
+  `--paths` and `--plan`, the second query from a bare intent, a row the query withholds, skips or cannot parse listed
+  as it prints, the person's to read or fix, with "never open the inbox for it", the whole-file read only when the CLI
+  or that query is absent, and any other failure as a finding, never a whole-file read (amended 2026-10-10, the
+  whole-branch review's fix round, `review/90`; it read "a withheld or skipped row listed as it prints").
+- GIVEN a run whose query refuses the read WHEN Frame runs THEN the record carries a finding naming the refusal and
+  the orchestrator opened no inbox file. `judgment: reviewer`
+
+**REQ-FLOW-069**
+
+- GIVEN the qa skill WHEN read THEN it names the three kinds, says every other row is auto-proven from a check the run's
+  test-runner executes before the table is built, and keeps on the human path a row whose check is missing, cannot run
+  or fails, and holds the negative row of a security-adjacent path to a committed test's assertion (amended 2026-10-10,
+  the whole-branch review's fix round, `review/94`).
+- GIVEN a change to a security-adjacent path whose negative row no committed test's assertion covers THEN that row is
+  not recorded `auto-proven` on a check the test-runner ran once for it; it stays on the human path and is asked (added
+  2026-10-10, the whole-branch review's fix round, `review/94`). `judgment: reviewer`
+- GIVEN a change of class `docs`, `records` or `tests` that changes no path the site build renders and none the
+  classify hands the `design-quality` lens THEN the checkpoint prints "no walk-through required — <class> only", with
+  no sign-off block and no ask.
+- GIVEN such a class and a changed stylesheet the classify hands the `design-quality` lens THEN one person row is
+  emitted, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off
+  block, and "no walk-through required" is not printed. `judgment: reviewer`
+- GIVEN a `product` change to one CLI source file, with no rendered surface, no third-party account and no step that
+  cannot be undone, THEN none of the three kinds creates a person row, and where every row's check ran and passed no
+  QA question is asked; a row whose check is missing, cannot run or fails stays on the human path, the person's, and
+  is asked, and so does the negative row a security-adjacent path derives where no committed test's assertion covers
+  it, a check run once for that row being no proof for it (`content/skills/st-qa/SKILL.md:43-44`, `:45-49`,
+  `:105-107`, `:113`; amended 2026-10-10, `review/83`; it read "THEN no person row is created and no QA question is
+  asked"; amended 2026-10-10, the whole-branch review's cap round, `review/103`: the clause on the negative row and
+  its citation `:45-49` added). `judgment: reviewer`
+
+**REQ-FLOW-070**
+
+- GIVEN a plan with a unit spanning 61 lines and one spanning 101 WHEN the coverage script runs THEN it reports
+  `unit-size` for the first and `unit-oversize` for the second, each at its unit's heading line, and its status stays
+  `pass`.
+- GIVEN a unit holding one fence, or five consecutive lines that start with `>`, THEN it reports `unit-prewritten`;
+  GIVEN a delta entry of a heading and seven non-blank lines THEN `delta-verbose`, and of a heading and six THEN
+  none; GIVEN an entry headed `### ADDED REQ-…` THEN it is measured as the bare form is.
+- GIVEN an indented `### X` line inside a unit THEN it starts no unit.
+- GIVEN `/st-plan`'s and `/st-rework`'s return lines THEN each carries `L5 none|<n> advisory|not run`, `/st-rework`'s
+  before `R1 pass|fail`.
+
+**REQ-FLOW-071**
+
+- GIVEN the Copilot emit WHEN every agent file is read THEN its frontmatter carries
+  `include-custom-instructions: true` after `target: github-copilot` and before `tools:`; GIVEN a prompt file THEN it
+  carries no such key.
+- GIVEN the capability matrix THEN Copilot's `sub-agent-instructions` row names the changelog version, the live
+  check's version and date, the `--no-custom-instructions` override as unverified on 1.0.89, and the cloud agent's
+  undocumented handling of the key.
+- GIVEN a Copilot CLI session in a repository set up by this engine WHEN its orchestrator dispatches an emitted agent
+  through `task` THEN the sub-agent quotes the charter's `Invariants version` line. `judgment: maintainer`; not yet
+  run with the key emitted (`build/13`).
+
+**REQ-FLOW-074**
+
+- GIVEN `/st-board`'s Leftovers at a close WHEN read THEN it names the four kinds of leftover with the
+  `decision-waiting` rows first, the line form, "never pre-set to drop", the three answers, and a withheld or skipped
+  row as listed and never decided; and, amended 2026-10-10 (the whole-branch review's fix round; `review/90`,
+  `review/91`, `review/96`, `review/97`), an `unparsed:` line as the person's to fix, the never-open floor as Frame's
+  alone with what the close's write reads, `stop` as every leftover row on `Not done:`, and what `show` prints and where
+  it is refused.
+- GIVEN a close holding a Warning finding whose author's note urges dropping it, and two notes, THEN the Warning is
+  listed with fix now or schedule as its recommendation, never pre-set to drop and never folded into the notes line.
+  `judgment: reviewer`
+- GIVEN the person's answer drops an inbox row the change touched THEN the row's ledger row, where its `Ref:` names
+  one, is retired `cut <reason>`, its bullet is removed and the record carries an `- inbox retired:` line naming the
+  disposition; GIVEN a new date for it THEN its bullet is replaced by one row under the schedule rule carrying the
+  same `Ref:`. `judgment: reviewer`
+- GIVEN a Critical or Warning the person drops THEN its row is retired `cut accepted risk: <reason>` and stays on
+  `Not done:`.
+- GIVEN a close with every finding fixed, no inbox row touched or due, no `decision-waiting` row and no notes THEN the
+  close asks only what it asked before, or nothing. `judgment: reviewer`
+
+**REQ-FLOW-075**
+
+- GIVEN an unattended close holding one Critical and one Minor deferred row of its own ledger, neither a fix its plan
+  covers, one inbox row its change touched and did not fix, and three notes THEN the notes are dropped and counted,
+  the two ledger rows are appended tagged `decision-waiting` with `when: next attended close`, the touched inbox row
+  stays as it is with no copy, and all three are listed on `Not done:`; the Critical is neither dropped nor retired.
+  `judgment: reviewer`
+- GIVEN a row tagged `decision-waiting` THEN `ledger inbox` shows it for every query, matched as `always` where no
+  other filter matches it.
+- GIVEN the answer `stop` at a close that asks the leftovers question THEN nothing is fixed, merged or committed, each
+  leftover of the run's own ledger closes `deferred` and is appended tagged `decision-waiting`, and each inbox row stays
+  as it is, and the notes are dropped as with no answer (amended 2026-10-10, the whole-branch review's fix round,
+  `review/91`). `judgment: reviewer`
+
+**REQ-FLOW-076**
+
+- GIVEN `parseDisposition` THEN `fixed in 2026-10-10_x`, `fixed by /st-quick`, `cut: out of scope`,
+  `cut accepted risk: no exploit path`, `scheduled plan docs/plans/015-board-writes.md#b1-board-contract · by
+  2026-11-01` and `scheduled board #42 · when touched` are accepted; `scheduled later`, `scheduled board #42 · when
+  later on`, `scheduled board #42 · by 2026-02-30`, `scheduled board now · by 2026-11-01`, `scheduled board #42 · when
+  2026-11-15`, `fixed later`, `cut: tbd`, `cut accepted risk: tbd`, `fixed —` and `moved somewhere` are refused, each
+  naming its problem (the day under `when` added 2026-10-10, the whole-branch review's fix round, `review/89`).
+- GIVEN a deferred ledger row and a clock at 2026-10-10 WHEN `ledger close --retired "scheduled later"` names it THEN
+  the command exits 1 with `why` and `next` and the ledger is byte-identical; GIVEN the clock at 2026-10-09 THEN the
+  value is recorded as before; GIVEN a re-run, after 2026-10-10, of a value recorded before it THEN it prints
+  `unchanged`.
+- GIVEN an inbox row below `## Rows under the schedule rule` with neither `by:` nor `when:`, with `when: later`, with
+  `when: at some point`, with both `by:` and `when:`, with `when: touched` at `—` and no `files:`, or with a `when:`
+  that holds a day, alone (`when: 2026-11-15`) or among other words, THEN `parseInbox` names a problem at its line;
+  GIVEN `when: the next edit of src/a.ts`, or a `when:` naming a run id that opens on its date, THEN none; GIVEN a row
+  above the heading with no schedule field THEN none (the day under `when:` added 2026-10-10, the whole-branch review's
+  fix round, `review/89`).
+- GIVEN `ledger inbox --due 2026-12-01` THEN a row whose `by:` day is on or before that day matches, as `due` where
+  nothing else matched it, the count line ends `· <n> due by 2026-12-01 · <n> triggers`, and an unmatched row carrying
+  `when:` counts under triggers; GIVEN `--due` with no value THEN the clock's UTC day is used; GIVEN `--due
+  2026-02-30` THEN a `USAGE` refusal.
+- GIVEN this repository's tracked inbox and ledgers WHEN the records gate runs THEN every bullet parses, and every
+  `retired` value the schedule rule binds parses under the grammar.
+
+**REQ-FLOW-077**
+
+- GIVEN each writer's row template with its placeholders filled — `/st-plan`'s follow-up on a day and on a trigger,
+  `/st-pr-resolve`'s deferral, `/st-rework`'s DEFER row, its critical-deferred row and its meta row, and the dep-audit
+  row on a day and on a touch — THEN `parseInbox` reads each below the heading with no problem.
+- GIVEN `/st-board`'s census THEN it names five writers, and `/st-quick` among the retirers and not the writers;
+  GIVEN `/st-quick`'s body THEN its last paragraph says the lane appends no inbox row and offers no leftovers ask.
+- GIVEN a deferred advisory at `critical` or `high` THEN the dep-audit row carries a `by:` day the operator named and
+  never `when: touched`.
+- GIVEN a `/st-plan` follow-up with no date and no trigger a run can check THEN it goes to the plan's Drop list and
+  appends nothing.
+- GIVEN a Critical the user defers, with no path to name and no day named, THEN `/st-rework` asks for the day in the
+  rationale question and writes no `critical-deferred` row with neither a path nor a day; the run closes naming the
+  unwritten row as its open item (added 2026-10-10, the whole-branch review's fix round, `review/93`).
+  `judgment: reviewer`
+
 ## References
 
 - `docs/plans/013-optimization-sweep-01.md` — the measures and the method that found these items.
@@ -1829,6 +2474,9 @@ exists, it is the normative record for that requirement.
 - `docs/plans/019-lean-flows-02.md`, and `.stamity/runs/2026-10-08_product-core/plan.md` (its in-flow re-plan, whose
   `## Spec delta` and `## Security notes` this merge took), `record.md` and `ledger.jsonl` — the sign-offs, the review
   rounds and the ledger rows the text dated 2026-10-09 cites.
+- `docs/plans/019-lean-flows-03.md`, and `.stamity/runs/2026-10-10_next-tier/plan.md` (its in-flow re-plan, whose
+  `## Spec delta` this merge took), `record.md` and `ledger.jsonl` — the sign-offs, the review rounds and the ledger
+  rows the text dated 2026-10-10 cites.
 - `test`: each requirement names its suites above; once a test exists it is the normative record.
 - `source`: `src/shared/cliCall.ts`, `src/emit/substitution.ts`, `src/cli/kit/packageName.ts`,
   `scripts/plugins/tokens.mjs`, `src/types/markers.ts`, `src/detect/repoAnalyzer.ts`, `src/detect/verificationGates.ts`,
@@ -1839,6 +2487,8 @@ exists, it is the normative record for that requirement.
   `scripts/plugins/clients/cursor.mjs`, `src/change/classify.ts`, `src/change/testInputs.ts`, `src/change/scan.ts`,
   `src/cli/commands/gate.ts`, `src/roster/triggers.ts`, `src/roster/reviewCaps.ts`, `.stamity/change-classes.json`, and
   the command, agent and skill bodies under `content/`.
+- `source` (added 2026-10-10): `src/runs/inboxStore.ts`, `src/runs/disposition.ts`, `src/cli/commands/ledger.ts`,
+  `content/skills/st-verify/scripts/spec-plan-coverage.mjs`, `scripts/generate-apm-package.mjs`.
 
 ## Risks
 
@@ -1862,6 +2512,34 @@ exists, it is the normative record for that requirement.
   TypeScript and Python only, so a dangerous call in another language places a change by path alone.
 - Audit-first (REQ-FLOW-065) needs the bump staged with the index equal to the work tree; an unstaged bump, or a CRLF
   work tree, keeps the lens. It fails closed (ledger `review/170`, declared default).
+- **Accepted risk (REQ-FLOW-071, and REQ-LADDER-004 in `docs/specs/model-ladder.md`).** github.com's Copilot cloud
+  agent reads the same `.github/agents/` files, and its handling of `include-custom-instructions` and
+  `reasoning-effort` is undocumented (the custom-agents configuration page, read 2026-10-10). The risk was accepted
+  at the plan gate of run `2026-10-10_next-tier` (its ledger `plan/8`, `plan/21`, `build/14`). What
+  bounds it: both capability rows say the cloud handling is undocumented and claim nothing for it
+  (`src/adapters/copilot.ts:196-219`). What would change it: a cloud-agent run on a repository carrying the keys, or
+  GitHub's custom-agents page listing them.
+- REQ-FLOW-071's effect is not yet shown by a live run: the 2026-10-10 check ran without the key and proved the gap
+  alone (that run's ledger `build/13`). Until a run with the key emitted quotes the charter, the claim rests on the
+  CLI's changelog and its loader's key list.
+- A row the screen withholds reaches a run without its description (REQ-FLOW-068). What bounds it: the row still
+  matches by its location, its files, its day and its tag, and prints its line, severity and location with the
+  pattern id, so Frame and the close name it for the person to read. A true finding is never reworded until the
+  screen misses it, which is the defect the injection-screening rule names
+  (`content/rules/stamity-injection-screening.md`).
+- A close that drops or re-dates an inbox row edits a row another run wrote (REQ-FLOW-074). It does so only on the
+  person's answer; each removal is a retirement with a record line, and a re-dated row keeps its `Ref:`.
+- A path match misses a prose location and a root manifest with no dot in its name (REQ-FLOW-068, REQ-FLOW-077; that
+  run's ledger `review/77`). `--area`, `files:` and the unmatched count bound it. Amended 2026-10-10 (the fix batch
+  for the pull request's review bot; `review/107`, with `review/77`): a location entry that carries a line suffix
+  names a path even with no slash and no dot. The suffix is a name holding a letter, one `:`, then a line number or
+  a line range and nothing more, as in `Makefile:12`, `Dockerfile:3-9` or `Gemfile:12`, read after the entry's
+  backticks are stripped and it is cut at its first space. Such a row matches by `--paths`, is no longer reached by
+  `--area`, and may carry `when: touched` with no `files:` (`src/runs/inboxStore.ts:294-335`). What the match still
+  misses: a prose location, a bare word with no line suffix (`Makefile`), a `:` followed by anything else
+  (`Makefile:all`, `Makefile:12:5`), and a suffix with no letter before it (`12:30`, `—:12`). The rule's limit,
+  accepted: a prose location whose first word reads `<word>:<number>` (`step:2 of the plan`) names a path too, and
+  `--area` no longer reaches its row.
 
 ## Concerns
 
@@ -1918,7 +2596,44 @@ exists, it is the normative record for that requirement.
     (`src/change/testInputs.ts:11-14`; `review/84`); the full run on every `product` or stronger change backs it.
   - **The review gate's `low` refusal** sits beside "confidence alone starts no round": on a client whose hook holds,
     a `low` approval is sent back to a fixer, and the text does not say whether that counts as a round
-    (`content/commands/st-work.md:242-245`; `review/33`, a product choice left open).
+    (`content/commands/st-work.md:212-215`; `review/33`, a product choice left open).
   - **Invariant 4 names `gate classify` but not its base**; a bare call after committing classifies only the
-    uncommitted paths. Both flows pass the base (`content/commands/st-work.md:221`;
+    uncommitted paths. Both flows pass the base (`content/commands/st-work.md:193`;
     `content/commands/st-quick.md:165`), and the charter's two lines hold no room for it.
+- REQ-FLOW-068 to REQ-FLOW-077 — the residuals run `2026-10-10_next-tier` recorded, as landed; each id is that run's
+  ledger row, open at this merge:
+  - **The free-text refusal has five slots, and the command named three** (`review/69`). `/st-board`'s Removal rule
+    stated it for a trigger, a `fixed` reference and a `cut` reason; the grammar also refuses a board item and an
+    accepted-risk reason (`src/runs/disposition.ts:253-254`, `:326-346`). Settled 2026-10-10 in the whole-branch
+    review's fix round: the rule names all five (`content/commands/st-board.md:398-400`).
+  - **The query's caps are in no command text** (`review/70`). `/st-board` says a skipped row is listed as it prints;
+    one past the fiftieth has no line of its own, only the `+<n> more` count. The JSON `skipped` list is cut to 50
+    before the matched withheld rows are left out of it, where the human form drops them first
+    (`src/cli/commands/ledger.ts:1175-1178`, `:1193`; `review/78`). Settled 2026-10-10 in the whole-branch review's fix
+    round, its code part: the JSON list leaves those rows out before its cap, as the human form does (REQ-FLOW-068, the
+    caps).
+  - **`files:` at `—`** (`review/62`). `/st-board` asks a row at `—` to name `files:`; the reader holds only a
+    `when: touched` row to a path, and `/st-rework`'s meta row stands at `—` with none (REQ-FLOW-076, REQ-FLOW-077).
+  - **What the grammar still lets through.** A row placed above the heading passes with no day and no trigger
+    (`build/19`); one prose word in `files:` passes as a path (`review/37`); and the screen reads the inbox row by row,
+    so a pattern split over two adjacent rows passes (`src/cli/commands/ledger.ts:1102-1107`; `review/26`).
+  - **The close edits the inbox whole.** It removes and appends bullets with the file tools, and no text limits its
+    read to the lines it changes, so a whole-file read there brings a withheld row's text into the orchestrator's
+    context, which the query kept out (`content/commands/st-work.md:380-390`; `review/50`). Amended 2026-10-10 (the
+    whole-branch review's fix round, `review/97`): the text no longer claims the never-open floor for the close; it says
+    the close's write reads the file whole where the client's edit tool reads before it writes, and that a withheld or
+    skipped row's text is data the close never acts on or repeats (`content/commands/st-board.md:417-421`). The read
+    itself stands.
+  - **A settled row is asked about at the close.** A row a persisted plan settles as deferred is not asked about at
+    Frame (REQ-FLOW-019), yet it is a touched, unfixed row at the close, so each run touching its file asks about it
+    there (`build/27`, a decision left open).
+  - **The qa skill's two readings of auto-proven** (`build/42`). Its person-row paragraph auto-proves a row from a
+    check the test-runner executed, while its Auto-prove table and rule 1 ask for the test source's `file:line`
+    (`content/skills/st-qa/SKILL.md:41-43`, `:90`, `:100-104`). Recorded as observed; this merge settles neither.
+    Amended 2026-10-10 (the whole-branch review's fix round, `review/94`): the negative row of a security-adjacent path
+    is held to rule 1's pointer (`:45-49`); for every other row the two readings stand.
+  - **Copilot's verdict roles load the working tree's instructions** (`review/22`, a security finding and a decision
+    left open). With REQ-FLOW-071's key, Copilot's reviewer and lenses load the checkout's `AGENTS.md`, `CLAUDE.md`
+    and `copilot-instructions.md`, so a branch that edits one is judged by roles already following the edit.
+  - **The APM package's Copilot agents** carry neither `include-custom-instructions` nor `reasoning-effort`
+    (`scripts/generate-apm-package.mjs:601-606`; `build/12`, `build/22`).

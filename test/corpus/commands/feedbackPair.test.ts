@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { REPO_SUBSTITUTION_TOKENS } from "../../../src/emit/substitution.ts";
+import { parseInbox, SCHEDULE_RULE_HEADING, type InboxRow } from "../../../src/runs/inboxStore.ts";
 import {
   CORPUS_ROOT,
   assertDenyClean,
@@ -108,6 +109,9 @@ const PR_RESOLVE = "commands/st-pr-resolve.md";
  */
 const BOARD = "commands/st-board.md";
 
+/** Read as the owner of the plan-lint gate `/st-rework` cites: its L5 row is the one rework names. */
+const PLAN = "commands/st-plan.md";
+
 /**
  * Declared spawn roster per artifact — the command discriminator made explicit.
  *
@@ -127,7 +131,7 @@ const files = new Map<string, CorpusFile>();
 
 beforeAll(async () => {
   const loaded = await Promise.all(
-    [REWORK, PR_RESOLVE, BOARD].map(async (relPath) => {
+    [REWORK, PR_RESOLVE, BOARD, PLAN].map(async (relPath) => {
       const raw = await readFile(join(CORPUS_ROOT, relPath), "utf8");
       return corpusFileOf(relPath, raw);
     }),
@@ -221,6 +225,53 @@ function spawnsOf(file: CorpusFile): string[] {
 }
 
 const countingUp = (n: number, index: number): boolean => n === index + 1;
+
+/** Every backticked span of a clause that opens with `opening`, in document order: its row templates, read off the shipped text. */
+function rowTemplates(text: string, opening: string): string[] {
+  return [...text.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "").filter((span) => span.startsWith(opening));
+}
+
+/**
+ * A whole field a template spells as a bare word or a lone placeholder, with the value a run would
+ * write. The `by:` field is filled whole, ahead of the slots, because the deferred Critical holds
+ * two days in one format (the day it comes back and the day it was deferred): filled from one slot
+ * they would be equal, and no assertion could tell `by` from `deferredOn`.
+ */
+const FILLED_FIELDS: Readonly<Record<string, string>> = {
+  severity: "Warning",
+  "file:line": "lib/widget.ts:14",
+  "<file:line>": "lib/widget.ts:14",
+  description: "the retry loop never backs off",
+  "one-line description": "the retry loop never backs off",
+  "<the consequence in one line>": "a stale session keeps read access",
+  "<one line>": "the run asked twice for one answer",
+  "by: <YYYY-MM-DD>": "by: 2026-11-02",
+};
+
+/** A placeholder inside a field, with the value a run would write; the rationale holds a separator on purpose. */
+const FILLED_SLOTS: readonly (readonly [string, string])[] = [
+  ["<branch>", "fix/session-expiry"],
+  ["#<n>", "#42"],
+  ["<YYYY-MM-DD>", "2026-10-10"],
+  ["<path>", "lib/widget.ts"],
+  ["<the user's sentence>", "the flag is off · so shipping is safe"],
+];
+
+/** A row template with every placeholder filled, field by field; `location` overrides the second field. */
+function fillRow(template: string, location?: string): string {
+  const fill = (field: string): string =>
+    FILLED_FIELDS[field] ?? FILLED_SLOTS.reduce((text, [slot, value]) => text.replaceAll(slot, value), field);
+  return template
+    .split(" · ")
+    .map((field, index) => (index === 1 && location !== undefined ? location : fill(field)))
+    .join(" · ");
+}
+
+/** One filled row as the only bullet below the inbox's schedule-rule heading, read by the inbox's one reader. */
+function parseBelowRule(row: string): { rows: InboxRow[]; problems: string[] } {
+  const parsed = parseInbox(`${SCHEDULE_RULE_HEADING}\n\n- ${row}\n`);
+  return { rows: parsed.rows, problems: parsed.problems.map((problem) => problem.message) };
+}
 
 describe("feedback pair — frontmatter contract", () => {
   it.each([REWORK, PR_RESOLVE])("%s declares the identity head with a bare id", (relPath) => {
@@ -368,9 +419,19 @@ describe("rework — leftover scan and routing", () => {
     expect(routing).toMatch(/\bREVISE\b/);
     expect(routing).toMatch(/\bDEFER\b/);
     expect(routing).toContain(INBOX);
-    // The inbox is read, not just written: both readers are named where the rows land.
+    // The inbox is read, not just written: its readers are named where the rows land.
     expect(routing).toMatch(/\/st-board/);
     expect(routing).toMatch(/\/st-work/);
+    // Added 2026-10-11 (run 2026-10-10_next-tier, the close's fix round; ledger row `qa/5`): the
+    // sentence said "two guaranteed readers" while `/st-board`'s census, which owns the count,
+    // lists three, `/st-plan`'s intake the third. The count is read off the census here, so the
+    // two texts cannot part again unseen, and the third reader is named beside the other two.
+    const census = /\*\*Readers, (\w+), all mandatory:\*\*/.exec(
+      clause(artifact(BOARD).parsed.body, "## Deferral inbox"),
+    )?.[1];
+    expect(census, "`/st-board`'s census states no reader count").toBeDefined();
+    expect(routing).toContain(`That inbox has ${census ?? ""} guaranteed readers`);
+    expect(routing).toContain("and `/st-plan` folds overlapping items into its shared intake");
   });
 
   it("routes every (severity, scope) pair — the table is total over its own scan", () => {
@@ -455,11 +516,233 @@ describe("rework — leftover scan and routing", () => {
       "<the consequence in one line>",
       "source: rework <branch>",
     ]);
+    // TEST CHANGE, justified (2026-10-10, q11b-feedback-writers; REQ-FLOW-077, the plan's D11):
+    // the pinned tail was `critical-deferred`, the date and the rationale. What changed about the
+    // contract: a row under the inbox's schedule rule carries `by:` or `when:`, and the fixed
+    // shape carried neither, so the reader this row is written for refused it below the heading.
+    // The row gains its schedule field straight after the grammar's four, ahead of the tag.
+    // Nothing is relaxed: every field is still pinned in order, and the tail is one field longer.
     expect(fields.slice(4)).toEqual([
+      "when: touched",
       "critical-deferred",
       "<YYYY-MM-DD>",
       "rationale: <the user's sentence>",
     ]);
+    // The sentence that introduces the row counts what follows the four, the new field included.
+    expect(protocol).toContain(
+      "the schedule field, the tag and the two extra fields follow the grammar's four:",
+    );
+    expect(protocol).not.toContain("— the tag and the two extra fields follow");
+    // A day the user names replaces the trigger; the row never carries both. The day is written
+    // in its format (ledger rows `review/58` and `build/34` of run 2026-10-10_next-tier): the
+    // reader takes a real `YYYY-MM-DD` and nothing else, and `by: <date>` named no format.
+    expect(protocol).toContain(`\`${row ?? ""}\` (or \`by: <YYYY-MM-DD>\` when the user names one)`);
+    expect(protocol).not.toContain("by: <date>");
+    // A deferred Critical may name no location, and `when: touched` with no path is refused by
+    // the reader, so the fixed shape says what such a row carries (ledger row `review/57`).
+    expect(protocol).toContain(
+      "A row whose location is `—` adds `files: <path>` straight after `when: touched`, or carries " +
+        "the day the user names: the reader refuses a touch trigger that names no path.",
+    );
+    // Added 2026-10-10 (the whole-branch review's fix round, part B; ledger row `review/93` of run
+    // 2026-10-10_next-tier, signed off): a Critical about no file, deferred by a user who names no
+    // day, had no row shape, so a run invented a path or a day. The question the protocol already
+    // asks takes the day too, and with neither the row is not written; the default below then
+    // names it as the run's open item.
+    const noPath =
+      "With no path to name, the rationale question also asks for the day; with neither, no row is written.";
+    expect(protocol).toContain(noPath);
+    expect(protocol.indexOf(noPath)).toBeGreaterThan(protocol.indexOf("the reader refuses a touch trigger that names no path."));
+    expect(protocol.indexOf(noPath)).toBeLessThan(
+      protocol.indexOf("A row missing the date or the rationale is not this record."),
+    );
+    // Added 2026-10-11 (run 2026-10-10_next-tier, the close's fix round; ledger row `review/101`):
+    // only the unanswered default said how the run closes with no row written, so a user who gave
+    // the rationale and named no day had no such sentence, while REQ-FLOW-077's criterion asserts
+    // it for that case too. It stands straight after the sentence that writes no row.
+    const closes = "The run then closes naming the unwritten row as its open item.";
+    expect(protocol).toContain(
+      `${noPath} ${closes} A row missing the date or the rationale is not this record.`,
+    );
+    expect(protocol).toContain(
+      "**Default if the rationale question goes unanswered:** the deferral stands and the row waits — the run closes naming the unwritten `critical-deferred` row as its open item.",
+    );
+  });
+
+  it("ends both DEFER row templates on the schedule field, with `files:` for a row that names no location (REQ-FLOW-077)", () => {
+    const routing = clause(artifact(REWORK).parsed.body, "## 4. Routing");
+    const templates = rowTemplates(routing, "severity · file:line · ");
+
+    // Two statements of one row: the bullet that says what phase 4 appends, and the bullet that
+    // says how a DEFER finding is shown before it lands. A row shown without the field it lands
+    // with is a row the person did not see.
+    expect(templates).toEqual([
+      "severity · file:line · one-line description · source: rework <branch> · when: touched",
+      "severity · file:line · one-line description · source: rework <branch> · when: touched",
+    ]);
+    // `when: touched` needs a path, so a row whose location is `—` names its files.
+    expect(routing).toContain("with `files: <path>` when the location is `—`");
+    // The grammar is the board's: its own text states the rule this sentence follows.
+    expect(clause(artifact(BOARD).parsed.body, "## Deferral inbox")).toContain(
+      "`when: touched` needs a path in the location or `files:`",
+    );
+  });
+
+  it("gives the meta row the full row grammar, with a trigger or a day and the `meta` tag (REQ-FLOW-077)", () => {
+    const meta = clause(artifact(REWORK).parsed.body, "## Meta-feedback");
+
+    // TEST CHANGE, justified (2026-10-10, q11b-feedback-writers review round 1; ledger rows
+    // `review/59` and `build/35` of run 2026-10-10_next-tier, signed off as amended): the pinned
+    // cell ended `by: <YYYY-MM-DD> · meta`, and no text said whose day that was, so a run had to
+    // invent one. What changed about the contract: the row's default is a trigger, the board's
+    // own triage (`fill` reads the whole inbox, and no close takes a `meta` row), and a day is
+    // written only when the user names it. Nothing is relaxed: the cell is still pinned whole.
+    // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; ledger row
+    // `review/89` of run 2026-10-10_next-tier, signed off): the cell ended "when the user names a
+    // day) |". What changed about the contract: a day written under `when:` parsed and never came
+    // back, and "in the trigger's place" is the wording that invites it, so the cell says which
+    // key the day takes. Nothing is relaxed: the cell is still pinned whole, one clause longer.
+    expect(meta).toContain(
+      `| any | not ready to file | \`${INBOX}\` row \`Minor · — · <one line> · source: rework <branch> · when: next board fill · meta\` ` +
+        "(or `by: <YYYY-MM-DD>` in the trigger's place when the user names a day, never a day under `when:`) |",
+    );
+    // A bare "row tagged `meta`" named no severity, location, writer or day, so no reader parsed it.
+    expect(meta).not.toContain("row tagged `meta`");
+  });
+});
+
+/**
+ * REQ-FLOW-077: every inbox writer follows the schedule rule. Each row template the pair ships is
+ * read off its own text, filled the way a run fills it, and handed to the inbox's one reader
+ * (`parseInbox`) below the schedule-rule heading, where a row with neither `by:` nor `when:` does
+ * not parse. No double stands in for anything: the parser is pure, text in and verdict out.
+ */
+describe("feedback pair — every row template parses under `/st-board`'s grammar (REQ-FLOW-077)", () => {
+  // The dep-audit skill's row is not copied here (ledger row `build/37` of run
+  // 2026-10-10_next-tier): the skill ships it, and the skill's own suite
+  // (`test/corpus/skills/verifyRestTools.test.ts`) reads it off that text and parses it on a day,
+  // on a touch, and without its schedule field. A copy written from the plan guarded a literal no
+  // file ships.
+  const stated = (relPath: string, heading: string, opening: string, index = 0): string =>
+    rowTemplates(clause(artifact(relPath).parsed.body, heading), opening)[index] ?? "";
+  /** Each template as the shipped text states it, read when its case runs; a missing one is "", which fills to no row. */
+  const TEMPLATES: Readonly<Record<string, () => string>> = {
+    "rework DEFER, as appended": () => stated(REWORK, "## 4. Routing", "severity · file:line · "),
+    "rework DEFER, as presented": () => stated(REWORK, "## 4. Routing", "severity · file:line · ", 1),
+    "rework critical-deferred": () => stated(REWORK, "### Critical Deferral Protocol", "Critical · "),
+    "rework meta": () => stated(REWORK, "## Meta-feedback", "Minor · — · "),
+    "pr-resolve DEFER and blocked FIX": () => stated(PR_RESOLVE, "## Close", "severity · file:line · "),
+  };
+  const template = (name: string): string => TEMPLATES[name]?.() ?? "";
+
+  const deferred = { severity: "Warning", source: "rework fix/session-expiry", when: "touched", by: null, tag: null };
+  const CASES: readonly (readonly [string, Partial<InboxRow>])[] = [
+    ["rework DEFER, as appended", deferred],
+    ["rework DEFER, as presented", deferred],
+    [
+      "rework critical-deferred",
+      { ...deferred, severity: "Critical", tag: "critical-deferred", deferredOn: "2026-10-10", rationale: "the flag is off · so shipping is safe" },
+    ],
+    // No path and no day: the trigger is the board's own triage, which needs neither.
+    ["rework meta", { ...deferred, severity: "Minor", location: "—", when: "next board fill", tag: "meta", files: [] }],
+    ["pr-resolve DEFER and blocked FIX", { ...deferred, source: "pr-resolve #42" }],
+  ];
+
+  it.each(CASES)("%s: the filled row parses below the schedule-rule heading", (name, expected) => {
+    const filled = fillRow(template(name));
+    // Every placeholder was filled: a `<…>` left standing would parse as prose and prove nothing.
+    expect(filled).not.toMatch(/<[^>]*>/);
+
+    const { rows, problems } = parseBelowRule(filled);
+    expect(problems).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ...expected, belowRule: true });
+  });
+
+  it.each(CASES.map(([name]) => name))("%s: the same row without its schedule field is refused there", (name) => {
+    // The rule is live: this is the row each template was before it carried the field.
+    const filled = fillRow(template(name));
+    const bare = filled.split(" · ").filter((field) => !/^(?:by|when): /.test(field)).join(" · ");
+    expect(bare).not.toBe(filled);
+
+    const { rows, problems } = parseBelowRule(bare);
+    expect(rows).toEqual([]);
+    expect(problems).toEqual([expect.stringContaining("this one carries neither")]);
+  });
+
+  it("names `files:` on a row with no location, without which `when: touched` is refused", () => {
+    const NO_PATH = "`when: touched` needs a path, in the location or in `files:`";
+    // Each row with the section whose own text names its `files:` field. The deferred Critical
+    // joined on 2026-10-10 (ledger row `review/57` of run 2026-10-10_next-tier): its fixed shape
+    // named no `files:`, so a Critical deferred at `—` was written in a shape the reader refuses.
+    const ROWS: readonly (readonly [string, string])[] = [
+      ["rework DEFER, as appended", "## 4. Routing"],
+      ["pr-resolve DEFER and blocked FIX", "## 4. Routing"],
+      ["rework critical-deferred", "### Critical Deferral Protocol"],
+    ];
+    for (const [name, heading] of ROWS) {
+      const filesField = stated(REWORK, heading, "files: ");
+      expect(filesField, name).toBe("files: <path>");
+
+      const nowhere = fillRow(template(name), "—");
+      expect(parseBelowRule(nowhere).problems, name).toEqual([NO_PATH]);
+
+      // Straight after the trigger, which on a DEFER row is the end of the row.
+      const named = parseBelowRule(nowhere.replace("when: touched", `when: touched · ${fillRow(filesField)}`));
+      expect(named.problems, name).toEqual([]);
+      expect(named.rows[0], name).toMatchObject({ location: "—", when: "touched", files: ["lib/widget.ts"] });
+    }
+
+    // Why the protocol says "straight after": the rationale is the row's last field and takes the
+    // rest of the line, so `files:` written after it is rationale text and the row is still refused.
+    const critical = fillRow(template("rework critical-deferred"), "—");
+    expect(parseBelowRule(`${critical} · files: lib/widget.ts`).problems).toEqual([NO_PATH]);
+    const placed = parseBelowRule(critical.replace("when: touched", "when: touched · files: lib/widget.ts")).rows[0];
+    expect(placed).toMatchObject({ severity: "Critical", tag: "critical-deferred", deferredOn: "2026-10-10" });
+    expect(placed?.rationale).toBe("the flag is off · so shipping is safe");
+  });
+
+  it("takes a day the user names in place of the trigger, written as YYYY-MM-DD, on every row that offers one", () => {
+    const close = clause(artifact(PR_RESOLVE).parsed.body, "## Close");
+    const protocol = clause(artifact(REWORK).parsed.body, "### Critical Deferral Protocol");
+    const meta = clause(artifact(REWORK).parsed.body, "## Meta-feedback");
+    // Each alternative is the text's own span, read where it stands beside its template. In all
+    // three the user names the day (ledger row `review/61`: the Close said "the reviewer", whose
+    // comment this command reads as data, while the user decides each row at the triage ask),
+    // and the span writes the day's format (`review/58`, `build/34`).
+    const closeDay = /\(or `· (by: [^`]+)` when the user names one\)/.exec(close)?.[1] ?? "";
+    const criticalDay = /\(or `(by: [^`]+)` when the user names one\)/.exec(protocol)?.[1] ?? "";
+    // The span's close moved with the cell's last clause (`review/89`; the note is on the cell's pin above).
+    const metaDay = /\(or `(by: [^`]+)` in the trigger's place when the user names a day, never a day under `when:`\)/.exec(meta)?.[1] ?? "";
+    expect([closeDay, criticalDay, metaDay]).toEqual(["by: <YYYY-MM-DD>", "by: <YYYY-MM-DD>", "by: <YYYY-MM-DD>"]);
+    for (const text of [close, protocol, meta]) expect(text).not.toContain("by: <date>");
+    expect(close).not.toContain("the reviewer names one");
+
+    const row = parseBelowRule(fillRow(template("pr-resolve DEFER and blocked FIX").replace("when: touched", closeDay)));
+    expect(row.problems).toEqual([]);
+    expect(row.rows[0]).toMatchObject({ by: "2026-11-02", when: null });
+
+    // Two days in one row, each its own: the day it comes back and the day it was deferred.
+    const critical = parseBelowRule(fillRow(template("rework critical-deferred").replace("when: touched", criticalDay)));
+    expect(critical.problems).toEqual([]);
+    expect(critical.rows[0]).toMatchObject({ by: "2026-11-02", when: null, tag: "critical-deferred", deferredOn: "2026-10-10" });
+    // The day needs no path, so it is also what a deferred Critical at `—` may carry.
+    const nowhere = parseBelowRule(fillRow(template("rework critical-deferred").replace("when: touched", criticalDay), "—"));
+    expect(nowhere.problems).toEqual([]);
+    expect(nowhere.rows[0]).toMatchObject({ location: "—", by: "2026-11-02", when: null, files: [], tag: "critical-deferred" });
+
+    const noted = parseBelowRule(fillRow(template("rework meta").replace("when: next board fill", metaDay)));
+    expect(noted.problems).toEqual([]);
+    expect(noted.rows[0]).toMatchObject({ location: "—", by: "2026-11-02", when: null, tag: "meta" });
+
+    // Why the span writes the format: the reader takes no other shape of day.
+    const loose = parseBelowRule(fillRow(template("pr-resolve DEFER and blocked FIX")).replace("when: touched", "by: 2 Nov 2026"));
+    expect(loose.rows).toEqual([]);
+    expect(loose.problems).toEqual(["`by:` names no real calendar day as YYYY-MM-DD"]);
+
+    // Both at once is no row: a row comes back on a day or on an event.
+    const both = parseBelowRule(`${fillRow(template("pr-resolve DEFER and blocked FIX"))} · ${fillRow(closeDay)}`);
+    expect(both.problems).toEqual(["`by:` and `when:` both appear; a row carries one of them"]);
   });
 });
 
@@ -487,9 +770,75 @@ describe("rework — validation and handoff", () => {
     // reporting three verdicts hides L4 at the one seam the operator reads.
     expect(handoff).toMatch(/`L1`[^.]*`L2`[^.]*`L3`[^.]*`L4`/);
     expect(handoff).toMatch(/run here unchanged rather than restated with different content/i);
-    expect(handoff).toMatch(
-      /L1 pass\|fail · L2 pass\|fail · L3 pass\|fail · L4 pass\|fail · R1 pass\|fail/,
+    // TEST CHANGE, justified (2026-10-10, q10b-flow-close-pointers; REQ-FLOW-070): the close's
+    // plan-lint line gains `/st-plan`'s fifth check, so the pinned token moves from
+    // `… L4 pass|fail · R1 pass|fail` to the one below. What changed about the contract: a
+    // rework-written plan now reports its plan-size reading as `/st-plan`'s own line does, in
+    // L5's vocabulary and not the other four's, ahead of the one rework-only check. Nothing is
+    // relaxed: the whole token is still pinned, and the old five-token line is asserted gone.
+    expect(handoff).toContain(
+      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`",
     );
+    expect(handoff).not.toContain("L4 pass|fail · R1 pass|fail");
+    expect(handoff).not.toContain("L5 pass|fail");
+  });
+
+  it("names L5 as `/st-plan`'s advisory plan-size check, one that never blocks the handoff (REQ-FLOW-070)", () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+
+    // The enumeration is `/st-plan`'s gate cited check by check, so a fifth row there with no
+    // fifth name here would be the gate restated with different content under the same name.
+    expect(handoff).toMatch(/`L4`[^.]*`L5` plan size, advisory[^.]*run here unchanged/);
+    // An advisory code is not a failed check: the next paragraph sends a unit that FAILS a
+    // check back to the user, and L5 must not be readable as one of those.
+    expect(handoff).toContain("whose codes fail no unit and block nothing");
+    // The third value is for a run whose coverage script could not run. `L5 none` there would
+    // tell the operator no size code fired when none was looked for.
+    expect(handoff).toContain("`L5 not run` where the coverage script could not run");
+    expect(handoff).toContain("no `L5` value blocks the handoff");
+    // The rework-only check keeps its label and stays last on the line.
+    expect(handoff.indexOf("L5 none|<n> advisory|not run")).toBeLessThan(handoff.indexOf("R1 pass|fail"));
+
+    // `/st-plan` owns the row this cites; read its own table rather than a copied literal.
+    const planGate = artifact(PLAN).parsed.body.split("\n").find((line) => line.startsWith("| L5 |")) ?? "";
+    expect(planGate, "`/st-plan`'s gate table carries no L5 row for rework to cite").toContain("Plan size (advisory)");
+  });
+
+  // TEST CHANGE, justified (2026-10-10, q11b-feedback-writers; REQ-FLOW-074, REQ-FLOW-077; the
+  // sign-offs on ledger rows `review/52` and `build/31` of run 2026-10-10_next-tier): the pin held
+  // "its DEFER rows and notes ride that ask, by `/st-board`'s Leftovers at a close". What changed
+  // about the contract: by the handoff, phase 4 has appended the DEFER rows and phase 5 has
+  // validated the plan, so the board's answers had nothing to act on there ("fix now" would add a
+  // unit nobody validated, "schedule" would append a row twice). The rows are decided where the
+  // routing table is corrected, the pointer names the board's schedule fields for them, as
+  // `/st-pr-resolve`'s Close does, and the handoff asks no leftovers question. Nothing is
+  // relaxed: the one ask and its three answers are still pinned word for word, and so is `stop`.
+  it("decides each DEFER row at the routing table and asks no leftovers question at the handoff (REQ-FLOW-074, REQ-FLOW-077)", () => {
+    const body = artifact(REWORK).parsed.body;
+    const handoff = clause(body, "## 6. Plan handoff");
+
+    expect(handoff).toContain(
+      "Then ask once, execute-now default: `execute now (default) / show the plan first / stop`. " +
+        "Each DEFER row was decided at phase 4's routing table, in its one batched correction: " +
+        "its row carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the " +
+        "location is `—`), and this handoff asks no leftovers question.",
+    );
+    expect(handoff).not.toContain("ride that ask");
+    expect(handoff).not.toContain("Leftovers at a close");
+    // The handoff's own `stop` keeps its meaning: nothing here re-decides a row already appended.
+    expect(handoff).toContain("On `stop`, the plan and the inbox rows are the run's output.");
+    // The ask the sentence points back at is phase 4's, and it is one.
+    expect(clause(body, "## 4. Routing")).toContain(
+      "Present the whole routing table once and take one batched correction",
+    );
+
+    // The schedule fields are board's, named there: read its grammar rather than a literal. The
+    // same two sentences `/st-pr-resolve`'s Close is held to, so the pair points at one rule.
+    const grammar = clause(artifact(BOARD).parsed.body, "## Deferral inbox");
+    expect(grammar).toContain("`by: <YYYY-MM-DD>` or `when: <trigger>`");
+    expect(grammar).toContain("name `files:` when the location is `—`");
+    // And board's rule leaves a handoff's `stop` to the flow that asks it.
+    expect(grammar).toContain("another ask's own `stop`, as at a plan handoff, keeps its meaning");
   });
 
   it("gives the low-confidence marking a consumer instead of a note", () => {
@@ -850,6 +1199,66 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(close).toMatch(/fourth write-back channel/i);
     expect(close).toContain(INBOX);
     expect(close).toMatch(/proof block/i);
+  });
+
+  it("decides each DEFER row in the phase-3 triage ask and adds no closing ask (REQ-FLOW-074, REQ-FLOW-077)", () => {
+    const body = artifact(PR_RESOLVE).parsed.body;
+    const close = clause(body, "## Close");
+
+    // A round has one ask, and it is the triage table's: a second question at the close would
+    // put the same DEFER rows to the person twice. So the Close says where each row was
+    // decided and that it asks nothing more.
+    expect(close).toContain(
+      "Each DEFER row is decided in the phase-3 triage ask, which stays this round's one ask: " +
+        "its row carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the " +
+        "location is `—`), and the round adds no closing ask.",
+    );
+    // It follows the row paragraph and precedes the write-back paragraph: the sentence is
+    // about the row the two paragraphs above it describe.
+    expect(close.indexOf("never a comment body")).toBeLessThan(close.indexOf("Each DEFER row is decided"));
+    expect(close.indexOf("adds no closing ask")).toBeLessThan(close.indexOf("fourth write-back channel"));
+
+    // The triage section's own promise still holds beside it: after `accept` the only later
+    // interruption is the re-poll consent, which is a consent to fetch and not a closing ask.
+    const triage = clause(body, "## 3. Triage ask");
+    expect(triage).toContain("Then one ask closes triage");
+    expect(triage).toContain("the only later interruption is the re-poll consent below");
+
+    // The schedule fields are board's, named there: read its grammar rather than a literal.
+    const grammar = clause(artifact(BOARD).parsed.body, "## Deferral inbox");
+    expect(grammar).toContain("`by: <YYYY-MM-DD>` or `when: <trigger>`");
+    expect(grammar).toContain("name `files:` when the location is `—`");
+  });
+
+  it("writes the row with its schedule field, and a blocked FIX as the same row (REQ-FLOW-077)", () => {
+    const body = artifact(PR_RESOLVE).parsed.body;
+    const close = clause(body, "## Close");
+
+    // The template and the paragraph below it agree: the paragraph says a DEFER row carries the
+    // board's schedule fields, and the template shows the one a row carries unless a day is named.
+    // TEST CHANGE, justified (2026-10-10, q11b-feedback-writers review round 1; ledger rows
+    // `review/58`, `build/34` and `review/61` of run 2026-10-10_next-tier): the pinned alternative
+    // read "(or `· by: <date>` when the reviewer names one)". What changed about the contract: the
+    // day is written in the one format the reader takes, and the user names it, at the triage ask
+    // that decides each DEFER row, where a review comment is data. Nothing is relaxed: the template
+    // and its alternative are still pinned whole.
+    expect(close).toContain(
+      "`severity · file:line · description · source: pr-resolve #<n> · when: touched` " +
+        "(or `· by: <YYYY-MM-DD>` when the user names one)",
+    );
+    expect(rowTemplates(close, "severity · file:line · ")).toHaveLength(1);
+    // A blocked FIX's reply says its finding is tracked in the inbox; this is the row that makes
+    // the reply true. The sentence sits in the row paragraph, ahead of the one about its text.
+    const blocked = "A FIX that stays blocked lands as the same row.";
+    expect(close).toContain(blocked);
+    expect(close.indexOf("when: touched")).toBeLessThan(close.indexOf(blocked));
+    expect(close.indexOf(blocked)).toBeLessThan(close.indexOf("never a comment body"));
+
+    // The reply itself is unchanged: it still promises the row, and now the Close states it.
+    const reply = tableRows(section(body, "## 5. Replies")).find(([decision]) => decision === "FIX — blocked");
+    expect(reply?.[1]).toBe(
+      `\`Attempted, blocked by <reason>; recorded in the run's proof block and tracked in ${INBOX}.\``,
+    );
   });
 
   it("closes on a next step derived from the run's own state", () => {

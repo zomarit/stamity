@@ -186,6 +186,826 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-11, plan 019 file 3, the close's fix round (run
+  //     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,
+  //     review/101, each decided by the person at the run's close). One
+  //     touchpoint moved, plus the manifest rows that record it. No emitted
+  //     path was added or removed.
+  //
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 20597 -> 20726,
+  //       `.agents/skills/st-rework/SKILL.md` 20644 -> 20773), by +129 bytes,
+  //       the corpus source's own delta (20820 -> 20949, 307 -> 309 lines),
+  //       in two hunks. `## 4. Routing`: the DEFER bullet reads "That inbox
+  //       has three guaranteed readers — `/st-board` fill triages it,
+  //       `/st-work` surfaces overlapping items when its framing phase touches
+  //       the same files, and `/st-plan` folds overlapping items into its
+  //       shared intake", where it named two; `/st-board`'s census, which owns
+  //       the count, lists three (three lines become four; qa/5).
+  //       `### Critical Deferral Protocol`: "The run then closes naming the
+  //       unwritten row as its open item." stands after "with neither, no row
+  //       is written." (two lines become three; review/101).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 row of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, every rule, every
+  //       skill, every other touchpoint, and every companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, the whole-branch review's fix round, part
+  //     B (run 2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-069, REQ-FLOW-074
+  //     to REQ-FLOW-077, ledger rows review/69, review/89 as review/99
+  //     widened it, review/90, review/91, review/93, review/94, review/96 and
+  //     review/97, each signed off). Three touchpoints and one skill moved,
+  //     plus the manifest rows that record them. No emitted path was added
+  //     or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 27820 -> 28482,
+  //       `.agents/skills/st-board/SKILL.md` 27866 -> 28528), by +662 bytes,
+  //       the corpus source's own delta (463 -> 471 lines), three hunks in
+  //       `## Deferral inbox`. Row grammar: after "its row does not parse."
+  //       comes "`when:` names an event and never holds a day: a day is
+  //       written `by: <YYYY-MM-DD>`, and a trigger that holds one is refused
+  //       the same way.", the bullet's next two lines rewrapped behind it
+  //       (three lines become four; review/89). Removal: the free-text refusal
+  //       reads "A `fixed` reference, a `cut` reason, an accepted-risk reason
+  //       or a board item made only of vague and filler words", where it named
+  //       the first two (its three lines held; review/69). Leftovers at a
+  //       close: "An `unparsed: <line>: <message>` line is listed as it prints
+  //       too, the person's to fix as a skipped row is." (review/90); the
+  //       never-open floor is claimed for Frame alone, followed by "Where the
+  //       client's edit tool reads a file before it writes, the close's write
+  //       to the inbox reads it whole: the text of a withheld or skipped row
+  //       is data the close never acts on or repeats, and the row is still
+  //       listed as it printed, with no disposition." (review/97); the third
+  //       answer reads "or stop, every leftover row on `Not done:`"
+  //       (review/91); and "`show` prints a note's title; on a withheld or
+  //       skipped row it is refused, since the person reads that row by hand."
+  //       follows the answers (review/96) (six lines become thirteen).
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 20466 -> 20597,
+  //       `.agents/skills/st-rework/SKILL.md` 20513 -> 20644), by +131 bytes,
+  //       the source's own delta (306 -> 307 lines), in two hunks.
+  //       `### Critical Deferral Protocol`: "With no path to name, the
+  //       rationale question also asks for the day; with neither, no row is
+  //       written." stands before "A row missing the date or the rationale is
+  //       not this record." (one line becomes two; review/93).
+  //       `## Meta-feedback`: the last table row's alternative ends "when the
+  //       user names a day, never a day under `when:`)" (its one line held;
+  //       review/89).
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and
+  //       `.github/prompts/st-work.prompt.md` 34624 -> 34645,
+  //       `.agents/skills/st-work/SKILL.md` 34669 -> 34690), by +21 bytes, the
+  //       source's own delta (485 lines held), one hunk in Frame step 4: "A
+  //       row it withholds, skips or cannot parse is listed as it prints, the
+  //       person's to read or fix; never open the inbox for it.", lines 24-30
+  //       rewrapped in place (review/90).
+  //     CHANGED the qa skill wherever it is emitted
+  //       (`.claude/skills/st-qa/SKILL.md` and
+  //       `.agents/skills/st-qa/SKILL.md`, both 8098 -> 8425), by +327 bytes,
+  //       the source's own delta (144 -> 149 lines), one hunk in
+  //       `## Build the walk-through table`: after "under that pass's rule 2."
+  //       comes "The exception is the negative row a security-adjacent path
+  //       derives: it is auto-proven only where a committed test's assertion
+  //       covers it (that pass's rule 1: the test source `file:line` beside
+  //       the runner's command and outcome); a check run once for the row is
+  //       not proof for it, and with no such test it stays on the human
+  //       path." (five lines added; review/94).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, every rule, every other
+  //       skill and touchpoint, and every companion, hook script, guard and
+  //       policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, the QA walk's fix round, pass qa-row4
+  //     (run 2026-10-10_next-tier; REQ-FLOW-072, REQ-FLOW-077, ledger rows
+  //     qa/2 and qa/4). Six agents and one touchpoint moved, plus the manifest
+  //     rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the six agents whose digest ends `notes left out: <n>`,
+  //       wherever each is emitted, by its corpus source's own delta, one hunk
+  //       each in `## Return contract`: the `Report and digest` rule gains
+  //       "The written report lists every note left out, one line each with
+  //       its locator, and the digest keeps the count alone." before "With no
+  //       report path, or a write refused", and is re-wrapped from the line
+  //       the sentence starts on to the rule's end. Per agent, the paths being
+  //       `.claude/agents/<id>.md`, `.cursor/agents/<id>.md`,
+  //       `.github/agents/<id>.agent.md` and `.codex/agents/<id>.toml`:
+  //       stamity-reviewer (+120, 226 -> 228 lines) 15677 -> 15797,
+  //         15594 -> 15714, 15710 -> 15830, 16380 -> 16500;
+  //       stamity-fixer (+120, 167 -> 169) 10584 -> 10704, 10453 -> 10573,
+  //         10602 -> 10722, 11200 -> 11320;
+  //       stamity-implementer (+118, 157 -> 158) 10045 -> 10163,
+  //         9912 -> 10030, 10065 -> 10183, 10669 -> 10787;
+  //       stamity-security (+118, 192 -> 193) 12922 -> 13040, 12839 -> 12957,
+  //         12955 -> 13073, 13625 -> 13743;
+  //       stamity-design-quality (+118, 185 -> 186) 11943 -> 12061,
+  //         11854 -> 11972, 11976 -> 12094, 12652 -> 12770;
+  //       stamity-performance (+118, 210 -> 211) 13922 -> 14040,
+  //         13832 -> 13950, 13953 -> 14071, 14626 -> 14744.
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 27967 -> 27986,
+  //       `.agents/skills/st-plan/SKILL.md` 28010 -> 28029), by +19 bytes, the
+  //       corpus source's own delta (425 -> 426 lines), one hunk in
+  //       `## Side effects`: the Deferral-inbox append bullet no longer lists
+  //       "a date" among a follow-up's triggers and reads "A day is written
+  //       `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the
+  //       repository or its record: a path touched, a named unit or session, a
+  //       release." (three lines become four); the Drop-list sentence after it
+  //       holds word for word.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, the other four agents (creator,
+  //       researcher, spec-author, test-runner), every rule, every skill other
+  //       than the touchpoint's skill copy, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer, review round 1
+  //     (run 2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger rows
+  //     review/63 to review/68 and build/38). One skill moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the dep-audit skill wherever it is emitted
+  //       (`.claude/skills/st-dep-audit/SKILL.md` and
+  //       `.agents/skills/st-dep-audit/SKILL.md`, both 8212 -> 8982), by +770
+  //       bytes, the corpus source's own delta (148 -> 156 lines), in three
+  //       hunks. `## Step 5 — Report and route out`: the row reads
+  //       `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
+  //       where its description ended `[, <advisory id>]` and it named no
+  //       `files:`, followed after "in the day's place." by "`files:` names
+  //       the lockfile that holds the entry, so a bump of that lockfile alone
+  //       brings the row back. The severity is the word the advisory's source
+  //       gave (Step 2), and an advisory at `critical` or `high` is deferred
+  //       only with a day the operator names: the audit asks for that day and
+  //       never writes the touch trigger in its place." (eight lines become
+  //       twelve). `## Before the security lens`: the gloss reads "so a
+  //       `major` move flags, and so does a changed entry whose own class is
+  //       `major`, `pinned-back` or `unmaintained`"; one sentence follows the
+  //       clause, "In this role the report's Risk row states both classes for
+  //       each such entry: the move's, and the entry's own, which is Step 4's
+  //       class for the version the bump leaves, or `none`."; and the
+  //       fail-closed sentence gains "and so does a changed entry the audit
+  //       cannot class, for want of its release data or of a staleness window
+  //       to read it against" (sixteen lines become twenty). `## Output
+  //       artifact`: the Risk row ends "; before the security lens, both
+  //       classes of each changed entry" (its one line held).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved copies.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint and
+  //       every other skill, companion, hook script, guard and policy
+  //       document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers, review round 1
+  //     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/57 to
+  //     review/61 and build/34 to build/37). Two touchpoints moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 20203 -> 20466,
+  //       `.agents/skills/st-rework/SKILL.md` 20250 -> 20513), by +263 bytes,
+  //       the corpus source's own delta (304 -> 306 lines), in two hunks.
+  //       `### Critical Deferral Protocol`: the fixed row's alternative reads
+  //       "(or `by: <YYYY-MM-DD>` when the user names one)", where it read
+  //       `by: <date>`, followed by "A row whose location is `—` adds
+  //       `files: <path>` straight after `when: touched`, or carries the day
+  //       the user names: the reader refuses a touch trigger that names no
+  //       path." (seven lines become nine). `## Meta-feedback`: the last
+  //       table row names its inbox row as
+  //       `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta`
+  //       "(or `by: <YYYY-MM-DD>` in the trigger's place when the user names a
+  //       day)", where it ended `by: <YYYY-MM-DD> · meta` (its one line held).
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 21114 -> 21116,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 21165 -> 21167), by +2
+  //       bytes, the source's own delta (333 lines held), in the Close's first
+  //       paragraph: the alternative reads "(or `· by: <YYYY-MM-DD>` when the
+  //       user names one)", where it read "(or `· by: <date>` when the
+  //       reviewer names one)", rewrapped within its two lines.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       two touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer (run
+  //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger row build/34,
+  //     and the inbox row `close/6` of run 2026-10-08_product-core). One skill
+  //     moved, plus the manifest rows that record it. No emitted path was
+  //     added or removed.
+  //
+  //     CHANGED the dep-audit skill wherever it is emitted
+  //       (`.claude/skills/st-dep-audit/SKILL.md` and
+  //       `.agents/skills/st-dep-audit/SKILL.md`, both 7853 -> 8212), by +359
+  //       bytes, the corpus source's own delta (144 -> 148 lines), in two
+  //       hunks. `## Step 5 — Report and route out`: the deferred rows land
+  //       "in `/st-board`'s grammar:", stated as
+  //       `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <advisory id>] · source: dep-audit · by: <YYYY-MM-DD>`
+  //       "(an advisory's deadline, when the operator names one) or
+  //       `· when: touched` in the day's place", and an item with no manifest
+  //       line of its own takes the manifest's path with `:1` (six lines
+  //       become eight). `## Before the security lens`: the flag's third
+  //       outcome reads "an update-risk class other than `patch` or `minor`
+  //       (Step 4), for the bump's own version move or on the entry itself, so
+  //       a `major` move, or a changed entry that is `pinned-back` or
+  //       `unmaintained`, flags", the paragraph rewrapped from that clause
+  //       down (fourteen lines become sixteen).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved copies.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint and
+  //       every other skill, companion, hook script, guard and policy
+  //       document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer, review round 1
+  //     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/53,
+  //     review/54, review/55, build/32 and build/33). Two touchpoints moved,
+  //     plus the manifest rows that record them. No emitted path was added or
+  //     removed.
+  //
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 27499 -> 27967,
+  //       `.agents/skills/st-plan/SKILL.md` 27542 -> 28010), by +468 bytes,
+  //       the corpus source's own delta (420 -> 425 lines), in three hunks.
+  //       `## Plan artifact shape`: the Drop list holds "items with no date
+  //       and no trigger a run can check" (its two lines held).
+  //       `## Side effects`: the Deferral-inbox append bullet cites the plan
+  //       path "in `Ref:`", states the row after the heading's name,
+  //       `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
+  //       "or `· when: <trigger>` in the date's place, with
+  //       `· files: <path>, …` when the location is `—`", and says a
+  //       follow-up's trigger is something a run can check from the repository
+  //       or its record, one with neither, or with a trigger only the outside
+  //       world fires, going to the plan's Drop list (six lines become
+  //       eleven). `## Return contract`: the last row reads "citing the plan
+  //       path in `Ref:`" (its two lines held).
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 27732 -> 27820,
+  //       `.agents/skills/st-board/SKILL.md` 27778 -> 27866), by +88 bytes,
+  //       the source's own delta (462 -> 463 lines), one line in the Deferral
+  //       inbox's Row grammar bullet: "a writer appending where the heading is
+  //       absent adds it first, at the end of the file;".
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       two touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers (run
+  //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-074, ledger rows
+  //     review/52, build/29 and build/31). Two touchpoints moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 21000 -> 21114,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 21051 -> 21165), by +114
+  //       bytes, the corpus source's own delta (332 -> 333 lines), all of it
+  //       in the Close's first paragraph: the row template ends
+  //       `· when: touched`, followed by "(or `· by: <date>` when the reviewer
+  //       names one)", and the paragraph closes "A FIX that stays blocked
+  //       lands as the same row."
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 19812 -> 20203,
+  //       `.agents/skills/st-rework/SKILL.md` 19859 -> 20250), by +391 bytes,
+  //       the source's own delta (302 -> 304 lines), in five hunks.
+  //       `## 4. Routing`: both DEFER row templates end
+  //       `· source: rework <branch> · when: touched`, the first followed by
+  //       "with `files: <path>` when the location is `—`" (each bullet
+  //       rewrapped into its five lines). `### Critical Deferral Protocol`:
+  //       "the schedule field, the tag and the two extra fields follow the
+  //       grammar's four", and the fixed row carries `when: touched` ahead of
+  //       `critical-deferred`, followed by "(or `by: <date>` when the user
+  //       names one)" (seven lines held). `## 6. Plan handoff`: the one ask's
+  //       pointer at `/st-board`'s Leftovers at a close is replaced by "Each
+  //       DEFER row was decided at phase 4's routing table, in its one batched
+  //       correction", its row carrying `/st-board`'s schedule fields, and
+  //       "this handoff asks no leftovers question" (+2 lines); the `stop`
+  //       sentence is byte for byte as it was. `## Meta-feedback`: the last
+  //       table row names its inbox row as
+  //       `Minor · — · <one line> · source: rework <branch> · by: <YYYY-MM-DD> · meta`.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       two touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer (run
+  //     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-070, ledger row
+  //     review/39). The st-plan touchpoint moved, plus the manifest rows that
+  //     record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 26785 -> 27499,
+  //       `.agents/skills/st-plan/SKILL.md` 26828 -> 27542), by +714 bytes,
+  //       the corpus source's own delta (412 -> 420 lines), in four hunks.
+  //       `## Plan artifact shape` lists two optional sections after Open
+  //       questions: "6. **Follow-ups** (optional)", items the plan leaves
+  //       out, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and
+  //       `files:` when it names no location, and "7. **Drop list**
+  //       (optional)", a table `Item | Revisit when` whose items append
+  //       nowhere. `## Side effects`: the Deferral-inbox append bullet has
+  //       each row carry `by:` or `when:`, and `files:` when its location is
+  //       `—`, below the inbox's `## Rows under the schedule rule` heading,
+  //       and sends a follow-up with neither to the plan's Drop list.
+  //       `## Return contract`: the plan-lint line's last token reads
+  //       `L5 none|<n> advisory|not run`, followed by "(`L5 not run` where the
+  //       coverage script could not run, never a claimed pass)", and the last
+  //       row ends "with `by:` or `when:`; the Drop list appends nothing".
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-plan skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q10a-work-close, review round 1 (run
+  //     2026-10-10_next-tier; ledger rows review/48 and review/49). The
+  //     st-board touchpoint moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 27127 -> 27732,
+  //       `.agents/skills/st-board/SKILL.md` 27173 -> 27778), by +605 bytes,
+  //       the corpus source's own delta (454 -> 462 lines), all of it at the
+  //       end of the "Leftovers at a close" bullet of `## Deferral inbox`, set
+  //       before its last sentence: the stop answer fixes nothing and
+  //       otherwise handles rows as no answer does (a ledger leftover closes
+  //       `deferred` and is appended tagged `decision-waiting` with
+  //       `when: next attended close`, an inbox row stays, nothing is fixed,
+  //       merged or committed, and another ask's own `stop` keeps its
+  //       meaning); and the leftovers line's `real` counts the Critical and
+  //       Warning rows among those shown, its `changed` the rows whose
+  //       recommendation the person changed.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-board skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q10b-flow-close-pointers (run
+  //     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-070, REQ-FLOW-077). Three
+  //     touchpoints moved, plus the manifest rows that record them. No emitted
+  //     path was added or removed.
+  //
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 20770 -> 21000,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 20821 -> 21051), by +230
+  //       bytes, the corpus source's own delta (328 -> 332 lines): the Close
+  //       gains one paragraph after its row paragraph, "Each DEFER row is
+  //       decided in the phase-3 triage ask, which stays this round's one ask",
+  //       its row carrying `/st-board`'s schedule fields, and the round adding
+  //       no closing ask.
+  //     CHANGED the st-rework touchpoint wherever it is emitted
+  //       (`.claude/commands/st-rework.md` and
+  //       `.github/prompts/st-rework.prompt.md` 19542 -> 19812,
+  //       `.agents/skills/st-rework/SKILL.md` 19589 -> 19859), by +270 bytes,
+  //       the source's own delta (302 lines held, each edit rewrapped into
+  //       the lines its paragraph had), all of it inside
+  //       `## 6. Plan handoff`: the gate enumeration names "`L5` plan size,
+  //       advisory, whose codes fail no unit and block nothing" after L4; the
+  //       one ask ends "; its DEFER rows and notes ride that ask, by
+  //       `/st-board`'s Leftovers at a close"; and the close's plan-lint line
+  //       carries `L5 none|<n> advisory|not run` before `R1`, with the line
+  //       that says when `L5 not run` applies and that no L5 value blocks the
+  //       handoff.
+  //     CHANGED the st-quick touchpoint wherever it is emitted
+  //       (`.claude/commands/st-quick.md` and
+  //       `.github/prompts/st-quick.prompt.md` 14076 -> 14237,
+  //       `.agents/skills/st-quick/SKILL.md` 14120 -> 14281), by +161 bytes,
+  //       the source's own delta (221 -> 224 lines): one last paragraph of two
+  //       sentences, "This lane appends no inbox row. What a batch cannot
+  //       finish escalates to `/st-work` by the Escalation table above, and
+  //       that run's close asks about what is left."
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       three touchpoints' skill copies, every other touchpoint, companion,
+  //       hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules, review round 1
+  //     (run 2026-10-10_next-tier; ledger rows review/41 to review/45, build/25
+  //     and build/26). The st-board touchpoint moved, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 26475 -> 27127,
+  //       `.agents/skills/st-board/SKILL.md` 26521 -> 27173), by +652 bytes,
+  //       the corpus source's own delta (444 -> 454 lines), all of it inside
+  //       `## Deferral inbox`: the Writers bullet says `/st-work`'s close
+  //       appends the `deferred` rows it schedules to the inbox, not every
+  //       one; the Row grammar bullet names a trigger of filler words alone
+  //       among those refused; the Removal bullet states the `scheduled`
+  //       retire value and its three place forms; and the Leftovers bullet
+  //       lists a withheld or skipped row without deciding it, names what
+  //       each prints, narrows the never-open rule to `/st-work`'s Frame and
+  //       close, and points the Schedule sentence at the retire value.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-board skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q10a-work-close (run
+  //     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019,
+  //     REQ-FLOW-024, REQ-CTX-020). The st-work touchpoint moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       33029 -> 34624, `.agents/skills/st-work/SKILL.md` 33074 -> 34669), by
+  //       +1595 bytes, the corpus source's own delta (471 -> 485 lines), all of
+  //       it below the re-attachment cut: the Severity floor closes a Minor row
+  //       through the close's leftovers part; "The close asks once" gains the
+  //       four-line pointer to `/st-board`'s Leftovers at a close; the Proof
+  //       block gains the "Leftovers line" paragraph after the usage lines; the
+  //       append paragraph puts a deferred row under the schedule rule unless
+  //       the close dropped or placed it, reads "scheduled to a place with a
+  //       date or a trigger" and adds each accepted risk to `Not done:`; and
+  //       the fixed-row paragraph applies the close's answer by `/st-board`'s
+  //       Removal rule, lists a withheld or skipped row without deciding it,
+  //       and keeps a row no answer reached.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules (run
+  //     2026-10-10_next-tier; REQ-FLOW-076, REQ-FLOW-074, REQ-FLOW-075,
+  //     REQ-FLOW-024). The st-board touchpoint moved, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 22074 -> 26475,
+  //       `.agents/skills/st-board/SKILL.md` 22120 -> 26521), by +4401 bytes,
+  //       the corpus source's own delta (383 -> 444 lines), all of it inside
+  //       `## Deferral inbox`: the Row grammar bullet names the optional
+  //       fields after `source:` and `Ref:` (`by:` or `when:`, `files:`, the
+  //       tag word, the bare deferral date, `rationale:` last), the
+  //       schedule-rule heading and the triggers refused; the Triage order
+  //       puts `decision-waiting` rows second; the Removal bullet reads
+  //       "scheduled to a place with a date or a trigger", says when a row
+  //       comes back to a close and how the close's answer applies to it, and
+  //       names the count line's `--due` tail; the Retirers bullet gains the
+  //       rows `/st-work`'s one question decided; and a new last bullet,
+  //       "Leftovers at a close", states the close's one ask, its three
+  //       answers, the withheld row (listed as it prints, never opened) and
+  //       the unattended rule. The Writers and Readers bullets are byte for
+  //       byte as they were.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-board skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q4t-ladder-placement-text (run
+  //     2026-10-10_next-tier; REQ-LADDER-003, the plan's `build/87` row). The
+  //     st-work touchpoint moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32903 -> 33029, `.agents/skills/st-work/SKILL.md` 32948 -> 33074), by
+  //       +126 bytes, the corpus source's own delta: the Model ladder paragraph
+  //       counts three placements the table records and names the escalation
+  //       fixer's effort step as a second one no row records (+58), and the
+  //       table's frontier cell names the one closure re-review after an
+  //       escalation (+68).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q3b-plan-size-text (run
+  //     2026-10-10_next-tier; REQ-FLOW-070). The st-plan touchpoint and the
+  //     verify skill moved, plus the manifest rows that record them. No emitted
+  //     path was added or removed.
+  //
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and `.github/prompts/st-plan.prompt.md`
+  //       26341 -> 26785, `.agents/skills/st-plan/SKILL.md` 26384 -> 26828), by
+  //       +444 bytes, the corpus source's own delta: the Plan-lint gate table
+  //       gains its L5 row, "Plan size (advisory)", naming the coverage
+  //       script's four size codes, and the Return contract's lint line ends
+  //       `· L5 none|<n> advisory`.
+  //     CHANGED `st-verify/SKILL.md` in every selection that carries it
+  //       (`.claude/skills/` and `.agents/skills/`) by +128 bytes,
+  //       7045 -> 7173, at an unchanged line count: one line after the
+  //       coverage-script paragraph, "Its advisory plan-size codes are L5 —
+  //       `unit-size`, `unit-oversize`, `unit-prewritten`, `delta-verbose` —
+  //       and never fail it.", and the closing paragraph's last word pulled up
+  //       a line (a line break became a space, 0 bytes) so the body holds its
+  //       130-line cap.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, every other
+  //       touchpoint and skill, the coverage script, every companion, hook
+  //       script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q6c-copilot-effort-key (run
+  //     2026-10-10_next-tier; REQ-LADDER-004). The ten Copilot agent files
+  //     moved, plus the manifest rows that record them. No emitted path was
+  //     added or removed, and no corpus source moved.
+  //
+  //     CHANGED all ten `.github/agents/stamity-<id>.agent.md` files in the two
+  //       selections that carry them (copilot and all-four): one frontmatter
+  //       line closing the list, `reasoning-effort: <level>`, at the default of
+  //       the class the agent declares. `high`, +23 bytes: design-quality
+  //       11953 -> 11976, implementer 10042 -> 10065, reviewer 15687 -> 15710,
+  //       security 12932 -> 12955, spec-author 12246 -> 12269. `medium`, +25
+  //       bytes: creator 14002 -> 14027, fixer 10577 -> 10602, performance
+  //       13928 -> 13953, researcher 8445 -> 8470. `low`, +22 bytes:
+  //       test-runner 8664 -> 8686. The prompt below the frontmatter is
+  //       byte-identical.
+  //     CHANGED `.stamity/manifest.json` in those two selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the ten files.
+  //
+  //     What did NOT move: the claude, codex and cursor selections, every
+  //       Copilot prompt file, instructions file, hook document and the setup
+  //       workflow, and every other agent dialect, rule, skill, hook script
+  //       and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script, its review
+  //     round 1 fix (run 2026-10-10_next-tier; review/12 with build/7;
+  //     REQ-FLOW-070). The coverage script moved again, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `st-verify/scripts/spec-plan-coverage.mjs` in every selection
+  //       that carries it (`.claude/skills/` and `.agents/skills/`) by +260
+  //       bytes, 17656 -> 17916, and 302 -> 304 lines: `delta-verbose` also
+  //       reads a delta entry headed `### ADDED REQ-…`, `### MODIFIED REQ-…`
+  //       or `### REMOVED REQ-…` (one pattern and two comment lines).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint,
+  //       companion, hook script, guard, policy document and every other
+  //       skill file.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q6b-copilot-instructions-key (run
+  //     2026-10-10_next-tier; REQ-FLOW-071). The ten Copilot agent files
+  //     moved, plus the manifest rows that record them. No emitted path was
+  //     added or removed, and no corpus source moved.
+  //
+  //     CHANGED all ten `.github/agents/stamity-<id>.agent.md` files in the two
+  //       selections that carry them (copilot and all-four) by +34 bytes each
+  //       (creator 13968 -> 14002, design-quality 11919 -> 11953, fixer
+  //       10543 -> 10577, implementer 10008 -> 10042, performance
+  //       13894 -> 13928, researcher 8411 -> 8445, reviewer 15653 -> 15687,
+  //       security 12898 -> 12932, spec-author 12212 -> 12246, test-runner
+  //       8630 -> 8664): one frontmatter line, `include-custom-instructions:
+  //       true`, between `target` and `tools`, so a Copilot sub-agent loads
+  //       the repository instructions. The prompt below the frontmatter is
+  //       byte-identical.
+  //     CHANGED `.stamity/manifest.json` in those two selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the ten files.
+  //
+  //     What did NOT move: the claude, codex and cursor selections, every
+  //       Copilot prompt file, instructions file, hook document and the setup
+  //       workflow, and every other agent dialect, rule, skill, hook script
+  //       and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script (run
+  //     2026-10-10_next-tier; REQ-FLOW-070). The coverage script moved, plus
+  //     the manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `st-verify/scripts/spec-plan-coverage.mjs` in every selection
+  //       that carries it (`.claude/skills/` and `.agents/skills/`) by +2283
+  //       bytes, 15373 -> 17656, and 262 -> 302 lines: the four advisory L5
+  //       codes (`unit-size`, `unit-oversize`, `unit-prewritten`,
+  //       `delta-verbose`) and a unit read only at an unindented `### `.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint,
+  //       companion, hook script, guard, policy document and every other
+  //       skill file.
+  //
+  //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q1t-frame-inbox-read
+  //     (run 2026-10-10_next-tier; REQ-FLOW-019, REQ-FLOW-068, review/28 with
+  //     build/15 and review/29 as signed off). The st-work touchpoint moved,
+  //     plus the manifest rows that record it. No emitted path was added or
+  //     removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32882 -> 32903, `.agents/skills/st-work/SKILL.md` 32927 -> 32948), by
+  //       +21 bytes, the corpus source's own delta: Frame step 4's first
+  //       sentence opens "Read and surface the deferral inbox rows" (+12), and
+  //       its never-open rule names a row the query skips beside one it
+  //       withholds (+9).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, second commit of unit q1t-frame-inbox-read
+  //     (run 2026-10-10_next-tier; REQ-FLOW-068, q1a's security re-review as
+  //     signed off). The st-work touchpoint moved, plus the manifest rows that
+  //     record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32889 -> 32882, `.agents/skills/st-work/SKILL.md` 32934 -> 32927), by
+  //       -7 bytes, the corpus source's own delta: Frame step 4's withheld-row
+  //       sentence says the row is the person's to read and the inbox is never
+  //       opened for it (+54), paid for by word-level cuts in Phase 2's
+  //       Plan-artifact intake and Freshness guard bullets (-61).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q1t-frame-inbox-read (run
+  //     2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-019, ledger row review/1).
+  //     The st-work touchpoint moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32489 -> 32889, `.agents/skills/st-work/SKILL.md` 32534 -> 32934), by
+  //       +400 bytes, the corpus source's own delta: Frame step 4 reads the
+  //       inbox rows that match the change through the `ledger` verb's `inbox`
+  //       query and keeps the whole-file read for a CLI or a query that is
+  //       absent; the Freshness guard's last sentence drops "recorded"; the
+  //       in-flow plan sentence ends "the record's `Plan:` line names it"; the
+  //       Coverage before Build bullet ends "A structural pass alone is not
+  //       clarity."
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit
+  //     q6t-test-runner-ci-line (run 2026-10-10_next-tier; review/14 as signed
+  //     off). The test-runner agent moved, plus the manifest rows that record
+  //     it. No emitted path was added or removed.
+  //
+  //     CHANGED the test-runner agent wherever it is emitted
+  //       (`.claude/agents/stamity-test-runner.md` 8593 -> 8648,
+  //       `.codex/agents/stamity-test-runner.toml` 9217 -> 9272,
+  //       `.cursor/agents/stamity-test-runner.md` 8487 -> 8542,
+  //       `.github/agents/stamity-test-runner.agent.md` 8575 -> 8630), by +55
+  //       bytes on every client, the corpus source's own delta: the
+  //       `unknown`-provider sentence also fires where the provider "is still
+  //       an unresolved `STAMITY` substitution token". The provider token
+  //       renders as before on all four.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every other agent, rule, touchpoint,
+  //       skill, companion, hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q5-usage-lines (run
+  //     2026-10-10_next-tier; review/8 as signed off). The st-work touchpoint
+  //     moved, plus the manifest rows that record it. No emitted path was added
+  //     or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32447 -> 32489, `.agents/skills/st-work/SKILL.md` 32492 -> 32534), by
+  //       +42 bytes, the corpus source's own delta: the Proof block's
+  //       usage-lines paragraph has the line appended to the run record as each
+  //       phase or review round ends, and no longer names a place after the
+  //       field list.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q6t-test-runner-ci-line (run
+  //     2026-10-10_next-tier; REQ-FLOW-063, inbox rows build/61 and build/85).
+  //     The test-runner agent moved, plus the manifest rows that record it. No
+  //     emitted path was added or removed.
+  //
+  //     CHANGED the test-runner agent wherever it is emitted
+  //       (`.claude/agents/stamity-test-runner.md` 8530 -> 8593,
+  //       `.codex/agents/stamity-test-runner.toml` 9154 -> 9217,
+  //       `.cursor/agents/stamity-test-runner.md` 8424 -> 8487,
+  //       `.github/agents/stamity-test-runner.agent.md` 8512 -> 8575), by +63
+  //       bytes on every client: the corpus source's +71 with
+  //       `${STAMITY:CI_PROVIDER}` (22 bytes) rendered as the fixture's
+  //       `github-actions` (14), the same on all four, and the red sentence's
+  //       "writes nothing to the named path".
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every other agent, rule, touchpoint,
+  //       skill, companion, hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q2-qa-rows (run
+  //     2026-10-10_next-tier; review/2, review/3, review/4). The qa skill
+  //     moved, plus the manifest rows that record it. No emitted path was
+  //     added or removed.
+  //
+  //     CHANGED the qa skill wherever it is emitted (`.claude/skills/st-qa/` and
+  //       `.agents/skills/st-qa/` SKILL.md, 7961 -> 8098), by +137 bytes, the
+  //       corpus source's own delta: a row whose check is missing, cannot run
+  //       or fails stays on the human path under the Auto-prove pass's rule 2,
+  //       and the class clause's person row also checks that the links to and
+  //       from the changed page resolve.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, touchpoint, skill
+  //       other than the qa skill, companion, hook script, guard and policy
+  //       document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q5-usage-lines (run
+  //     2026-10-10_next-tier; REQ-CTX-019). The st-work touchpoint moved, plus
+  //     the manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32205 -> 32447, `.agents/skills/st-work/SKILL.md` 32250 -> 32492), by
+  //       +242 bytes, the corpus source's own delta: the Proof block's
+  //       usage-lines paragraph after its field list.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved file.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit q2-qa-rows (run 2026-10-10_next-tier;
+  //     REQ-FLOW-069). The st-work touchpoint and the qa skill moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32121 -> 32205, `.agents/skills/st-work/SKILL.md` 32166 -> 32250), by
+  //       +84 bytes, the corpus source's own delta: the QA checkpoint's step 2
+  //       hands the qa skill the class and lenses `gate classify` named.
+  //     CHANGED the qa skill wherever it is emitted (`.claude/skills/st-qa/` and
+  //       `.agents/skills/st-qa/` SKILL.md, 7229 -> 7961), by +732 bytes, the
+  //       corpus source's own delta: a paragraph naming the three kinds of row
+  //       a person walks, and the documentation-only clause turned into a class
+  //       clause that keeps one person row when a rendered page changes.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       qa skill and the st-work skill copy, every other touchpoint,
+  //       companion, hook script, guard and policy document.
+  //
+  //   - 2026-10-10, plan 019 file 3, unit f0-make-room (run 2026-10-10_next-tier;
+  //     inbox rows 2026-10-08_product-core/build/1 and close/10). The st-work
+  //     touchpoint moved, plus the manifest rows that record it. No emitted path
+  //     was added or removed.
+  //
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       32720 -> 32121, `.agents/skills/st-work/SKILL.md` 32765 -> 32166), by
+  //       -599 bytes, the corpus source's own delta: room above the
+  //       re-attachment cut and under the line cap (rewraps at 100 columns,
+  //       restating sentences cut, the record head moved to the Proof block, the
+  //       light cap's hook caveat moved to Intensity) and the Dials rows' no-class
+  //       clause naming a failed read.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, rule, skill other than the
+  //       st-work skill copy, every other touchpoint, companion, hook script,
+  //       guard and policy document.
+  //
   //   - 2026-10-09, plan 019 file 2, unit p5f-class-file-gate-config (run
   //     2026-10-08_product-core; REQ-FLOW-061). The injection-screening rule
   //     moved, plus the manifest rows that record it. No emitted path was added

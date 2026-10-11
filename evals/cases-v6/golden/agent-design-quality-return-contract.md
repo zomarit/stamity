@@ -2,7 +2,7 @@
 id: agent-design-quality-return-contract
 class: golden
 claim: "A change with no rendered surface returns the agent unrun rather than reporting a clean surface it never found: the return is a BLOCKED_* form carrying what was attempted, what blocks it, and the smallest unblocking input, and it names no criterion, token, or measured value for a surface it did not read."
-source: content/agents/stamity-design-quality.md:14-33,112-156
+source: content/agents/stamity-design-quality.md:14-33,112-157
 metric: rubric
 ---
 
@@ -83,9 +83,10 @@ Governing text — the same file, "Return contract":
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only.
-  With no report path, or a write refused, the full result is returned inline and a refused
-  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*`
-  return writes no report and is returned in full.
+  The written report lists every note left out, one line each with its locator, and the digest
+  keeps the count alone. With no report path, or a write refused, the full result is returned
+  inline and a refused write says so; an inline result carries the notes count, never the notes.
+  A `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Scenario state — the change you were handed and what the repository holds, given to you as

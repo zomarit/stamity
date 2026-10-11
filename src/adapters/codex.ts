@@ -336,11 +336,11 @@ const AGENTS_OVERRIDE_ARTIFACT_ID = "codex-agents-override";
  */
 const EFFORT_SCALE_CAP =
   `${CLIENT_MODEL_PROJECTION.codex.effortScale.join(", ")} — the levels this client's ` +
-  "`model_reasoning_effort` key accepts; xhigh is model-dependent, so a model that does not " +
-  "offer it falls back to that model's own default " +
-  "(learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-09-17). This is the " +
-  "only supported client documenting `minimal`, and the only one that cannot be asked for " +
-  "`max`: a `max` request is emitted as `xhigh` with a disclosure, never dropped";
+  "`model_reasoning_effort` key accepts; the available levels depend on the model and client " +
+  "(learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-10-10). This is the " +
+  "only supported client documenting `ultra`. The reference no longer lists `minimal`; this " +
+  "client's parser still takes it, so `minimal` is accepted and written as `low`, with a " +
+  "disclosure";
 
 const CODEX_FACTS: AdapterDialectFacts = {
   tool: TOOL,

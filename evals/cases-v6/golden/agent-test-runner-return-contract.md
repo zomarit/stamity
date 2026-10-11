@@ -83,9 +83,9 @@ what the change broke is worse than none.
   holds no edit tool — that write is the one redirect this role makes, and no gate command is
   ever redirected — and the final message is the digest: `status:`, `report:` with the path,
   the verdict line, `security:` any redacted-credential row in full or `none`, and
-  `contract delta: none`. A `red` verdict is returned in full, rows and excerpts, whatever the
-  dispatch names: its excerpts are ledger evidence. A `BLOCKED_*` return writes no report and
-  is returned in full.
+  `contract delta: none`. A `red` verdict writes nothing to the named path and is returned in
+  full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence. A
+  `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Scenario state — the pass you have just run, given to you as fact:

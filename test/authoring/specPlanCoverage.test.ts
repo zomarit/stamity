@@ -224,3 +224,174 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
     expect(result.scope).toHaveLength(22);
   });
 });
+
+// REQ-FLOW-070 — plan-lint L5. The size codes are advisory: each one names a unit or a delta entry
+// and its line, and none of them turns the status to `fail`.
+describe("REQ-FLOW-070 — plan size, advisory (L5)", () => {
+  type Finding = { code: string; path: string; line: number; message: string };
+  const L5 = new Set(["unit-size", "unit-oversize", "unit-prewritten", "delta-verbose"]);
+  /** U1 grown to `span` lines (its heading and two fields included), one blank line before `### U2`. */
+  const grown = (span: number, filler = (n: number) => `Note ${n}.`) => plan.replace("- **depends_on**: none.\n",
+    `- **depends_on**: none.\n${Array.from({ length: span - 3 }, (_, n) => filler(n)).join("\n")}\n`);
+  /** The persisted plans are read against the real spec tree, from the repository root. */
+  function checkRepo(planPath: string) {
+    let output: string;
+    try {
+      output = execFileSync(process.execPath, [script, planPath, "docs/specs"], { encoding: "utf8", stdio: "pipe" });
+    } catch (error) {
+      output = String((error as { stdout?: string }).stdout ?? "");
+    }
+    return JSON.parse(output) as { status: string; units: string[]; findings: Finding[] };
+  }
+  /**
+   * A persisted plan read by quoted line, so a case names a heading and not the line it sat on when the case was
+   * written: `lineOf` is the 1-based line of the one row reading exactly `text`, and `span` runs from a unit's
+   * heading to its last non-blank line before the heading that ends it.
+   */
+  function planRows(planPath: string) {
+    const rows = readFileSync(planPath, "utf8").split(/\r?\n/);
+    const lineOf = (text: string) => {
+      const at = rows.flatMap((row, index) => (row === text ? [index + 1] : []));
+      expect(at, `${planPath} holds one line reading: ${text}`).toHaveLength(1);
+      return at[0] ?? 0;
+    };
+    const span = (heading: string, next: string) => {
+      const line = lineOf(heading);
+      let last = lineOf(next) - 1;
+      while (last > line && !rows[last - 1]?.trim()) last -= 1;
+      return { line, lines: last - line + 1, rows: rows.slice(line - 1, last) };
+    };
+    return { lineOf, span };
+  }
+
+  it("starts a unit only at an unindented `### ` line, so an indented heading-like line is no unit", () => {
+    for (const written of ["  ### X", "  `### Item text is data` naming the rule"]) {
+      const result = check(plan.replace("- **depends_on**: none.\n", `- **depends_on**: none.\n${written}\n`));
+      expect(result, written).toMatchObject({ status: "pass", units: ["U1", "U2"], findings: [] });
+    }
+  });
+  it("reads plan 015's continuation line as no unit, and measures b1 whole", () => {
+    const path = "docs/plans/015-board-writes.md";
+    const result = checkRepo(path);
+    expect(result.status).toBe("pass");
+    expect(result.units).not.toContain("Item");
+    // TEST CHANGE, justified (2026-10-10, q3a-plan-size-script, review/13): the case pinned the numbers measured at
+    // 1987ed01 (the heading at :361, a span of 228 lines, the first `>` run at :467) on a plan that is still edited,
+    // so one line added to the unit turned it red. The same two exact findings are asserted; their numbers are now
+    // read from the plan by quoted line: the unit's heading, the heading that ends it, the first line of its `>` run.
+    const { lineOf, span } = planRows(path);
+    const b1 = span("### b1-board-contract — the board's write contract",
+      "### b2-pr-resolve-replies — PR-thread replies need no board setup");
+    expect(b1.rows.some((row) => row.startsWith("  `### Item text is data`"))).toBe(true);
+    expect(result.findings.filter((row) => row.message.startsWith("b1-board-contract "))).toEqual([
+      { code: "unit-oversize", path, line: b1.line, message: `b1-board-contract spans ${b1.lines} lines` },
+      { code: "unit-prewritten", path, line: b1.line,
+        message: `b1-board-contract carries prewritten text at line ${lineOf("    > ## Write-back contract")}` },
+    ]);
+  });
+  it("finds no unit-size, unit-oversize or unit-prewritten code in plan 013-02", () => {
+    const codes = checkRepo("docs/plans/013-optimization-sweep-02.md").findings.map((row) => row.code);
+    expect(codes.filter((code) => code.startsWith("unit-"))).toEqual([]);
+  });
+  it("counts plan 017-01's a1-docs-contract whole, past the `##` headings inside its fence", () => {
+    // TEST CHANGE, justified (2026-10-10, q3a-plan-size-script, review/13): the case pinned the numbers measured at
+    // 1987ed01 (the heading at :274, a span of 105 lines, the first fence at :289). The same two exact findings are
+    // asserted, their numbers read from the plan by quoted heading. Cut at the unit's first fenced `## ` the span
+    // would stop short of the heading that ends it, and the first assertion below keeps such a line in the unit.
+    const path = "docs/plans/017-docs-overhaul-01.md";
+    const a1 = planRows(path).span("### a1-docs-contract — the docs contract every agent here loads when it opens a docs page",
+      "### a2-prose-checks — the counter, the budgets, and the checks that keep pages short");
+    const fence = a1.rows.findIndex((row) => row.startsWith("```"));
+    expect(a1.rows.findIndex((row) => row.startsWith("## "))).toBeGreaterThan(fence);
+    expect(fence).toBeGreaterThan(0);
+    expect(checkRepo(path).findings.filter((row) => row.message.startsWith("a1-docs-contract "))).toEqual([
+      { code: "unit-oversize", path, line: a1.line, message: `a1-docs-contract spans ${a1.lines} lines` },
+      { code: "unit-prewritten", path, line: a1.line, message: `a1-docs-contract carries prewritten text at line ${a1.line + fence}` },
+    ]);
+  });
+  it("counts a unit whole past a `## ` line inside its fence", () => {
+    // Heading, two fields, the opening fence, the fenced `## ` line, 57 notes and the closing fence: 63 lines. Read
+    // as a section heading, the fenced line would end the Units section at five lines and lose U2 with it.
+    const fenced = check(plan.replace("- **depends_on**: none.\n",
+      `- **depends_on**: none.\n\`\`\`md\n## Inside the fence\n${Array.from({ length: 57 }, (_, n) => `Note ${n}.`).join("\n")}\n\`\`\`\n`));
+    expect(fenced).toMatchObject({ status: "pass", units: ["U1", "U2"], findings: [
+      { code: "unit-size", path: "plan.md", line: 7, message: "U1 spans 63 lines" },
+      { code: "unit-prewritten", path: "plan.md", line: 7, message: "U1 carries prewritten text at line 10" },
+    ] });
+  });
+  it("reports a unit past 60 lines as unit-size and past 100 as unit-oversize, counting no trailing blank line", () => {
+    const sized = (span: number) => check(grown(span));
+    expect(sized(60)).toMatchObject({ status: "pass", findings: [] });
+    expect(sized(61)).toMatchObject({ status: "pass",
+      findings: [{ code: "unit-size", path: "plan.md", line: 7, message: "U1 spans 61 lines" }] });
+    expect(sized(100)).toMatchObject({ status: "pass",
+      findings: [{ code: "unit-size", path: "plan.md", line: 7, message: "U1 spans 100 lines" }] });
+    expect(sized(101)).toMatchObject({ status: "pass",
+      findings: [{ code: "unit-oversize", path: "plan.md", line: 7, message: "U1 spans 101 lines" }] });
+  });
+  it("keeps a `####` sub-heading inside the unit's span", () => {
+    expect(check(grown(61, (n) => (n === 10 ? "#### U1 text" : `Note ${n}.`))).findings)
+      .toEqual([expect.objectContaining({ code: "unit-size", message: "U1 spans 61 lines" })]);
+  });
+  it("reports a fence, or a run of five `>` lines, inside a unit as unit-prewritten", () => {
+    const fenced = check(plan.replace("- **depends_on**: none.\n", "- **depends_on**: none.\n```md\n### REQ-DEMO-001\n```\n"));
+    expect(fenced).toMatchObject({ status: "pass", units: ["U1", "U2"],
+      findings: [{ code: "unit-prewritten", path: "plan.md", line: 7, message: "U1 carries prewritten text at line 10" }] });
+    const quoted = (count: number) => check(plan.replace("- **depends_on**: none.\n",
+      `- **depends_on**: none.\nIntro.\n${Array.from({ length: count }, (_, n) => (n === 1 ? "   >" : `   > Line ${n}.`)).join("\n")}\n`));
+    expect(quoted(4)).toMatchObject({ status: "pass", findings: [] });
+    expect(quoted(5)).toMatchObject({ status: "pass",
+      findings: [{ code: "unit-prewritten", path: "plan.md", line: 7, message: "U1 carries prewritten text at line 11" }] });
+  });
+  it("reports a delta entry holding more than six non-blank lines below its heading as delta-verbose", () => {
+    const entry = (count: number) => check(`## Spec delta\n\n### REQ-DEMO-001 — the guard\n${
+      Array.from({ length: count }, (_, n) => `Given value ${n}, Then it holds.`).join("\n\n")
+    }\n\n## Units\n### U1\n- **requirements**: REQ-DEMO-001.\n- **depends_on**: none.\n`);
+    expect(entry(6)).toMatchObject({ status: "pass", findings: [] });
+    expect(entry(7)).toMatchObject({ status: "pass",
+      findings: [{ code: "delta-verbose", path: "plan.md", line: 3, message: "REQ-DEMO-001 runs 7 lines" }] });
+  });
+  it("reads an entry headed `ADDED`, `MODIFIED` or `REMOVED` before its id as a delta entry too", () => {
+    // A retired id needs no unit, so the REMOVED plan's one unit cites the other requirement.
+    for (const [heading, cited] of [["ADDED REQ-DEMO-001 — the guard", "REQ-DEMO-001"],
+      ["MODIFIED REQ-DEMO-001 — the guard", "REQ-DEMO-001"], ["REMOVED REQ-DEMO-001 — retired", "REQ-DEMO-002"]]) {
+      const entry = (count: number) => check(`## Spec delta\n\n### ${heading}\n${
+        Array.from({ length: count }, (_, n) => `Given value ${n}, Then it holds.`).join("\n\n")
+      }\n\n## Units\n### U1\n- **requirements**: ${cited}.\n- **depends_on**: none.\n`);
+      expect(entry(6), heading).toMatchObject({ status: "pass", findings: [] });
+      expect(entry(7), heading).toMatchObject({ status: "pass",
+        findings: [{ code: "delta-verbose", path: "plan.md", line: 3, message: "REQ-DEMO-001 runs 7 lines" }] });
+    }
+  });
+  it("reports the first `### ADDED REQ-` entry of plan 015 as delta-verbose", () => {
+    // The plan is a fixture of the heading form here, so the entry is found by that form and its numbers are read
+    // from the plan. No id of the plan's spec is written in this file: the spec-status gate reads an id cited by a
+    // test as that requirement's proof, and this case proves nothing about the board.
+    const path = "docs/plans/015-board-writes.md";
+    const rows = readFileSync(path, "utf8").split(/\r?\n/);
+    const at = rows.findIndex((row) => row.startsWith("### ADDED REQ-"));
+    const next = rows.findIndex((row, index) => index > at && /^#{1,6}\s/.test(row));
+    const id = /^### ADDED (\S+)/.exec(rows[at] ?? "")?.[1];
+    const below = rows.slice(at + 1, next).filter((row) => row.trim()).length;
+    expect(at).toBeGreaterThan(-1);
+    expect(below).toBeGreaterThan(6);
+    const result = checkRepo(path);
+    expect(result.status).toBe("pass");
+    expect(result.findings.find((row) => row.code === "delta-verbose"))
+      .toEqual({ code: "delta-verbose", path, line: at + 1, message: `${id} runs ${below} lines` });
+  });
+  it("still reads no `### ADDED REQ-` heading as a provisional definition", () => {
+    // The definition reading is a separate rule and keeps its shape: only a bare `### REQ-` heading defines an id for
+    // a plan whose spec is not written, so a `### REMOVED REQ-` heading can never define the id it retires.
+    const result = check("## Spec delta\n\n### ADDED REQ-NEW-001 — the guard\nGiven a fresh plan, Then it holds.\n\n## Units\n### U1\n- **requirements**: REQ-NEW-001.\n- **depends_on**: none.\n");
+    expect(result.status).toBe("fail");
+    expect(result.findings.map((row) => row.code)).not.toContain("provisional-definition");
+    expect(result.findings.map((row) => row.code)).toContain("dangling-requirement");
+  });
+  it("adds no L5 code to a plan with no units section", () => {
+    expect(check("A freeform legacy note.").findings.map((row) => row.code).filter((code) => L5.has(code))).toEqual([]);
+    // A long, fenced `###` block outside any Units section is no unit, so only the existing finding is raised.
+    const noUnits = `## Spec delta\n\nNone.\n\n## Notes\n### N1\n${Array.from({ length: 70 }, (_, n) => `Note ${n}.`).join("\n")}\n\`\`\`\nx\n\`\`\`\n`;
+    expect(check(noUnits).findings.map((row) => row.code)).toEqual(["missing-units"]);
+  });
+});

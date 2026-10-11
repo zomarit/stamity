@@ -96,7 +96,7 @@ Say the work is a rate limit on an existing endpoint. It is a feature. It lands 
    failing excerpt. Bare pass or fail is not a result. Then a reviewer and fixer loop on `file:line` evidence, capped at three rounds by default. A
    loop that runs out stops as blocked, with the open findings attached.
 5. **Close.** The QA human checkpoint is mandatory at every intensity. You get a what-to-verify summary naming each observable behaviour the change
-   added or altered, each with a check you can run in under a minute. Then a guided pass: each row closes walked, auto-proven or accepted-unwalked; when every row auto-proves nothing is asked, and an unattended run records `not signed`.
+   added or altered, each with a check you can run in under a minute. Then a guided pass: each row closes walked, auto-proven or accepted-unwalked; when every row auto-proves nothing is asked, and an unattended run records `not signed`. The close then asks one question about what is left: the rows no evidence proved, the spec delta merge, the commit and, as its fourth part, the leftovers. Those are the findings neither fixed nor rejected and the inbox rows that came due or that the change touched, each with a recommendation to fix now, schedule or drop. A part with nothing to decide drops out.
 
 On disk when the run stops: a proof block under `.stamity/runs/`. It carries gate results with their commands, review verdicts per round, the
 decisions trace, artifacts touched with their owning sub-agent, and a next step derived from that run's own state. Beside it sits the findings ledger,

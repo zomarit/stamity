@@ -1,8 +1,17 @@
-import { stat } from "node:fs/promises";
+import { constants as FS, type Stats } from "node:fs";
+import { lstat, open, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Argument, Option, type Command } from "commander";
+import {
+  CONTENT_DENY_PATTERNS,
+  INJECTION_PATTERNS,
+  INVISIBLE_SMUGGLING_CHARS,
+  LEARNINGS_INJECTION_PATTERNS,
+  normalizeForDenyScan,
+} from "../../denyscan/denyScan.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { BlockProblem } from "../../runs/blocks.ts";
+import type { InboxProblem, InboxRow, MatchedBy } from "../../runs/inboxStore.ts";
 import type { AppendResult, CloseChange, CloseResult } from "../../runs/ledgerStore.ts";
 import type { ResumeCard } from "../../runs/resumeCard.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
@@ -11,14 +20,18 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
 import { sanitizeLabel } from "../kit/prompts.ts";
 
 /**
- * `stamity ledger append`, `stamity ledger close` and `stamity ledger status` —
- * the one serialized writer of a work run's findings ledger, its reader, and the
- * CLI's third hidden plumbing verb. `append` files a report's findings as `open`
+ * `stamity ledger append`, `stamity ledger close`, `stamity ledger status` and
+ * `stamity ledger inbox` — the one serialized writer of a work run's findings
+ * ledger, its reader, the deferral inbox's query, and the CLI's third hidden
+ * plumbing verb. `append` files a report's findings as `open`
  * rows; `close` moves rows on a re-review's closures block (`--report` with the
  * `--ids` it was handed), by one manual transition (`--id`, `--state`,
  * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
  * prints the run's resume card, the same lines the session-start hook prints
- * after a compaction or a resume, and writes nothing.
+ * after a compaction or a resume, and writes nothing; `inbox` prints the
+ * deferral inbox's rows a change's paths touch and, under `--due`, the rows
+ * whose day has come, each line screened first in the form it prints in, and
+ * writes nothing.
  * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -27,7 +40,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * row numbering, the closure rules, the lock and the write live in
  * `../../runs/ledgerStore.ts`; the
  * run id's grammar lives in `../../runs/layout.ts`; the resume card lives in
- * `../../runs/resumeCard.ts`. Every verdict printed here is
+ * `../../runs/resumeCard.ts`; the inbox's grammar and query live in
+ * `../../runs/inboxStore.ts`. Every verdict printed here is
  * one of theirs. What this file owns is which flags spell an append, a close or
  * a status, where the block's text comes from, and how a refusal reads on a
  * terminal. A flag only another subcommand reads is a usage error, never ignored.
@@ -41,7 +55,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * `<id> <from> -> <to>` line per row (with its closure status, or a
  * retirement's `retired: <value>`, in parentheses),
  * or `<id> unchanged (already recorded)`; for a status, the card's lines, or the
- * one no-run sentence. Everything else — the nothing-to-do
+ * one no-run sentence; for an inbox, the count line, then the matched rows, the
+ * unparsed lines and the skipped lines, the last two capped in number.
+ * Everything else — the nothing-to-do
  * note, the warnings about a line that is not a row or about locking being off
  * — goes to stderr. The dry-run line is the one exception, and it ends the
  * output; a status writes nothing, so its dry run prints no such line.
@@ -56,6 +72,7 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 const APPEND = "append";
 const CLOSE = "close";
 const STATUS = "status";
+const INBOX = "inbox";
 const MANUAL_STATES = ["fixed", "rejected", "deferred"] as const;
 
 /** Where the block came from when it was piped rather than named. */
@@ -115,7 +132,8 @@ function missingFlag(subcommand: string, flag: string): CliFailure {
 /**
  * The flags a subcommand does not read, keyed by subcommand: each as its
  * commander option key, its spelling, and the subcommands that do read it.
- * `--run` is read by all three; `--report` by append and close.
+ * `--run` is read by every subcommand but inbox; `--report` by append and close;
+ * `--paths`, `--plan`, `--area` and `--due` by inbox alone.
  */
 const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string, readonly string[]])[]>> = {
   [APPEND]: [
@@ -124,13 +142,37 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["state", "--state", [CLOSE]],
     ["rationale", "--rationale", [CLOSE]],
     ["retired", "--retired", [CLOSE]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
   ],
   [CLOSE]: [
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
     ["stdin", "--stdin", [APPEND]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
   ],
   [STATUS]: [
+    ["phase", "--phase", [APPEND]],
+    ["source", "--source", [APPEND]],
+    ["stdin", "--stdin", [APPEND]],
+    ["report", "--report", [APPEND, CLOSE]],
+    ["ids", "--ids", [CLOSE]],
+    ["id", "--id", [CLOSE]],
+    ["state", "--state", [CLOSE]],
+    ["rationale", "--rationale", [CLOSE]],
+    ["retired", "--retired", [CLOSE]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
+  ],
+  [INBOX]: [
+    ["run", "--run", [APPEND, CLOSE, STATUS]],
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
     ["stdin", "--stdin", [APPEND]],
@@ -648,15 +690,527 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
   return { exitCode: 0, json: statusJson(card) };
 }
 
+/** The largest inbox `ledger inbox` reads: 1 MiB, the engine's report ceiling. */
+const INBOX_READ_MAX_BYTES = 1_048_576;
+
+/**
+ * The inbox screen: the session-start screen's three catalogs in its order
+ * (`../../hooks/scripts.ts`), block rows only, WITHOUT its network-vocabulary
+ * filter. That filter keeps the emitted hook script free of network words; this
+ * screen ships in no script, so the exfil rows (`remote-exec-pipe`,
+ * `send-data-external`, `image-url-exfiltration`) stay in. Each pattern is a
+ * private copy, so a `lastIndex` left on a catalog row never reaches here.
+ */
+export const INBOX_SCREEN: readonly { readonly id: string; readonly re: RegExp }[] = [
+  ...LEARNINGS_INJECTION_PATTERNS,
+  ...CONTENT_DENY_PATTERNS,
+  ...INJECTION_PATTERNS,
+]
+  .filter((entry) => entry.severity === "block")
+  .map((entry) => ({ id: entry.id, re: new RegExp(entry.pattern.source, entry.pattern.flags) }));
+
+/**
+ * The longest bullet the screen reads, in UTF-16 code units: about four times
+ * the longest row of this repository's own inbox. Two screen rows
+ * (`remote-exec-pipe`, and `image-url-exfiltration`'s tag alternative) rescan
+ * to the end of the line from every start, so their cost grows with the square
+ * of a line's length; the read's byte ceiling bounds the file and not a line.
+ * A bullet past the cap is skipped by its line number, unscreened, as
+ * {@link INBOX_OVER_LENGTH}.
+ */
+export const INBOX_BULLET_MAX_CHARS = 4096;
+
+/** The reason an over-long bullet's skip names where a hit names a pattern id; no screen row carries it. */
+export const INBOX_OVER_LENGTH = "over-length";
+
+/**
+ * The most unparsed lines, and the most skip lines, one query lists. Both
+ * print whatever the query, one per bullet, and the read's byte ceiling bounds
+ * the file and not the bullets in it: a 1 MiB inbox of three-byte bullets
+ * would print about fifteen times its own size into the reader's context. The
+ * first fifty of each say what is wrong with the file, and the count of the
+ * rest says how far it goes. The matched rows are what the query was asked
+ * for and are not capped.
+ */
+export const INBOX_LISTED_MAX = 50;
+
+/**
+ * The first {@link INBOX_SCREEN} id, in list order, whose pattern matches a
+ * view of the line; "" when none does. The views are the line as written and
+ * the line as it prints (`sanitizeLabel`), each beside its copy with invisible
+ * smuggling characters stripped and that copy's normalized form: the union
+ * `screenCard` composes (`../../runs/resumeCard.ts`), taken twice.
+ *
+ * The printed form is screened because it is not the written one:
+ * `sanitizeLabel` drops the C0 and C1 controls, which no other view removes,
+ * so a keyword one of them splits passes the written views and prints joined.
+ * The written form is still screened, since the printed one has lost what the
+ * tag-block and control rows match on.
+ *
+ * A row whose id is in `except` is not read; {@link screenInboxPrinted} is the
+ * one caller that passes any.
+ */
+function screenInboxLine(line: string, except?: ReadonlySet<string>): string {
+  const views = new Set<string>();
+  for (const form of [line, sanitizeLabel(line)]) {
+    const stripped = form.replace(INVISIBLE_SMUGGLING_CHARS, "");
+    views.add(form).add(stripped).add(normalizeForDenyScan(stripped));
+  }
+  const copies = [...views];
+  const hit = INBOX_SCREEN.find(
+    (entry) =>
+      except?.has(entry.id) !== true &&
+      copies.some((copy) => {
+        entry.re.lastIndex = 0;
+        return entry.re.test(copy);
+      }),
+  );
+  return hit === undefined ? "" : hit.id;
+}
+
+/**
+ * The screen of a matched row's line as it prints, composed
+ * ({@link inboxRowLine}): the engine's own suffix, or a withheld line's
+ * pattern id, can complete a screen row after fields that each pass alone.
+ *
+ * `own` is the engine's words in that line that no author wrote, a withheld
+ * row's body, or "" for a clean row. Two pattern ids (`exfiltrate`,
+ * `jailbreak-mode`) spell a word their own screen row matches, so a body
+ * naming one hits by itself, as that row's skip line would. `own` is therefore
+ * screened first, and the rows it hits alone are left out of the line's
+ * screen: such a hit says nothing about the row, and the skip form would not
+ * remove it. Every other screen row reads the whole line.
+ */
+function screenInboxPrinted(line: string, own: string): string {
+  const ownHits = new Set<string>();
+  if (own !== "") {
+    for (let hit = screenInboxLine(own); hit !== ""; hit = screenInboxLine(own, ownHits)) ownHits.add(hit);
+  }
+  return screenInboxLine(line, ownHits);
+}
+
+/** The first hit {@link screenInboxLine} reports over the fields, in their order; "" when each passes. */
+function screenInboxFields(fields: readonly string[]): string {
+  for (const field of fields) {
+    const pattern = screenInboxLine(field);
+    if (pattern !== "") return pattern;
+  }
+  return "";
+}
+
+/**
+ * A parsed row's screen over what prints of it: its fields in the order the
+ * human line joins them, then each field as the string of its own the JSON
+ * document carries, where a pattern anchored to a line's start can match a
+ * field it misses in the middle of the bullet. The schedule fields the
+ * document carries (`by`, `when`, each `files` entry) are among them; the
+ * deferral date and the rationale print nowhere.
+ */
+function screenInboxRow(row: InboxRow): string {
+  return screenInboxFields([
+    `${row.severity} · ${row.location} · ${row.description}${row.tag === null ? "" : ` · ${row.tag}`}`,
+    row.severity,
+    row.location,
+    row.description,
+    row.source,
+    row.ref ?? "",
+    row.tag ?? "",
+    row.by ?? "",
+    row.when ?? "",
+    ...screenedFiles(row.files),
+  ]);
+}
+
+/** A row's `files:` entries as the strings the screen reads: the list as one line, then each entry alone. */
+function screenedFiles(files: readonly string[]): string[] {
+  return files.length === 0 ? [] : [files.join(", "), ...files];
+}
+
+/**
+ * The copy of a withheld row the match reads: its line, severity and
+ * location, which the caller has screened, and three more fields, each only
+ * when it passes the screen alone: its tag when that is an always-shown word,
+ * its `by:` day, and its `files:` entries (all of them or none). So the row
+ * still shows by that tag, still comes back when its day arrives, and still
+ * matches a path its files name. Its description, writer, `Ref:`, trigger,
+ * deferral date and rationale are left out: none reaches the match or the
+ * output.
+ */
+function withheldCopy(row: InboxRow, alwaysShown: readonly string[]): InboxRow {
+  const passes = (fields: readonly string[]): boolean => screenInboxFields(fields) === "";
+  return {
+    line: row.line,
+    severity: row.severity,
+    location: row.location,
+    description: "",
+    source: "",
+    ref: null,
+    tag: row.tag !== null && alwaysShown.includes(row.tag) && passes([row.tag]) ? row.tag : null,
+    by: row.by !== null && passes([row.by]) ? row.by : null,
+    when: null,
+    files: passes(screenedFiles(row.files)) ? row.files : [],
+    deferredOn: null,
+    rationale: null,
+    belowRule: row.belowRule,
+  };
+}
+
+/**
+ * The day `--due` names: its value, the clock's UTC day when it carries none,
+ * and null when the flag is absent. A value that is not a real day as
+ * `YYYY-MM-DD` is a usage error; the refusal does not repeat it.
+ */
+function inboxDue(ctx: CliContext, opts: Record<string, unknown>): string | null {
+  const value = opts["due"];
+  if (value === undefined || value === false) return null;
+  if (value === true) return ctx.app.runtime.clock.now().toISOString().slice(0, 10);
+  if (typeof value === "string" && ctx.engine.runs.disposition.isIsoDate(value)) return value;
+  throw new CliFailure({
+    code: "USAGE",
+    message: "ledger inbox --due takes a day as YYYY-MM-DD",
+    why: "the value given names no real calendar day in that form, and a row's `by:` day is compared against it",
+    next: "re-run with --due <YYYY-MM-DD>, or with --due alone for today's date",
+  });
+}
+
+/**
+ * A refused read. Its `next` leads with what the caller must not do: a refusal
+ * is no licence to read the file whole by another route, which would hand a
+ * run the unscreened text this query exists to screen (a writer can force the
+ * refusal by padding the file or replacing it with a link). The refusal is
+ * reported as a finding instead.
+ */
+function inboxRefusal(message: string, why: string): CliFailure {
+  return new CliFailure({
+    code: "VALIDATION_ERROR",
+    message,
+    why,
+    next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once the inbox is a regular file with one link, of at most ${INBOX_READ_MAX_BYTES} bytes, inside the repository`,
+  });
+}
+
+/**
+ * The inbox's text, or null when there is none. Each segment is `lstat`ed top
+ * down, so a link at `.stamity` or at the inbox is refused rather than read
+ * through, and the open takes `O_NOFOLLOW` where the platform has it, so a
+ * leaf swapped for a link after the walk is refused too.
+ *
+ * A hard link is refused as a symbolic link is: a regular file with more than
+ * one link is a second name for bytes another name owns, and that name can sit
+ * outside the checkout, with nothing in the entry type or the open flags to
+ * say so. `isShared` is the substrate's one predicate for that tell
+ * (`../../merge/atomicWrite.ts::isSharedRegularFile`, its policy in
+ * `../../merge/safeWrite.ts`), handed in rather than spelled again here. It is
+ * asked of the walk's `lstat` as a fast refusal and of the descriptor's own
+ * stats as the proof, since a name made between the two shows only there; both
+ * come before any byte is read, so a refusal carries none of the file's text.
+ *
+ * The ceiling is held by the read itself. The two size checks are fast
+ * refusals on a size taken before the read, and a writer can grow the file
+ * after them; so the read takes {@link INBOX_READ_MAX_BYTES} plus one byte at
+ * most from the open descriptor and refuses when that byte is there, naming
+ * the size as more than the ceiling, the only thing it knows of it.
+ */
+async function readInbox(
+  rootDir: string,
+  inboxPath: string,
+  isShared: (entry: Stats) => boolean,
+): Promise<string | null> {
+  let walked = rootDir;
+  let leaf: Stats | null = null;
+  for (const segment of inboxPath.split("/")) {
+    walked = join(walked, segment);
+    try {
+      // eslint-disable-next-line no-await-in-loop -- top-down on purpose: the first bad segment is the one named
+      leaf = await lstat(walked);
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw inboxRefusal(`ledger inbox cannot read ${inboxPath}`, cause instanceof Error ? cause.message : String(cause));
+    }
+    if (leaf.isSymbolicLink()) {
+      throw inboxRefusal(
+        `ledger inbox refused ${inboxPath}: ${segment} is a symbolic link`,
+        "the inbox is read only as a regular file inside the repository, never through a link",
+      );
+    }
+  }
+  const tooLarge = (size: number | "more than the ceiling"): CliFailure =>
+    inboxRefusal(
+      `ledger inbox refused ${inboxPath}: it is ${typeof size === "number" ? size : `more than ${INBOX_READ_MAX_BYTES}`} bytes, over the ${INBOX_READ_MAX_BYTES} byte ceiling`,
+      "the inbox's rows are printed into a run's context, so its size is bounded",
+    );
+  const notFile = inboxRefusal(
+    `ledger inbox refused ${inboxPath}: it is not a regular file`,
+    "the inbox is one markdown file of rows",
+  );
+  const hardLink = (links: number): CliFailure =>
+    inboxRefusal(
+      `ledger inbox refused ${inboxPath}: ${inboxPath.slice(inboxPath.lastIndexOf("/") + 1)} is a hard link`,
+      `the inbox is read only as a file of its own inside the repository; this one has ${links} links, so its text is shared with another name, which may sit outside the repository`,
+    );
+  if (leaf === null || !leaf.isFile()) throw notFile;
+  if (isShared(leaf)) throw hardLink(leaf.nlink);
+  if (leaf.size > INBOX_READ_MAX_BYTES) throw tooLarge(leaf.size);
+
+  const handle = await open(walked, FS.O_RDONLY | (FS.O_NOFOLLOW ?? 0));
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) throw notFile;
+    if (isShared(stats)) throw hardLink(stats.nlink);
+    if (stats.size > INBOX_READ_MAX_BYTES) throw tooLarge(stats.size);
+    const bytes = Buffer.alloc(INBOX_READ_MAX_BYTES + 1);
+    let filled = 0;
+    while (filled < bytes.length) {
+      // eslint-disable-next-line no-await-in-loop -- one descriptor read in order: each read starts where the last one ended
+      const { bytesRead } = await handle.read(bytes, filled, bytes.length - filled, null);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    if (filled > INBOX_READ_MAX_BYTES) throw tooLarge("more than the ceiling");
+    return bytes.toString("utf8", 0, filled);
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * A row as the JSON document carries it: every text field sanitised.
+ * `withheld` is null on a clean row and the pattern id on a withheld one,
+ * whose description, writer and `Ref:` are null rather than empty, whose
+ * `when` is null, and whose `by` and `files` are what passed the screen alone.
+ */
+function inboxRowJson(row: InboxRow, matchedBy: MatchedBy, withheld: string | null): Record<string, unknown> {
+  return {
+    line: row.line,
+    severity: sanitizeLabel(row.severity),
+    location: sanitizeLabel(row.location),
+    description: withheld === null ? sanitizeLabel(row.description) : null,
+    source: withheld === null ? sanitizeLabel(row.source) : null,
+    ref: withheld === null && row.ref !== null ? sanitizeLabel(row.ref) : null,
+    tag: row.tag === null ? null : sanitizeLabel(row.tag),
+    by: row.by === null ? null : sanitizeLabel(row.by),
+    when: row.when === null ? null : sanitizeLabel(row.when),
+    files: row.files.map((file) => sanitizeLabel(file)),
+    matchedBy,
+    withheld,
+  };
+}
+
+/** What stands where a withheld row's description would: the engine's words, naming the pattern. */
+function withheldBody(pattern: string): string {
+  return `withheld by the screen (${pattern}); read it by hand`;
+}
+
+/**
+ * A matched row's human line as composed, before it is sanitised; a withheld
+ * row's carries {@link withheldBody} where its description would stand. The
+ * caller screens this string and prints its `sanitizeLabel` form.
+ */
+function inboxRowLine(row: InboxRow, matchedBy: MatchedBy, withheld: string | null): string {
+  const body = withheld === null ? row.description : withheldBody(withheld);
+  return `${row.line} ${row.severity} · ${row.location} · ${body}${row.tag === null ? "" : ` · ${row.tag}`} (${matchedBy})`;
+}
+
+/**
+ * The first {@link INBOX_LISTED_MAX} of a list of unparsed or skip lines, then
+ * one `<label>: … +<n> more` line when the list is longer.
+ */
+function listedLines(label: string, lines: readonly string[]): string[] {
+  const more = lines.length - INBOX_LISTED_MAX;
+  return more > 0 ? [...lines.slice(0, INBOX_LISTED_MAX), `${label}: … +${more} more`] : [...lines];
+}
+
+/**
+ * `ledger inbox`: the deferral inbox's rows a change touches — by `--paths`
+ * (a row's location or its `files:`), by `--plan`, by `--area` word for a row
+ * whose location names no path — the rows whose `by:` day is on or before
+ * `--due`, every row tagged `critical-deferred` or `decision-waiting`, and
+ * every row when no filter is given. Under `--due` the count line ends
+ * `· <n> due by <day> · <n> triggers`: how many matched rows carry a `by:` day
+ * on or before the day, whatever each matched by, so a row both touched and
+ * overdue is counted, and how many unmatched rows wait on a `when:` trigger,
+ * which no query can see arrive.
+ *
+ * The inbox is user-tier state any writer can author and these lines land in
+ * a run's context, so every bullet, parsed or not, is screened before
+ * anything of it prints, as written and as it prints: the bullet first, then
+ * a parsed row's printed fields and an unparsed line's message. A bullet past
+ * {@link INBOX_BULLET_MAX_CHARS} is skipped unscreened. A hit prints
+ * `skipped: <line> (<pattern id>)` and never the row's text nor its parse
+ * message.
+ *
+ * One hit prints more. A row that parses, and whose severity and location each
+ * pass the screen alone, is withheld rather than dropped: a copy
+ * ({@link withheldCopy}) holding its line, severity and location goes to the
+ * match, with its always-shown tag, its `by:` day and its `files:` where each
+ * passes the screen alone, so the row still matches by its location, its
+ * files and its day, and still shows by that tag. Matched, it prints `<line>
+ * <severity> · <location> · withheld by the screen (<pattern id>); read it by
+ * hand` in place of its skip line; its description, writer, `Ref:`, trigger
+ * and rationale never reach the match or the output. A deferral whose text
+ * the screen refuses still comes back to the run that touches its file, or on
+ * its day, for a person to read.
+ *
+ * A matched row's line is then screened as it prints, composed
+ * ({@link screenInboxPrinted}): the engine's own suffix, or a withheld line's
+ * pattern id, can complete a screen row after fields that each pass alone. A
+ * row whose line hits is not matched, in the human output and the document
+ * alike: it prints its skip line and counts under skipped alone, a clean row
+ * by the pattern its line hit, a withheld one by the pattern that withheld it.
+ *
+ * Every printed field is sanitised. Each bullet counts once under matched,
+ * unmatched, unparsed or skipped, but for a matched withheld row, which counts
+ * under matched and skipped both; a skip line prints whatever the query (a
+ * clean row skipped by its line has one only where the query matches it), and
+ * the JSON `skipped` lists the bullets the skip lines name: a matched withheld
+ * row has no skip line and is left out of it, standing under `matched` with
+ * its pattern id as `withheld`. The unparsed lines and the skip lines are
+ * listed up to {@link INBOX_LISTED_MAX} each, then one `unparsed: … +<n> more`
+ * or `skipped: … +<n> more` line; the count line keeps the whole numbers, and
+ * the JSON `problems` and `skipped` hold the first of each up to the same cap,
+ * with the number left out of each under `truncated`. The JSON `counts`
+ * tallies the matched rows by severity. Reads only; `--dry-run` is accepted
+ * and changes nothing, so it prints no dry-run line.
+ */
+async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+  const due = inboxDue(ctx, opts);
+  const rootDir = ctx.app.runtime.cwd;
+  await requireStateDir(rootDir, "to read the deferral inbox from");
+  const { inboxStore } = ctx.engine.runs;
+  const counts: Record<string, number> = Object.fromEntries(inboxStore.INBOX_SEVERITIES.map((severity) => [severity, 0]));
+
+  const inboxText = await readInbox(rootDir, inboxStore.INBOX_PATH, ctx.engine.merge.atomicWrite.isSharedRegularFile);
+  if (inboxText === null) {
+    ctx.io.out("inbox: absent\n");
+    return {
+      exitCode: 0,
+      json: {
+        inbox: inboxStore.INBOX_PATH,
+        total: 0,
+        matched: [],
+        counts,
+        unmatched: 0,
+        problems: [],
+        skipped: [],
+        truncated: { problems: 0, skipped: 0 },
+        due,
+        triggers: 0,
+      },
+    };
+  }
+
+  // Each bullet's own verdict, before anything of it is read further: its length, then the screen.
+  const bulletScreen = new Map<number, string>();
+  inboxText.split("\n").forEach((raw, index) => {
+    if (!raw.startsWith("- ")) return;
+    bulletScreen.set(index + 1, raw.length > INBOX_BULLET_MAX_CHARS ? INBOX_OVER_LENGTH : screenInboxLine(raw));
+  });
+
+  const parsed = inboxStore.parseInbox(inboxText);
+  const skipped: { line: number; pattern: string }[] = [];
+  const withheld = new Map<number, string>();
+  const alwaysShown: readonly string[] = inboxStore.ALWAYS_SHOW_TAGS;
+  const rows: InboxRow[] = [];
+  for (const row of parsed.rows) {
+    const bullet = bulletScreen.get(row.line) ?? "";
+    const pattern = bullet === "" ? screenInboxRow(row) : bullet;
+    if (pattern === "") {
+      rows.push(row);
+      continue;
+    }
+    skipped.push({ line: row.line, pattern });
+    if (pattern === INBOX_OVER_LENGTH) continue;
+    if (screenInboxFields([row.severity, row.location, `${row.severity} · ${row.location}`]) !== "") continue;
+    withheld.set(row.line, pattern);
+    rows.push(withheldCopy(row, alwaysShown));
+  }
+  const problems: InboxProblem[] = [];
+  for (const problem of parsed.problems) {
+    const bullet = bulletScreen.get(problem.line) ?? "";
+    const pattern = bullet === "" ? screenInboxLine(problem.message) : bullet;
+    if (pattern === "") problems.push(problem);
+    else skipped.push({ line: problem.line, pattern });
+  }
+  const paths = Array.isArray(opts["paths"]) ? (opts["paths"] as string[]) : [];
+  const area = Array.isArray(opts["area"]) ? (opts["area"] as string[]) : undefined;
+  const plan = text(opts, "plan");
+  const result = inboxStore.matchInbox(rows, {
+    paths,
+    ...(plan === undefined ? {} : { plan }),
+    ...(area === undefined ? {} : { area }),
+    ...(due === null ? {} : { due }),
+  });
+  // Each matched row's line is screened as it prints, composed (`screenInboxPrinted`). A row whose
+  // line hits is not matched: it is skipped, a clean one by the pattern its line hit, a withheld
+  // one by the pattern that withheld it.
+  const matched: { row: InboxRow; matchedBy: MatchedBy; line: string }[] = [];
+  for (const { row, matchedBy } of result.matched) {
+    const by = withheld.get(row.line) ?? null;
+    const line = inboxRowLine(row, matchedBy, by);
+    const pattern = screenInboxPrinted(line, by === null ? "" : withheldBody(by));
+    if (pattern === "") matched.push({ row, matchedBy, line });
+    else if (by === null) skipped.push({ line: row.line, pattern });
+  }
+  skipped.sort((a, b) => a.line - b.line);
+  for (const { row } of matched) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
+  const total = parsed.rows.length + parsed.problems.length;
+  // A withheld row is counted under `skipped`, matched or not, so `unmatched` counts the clean rows alone.
+  const withheldMatches = result.matched.filter(({ row }) => withheld.has(row.line)).length;
+  const unmatched = result.unmatched - (withheld.size - withheldMatches);
+  // The withheld rows whose line prints; each of the others prints its skip line.
+  const shown = new Set(matched.filter(({ row }) => withheld.has(row.line)).map(({ row }) => row.line));
+  // The skips listed, in the human form and the document alike, each left out before its cap.
+  const listed = skipped.filter((skip) => !shown.has(skip.line));
+
+  // Counted by the day and not by the `due` label: a row a path matched first may be overdue too.
+  const overdue = due === null ? 0 : matched.filter(({ row }) => row.by !== null && row.by <= due).length;
+  const dueNote = due === null ? "" : ` · ${overdue} due by ${due} · ${result.triggers} triggers`;
+  const lines = [
+    `inbox: ${total} rows · ${matched.length} matched · ${unmatched} unmatched · ${problems.length} unparsed · ${skipped.length} skipped${dueNote}`,
+    ...matched.map(({ line }) => sanitizeLabel(line)),
+    ...listedLines(
+      "unparsed",
+      problems.map((problem) => sanitizeLabel(`unparsed: ${problem.line}: ${problem.message}`)),
+    ),
+    ...listedLines(
+      "skipped",
+      listed.map((skip) => `skipped: ${skip.line} (${skip.pattern})`),
+    ),
+  ];
+  ctx.io.out(`${lines.join("\n")}\n`);
+
+  return {
+    exitCode: 0,
+    json: {
+      inbox: inboxStore.INBOX_PATH,
+      total,
+      matched: matched.map(({ row, matchedBy }) => inboxRowJson(row, matchedBy, withheld.get(row.line) ?? null)),
+      counts,
+      unmatched,
+      problems: problems
+        .slice(0, INBOX_LISTED_MAX)
+        .map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) })),
+      skipped: listed.slice(0, INBOX_LISTED_MAX),
+      truncated: {
+        problems: Math.max(0, problems.length - INBOX_LISTED_MAX),
+        skipped: Math.max(0, listed.length - INBOX_LISTED_MAX),
+      },
+      due,
+      triggers: result.triggers,
+    },
+  };
+}
+
 export const ledgerCommand: CommandModule = {
   name: "ledger",
-  summary: "append findings to a run's ledger, close its rows, and print its resume card (plumbing)",
+  summary:
+    "append findings to a run's ledger, close its rows, print its resume card, and read the deferral inbox (plumbing)",
   hidden: true,
   mutating: true,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS]))
+      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS, INBOX]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/")
       .option("--phase <phase>", "the phase the rows are filed under, a lowercase slug (review, build)")
       .option("--source <role>", "the role whose findings these are, a lowercase slug (reviewer)")
@@ -671,13 +1225,21 @@ export const ledgerCommand: CommandModule = {
       .option(
         "--retired <disposition>",
         "retire a deferred row whose inbox row left: keeps its state and records the date and this disposition",
+      )
+      .option("--paths <paths...>", "the paths a change touches; the inbox rows naming them are printed")
+      .option("--plan <path>", "a plan path; the inbox rows whose Ref: or location names it are printed")
+      .option("--area <words...>", "whole words matched in an inbox row that names no path")
+      .option(
+        "--due [date]",
+        "a day as YYYY-MM-DD, today when no value is given; the inbox rows whose by: day is on or before it are printed",
       );
   },
 
   async run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    const subcommand = args[0] === CLOSE || args[0] === STATUS ? args[0] : APPEND;
+    const subcommand = args[0] === CLOSE || args[0] === STATUS || args[0] === INBOX ? args[0] : APPEND;
     refuseForeignFlags(subcommand, opts);
+    if (subcommand === INBOX) return await runInbox(ctx, opts);
     if (subcommand === STATUS) return await runStatus(ctx, opts);
     return subcommand === CLOSE ? await runClose(ctx, opts) : await runAppend(ctx, opts);
   },

@@ -2,7 +2,7 @@
 id: agent-performance-return-contract
 class: golden
 claim: "On a repository that declares no budget the run returns status DONE with a Warning ceiling — Critical requires a breached declared budget — naming the budget classes that were absent, reporting the unmeasured surface as unmeasured rather than as a pass, raising the Warning that names the surface needing a budget, and reporting no rate."
-source: content/agents/stamity-performance.md:14-49,107-181
+source: content/agents/stamity-performance.md:14-49,107-182
 metric: rubric
 ---
 
@@ -115,9 +115,10 @@ Governing text — the same file, "Kill switch" and "Return contract":
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only.
-  With no report path, or a write refused, the full result is returned inline and a refused
-  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*`
-  return writes no report and is returned in full.
+  The written report lists every note left out, one line each with its locator, and the digest
+  keeps the count alone. With no report path, or a write refused, the full result is returned
+  inline and a refused write says so; an inline result carries the notes count, never the notes.
+  A `BLOCKED_*` return writes no report and is returned in full.
 ```
 
 Scenario state — the pass you have just completed, given to you as fact:

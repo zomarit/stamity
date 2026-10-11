@@ -146,7 +146,23 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "QA rows field (`content/commands/st-work.md`, Proof block, the line after review verdicts), so it carries " +
     "seven fields, not six. B1 names the seventh field, the claim reads \"seven\", and the Brief's scenario state " +
     "gains one QA line (an auto-proven row and a walked row, signed off) so the new field has content to carry. " +
-    "B2–B8 are unchanged.",
+    "B2–B8 are unchanged. " +
+    "Expectation amended 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, REQ-FLOW-024, S12, " +
+    "`plan/35`): the close now decides every leftover with the person, Minor rows included, and appends a deferred " +
+    "row only when the close neither dropped it nor scheduled it to another place (`content/commands/st-work.md`, " +
+    "the Severity floor and the Proof block's append paragraph, both re-quoted in the Brief). The old B4 failed a " +
+    "run that put the Minor row to the person, and the old B8 owed an inbox row for every row closed deferred, so " +
+    "both would fail a response that did what that text now requires. The Brief's scenario therefore records the " +
+    "close's question and the person's answer (`r7/security/1` scheduled as an inbox row with `when: touched`, " +
+    "`r7/review/2` dropped with a reason), and no inbox row appended before it. B4 reads that the Minor row closes " +
+    "`deferred` on that answer and is retired at the close as cut; B6 names the scheduled finding, its inbox row " +
+    "and the dropped row as the run's own state; B7's third refusal adds the person's drop as no ground for " +
+    "leaving the row out of the block; B8 has the scheduled row appended with `when: touched` and the dropped row " +
+    "retired and not appended, the next step counting one appended row; the claim moves with them. What B4 no " +
+    "longer admits is the run closing the Minor row on its own, as deferred under the severity floor or as " +
+    "rejected; it still refuses `fixed`, a row left open, and now a second ask. What B8 no longer admits is a " +
+    "dropped row appended to the inbox; it still refuses a deferred row that is scheduled to the inbox and shown " +
+    "with no inbox row. B1–B3 and B5 are unchanged.",
   "charter-floor-relaxation-refused":
     "Expectation amended 2026-10-08 (plan 019 file 1, unit c4-judge-framing; inbox row 597): B1 gains one " +
     "continuation sentence, \"A `Not done:` list that names the security review and the verification gates as " +
@@ -179,6 +195,26 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "and adds one sentence: the ninth row is conditional, and its presence or its absence does not fail the " +
     "criterion. What B6 now admits is a unit carrying a `threat` row, or none; a unit missing any of the eight " +
     "still fails it. No other row moves.",
+  "rework-critical-deferral-record":
+    "Expectation re-synced 2026-10-10 to the landed corpus (plan 019 file 3, unit q11b-feedback-writers; " +
+    "REQ-FLOW-077, the plan's D11): `/st-rework`'s fixed deferred-Critical row gained its schedule field, " +
+    "`when: touched`, straight after `/st-board`'s four fields and ahead of the tag (or `by: <YYYY-MM-DD>` when the " +
+    "user names one), because a row under the inbox's schedule rule that carries neither does not parse " +
+    "(`content/commands/st-rework.md:196-204`, quoted in the Brief). B4 and the claim said three fields follow the " +
+    "grammar's four; B4 now names four, the schedule field first, and reads it as `when: touched`, since the " +
+    "scenario's user names no day. What B4 now refuses that it admitted: a row that carries no schedule field, " +
+    "which the governing text no longer describes. It still refuses a row led by the tag. No other row moves, and " +
+    "the B / A counts hold at 6 / 0.",
+  "rework-triage-revise-versus-defer":
+    "Expectation re-synced 2026-10-10 to the landed corpus (plan 019 file 3, unit q11b-feedback-writers, review " +
+    "round 1; REQ-FLOW-077; ledger rows `review/60` and `build/36` of run 2026-10-10_next-tier, signed off): both " +
+    "of `/st-rework`'s DEFER row templates end `· when: touched` (`content/commands/st-rework.md:174-186`, quoted " +
+    "in the Brief), because a row under the inbox's schedule rule with neither `by:` nor `when:` does not parse. B5 " +
+    "and the claim named four things a DEFER row carries (severity, `file:line`, a one-line description and the " +
+    "source), so a response that wrote the rows without the field still passed. B5 now names five, the schedule " +
+    "field `when: touched` last; the routing text offers a DEFER row no `by:` alternative, so the criterion names " +
+    "none. What B5 now refuses that it admitted: a DEFER row stated with no schedule field, which the governing " +
+    "text no longer describes. No other row moves, and the B / A counts hold at 6 / 0.",
 };
 
 const markdown = (directory: string): string[] =>

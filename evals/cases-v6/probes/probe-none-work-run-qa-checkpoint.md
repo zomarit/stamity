@@ -2,7 +2,7 @@
 id: probe-none-work-run-qa-checkpoint
 class: probe
 claim: "Inside an active work run that has reached its own QA checkpoint, no skill is separately selected: the running command owns the checkpoint step."
-source: content/commands/st-work.md:309-325
+source: content/commands/st-work.md:274-291
 metric: classification
 ---
 
@@ -38,10 +38,11 @@ Scenario state — given to you as fact:
 >
 > 1. Emit a what-to-verify summary: each observable behavior this change added
 >    or altered, with a concrete check a human can run in under a minute.
-> 2. Invoke the qa skill by name for the guided pass. The step belongs to the
->    command already running, not to a trigger match: a request arriving here —
->    "what should I check by hand?" — is what this checkpoint answers, and stays
->    with this command.
+> 2. Invoke the qa skill by name for the guided pass, handing it the class and
+>    lenses `gate classify` named (`unclear` when none ran). The step belongs to
+>    the command already running, not to a trigger match: a request arriving
+>    here — "what should I check by hand?" — is what this checkpoint answers,
+>    and stays with this command.
 > 3. When the change has a user-facing surface, offer a browser-evidence skill
 >    run; captured screenshots and console output attach to the proof block.
 > ```

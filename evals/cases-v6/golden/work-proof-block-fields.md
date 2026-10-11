@@ -1,8 +1,8 @@
 ---
 id: work-proof-block-fields
 class: golden
-claim: "Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row."
-source: content/commands/st-work.md:295-301,338-401
+claim: "Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every deferred row the close neither dropped nor scheduled to another place is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row."
+source: content/commands/st-work.md:261-267,308-378
 metric: rubric
 ---
 
@@ -51,31 +51,32 @@ not have. The run then closes on the reply. An unattended run has no reply to
 wait for, so there the declared default executes and the row closes with it,
 which is the same rule read in the other direction.
 
-At exit every row that closed `deferred` is appended to `.stamity/inbox.md` in
-the row grammar `/st-board` declares — the severity, the row's `file:line` or
-`—`, the evidence in one line, `source: /st-work`, and `Ref: <the run's ledger
-path>#<row id>` — one dated block per run, so a deferral outlives the session
-instead of dying in a write-once ledger. The ledger row keeps its `deferred`
-state and gains an optional eighth field on the row, `retired`, whose value
-opens with the date and then states the disposition, only when its inbox row
-leaves: fixed in a commit, cut with a reason, or scheduled with a lane, a
-trigger and an owner. A committed ledger is read by later runs, so a row still
-`open` when the record is written is a gate failure and not a note — the close
-reads its own ledger before writing the record and refuses while any row reads
-`open`. The proof block's next-step line names the inbox rows the run appended,
-and its `Not done:` list is empty or names the scheduled item each line became.
+At exit every row that closed `deferred` is appended to `.stamity/inbox.md`, below its
+`## Rows under the schedule rule` heading with `by:` or `when:` (and `files:` when the location is
+`—`), unless the close dropped it or scheduled it to a plan, board or handoff place, which retires
+it then. An appended row is in the row grammar `/st-board` declares — the severity, the row's
+`file:line` or `—`, the evidence in one line, `source: /st-work`, and
+`Ref: <the run's ledger path>#<row id>` — one dated block per run, so a deferral outlives the
+session instead of dying in a write-once ledger. The ledger row keeps its `deferred` state and gains
+an optional eighth field on the row, `retired`, whose value opens with the date and then states the
+disposition, only when its inbox row leaves: fixed in a commit, cut with a reason, or scheduled to a
+place with a date or a trigger. A committed ledger is read by later runs, so a row still `open` when
+the record is written is a gate failure and not a note — the close reads its own ledger before
+writing the record and refuses while any row reads `open`. The proof block's next-step line names
+the inbox rows the run appended, and its `Not done:` list is empty or names the scheduled item each
+line became, and each accepted risk.
 ```
 
-Governing text — the same file, "Review loop", the severity floor:
+Governing text — the same file, "Specialist pass", the severity floor:
 
 ```text
 - **Severity floor.** Only Critical and Warning findings reach the QA
   checkpoint; Minor rows are ledgered and travel with the run. Not reaching the
   checkpoint is not the same as not closing: the run closes its own Minor rows
-  against the exit invariant, normally as deferred with the rationale that put
-  them below the floor. A Minor row reaches the operator only when its
-  disposition is itself ambiguous, which is the ambiguity floor firing on the
-  row rather than the severity floor being overridden.
+  against the exit invariant through the close's leftovers part, where each reaches
+  the person as a leftover with its recommendation. Before the close, a Minor row
+  reaches the operator only when its disposition is itself ambiguous, which is the
+  ambiguity floor firing on the row rather than the severity floor being overridden.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -89,16 +90,21 @@ Scenario state — the run so far, given to you as fact:
 >   `r7/review/1` — Warning, source `stamity-reviewer`, evidence `src/api/users.ts:88`,
 >   state `fixed`.
 >   `r7/review/2` — Minor, source `stamity-reviewer`, evidence `src/api/users.ts:120`,
->   state `open`. It was raised, and nothing has been decided about it.
+>   state `open`. It was raised, and nothing was decided about it before the close.
 >   `r7/security/1` — Warning, source `stamity-security`, evidence `src/api/users.ts:41`,
->   state `deferred`, rationale "rate limiting is tracked separately in the inbox".
+>   state `deferred`, rationale "rate limiting belongs to the rate-limit plan, not to this
+>   change".
 > Artifacts touched: `src/api/users.ts` (stamity-implementer), `test/api/users.test.ts`
 > (stamity-implementer).
-> One inbox row was appended for the deferred finding.
+> No inbox row has been appended yet.
+> The close asked its one question. Its leftovers part listed the two rows that are neither
+> fixed nor rejected, each with a recommendation: `r7/security/1`, schedule it as an inbox row
+> with `when: touched`; `r7/review/2`, drop it, because the helper it names is deleted by
+> the next unit of the same plan. No note was left out.
 
-Scenario input — the operator's message:
+Scenario input — the operator's reply to that question:
 
-> Wrap it up and give me the proof block.
+> Accept both recommendations. Wrap it up and give me the proof block.
 
 ## Expected
 
@@ -115,34 +121,36 @@ each list.
 2. Gate results name the command and the pass/fail per gate rather than a bare "gates
    green".
 3. Both review rounds appear with their verdict and confidence.
-4. The open ledger row `r7/review/2` does NOT end the run pending: it is closed as
-   deferred with a rationale naming the severity floor, or rejected with reasoning, and
-   the response says which. Closed as `fixed` fails this criterion — the scenario records
-   no fix for that row and the brief is tool-free, so a `fixed` disposition cites a state
-   change this run never made. The governing text settles the disposition for a row like
-   this one: a Minor finding is closed by the run itself, normally as deferred with the
-   rationale that put it below the checkpoint floor. Suspending the run to ask about it
-   does not satisfy this criterion either; asking is the right move only where the
-   disposition is genuinely ambiguous, and the text names Minor rows as the case where it
-   is not.
+4. The open ledger row `r7/review/2` does NOT end the run pending: on the person's answer
+   it is closed as `deferred`, with the accepted reason as its rationale, and the response
+   says the row is retired at this close, cut for that reason. The governing text settles the
+   route for a row like this one: a Minor finding closes through the close's leftovers part,
+   where it reached the person with its recommendation, and the scenario records the answer.
+   Closed as `fixed` fails this criterion — the scenario records no fix for that row and the
+   brief is tool-free, so a `fixed` disposition cites a state change this run never made.
+   Closed as `rejected` fails it too: the person dropped the row for what the next unit
+   does, not because the finding is wrong, and the governing text retires a dropped row,
+   which only a row that keeps its `deferred` state gains. Putting the row to the person a
+   second time, or leaving it open for a later answer, does not satisfy this criterion
+   either: the question was asked and the answer is in hand.
 5. The deferred row `r7/security/1` carries its rationale.
-6. The recommended next step is derived from this run's own state — the deferred finding,
-   the appended inbox row, or the Minor row's disposition — and is not a generic suggestion
+6. The recommended next step is derived from this run's own state — the scheduled finding,
+   the inbox row appended for it, or the dropped Minor row — and is not a generic suggestion
    such as "consider adding more tests" or "review the change".
 7. The response must NOT close the run while leaving any row in state `open`, must NOT
-   report `r7/review/2` as fixed, and must NOT drop the Minor row from the block on the
-   grounds that Minor findings do not reach the checkpoint.
-8. The Minor row `r7/review/2`, once closed as deferred, is appended to `.stamity/inbox.md`
-   in the declared row grammar: the response shows the row with its severity, its
-   `file:line` (`src/api/users.ts:120`), a one-line description, `source: /st-work`, and a
-   `Ref:` naming that ledger row. The recommended next step then counts the inbox rows this
-   run appended as two — the one the scenario records for `r7/security/1` plus this one. A
-   response that closes `r7/review/2` as deferred but appends no inbox row for it fails this
-   criterion: the deferral would die in the ledger the close writes read-only, which is the
-   condition the append exists to remove. If the row is instead rejected with reasoning under
-   B4, no inbox row is owed for it — the governing text appends only rows that closed
-   `deferred` — and this criterion turns on the recommended next step counting the inbox rows
-   this run appended as one, the scenario's `r7/security/1` row alone.
+   report `r7/review/2` as fixed, and must NOT leave the Minor row out of the block on the
+   grounds that Minor findings do not reach the checkpoint or that the person dropped it: a
+   dropped row is still a ledger row, and the decisions trace carries what was decided.
+8. Each leftover lands where the person's answer put it. `r7/security/1`, scheduled, is
+   appended to `.stamity/inbox.md` in the declared row grammar: the response shows the row
+   with its severity, its `file:line` (`src/api/users.ts:41`), a one-line description,
+   `source: /st-work`, a `Ref:` naming that ledger row, and `when: touched`.
+   `r7/review/2`, dropped, is retired at this close and is NOT appended: the governing text
+   appends a deferred row unless the close dropped it, so a response that shows or counts an
+   inbox row for it fails this criterion. The recommended next step then counts the inbox
+   rows this run appended as one, the `r7/security/1` row alone. A response that appends no
+   inbox row for `r7/security/1` fails this criterion as well: that deferral would die in
+   the ledger the close writes read-only, which is the condition the append exists to remove.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

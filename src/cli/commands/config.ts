@@ -261,7 +261,7 @@ const MODEL_HINT =
   "a model id your client accepts — passed through verbatim, shape-checked only " +
   "(non-empty, one line)";
 
-/** Clients that carry the effort axis at all, and the one that documents dropping it. */
+/** Clients that carry the effort axis at all, and any whose row documents dropping it. */
 const EFFORT_CARRIERS = TOOLS.filter(
   (tool) => CLIENT_MODEL_PROJECTION[tool].effortCarrier !== null,
 );
@@ -269,10 +269,37 @@ const EFFORT_OMITTERS = TOOLS.filter(
   (tool) => CLIENT_MODEL_PROJECTION[tool].effortCarrier === null,
 );
 
+/**
+ * The legacy exception to the refusal, read from the rows that grant it: each
+ * level a carrier lists in `effortLegacy`, the level the emission writes for it
+ * there, and the clients it holds on. {@link unexpressibleOn} skips exactly
+ * these pairs, so the hint cannot promise a refusal the code does not make.
+ */
+const EFFORT_LEGACY_CLAUSES = EFFORT_LEVELS.flatMap((level) => {
+  const clientsByWritten = new Map<EffortLevel, Tool[]>();
+  for (const tool of EFFORT_CARRIERS) {
+    if (!CLIENT_MODEL_PROJECTION[tool].effortLegacy.includes(level)) continue;
+    const written = nearestExpressibleEffort(level, tool);
+    if (written === undefined) continue;
+    clientsByWritten.set(written, [...(clientsByWritten.get(written) ?? []), tool]);
+  }
+  return [...clientsByWritten].map(
+    ([written, tools]) => `${level} is written as ${written} on ${renderList(tools)}`,
+  );
+});
+
+// The "omitted on" clause is printed only while a row drops the axis; none does
+// today, and "omitted on none" would read as a client named `none`. The legacy
+// clause follows the same rule: it is printed only while a row lists a level.
 const EFFORT_HINT =
-  `one of ${EFFORT_LEVELS.join(" | ")} — carried on ${renderList(EFFORT_CARRIERS)}, ` +
-  `omitted on ${renderList(EFFORT_OMITTERS)}; the levels are the union of the clients' ` +
-  `documented scales, so one a selected client cannot express is refused here`;
+  `one of ${EFFORT_LEVELS.join(" | ")} — carried on ${renderList(EFFORT_CARRIERS)}` +
+  (EFFORT_OMITTERS.length === 0 ? "" : `, omitted on ${renderList(EFFORT_OMITTERS)}`) +
+  `; the levels are the union of the clients' documented scales, so one a ` +
+  `selected client cannot express is refused here` +
+  (EFFORT_LEGACY_CLAUSES.length === 0
+    ? ""
+    : `, except a legacy level, which is accepted and written as the nearest level ` +
+      `that client documents: ${EFFORT_LEGACY_CLAUSES.join("; ")}`);
 
 /** The persisted pin for one class, or null when the operator set none. */
 function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null {
@@ -353,10 +380,10 @@ function expressesEffort(
     EFFORT_LEVELS.map((level) => {
       const probe = { ...efforts, [modelClass]: level };
       // Both carriers together: one client writes the level into a key of its
-      // own, another rides it inside the model value, a third writes it
-      // nowhere. Serialised as a pair rather than concatenated, so an absent
-      // field stays distinguishable from an empty one and two different
-      // emissions can never compare equal.
+      // own, another rides it inside the model value, and a row with no
+      // carrier would write it nowhere. Serialised as a pair rather than
+      // concatenated, so an absent field stays distinguishable from an empty
+      // one and two different emissions can never compare equal.
       return JSON.stringify([
         resolveModelValue(modelClass, tool, pins, probe),
         resolveEffortValue(modelClass, tool, probe),
@@ -374,8 +401,8 @@ function expressesEffort(
  * off the ladder rather than restated. WHICH clients apply it is the other half
  * of the answer and the reason this row cannot print a bare level: on the
  * bracket client the axis rides inside a model value that exists only once an
- * id is pinned, and one client publishes no effort surface at all, so a repo
- * can carry a level — persisted or defaulted — that reaches no emitted file.
+ * id is pinned, so a repo selecting that client alone can carry a level —
+ * persisted or defaulted — that reaches no emitted file.
  * Printing that as what binds is the fabricated value the ladder's "never
  * invent a value" rule forbids, told about the effort axis instead of the
  * model one.
@@ -428,17 +455,21 @@ function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string 
  * Asked against `draft.tools` rather than against the union vocabulary,
  * because the refusal is about THIS repository's selection: `max` is a real
  * level one client documents, and refusing the word outright would be a
- * vocabulary claim the engine has no basis for. The one client that carries
- * the axis nowhere is skipped — setting a level there is legal and inert, as
- * it has always been, and turning that into a refusal would break every
- * copilot-only repository that ever set the key.
+ * vocabulary claim the engine has no basis for. A client that carries the
+ * axis nowhere is skipped — setting a level there is legal and inert. So is a
+ * client whose row lists the level as legacy: its own parser still takes the
+ * word, the emission writes the nearest documented level and discloses it, and
+ * refusing it would break a repository that set it while the vendor still
+ * documented it.
  */
 function unexpressibleOn(
   tools: readonly Tool[],
   level: EffortLevel,
 ): { tool: Tool; edge: "ends at" | "starts at"; bound: EffortLevel } | null {
   for (const tool of tools) {
-    if (CLIENT_MODEL_PROJECTION[tool].effortCarrier === null) continue;
+    const projection = CLIENT_MODEL_PROJECTION[tool];
+    if (projection.effortCarrier === null) continue;
+    if (projection.effortLegacy.includes(level)) continue;
     const nearest = nearestExpressibleEffort(level, tool);
     if (nearest === undefined || nearest === level) continue;
     return {
@@ -452,7 +483,7 @@ function unexpressibleOn(
 
 function applyEffort(draft: SetupManifest, modelClass: ModelClass, raw: string): void {
   // Membership is the schema's call: an out-of-band level comes back from
-  // validation naming the six the clients document between them.
+  // validation naming the seven the clients document between them.
   if ((EFFORT_LEVELS as readonly string[]).includes(raw)) {
     // Expressibility is NOT the schema's call, because it depends on which
     // clients this repository selects. A level the selection cannot express

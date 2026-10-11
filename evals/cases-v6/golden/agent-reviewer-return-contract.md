@@ -2,7 +2,7 @@
 id: agent-reviewer-return-contract
 class: golden
 claim: "A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; a note with no consequence is not recorded as a finding but counted as a note left out; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command beyond its read-only git reads; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage."
-source: content/agents/stamity-reviewer.md:14-31,100-197
+source: content/agents/stamity-reviewer.md:14-31,100-199
 metric: rubric
 ---
 
@@ -127,9 +127,11 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
   `contract delta: none`; then at most 1,500 characters of prose. The cap binds the prose only
-  and never drops a `Critical` or `Warning` line. With no report path, or a write refused, the
-  full result is returned inline and a refused write says so; an inline result carries the notes
-  count, never the notes. A `BLOCKED_*` return writes no report and is returned in full.
+  and never drops a `Critical` or `Warning` line. The written report lists every note left out,
+  one line each with its locator, and the digest keeps the count alone. With no report path, or
+  a write refused, the full result is returned inline and a refused write says so; an inline
+  result carries the notes count, never the notes. A `BLOCKED_*` return writes no report and is
+  returned in full.
 ```
 
 Scenario state — the review you have just completed, given to you as fact:

@@ -3,6 +3,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parseDisposition, SCHEDULE_RULE_FROM } from "../../src/runs/disposition.ts";
+import {
+  INBOX_PATH,
+  INBOX_SEVERITIES,
+  parseInbox,
+  SCHEDULE_RULE_HEADING,
+  type InboxProblem,
+} from "../../src/runs/inboxStore.ts";
 import { LEDGER_SUFFIX, SEVERITIES, parseLedger, type LedgerRow } from "../support/ledgerGrammar.ts";
 
 /**
@@ -25,13 +33,24 @@ import { LEDGER_SUFFIX, SEVERITIES, parseLedger, type LedgerRow } from "../suppo
  *
  * The row grammar itself — the fields, the vocabularies and `parseLedger` —
  * lives in `test/support/ledgerGrammar.ts`, so the `ledger append` suite holds
- * the bytes it writes to this same parser.
+ * the bytes it writes to this same parser. The inbox's row grammar — `parseInbox`
+ * and the `Ref:` rule — lives in `src/runs/inboxStore.ts`, so `stamity ledger
+ * inbox` and this gate read one grammar.
  */
 
 /** Repo root, resolved from this file rather than from the process cwd. */
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 
-const INBOX_PATH = ".stamity/inbox.md";
+/**
+ * One inbox problem as the gate prints it: `.stamity/inbox.md:<line>: <message>`.
+ *
+ * TEST CHANGE, justified (2026-10-10, q1b-records-gate-parser): the inbox parser
+ * moved from this file to `src/runs/inboxStore.ts` so the `ledger inbox` query
+ * and this gate read one grammar. The shared parser returns `{ line, message }`
+ * rather than a prefixed string, so the prefix is composed here; no message and
+ * no verdict changed, and every pin below matches the same substring as before.
+ */
+const renderProblem = (problem: InboxProblem): string => `${INBOX_PATH}:${problem.line}: ${problem.message}`;
 
 /**
  * The ledgers carrying each legacy spelling, by NAME rather than by count. A
@@ -63,29 +82,6 @@ const LEGACY_INFO_LEDGERS = [
 const RETIRED_DATE = /^\d{4}-\d{2}-\d{2}\s+\S/;
 
 /**
- * A `Ref:` value, in the two forms `/st-board`'s grammar declares: a bare
- * `<path>`, or `<path>#<anchor>` naming one line inside it. `/st-work`'s close
- * writes the anchored form (`<the run's ledger path>#<row id>`), while a
- * `/st-rework` or `/st-pr-resolve` row may name a record whose whole file is
- * the reference. The one place the anchor is mandatory is a ledger: it is
- * addressable only by row id, so a bare `ledger.jsonl` path names nothing the
- * dangling check below can resolve.
- */
-const REF_PATH = /^[^\s#]+$/;
-const REF_ANCHORED = /^[^\s#]+#\S+$/;
-
-/** The grammar problem with a `Ref:` value, or null where it parses. */
-const refProblem = (ref: string): string | null => {
-  if (REF_PATH.test(ref)) {
-    return ref.endsWith(LEDGER_SUFFIX)
-      ? `\`Ref: ${ref}\` names a ledger, which is addressable only as \`<path>#<row id>\``
-      : null;
-  }
-  if (REF_ANCHORED.test(ref)) return null;
-  return `\`Ref: ${ref}\` is neither \`<path>\` nor \`<path>#<anchor>\``;
-};
-
-/**
  * `<ledger>#<id>` for every id a ledger carries more than once. The id is what
  * makes the in-place rewrite converge instead of appending a second row, so two
  * rows sharing one id are two answers to the same finding: an inbox `Ref:`
@@ -102,92 +98,49 @@ const duplicateIds = (ledgerPath: string, rows: readonly LedgerRow[]): string[] 
   return [...repeated].map((id) => `${ledgerPath}#${id}`);
 };
 
+/** A `retired` value's leading date, and the disposition after it (empty when the date stands alone). */
+const RETIRED_LEAD = /^(\d{4}-\d{2}-\d{2})(?:\s+|$)/u;
+
+/** The UTC date a run folder's name opens with, read from its ledger's path; `null` when the folder carries none. */
+const runDateOf = (ledgerPath: string): string | null =>
+  /^\.stamity\/runs\/(\d{4}-\d{2}-\d{2})_[^/]*\/ledger\.jsonl$/u.exec(ledgerPath)?.[1] ?? null;
+
+/**
+ * `<ledger>#<id>: <problem>` for every `retired` value the schedule rule
+ * (REQ-FLOW-076) binds whose disposition, its leading date stripped, does not
+ * parse under the rule's grammar.
+ *
+ * Which values it binds is read from two dates. In a ledger whose run is dated
+ * on or after {@link SCHEDULE_RULE_FROM}, every `retired` value is bound,
+ * whatever date it carries or none: the leading date is text in the committed
+ * line, so it cannot take its own value out of the rule (review/18). There a
+ * date earlier than the run's is a problem of its own, since no row is retired
+ * before its run exists; a missing date stays the unaccounted check's to name.
+ * In any other ledger a value is bound by its own leading date alone, as
+ * before: one dated earlier than the cutover, or undated, is not read here.
+ */
+const retiredProblems = (ledgerPath: string, rows: readonly LedgerRow[]): string[] => {
+  const runDate = runDateOf(ledgerPath);
+  const ruledRun = runDate !== null && runDate >= SCHEDULE_RULE_FROM;
+  return rows.flatMap((row) => {
+    if (row.retired === null) return [];
+    const value = row.retired.trim();
+    const lead = RETIRED_LEAD.exec(value);
+    const date = lead?.[1];
+    if (!ruledRun && (date === undefined || date < SCHEDULE_RULE_FROM)) return [];
+    const problems: string[] = [];
+    if (ruledRun && date !== undefined && date < runDate) {
+      problems.push(`\`retired\` is dated ${date}, before its run's date ${runDate}`);
+    }
+    const parsed = parseDisposition(value.slice(lead?.[0].length ?? 0));
+    if (!parsed.ok) problems.push(parsed.problem);
+    return problems.map((problem) => `${ledgerPath}#${row.id}: ${problem}`);
+  });
+};
+
 /** `<ledger>#<id>` for every row a committed ledger left `open`. */
 const openRowLabels = (ledgerPath: string, rows: readonly LedgerRow[]): string[] =>
   rows.filter((row) => row.state === "open").map((row) => `${ledgerPath}#${row.id}`);
-
-interface InboxBullet {
-  readonly severity: string;
-  readonly location: string;
-  readonly description: string;
-  readonly source: string;
-  readonly ref: string | null;
-  readonly tag: string | null;
-}
-
-interface InboxParse {
-  readonly rows: readonly InboxBullet[];
-  readonly problems: readonly string[];
-}
-
-/**
- * Parse the inbox under `/st-board`'s declared row grammar:
- * `severity · file:line · description · source: <writer>`, with an optional
- * `Ref: <path>` or `Ref: <path>#<anchor>` and an optional trailing tag word. Non-bullet lines —
- * headings, prose, blanks — are not rows and are ignored: the grammar governs
- * what a reader can parse, not what a writer is allowed to say around it.
- */
-const parseInbox = (text: string): InboxParse => {
-  const rows: InboxBullet[] = [];
-  const problems: string[] = [];
-
-  text.split("\n").forEach((line, index) => {
-    const at = `${INBOX_PATH}:${index + 1}`;
-    if (!line.startsWith("- ")) return;
-    const fields = line.slice(2).split(" · ");
-
-    const sourceIndex = fields.findIndex((field) => field.startsWith("source: "));
-    if (sourceIndex === -1) {
-      problems.push(`${at}: no \`source: <writer>\` field`);
-      return;
-    }
-    if (sourceIndex < 3) {
-      problems.push(`${at}: \`source:\` arrives before severity, location and description are all present`);
-      return;
-    }
-    const severity = fields[0] ?? "";
-    if (!SEVERITIES.has(severity)) {
-      problems.push(`${at}: severity \`${severity}\` is outside ${[...SEVERITIES].join(", ")}`);
-      return;
-    }
-    const location = fields[1] ?? "";
-    if (location.trim() === "") {
-      problems.push(`${at}: the location field is a \`file:line\` or \`—\`, never empty`);
-      return;
-    }
-    const description = fields.slice(2, sourceIndex).join(" · ");
-    if (description.trim() === "") {
-      problems.push(`${at}: the description field is empty`);
-      return;
-    }
-    const writer = (fields[sourceIndex] ?? "").slice("source: ".length).trim();
-    if (writer === "") {
-      problems.push(`${at}: \`source:\` names no writer`);
-      return;
-    }
-
-    const rest = fields.slice(sourceIndex + 1);
-    let ref: string | null = null;
-    if (rest[0]?.startsWith("Ref: ") === true) {
-      ref = rest[0].slice("Ref: ".length).trim();
-      const problem = refProblem(ref);
-      if (problem !== null) {
-        problems.push(`${at}: ${problem}`);
-        return;
-      }
-      rest.shift();
-    }
-    const tag = rest.length > 0 ? (rest[0] ?? "") : null;
-    if (rest.length > 1 || (tag !== null && (tag.trim() === "" || /\s/.test(tag.trim())))) {
-      problems.push(`${at}: trailing field(s) beyond one optional tag word — ${rest.join(" · ")}`);
-      return;
-    }
-
-    rows.push({ severity, location, description, source: writer, ref, tag: tag?.trim() ?? null });
-  });
-
-  return { rows, problems };
-};
 
 /** Every `Ref:` value the inbox carries, as written. */
 const inboxRefs = (text: string): Set<string> =>
@@ -289,6 +242,15 @@ describe("committed run ledgers", () => {
       `${unaccounted.length} deferred row(s) with neither a dated \`retired\` line nor an inbox row`,
     ).toEqual([]);
   });
+
+  it("holds every `retired` value dated from the cutover to the schedule rule's grammar", () => {
+    // From 2026-10-10 a retirement names how the deferral left — fixed, cut, or
+    // scheduled to a place with a date or a trigger — so a row cannot leave the
+    // inbox on "scheduled later" and never come back. Earlier values stay valid,
+    // except in a run dated from the cutover, where every value is read.
+    const problems = LEDGERS.flatMap((path) => retiredProblems(path, PARSED.get(path)?.rows ?? []));
+    expect(problems, `${problems.length} \`retired\` value(s) outside the schedule rule`).toEqual([]);
+  });
 });
 
 describe("the deferral inbox", () => {
@@ -300,12 +262,20 @@ describe("the deferral inbox", () => {
   });
 
   it("parses every bullet under the board's declared row grammar", () => {
-    const { rows, problems } = parseInbox(INBOX_TEXT);
+    const { rows, problems: parsed } = parseInbox(INBOX_TEXT);
+    const problems = parsed.map(renderProblem);
     expect(problems, `${problems.length} inbox row(s) outside the grammar`).toEqual([]);
     // No floor on the row count: an empty inbox is the state a completeness pass leaves
     // behind, and the parser's own non-vacuity is proven by the fixtures below, not by
     // the tree happening to carry a deferral today.
     expect(rows.length, "the inbox holds a negative number of rows").toBeGreaterThanOrEqual(0);
+  });
+
+  it("carries the schedule rule's heading once, so a close has a section to append under", () => {
+    // The parser holds every row below this line to `by:` or `when:` (REQ-FLOW-076). With the
+    // line gone, or respelled, no row is below it and the rule binds nothing, silently.
+    const headings = INBOX_TEXT.split("\n").filter((line) => line.trimEnd() === SCHEDULE_RULE_HEADING);
+    expect(headings, `${INBOX_PATH} carries \`${SCHEDULE_RULE_HEADING}\` ${headings.length} time(s)`).toHaveLength(1);
   });
 
   it("points every ledger `Ref:` at a row that exists", () => {
@@ -386,7 +356,7 @@ describe("fixtures — the gate fails where it must", () => {
       "",
     ].join("\n");
     const { rows } = parseLedger(LEDGER, text);
-    expect(parseInbox(inbox).problems).toEqual([]);
+    expect(parseInbox(inbox).problems.map(renderProblem)).toEqual([]);
     expect(unaccountedDeferrals(LEDGER, rows, inboxRefs(inbox))).toEqual([]);
   });
 
@@ -406,6 +376,118 @@ describe("fixtures — the gate fails where it must", () => {
     const text = row({ id: "r1/prove/7", state: "deferred", rationale: "r", retired: "2026-09-09" });
     const { rows } = parseLedger(LEDGER, text);
     expect(unaccountedDeferrals(LEDGER, rows, new Set())).toEqual([`${LEDGER}#r1/prove/7`]);
+  });
+
+  it("(n) names a `retired` value from the cutover that the schedule rule refuses", () => {
+    const text = [
+      row({ id: "r1/prove/8", state: "deferred", rationale: "r", retired: "2026-10-10 scheduled later" }),
+      row({ id: "r1/prove/9", state: "deferred", rationale: "r", retired: "2026-11-02" }),
+      row({ id: "r1/prove/10", state: "deferred", rationale: "r", retired: "2026-10-10 cut: out of scope" }),
+      row({
+        id: "r1/prove/11",
+        state: "deferred",
+        rationale: "r",
+        retired: "2026-10-11 scheduled board #42 · when touched",
+      }),
+    ].join("\n");
+    const { rows, problems } = parseLedger(LEDGER, text);
+    expect(problems).toEqual([]);
+    const named = retiredProblems(LEDGER, rows);
+    expect(named).toHaveLength(2);
+    expect(named[0]?.startsWith(`${LEDGER}#r1/prove/8: \`scheduled\` names no `), named[0]).toBe(true);
+    expect(named[1]?.startsWith(`${LEDGER}#r1/prove/9: the disposition is empty`), named[1]).toBe(true);
+  });
+
+  it("(o) leaves a `retired` value dated before the cutover unread", () => {
+    // The shape fixture (c) carries, one day before the rule: valid then, valid now.
+    const text = row({
+      id: "r1/prove/12",
+      state: "deferred",
+      rationale: "r",
+      retired: "2026-10-09 scheduled to L2, trigger: x",
+    });
+    const { rows, problems } = parseLedger(LEDGER, text);
+    expect(problems).toEqual([]);
+    expect(retiredProblems(LEDGER, rows)).toEqual([]);
+    expect(unaccountedDeferrals(LEDGER, rows, new Set())).toEqual([]);
+  });
+
+  it("(p) names a value from the cutover whose slot holds only vague and filler words, or no word", () => {
+    // review/15, review/16, review/17: the gate reads the writer's grammar, so
+    // what `ledger close --retired` refuses a hand-written line cannot carry.
+    const retiredAs = (n: number, retired: string): string =>
+      row({ id: `r1/prove/${n}`, state: "deferred", rationale: "r", retired });
+    const text = [
+      retiredAs(20, "2026-10-10 fixed later"),
+      retiredAs(21, "2026-10-10 cut: tbd"),
+      retiredAs(22, "2026-10-10 scheduled board #42 · when maybe later"),
+      retiredAs(23, "2026-10-10 scheduled board #42 · when —"),
+      retiredAs(24, "2026-10-10 fixed —"),
+      retiredAs(25, "2026-10-10 fixed in r2"),
+      // review/44: filler words alone, with no vague word among them.
+      retiredAs(26, "2026-10-10 cut not yet"),
+      retiredAs(27, "2026-10-10 scheduled board #42 · when at some point"),
+    ].join("\n");
+    const { rows, problems } = parseLedger(LEDGER, text);
+    expect(problems).toEqual([]);
+    const named = retiredProblems(LEDGER, rows);
+    expect(named.map((problem) => problem.slice(0, problem.indexOf(": ")))).toEqual(
+      [20, 21, 22, 23, 24, 26, 27].map((n) => `${LEDGER}#r1/prove/${n}`),
+    );
+    expect(named[0]).toContain("`fixed` names only the vague word `later`");
+    expect(named[1]).toContain("`cut` names only the vague word `tbd`");
+    expect(named[2]).toContain("vague trigger `later`");
+    expect(named[3]).toContain("`when` names no trigger");
+    expect(named[4]).toContain("`fixed` names no ref");
+    expect(named[5]).toContain("`cut` names only filler words (`not yet`)");
+    expect(named[6]).toContain("vague trigger `at some point`");
+  });
+
+  it("(q) holds every `retired` value of a run dated from the cutover, a back-dated one included", () => {
+    // review/18: a value's own leading date is text in the committed line, so it
+    // cannot take the value out of the rule. A run that started on or after the
+    // cutover has every `retired` value read, and a date before the run's own
+    // is a problem by itself: no row is retired before its run exists.
+    const ruled = ".stamity/runs/2026-10-12_fixture/ledger.jsonl";
+    const retiredAs = (n: number, retired: string): string =>
+      row({ id: `r1/prove/${n}`, state: "deferred", rationale: "r", retired });
+    const text = [
+      retiredAs(30, "2026-10-09 scheduled to L2, trigger: x"),
+      retiredAs(31, "2026-10-11 fixed in r2"),
+      retiredAs(32, "2026-10-12 fixed in r2"),
+      retiredAs(33, "2026-10-13 scheduled board #42 · when touched"),
+      retiredAs(34, "scheduled later"),
+      retiredAs(35, "2026-09-30"),
+    ].join("\n");
+    const { rows, problems } = parseLedger(ruled, text);
+    expect(problems).toEqual([]);
+    expect(retiredProblems(ruled, rows)).toEqual([
+      `${ruled}#r1/prove/30: \`retired\` is dated 2026-10-09, before its run's date 2026-10-12`,
+      `${ruled}#r1/prove/30: \`scheduled\` names no \` · by <YYYY-MM-DD>\` or \` · when <trigger>\` after its place`,
+      `${ruled}#r1/prove/31: \`retired\` is dated 2026-10-11, before its run's date 2026-10-12`,
+      `${ruled}#r1/prove/34: \`scheduled\` names no \` · by <YYYY-MM-DD>\` or \` · when <trigger>\` after its place`,
+      `${ruled}#r1/prove/35: \`retired\` is dated 2026-09-30, before its run's date 2026-10-12`,
+      `${ruled}#r1/prove/35: the disposition is empty: write \`fixed <ref>\`, \`cut <reason>\` or \`scheduled <place> · by <YYYY-MM-DD> | when <trigger>\``,
+    ]);
+    // The back-dated value passed both checks before: the older one reads only its shape.
+    expect(unaccountedDeferrals(ruled, rows.slice(0, 1), new Set())).toEqual([]);
+  });
+
+  it("(r) keeps a run dated before the cutover on its values' own dates", () => {
+    // The same rows under a run of the day before: a value dated before the
+    // cutover stays unread, and one dated from it is held to the grammar.
+    const earlier = ".stamity/runs/2026-10-09_fixture/ledger.jsonl";
+    const text = [
+      row({ id: "r1/prove/40", state: "deferred", rationale: "r", retired: "2026-10-09 scheduled to L2, trigger: x" }),
+      row({ id: "r1/prove/41", state: "deferred", rationale: "r", retired: "2026-10-08 later" }),
+      row({ id: "r1/prove/42", state: "deferred", rationale: "r", retired: "2026-10-10 scheduled later" }),
+      row({ id: "r1/prove/43", state: "deferred", rationale: "r", retired: "scheduled later" }),
+    ].join("\n");
+    const { rows, problems } = parseLedger(earlier, text);
+    expect(problems).toEqual([]);
+    const named = retiredProblems(earlier, rows);
+    expect(named).toHaveLength(1);
+    expect(named[0]?.startsWith(`${earlier}#r1/prove/42: \`scheduled\` names no `), named[0]).toBe(true);
   });
 
   it("(g) fails on two rows sharing one id", () => {
@@ -449,7 +531,10 @@ describe("fixtures — the gate fails where it must", () => {
   });
 
   it("reports inbox bullets outside the grammar, and ignores everything that is not one", () => {
-    const problem = (line: string): string => parseInbox(line).problems[0] ?? "";
+    const problem = (line: string): string => {
+      const first = parseInbox(line).problems[0];
+      return first === undefined ? "" : renderProblem(first);
+    };
     expect(problem("- Trivial · — · d · source: /st-work")).toContain("severity `Trivial`");
     expect(problem("- Minor · — · d")).toContain("no `source: <writer>` field");
     expect(problem("- Minor · source: /st-work")).toContain("arrives before severity");
@@ -470,18 +555,57 @@ describe("fixtures — the gate fails where it must", () => {
     expect(problem("- Minor · — · d · source: /st-work · two words")).toContain("beyond one optional tag");
     expect(problem("- Minor · — · d · source: /st-work · a#1 · b")).toContain("trailing field(s)");
     // Prose, headings and blank lines are not rows.
-    expect(parseInbox("# Deferral inbox\n\nRows: 3.\n  - indented\n").problems).toEqual([]);
+    expect(parseInbox("# Deferral inbox\n\nRows: 3.\n  - indented\n").problems.map(renderProblem)).toEqual([]);
     // The full shape, with the tag, parses.
     const tagged = "- Critical · src/a.ts:9 · the consequence · source: rework main · Ref: r.jsonl#a/1 · critical-deferred";
     const parsed = parseInbox(tagged);
-    expect(parsed.problems).toEqual([]);
+    expect(parsed.problems.map(renderProblem)).toEqual([]);
     expect(parsed.rows[0]?.tag).toBe("critical-deferred");
     expect(parsed.rows[0]?.ref).toBe("r.jsonl#a/1");
     // And the grammar's other declared form — a bare path, which is what a row
     // naming a whole record carries — parses as the same optional field.
     const bare = parseInbox("- Minor · — · d · source: rework main · Ref: .stamity/runs/x/record.md");
-    expect(bare.problems).toEqual([]);
+    expect(bare.problems.map(renderProblem)).toEqual([]);
     expect(bare.rows[0]?.ref).toBe(".stamity/runs/x/record.md");
+  });
+
+  it("(s) fails on a row below the schedule rule's heading that names no day and no trigger", () => {
+    // The gate reads the committed inbox through `parseInbox`, so what the parser refuses below
+    // the heading "parses every bullet" fails on. Two rows the rule binds, one of them scheduled,
+    // under one older row it does not bind.
+    const inbox = [
+      "# Deferral inbox",
+      "",
+      "- Minor · src/a.ts:1 · an older row, valid as it was written · source: /st-work",
+      "",
+      SCHEDULE_RULE_HEADING,
+      "",
+      "- Minor · src/a.ts:2 · comes back when its file is touched · source: /st-work · when: touched",
+      "- Minor · src/a.ts:3 · names no day and no trigger · source: /st-work",
+      "- Minor · — · a touch with no file to touch · source: /st-work · when: touched",
+      "- Minor · src/a.ts:5 · a trigger no event brings back · source: /st-work · when: later on",
+      "",
+    ].join("\n");
+    const { rows, problems } = parseInbox(inbox);
+    expect(rows.map((parsed) => parsed.line)).toEqual([3, 7]);
+    expect(problems.map(renderProblem)).toEqual([
+      `${INBOX_PATH}:8: a row under \`${SCHEDULE_RULE_HEADING}\` carries \`by: <YYYY-MM-DD>\` or \`when: <trigger>\`; this one carries neither`,
+      `${INBOX_PATH}:9: \`when: touched\` needs a path, in the location or in \`files:\``,
+      `${INBOX_PATH}:10: \`when:\` names the vague trigger \`later\`, which no event brings back`,
+    ]);
+    // The same rows with the heading gone: the row naming no day and no trigger is an older row
+    // again, and a trigger is still held to its rule wherever its row stands.
+    const above = parseInbox(inbox.replace(`${SCHEDULE_RULE_HEADING}\n`, ""));
+    expect(above.rows.map((parsed) => parsed.line)).toEqual([3, 6, 7]);
+    expect(above.problems.map((problem) => problem.line)).toEqual([8, 9]);
+  });
+
+  it("admits on the inbox exactly the severities the ledger admits", () => {
+    // The inbox grammar now lives in `src/runs/inboxStore.ts` and the ledger grammar in
+    // `test/support/ledgerGrammar.ts`; a deferral moves a row from one to the other, so a
+    // severity either side admits alone would strand it. Compared as ordered arrays, so the
+    // severity problem message, which lists them, reads the same on both sides.
+    expect([...INBOX_SEVERITIES]).toEqual([...SEVERITIES]);
   });
 });
 

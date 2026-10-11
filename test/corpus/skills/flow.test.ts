@@ -703,6 +703,71 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/Sort by `Risk` descending/i);
   });
 
+  it("keeps a person row for three kinds only, and skips the walk by class unless a page renders (REQ-FLOW-069)", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+
+    // The three kinds a person adds something to; every other row is the test-runner's.
+    expect(text).toContain("**A row needs a person for one of three kinds only:**");
+    expect(text).toContain("a rendered surface a person must look at");
+    expect(text).toContain("a live third-party client or account");
+    expect(text).toContain("a step that cannot be undone");
+    expect(text).toContain("Every other row is auto-proven");
+    expect(text).toContain("the run's test-runner executes its check before this table is built");
+    // A row no check proves is not auto-proven: it stays a person's, as rule 2 already says.
+    expect(text).toContain(
+      "A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2.",
+    );
+    // The class the caller passes skips the walk, unless a rendered page changed.
+    expect(text).toContain("`docs`, `records` or `tests`");
+    expect(text).toContain('"no walk-through required — <class> only", with no sign-off block and no ask');
+    expect(text).toContain("site build renders");
+    expect(text).toContain("`design-quality` lens");
+    expect(text).toContain(
+      "one person row, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off block.",
+    );
+    expect(text).toContain("With no class passed, the triggers above decide.");
+    // The diff-shape escape it replaces is gone: a docs page renders, so it is no longer walk-free.
+    expect(text).not.toContain("no walk-through required — documentation only");
+    // Placed after the trigger table and before the column contract, as one rule with it.
+    const kinds = text.indexOf("**A row needs a person for one of three kinds only:**");
+    expect(kinds).toBeGreaterThan(text.indexOf("breakpoints or themes"));
+    expect(text.indexOf("With no class passed")).toBeGreaterThan(kinds);
+    expect(text.indexOf("Seven columns, every one filled")).toBeGreaterThan(
+      text.indexOf("With no class passed"),
+    );
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, the whole-branch review's fix round, part B; `review/94`,
+  // a security finding, signed off): the three-kinds rule sent every other row to a check the
+  // run's test-runner executes once, and the negative row a security-adjacent path derives is
+  // none of the three kinds, so the one row that tries what the change should deny could close on
+  // a command the run composed and ran, with no committed assertion and no person. That row is
+  // now held to the Auto-prove pass's own pointer; every other row keeps the rule as it stood.
+  it("auto-proves the security-negative row only on a committed test's assertion (review/94)", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+    const exception =
+      "The exception is the negative row a security-adjacent path derives: it is auto-proven only where a committed test's assertion covers it (that pass's rule 1: the test source `file:line` beside the runner's command and outcome); a check run once for the row is not proof for it, and with no such test it stays on the human path.";
+    expect(text).toContain(exception);
+
+    // Inside the person-row rule: after the sentence that keeps an unproven row a person's, and
+    // before the class clause.
+    const at = text.indexOf(exception);
+    expect(at).toBeGreaterThan(
+      text.indexOf("A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2."),
+    );
+    expect(at).toBeLessThan(text.indexOf("A change whose class (`gate classify`'s, which the caller passes)"));
+    // The row it names is the one the trigger table derives, in the table's own words...
+    expect(text).toContain("a security-adjacent path changed (auth, permissions, input validation, secret handling)");
+    expect(text).toContain("one negative row: attempt exactly what the change should deny");
+    // ...and the pointer it asks for is the one rule 1 already states, so the two cannot part.
+    expect(text).toContain(
+      "what covers the row is cited from the test source — the file and line of the assertion — with the runner's command and outcome beside it",
+    );
+    // Every other row keeps the three-kinds rule: one exception, stated once.
+    expect(text).toContain("Every other row is auto-proven");
+    expect(text.split("The exception is").length - 1).toBe(1);
+  });
+
   it("derives the duration its sort and session split are computed from", async () => {
     const text = flow(await load("skills/st-qa/SKILL.md"));
 

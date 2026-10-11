@@ -166,17 +166,18 @@ under the presented table as `note · file:line · category · remedy` and count
 
 - REVISE findings become plan units in phase 6.
 - DEFER findings append to `.stamity/inbox.md` as one dated block per rework run, each row
-  `severity · file:line · one-line description · source: rework <branch>`, written through the
-  persistence guard above. That inbox has two guaranteed readers — `/st-board` fill triages
-  it, and `/st-work` surfaces overlapping items when its framing phase touches the same
-  files — so a deferral is tracked, not lost.
+  `severity · file:line · one-line description · source: rework <branch> · when: touched`, with
+  `files: <path>` when the location is `—`, written through the persistence guard above. That inbox
+  has three guaranteed readers — `/st-board` fill triages it, `/st-work` surfaces overlapping items
+  when its framing phase touches the same files, and `/st-plan` folds overlapping items into its
+  shared intake — so a deferral is tracked, not lost.
 - Present the whole routing table once and take one batched correction
   (*"revise 3, defer 7 and 9"*), not a prompt per finding.
 - Present each finding's disposition in the shape it will take: a REVISE finding as the plan
   unit it becomes, a DEFER finding as the inbox row it becomes, written out in full —
-  `severity · file:line · one-line description · source: rework <branch>`. Say where those
-  rows land: one dated block appended to `.stamity/inbox.md` for this rework run. Rows shown
-  without that block named leave the reader guessing what this run appends.
+  `severity · file:line · one-line description · source: rework <branch> · when: touched`. Say
+  where those rows land: one dated block appended to `.stamity/inbox.md` for this rework run.
+  Rows shown without that block named leave the reader guessing what this run appends.
 
 ### Critical Deferral Protocol
 
@@ -189,10 +190,14 @@ A Critical finding the user wants deferred **is deferred** — with a record:
 3. **Elevated-triage tag.** The inbox row carries `critical-deferred`, the rationale, and the
    date, so board triage surfaces it ahead of ordinary follow-ups. The row's shape is fixed, and
    it opens with `/st-board`'s declared row grammar so the reader that must surface it can parse
-   it — the tag and the two extra fields follow the grammar's four:
-   `Critical · <file:line> · <the consequence in one line> · source: rework <branch> ·
-   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`. A row missing the date
-   or the rationale is not this record.
+   it — the schedule field, the tag and the two extra fields follow the grammar's four: `Critical ·
+   <file:line> · <the consequence in one line> · source: rework <branch> · when: touched ·
+   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>` (or `by: <YYYY-MM-DD>` when
+   the user names one). A row whose location is `—` adds `files: <path>` straight after
+   `when: touched`, or carries the day the user names: the reader refuses a touch trigger that
+   names no path. With no path to name, the rationale question also asks for the day; with neither,
+   no row is written. The run then closes naming the unwritten row as its open item. A row missing
+   the date or the rationale is not this record.
 
 Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
 the branch next. **Default if the rationale question goes unanswered:** the deferral stands and
@@ -237,12 +242,12 @@ Plan-lint runs once, deterministically, before anything is persisted. The gate i
 `/st-plan` defines — `L1` testable acceptance criteria (a unit with no acceptance criterion
 stated as an observable outcome fails it), `L2` dependencies resolve, `L3` edge cases non-empty,
 `L4` every unit's `requirements` field cites a requirement id carried by the spec or the literal
-`spec carries no ids`, blank never passing — run here unchanged rather than restated with
-different content under the same name. One rework-only check runs beside it, labelled so the
-difference is visible: `R1`, every unit cites validated `file:line` evidence or is explicitly
-marked `unvalidated`. Apply `/st-plan`'s structural coverage pass and semantic
-coverage review at the same handoff; a structural pass alone does not resolve
-incompatible requirement and unit meanings.
+`spec carries no ids`, blank never passing, `L5` plan size, advisory, whose codes fail no unit
+and block nothing — run here unchanged rather than restated with different content under the
+same name. One rework-only check runs beside it, labelled so the difference is visible: `R1`,
+every unit cites validated `file:line` evidence or is explicitly marked `unvalidated`. Apply
+`/st-plan`'s structural coverage pass and semantic coverage review at the same handoff; a
+structural pass alone does not resolve incompatible requirement and unit meanings.
 
 A unit that fails a check goes back to the user to sharpen or defer. It never enters the plan
 in a state where the implementer would have to guess what "done" means.
@@ -250,9 +255,11 @@ in a state where the implementer would have to guess what "done" means.
 Persist through the same plan artifact `/st-plan` writes — through the persistence guard,
 since the plan carries the user's own words and `/st-work` reads it back — so `/st-work`
 detects and consumes it under its freshness guard. Then ask once, execute-now default:
-`execute now (default) / show the plan first / stop`. On `execute now`, continue into
-`/st-work` in this session with the persisted plan as its input. On `stop`, the plan and the
-inbox rows are the run's output.
+`execute now (default) / show the plan first / stop`. Each DEFER row was decided at phase 4's
+routing table, in its one batched correction: its row carries `/st-board`'s schedule fields
+(`by:` or `when:`, and `files:` when the location is `—`), and this handoff asks no leftovers
+question. On `execute now`, continue into `/st-work` in this session with the persisted plan as
+its input. On `stop`, the plan and the inbox rows are the run's output.
 
 A plan carrying a `[NEEDS CLARIFICATION]` marker has no execute-now default. The ask becomes
 `show the plan first (default) / resolve marker n / stop`, and the handoff stays blocked until
@@ -260,8 +267,8 @@ the last marker clears — which is what makes the low-confidence marking of pha
 
 Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
 by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
-plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`,
-the plan path, and the inbox rows added.
+plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
@@ -277,7 +284,7 @@ Feedback about how the agent behaved — not about the branch's code — leaves 
 | negative, suggestion | reusable insight about this repo | `st-learn` skill → `.stamity/learnings/` |
 | negative | defect in the tooling itself | issue on the project's own tracker, drafted here, filed only after the user confirms the body |
 | positive | what to keep | learning record — reinforcement is signal, not noise |
-| any | not ready to file | `.stamity/inbox.md` row tagged `meta` |
+| any | not ready to file | `.stamity/inbox.md` row `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta` (or `by: <YYYY-MM-DD>` in the trigger's place when the user names a day, never a day under `when:`) |
 
 Every destination in that table is a persistence path, so every row clears the persistence
 guard above — a learning record, an inbox row, and a drafted issue body alike. The guard is

@@ -2,7 +2,7 @@
 id: implementer-unresolvable-cell-blocked-dependency
 class: golden
 claim: "An implementer dispatched by pointer whose plan cell names an interface that no longer resolves at HEAD returns BLOCKED_DEPENDENCY in full, naming the interface, where the cell expected it and what HEAD holds instead, with the smallest unblocking input and the work done before the block listed file by file; it neither builds against a guessed seam nor writes a report or a digest."
-source: content/commands/st-work.md:159-168
+source: content/commands/st-work.md:134-143
 metric: rubric
 ---
 
@@ -41,9 +41,9 @@ cell item) and "Return contract" (what a block carries, and where it goes):
   input; work completed before the block is listed file by file so nothing is silently
   half-applied.
 [...]
-  or a write refused, the full result is returned inline and a refused write says so; an
-  inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
-  report and is returned in full.
+  With no report path, or a write refused, the full result is returned inline and a refused
+  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*` return
+  writes no report and is returned in full.
 ```
 
 Scenario state — the unit as you worked it, given to you as fact:

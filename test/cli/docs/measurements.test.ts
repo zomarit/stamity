@@ -1734,6 +1734,46 @@ describe("the rule, exercised against fixture trees", () => {
     expect(report.numerator).toHaveLength(1);
   });
 
+  // Added 2026-10-10 (plan 019 file 3, unit q5-usage-lines; REQ-CTX-019, D17): `/st-work` now has a
+  // run append `- <UTC> usage: …` lines to its record as each phase or review round ends, each a
+  // line of its own, never directly above a table. A table's lead is the nearest non-empty line
+  // above it, so the placement is what keeps a usage line from becoming the gate table's lead; the
+  // misplaced control shows the reader would otherwise drop the run as "gates in prose only".
+  // Comment and title reworded 2026-10-10 (q5's fix round 1, `review/8`): they said "after the
+  // field list", the place the rule no longer names. The fixtures and assertions are unchanged.
+  it("keeps a table's lead when usage lines sit on lines of their own, and loses it when one sits directly above", () => {
+    const usage = [
+      "- 2026-01-03T09:40Z usage: build minutes=42 tokens=180000 (claude-code)",
+      "- 2026-01-03T10:05Z usage: review r1 minutes=11 tokens=unreported (claude-code)",
+    ];
+    const base = record({});
+    const placed = base
+      .replace("\n### Review verdicts, per round\n", `\n${usage[0] ?? ""}\n\n### Review verdicts, per round\n`)
+      .replace("\n## Next\n", `\n${usage.join("\n")}\n\n## Next\n`);
+    const misplaced = base.replace("\n| Pass | lint |", `\n${usage[0] ?? ""}\n| Pass | lint |`);
+    // The fixtures differ from the base by the usage lines alone: three placed, one misplaced.
+    expect(placed.split(" usage: ")).toHaveLength(4);
+    expect(misplaced.split(" usage: ")).toHaveLength(2);
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_usage-placed": { "record.md": placed, "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-04_usage-above-table": { "record.md": misplaced, "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.numerator.map((entry) => entry.run)).toEqual([
+      "2026-01-02_release-2.0.0",
+      "2026-01-03_usage-placed",
+    ]);
+    expect(report.excluded).toEqual([
+      {
+        run: "2026-01-04_usage-above-table",
+        reason: "gates in prose only — no gate row carries a pass or fail",
+      },
+    ]);
+  });
+
   it("reads the changelog head by version order, so 1.10.0 outranks 1.9.1", () => {
     // build/96: a string sort put "1.9.1" after "1.10.0" and froze the 1.10.0
     // snapshot with the previous release as its head.

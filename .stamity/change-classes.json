@@ -44,7 +44,8 @@
         "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
-        "test/records"
+        "test/records",
+        "test/runs/inboxStore.test.ts"
       ]
     },
     {

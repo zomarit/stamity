@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readFile, realpath, writeFile } from "node:fs/promi
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { acquireWriteLock, atomicWriteFileUnlocked } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
+import { parseDisposition, SCHEDULE_RULE_FROM } from "./disposition.ts";
 import {
   cutReportText,
   printableText,
@@ -892,6 +893,9 @@ function retiredDisposition(value: string): string {
   return value.replace(/^\d{4}-\d{2}-\d{2}\s+/, "");
 }
 
+/** What a refused retirement names as the next step: the grammar's three shapes. */
+const RETIRE_NEXT = "write fixed <ref>, cut <reason>, or scheduled <place> · by <YYYY-MM-DD> | when <trigger>";
+
 /**
  * Retire one `deferred` row whose inbox row left (`ledger close --id --retired`,
  * REQ-FLOW-024): the row keeps its state and gains the optional `retired`
@@ -899,6 +903,13 @@ function retiredDisposition(value: string): string {
  * reads. The disposition is stripped by `committedText`, trimmed and capped as a
  * manual close's rationale is. `now` is the caller's clock, so the date is
  * testable and never read off the wall here.
+ *
+ * From {@link SCHEDULE_RULE_FROM} (UTC, by `now`) a new value must also parse
+ * under the schedule rule's grammar (REQ-FLOW-076, `./disposition.ts`): `fixed
+ * <ref>`, `cut <reason>`, or `scheduled <place> · by <YYYY-MM-DD> | when
+ * <trigger>`; anything else is refused with the grammar's problem and nothing
+ * is written. The check runs after the `unchanged` answer, so a re-run of a
+ * value recorded before the cutover still reads as `unchanged`.
  *
  * Only a `deferred` row is retired; an id that is not a row is refused, and
  * the id is read as a manual close reads it (`<phase>/<n>` names this run's
@@ -925,6 +936,7 @@ export async function retireRow(req: {
       {
         code: "VALIDATION_ERROR",
         why: "a retirement records what happened to the deferral — fixed in a commit, cut with a reason, or scheduled — beside its date",
+        next: `${RETIRE_NEXT}, in at most ${RATIONALE_MAX} characters`,
       },
     );
   }
@@ -968,6 +980,16 @@ export async function retireRow(req: {
           next: "leave the row as it is; its `retired` value already states how the deferral left",
         },
       );
+    }
+    if (retiredDate(req.now) >= SCHEDULE_RULE_FROM) {
+      const grammar = parseDisposition(text);
+      if (!grammar.ok) {
+        throw new EngineError(`ledger close --retired refused: ${grammar.problem}`, {
+          code: "VALIDATION_ERROR",
+          why: `from ${SCHEDULE_RULE_FROM} a retirement names how the deferral left: fixed, cut, or scheduled to a place with a date or a trigger`,
+          next: RETIRE_NEXT,
+        });
+      }
     }
     return {
       changes: [{ ledgerId, from, to: from, status: null, unchanged: false, retired: value }],

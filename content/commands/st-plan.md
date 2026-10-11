@@ -283,6 +283,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L2 | **Dependencies resolve** | every `depends_on` names a unit in this plan, a path that exists on disk, or an external prerequisite with a named owner. Zero dangling references. | add the missing prerequisite or correct the reference, re-run the pass |
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
 | L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
+| L5 | **Plan size (advisory)** | the structural coverage pass reports `unit-size` (a unit past 60 lines), `unit-oversize` (past 100), `unit-prewritten` (a fenced block, or five or more `>` lines, inside a unit) and `delta-verbose` (a requirement entry past six lines); none fails the pass | split the unit, or point at the file that will carry the text instead of writing it into the unit; the write is never blocked |
 
 **Structural coverage pass.** Before handoff, locate the installed verify skill and run
 `node <verify-skill>/scripts/spec-plan-coverage.mjs <plan.md> <spec.md|spec-directory> ...`.
@@ -359,6 +360,11 @@ When neither form runs, the installed copy has no `gate` verb, or a classify's `
    mitigation · `Minor` recorded, not gating.
 5. **Open questions** — a `[NEEDS CLARIFICATION]` marker blocks handoff to `/st-work` until
    it is resolved.
+6. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with
+   `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append
+   as the Side effects say.
+7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no
+   trigger a run can check; they append nowhere.
 
 **Fresh-context criteria.** The artifact is executable by an implementer holding no session
 history. Two checks before the write: (1) every unit's `interfaces` resolve without opening another
@@ -385,9 +391,17 @@ file moves here, and neither side effect is a third write channel for the plan i
   non-obvious, verified, repo-specific. A run that met no qualifying failure writes none and
   says so, because a silent zero and an unrecorded finding read identically.
 - **Deferral-inbox append.** Follow-ups this plan deliberately left out append to
-  `.stamity/inbox.md`, one row each, citing the plan path. That inbox is the rendezvous
-  `/st-board fill` triages and `/st-work` reads at its framing phase, so a deliberate
-  exclusion stays visible instead of dying with the session.
+  `.stamity/inbox.md`, one row each, citing the plan path in `Ref:`, each row carrying `by:` or
+  `when:`, and `files:` when its location is `—`, below the
+  inbox's `## Rows under the schedule rule` heading:
+  `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
+  or `· when: <trigger>` in the date's place, with `· files: <path>, …` when the location is `—`.
+  A day is written `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the
+  repository or its record: a path touched, a named unit or session, a release. A follow-up with
+  neither, or one whose trigger only the outside world fires, belongs in the plan's Drop list
+  with its revisit trigger.
+  That inbox is the rendezvous `/st-board fill` triages and `/st-work` reads at its framing
+  phase, so a deliberate exclusion stays visible instead of dying with the session.
 
 ## Return contract
 
@@ -399,7 +413,8 @@ Close the run with:
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
 - Structural coverage result and unresolved semantic readings; structural pass alone is not handoff approval.
-- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail`.
+- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run`
+  (`L5 not run` where the coverage script could not run, never a claimed pass).
 - `sub_agents_spawned: <count> · task_structure: parallelizable | sequential | mixed`.
 - Open questions carried; a non-empty list blocks handoff.
 - Learnings written, with their paths; `none` when the run met no qualifying failure.
@@ -408,4 +423,4 @@ Close the run with:
   artifact goes to `/st-board fill --source docs/plans/<file>`; any other clean artifact
   goes to `/st-work docs/plans/<file>`. One action, named, with the state that chose it.
 - Follow-ups outside this plan's scope append to `.stamity/inbox.md`, one line each, citing the
-  plan path.
+  plan path in `Ref:`, with `by:` or `when:`; the Drop list appends nothing.

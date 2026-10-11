@@ -14,7 +14,7 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *   - **(c) The scale's shape.** Critical, Warning and Minor, each set by its consequence
  *     with one example, then the no-findings sentence.
  *   - **(d) What stays.** The reviewer's own Warning rule in `## Critical rows` stays word
- *     for word, and `/st-rework`'s severity vocabulary keeps its three lines (20–22). Its
+ *     for word, and `/st-rework`'s severity vocabulary keeps its three lines. Its
  *     severity inference grades a person's nit Minor, never a note, and its leftover scan's
  *     cleanup rows grade one Minor only with a named consequence, a note otherwise; the notes
  *     are listed under the routing table and counted in the proof block, in the lines they held.
@@ -39,6 +39,10 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     its own unit's files and counts a larger one, never deferring it; the fixer's "no
  *     opportunistic edits" rule stays byte for byte, and a reviewer's notes are never handed
  *     to it.
+ *   - **(h) The report lists the notes.** Each of the six bodies says, in its `Report and
+ *     digest` rule, that the written report lists every note left out, one line each with its
+ *     locator, and that the digest keeps the count alone: {@link NOTES_LISTED}, the same
+ *     sentence in all six, after the digest's count and before the inline fallback.
  */
 
 /** The `## Severity` section every finding-raising role carries, heading through EOF. */
@@ -79,6 +83,14 @@ const REVIEWER_WARNING_RULE =
   "These fail a review on their own, whatever the lens weighting says. Each is a blocking " +
   "finding when it appears in the change, and a `Warning` when the change makes an existing " +
   "instance worse without introducing it:";
+
+/**
+ * Where a left-out note is written down (check (h)): the report lists each one, so a reader
+ * who comes after the role has ended can still read it; the digest carries the count only.
+ */
+export const NOTES_LISTED =
+  "The written report lists every note left out, one line each with its locator, and the " +
+  "digest keeps the count alone.";
 
 /** One capture sentence a role carries, whitespace-collapsed, inside one `## ` section. */
 interface CapturePin {
@@ -242,6 +254,17 @@ const CAPTURE_PINS: readonly CapturePin[] = [
       "A pre-existing defect is recorded as a finding only when it names a consequence, its " +
       "`summary` leading `pre-existing:`.",
   },
+  /*
+   * Added 2026-10-10, run 2026-10-10_next-tier, the QA walk's fix round (ledger row qa/2,
+   * signed off): each body counted its left-out notes on the digest and said "the report lists
+   * it" only in passing, where the note is defined, and 24 of that run's reports listed none.
+   * The rule that says what the report holds now says it, in the same words in all six.
+   */
+  ...SEVERITY_ROLES.map((relPath) => ({
+    relPath,
+    section: "Return contract",
+    phrase: NOTES_LISTED,
+  })),
 ];
 
 /**
@@ -421,13 +444,33 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
     expect(flat(reviewer.raw)).toContain(REVIEWER_WARNING_RULE);
   });
 
-  it("(d) aligns /st-rework's severity vocabulary in the same three lines, 20–22", async () => {
+  /*
+   * TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit q11b-feedback-writers; the sign-off
+   * on ledger row `build/28` of run 2026-10-10_next-tier). This test and the next one pinned
+   * `/st-rework` by line number: the vocabulary at lines 20 to 22, and the routing section, the
+   * deferral protocol and the proof paragraph opening at lines 154, 187 and 267. What changed
+   * about the contract: the numbers stood in for "the ranges the eval cases quote did not move",
+   * which `test/evals/locators.test.ts` has held directly since run 2026-10-08_product-core (every
+   * `source:` range anchored, every quoted block contiguous). Held here as well, they made each
+   * later writer of the file rewrap its edit into the lines a paragraph already had, past the
+   * file's width (unit q10b-flow-close-pointers). Each pin is re-anchored on the words it was
+   * about: the paragraph is found by its opening words, and its length and the blank lines around
+   * it are measured from there. Nothing is relaxed about the text: the same sentences are pinned
+   * in the same paragraphs, each anchor has to be found exactly once, and the three sections keep
+   * their order.
+   */
+  it("(d) aligns /st-rework's severity vocabulary in the same three lines", async () => {
     const lines = (await load(REWORK)).raw.split("\n");
-    const paragraph = lines.slice(19, 22).join("\n");
+    const opening = "**Severity vocabulary**, used by every table below";
+    const vocabulary = lines.findIndex((line) => line.startsWith(opening));
+    const paragraph = lines.slice(vocabulary, vocabulary + 3).join("\n");
 
-    expect(lines[18]).toBe("");
-    expect(lines[19]?.startsWith("**Severity vocabulary**, used by every table below")).toBe(true);
-    expect(lines[22]).toBe("");
+    expect(lines.filter((line) => line.startsWith(opening))).toHaveLength(1);
+    expect(lines[vocabulary - 1]).toBe("");
+    expect(lines[vocabulary + 3]).toBe("");
+    // It sits in the head of the body, before the first table it governs.
+    expect(vocabulary).toBeGreaterThan(lines.findIndex((line) => line === "# Rework"));
+    expect(vocabulary).toBeLessThan(lines.findIndex((line) => line === "## Dispatch"));
     expect(flat(paragraph)).toContain(
       "**Minor** (a true defect with a small, named consequence)",
     );
@@ -490,10 +533,15 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
       "findings by severity plus the notes count, REVISE/DEFER counts,",
     );
     expect(lines[proof + 4]).toBe("");
-    // The sections the eval cases quote open where they did before this fix.
-    expect(routing + 1).toBe(154);
-    expect(protocol + 1).toBe(187);
-    expect(proof + 1).toBe(267);
+    // The sections the eval cases quote are each found once, by their opening words, and in the
+    // order the cases cite them (re-anchored 2026-10-10, the note above the vocabulary test).
+    for (const anchor of ["## 4. Routing", "### Critical Deferral Protocol", "Close with this run's proof block:"]) {
+      expect(lines.filter((line) => line.startsWith(anchor)), anchor).toHaveLength(1);
+    }
+    expect(scan).toBeGreaterThan(inference);
+    expect(routing).toBeGreaterThan(scan);
+    expect(protocol).toBeGreaterThan(routing);
+    expect(proof).toBeGreaterThan(protocol);
   });
 
   it("(e) fails when one word of the section is reworded", async () => {
@@ -753,3 +801,42 @@ describe("capture by consequence — the implementer and the fixer", () => {
     ]);
   });
 });
+
+describe("capture by consequence — the written report lists every note left out", () => {
+  /** The `Report and digest` rule of one body, whitespace-collapsed, or "" when absent. */
+  const reportRule = (file: CorpusFile): string => {
+    const contract = sectionText(file, "Return contract") ?? "";
+    const start = contract.indexOf("- **Report and digest.**");
+    if (start === -1) return "";
+    const end = contract.indexOf("\n- ", start + 1);
+    return flat(end === -1 ? contract.slice(start) : contract.slice(start, end));
+  };
+
+  it.each(SEVERITY_ROLES)(
+    "(h) %s says so in its `Report and digest` rule, after the count and before the inline fallback",
+    async (relPath) => {
+      const rule = reportRule(await load(relPath));
+      const count = rule.indexOf("`notes left out: <n>`");
+      const listed = rule.indexOf(NOTES_LISTED);
+
+      expect(count).toBeGreaterThan(-1);
+      expect(listed).toBeGreaterThan(count);
+      expect(rule.indexOf("With no report path, or a write refused,")).toBeGreaterThan(listed);
+      // Once per body: a second copy elsewhere would be a second rule to keep in step.
+      expect(flat((await load(relPath)).raw).split(NOTES_LISTED)).toHaveLength(2);
+    },
+  );
+
+  it("(h) fails when a body counts its notes and no longer says the report lists them", async () => {
+    const reviewer = await load(REVIEWER);
+    const sentence = new RegExp(`\\s${NOTES_LISTED.split(" ").map(escapeRegExp).join("\\s+")}`);
+    const dropped = corpusFileOf(reviewer.relPath, reviewer.raw.replace(sentence, ""));
+
+    expect(dropped.raw).not.toBe(reviewer.raw);
+    expect(captureGaps(dropped)).toEqual([`Return contract: ${NOTES_LISTED}`]);
+  });
+});
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

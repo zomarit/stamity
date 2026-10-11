@@ -28,10 +28,11 @@
  * frontmatter, and a parity case holds the shipped table to this array: its
  * class column to this order, and each row's role column to `roles` in BOTH
  * directions, so a dropped role fails as loudly as one borrowed from another
- * rung. Two placements no frontmatter can declare ARE recorded here, each named
+ * rung. Three placements no frontmatter can declare ARE recorded here, each named
  * in the `rationale` of the row carrying it: the reviewer's escalation to the
- * top class for the whole-branch pass, and the fixer's drop to the cheapest
- * class once a round is mechanical.
+ * top class for the whole-branch pass, the one closure re-review after a fixer
+ * escalation, which the review loop runs a class above the reviewer's own, and
+ * the fixer's drop to the cheapest class once a round is mechanical.
  *
  * TWO FLOW PLACEMENTS ARE NOT RECORDED HERE, and a reader has to know which.
  * The first is the review loop's escalation: a fresh fixer spawn at one effort
@@ -107,15 +108,17 @@
  * two of these clients publish no symbolic vocabulary to map onto at all. An
  * operator who wants the ladder enforced in the emitted files sets the pins.
  *
- * ONE EFFORT AXIS, TWO CARRIERS, FOUR SCALES. Effort is carried per client
- * where supported and omitted on Copilot cloud (documented) — one axis, and
- * exactly one client that drops it. The three that carry it do NOT document
- * the same levels, so each row declares its own
+ * ONE EFFORT AXIS, TWO CARRIERS, FOUR SCALES. Effort is carried per client,
+ * and no client drops it: Copilot's row named no carrier until its CLI's
+ * custom-agent loader was read to take a `reasoning-effort` key (2026-10-10).
+ * The four do NOT document the same levels, so each row declares its own
  * {@link ClientModelProjection.effortScale} with its own citation, and
  * {@link nearestExpressibleEffort} is where a level asked for on one client's
  * vocabulary lands on another's. `stamity config` refuses a level the CURRENT
- * selection cannot express; the clamp exists for the client that joins after. The rest do not agree on WHERE it goes:
- * two publish a key of their own, and one carries it as a bracket parameter of
+ * selection cannot express; the clamp exists for the client that joins after,
+ * and for a level a row lists in {@link ClientModelProjection.effortLegacy},
+ * which that client's own parser still takes. Nor do they agree on WHERE it goes:
+ * three publish a key of their own, and one carries it as a bracket parameter of
  * the model value itself (`<id>[effort=high]`, options comma-separated inside
  * a single group as `[effort=high,context=300k]` —
  * cursor.com/docs/agent/subagents, accessed 2026-08-17). A row therefore names
@@ -124,10 +127,10 @@
  * Reading `effortKey: null` as "this client has no effort" is the mistake the
  * field's name invites: it means no STANDALONE key, and
  * {@link ClientModelProjection.effortCarrier} says whether the axis rides
- * elsewhere or is genuinely absent. Dropping it on the one client is a
- * decision with a citation; dropping it on a client whose carrier merely has a
- * different SHAPE would be the unledgered in-code call this module exists to
- * end, one axis over.
+ * elsewhere or is genuinely absent. Dropping it takes a decision with a
+ * citation, and no row carries one today; dropping it on a client whose
+ * carrier merely has a different SHAPE would be the unledgered in-code call
+ * this module exists to end, one axis over.
  *
  * Consumers: the four adapters project a class through {@link resolveModelValue}
  * and {@link resolveEffortValue}; `stamity config` validates and stores the pin
@@ -181,7 +184,7 @@ export const MODEL_LADDER: readonly ModelLadderRow[] = [
     roles: ["reviewer"],
     defaultEffort: "high",
     rationale:
-      "The whole-branch pass at deep intensity: the one review that reads a finished branch end to end, where a missed cross-unit defect costs a rework cycle instead of a round. No agent file declares this class — it is an escalation the flow applies to the reviewer, whose default sits one rung down.",
+      "The whole-branch pass at deep intensity: the one review that reads a finished branch end to end, where a missed cross-unit defect costs a rework cycle instead of a round. No agent file declares this class — it is an escalation the flow applies to the reviewer, whose default sits one rung down. It also takes the one closure re-review after a fixer escalation, which the review loop runs a class above the reviewer's own.",
   },
   {
     modelClass: "advanced",
@@ -230,7 +233,8 @@ export function isModelClass(value: unknown): value is ModelClass {
  *   value resolves: the parameter has nothing to ride on until an id is named.
  * - `null` — the surface this engine emits carries the axis nowhere, so a
  *   class's effort is dropped on that client. Only a documented decision may
- *   take this value; it is not the default for a carrier that is awkward.
+ *   take this value; it is not the default for a carrier that is awkward, and
+ *   no row takes it today.
  *
  * Named for this note rather than inlined into the field below, and module-local
  * because the field is where a consumer meets it: adapters narrow on the literals
@@ -299,6 +303,20 @@ export interface ClientModelProjection {
    */
   readonly effortScale: readonly EffortLevel[];
   /**
+   * Levels this client's documented scale dropped that its own parser still
+   * accepts, as a subset of `EFFORT_LEVELS` off {@link effortScale}; empty on
+   * every row but two.
+   *
+   * A legacy level is a word an operator may keep asking for, not a level this
+   * engine writes: `stamity config set` accepts it on a selection whose client
+   * lists it here, and the emission writes the nearest documented level
+   * through {@link nearestExpressibleEffort}, disclosed as any other narrowing
+   * is. Refusing it would break a repository that set it while the vendor still
+   * documented it; emitting it would write a level the current reference does
+   * not list.
+   */
+  readonly effortLegacy: readonly EffortLevel[];
+  /**
    * What the scale does NOT guarantee, where that needs saying; `null` where
    * the scale is the whole claim.
    *
@@ -313,7 +331,7 @@ export interface ClientModelProjection {
    * there is no scale to cite — the documented omission is already carried by
    * {@link citation} on that row.
    *
-   * Separate from {@link citation} because three of the four scales are
+   * Separate from {@link citation} because two of the four scales are
    * published on a DIFFERENT vendor page from the key names and aliases, and
    * moving one date to cover both would date a claim nobody re-read.
    */
@@ -351,6 +369,7 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // is `low`, so the one level another client documents underneath it rises
     // to `low` here rather than being dropped.
     effortScale: ["low", "medium", "high", "xhigh", "max"],
+    effortLegacy: [],
     effortScaleNote: null,
     effortScaleCitation: {
       url: "https://code.claude.com/docs/en/sub-agents",
@@ -377,6 +396,7 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // HERE and none is clamped here either — and the note is what keeps that
     // from reading as a guarantee the level lands.
     effortScale: [...EFFORT_LEVELS],
+    effortLegacy: [],
     effortScaleNote: "pass-through — parameter ids and values vary by model",
     effortScaleCitation: {
       url: "https://cursor.com/docs/sdk/typescript",
@@ -387,26 +407,39 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
   copilot: {
     tool: "copilot",
     modelKey: "model",
-    // Documented omission — effort is omitted on Copilot cloud: the agent
-    // configuration publishes no effort key, and no model-value parameter
-    // either, on the surface this engine emits — the axis has nowhere to go
-    // here, and the `null` carrier records that as the decision it is. The
-    // only row entitled to it.
-    effortCarrier: null,
-    effortKey: null,
+    // A key of its own, in the kebab spelling the CLI's custom-agent loader
+    // (1.0.89) and its changelog (1.0.66, 1.0.88) carry; whether the loader
+    // also takes the `reasoningEffort` spelling of the online reference's table
+    // is unverified. A level the agent's model does not offer is reported by the
+    // CLI and falls back to the session's: it never stops the agent. The cloud
+    // agent's handling of the key is undocumented (custom-agents configuration
+    // page, read 2026-10-10), so this row speaks for the CLI.
+    effortCarrier: "key",
+    effortKey: "reasoning-effort",
     effortTemplate: null,
     acceptsConcreteIds: true,
     aliases: {},
-    // Empty, and empty for the SAME documented reason the carrier is `null`:
-    // there is no effort surface here to hold a level. Nothing to cite beyond
-    // the row's own page, so the scale citation is `null` rather than a second
-    // copy of it dated to a read that did not happen.
-    effortScale: [],
+    // The CLI reference's documented `--reasoning-effort` values. `minimal` is
+    // on the flag's own list and off the reference, so it is legacy as Codex's
+    // is: `stamity config set` keeps accepting it on a copilot-only selection,
+    // as it did while this row carried no scale, and the emission writes `low`.
+    // Published on the CLI reference, the page the key names are cited to
+    // below; the scale keeps a citation of its own, as every scale does.
+    effortScale: ["low", "medium", "high", "xhigh", "max"],
+    effortLegacy: ["minimal"],
     effortScaleNote: null,
-    effortScaleCitation: null,
+    effortScaleCitation: {
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
+    },
+    // The CLI command reference's custom-agent frontmatter table, which lists
+    // `model` and the effort key (spelled `reasoningEffort` there; the kebab
+    // spelling is the loader's, as the comment above says). The custom-agents
+    // configuration page, this row's citation until 2026-10-10, lists no effort
+    // key.
     citation: {
-      url: "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
-      accessDate: "2026-08-17",
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
     },
   },
   codex: {
@@ -417,16 +450,18 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortTemplate: null,
     acceptsConcreteIds: true,
     aliases: {},
-    // One rung lower and one rung shorter than the other key carrier: this is
-    // the only client documenting `minimal`, and the only one that cannot be
-    // asked for `max`. Published on the config-file page rather than on the
-    // subagents page this row's other claims come from, which is why the scale
-    // carries its own citation.
-    effortScale: ["minimal", "low", "medium", "high", "xhigh"],
+    // The config reference lists `low` through `ultra`, one rung above the
+    // other key carrier's ceiling, and which of them a run gets depends on the
+    // model. `minimal`, which the page used to list, is legacy: the parser still
+    // takes it, so it sits in `effortLegacy` and is written as `low`. Published
+    // on the config-file page rather than on the subagents page this row's other
+    // claims come from, which is why the scale carries its own citation.
+    effortScale: ["low", "medium", "high", "xhigh", "max", "ultra"],
+    effortLegacy: ["minimal"],
     effortScaleNote: null,
     effortScaleCitation: {
       url: "https://learn.chatgpt.com/docs/config-file/config-reference",
-      accessDate: "2026-09-17",
+      accessDate: "2026-10-10",
     },
     citation: {
       url: "https://learn.chatgpt.com/docs/agent-configuration/subagents",
@@ -517,7 +552,8 @@ function requestedEffort(modelClass: ModelClass, efforts: EffortMap): EffortLeve
  * Never silent about it: every clamp this makes is reported by
  * {@link effortDisclosures}, and `stamity config` refuses the level outright
  * when the narrow client is already selected, so a clamp is only ever reached
- * by a client that joined AFTER the level was set.
+ * by a client that joined AFTER the level was set, or by a level that client
+ * lists in {@link ClientModelProjection.effortLegacy}.
  */
 export function nearestExpressibleEffort(level: EffortLevel, tool: Tool): EffortLevel | undefined {
   const { effortScale } = CLIENT_MODEL_PROJECTION[tool];
@@ -649,10 +685,10 @@ export function resolveEffortValue(
  * plan is already composed, the level lands at the client's nearest rung, and
  * the operator is told which client moved it and to what.
  *
- * Silent about the client that carries the axis nowhere. An absent effort key
- * there is a documented omission the capability matrix already states, not a
- * narrowing of this operator's level, and reporting it per class would put
- * four lines of noise in front of every repository that selects that client.
+ * Silent about a client that carries the axis nowhere (no row does today). An
+ * absent effort key there would be a documented omission the capability matrix
+ * states, not a narrowing of this operator's level, and reporting it per class
+ * would put four lines of noise in front of every repository selecting it.
  */
 export function effortDisclosures(manifest: SetupManifest): string[] {
   const efforts = manifest.models?.effort ?? {};

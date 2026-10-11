@@ -423,6 +423,21 @@ describe("/st-work — body skeleton", () => {
     expect(() => assertLineCap(file, BODY_LINE_CAP)).not.toThrow();
     expect(() => assertDenyClean(file)).not.toThrow();
   });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close, the last of that file's writers of
+  // this command): what the two budgets have left once the close's leftovers text landed. The
+  // plan hands the next package at least 900 characters under the re-attachment cut and 15 body
+  // lines under the cap, and neither budget is ever raised. A unit that spends this room moves
+  // these two numbers with a dated note naming what it bought; one that only crosses them by
+  // accident meets this pin before it meets the cap.
+  it("leaves room under both budgets: 900 characters before the cut, 15 lines under the cap", async () => {
+    const file = await workFile;
+    const cut = file.raw.indexOf("\n### Specialist pass\n");
+    expect(cut).toBeGreaterThan(-1);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(900);
+    const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
+    expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
+  });
 });
 
 describe("/st-work — Frame and Plan", () => {
@@ -430,8 +445,64 @@ describe("/st-work — Frame and Plan", () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
     expect(frame).toContain("deferral inbox");
     expect(frame).toContain("overlap");
+    // Added 2026-10-10 (plan 019 file 3, unit q1t-frame-inbox-read, review round 1; review/28
+    // with build/15 as signed off). The matched rows are shown, not only read. Where the plan
+    // gate asks nothing (light, or standard on a fresh persisted plan) no later step shows a row
+    // the plan does not settle, so the duty lives in this sentence; the unit's first commit
+    // dropped the verb and nothing here went red.
+    expect(frame).toContain("Read and surface the deferral inbox rows whose paths overlap");
     // Reader mandate: the read is unconditional, every run.
     expect(frame).toContain("guaranteed on every run");
+  });
+
+  it("reads the inbox through the ledger verb's query and reads the file whole only when that query is absent (REQ-FLOW-068)", async () => {
+    const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    // Added 2026-10-10 (plan 019 file 3, unit q1t-frame-inbox-read). The inbox is state any
+    // writer can author, and the query screens every row before it prints one. Frame reads the
+    // matching rows through it, by the change's paths and by the plan.
+    expect(frame).toContain("the `ledger` verb's `inbox` query");
+    expect(frame).toContain("`--paths`");
+    expect(frame).toContain("`--plan`");
+    // The counts say how much of the inbox the query left out.
+    expect(frame).toContain("unmatched");
+    // A bare intent names no files until Phase 2 has planned them: the second query.
+    expect(frame).toContain("again with the plan's files");
+    // A row the screen withholds is listed as the query's own line (its line number, severity,
+    // location and pattern id) and handed to the person. The printed line ends "read it by
+    // hand", which a run could take as its own to do.
+    // TEST CHANGE, justified (2026-10-10, q1t-frame-inbox-read, second commit): this unit's own
+    // pin "A row it withholds is listed as it prints" grows to the whole sentence. q1a's
+    // security re-review, as the orchestrator signed off, has Frame say whose read it is and
+    // keep the session out of the inbox for that row; the shorter pin still matches inside it.
+    // TEST CHANGE, justified (2026-10-10, q1t-frame-inbox-read, review round 1; review/29 as
+    // signed off): the pin's subject grows from "A row it withholds" to "A row it withholds or
+    // skips". The query prints a second kind of line for a row it does not show, `skipped:` with
+    // the line number and the pattern id, and a writer forces one by padding a row past the
+    // length the screen reads. The rule now keeps the session out of the inbox for that row too;
+    // the rest of the sentence is as the second commit pinned it.
+    // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; `review/90`,
+    // signed off): the pin read "A row it withholds or skips is listed as it prints, the person's
+    // to read; never open the inbox for it." What changed about the contract: the query prints a
+    // third kind of line for a row it does not show, `unparsed: <line>: <message>`, and no text
+    // named its reader, so a row with a grammar slip that overlapped the change was handed to
+    // nobody. The subject grows to the row the query cannot parse, which is the person's to fix;
+    // the never-open rule is as it was and now covers that row too.
+    expect(frame).toContain(
+      "A row it withholds, skips or cannot parse is listed as it prints, the person's to read or fix; never open the inbox for it.",
+    );
+    expect(frame).not.toContain("A row it withholds or skips is listed");
+    // The whole-file read has one trigger: no installed CLI, or a copy older than the query. No
+    // failed run of the query is it. A writer can force a refusal (a link, a file padded past
+    // the ceiling) and perhaps a crash, and a whole read would be unscreened. The plan's r4 text
+    // let a crash earn the whole read; q1a's round-2 review narrowed it to the absent verb, as
+    // the orchestrator signed off, before this unit landed.
+    expect(frame).toContain("Only when the CLI or that query is absent, read the whole file and say so");
+    expect(frame).toContain(
+      "any other failure (a refusal, a crash, a failing exit) is a finding naming it, never a whole-file read",
+    );
+    expect(frame).not.toContain("When the query cannot run");
+    expect(frame).not.toContain("cannot run at all");
+    expect(frame).not.toContain("absent or crashed");
   });
 
   it("lists an inbox row a persisted plan settles and asks nothing about it (REQ-FLOW-019)", async () => {
@@ -605,25 +676,34 @@ describe("/st-work — Frame and Plan", () => {
 
   it("opens the run record head at Frame with the plan and the invocation (REQ-CTX-012)", async () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit f0-make-room; REQ-CTX-014): the
+    // four head lines and the `reports/` folder's `.gitignore` moved out of Frame step 5 into the
+    // Proof block's record paragraph, below the re-attachment cut, to make room above it. Frame
+    // still opens the record and points at that paragraph; a resumed run reads an existing head
+    // and never rewrites it. Every phrase below is pinned word for word as before, only its
+    // section moved from Frame to `### Proof block`, and the pointer is pinned in Frame.
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(frame).toContain("with the head lines and the `reports/` folder the Proof block names");
 
     // The resume card is built from the record's head after a compaction, so
     // the head has to name what the run executes and how it was invoked, near
     // the top where a reader of the first lines finds it.
-    expect(frame).toContain("`Plan: <path>`");
-    expect(frame).toContain("`Invocation: <this command line, verbatim>`");
-    expect(frame).toContain("among its first 15");
+    expect(proof).toContain("`Plan: <path>`");
+    expect(proof).toContain("`Invocation: <this command line, verbatim>`");
+    expect(proof).toContain("among its first 15");
     // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/115`): the head records the
     // run's base, which the Gates read for the scan and the class (sign-off: the run's branch point).
-    expect(frame).toContain("with four lines among its first 15");
+    expect(proof).toContain("with four lines among its first 15");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
     // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
-    expect(frame).toContain(
+    expect(proof).toContain(
       "`Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame, never the word `HEAD`)",
     );
     // The reports folder is created beside the record and ignored by git.
     expect(frame).toContain("`reports/` folder");
-    expect(frame).toContain("whose one line is `*`");
+    expect(proof).toContain("`reports/` folder");
+    expect(proof).toContain("whose one line is `*`");
   });
 
   it("persists an in-flow plan once under the run folder, never under the plan artifacts (REQ-CTX-009)", async () => {
@@ -634,6 +714,19 @@ describe("/st-work — Frame and Plan", () => {
     expect(plan).toContain("persisted nowhere under `docs/plans/`");
     expect(plan).toContain("`.stamity/runs/<run-id>/plan.md`");
     expect(plan).toContain("not a reviewable artifact");
+  });
+
+  it("names the record's Plan: line where the in-flow plan is written, above the re-attachment cut", async () => {
+    const plan = collapse(section(await body(), "## Phase 2 — Plan"));
+    const raw = (await workFile).raw;
+
+    // Added 2026-10-10 (plan 019 file 3, unit q1t-frame-inbox-read; ledger row `review/1`). The
+    // head-line list moved below the cut in f0-make-room, so a run compacted before it re-read
+    // the Proof block could write plan.md and leave `Plan:` unset, and its resume card would
+    // carry no plan path. The duty is named where the plan is written.
+    expect(plan).toContain("not a reviewable artifact; the record's `Plan:` line names it.");
+    expect(raw.indexOf("the record's `Plan:` line names it")).toBeGreaterThan(-1);
+    expect(raw.indexOf("the record's `Plan:` line names it")).toBeLessThan(REATTACH_BUDGET_CHARS);
   });
 });
 
@@ -874,7 +967,12 @@ describe("/st-work — Prove", () => {
     const text = await body();
     const loop = collapse(section(text, "### Review loop"));
     expect(loop).toContain(`${DEFAULT_MAX_REVIEW_ITERATIONS} rounds by default (2 at light)`);
-    expect(loop).toContain("a review-gate hook that cannot see the tier may hold a light run to the engine cap");
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit f0-make-room; REQ-CTX-014): the
+    // light cap's hook caveat moved out of the Review loop's cap bullet into the client-events
+    // paragraph under `### Intensity`, which is about what the hook enforces, to make room above
+    // the re-attachment cut. The phrase is pinned word for word, only its section moved.
+    const events = collapse(section(text, "### Intensity"));
+    expect(events).toContain("a review-gate hook that cannot see the tier may hold a light run to the engine cap");
     // The three triggers, in order.
     const triggers = [
       "a finding whose ledger row carries two `re-review not-fixed` notes",
@@ -973,6 +1071,27 @@ describe("/st-work — Prove", () => {
     expect(pass).toContain("false-positive rate");
     expect(pass).toContain("downgrades itself to advisory");
     expect(pass).toContain("blocks only on a breached budget");
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, `plan/35`): the floor
+  // keeps a Minor row away from the QA checkpoint, and it used to close that row itself, "normally
+  // as deferred". The close now asks about every leftover, Minor rows included (`/st-board`'s
+  // Leftovers at a close), so the floor says where a Minor row closes and that the person sees it
+  // there. Before the close the old exception stands: only an ambiguous disposition reaches the
+  // operator.
+  it("closes a Minor row through the close's leftovers part, where the person sees it (REQ-FLOW-074)", async () => {
+    const pass = collapse(section(await body(), "### Specialist pass"));
+    expect(pass).toContain(
+      "the run closes its own Minor rows against the exit invariant through the close's leftovers part, where each reaches the person as a leftover with its recommendation.",
+    );
+    expect(pass).toContain(
+      "Before the close, a Minor row reaches the operator only when its disposition is itself ambiguous, which is the ambiguity floor firing on the row rather than the severity floor being overridden.",
+    );
+    // The retired wording: a Minor row the run closed alone never reached a person.
+    expect(pass).not.toContain("normally as deferred");
+    // The rule it leans on is `/st-board`'s, which counts Minor rows among the leftovers.
+    const board = collapse(section((await corpusFile(BOARD_PATH)).parsed.body, "## Deferral inbox"));
+    expect(board).toContain("each ledger row neither fixed nor rejected, Minor rows included");
   });
 
   it("runs the security lens at light intensity, so the universal floor holds at every tier", async () => {
@@ -1202,6 +1321,63 @@ describe("/st-work — Prove", () => {
     expect(qa.indexOf("**The close asks once.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
   });
 
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019):
+  // the close's one question gains the leftovers as a fourth part. The rule itself has one home,
+  // `/st-board`'s Leftovers at a close; this command carries a pointer of at most four lines that
+  // names the query the close runs and the order it takes the rows in, and hands the unanswered
+  // close to that rule.
+  it("joins the leftovers to the close's one question as a fourth part, by /st-board's rule (REQ-FLOW-074)", async () => {
+    const raw = (await workFile).raw;
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    const pointer =
+      "The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.";
+    expect(qa).toContain(pointer);
+    expect(qa).toContain("every `decision-waiting` row first");
+
+    // Inside the one question's paragraph: after the three parts and their default, and before
+    // the sentence that drops an empty part, which therefore reads for all four.
+    const at = qa.indexOf(pointer);
+    expect(at).toBeGreaterThan(qa.indexOf("those rows not signed and the delta unmerged."));
+    expect(at).toBeLessThan(qa.indexOf("A part with nothing to decide drops out; with none left, there is no ask."));
+    expect(qa.indexOf("**The close asks once.**")).toBeLessThan(at);
+
+    // A pointer, not a second copy of the rule: at most four lines, each its own.
+    const lines = raw.split("\n");
+    const first = lines.findIndex((line) => line.startsWith("The leftovers join it as a fourth part"));
+    const last = lines.findIndex((line) => line.endsWith("its unattended rule applies."));
+    expect(first).toBeGreaterThan(-1);
+    expect(last).toBeGreaterThanOrEqual(first);
+    expect(last - first + 1).toBeLessThanOrEqual(4);
+    // The rule's own words stay in `/st-board`: what a line reads, and what is never pre-set.
+    const work = collapse(await body());
+    expect(work).not.toContain("never pre-set to drop");
+    expect(work).not.toContain("→ fix now |");
+
+    // What the pointer names is what the owner declares: the block's label, the two flags the
+    // close's query takes, and the ledger rows the rule counts, in the owner's words.
+    const board = collapse(section((await corpusFile(BOARD_PATH)).parsed.body, "## Deferral inbox"));
+    expect(board).toContain("- **Leftovers at a close:**");
+    expect(board).toContain("the `ledger` verb's `inbox` query with `--due` and `--paths`");
+    expect(board).toContain("each ledger row neither fixed nor rejected");
+    expect(board).toContain("every inbox row tagged `decision-waiting`, listed first");
+    expect(board).toContain("With no answer, only notes are dropped");
+
+    // Below the cut: the pointer costs nothing a resumed run re-attaches.
+    expect(raw.indexOf("The leftovers join it as a fourth part")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+  });
+
+  it("hands the qa skill the class and lenses gate classify named (REQ-FLOW-069)", async () => {
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    // The skill skips the walk by class, so the checkpoint passes what the classify named.
+    expect(qa).toContain(
+      "Invoke the qa skill by name for the guided pass, handing it the class and lenses `gate classify` named (`unclear` when none ran).",
+    );
+    // Step 2 keeps its ownership sentence, after the hand-off.
+    expect(qa.indexOf("The step belongs to the command already running")).toBeGreaterThan(
+      qa.indexOf("handing it the class and lenses"),
+    );
+  });
+
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("`report`, the repo-relative path of the report it came from");
@@ -1210,6 +1386,82 @@ describe("/st-work — Prove", () => {
     expect(proof.indexOf("`decision_needed`, present only as `true`")).toBeGreaterThan(
       proof.indexOf("an optional eighth field on the row, `retired`"),
     );
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q5-usage-lines; REQ-CTX-019, D17): what a phase and a
+  // review round cost is one record line in a fixed grammar, a line of its own and never directly
+  // above a table, because `src/cli/docs/measurements.ts` takes a table's lead from the nearest
+  // non-empty line above it (`test/cli/docs/measurements.test.ts` holds that side).
+  //
+  // TEST CHANGE, justified (2026-10-10, plan 019 file 3, q5's fix round 1, `review/8` as signed
+  // off): the pin read "An ended phase or review round adds `…` to the record, minutes from the
+  // orchestrator's clock, after this list and never directly above a table." "After this list"
+  // named the proof block's field list, which no record holds while Frame, Build or a review round
+  // is ending, so the line had no place to go when it was due. The sentence now has the line
+  // appended to the run record as the phase or round ends, the way a capacity line is, and names no
+  // place inside the proof block. The text still sits where it sat, below the cut, and takes no
+  // character from the re-attached index: the Resume bullet, above the cut, has a resumed run
+  // "re-read this command's own file past the part the client re-attached" (pinned below, in the
+  // Dispatch contract's tests).
+  it("names the usage line a phase or review round appends, below the re-attachment cut (REQ-CTX-019)", async () => {
+    const raw = (await workFile).raw;
+    const proof = collapse(section(await body(), "### Proof block"));
+    const usage =
+      "**Usage lines.** As each phase or review round ends, append `- <UTC> usage: <phase | review rN> minutes=<n> tokens=<n | unreported> (<client>)` to the run record, as a capacity line is appended: minutes from the orchestrator's clock, a line of its own, never directly above a table.";
+    expect(proof).toContain(usage);
+    // The text sits after the field list's last item, before the citation paragraph.
+    const at = proof.indexOf(usage);
+    expect(at).toBeGreaterThan(proof.indexOf("says so in the same line."));
+    expect(at).toBeLessThan(proof.indexOf("Cite native platform artifacts"));
+    // The paragraph is that one sentence: nothing beside it names a place inside the proof block,
+    // which no record holds while the run is still going.
+    //
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit q10a-work-close; REQ-CTX-020,
+    // `plan/39`): the slice ended at "Cite native platform artifacts", the paragraph that followed
+    // this one. The leftovers-line paragraph now stands between the two, so the slice ends where
+    // that paragraph opens. What is asserted is unchanged and no looser: the usage paragraph is
+    // this one sentence, byte for byte, and no word of it moved.
+    const paragraph = proof.slice(at, proof.indexOf("**Leftovers line.**")).trim();
+    expect(paragraph).toBe(usage);
+    // Below the cut: the paragraph costs nothing a resumed run re-attaches.
+    expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+    expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-CTX-020, S18, `plan/39`): the
+  // close records what happened to its leftovers as one count line. Unlike a usage line, which is
+  // appended while the run is going, this one is written once, at the close, so it has a place:
+  // a line of its own in the record's Proof block. It is never directly above a table, because
+  // `src/cli/docs/measurements.ts` takes a table's lead from the nearest non-empty line above it.
+  it("names the leftovers count line the close writes in the Proof block (REQ-CTX-020)", async () => {
+    const raw = (await workFile).raw;
+    const proof = collapse(section(await body(), "### Proof block"));
+    const leftovers =
+      "**Leftovers line.** The close adds `- <UTC> leftovers: shown=<n> real=<a> fixed=<f> scheduled=<s> dropped=<d> accepted=<k> notes=<p|unknown> changed=<c>`, a line of its own in the record's Proof block, never directly above a table (n = f + s + d, k ≤ d, a ≤ n; a `decision-waiting` append and a kept inbox row count in s; unattended, d = k = c = 0).";
+    expect(proof).toContain(leftovers);
+    // Its own place, in its own words; it does not borrow the usage lines' place, which is the
+    // run record as each phase ends.
+    expect(leftovers).toContain("a line of its own in the record's Proof block, never directly above a table");
+    expect(leftovers).toContain("a kept inbox row count in s");
+    expect(proof).not.toContain("as the usage lines are");
+    // After the usage paragraph, before the citation paragraph, and nothing else between.
+    const at = proof.indexOf(leftovers);
+    expect(at).toBeGreaterThan(proof.indexOf("**Usage lines.**"));
+    expect(at).toBeLessThan(proof.indexOf("Cite native platform artifacts"));
+    expect(proof.slice(at, proof.indexOf("Cite native platform artifacts")).trim()).toBe(leftovers);
+    // One blank line and two lines, and the paragraph itself sits above no table.
+    const lines = raw.split("\n");
+    const first = lines.findIndex((line) => line.startsWith("**Leftovers line.**"));
+    expect(first).toBeGreaterThan(-1);
+    expect(lines[first - 1]).toBe("");
+    expect(lines[first + 2]).toBe("");
+    expect(lines[first + 3]?.startsWith("|")).toBe(false);
+    // `/st-board`'s unattended rule counts its rows in this line's `scheduled`, under this name.
+    const board = collapse(section((await corpusFile(BOARD_PATH)).parsed.body, "## Deferral inbox"));
+    expect(board).toContain("counted as scheduled in the leftovers line");
+    // Below the cut: the paragraph costs nothing a resumed run re-attaches.
+    expect(raw.indexOf("**Leftovers line.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+    expect(raw.indexOf("**Leftovers line.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
   });
 
   it("closes the run with the proof block over a write-ahead ledger", async () => {
@@ -1285,7 +1537,36 @@ describe("/st-work — Prove", () => {
       "gains an optional eighth field on the row, `retired`, whose value opens with the date and then states the disposition",
     );
     expect(proof).toContain("only when its inbox row leaves");
-    expect(proof).toContain("fixed in a commit, cut with a reason, or scheduled with a lane, a trigger and an owner");
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit q10a-work-close; REQ-FLOW-024,
+    // REQ-FLOW-076): the pin read "…or scheduled with a lane, a trigger and an owner". The schedule
+    // rule replaced that triple: a scheduled item names a place and a date or a trigger, which is
+    // the shape the `ledger` verb now holds a new `retired` value to (`src/runs/disposition.ts`),
+    // and an owner is no part of it. `/st-board`'s Removal rule carries the same words (q9t), and
+    // the pair is compared below so the two cannot part again.
+    const dispositions = "fixed in a commit, cut with a reason, or scheduled to a place with a date or a trigger";
+    expect(proof).toContain(dispositions);
+    expect(proof).not.toContain("scheduled with a lane, a trigger and an owner");
+    const board = collapse(section((await corpusFile(BOARD_PATH)).parsed.body, "## Deferral inbox"));
+    expect(board).toContain(dispositions);
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, REQ-FLOW-076, S12, S14):
+  // the close no longer appends every deferred row. A row it appends goes below the inbox's
+  // schedule-rule heading and names when it comes back; a row the close's answer dropped, or
+  // scheduled to a plan, board or handoff place, is retired at that close and never reaches the
+  // inbox.
+  it("appends a deferred row under the schedule rule, unless the close dropped or placed it (REQ-FLOW-074)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain(
+      `At exit every row that closed \`deferred\` is appended to \`${INBOX}\`, below its \`## Rows under the schedule rule\` heading with \`by:\` or \`when:\` (and \`files:\` when the location is \`—\`), unless the close dropped it or scheduled it to a plan, board or handoff place, which retires it then.`,
+    );
+    // The grammar the appended row is written in is still the owner's.
+    expect(proof).toContain("An appended row is in the row grammar `/st-board` declares");
+    // The heading and the fields are the owner's own names for them.
+    const board = collapse(section((await corpusFile(BOARD_PATH)).parsed.body, "## Deferral inbox"));
+    expect(board).toContain("heading `## Rows under the schedule rule` carry `by:` or `when:`");
+    expect(board).toContain("name `files:` when the location is `—`");
+    expect(board).toContain("retires it to a plan, board or handoff place");
   });
 
   it("refuses to write the record while any ledger row still reads open", async () => {
@@ -1303,6 +1584,12 @@ describe("/st-work — Prove", () => {
     // what is still owed with the item it became.
     expect(proof).toContain("next-step line names the inbox rows the run appended");
     expect(proof).toContain("`Not done:` list is empty or names the scheduled item each line became");
+    // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, S12): a Critical or
+    // Warning the person dropped is an accepted risk, and it stays on that list beside the
+    // scheduled items rather than leaving with its row.
+    expect(proof).toContain(
+      "`Not done:` list is empty or names the scheduled item each line became, and each accepted risk.",
+    );
   });
 
   it("retires the inbox rows the run fixed at its close, keeping the ledger row's state (REQ-FLOW-024)", async () => {
@@ -1318,11 +1605,69 @@ describe("/st-work — Prove", () => {
       '`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`',
     );
     expect(proof).toContain("retired, its state kept");
-    expect(proof).toContain("A row the run did not fix stays as it is.");
+    // TEST CHANGE, justified (2026-10-10, plan 019 file 3, unit q10a-work-close; REQ-FLOW-074,
+    // `plan/33`, D37): the pin read "A row the run did not fix stays as it is." That was true
+    // while the close retired only what it fixed. The close's one question now decides the inbox
+    // rows the change touched or found due, and its answer is applied to each of them, so an
+    // unfixed row may leave too. What stays as it is narrowed to the row no answer reached, which
+    // is `/st-board`'s "Nothing retires a row without an answer".
+    expect(proof).toContain("A row no answer reached stays as it is.");
+    expect(proof).not.toContain("A row the run did not fix stays as it is.");
     // After the appending paragraph, so the order reads append, then retire.
     expect(proof.indexOf("An inbox row this run fixed")).toBeGreaterThan(
       proof.indexOf("names the scheduled item each line became"),
     );
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, `plan/33`, D37): what
+  // the close does to an inbox row its answer decided, in the three ways `/st-board`'s Removal
+  // rule names, each leaving a record line. The retire values are the `ledger` verb's own
+  // (`src/runs/disposition.ts`): `fixed <ref>` above, `cut <reason>` here.
+  it("applies the close's answer to each inbox row it decided, by /st-board's Removal rule (REQ-FLOW-074)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain(
+      "An inbox row the close's answer decided follows `/st-board`'s Removal rule: a drop retires it `cut <reason>` and removes its bullet, a plan, board or handoff place retires it there, and a new date or trigger replaces its bullet with one row carrying the same `Ref:`; each removal adds an `- inbox retired:` line naming its disposition.",
+    );
+    expect(proof).toContain("carrying the same `Ref:`");
+    // In the fixed-row paragraph, after the fixed row's own retirement and before the row that stays.
+    const at = proof.indexOf("An inbox row the close's answer decided");
+    expect(at).toBeGreaterThan(proof.indexOf("the run record carries `- inbox retired: <location> — fixed in <run id>`"));
+    expect(at).toBeLessThan(proof.indexOf("A row no answer reached stays as it is."));
+    // The owner's rule says the same three things, in its own words.
+    const board = collapse(section((await corpusFile(BOARD_PATH)).parsed.body, "## Deferral inbox"));
+    expect(board).toContain("a drop retires it (`cut <reason>`) and removes its bullet");
+    expect(board).toContain("a plan, board or handoff place retires it there and removes its bullet");
+    expect(board).toContain(
+      "a new date or trigger removes its bullet and appends one row under the schedule rule carrying the same `Ref:`",
+    );
+    expect(board).toContain("Nothing retires a row without an answer");
+  });
+
+  // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; the sign-off on q9t's review, D39):
+  // a row the inbox query withholds or skips carries text the screen kept from the session, so
+  // the close has nothing to recommend from and no answer to apply. It is listed, as Frame lists
+  // it, and it leaves only by the person's own hand. Without this sentence the paragraph's
+  // "an inbox row the close's answer decided" could be read to cover a row nobody could read.
+  it("lists a withheld or skipped row at the close and decides nothing about it (REQ-FLOW-068)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    const withheld =
+      "A row the query withholds or skips is listed as it prints, the person's to read, and never decided: the close offers no disposition for it and applies none, and it stays in the inbox until the person edits it or hands over its `Ref:` with an instruction.";
+    expect(proof).toContain(withheld);
+    // After the rows an answer decided, before the row that stays: it is neither.
+    const at = proof.indexOf(withheld);
+    expect(at).toBeGreaterThan(proof.indexOf("each removal adds an `- inbox retired:` line naming its disposition."));
+    expect(at).toBeLessThan(proof.indexOf("A row no answer reached stays as it is."));
+    // No sentence here hands such a row to the Removal rule.
+    expect(proof).not.toMatch(/withh[^.]*\bRemoval rule/);
+    // Frame says the same of the same rows, in the same words.
+    // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; `review/90`,
+    // signed off): the pin read "A row it withholds or skips is listed as it prints, the person's
+    // to read". What changed about the contract: Frame's subject gained the row the query cannot
+    // parse, the person's to fix (the note on Frame's own pin says why). The words the two
+    // sentences share for a withheld or skipped row are held as they were; the close's sentence
+    // above did not move, and `/st-board`'s bullet names the unparsed line's reader at the close.
+    const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    expect(frame).toContain("A row it withholds, skips or cannot parse is listed as it prints, the person's to read");
   });
 
   it("closes with a next step derived from the run's own state", async () => {
@@ -1592,6 +1937,12 @@ describe("/st-work — dials", () => {
       expect(intensityRow(dials, tier)).toContain(
         "a lockfile's own trigger-path match waiting for the audit's flag when the checks name `dependency-audit`",
       );
+      // Added 2026-10-10 (plan 019 file 3, unit f0-make-room; inbox row
+      // `2026-10-08_product-core/close/10`): the rows restate the Specialist pass's whole fail-closed
+      // rule, so a classify whose `reason` names a failed read keeps the lens at both tiers too.
+      expect(intensityRow(dials, tier)).toContain(
+        "or with no class from `gate classify` or a `reason` naming a failed read (a lockfile's",
+      );
     }
   });
 
@@ -1614,6 +1965,10 @@ describe("/st-work — dials", () => {
     const frontierRow = ladderRoleCells(dials).get("frontier") ?? "";
     expect(frontierRow).toContain("whole-branch deep review");
     expect(frontierRow).toContain(anchor);
+    // The frontier rung carries a second flow placement since 2026-10-10 (unit
+    // q4t-ladder-placement-text, REQ-LADDER-003): the one closure re-review after
+    // an escalation, which MODEL_LADDER's frontier rationale records too.
+    expect(frontierRow).toContain("closure re-review after an escalation");
     // The anchor names real sub-sections, in the order Phase 4 declares them.
     const prove = section(raw, "## Phase 4 — Prove");
     expect(prove.indexOf("### Review loop")).toBeGreaterThanOrEqual(0);
@@ -1624,10 +1979,21 @@ describe("/st-work — dials", () => {
     const dials = collapse(section(await body(), "## Dials"));
 
     // The ladder's prose claimed exactly two flow placements; the capacity rung
-    // adds a third that no row carries, and a reader checking a role's class
+    // adds one that no row carries, and a reader checking a role's class
     // against the table has to be told so rather than find a missing rung.
-    expect(dials).toContain("The two placements no agent file can declare that this table records");
-    expect(dials).toContain("the capacity rung's one-class drop for a build role (Dispatch contract) is a third, which no row records");
+    //
+    // TEST CHANGE, justified (2026-10-10, q4t-ladder-placement-text): the two pins
+    // below moved with the contract. The ladder now records a third placement, the
+    // frontier rung's closure re-review after an escalation, so the count the table
+    // records is three; and it names a second placement no row records, the
+    // escalation fixer's effort step, beside the capacity rung's drop. The old
+    // pins read "The two placements [...] this table records" and "[...] (Dispatch
+    // contract) is a third, which no row records". The capacity rung's clause is
+    // still pinned, inside the longer sentence.
+    expect(dials).toContain("The three placements no agent file can declare that this table records");
+    expect(dials).toContain(
+      "the capacity rung's one-class drop for a build role (Dispatch contract) and the escalation fixer's effort step (Review loop) are two more, which no row records",
+    );
     expect(dials).not.toContain("The only two placements");
   });
 

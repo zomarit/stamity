@@ -43,7 +43,13 @@ import {
   resolveAgentGrant,
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
-import { resolveModelValue, type ModelPinMap } from "../roster/modelLadder.ts";
+import {
+  CLIENT_MODEL_PROJECTION,
+  resolveEffortValue,
+  resolveModelValue,
+  type EffortMap,
+  type ModelPinMap,
+} from "../roster/modelLadder.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCopilotToolsFrontmatter,
@@ -138,6 +144,13 @@ const NODE_LANGUAGES: ReadonlySet<string> = new Set(["javascript", "typescript"]
  */
 const ACCESS_DATE = "2026-09-10";
 
+/**
+ * This client's effort key and scale, as the projection row declares them
+ * (`../roster/modelLadder.ts`): the emitted line takes its key from here and
+ * the capability row its scale's two ends, so neither restates the row.
+ */
+const { effortKey: EFFORT_KEY, effortScale: EFFORT_SCALE } = CLIENT_MODEL_PROJECTION[TOOL];
+
 // ── Dialect facts ────────────────────────────────────────────────
 
 /** This client's honest hook guarantee, read from the shared table rather than restated. */
@@ -156,7 +169,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
   hooksConfigPath: COPILOT_HOOKS_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `tools:` alias list, `model:` only under an operator pin) over a markdown prompt",
+    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` only under an operator pin, `reasoning-effort:` at the declared class's level) over a markdown prompt",
   mcpDialect: "vscode-json",
   entryFile: null,
   caps: [
@@ -173,16 +186,36 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         `operator: Copilot CLI 1.0.89 shows them as project skills (\`copilot skill list\`) beside ` +
         `the prompt files, and keeps them out of the model's own skills list (measured 2026-09-30)`,
     },
-    // Dated inline, and ACCESS_DATE is not re-stamped: the 2026-09-30 pass
-    // found this claim changed ("publishes no effort key" was refuted by the CLI
-    // release notes, while the cited custom-agents page still lists no effort
-    // key) and two rule rows below unverified, so the all-or-nothing rule holds.
+    // Dated inline, and ACCESS_DATE is not re-stamped: this one claim was read
+    // on 2026-10-10 (the CLI command reference, cited below under its own date,
+    // the 1.0.89 loader and its changelog, and the custom-agents page), so the
+    // all-or-nothing rule holds (as it did on 2026-09-30, when two rule rows
+    // below were unverified). The scale's two ends are read off the projection
+    // row the emission resolves through, so the row cannot name a level the
+    // files never carry.
     {
       name: "effort-axis",
       value:
-        "not emitted — Copilot CLI custom agents accept `reasoning-effort` (1.0.66; applied on " +
-        "agent selection since 1.0.88; release notes, accessed 2026-09-30); this engine does not " +
-        "write it yet",
+        `emitted — \`reasoning-effort: <level>\` per agent, on the scale \`${EFFORT_SCALE[0]}\` … ` +
+        `\`${EFFORT_SCALE.at(-1)}\` (Copilot CLI reference, accessed 2026-10-10; the key in the ` +
+        "1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a level the model does not offer is " +
+        "reported and falls back to the session's; the cloud agent's handling of the key is " +
+        "undocumented (custom-agents configuration page, accessed 2026-10-10)",
+    },
+    // Dated inline, and ACCESS_DATE is not re-stamped: this one claim was read
+    // on 2026-10-10 (the CLI changelog, the 1.0.89 loader, the live check, the
+    // CLI command reference and the custom-agents page), so the all-or-nothing
+    // rule holds. The key's effect is the changelog's claim; the live check
+    // proved only the gap, and the override flag is the reference's claim alone.
+    {
+      name: "sub-agent-instructions",
+      value:
+        "emitted — `include-custom-instructions: true` on every agent (Copilot CLI changelog " +
+        "1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on " +
+        "Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`; " +
+        "`--no-custom-instructions` overrides it (Copilot CLI command reference, accessed " +
+        "2026-10-10; unverified on 1.0.89, where no live run passed the flag); the cloud agent's " +
+        "handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
     },
     {
       name: "hook-enforcement",
@@ -257,6 +290,16 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     // `timeoutSec`, PascalCase matcher aliases, fail behavior, and the
     // sessionStart `additionalContext` injection the portable runner writes.
     { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-09-17" },
+    // The `--reasoning-effort` levels (`low` through `max`), the fallback for
+    // a model or effort that cannot be honoured, the default that a sub-agent
+    // receives no repository instruction files, and the priority of
+    // `--no-custom-instructions` over `include-custom-instructions`. Read
+    // 2026-10-10 for those claims; its frontmatter table spells the effort key
+    // `reasoningEffort`, which is not the spelling the 1.0.89 loader carries.
+    {
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
+    },
   ],
 };
 
@@ -293,6 +336,9 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // comes from them, since the projection publishes no alias vocabulary to
     // fall back to (`../roster/modelLadder.ts`).
     const pins = ctx.manifest.models?.pins ?? {};
+    // The operator's effort overrides, read once beside them: a class with none
+    // runs at the ladder's own default.
+    const efforts = ctx.manifest.models?.effort ?? {};
 
     // A demoted rule is NOT written here: the core projected it as a skill
     // under `.agents/skills/stamity-<id>/`, which this client reads directly,
@@ -304,7 +350,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
         case "rule":
           return demoted.has(item.id) ? [] : [buildInstructionsFile(item, render)];
         case "agent":
-          return [buildAgentFile(item, grantFor(item), render, pins)];
+          return [buildAgentFile(item, grantFor(item), render, pins, efforts)];
         default:
           return [buildPromptFile(item, render, pins)];
       }
@@ -424,9 +470,14 @@ export function buildInstructionsFile(
  * is emitted rather than left off deliberately: unset "defaults to both
  * environments", and this setup's agents are written for the cloud surface the
  * rest of this file emits for, so naming the target states the scope instead of
- * inheriting one. `tools:` is always present (see the module header), and
- * `model:` appears only when the operator pinned an id for the class the agent
- * declares.
+ * inheriting one. `include-custom-instructions: true` opts the agent into the
+ * repository instruction files: a live sub-agent check on Copilot CLI 1.0.89
+ * (2026-10-10) found that an agent dispatched through `task` without it loads
+ * no `AGENTS.md`, so the charter, the invariants and the repo facts never reach
+ * it (REQ-FLOW-071; the key since CLI 1.0.86, per its changelog). `tools:` is
+ * always present (see the module header), `model:` appears only when the
+ * operator pinned an id for the class the agent declares, and
+ * `reasoning-effort:` closes the list at that class's level (REQ-LADDER-004).
  *
  * The prompt is measured before the document is composed: the cap applies to
  * the markdown below the frontmatter, which is exactly what the platform
@@ -437,6 +488,7 @@ export function buildAgentFile(
   grant: ResolvedAgentGrant,
   render: (raw: string) => string,
   pins: ModelPinMap = {},
+  efforts: EffortMap = {},
 ): AdapterOutput {
   const id = emittedId(item);
   const prompt = bodyOf(render(item.body));
@@ -456,8 +508,10 @@ export function buildAgentFile(
         `name: ${id}`,
         `description: ${yamlScalar(render(item.description))}`,
         "target: github-copilot",
+        "include-custom-instructions: true",
         `tools: ${toCopilotToolsFrontmatter(grant.allow)}`,
         ...modelLine(item, pins),
+        ...effortLine(item, efforts),
       ],
       prompt,
     ),
@@ -513,6 +567,24 @@ function modelLine(item: CatalogItem, pins: ModelPinMap): string[] {
   if (typeof declared !== "string") return [];
   const model = resolveModelValue(declared, TOOL, pins);
   return model === undefined ? [] : [`model: ${yamlScalar(model)}`];
+}
+
+/**
+ * The `reasoning-effort:` line for an agent, or no line at all.
+ *
+ * The level is the declared class's, operator override first, narrowed to this
+ * client's scale by the ladder (`../roster/modelLadder.ts`); an agent that
+ * declares no class, or one off the ladder, has asked for none. Unlike the
+ * model line it needs no pin: the level is a property of the class. Written
+ * bare, as this file's other fixed-vocabulary values are: the resolver answers
+ * only a level of the scale, never operator free text. Prompt files carry
+ * none, since a prompt runs in the session at the session's own effort.
+ */
+function effortLine(item: CatalogItem, efforts: EffortMap): string[] {
+  const declared = item.frontmatter[MODEL_CLASS_FIELD];
+  if (typeof declared !== "string") return [];
+  const level = resolveEffortValue(declared, TOOL, efforts);
+  return EFFORT_KEY === null || level === undefined ? [] : [`${EFFORT_KEY}: ${level}`];
 }
 
 /**

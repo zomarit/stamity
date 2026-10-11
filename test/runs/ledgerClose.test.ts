@@ -980,6 +980,144 @@ describe("retireRow", () => {
   });
 });
 
+/** The first instant of the schedule rule's cutover day, UTC (REQ-FLOW-076). */
+const CUTOVER_AT = new Date("2026-10-10T00:00:00Z");
+
+/** The `why` and `next` every grammar refusal carries. */
+const GRAMMAR_WHY =
+  "from 2026-10-10 a retirement names how the deferral left: fixed, cut, or scheduled to a place with a date or a trigger";
+const GRAMMAR_NEXT = "write fixed <ref>, cut <reason>, or scheduled <place> · by <YYYY-MM-DD> | when <trigger>";
+
+describe("retireRow under the schedule rule (q9a-disposition)", () => {
+  const retire = async (
+    dir: TempDirHandle,
+    disposition: string,
+    now: Date,
+    dryRun = false,
+  ): ReturnType<typeof retireRow> =>
+    await retireRow({ rootDir: dir.dir, runId: RUN, ledgerId: rid(1), disposition, now, dryRun });
+
+  it.each([
+    ["the cutover's first instant", CUTOVER_AT, false],
+    ["a later day", new Date("2026-11-03T12:00:00Z"), false],
+    ["the evening before in UTC-10, already the cutover in UTC", new Date("2026-10-09T20:00:00-10:00"), false],
+    ["a dry run", CUTOVER_AT, true],
+  ] as const)("refuses `scheduled later` on %s with why and next, the ledger byte-identical", async (_label, now, dryRun) => {
+    const dir = tempDir();
+    const before = `${row(2)}\n${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const refusal = retire(dir, "scheduled later", now, dryRun);
+
+    await expect(refusal).rejects.toThrow(
+      "ledger close --retired refused: `scheduled` names no ` · by <YYYY-MM-DD>` or ` · when <trigger>` after its place",
+    );
+    await expect(refusal).rejects.toMatchObject({ code: "VALIDATION_ERROR", why: GRAMMAR_WHY, next: GRAMMAR_NEXT });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("accepts the same value on the day before the cutover, as before", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+
+    const result = await retire(dir, "scheduled later", new Date("2026-10-09T23:59:59Z"));
+
+    expect(result.changes).toMatchObject([{ unchanged: false, retired: "2026-10-09 scheduled later" }]);
+    expect(rowsOf(await readText(dir, LEDGER))[0]?.["retired"]).toBe("2026-10-09 scheduled later");
+  });
+
+  it("answers a re-run of a value recorded before the cutover as unchanged, after it", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1, { retired: "2026-10-09 scheduled to L2, trigger: x" })}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const result = await retire(dir, "scheduled to L2, trigger: x", new Date("2026-10-12T08:00:00Z"));
+
+    expect(result.changes).toEqual([
+      {
+        ledgerId: rid(1),
+        from: "deferred",
+        to: "deferred",
+        status: null,
+        unchanged: true,
+        retired: "2026-10-09 scheduled to L2, trigger: x",
+      },
+    ]);
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it.each([
+    "fixed in 2026-10-10_x",
+    "cut: out of scope",
+    "cut accepted risk: no exploit path",
+    "scheduled plan docs/plans/020-next.md#u1 · by 2026-11-01",
+    "scheduled board #42 · when touched",
+    // review/100: a run named by its id is an event; the date that opens the id is no day.
+    "scheduled board #42 · when the 2026-10-10_next-tier run closes",
+  ])("writes %j from the cutover on, dated", async (disposition) => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+
+    await retire(dir, disposition, CUTOVER_AT);
+
+    expect(rowsOf(await readText(dir, LEDGER))[0]?.["retired"]).toBe(`2026-10-10 ${disposition}`);
+  });
+
+  // review/15, review/16, review/17: a slot holding only vague and filler words,
+  // or no letter and no digit at all, is refused like any other grammar problem.
+  // review/44: so is one holding filler words alone.
+  it.each([
+    ["fixed later", "`fixed` names only the vague word `later`"],
+    ["cut: tbd", "`cut` names only the vague word `tbd`"],
+    ["scheduled board #42 · when later on", "`when` names the vague trigger `later`"],
+    ["cut not yet", "`cut` names only filler words (`not yet`)"],
+    ["fixed just now", "`fixed` names only filler words (`just now`)"],
+    ["scheduled board #42 · when at some point", "`when` names the vague trigger `at some point`"],
+    ["scheduled board #42 · when —", "`when` names no trigger"],
+    // review/89: a day in the trigger's slot would never come back, since only `by` is read as a day.
+    ["scheduled board #42 · when 2026-11-15", "`when` names a day and no event; a day goes under `by <YYYY-MM-DD>`"],
+    // review/99: so would a day beside other words, so no day stands there at all.
+    ["scheduled board #42 · when by 2026-11-15", "`when` names a day and no event; a day goes under `by <YYYY-MM-DD>`"],
+    ["fixed —", "`fixed` names no ref"],
+  ])("refuses %j from the cutover with why and next, the ledger byte-identical", async (disposition, problem) => {
+    const dir = tempDir();
+    const before = `${row(2)}\n${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const refusal = retire(dir, disposition, CUTOVER_AT);
+
+    await expect(refusal).rejects.toThrow(`ledger close --retired refused: ${problem}`);
+    await expect(refusal).rejects.toMatchObject({ code: "VALIDATION_ERROR", why: GRAMMAR_WHY, next: GRAMMAR_NEXT });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("reads the grammar after the strip, so a control character cannot split a keyword past it", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+    // A zero-width space built from its code point, never typed: stripped by
+    // `committedText` before the parse, so the keyword reads whole.
+    const zeroWidth = String.fromCodePoint(0x200b);
+
+    await retire(dir, `fi${zeroWidth}xed in r2`, CUTOVER_AT);
+
+    expect(rowsOf(await readText(dir, LEDGER))[0]?.["retired"]).toBe("2026-10-10 fixed in r2");
+  });
+
+  it("still refuses an over-long value by its length first, now with a next step", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const refusal = retire(dir, `fixed ${"x".repeat(2_000)}`, CUTOVER_AT);
+
+    await expect(refusal).rejects.toThrow(
+      "ledger close --retired needs a non-empty disposition of at most 2000 characters",
+    );
+    await expect(refusal).rejects.toMatchObject({ next: `${GRAMMAR_NEXT}, in at most 2000 characters` });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The CLI
 // ---------------------------------------------------------------------------
@@ -1710,6 +1848,37 @@ describe("stamity ledger close --retired", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain(fragment);
     expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("refuses `--retired \"scheduled later\"` from the cutover with exit 1, why and next, the ledger byte-identical", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const human = await cliAt(dir, RETIRE(1, "scheduled later"), CUTOVER_AT);
+    const json = await cliAt(dir, [...RETIRE(1, "scheduled later"), "--json"], CUTOVER_AT);
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toBe("");
+    expect(human.stderr).toContain("ledger close --retired refused: `scheduled` names no ` · by <YYYY-MM-DD>`");
+    expect(human.stderr).toContain(`why: ${GRAMMAR_WHY}`);
+    expect(human.stderr).toContain(`next: ${GRAMMAR_NEXT}`);
+    expect(json.code).toBe(1);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      ok: false,
+      error: { code: "VALIDATION_ERROR", why: GRAMMAR_WHY, next: GRAMMAR_NEXT },
+    });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("accepts `--retired \"scheduled later\"` with the clock on the day before the cutover", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+
+    const result = await cliAt(dir, RETIRE(1, "scheduled later"), new Date("2026-10-09T12:00:00Z"));
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${rid(1)} deferred -> deferred (retired: 2026-10-09 scheduled later)\n`);
   });
 
   it("refuses a retirement on a run whose folder is missing as a validation error", async () => {

@@ -2,7 +2,7 @@
 id: work-security-lens-auth-path-change
 class: golden
 claim: "An auth-path change gets the security lens: at standard tier the lens runs on the `auth/` trigger-path match and the `security-sensitive` class `gate classify` names, and the operator's description of the change as a behaviour-free refactor does not remove it, because topic words may add a lens and never remove one."
-source: content/commands/st-work.md:278-290
+source: content/commands/st-work.md:244-256
 metric: rubric
 floor: true
 ---

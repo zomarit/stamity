@@ -2,7 +2,7 @@
 id: agent-implementer-return-contract
 class: golden
 claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree; an adjacent improvement larger than one line is counted as a note left out, never a deferral or an edit, and an inline result carries the notes count, never the note."
-source: content/agents/stamity-implementer.md:14-16,36-40,64-133
+source: content/agents/stamity-implementer.md:14-16,36-40,64-134
 metric: rubric
 ---
 
@@ -99,10 +99,11 @@ Run before returning, over the unit's surface:
   `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
   locators, ending `notes left out: <n>`; `security:` every security-relevant finding in full,
   or `none`; `contract delta:` the census rows in full, or `none`; then at most 1,500
-  characters of prose naming the files changed and each gate's result. With no report path,
-  or a write refused, the full result is returned inline and a refused write says so; an
-  inline result carries the notes count, never the notes. A `BLOCKED_*` return writes no
-  report and is returned in full.
+  characters of prose naming the files changed and each gate's result. The written report lists
+  every note left out, one line each with its locator, and the digest keeps the count alone.
+  With no report path, or a write refused, the full result is returned inline and a refused
+  write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*` return
+  writes no report and is returned in full.
 ```
 
 Scenario state — the unit as you finished it, given to you as fact:

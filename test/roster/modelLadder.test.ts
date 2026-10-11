@@ -351,6 +351,16 @@ describe("CLIENT_MODEL_PROJECTION", () => {
     }
   });
 
+  it("cites Copilot's key names to the CLI command reference, the page that lists an effort key", () => {
+    // review/35: the row names `reasoning-effort`, and the custom-agents configuration page it
+    // cited (read 2026-08-17) lists no effort key, so a currency pass re-reading that page for
+    // the row's key names would find one of them missing.
+    expect(projection("copilot").citation).toEqual({
+      url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      accessDate: "2026-10-10",
+    });
+  });
+
   it("declares only ladder classes in an alias table", () => {
     for (const tool of TOOLS) {
       for (const [modelClass, alias] of Object.entries(projection(tool).aliases)) {
@@ -360,14 +370,17 @@ describe("CLIENT_MODEL_PROJECTION", () => {
     }
   });
 
-  it("carries the effort axis on every client but the one the SoT drops it on", () => {
-    // Effort is carried per client where supported and omitted on Copilot cloud
-    // (documented) — one omission, and it is named. A second row answering
-    // `null` here is the axis being dropped in code with nothing behind
-    // it, which is how this client's carrier went missing the first time.
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "carries the effort
+  // axis on every client but the one the SoT drops it on" and pinned Copilot's carrier to `null`.
+  // The Copilot CLI's custom-agent loader reads a `reasoning-effort` key (changelog 1.0.66 and
+  // 1.0.88; the 1.0.89 loader, read 2026-10-10), so the row now names that key and no client drops
+  // the axis. What the case guards is unchanged: a row answering `null` is the axis dropped in
+  // code, and it fails here.
+  it("carries the effort axis on every client: no row drops it", () => {
     const carrying = TOOLS.filter((tool) => projection(tool).effortCarrier !== null);
-    expect(carrying.toSorted()).toEqual(["claude", "codex", "cursor"]);
-    expect(projection("copilot").effortCarrier).toBeNull();
+    expect(carrying.toSorted()).toEqual(["claude", "codex", "copilot", "cursor"]);
+    expect(projection("copilot").effortCarrier).toBe("key");
+    expect(projection("copilot").effortKey).toBe("reasoning-effort");
   });
 
   it("supplies exactly the carrier each row declares, and nothing of the other", () => {
@@ -502,20 +515,30 @@ describe("resolveEffortValue", () => {
         );
       }
     }
-    // The two clients that do publish one, named: the codex key is the shipped
+    // The clients that do publish one, named: the codex key is the shipped
     // emission's, and claude's is the frontmatter field of the same name.
     expect(projection("codex").effortKey).toBe("model_reasoning_effort");
     expect(resolveEffortValue("advanced", "codex")).toBe("high");
     expect(resolveEffortValue("standard", "codex")).toBe("medium");
     expect(resolveEffortValue("economy", "codex")).toBe("low");
+    // Copilot's is the kebab spelling its 1.0.89 loader and changelog carry
+    // (unit q6c-copilot-effort-key), at the same class defaults.
+    expect(projection("copilot").effortKey).toBe("reasoning-effort");
+    expect(resolveEffortValue("advanced", "copilot")).toBe("high");
+    expect(resolveEffortValue("standard", "copilot")).toBe("medium");
+    expect(resolveEffortValue("economy", "copilot")).toBe("low");
   });
 
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case closed on Copilot's
+  // carrier being `null`. Copilot now carries the axis in a key of its own, so the one client
+  // left without a standalone key is the bracket client, and the closing pin names the two
+  // carriers as they stand. The loop, read off `effortKey`, is unchanged.
   it("answers undefined for every class on a client with no standalone key", () => {
-    // Read off the carrier rather than a hardcoded pair. The two clients that
-    // answer nothing HERE do so for opposite reasons: one drops the axis by
-    // documented decision, the other carries it inside the model value. The
-    // earlier version of this case asserted the pair together as "inexpressible",
-    // which made the dropped carrier load-bearing — a test pinning a silence.
+    // Read off the carrier rather than a hardcoded list. The one client that
+    // answers nothing HERE carries the axis inside the model value, so this
+    // silence is a shape, never the axis being dropped.
+    const keyless = TOOLS.filter((tool) => projection(tool).effortKey === null);
+    expect(keyless).toEqual(["cursor"]);
     for (const tool of TOOLS) {
       if (projection(tool).effortKey !== null) continue;
       for (const modelClass of MODEL_CLASSES) {
@@ -526,7 +549,7 @@ describe("resolveEffortValue", () => {
         ).toBeUndefined();
       }
     }
-    expect(projection("copilot").effortCarrier).toBeNull();
+    expect(projection("copilot").effortCarrier).toBe("key");
     expect(projection("cursor").effortCarrier).toBe("model-suffix");
   });
 
@@ -723,9 +746,21 @@ describe("the ladder's own exposure disclosures", () => {
     expect(prose).toMatch(/capacity rung/i);
     expect(prose).toMatch(/`limit-no-reset`/);
     expect(prose).toMatch(/that drop is prompt-carried too/i);
-    // The two placements that ARE recorded stay recorded, so the correction narrows the
+    // The placements that ARE recorded stay recorded, so the correction narrows the
     // claim rather than dropping it.
-    expect(prose).toMatch(/two placements no frontmatter can declare ARE recorded here/i);
+    // TEST CHANGE, justified (2026-10-10, q4b-codex-scale, build/87): the review loop's one
+    // closure re-review after a fixer escalation runs a class above the reviewer's own, a third
+    // placement no frontmatter declares; the header now counts three and the frontier row names
+    // it. "TWO FLOW PLACEMENTS ARE NOT RECORDED HERE" above is unchanged.
+    expect(prose).toMatch(/three placements no frontmatter can declare ARE recorded here/i);
+    expect(prose).not.toMatch(/two placements no frontmatter can declare ARE recorded here/i);
+    expect(prose).toContain(
+      "the one closure re-review after a fixer escalation, which the review loop runs a class above the reviewer's own",
+    );
+    const frontier = MODEL_LADDER.find((entry) => entry.modelClass === "frontier");
+    expect(frontier?.rationale).toContain(
+      "It also takes the one closure re-review after a fixer escalation, which the review loop runs a class above the reviewer's own.",
+    );
   });
 });
 
@@ -746,17 +781,47 @@ function manifestWith(tools: readonly Tool[], effort: EffortMap = {}): SetupMani
 describe("the per-client effort scales", () => {
   it("declares each client's documented scale, as the vendor pages state it", () => {
     expect(projection("claude").effortScale).toEqual(["low", "medium", "high", "xhigh", "max"]);
-    expect(projection("codex").effortScale).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's config reference, re-read
+    // 2026-10-10, lists `low` through `ultra` and no longer lists `minimal`; the pin follows the
+    // vendor page, and `minimal` moves to the row's legacy list below.
+    expect(projection("codex").effortScale).toEqual(["low", "medium", "high", "xhigh", "max", "ultra"]);
     // The pass-through client accepts whatever the model does, so its row is
     // the whole union plus the note that says why it is not a guarantee.
     expect(projection("cursor").effortScale).toEqual([...EFFORT_LEVELS]);
     expect(projection("cursor").effortScaleNote).toBe(
       "pass-through — parameter ids and values vary by model",
     );
-    // The one client with no effort surface at all: an empty scale, not a
-    // narrow one, and the same row that records the documented omission.
-    expect(projection("copilot").effortScale).toEqual([]);
-    expect(projection("copilot").effortCarrier).toBeNull();
+    // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the pin read an empty scale and
+    // a `null` carrier, "the one client with no effort surface at all". The Copilot CLI reference,
+    // read 2026-10-10, documents `--reasoning-effort` as `low` through `max`, and the engine now
+    // writes the agent key, so the row declares that scale and no row is empty.
+    expect(projection("copilot").effortScale).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(projection("copilot").effortCarrier).toBe("key");
+    for (const tool of TOOLS) expect(projection(tool).effortScale.length, tool).toBeGreaterThan(0);
+  });
+
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "on Codex alone".
+  // Copilot's `--reasoning-effort` flag still lists `minimal` and its reference does not, so its
+  // row lists the word as legacy too (the plan's open question 3, option 1: `stamity config set`
+  // accepted any level on a copilot-only selection before). The rule for a legacy level, below,
+  // is unchanged.
+  it("names the levels a client's scale dropped and its parser still takes, on Codex and Copilot", () => {
+    expect(projection("codex").effortLegacy).toEqual(["minimal"]);
+    expect(projection("copilot").effortLegacy).toEqual(["minimal"]);
+    for (const tool of TOOLS) {
+      if (tool === "codex" || tool === "copilot") continue;
+      expect(projection(tool).effortLegacy, tool).toEqual([]);
+    }
+    // A legacy level is a union level off the documented scale, and it lands on a level the
+    // scale holds — the emission never writes the legacy word itself.
+    for (const tool of TOOLS) {
+      const { effortLegacy, effortScale } = projection(tool);
+      for (const level of effortLegacy) {
+        expect(EFFORT_LEVELS as readonly string[], `${tool}/${level}`).toContain(level);
+        expect(effortScale, `${tool}/${level}`).not.toContain(level);
+        expect(effortScale, `${tool}/${level}`).toContain(nearestExpressibleEffort(level, tool));
+      }
+    }
   });
 
   it("orders every scale by the union's own ranking, with no off-ladder level", () => {
@@ -770,10 +835,23 @@ describe("the per-client effort scales", () => {
     }
   });
 
-  it("cites a vendor page with a 2026-09-17 access date for every non-empty scale", () => {
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): the case held every scale to one
+  // access date, 2026-09-17. The Codex scale was re-read on 2026-10-10 and the others were not, so
+  // each row is held to its own read; the rule that every non-empty scale is cited and dated is
+  // unchanged.
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): Copilot's row gained a scale, read
+  // from the CLI command reference on 2026-10-10, so it gains its own date and page here; the
+  // table is now total over the four clients. The rule is unchanged.
+  it("cites a vendor page with its own access date for every non-empty scale", () => {
     // The spec's invariant: every per-client scale carries a vendor citation
-    // with an access date. The empty row has no scale to cite and says so with
-    // `null` rather than with a page it did not read.
+    // with an access date. An empty row would have no scale to cite and would
+    // say so with `null` rather than with a page it did not read.
+    const readOn: Record<Tool, string> = {
+      claude: "2026-09-17",
+      codex: "2026-10-10",
+      copilot: "2026-10-10",
+      cursor: "2026-09-17",
+    };
     for (const tool of TOOLS) {
       const declared = projection(tool);
       const cited = declared.effortScaleCitation;
@@ -783,7 +861,7 @@ describe("the per-client effort scales", () => {
       }
       expect(cited, tool).not.toBeNull();
       expect(cited?.url, tool).toMatch(/^https:\/\/\S+$/);
-      expect(cited?.accessDate, tool).toBe("2026-09-17");
+      expect(cited?.accessDate, tool).toBe(readOn[tool]);
     }
     expect(projection("claude").effortScaleCitation?.url).toBe(
       "https://code.claude.com/docs/en/sub-agents",
@@ -793,6 +871,9 @@ describe("the per-client effort scales", () => {
     );
     expect(projection("cursor").effortScaleCitation?.url).toBe(
       "https://cursor.com/docs/sdk/typescript",
+    );
+    expect(projection("copilot").effortScaleCitation?.url).toBe(
+      "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
     );
   });
 
@@ -807,8 +888,17 @@ describe("the per-client effort scales", () => {
     }
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's scale now runs to `ultra`, so
+  // `max` and `ultra` are levels it holds rather than requests it clamps; the downward case left
+  // is `ultra` on the client whose scale ends at `max`, and Codex's two now answer unchanged.
   it("falls to the highest entry below a level the scale tops out under", () => {
-    expect(nearestExpressibleEffort("max", "codex")).toBe("xhigh");
+    // `ultra`, the union's top, clamps to a narrower client's ceiling.
+    expect(nearestExpressibleEffort("ultra", "claude")).toBe("max");
+    expect(nearestExpressibleEffort("max", "codex")).toBe("max");
+    expect(nearestExpressibleEffort("ultra", "codex")).toBe("ultra");
+    // Copilot's documented scale ends at `max` too (unit q6c-copilot-effort-key).
+    expect(nearestExpressibleEffort("ultra", "copilot")).toBe("max");
+    expect(nearestExpressibleEffort("max", "copilot")).toBe("max");
   });
 
   it("rises to the lowest entry above a level the scale starts over", () => {
@@ -816,22 +906,54 @@ describe("the per-client effort scales", () => {
     // floor is `low`. Rising is the honest answer — a client that cannot be
     // asked for less than `low` is asked for `low`, never dropped.
     expect(nearestExpressibleEffort("minimal", "claude")).toBe("low");
+    // Codex's own legacy level rises the same way: its parser takes the word,
+    // and the emission writes the documented floor.
+    expect(nearestExpressibleEffort("minimal", "codex")).toBe("low");
+    // And Copilot's, the same legacy word on a scale with the same floor.
+    expect(nearestExpressibleEffort("minimal", "copilot")).toBe("low");
   });
 
-  it("answers nothing at all on an empty scale", () => {
-    for (const level of EFFORT_LEVELS) {
-      expect(nearestExpressibleEffort(level, "copilot"), level).toBeUndefined();
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "answers nothing at
+  // all on an empty scale" and looped the union over Copilot, the one row with no scale. That row
+  // now declares `low` through `max`, so no shipped row reaches the empty-scale answer; the case
+  // asserts what replaced it: every level lands on a level of the client's own scale, on every
+  // client, and Copilot's two off-scale levels land at its two ends.
+  it("answers every level with a level of the client's own scale, on every client", () => {
+    for (const tool of TOOLS) {
+      for (const level of EFFORT_LEVELS) {
+        const answered = nearestExpressibleEffort(level, tool);
+        expect(answered, `${tool}/${level}`).toBeDefined();
+        expect(projection(tool).effortScale, `${tool}/${level}`).toContain(answered);
+      }
     }
+    expect(EFFORT_LEVELS.map((level) => nearestExpressibleEffort(level, "copilot"))).toEqual([
+      "low",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "max",
+    ]);
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's re-read scale holds `max` and
+  // `ultra` and drops `minimal` to legacy, so its `max` is written as `max` and its `minimal` as
+  // `low`; the clamp the case exists for now shows on `ultra`, which one of the two clients holds.
   it("emits the nearest expressible level from the standalone effort key", () => {
-    // Two clients, one request. The operator asked for `max`; one client has
+    // Two clients, one request. The operator asked for `ultra`; one client has
     // it and the other tops out a rung below, and neither is silently dropped.
-    const asked: EffortMap = { frontier: "max" };
+    const asked: EffortMap = { frontier: "ultra" };
     expect(resolveEffortValue("frontier", "claude", asked)).toBe("max");
-    expect(resolveEffortValue("frontier", "codex", asked)).toBe("xhigh");
+    expect(resolveEffortValue("frontier", "codex", asked)).toBe("ultra");
+    expect(resolveEffortValue("frontier", "codex", { frontier: "max" })).toBe("max");
     expect(resolveEffortValue("economy", "claude", { economy: "minimal" })).toBe("low");
-    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("minimal");
+    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("low");
+    // The third key carrier narrows the same two requests to its own ends
+    // (unit q6c-copilot-effort-key), and writes a level it holds unchanged.
+    expect(resolveEffortValue("frontier", "copilot", asked)).toBe("max");
+    expect(resolveEffortValue("economy", "copilot", { economy: "minimal" })).toBe("low");
+    expect(resolveEffortValue("advanced", "copilot", { advanced: "xhigh" })).toBe("xhigh");
   });
 
   it("leaves every class default expressible on every carrier, so nothing clamps unasked", () => {
@@ -860,10 +982,23 @@ describe("the per-client effort scales", () => {
     );
   });
 
+  // TEST CHANGE, justified (2026-10-10, q4b-codex-scale): Codex's scale now holds `max`, so a
+  // `max` request moves nothing there; the case asks for `ultra`, which Codex holds and Claude
+  // does not, and still asserts one line for exactly the client that moved the level.
   it("discloses exactly the clients whose scale moved the operator's level", () => {
-    const lines = effortDisclosures(manifestWith(["claude", "codex"], { frontier: "max" }));
+    const lines = effortDisclosures(manifestWith(["claude", "codex"], { frontier: "ultra" }));
     expect(lines).toEqual([
-      "effort [codex]: frontier asks for max; this client's scale ends at xhigh, emitted xhigh",
+      "effort [claude]: frontier asks for ultra; this client's scale ends at max, emitted max",
+    ]);
+  });
+
+  it("discloses a legacy level the client accepts as the documented level it is written as", () => {
+    // `stamity config` accepts `minimal` on a Codex-only selection, because Codex's own parser
+    // still takes it; the emission writes `low`, and says so rather than letting the stored
+    // word and the emitted one disagree in silence.
+    const lines = effortDisclosures(manifestWith(["codex"], { economy: "minimal" }));
+    expect(lines).toEqual([
+      "effort [codex]: economy asks for minimal; this client's scale starts at low, emitted low",
     ]);
   });
 
@@ -883,18 +1018,29 @@ describe("the per-client effort scales", () => {
     expect(effortDisclosures(bare)).toEqual([]);
   });
 
-  it("says nothing for the client that carries no effort at all", () => {
-    // An empty scale is not a clamp: copilot emits no effort key, which the
-    // capability matrix already states. A disclosure here would tell an
-    // operator their level was narrowed when it was never carried.
+  // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "says nothing for
+  // the client that carries no effort at all" and held a copilot-only `max` to no line, because
+  // the row had an empty scale. Copilot now writes `reasoning-effort` on the scale `low` through
+  // `max`, so its narrowings are disclosed as any other client's are. The old input still yields
+  // no line, now because `max` is a level the scale holds.
+  it("discloses Copilot's narrowings at both ends of its scale, and nothing for a level it holds", () => {
     expect(effortDisclosures(manifestWith(["copilot"], { frontier: "max" }))).toEqual([]);
+    expect(effortDisclosures(manifestWith(["copilot"], { frontier: "ultra" }))).toEqual([
+      "effort [copilot]: frontier asks for ultra; this client's scale ends at max, emitted max",
+    ]);
+    // The legacy word `stamity config` accepts on a copilot-only selection.
+    expect(effortDisclosures(manifestWith(["copilot"], { economy: "minimal" }))).toEqual([
+      "effort [copilot]: economy asks for minimal; this client's scale starts at low, emitted low",
+    ]);
   });
 
   it("omits the key for a level the running engine does not know", () => {
     // Same defence one layer down: an unknown level yields no emitted value at
     // all rather than a fabricated rank or a clamp toward a scale end. The
     // manifest carrying it is refused by `collectManifestErrors` first.
-    const unknown = { frontier: "ultra" as EffortLevel };
+    // TEST CHANGE, justified (2026-10-10, q4a-effort-union): `ultra` joined the
+    // union, so it no longer stands for an unknown level; `unbounded` does.
+    const unknown = { frontier: "unbounded" as EffortLevel };
     expect(resolveEffortValue("frontier", "codex", unknown)).toBeUndefined();
     expect(resolveModelValue("frontier", "cursor", { frontier: "vendor-x-1" }, unknown)).toBe(
       "vendor-x-1",
@@ -905,7 +1051,9 @@ describe("the per-client effort scales", () => {
     // A manifest written by a newer engine is refused by `collectManifestErrors`
     // long before a plan is composed; this is the belt-and-braces answer for a
     // caller that skipped validation — silence, not a fabricated rank.
-    const unknown = manifestWith(["codex"], { frontier: "ultra" as EffortLevel });
+    // TEST CHANGE, justified (2026-10-10, q4a-effort-union): `ultra` joined the
+    // union, so it no longer stands for an unknown level; `unbounded` does.
+    const unknown = manifestWith(["codex"], { frontier: "unbounded" as EffortLevel });
     expect(effortDisclosures(unknown)).toEqual([]);
   });
 });

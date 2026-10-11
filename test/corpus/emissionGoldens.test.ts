@@ -93,6 +93,440 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-11, plan 019 file 3, the close's fix round (run
+ *     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,
+ *     review/101, each decided by the person at the run's close). NOTHING
+ *     moved in this suite; the row keeps the two ledgers in step. The round's
+ *     one emitted change is a touchpoint, `commands/st-rework.md` (20820 ->
+ *     20949 bytes, 307 -> 309 lines): the Routing section's DEFER bullet
+ *     names the inbox's three guaranteed readers, `/st-plan`'s intake the
+ *     third, as `/st-board`'s census lists them, and the Critical Deferral
+ *     Protocol says the run closes naming the unwritten row as its open item
+ *     when no row is written for want of both a path and a day. It is not a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, the whole-branch review's fix round, part
+ *     B (run 2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-069, REQ-FLOW-074 to
+ *     REQ-FLOW-077, ledger rows review/69, review/89 as review/99 widened
+ *     it, review/90, review/91, review/93, review/94, review/96 and
+ *     review/97, each signed off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 34899 -> 34920 bytes at an
+ *     unchanged 485 lines in the corpus source, one hunk. Frame step 4's
+ *     never-open rule reads "A row it withholds, skips or cannot parse is
+ *     listed as it prints, the person's to read or fix; never open the inbox
+ *     for it." (+21: the query's `unparsed:` line has a reader, review/90).
+ *     Lines 24-30 are rewrapped in place and the step holds its ten lines,
+ *     every other word as it was. It sits above the re-attachment cut (`###
+ *     Specialist pass` moves 17076 -> 17097, 903 characters under the budget
+ *     against the 900 the room pin keeps). No token sits in the moved text.
+ *
+ *     NOTHING else moved here. The round's other emitted changes are two
+ *     touchpoints and one skill, which no golden here carries:
+ *     `commands/st-board.md` (28001 -> 28663 bytes, 463 -> 471 lines: the Row
+ *     grammar says a day is written `by:` and no `when:` holds one, the
+ *     Removal rule names all five refused free-text slots, and Leftovers at a
+ *     close names the `unparsed:` line's reader, claims the never-open floor
+ *     for Frame alone, says what the close's write reads, has `stop` list
+ *     every leftover row, and defines `show`), `commands/st-rework.md`
+ *     (20689 -> 20820, 306 -> 307: a deferred Critical with no path asks for
+ *     its day in the rationale question and writes no row with neither, and
+ *     the meta row's day is never under `when:`) and `skills/st-qa/SKILL.md`
+ *     (8064 -> 8391, 144 -> 149: the security-negative row auto-proves only
+ *     on a committed test's assertion). The sibling suite itemises them.
+ *
+ *   - 2026-10-10, plan 019 file 3, the QA walk's fix round, pass qa-row4 (run
+ *     2026-10-10_next-tier; REQ-FLOW-072, REQ-FLOW-077, ledger rows qa/2 and
+ *     qa/4). NOTHING moved in this suite; the row keeps the two ledgers in
+ *     step. The round's emitted changes are six agents and one touchpoint.
+ *     `agents/stamity-reviewer.md` (15940 -> 16060 bytes, 226 -> 228 lines),
+ *     `stamity-fixer.md` (10741 -> 10861, 167 -> 169), `stamity-implementer.md`
+ *     (10210 -> 10328, 157 -> 158), `stamity-security.md` (13102 -> 13220,
+ *     192 -> 193), `stamity-design-quality.md` (12104 -> 12222, 185 -> 186)
+ *     and `stamity-performance.md` (14058 -> 14176, 210 -> 211): each
+ *     `Report and digest` rule says the written report lists every note left
+ *     out, one line each with its locator, and the digest keeps the count
+ *     alone. `commands/st-plan.md` (28136 -> 28155, 425 -> 426): the Side
+ *     effects' inbox bullet writes a day as `by: <YYYY-MM-DD>` and keeps
+ *     `when:` for an event a run can check, "a date" gone from the trigger
+ *     list. None is a substitution target, the catalog, the policy document or
+ *     a core hook script, so no golden here carries one; the sibling suite
+ *     itemises them.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer, review round 1
+ *     (run 2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger rows
+ *     review/63 to review/68 and build/38). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The round's one emitted change is
+ *     `skills/st-dep-audit/SKILL.md`, 8166 -> 8936 bytes and 148 -> 156 lines:
+ *     Step 5's row names its lockfile in `files:` before the day or the
+ *     trigger and keeps an advisory's severity word, and an advisory at
+ *     `critical` or `high` is deferred only with a day the operator names; the
+ *     flag before the security lens names a standing `major` on a changed
+ *     entry, the report states both classes of each changed entry (the Risk
+ *     row says so too), and an entry the audit cannot class counts as a flag.
+ *     It is not a substitution target, the catalog, the policy document or a
+ *     core hook script, so no golden here carries it; the sibling suite
+ *     itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers, review round 1
+ *     (run 2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/57 to
+ *     review/61 and build/34 to build/37). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The round's emitted changes are two
+ *     touchpoints: `commands/st-rework.md` (20426 -> 20689 bytes, 304 -> 306
+ *     lines: the deferred-Critical row's alternative reads
+ *     `by: <YYYY-MM-DD>`, a row at `—` adds `files: <path>` straight after
+ *     `when: touched` or carries the day the user names, and the meta row's
+ *     default trigger is `when: next board fill`, with `by: <YYYY-MM-DD>` in
+ *     its place when the user names a day) and `commands/st-pr-resolve.md`
+ *     (21304 -> 21306, 333 lines held: the Close's alternative reads
+ *     `· by: <YYYY-MM-DD>` when the user names one). Neither is a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries one; the sibling suite itemises them.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q11c-dep-audit-writer (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-065, ledger row build/34,
+ *     and the inbox row `close/6` of run 2026-10-08_product-core). NOTHING
+ *     moved in this suite; the row keeps the two ledgers in step. The unit's
+ *     one emitted change is `skills/st-dep-audit/SKILL.md`, 7807 -> 8166 bytes
+ *     and 144 -> 148 lines: Step 5 states the deferred row in `/st-board`'s
+ *     grammar, ending `· by: <YYYY-MM-DD>` or `· when: touched`, with the
+ *     manifest's path and `:1` for an item on no manifest line; and the flag
+ *     before the security lens reads the changed entry's own class as well as
+ *     the bump's version move. It is not a substitution target, the catalog,
+ *     the policy document or a core hook script, so no golden here carries
+ *     it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer, review round 1 (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, ledger rows review/53, review/54,
+ *     review/55, build/32 and build/33). NOTHING moved in this suite; the row
+ *     keeps the two ledgers in step. The round's emitted changes are two
+ *     touchpoints: `commands/st-plan.md` (27668 -> 28136 bytes, 420 -> 425
+ *     lines: the Side effects' inbox bullet cites the plan path in `Ref:`,
+ *     states the follow-up row whole and says a follow-up's trigger is one a
+ *     run can check from the repository or its record; the Drop list holds
+ *     items with no date and no such trigger; the last return row names
+ *     `Ref:`) and `commands/st-board.md` (27913 -> 28001, 462 -> 463: one line
+ *     in the Row grammar, a writer appending where the schedule-rule heading
+ *     is absent adds it first, at the end of the file). Neither is a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries one; the sibling suite itemises them.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q11b-feedback-writers (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-074, ledger rows review/52,
+ *     build/29 and build/31). NOTHING moved in this suite; the row keeps the
+ *     two ledgers in step. The unit's emitted changes are two touchpoints:
+ *     `commands/st-pr-resolve.md` (21190 -> 21304 bytes, 332 -> 333 lines: the
+ *     Close's row template ends `· when: touched`, with `· by: <date>` when
+ *     the reviewer names one, and a blocked FIX lands as the same row) and
+ *     `commands/st-rework.md` (20035 -> 20426, 302 -> 304: both DEFER row
+ *     templates end `· when: touched`, with `files: <path>` for a row that
+ *     names no location; the deferred-Critical row carries `when: touched`
+ *     ahead of its tag; the handoff's ask names `/st-board`'s schedule fields
+ *     for the DEFER rows and asks no leftovers question; and the meta row is
+ *     stated in the full row grammar). Neither is a substitution target, the
+ *     catalog, the policy document or a core hook script, so no golden here
+ *     carries one; the sibling suite itemises them.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q11a-plan-writer (run
+ *     2026-10-10_next-tier; REQ-FLOW-077, REQ-FLOW-070, ledger row review/39).
+ *     NOTHING moved in this suite; the row keeps the two ledgers in step. The
+ *     unit's one emitted change is `commands/st-plan.md`, 26954 -> 27668 bytes
+ *     and 412 -> 420 lines: the shape's optional Follow-ups and Drop list
+ *     sections, the schedule rule in the Side effects' inbox bullet, the
+ *     return line's `L5 none|<n> advisory|not run` with the line that says
+ *     when `L5 not run` applies, and the last return row's "with `by:` or
+ *     `when:`; the Drop list appends nothing". It is not a substitution
+ *     target, the catalog, the policy document or a core hook script, so no
+ *     golden here carries it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q10a-work-close, review round 1 (run
+ *     2026-10-10_next-tier; ledger rows review/48 and review/49). NOTHING
+ *     moved in this suite; the row keeps the two ledgers in step. The round's
+ *     one emitted change is `commands/st-board.md`, 27308 -> 27913 bytes and
+ *     454 -> 462 lines, all of it at the end of the "Leftovers at a close"
+ *     bullet of `## Deferral inbox` (what the stop answer does to a row, and
+ *     what the leftovers line's `real` and `changed` count). It is not a
+ *     substitution target, the catalog, the policy document or a core hook
+ *     script, so no golden here carries it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q10b-flow-close-pointers (run
+ *     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-070, REQ-FLOW-077).
+ *     NOTHING moved in this suite; the row keeps the two ledgers in step. The
+ *     unit's emitted changes are three touchpoints: `commands/st-pr-resolve.md`
+ *     (20960 -> 21190 bytes, 328 -> 332 lines: the Close's DEFER-row
+ *     paragraph), `commands/st-rework.md` (19765 -> 20035, 302 lines held:
+ *     L5 in the gate enumeration and the close's plan-lint line, and the
+ *     handoff ask's pointer at `/st-board`'s Leftovers at a close) and
+ *     `commands/st-quick.md` (14136 -> 14297, 221 -> 224: the last paragraph,
+ *     "This lane appends no inbox row."). None is a substitution target, the
+ *     catalog, the policy document or a core hook script, so no golden here
+ *     carries one; the sibling suite itemises them.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules, review round 1
+ *     (run 2026-10-10_next-tier; ledger rows review/41 to review/45, build/25
+ *     and build/26). NOTHING moved in this suite; the row keeps the two
+ *     ledgers in step. The round's one emitted change is `commands/st-board.md`,
+ *     26656 -> 27308 bytes and 444 -> 454 lines, all of it inside
+ *     `## Deferral inbox` (the Writers bullet's `/st-work` clause, the
+ *     filler-alone trigger, the `scheduled` retire value, and the withheld or
+ *     skipped row a close lists and never decides). It is not a substitution
+ *     target, the catalog, the policy document or a core hook script, so no
+ *     golden here carries it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q10a-work-close (run
+ *     2026-10-10_next-tier; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019,
+ *     REQ-FLOW-024, REQ-CTX-020). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33304 -> 34899 bytes and
+ *     471 -> 485 lines in the corpus source, five hunks. The Severity floor
+ *     closes a Minor row "through the close's leftovers part, where each
+ *     reaches the person as a leftover with its recommendation" and opens its
+ *     last sentence "Before the close," (edited within its seven lines). "The
+ *     close asks once" gains a four-line pointer, "The leftovers join it as a
+ *     fourth part, by `/st-board`'s Leftovers at a close", set before the
+ *     paragraph's last sentence (+4 lines). The Proof block gains a
+ *     "**Leftovers line.**" paragraph after the usage lines (+3). The append
+ *     paragraph puts a deferred row below the inbox's schedule-rule heading
+ *     with `by:` or `when:` unless the close dropped it or scheduled it
+ *     elsewhere, reads "scheduled to a place with a date or a trigger", and
+ *     ends "and each accepted risk", rewrapped whole (+1). The fixed-row
+ *     paragraph's last sentence becomes three: an answered inbox row follows
+ *     `/st-board`'s Removal rule, a withheld or skipped row is listed and
+ *     never decided, and "A row no answer reached stays as it is." (+6). All
+ *     five sit below the re-attachment cut (`### Specialist pass` holds at
+ *     17076). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q9t-board-inbox-rules (run
+ *     2026-10-10_next-tier; REQ-FLOW-076, REQ-FLOW-074, REQ-FLOW-075,
+ *     REQ-FLOW-024). NOTHING moved in this suite; the row keeps the two
+ *     ledgers in step. The unit's one emitted change is `commands/st-board.md`,
+ *     22255 -> 26656 bytes and 383 -> 444 lines, all of it inside
+ *     `## Deferral inbox` (the schedule fields of the row grammar, the
+ *     `decision-waiting` triage order, the come-back and answer rules of
+ *     Removal, the widened `/st-work` retirer and the new last bullet,
+ *     "Leftovers at a close"). It is not a substitution target, the catalog,
+ *     the policy document or a core hook script, so no golden here carries
+ *     it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q4t-ladder-placement-text (run
+ *     2026-10-10_next-tier; REQ-LADDER-003, the plan's `build/87` row). ONE
+ *     golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33178 -> 33304 bytes and
+ *     470 -> 471 lines in the corpus source, one hunk. The Model ladder
+ *     paragraph's last sentence opens "The three placements no agent file can
+ *     declare that this table records are the flow's own escalations and
+ *     drop" and ends "and the escalation fixer's effort step (Review loop)
+ *     are two more, which no row records" (+58, three lines become four). The
+ *     table's frontier cell gains ", and for the one closure re-review after
+ *     an escalation (Review loop)" and closes "flow placements, declared by
+ *     no agent file" (+68, edited in place). Both sit below the re-attachment
+ *     cut (`### Specialist pass` holds at 17076). No token sits in the moved
+ *     text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q3b-plan-size-text (run
+ *     2026-10-10_next-tier; REQ-FLOW-070). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's two emitted changes are
+ *     `commands/st-plan.md`, 26510 -> 26954 bytes and 411 -> 412 lines (the
+ *     Plan-lint gate's L5 row and the return line's `L5 none|<n> advisory`),
+ *     and `skills/st-verify/SKILL.md`, 7007 -> 7135 bytes at an unchanged 129
+ *     lines (one line naming the four L5 codes, and the closing paragraph's
+ *     last word pulled up a line). Neither is a substitution target, the
+ *     catalog, the policy document or a core hook script, so no golden here
+ *     carries them; the sibling suite itemises both.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q6c-copilot-effort-key (run
+ *     2026-10-10_next-tier; REQ-LADDER-004). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's one emitted change is a
+ *     frontmatter line, `reasoning-effort: <level>`, closing the ten Copilot
+ *     agent files. A Copilot residue file is not a substitution target, not
+ *     the catalog, not the policy document and not a core hook script, so no
+ *     golden here carries it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script, its review
+ *     round 1 fix (run 2026-10-10_next-tier; review/12 with build/7;
+ *     REQ-FLOW-070). NOTHING moved in this suite; the row keeps the two
+ *     ledgers in step. The fix's one emitted change is
+ *     `skills/st-verify/scripts/spec-plan-coverage.mjs`, 17656 -> 17916 bytes
+ *     and 302 -> 304 lines: `delta-verbose` also reads a delta entry headed
+ *     `### ADDED REQ-…`, `### MODIFIED REQ-…` or `### REMOVED REQ-…`. A skill
+ *     script is no golden of this suite, as the unit's own row below says;
+ *     the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q6b-copilot-instructions-key (run
+ *     2026-10-10_next-tier; REQ-FLOW-071). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's one emitted change is a
+ *     frontmatter line, `include-custom-instructions: true`, on the ten
+ *     Copilot agent files, +34 bytes each. A Copilot residue file is not a
+ *     substitution target, not the catalog, not the policy document and not a
+ *     core hook script, so no golden here carries it; the sibling suite
+ *     itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q3a-plan-size-script (run
+ *     2026-10-10_next-tier; REQ-FLOW-070). NOTHING moved in this suite; the
+ *     row keeps the two ledgers in step. The unit's one emitted change is
+ *     `skills/st-verify/scripts/spec-plan-coverage.mjs`, 15373 -> 17656 bytes
+ *     and 262 -> 302 lines: plan-lint L5's four advisory size codes and the
+ *     unindented-heading rule for units. A skill script is not a substitution
+ *     target, not the catalog, not the policy document and not a core hook
+ *     script, so no golden here carries it; the sibling suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q1t-frame-inbox-read
+ *     (run 2026-10-10_next-tier; REQ-FLOW-019, REQ-FLOW-068, review/28 with
+ *     build/15 and review/29 as signed off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33157 -> 33178 bytes at an
+ *     unchanged 470 lines in the corpus source, one hunk. Frame step 4's first
+ *     sentence opens "Read and surface the deferral inbox rows whose paths
+ *     overlap this change's files" (+12: the duty to show the matched rows,
+ *     which the unit's first commit dropped), and its never-open rule reads
+ *     "A row it withholds or skips is listed as it prints" (+9: a row the
+ *     query skips is named too). The step is rewrapped in place at an
+ *     unchanged ten lines, every other word as it was. It sits above the
+ *     re-attachment cut (`### Specialist pass` moves 17055 -> 17076). No token
+ *     sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, second commit of unit q1t-frame-inbox-read
+ *     (run 2026-10-10_next-tier; REQ-FLOW-068, q1a's security re-review as
+ *     signed off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 33164 -> 33157 bytes and
+ *     469 -> 470 lines in the corpus source, three hunks. Frame step 4's
+ *     withheld-row sentence reads "A row it withholds is listed as it prints,
+ *     the person's to read; never open the inbox for it." (nine lines become
+ *     ten, the rest of the step rewrapped and unchanged). The Plan-artifact
+ *     intake bullet loses the label "Discovery:" and reads "keep those whose
+ *     head" and "Two still matching is one ambiguity-gate question",
+ *     rewrapped at an unchanged five lines. The Freshness guard bullet loses
+ *     ", unrestated" and reads "Only two head keys are read", rewrapped at an
+ *     unchanged four lines. All sit above the re-attachment cut (`###
+ *     Specialist pass` moves 17062 -> 17055). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q1t-frame-inbox-read (run
+ *     2026-10-10_next-tier; REQ-FLOW-068, REQ-FLOW-019, ledger row review/1).
+ *     ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32764 -> 33164 bytes and
+ *     467 -> 469 lines in the corpus source, four hunks. Frame step 4's
+ *     first sentence is replaced: the run reads the inbox rows that match its
+ *     change through the `ledger` verb's `inbox` query (`--paths`, `--plan`),
+ *     lists a row the query withholds as it prints, reads the whole file only
+ *     when the CLI or that query is absent, and reports any other failure (a
+ *     refusal, a crash, a failing exit) as a finding (five lines become nine,
+ *     the rest of the step rewrapped and unchanged). The Freshness guard's
+ *     last sentence drops "recorded" and pulls its last line up. The Decompose
+ *     bullet's in-flow plan sentence ends "the record's `Plan:` line names
+ *     it". The Coverage before Build bullet's last sentence reads "A
+ *     structural pass alone is not clarity." and pulls its last line up. All
+ *     four sit above the re-attachment cut (`### Specialist pass` moves
+ *     16662 -> 17062). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit
+ *     q6t-test-runner-ci-line (run 2026-10-10_next-tier; review/14 as signed
+ *     off). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on agents/stamity-test-runner.md, 8754 -> 8809 bytes
+ *     at an unchanged 157 lines in the corpus source: the Gate set's
+ *     `unknown`-provider sentence also fires where the provider "is still an
+ *     unresolved `STAMITY` substitution token", so a surface that copies the
+ *     body without substitution (the APM package) runs every gate. Three
+ *     lines moved, the paragraph's last three, rewrapped in place; the
+ *     detected fixture still renders the token as `github-actions`.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q5-usage-lines (run
+ *     2026-10-10_next-tier; review/8 as signed off). ONE golden moved,
+ *     SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32722 -> 32764 bytes at an
+ *     unchanged 467 lines in the corpus source: the Proof block's usage-lines
+ *     paragraph has the line appended to the run record as each phase or
+ *     review round ends, the way a capacity line is, a line of its own and
+ *     never directly above a table, where it named a place after the proof
+ *     block's field list, which no record holds mid-run. Both of its lines
+ *     moved; it still sits below the re-attachment cut (`### Specialist pass`
+ *     stays at 16662). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q6t-test-runner-ci-line (run
+ *     2026-10-10_next-tier; REQ-FLOW-063, inbox rows build/61 and build/85).
+ *     ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on agents/stamity-test-runner.md, 8683 -> 8754 bytes
+ *     at an unchanged 157 lines in the corpus source: the Gate set's
+ *     `unknown`-provider sentence names the provider through
+ *     `${STAMITY:CI_PROVIDER}`, which the detected fixture renders as
+ *     `github-actions`, in place of the charter field it pointed at; and the
+ *     Return contract's red sentence states that a `red` verdict writes
+ *     nothing to the named path. Both rewrapped inside their paragraphs.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, fixer round 1 of unit q2-qa-rows (run
+ *     2026-10-10_next-tier; review/2, review/3, review/4). NOTHING moved in
+ *     this suite; the row keeps the two ledgers in step. The round's one
+ *     emitted change is `skills/st-qa/SKILL.md`, +137 bytes in its person-rows
+ *     paragraph and class clause, which no golden here carries; the sibling
+ *     suite itemises it.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q5-usage-lines (run
+ *     2026-10-10_next-tier; REQ-CTX-019). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32480 -> 32722 bytes and
+ *     464 -> 467 lines in the corpus source: the Proof block gains a
+ *     usage-lines paragraph (one blank line and two lines) after its field
+ *     list's last item, naming the `- <UTC> usage: …` record line and its
+ *     placement. The edit sits below the re-attachment cut (`### Specialist
+ *     pass` stays at 16662). No token sits in the moved text.
+ *
+ *     NOTHING else moved here.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit q2-qa-rows (run 2026-10-10_next-tier;
+ *     REQ-FLOW-069). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32396 -> 32480 bytes and
+ *     463 -> 464 lines in the corpus source: the QA checkpoint's step 2 hands
+ *     the qa skill the class and lenses `gate classify` named (`unclear` when
+ *     none ran), its sentence rewrapped from four lines to five. The edit sits
+ *     below the re-attachment cut (`### Specialist pass` stays at 16662). No
+ *     token sits in the moved text.
+ *
+ *     NOTHING else moved here; the qa skill's own change is goldened in the
+ *     sibling suite, which itemises the emitted copies.
+ *
+ *   - 2026-10-10, plan 019 file 3, unit f0-make-room (run
+ *     2026-10-10_next-tier; inbox rows 2026-10-08_product-core/build/1 and
+ *     close/10). ONE golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 32995 -> 32396 bytes and
+ *     507 -> 463 lines in the corpus source: room above the re-attachment cut
+ *     (`### Specialist pass` at offset 17858 -> 16662) and under the 500-line
+ *     cap (body 498 -> 454). Unquoted blocks rewrap at 100 columns; the
+ *     opening line, Frame's "Seconds, not ceremony", the Dispatch contract's
+ *     lead-in and the Review loop's opening line go; Frame step 4's census
+ *     sentence, the isolation examples, the findings-ledger tail, the resume
+ *     bullet, the return lead-in, the cap bullet and the nit bullet shorten;
+ *     Frame's four record-head lines and the reports `.gitignore` move to the
+ *     Proof block's record paragraph; the light cap's hook caveat moves to
+ *     the Intensity client-events paragraph; both Dials rows add "or a
+ *     `reason` naming a failed read" to the no-class clause. No token sits in
+ *     the moved text.
+ *
+ *     NOTHING else moved here; the sibling suite itemises the emitted copies.
+ *
  *   - 2026-10-09, plan 019 file 2, consolidated at the close (run
  *     2026-10-08_product-core; build/24). FIFTEEN commits on the branch from
  *     5be05cda moved this suite's snapshot, each reviewed in its unit's round;
