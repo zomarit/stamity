@@ -1,7 +1,7 @@
 ---
 id: prove-behavior-and-value
 # A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
-status: shipped-with-1.8.0
+status: shipped-with-1.14.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
 # Prove behavior and value
@@ -31,12 +31,12 @@ in run `2026-10-07_release-1-12-0`, unit `c4-run-of-record`; it cites the run fi
 at the commit that adds it, and shipped with 1.12.0. REQ-PROVE-030 to REQ-PROVE-036, and the text dated 2026-10-08
 that names run `2026-10-08_maintainer-tooling` under REQ-PROVE-009, REQ-PROVE-017, REQ-PROVE-020 and REQ-PROVE-021,
 come from that run's spec deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it
-and read against the integration head `47acb16e`; they are unreleased. The ids REQ-PROVE-023 to 025 belong to
+and read against the integration head `47acb16e`; they shipped with 1.14.0. The ids REQ-PROVE-023 to 025 belong to
 `docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap; REQ-PROVE-026 to 029 are unallocated.
 The amendment dated 2026-10-09 to REQ-PROVE-031 comes from the spec delta of run `2026-10-08_product-core` (plan 019
 file 2), unit `p2c-ci-lanes-from-map`, merged by its unit `p9-spec-merge`; it cites the integration head `90710ba5`
-and is unreleased. The amendment dated 2026-10-09 to REQ-PROVE-009 comes from the same run's close (ledger
-`build/99`); it cites the integration head `46121954` and is unreleased.
+and shipped with 1.14.0. The amendment dated 2026-10-09 to REQ-PROVE-009 comes from the same run's close (ledger
+`build/99`); it cites the integration head `46121954` and shipped with 1.14.0, which set `status: shipped-with-1.14.0`.
 
 ## Intent
 

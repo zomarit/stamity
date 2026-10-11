@@ -1,7 +1,7 @@
 ---
 id: model-ladder
 # A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
-status: shipped-with-1.9.0
+status: shipped-with-1.14.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
 ---
 # Model ladder
@@ -10,7 +10,7 @@ Two axes of the model ladder. The first is effort (`src/roster/modelLadder.ts`).
 (`low, medium, high`) was chosen in 1.7.0 as the scale every supported client shared; by
 2026-09-17 Claude Code documents `xhigh` and `max`, Codex documents `minimal` and `xhigh`, and
 Cursor passes the value through to the model, so the band capped the deep-review class below what
-three of four clients accept. `/st-work` moves `status` to `shipped-with-1.9.0` at the close.
+three of four clients accept. `/st-work` moved `status` to `shipped-with-1.9.0` at that close.
 
 The second axis is capacity, added on 2026-09-23 from `docs/plans/009-orchestrator-context-economy-01.md`
 (REQ-LADDER-002, REQ-LADDER-003). It covers what the flow does when a sub-agent stops
@@ -18,14 +18,14 @@ because a model is out of capacity, not because its work failed. The failure lad
 (`content/commands/st-work.md:98-102`) reads any stop as a failed sub-agent: its first rung
 re-briefs the agent, and its second reassigns the work to a stronger class. Under a limit on
 one model, that stronger class is the one already out of capacity. REQ-LADDER-001 shipped with
-1.9.0. REQ-LADDER-002 and REQ-LADDER-003 ship with 1.10.0. `status` stays
-`shipped-with-1.9.0`, the release that first shipped this spec, and the 1.10.0 release does not
+1.9.0. REQ-LADDER-002 and REQ-LADDER-003 shipped with 1.10.0. `status` stayed
+`shipped-with-1.9.0`, the release that first shipped this spec, and the 1.10.0 release did not
 move it (the `spec-citations` unit of `docs/plans/010-enterprise-release-02.md`, 2026-09-27).
 
 REQ-LADDER-004 and the paragraphs dated 2026-10-10 come from the spec delta of run
 `2026-10-10_next-tier` (plan 019 file 3, re-planned in that run), merged by its unit
-`s1-spec-merge` against the integration head `a60cb496`. They are unreleased at that merge, so
-`status` does not move. A ledger id in that text (`review/5`, `build/21`) is that run's own
+`s1-spec-merge` against the integration head `a60cb496`. They shipped with 1.14.0, which set
+`status` to `shipped-with-1.14.0`. A ledger id in that text (`review/5`, `build/21`) is that run's own
 unless a run is named beside it. `## References` says which citations the merge re-pointed.
 
 ## Intent

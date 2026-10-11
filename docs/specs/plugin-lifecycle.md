@@ -1,7 +1,7 @@
 ---
 id: plugin-lifecycle
 # A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
-status: shipped-with-1.12.0
+status: shipped-with-1.14.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
 # Plugin lifecycle
@@ -39,12 +39,12 @@ are integrated. They shipped with 1.12.0, which set `status` to `shipped-with-1.
 
 The paragraphs headed "Amended 2026-10-08" that name run `2026-10-08_maintainer-tooling` come from that run's spec
 deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
-integration head `47acb16e`; lane D's, under REQ-PLUGIN-045 and REQ-PLUGIN-046, against `dbd54fc7`. They are
-unreleased, and `status` does not move.
+integration head `47acb16e`; lane D's, under REQ-PLUGIN-045 and REQ-PLUGIN-046, against `dbd54fc7`. They
+shipped with 1.14.0.
 
 The paragraph headed "Amended 2026-10-09" under REQ-PLUGIN-003 comes from run `2026-10-08_product-core` (plan 019
 file 2), unit `p6-setup-route` and its ledger row `build/42`, merged by the unit `p9-spec-merge`; it cites the
-integration head `90710ba5` and is unreleased.
+integration head `90710ba5` and shipped with 1.14.0, which set `status` to `shipped-with-1.14.0`.
 
 ## Intent
 

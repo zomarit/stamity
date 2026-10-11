@@ -1,7 +1,7 @@
 ---
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
-status: shipped-with-1.12.0
+status: shipped-with-1.14.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
@@ -10,15 +10,15 @@ What the nine commands and the setup that serves them do for a user day to day: 
 honestly, records say what happened, and the person is asked only what needs the person. The area code is `FLOW`.
 REQ-FLOW-001 to REQ-FLOW-026 shipped with 1.11.0, and REQ-FLOW-036 to REQ-FLOW-038 with 1.12.0, which set
 `status: shipped-with-1.12.0`. REQ-FLOW-025's allowlist sentence did not ship with them; `## Concerns` says so, and
-an inbox row follows it up. It landed on 2026-10-08 in run `2026-10-08_maintainer-tooling` (REQ-FLOW-025, amended),
-unreleased at that merge, so `status` does not move. The text dated 2026-10-08 that names that run comes from its spec
+an inbox row follows it up. It landed on 2026-10-08 in run `2026-10-08_maintainer-tooling` (REQ-FLOW-025, amended)
+and shipped with 1.14.0. The text dated 2026-10-08 that names that run comes from its spec
 deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it and read against the
 integration head `47acb16e`; lane D's, under REQ-FLOW-026, REQ-FLOW-037 and REQ-FLOW-038, against `dbd54fc7`.
 REQ-FLOW-061 to REQ-FLOW-067, REQ-FLOW-072 and REQ-FLOW-073, and the text dated 2026-10-09, come from the spec delta
 of run `2026-10-08_product-core` (plan 019 file 2, re-planned in that run), merged by its unit `p9-spec-merge` against
 the integration head `90710ba5`, where every citation of `content/commands/st-work.md` and
-`content/agents/stamity-test-runner.md` in this file was re-pointed to the lines that hold its text; unreleased at that
-merge, so `status` does not move. REQ-FLOW-039 to 050 are held for plan 016's later files and 051 to 060 are
+`content/agents/stamity-test-runner.md` in this file was re-pointed to the lines that hold its text; they shipped with
+1.14.0. REQ-FLOW-039 to 050 are held for plan 016's later files and 051 to 060 are
 unallocated, so the ids leave gaps; 068 to 071, which that merge held for plan 019 file 3, were allocated on 2026-10-10
 with 074 to 077 (amended 2026-10-10; it read "051 to 060 are unallocated and 068 to 071 are held for plan 019 file 3,
 so the ids leave gaps"). The run's own eval cases land after this merge and
@@ -30,7 +30,7 @@ and found every other citation on the same text at both heads.
 
 REQ-FLOW-068 to REQ-FLOW-071 and REQ-FLOW-074 to REQ-FLOW-077, and the text dated 2026-10-10, come from the spec delta
 of run `2026-10-10_next-tier` (plan 019 file 3, re-planned in that run), merged by its unit `s1-spec-merge` against the
-integration head `a60cb496`; unreleased at that merge, so `status` does not move. Where a delta entry and the landed
+integration head `a60cb496`; they shipped with 1.14.0, which set `status: shipped-with-1.14.0`. Where a delta entry and the landed
 text differed, the text states what that head holds, and a line headed "As built" says what moved. The same pass
 re-pointed to `a60cb496` every citation in this file of `content/commands/st-work.md`, `content/commands/st-board.md`,
 `content/commands/st-plan.md`, `content/commands/st-rework.md`, `content/skills/st-qa/SKILL.md`,
@@ -644,8 +644,8 @@ write and edit tools — never a shell redirect, a heredoc or `cat >` — and to
 `ledger` verb (REQ-CTX-005) (`content/commands/st-work.md:32-35`); a build or fix dispatch names the report path,
 written with the file write tool (`:136`).
 
-Landed 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`, inbox row 324; unreleased at
-that merge): setup writes no permission allowlist. The engine renders no `permissions` member in
+Landed 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`, inbox row 324; shipped with
+1.14.0): setup writes no permission allowlist. The engine renders no `permissions` member in
 `.claude/settings.json`, in repository setups and in plugin setups alike (`stamity plugin setup`, where a plugin that
 carries hooks leaves the engine no member to write; `buildSettingsJson`, `src/adapters/claude.ts`). The three `read`
 rows a release rendered (`Read`, `Grep`, `Glob`) leave on the next `sync` without a backup where the ledger records
@@ -2554,7 +2554,7 @@ exists, it is the normative record for that requirement.
   and a Windows venv, keep the default rendering plus the warning from REQ-FLOW-008. `config detect` does not compare
   `detected.packageManager` (deferred).
 - REQ-FLOW-012 leaves the method for counting source lines to the Source tree probe the command already runs.
-- REQ-FLOW-025's allowlist sentence landed on 2026-10-08 (unit `b4-no-read-allow-rows`), unreleased at that merge;
+- REQ-FLOW-025's allowlist sentence landed on 2026-10-08 (unit `b4-no-read-allow-rows`) and shipped with 1.14.0;
   its one residual is the lost-manifest case the REQ-FLOW-036 line below names.
 - REQ-FLOW-022: the Copilot workflow's bun branch still tells the reader to "add its setup step here" in a file that
   says edits are overwritten (`src/adapters/copilot.ts:606-608`); the unit fixed only the non-Node branch. The file

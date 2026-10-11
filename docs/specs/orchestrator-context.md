@@ -2,7 +2,7 @@
 id: orchestrator-context
 # A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
-status: shipped-with-1.10.0
+status: shipped-with-1.14.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
 # Orchestrator context economy
@@ -10,8 +10,8 @@ obsolete_when: every supported client hands a parent a sub-agent's full report b
 This spec covers what enters the `/st-work` orchestrator's context and what stays on disk.
 Full reports stay on disk and the orchestrator gets a digest. A CLI verb writes the findings
 ledger. A dispatch points at a plan unit instead of restating it. After a compaction, a card
-recomputed from disk re-grounds the run. The requirements ship with 1.10.0, and
-`status: shipped-with-1.10.0` records that; the spec-status gate admits only `design`, `shipped`
+recomputed from disk re-grounds the run. The requirements shipped with 1.10.0, and
+`status: shipped-with-1.10.0` recorded that; the spec-status gate admits only `design`, `shipped`
 and `shipped-with-<x.y.z>` (amendment A15). They merged on the QA sign-off, the gate of record
 and CI. They ship without the replay's measurement: R5, the maintainer's decision of 2026-09-27
 in `docs/plans/011-replay-v2.md`, took the replay out of the 1.10.0 release. On 2026-09-29 the
@@ -38,20 +38,20 @@ of that day to retire the replay; no plan file carries it.
 REQ-CTX-017 and REQ-CTX-018, and the paragraphs and criteria marked "amended 2026-09-30" or "added 2026-09-30", come
 from the spec deltas of `docs/plans/013-optimization-sweep-02.md` (B) and `docs/plans/013-optimization-sweep-03.md`
 (B), merged at the Prove phase of the run `.stamity/runs/2026-09-30_optimization-sweep/`, with the run's contract
-census and sign-offs. They shipped with 1.11.0; `status` still names 1.10.0, the release this spec first shipped with.
+census and sign-offs. They shipped with 1.11.0; `status` still named 1.10.0, the release this spec first shipped with.
 Their `path:line` citations are to the package head `b855876a`; where the built code and a delta differed, the text
 states what the code does.
 
 The paragraphs and criteria marked "amended 2026-10-09" under REQ-CTX-002, REQ-CTX-012 and REQ-CTX-018 come from the
 spec delta of run `2026-10-08_product-core` (plan 019 file 2, re-planned in that run) and its sign-offs, merged by its
-unit `p9-spec-merge`. They cite the integration head `90710ba5`, as do REQ-CTX-018's re-pointed citations; they are
-unreleased, and `status` does not move.
+unit `p9-spec-merge`. They cite the integration head `90710ba5`, as do REQ-CTX-018's re-pointed citations; they
+shipped with 1.14.0.
 
 REQ-CTX-019 and REQ-CTX-020, and the paragraphs and criteria marked "amended 2026-10-10" or "added 2026-10-10", come
 from the spec delta of run `2026-10-10_next-tier` (plan 019 file 3, re-planned in that run) and its sign-offs, merged
-by its unit `s1-spec-merge`. They cite the integration head `a60cb496`; they are unreleased, and `status` does not
-move. A ledger id in that text (`review/8`, `plan/39`) is that run's own unless a run is named beside it. The same
-pass re-pointed to `a60cb496`, outside the Context section, every citation in this file of
+by its unit `s1-spec-merge`. They cite the integration head `a60cb496`; they shipped with 1.14.0, which set `status`
+to `shipped-with-1.14.0`. A ledger id in that text (`review/8`, `plan/39`) is that run's own unless a run is named
+beside it. The same pass re-pointed to `a60cb496`, outside the Context section, every citation in this file of
 `content/commands/st-work.md`, `content/commands/st-plan.md` and `src/runs/ledgerStore.ts`, each read at that head
 and whatever tree the paragraphs around it name; the paragraphs marked "amended 2026-10-09" cite `a60cb496` for
 those three files since. The Context section's citations stay at `fed39ac`, and a citation of any other file stays at
