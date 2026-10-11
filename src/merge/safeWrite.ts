@@ -1053,7 +1053,8 @@ function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean 
  *
  * `safe.bareRepository=explicit` refuses such a folder from git 2.38 on, and an
  * older git ignores the option without an error. This walk is the same refusal
- * with no git in it, so it holds on every version. Level by level, as git:
+ * with no git in it, so for a tree git checked out it does not rest on git's
+ * version; what it leaves is said below. Level by level, as git:
  *
  * - a `.git` entry git would stop at ends the walk as safe
  *   ({@link gitEntryEndsDiscovery});
@@ -1066,12 +1067,19 @@ function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean 
  *
  * It asks `lstat` whether a name exists, its type and its device, and nothing
  * more: no content is read. For a git started with none of its own variables,
- * which is how the pinned runners start it, the look refuses a little more than
- * git does and never less: a genuine bare repository, which the option refuses
- * too, and a folder whose `HEAD` or `commondir` holds nothing git can use. No
- * commit can hold a `.git` entry, so the `.git` rules are for a leftover in the
- * operator's own tree. The walk starts where the folder really is, as the
- * process git runs in would.
+ * which is how the pinned runners start it, and for a tree git checked out, the
+ * look refuses every level git would open and a little more: a genuine bare
+ * repository, which the option refuses too, and a level whose `HEAD` or
+ * `commondir` holds nothing git can use. What git would open is read from its
+ * source, and no git older than 2.38 was run. Names alone leave one case where
+ * the look refuses less than such a git opens: a `.git` folder that holds the
+ * names and that git cannot open ends the walk as safe, while that git walks
+ * past it and opens a folder of the shape at the same level. No commit can
+ * hold a `.git` entry, so that takes a leftover or damaged `.git` in the
+ * operator's own tree. A caller that keeps its environment leaves two more:
+ * `GIT_COMMON_DIR` with no `GIT_DIR`, on a git older than 2.38, and a relative
+ * `GIT_DIR`, which git resolves against the folder it runs in, on any git. The
+ * walk starts where the folder really is, as the process git runs in would.
  *
  * `env` is the environment git will be started in, as far as it changes git's
  * discovery. The pinned runners drop every `GIT_*` variable and pass none. A
