@@ -325,15 +325,19 @@ so where it says which edition each id belongs to.
 
 ## What is still open
 
-Two advisories, in three Dependabot alerts, are open and watched rather than fixed, because no
-patched version of either exists:
+Two advisories, in three Dependabot alerts, are open and watched rather than fixed. Each alert is
+rated high, and none names a patched version (read live on 2026-10-11). They are known residuals
+in 1.14.0, tracked in `.stamity/inbox.md` as the row `2026-10-08_product-core/close/1`:
 
-- `http-cache-semantics` <= 4.2.0 (GHSA-ch52-4w7c-c8xp, max-stale handling), alerts #23 and #27.
-  #23 is the root lockfile, where it reaches the published CLI through the optional `sigstore`
-  dependency's signing path; #27 is the docs site's lockfile, which ships in no package. No version
-  names a fix: 4.3.0 changes only Vary matching.
+- `http-cache-semantics` <= 4.2.0 (GHSA-ch52-4w7c-c8xp, high, max-stale handling can disclose
+  cross-user cached responses), alerts #23 and #27, no patched version. #23 is `package-lock.json`,
+  the root lockfile, where the package is locked at 4.2.0 and reaches the published CLI through
+  the optional `sigstore` dependency's signing path; #27 is `website/package-lock.json`, the docs
+  site's lockfile, which ships in no package. The advisory names no fix: 4.3.0, the one release
+  since, changes Vary matching and exposes the response status.
 - `braces` <= 3.0.3 (GHSA-vfj7-8cjw-p6xm, high, stack exhaustion through deeply nested patterns),
-  alert #26, in the docs site's lockfile only: the published CLI does not reach it.
+  alert #26, no patched version, in `website/package-lock.json` only: the published CLI does not
+  reach it.
 
 Each lockfile moves once its advisory names a patched version. Before these, the one item recorded
 here as accepted was the documentation site's `image-size` dependency, reached through Docusaurus's MDX loader: two high-severity advisories
