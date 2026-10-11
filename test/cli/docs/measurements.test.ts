@@ -1678,6 +1678,80 @@ describe("the rule, exercised against fixture trees", () => {
     expect(evidenceFor(report.numerator, "2026-01-03_unreleased")).toBe(MERGE_EVIDENCE_NONE);
   });
 
+  // ADDED 2026-10-11, unit c6-measurements (run 2026-10-11_release-1-14-0, ledger build/5). The
+  // 1.12.0 section names another project's issue as `owner/repo#<n>`, and the reader took the
+  // number as one of this repository's pull requests, so a record that mentions it was credited
+  // "pull request #<n> in CHANGELOG". The two cases below hold one side bare each, so each of the
+  // two readers (the changelog's and the record's) is the only thing standing between its
+  // qualified number and a false merge line.
+  it("credits no merge evidence to a number the changelog writes owner/repo#n", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_bare": {
+        "record.md": record({ merge: "Landed as pull request #42." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      "2026-01-04_upstream-number": {
+        "record.md": record({ merge: "Works around the upstream defect, their issue #3129." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    writeFileSync(
+      join(root, "CHANGELOG.md"),
+      [
+        "# Changelog",
+        "",
+        "## [2.0.0] - 2026-01-09",
+        "",
+        "- Landed through pull request #42.",
+        "- Refuses the entry another project drops silently (other-owner/other-repo#3129).",
+        "",
+      ].join("\n"),
+    );
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    // The bare number beside it still counts: the fix narrows the reader, it does not blind it.
+    expect(evidenceFor(report.numerator, "2026-01-03_bare")).toBe("pull request #42 in CHANGELOG");
+    expect(evidenceFor(report.numerator, "2026-01-04_upstream-number")).toBe(MERGE_EVIDENCE_NONE);
+  });
+
+  it("credits no merge evidence to a number a record writes owner/repo#n", () => {
+    // The fixture changelog names #42 and #7 bare, each under a released heading.
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_bare": {
+        "record.md": record({ merge: "Landed as pull request #42." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      "2026-01-04_qualified": {
+        "record.md": record({ merge: "Tracks other-owner/other-repo#42 upstream." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      // The qualified number comes first, so a reader that stops at it never reaches the bare one.
+      "2026-01-05_qualified-then-bare": {
+        "record.md": record({ merge: "Tracks other-owner/other-repo#42; landed as (#7)." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      // A second bare number after a slash is the form `#41/#42`, which names two pull requests here.
+      "2026-01-06_slash-pair": {
+        "record.md": record({ merge: "Landed as #41/#42." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(evidenceFor(report.numerator, "2026-01-03_bare")).toBe("pull request #42 in CHANGELOG");
+    expect(evidenceFor(report.numerator, "2026-01-04_qualified")).toBe(MERGE_EVIDENCE_NONE);
+    expect(evidenceFor(report.numerator, "2026-01-05_qualified-then-bare")).toBe(
+      "pull request #7 in CHANGELOG",
+    );
+    expect(evidenceFor(report.numerator, "2026-01-06_slash-pair")).toBe(
+      "pull request #42 in CHANGELOG",
+    );
+  });
+
   it("excludes a run whose record says it is still in progress", () => {
     // A record is written THROUGHOUT its run. Reading an open one would put work
     // that has not finished into the denominator and stamp the page with a date

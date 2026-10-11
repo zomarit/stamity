@@ -670,8 +670,19 @@ const CONFIDENCE = /(?<![\w.])([01]\.\d+)(?!\w|\.\w)/g;
 /** The confidence gate a record declares for its own approvals. */
 const STATED_GATE = /confidence gate[^\n\d]*([01]\.\d+)/i;
 
-/** A pull-request number, in either form a record writes it. */
-const PULL_REQUEST = /#(\d+)\b/g;
+/**
+ * One of THIS repository's pull-request numbers, in the bare forms a record and the changelog
+ * write it: `#42`, `(#42)`, `#41/#42`, `#79–#83`.
+ *
+ * A number written `owner/repo#42` names another project's issue or pull request, and the
+ * lookbehind refuses it (run 2026-10-11_release-1-14-0, ledger build/5): the 1.12.0 section cites
+ * an upstream issue in that form, and reading its number as a pull request here credited a run
+ * that mentions it with a merge the changelog does not name. Both readers share the pattern —
+ * {@link releasedPullRequests} over the changelog and {@link mergeEvidence} over a record — so a
+ * qualified number counts on neither side. The same shape refuses a `dir/file.md#12` anchor,
+ * which is no pull request either.
+ */
+const PULL_REQUEST = /(?<![\w.-]\/[\w.-]+)#(\d+)\b/g;
 
 /** A released version heading in the changelog. */
 const RELEASE_HEADING = /^## \[(\d+\.\d+\.\d+)]/gm;
@@ -932,7 +943,8 @@ function releasedPullRequests(changelog: string): ReadonlySet<string> {
  * carried by `CHANGELOG.md`, or a pull-request number the record names that the
  * changelog also names UNDER a released heading. A number that appears only
  * above the first release heading is in the unreleased section, which is where
- * a merge that has not shipped is written down.
+ * a merge that has not shipped is written down. A number either side writes
+ * `owner/repo#<n>` is another project's and is no evidence — see {@link PULL_REQUEST}.
  */
 function mergeEvidence(
   run: string,
