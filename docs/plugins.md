@@ -559,6 +559,15 @@ with the directory.
 The `sync` comes first because `clean` refuses with `CLEAN_ERROR`, before touching anything, while
 a file it would keep is one a `sync` with the running version rewrites — after an upgrade, or after
 the detected stack or the gates changed since the last `sync` — and names those files.
+That `sync` has one exception, which the refusal's own next step names: when the `pack-integrity`
+row of `stamity check` names an edited pack file, one that no longer hashes to what its install
+recorded, do not run `sync`, which would carry the edited bytes into the clients' files. Move that
+file out of the pack's directory first, as that row says, and run `stamity clean -y` again. It then
+runs with no `sync`. If it refuses once more, another copy is stale for the first reason, as after
+an upgrade: with the edited file out the row reports it missing, not edited, and a `sync` carries
+nothing of it, so run `stamity sync`, then `stamity clean -y`. On either route the moved file's own
+client copy, which never held the edit, is kept and named: delete it by hand unless it is yours.
+[Packs and trust](packs-and-trust.md) has both cases under "Remove one pack".
 `stamity clean --dry-run` writes nothing and names what a real run removes. `clean` also prints
 one uninstall command line per client the manifest recorded, so the plugin side can be removed
 the same way it was added.
