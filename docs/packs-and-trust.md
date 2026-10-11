@@ -503,11 +503,22 @@ names the copies: the first three, and a count of the rest. `--dry-run` refuses 
 paths, so first move aside any of them that is yours rather than the engine's.
 
 A pack file edited after the install and still in the pack's directory gives the same refusal over
-its client copy, because a `sync` would render that copy from the edited bytes. There, do not run the
-`sync`, which would carry the edit into your clients' files. Move the edited file out or delete it
-first, as [Check an installed pack for edits](#check-an-installed-pack-for-edits) says, and
-`clean --pack` then runs. The update and replacement sequences earlier on this page start with
-`clean --pack` and can stop at this refusal the same way.
+its client copy, because a `sync` would render that copy from the edited bytes. So that `sync` has
+one exception, which the refusal's own next step names: when the `pack-integrity` row of
+`stamity check` names an edited pack file, one that no longer hashes to what its install recorded,
+do not run `sync`, which would carry the edited bytes into the clients' files. Move that file out
+of the pack's directory first, as that row and
+[Check an installed pack for edits](#check-an-installed-pack-for-edits) say, and run
+`stamity clean --pack <id>` again.
+
+It then runs, unless another of the pack's copies is stale for the first reason, as after an
+upgrade. In that case it refuses once more and names only the copies stale that way. With the
+edited file out, the `pack-integrity` row reports it missing, not edited, and a `sync` carries
+nothing of it, so the first route is the next step: run `stamity sync` with this version, then
+`stamity clean --pack <id>` again. That `sync` keeps and names the moved file's own client copy,
+which never held the edit, and `clean --pack` no longer lists it. Delete it by hand unless it is
+yours. The update and replacement sequences earlier on this page start with `clean --pack` and can
+stop at this refusal the same way.
 
 Every other pack's files, copies and rows are left alone. Outside the pack's own directory, the
 pack's client copies leave, and two more things change. `.stamity/manifest.json` loses exactly this

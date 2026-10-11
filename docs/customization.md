@@ -328,8 +328,15 @@ An override that stops existing stops being emitted on that sync. What happens t
 copies it produced depends on what the override did.
 
 - **It replaced a bundled id, or it was an overlay.** The shipped artifact is written back at the
-  same paths. Deleting an overlay restores the shipped artifact exactly, because the base's own
-  bytes were never touched.
+  paths it ships at. Those are the paths your override wrote, with one exception: a rule
+  override whose `globs:` differ from the shipped rule's can be delivered at other paths, as the
+  section on a rule that declares no globs says above, and a copy at a path the shipped rule
+  does not use is kept, as an added id's copy is below. An override of `question-protocol` that
+  declared `globs: ["src/**"]` left `.claude/rules/stamity-question-protocol.md`,
+  `.github/instructions/stamity-question-protocol.instructions.md` and Codex's `src/AGENTS.md`
+  in place when it was removed, while the shipped rule was emitted again as the
+  `stamity-question-protocol` skill and as Cursor's rule. Deleting an overlay restores the
+  shipped artifact exactly, because the base's own bytes were never touched.
 - **It added an id of its own.** `sync` does not delete the copies. It deletes a file under an
   engine name only when its bytes are a rendering the running engine produces at that path, and
   with the override gone it produces none there. So each copy stays on disk, where your client
@@ -339,15 +346,21 @@ copies it produced depends on what the override did.
 `sync` names every copy it keeps, one line each under `Reclaim sweep:`. An agent's, a rule's or
 a command's line ends `the file is kept; delete it by hand if it is yours to remove`, and an added
 skill's line says the engine cannot claim to have written it. The list then closes on
-`kept file(s) are yours now — their ledger rows are dropped, so no sync or clean will touch them again`.
-Delete each path on that list.
+`kept file(s) are yours now — their ledger rows are dropped, so no sync or clean will touch them again`,
+with the kept paths under it. Delete each of them. Past twenty kept paths that closing group
+folds: it prints the first twenty and then `… and <n> more`. The `Reclaim sweep:` lines above
+it never fold, so take the rest from them.
 
 To see the paths before anything is written, run `stamity check` before that `sync`: they are the
 `keep` and `refuse` lines under its drift line. After the `sync`, no ledger row names them, so
 `check` reads clean while the copies are still in place. If you no longer have the list and the
 manifest is committed, `git diff .stamity/manifest.json` shows the rows that `sync` dropped. Each
 copy sits in a client's folder under the emitted name: `stamity-<id>` for an agent or a rule,
-`st-<id>` for a command, and the directory's own name for a skill.
+`st-<id>` for a command, and the directory's own name for a skill. One copy has no such name. On
+Codex a rule whose globs all sit under one folder is a section of an `AGENTS.md` in that
+folder: `packages/api/AGENTS.md` for `packages/api/**`, headed `## <id>` below the title
+`Conditional rules (Codex down-conversion)`. A search for `stamity-<id>` misses it, so search
+the `AGENTS.md` files below the root for that title.
 
 ## Where does a fork layer fit?
 
