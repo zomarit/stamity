@@ -20,6 +20,14 @@ export interface WorkingTreeStatus {
   dirty: boolean;
   /** Porcelain entries: one per changed path, a rename counting once. */
   changedCount: number;
+  /**
+   * Why git did not answer, where the read knows: `bare-layout` when the look
+   * the runner takes before it starts git kept the folder from git
+   * ({@link gitCheckRunner}). Absent when git answered, and for every other
+   * cause (no binary, no repository, a git too slow for the probe), which the
+   * read cannot tell apart.
+   */
+  reason?: "bare-layout";
 }
 
 /** Repository history shape, seeding maturity heuristics. */
@@ -50,13 +58,21 @@ export function parsePorcelainStatus(output: string): { dirty: boolean; changedC
  * `cwd` is the setup root, and the default runner is {@link execGitCheck}: a
  * folder a repository writer committed in the shape of a bare repository never
  * answers, and no configured file-system monitor command runs (review/112).
+ * Where that runner's look kept the folder from git, the status says so in its
+ * `reason`, so a caller can name that cause and send nobody to run git there.
  */
 export function readWorkingTreeStatus(cwd: string, runner: GitRunner = execGitCheck): WorkingTreeStatus {
   try {
     return { available: true, ...parsePorcelainStatus(runner(["status", "--porcelain"], cwd)) };
-  } catch {
-    return { available: false, dirty: false, changedCount: 0 };
+  } catch (error) {
+    const unavailable: WorkingTreeStatus = { available: false, dirty: false, changedCount: 0 };
+    return keptFromGit(error) ? { ...unavailable, reason: "bare-layout" } : unavailable;
   }
+}
+
+/** True for the error {@link gitCheckRunner} throws when its look keeps a folder from git: no git was started. */
+function keptFromGit(error: unknown): boolean {
+  return error instanceof Error && (error as { keptFromGit?: unknown }).keptFromGit === true;
 }
 
 /**
@@ -126,7 +142,8 @@ export interface GitCheckRunnerOptions {
  * A git older than 2.38 ignores the first option, so the runner looks before
  * it starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would
  * meet a folder shaped like a bare repository, no git is started and the call
- * throws as it does when git refuses the folder, exit status 128 included.
+ * throws as it does when git refuses the folder, exit status 128 included. That
+ * error alone is marked `keptFromGit`, which {@link readWorkingTreeStatus} reads.
  *
  * Exported so every other git read of the CLI runs the same construction:
  * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's
@@ -136,7 +153,9 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
   const timeout = options.timeoutMs ?? GIT_FACT_TIMEOUT_MS;
   const { maxBuffer } = options;
   return (args, cwd) => {
-    if (gitDiscoveryMeetsBareShape(cwd)) throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128 });
+    if (gitDiscoveryMeetsBareShape(cwd)) {
+      throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
+    }
     return execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
       cwd,
       env: gitCheckEnv(),

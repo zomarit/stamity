@@ -232,10 +232,34 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
  * (`./gate.ts`) and `worktree` bounds only its fetch (`../../worktree/git.ts`),
  * so what they lose is stated for an absent git or a missing repository only,
  * and the row says how to tell the causes apart.
+ *
+ * A fourth cause has words of its own: the look the engine takes before it
+ * starts git kept this folder from git, because it or a folder above it has the
+ * layout of a bare repository (the status's `reason`). The way to tell the
+ * other three apart is a plain `git status`, and plain git is what must not be
+ * run in such a folder, so there the row names the cause, says where to look
+ * by name, and gives no such hint. Both verbs take the same look, so what they
+ * lose is stated outright. The folder is named as "this folder", since no row
+ * prints a machine's layout.
  */
 function checkGit(rootDir: string): DoctorCheck {
   const id = "git-available";
   const status = readWorkingTreeStatus(rootDir);
+  if (!status.available && status.reason === "bare-layout") {
+    return {
+      id,
+      status: "warn",
+      detail:
+        "git was not started here — this folder, or a folder above it, has the layout of a bare " +
+        "repository (HEAD beside objects and refs, or beside commondir), met before any .git that " +
+        "git stops at, so the engine did not hand it to git. Look at the entries of this folder " +
+        "and of each folder above it by name to find that folder, and do not run git in it. " +
+        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "so here gate scan exits 1 and /st-quick and /st-work list " +
+        "`secret scan: not run` under `Not done:`. " +
+        "sync's dirty-tree warning simply stays silent while git does not answer.",
+    };
+  }
   if (!status.available) {
     return {
       id,

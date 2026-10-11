@@ -1158,6 +1158,24 @@ describe("report payload", () => {
       { adapter: "claude", files: 1, stampedVersion: ENGINE_VERSION },
     ]);
   });
+
+  it("carries the three working-tree facts and nothing more, whatever the status says of why git did not answer", async () => {
+    // Run 2026-10-11_release-1-14-0, review/44: the working-tree status gained an optional
+    // `reason`, which `check` reads for its `git-available` row. This payload copied the status
+    // whole, so `sync --json` would have grown a field at a folder the look before git refuses.
+    // The fix was for `check` alone, so the payload names its three facts.
+    const root = await seedRepo(tempDir());
+    const changed = await planSync(root, ENGINE_VERSION, { runner: () => " M src/x.ts\n?? y.md\n" });
+    const refused: SyncPlan = {
+      ...changed,
+      dirty: { available: false, dirty: false, changedCount: 0, reason: "bare-layout" },
+    };
+    const report = await applySync(root, changed, { engineVersion: ENGINE_VERSION, force: false, dryRun: true, now: T1 });
+
+    // Non-degenerate: the facts are the plan's own, not a constant.
+    expect(syncJsonPayload(changed, report)["dirty"]).toEqual({ available: true, dirty: true, changedCount: 2 });
+    expect(syncJsonPayload(refused, report)["dirty"]).toEqual({ available: false, dirty: false, changedCount: 0 });
+  });
 });
 
 /**

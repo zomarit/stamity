@@ -1211,6 +1211,43 @@ describe("check — advisory warnings", () => {
     // The sentence the row already carried stays: what `sync` loses without git.
     expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
   });
+
+  it("says the folder was kept from git, with no hint to run git there, where the look before git refused it", async () => {
+    // Run 2026-10-11_release-1-14-0, review/55, review/54 and review/44. Before the engine starts
+    // git it looks at the folder and the folders above it, and a folder there with the layout of a
+    // bare repository is not handed to git (`gitDiscoveryMeetsBareShape`,
+    // `src/merge/safeWrite.ts`). The row then read the working tree as unavailable, named three
+    // other causes and said "git status here tells which": a plain git, typed in the folder the
+    // engine had just kept from git. So the row states this cause as its own and gives no such
+    // hint. The fixture is the shape the look's own cases seed (`test/merge/safeWrite.test.ts`):
+    // an empty `HEAD` file beside empty `objects` and `refs` folders, with no `.git`. No git
+    // opens it, and none is started.
+    const root = await seedRepo(getRepo());
+    await writeFile(join(root, "HEAD"), "", "utf8");
+    await mkdir(join(root, "objects"));
+    await mkdir(join(root, "refs"));
+
+    const { code, doc } = await runJson(root);
+    const git = row(doc, "git-available");
+
+    expect(code).toBe(0);
+    expect(git.status).toBe("warn");
+    expect(git.detail).toContain("git was not started here");
+    expect(git.detail).toContain("this folder, or a folder above it, has the layout of a bare repository");
+    expect(git.detail).toContain("Look at the entries of this folder and of each folder above it by name");
+    expect(git.detail).toContain("do not run git in it");
+    // No hint to run git there, and none of the causes that are not this one.
+    expect(git.detail).not.toContain("git status");
+    expect(git.detail).not.toContain("tells which");
+    expect(git.detail).not.toContain("no binary on PATH");
+    expect(git.detail).not.toContain("slow to answer");
+    // What follows from git not answering stays, in the row's own words.
+    expect(git.detail).toContain("Two verbs need git");
+    expect(git.detail).toContain("worktree refuses without it");
+    expect(git.detail).toContain("gate scan exits 1");
+    expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+    expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
+  });
 });
 
 describe("check — a managed block copied into the preserved region", () => {

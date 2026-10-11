@@ -389,6 +389,13 @@ export function syncJsonPayload(plan: SyncPlan, report: SyncApplyReport): Record
       tool: row.tool,
       classes: [...row.classes],
     })),
-    dirty: { ...plan.dirty },
+    // The three facts by name, not the status whole: why git did not answer
+    // (`WorkingTreeStatus.reason`) is told by `check`'s `git-available` row, and
+    // a field this payload never carried does not arrive here unannounced.
+    dirty: {
+      available: plan.dirty.available,
+      dirty: plan.dirty.dirty,
+      changedCount: plan.dirty.changedCount,
+    },
   };
 }

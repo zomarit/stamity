@@ -124,6 +124,29 @@ describe("readWorkingTreeStatus (scripted runner)", () => {
   });
 });
 
+// Run 2026-10-11_release-1-14-0, review/44: the look the default runner takes
+// before it starts git kept its reason to itself, so `check` named three other
+// causes at such a folder. The status now says why. The fixture is the shape
+// the look's own cases seed (`test/merge/safeWrite.test.ts`): an empty `HEAD`
+// file beside empty `objects` and `refs` folders, with no `.git`. The look
+// refuses it before any git is started, so the case needs no git on the host.
+describe("readWorkingTreeStatus (default runner, a folder the look refuses)", () => {
+  const getRoot = useTempDir("gitstatus-look");
+
+  it("says the folder was kept from git, at the folder and below it, and reads no history there", async () => {
+    const shaped = getRoot().path("shaped");
+    const below = join(shaped, "packages", "app");
+    await mkdir(below, { recursive: true });
+    await writeFile(join(shaped, "HEAD"), "", "utf8");
+    await mkdir(join(shaped, "objects"));
+    await mkdir(join(shaped, "refs"));
+
+    expect(readWorkingTreeStatus(shaped)).toEqual({ ...UNAVAILABLE, reason: "bare-layout" });
+    expect(readWorkingTreeStatus(below)).toEqual({ ...UNAVAILABLE, reason: "bare-layout" });
+    expect(readHistoryFacts(shaped)).toBeNull();
+  });
+});
+
 describe("readHistoryFacts (scripted runner)", () => {
   it("combines rev-list and shortlog into history facts", () => {
     const { runner, calls } = scriptedGit({
@@ -324,7 +347,10 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     const history = withProcessEnv(env, () => readHistoryFacts(root));
 
     expect(existsSync(marker)).toBe(false);
-    expect(status).toEqual(UNAVAILABLE);
+    // TEST CHANGE, justified (2026-10-11, run 2026-10-11_release-1-14-0, review/44): this asserted
+    // the bare unavailable status. The look refuses this folder before git starts, and the status
+    // now carries that reason so `check` can name the cause; the three fields it had are unchanged.
+    expect(status).toEqual({ ...UNAVAILABLE, reason: "bare-layout" });
     expect(history).toBeNull();
   });
 
@@ -360,7 +386,9 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     const history = withProcessEnv(env, () => readHistoryFacts(root));
 
     expect(readFileSync(started, "utf8")).toBe(PINNED_STATUS);
-    expect(status).toEqual(UNAVAILABLE);
+    // TEST CHANGE, justified (2026-10-11, run 2026-10-11_release-1-14-0, review/44): as in the
+    // case above, the refused folder's status now carries the look's reason beside the same fields.
+    expect(status).toEqual({ ...UNAVAILABLE, reason: "bare-layout" });
     expect(history).toBeNull();
   });
 
