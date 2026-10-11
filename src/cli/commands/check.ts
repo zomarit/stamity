@@ -226,6 +226,12 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
 /**
  * Git availability. A repository without git is legal — only `worktree` and
  * `gate` need it — so absence is a warn that says what is lost, never a failure.
+ *
+ * The same warn covers a third cause: a git that is there and did not answer
+ * inside the probe's bound (`readWorkingTreeStatus`). `gate` waits longer on git
+ * (`./gate.ts`) and `worktree` bounds only its fetch (`../../worktree/git.ts`),
+ * so what they lose is stated for an absent git or a missing repository only,
+ * and the row says how to tell the causes apart.
  */
 function checkGit(rootDir: string): DoctorCheck {
   const id = "git-available";
@@ -235,10 +241,12 @@ function checkGit(rootDir: string): DoctorCheck {
       id,
       status: "warn",
       detail:
-        "git did not answer here — no binary on PATH, or this directory is not a repository. " +
+        "git did not answer here — no binary on PATH, this directory is not a repository, or git " +
+        "was only slow to answer this check (git status here tells which). " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
-        "so gate scan exits 1 and /st-quick and /st-work list `secret scan: not run` under " +
-        "`Not done:`. sync's dirty-tree warning simply stays silent.",
+        "so with no git or no repository gate scan exits 1 and /st-quick and /st-work list " +
+        "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +
+        "sync's dirty-tree warning simply stays silent while git does not answer.",
     };
   }
   return {

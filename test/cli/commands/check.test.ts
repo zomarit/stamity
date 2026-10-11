@@ -1189,6 +1189,11 @@ describe("check — advisory warnings", () => {
     // directory with no repository). This row is where an operator with no git lands, so it is
     // the one that has to say so. The temp fixture is not a git repository; the `warn` status is
     // asserted first so the detail under test is the no-git branch's and not the passing one's.
+    //
+    // The same `warn` fires when git is there and the status read outran the probe's bound
+    // (`readWorkingTreeStatus`, `src/cli/engine/gitStatus.ts`), where `gate` and `worktree`, which
+    // wait longer on git, may still run (review/29). So the row names that third cause, and what
+    // the two verbs lose is conditional on git being absent.
     const root = await seedRepo(getRepo());
 
     const { code, doc } = await runJson(root);
@@ -1197,12 +1202,14 @@ describe("check — advisory warnings", () => {
     expect(code).toBe(0);
     expect(git.status).toBe("warn");
     expect(git.detail).not.toContain("Nothing in stamity requires it");
+    expect(git.detail).toContain("or git was only slow to answer this check");
     expect(git.detail).toContain("Two verbs need git");
     expect(git.detail).toContain("worktree refuses without it");
-    expect(git.detail).toContain("gate scan exits 1");
+    expect(git.detail).toContain("so with no git or no repository gate scan exits 1");
     expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+    expect(git.detail).toContain("where git was only slow, both verbs may still run");
     // The sentence the row already carried stays: what `sync` loses without git.
-    expect(git.detail).toContain("sync's dirty-tree warning simply stays silent");
+    expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
   });
 });
 

@@ -307,13 +307,20 @@ async function askProceedWithoutGit(gate: PromptGate, promptIo: PromptIo): Promi
 /**
  * The line every non-git run prints — interactive, piped, `-y` and `--json`
  * alike — so the disclosure never depends on whether anyone was asked.
+ *
+ * Its second sentence carries the clauses of `check`'s `git-available` row
+ * (`./check.ts::checkGit`): this is the verb an operator with no repository
+ * runs first, so it cannot say less than the row they read one command later.
+ * What the two verbs lose is worded on git or the repository being absent, as
+ * in that row, because the probe also fails on a git that was only slow.
  */
 function noGitNote(dryRun: boolean): string {
   const tense = dryRun ? "would be written" : "were written";
   return (
     `no git repository: git did not answer in this directory, so the files that ${tense} have ` +
-    `no revert path — \`git init\` here first if you want one. Nothing in stamity requires git; ` +
-    `what changes is only that this run is not undoable.`
+    `no revert path — \`git init\` here first if you want one. Two verbs need git: worktree ` +
+    `refuses without it, and gate reads every change from it, so with no git or no repository ` +
+    `gate scan exits 1 and /st-quick and /st-work list \`secret scan: not run\` under \`Not done:\`.`
   );
 }
 

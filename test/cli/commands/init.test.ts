@@ -1186,6 +1186,38 @@ describe("init --json", () => {
   });
 });
 
+// ── The no-git note ────────────────────────────────────────────────
+
+describe("init — the no-git note", () => {
+  // The note said "Nothing in stamity requires git; what changes is only that this run is not
+  // undoable", on the first verb an operator with no repository runs. `check`'s `git-available`
+  // row, one command later, says two verbs need it: `worktree` refuses, and `gate scan` exits 1,
+  // so a flow's report lists the secret scan as not run (run 2026-10-11_release-1-14-0,
+  // review/28). The note now carries that row's own clauses. The temp fixture is not a git
+  // repository, so the note prints on both runs; it stays one line, revert path first.
+  it.each([
+    { name: "a real run", argv: ["-y"], tense: "were written" },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y"], tense: "would be written" },
+  ])("names the two verbs that need git on $name", async ({ argv, tense }) => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, argv);
+
+    expect(result.code).toBe(0);
+    const notes = result.stdout.split("\n").filter((line) => line.trimStart().startsWith("no git repository:"));
+    expect(notes).toHaveLength(1);
+    const note = notes[0] ?? "";
+    expect(note).toContain(`so the files that ${tense} have no revert path — \`git init\` here first if you want one.`);
+    expect(note).not.toContain("Nothing in stamity requires git");
+    expect(note).not.toContain("not undoable");
+    expect(note).toContain("Two verbs need git");
+    expect(note).toContain("worktree refuses without it");
+    expect(note).toContain("gate reads every change from it");
+    expect(note).toContain("so with no git or no repository gate scan exits 1");
+    expect(note).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+  });
+});
+
 // ── Hooks-planner findings ─────────────────────────────────────────
 
 /**
