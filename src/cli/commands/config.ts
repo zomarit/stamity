@@ -1,3 +1,4 @@
+import { gitCheckRunner } from "../engine/gitStatus.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import {
@@ -1193,7 +1194,9 @@ async function runDetect(ctx: CliContext, rootDir: string): Promise<CommandResul
 
   ctx.spinner.start("scanning the repo");
   const info = await ctx.engine.detect.repoAnalyzer.analyzeRepo(rootDir);
-  const identity = ctx.engine.workspace.git.detectRepoGitIdentity(rootDir);
+  // Through the pinned runner, as `init` reads it: a setup root shaped like a
+  // bare repository does not answer with an origin of its own.
+  const identity = ctx.engine.workspace.git.detectRepoGitIdentity(rootDir, gitCheckRunner());
   ctx.spinner.stop();
 
   const detected: DetectedSummary = summarizeDetection(info);

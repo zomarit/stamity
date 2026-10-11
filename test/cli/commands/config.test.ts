@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Writable } from "node:stream";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CONFIG_KEYS,
   configCommand,
@@ -34,6 +35,7 @@ import {
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
+import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
 /**
@@ -1306,6 +1308,81 @@ describe("config detect", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("none -> typescript");
     expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  /** Sync git for seeding only, the host's global and system config cut off. */
+  function seedGit(cwd: string, args: readonly string[]): string {
+    return execFileSync("git", [...args], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_CONFIG_SYSTEM: NO_GIT_CONFIG },
+      windowsHide: true,
+    }).trim();
+  }
+
+  /** `detect` with `HOME` at an empty folder, so the origin read finds no global git config. */
+  async function detectIsolated(root: string, home: string): ReturnType<typeof run> {
+    await mkdir(home, { recursive: true });
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("XDG_CONFIG_HOME", home);
+    try {
+      return await runInProcess([configCommand], ["config", "detect"], { cwd: root });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  const ORIGIN = "https://github.com/acme/demo.git";
+
+  // The origin read runs git the way `sync`, `check` and `init` read it
+  // (`gitCheckRunner`); in a repository of the setup root's own it answers as before.
+  it("records the platform the repository's own origin names", async (ctx) => {
+    const handle = tempDir();
+    const root = handle.path("repo");
+    await mkdir(root);
+    try {
+      seedGit(root, ["init", "-q"]);
+    } catch {
+      ctx.skip();
+    }
+    seedGit(root, ["remote", "add", "origin", ORIGIN]);
+    await handle.seedFiles({
+      [`repo/${STATE_DIR}/${MANIFEST_FILE}`]: `${JSON.stringify(baseManifest(), null, 2)}\n`,
+    });
+
+    const result = await detectIsolated(root, handle.path("home"));
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toMatch(/platform\s+none -> github/);
+    expect((await readManifest(root))?.platform).toBe("github");
+  });
+
+  // The folder is the shape `test/cli/engine/gitStatus.test.ts` builds
+  // (review/112), with an origin of its own in the settings it carries.
+  it("records no platform off the origin a setup root shaped like a bare repository carries", async (ctx) => {
+    const handle = tempDir();
+    const root = handle.path("planted");
+    await mkdir(root);
+    try {
+      seedGit(root, ["init", "-q", "--bare", "."]);
+    } catch {
+      ctx.skip();
+    }
+    seedGit(root, ["config", "--file", "config", "core.bare", "false"]);
+    seedGit(root, ["config", "--file", "config", "core.worktree", "."]);
+    seedGit(root, ["config", "--file", "config", "remote.origin.url", ORIGIN]);
+    // Non-degenerate: a plain git pointed at the folder does print that origin.
+    expect(seedGit(root, ["--git-dir=.", "remote", "get-url", "origin"])).toBe(ORIGIN);
+    await handle.seedFiles({
+      [`planted/${STATE_DIR}/${MANIFEST_FILE}`]: `${JSON.stringify(baseManifest(), null, 2)}\n`,
+    });
+
+    const result = await detectIsolated(root, handle.path("home"));
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("github");
+    expect((await readManifest(root))?.platform).toBeUndefined();
   });
 });
 

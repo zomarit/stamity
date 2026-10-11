@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -18,7 +19,7 @@ import {
 import { MANIFEST_VERSION, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { runInProcess } from "../../support/inProcess.ts";
-import { seedGitRepo } from "../../support/repoFixtures.ts";
+import { NO_GIT_CONFIG, seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
 /**
@@ -185,6 +186,93 @@ describe("handoff slug and ref helpers", () => {
   it("reads the branch half of a recorded ref, and nothing when there is none", () => {
     expect(recordedBranch("feature/a@abc1234")).toBe("feature/a");
     expect(recordedBranch("@abc1234")).toBeNull();
+  });
+});
+
+/** Sync git for seeding only, the host's global and system config cut off. */
+function seedGit(cwd: string, args: readonly string[]): string {
+  return execFileSync("git", [...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+      GIT_CONFIG_SYSTEM: NO_GIT_CONFIG,
+      GIT_AUTHOR_NAME: "Fixture One",
+      GIT_AUTHOR_EMAIL: "fixture.invalid",
+      GIT_COMMITTER_NAME: "Fixture One",
+      GIT_COMMITTER_EMAIL: "fixture.invalid",
+    },
+    windowsHide: true,
+  }).trim();
+}
+
+/** Runs `fn` with env overrides on this process, which the ref read's git inherits. */
+function withProcessEnv<T>(overrides: Record<string, string>, fn: () => T): T {
+  const previous = new Map(Object.keys(overrides).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, overrides);
+  try {
+    return fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+/** An empty folder as `HOME`, so the read finds no global git config, as `gitStatus.test.ts` isolates its reads. */
+async function emptyHome(temp: TempDirHandle): Promise<Record<string, string>> {
+  const home = temp.path("home");
+  await mkdir(home, { recursive: true });
+  return { HOME: home, XDG_CONFIG_HOME: home };
+}
+
+// `prepare` records this ref and `resume` measures drift against it, so it is
+// read the way `sync`, `check` and `init` read git (`gitCheckRunner`): the
+// fixture below is the one `test/cli/engine/gitStatus.test.ts` builds (review/112).
+describe("currentGitRef (the pinned runner)", () => {
+  it("names no ref at a setup root shaped like a bare repository", async (ctx) => {
+    const temp = tempDir();
+    const root = temp.path("planted");
+    await mkdir(root);
+    try {
+      seedGit(root, ["init", "-q", "--bare", "."]);
+    } catch {
+      ctx.skip();
+    }
+    await temp.seedFiles({ "planted/AGENTS.md": "# Charter\n" });
+    seedGit(root, ["--git-dir=.", "--work-tree=.", "add", "--", "AGENTS.md"]);
+    seedGit(root, ["--git-dir=.", "--work-tree=.", "commit", "-q", "-m", "planted"]);
+    seedGit(root, ["config", "--file", "config", "core.bare", "false"]);
+    seedGit(root, ["config", "--file", "config", "core.worktree", "."]);
+    // Non-degenerate: the folder does hold a branch and a commit a plain git names.
+    expect(seedGit(root, ["--git-dir=.", "rev-parse", "--short", "HEAD"])).toMatch(/^[0-9a-f]{4,}$/);
+
+    const env = { ...(await emptyHome(temp)), GIT_CEILING_DIRECTORIES: temp.dir };
+
+    expect(withProcessEnv(env, () => currentGitRef(root))).toBeNull();
+  });
+
+  it("names the setup root's own branch and commit whatever GIT_DIR names", async (ctx) => {
+    const temp = tempDir();
+    const other = temp.path("other");
+    const target = temp.path("target");
+    await mkdir(other);
+    await mkdir(target);
+    await seedGitOrSkip(other, () => ctx.skip());
+    await seedGitOrSkip(target, () => ctx.skip());
+    seedGit(other, ["checkout", "-q", "-b", "other-line"]);
+    seedGit(other, ["commit", "-q", "--allow-empty", "-m", "second"]);
+    seedGit(target, ["checkout", "-q", "-b", "target-line"]);
+    const targetSha = seedGit(target, ["rev-parse", "--short", "HEAD"]);
+    expect(seedGit(other, ["rev-parse", "--short", "HEAD"])).not.toBe(targetSha);
+
+    const env = { ...(await emptyHome(temp)), GIT_DIR: join(other, ".git"), GIT_WORK_TREE: other };
+
+    expect(withProcessEnv(env, () => currentGitRef(target))).toBe(`target-line@${targetSha}`);
   });
 });
 

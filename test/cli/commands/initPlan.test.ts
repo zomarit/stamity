@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyInit } from "../../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions, fullCoreSelection } from "../../../src/cli/commands/init/plan.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
@@ -16,6 +17,7 @@ import { OWNED_PATHS } from "../../../src/manifest/ownedPaths.ts";
 import type { ContentClass } from "../../../src/types/content.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
+import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -198,6 +200,44 @@ describe("buildInitDecisions — platform and edge repos", () => {
     expect(decisions.platform).toBeUndefined();
     expect(decisions.maturitySource).toBe("default");
     expect(decisions.maturityTier).toBe("solo");
+  });
+
+  // The origin read runs git the way `sync`, `check` and `init`'s other reads do
+  // (`gitCheckRunner`). The folder is the shape `test/cli/engine/gitStatus.test.ts`
+  // builds (review/112), with an origin of its own in the settings it carries.
+  it("reads no platform off the origin a setup root shaped like a bare repository carries", async (ctx) => {
+    const root = await seedRepo();
+    const seedGit = (args: readonly string[]): string =>
+      execFileSync("git", [...args], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_CONFIG_SYSTEM: NO_GIT_CONFIG },
+        windowsHide: true,
+      }).trim();
+    try {
+      seedGit(["init", "-q", "--bare", "."]);
+    } catch {
+      ctx.skip();
+    }
+    seedGit(["config", "--file", "config", "core.bare", "false"]);
+    seedGit(["config", "--file", "config", "core.worktree", "."]);
+    seedGit(["config", "--file", "config", "remote.origin.url", "https://github.com/planted/planted.git"]);
+    // Non-degenerate: a plain git pointed at the folder does print that origin.
+    expect(seedGit(["--git-dir=.", "remote", "get-url", "origin"])).toBe("https://github.com/planted/planted.git");
+
+    const home = getRepo().path("home");
+    await mkdir(home, { recursive: true });
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("XDG_CONFIG_HOME", home);
+    vi.stubEnv("GIT_CEILING_DIRECTORIES", getRepo().dir);
+    try {
+      const decisions = await buildInitDecisions(root, {}, { history: null });
+
+      expect(decisions.platform).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   // TEST CHANGE, justified: the case "lets a platform flag stand without any git

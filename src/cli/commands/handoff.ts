@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { Argument, Option, type Command } from "commander";
@@ -9,6 +8,7 @@ import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError } from "../../types/errors.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { HandoffFrontmatter } from "../../handoffs/schema.ts";
+import { gitCheckRunner } from "../engine/gitStatus.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -62,9 +62,6 @@ const HANDOFF_FILE_EXTENSION = ".md";
 
 /** Milliseconds in a day — the store's expiry arithmetic, mirrored by the dry run. */
 const MS_PER_DAY = 86_400_000;
-
-/** Ceiling on one git probe's wall time; a hung git must not stall a handoff. */
-const GIT_TIMEOUT_MS = 5_000;
 
 /** The trust frame the skill defines. A resumed body is data, and the tier has to
  *  be visible in the context it lands in, so the frame is output contract. */
@@ -213,15 +210,18 @@ function refuse(
 
 // ── Git ──────────────────────────────────────────────────────────
 
+/**
+ * The construction `sync`, `check`, `init` and `gate` read git through, at its
+ * 5-second default: a hung git must not stall a handoff, a setup root shaped
+ * like a bare repository never answers, and no inherited `GIT_*` variable
+ * points the read at another repository.
+ */
+const runGitCheck = gitCheckRunner();
+
 /** Bounded, quiet git. `null` on any failure: absence is an answer, never a throw. */
 function git(cwd: string, args: readonly string[]): string | null {
   try {
-    return execFileSync("git", [...args], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: GIT_TIMEOUT_MS,
-    }).trim();
+    return runGitCheck(args, cwd).trim();
   } catch {
     return null;
   }

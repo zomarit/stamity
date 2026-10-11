@@ -23,7 +23,7 @@ import {
   type WorkspaceRole,
 } from "../../../workspace/detect.ts";
 import { detectRepoGitIdentity } from "../../../workspace/git.ts";
-import { readHistoryFacts, type HistoryFacts } from "../../engine/gitStatus.ts";
+import { gitCheckRunner, readHistoryFacts, type HistoryFacts } from "../../engine/gitStatus.ts";
 
 /**
  * The prompt-free planning half of init: everything COMPUTABLE about the repo,
@@ -403,9 +403,13 @@ function resolveMaturity(
   };
 }
 
-/** Platform off the origin remote; `undefined` for a non-repo or an unmapped host. */
+/**
+ * Platform off the origin remote; `undefined` for a non-repo or an unmapped
+ * host. Read through {@link gitCheckRunner}, as the history seed is, so a setup
+ * root shaped like a bare repository does not answer with an origin of its own.
+ */
 function detectPlatform(rootDir: string): Platform | undefined {
-  return detectRepoGitIdentity(rootDir).platform ?? undefined;
+  return detectRepoGitIdentity(rootDir, gitCheckRunner()).platform ?? undefined;
 }
 
 /**
