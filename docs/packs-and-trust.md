@@ -112,7 +112,8 @@ copy. It removes the pack's own files and the copies an earlier `sync` wrote int
 copy it cannot prove the engine wrote is kept and named: one you edited, or every copy of a pack
 whose plan the engine refuses. Delete by hand each client copy it keeps and names, unless it is
 yours, then run `stamity sync`. Then add the pack again with `stamity add <id>`, and run
-`stamity sync`.
+`stamity sync`. `clean --pack` can refuse with `CLEAN_ERROR` before it removes anything, as after an
+upgrade of stamity itself: [Remove one pack](#remove-one-pack) says when, and what to run first.
 
 ### Packs in a plugin-backed repository
 
@@ -469,11 +470,13 @@ ordinary regeneration drift that `sync` would then propagate into your emitted a
 The check is read-only and never repairs. What to do about a mismatch is your decision. Re-install
 the pack in the order the row's finding line prints: move an edited file out of
 `.stamity/packs/<id>/` or delete it first (`clean --pack` keeps an edited pack file, and `add` would
-refuse it), then `stamity clean --pack <id>`. Delete by hand each client copy it keeps and names,
+refuse it), then `stamity clean --pack <id>`, which removes the pack's client copies itself and
+keeps and names any it cannot prove. Delete by hand each client copy it keeps and names,
 unless it is yours: the moved file's own copy is among them, since nothing renders it once the file
-is out. Then run `stamity sync`, `stamity add <source>` (the catalog id, path or package its install
-receipt records), and `stamity sync`. Or restore the file, or accept the edit knowing the row will
-keep reporting it.
+is out. Then run `stamity sync`, which regenerates the clients' files without the pack,
+`stamity add <source>` (the catalog id, path or package its install
+receipt records), and `stamity sync`. Do not start with `sync`: it would carry the edited bytes into
+the generated setup. Or restore the file, or accept the edit knowing the row will keep reporting it.
 
 ## Remove one pack
 
@@ -490,6 +493,21 @@ recorded hash keeps its ledger row. Nothing that is not the pack's is touched. I
 pack's selected MCP servers out of the merged client config files, and out of the `mcp.servers`
 selection in `.stamity/manifest.json`. This is the last moment they can be proved. An entry you had
 tuned yourself is kept and reported as yours.
+
+`clean --pack` can refuse before it removes anything. It exits with `CLEAN_ERROR` while one of the
+pack's client copies is a file a `sync` with the running version rewrites: the copy still hashes to
+what the ledger records, but this version renders other bytes at its path, as after an upgrade that
+changed how the copy renders. The delete cannot be proven, so nothing is removed, and the refusal
+names the copies: the first three, and a count of the rest. `--dry-run` refuses the same way. Run
+`stamity sync` with this version, then `stamity clean --pack <id>` again. That `sync` rewrites those
+paths, so first move aside any of them that is yours rather than the engine's.
+
+A pack file edited after the install and still in the pack's directory gives the same refusal over
+its client copy, because a `sync` would render that copy from the edited bytes. There, do not run the
+`sync`, which would carry the edit into your clients' files. Move the edited file out or delete it
+first, as [Check an installed pack for edits](#check-an-installed-pack-for-edits) says, and
+`clean --pack` then runs. The update and replacement sequences earlier on this page start with
+`clean --pack` and can stop at this refusal the same way.
 
 Every other pack's files, copies and rows are left alone. Outside the pack's own directory, the
 pack's client copies leave, and two more things change. `.stamity/manifest.json` loses exactly this

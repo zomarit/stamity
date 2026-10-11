@@ -436,7 +436,11 @@ first two commands are the documented
 route and they are not sufficient on their own: with the plugin already installed, `marketplace
 add` answers that the source is already on disk and `install` answers "already installed … it loads
 in place", leaving the recorded version where it was — the walk asserts that, which is what makes
-the move attributable to the third command. The third line is what re-records the version, and the
+the move attributable to the third command. On a marketplace added as a directory, the text of
+`claude plugin list` shows the version of the folder it reads, so once the source has moved back it
+already shows the previous version, while the recorded version — the `version` field of
+`claude plugin list --json` — does not move until the third command *(measured 2026-10-11 on Claude
+Code 2.1.290 and 2.1.296)*. The third line is what re-records the version, and the
 client's own message is what names it. A `plugin rollback` subcommand is **settled absent**:
 `claude plugin rollback stamity` answers `error: unknown command 'rollback'` on 2.1.278, and no
 vendor page read 2026-09-21 names one. The reinstall route above is the rollback.
@@ -544,7 +548,14 @@ or one it cannot read — still runs a script under `.stamity/`, `clean` keeps t
 manifest included, and names that file. Remove that wiring and run `stamity clean -y` again before
 `plugin setup`, which otherwise refuses on the manifest still there. **Save first** whatever of
 that you want to keep:
-copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setup`.
+copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setup`, all but a pack.
+A pack copied back is not installed: no ledger row records it, so `check` reports no installed pack
+and `sync` projects nothing from it, and `add` refuses over the copied files until they are removed.
+Install each pack again after `plugin setup` with `stamity add <source>`, where `<source>` is the
+catalog id, local path or package name you installed it from. Note each pack's source before
+`clean -y`: for a pack from the catalog that is its id, and for any other the path or package name
+in the `source` field of its install receipt, `.stamity/packs/<id>/receipt.json`, which is deleted
+with the directory.
 The `sync` comes first because `clean` refuses with `CLEAN_ERROR`, before touching anything, while
 a file it would keep is one a `sync` with the running version rewrites — after an upgrade, or after
 the detected stack or the gates changed since the last `sync` — and names those files.
@@ -552,7 +563,7 @@ the detected stack or the gates changed since the last `sync` — and names thos
 one uninstall command line per client the manifest recorded, so the plugin side can be removed
 the same way it was added.
 
-No release through 1.12.0 ships a migration engine. Detecting a generated setup, previewing the removals and
+No release through 1.14.0 ships a migration engine. Detecting a generated setup, previewing the removals and
 refusing on a conflict were planned and cut: the clean-then-setup route above is the documented
 one, and it is the one this page will describe until a later minor ships the engine.
 
