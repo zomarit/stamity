@@ -92,11 +92,14 @@ export const GIT_FETCH_TIMEOUT_MS = 60_000;
  * A git older than 2.38 ignores the first option, so the lane looks before it
  * starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would meet a
  * folder shaped like a bare repository, no git is started and the outcome is
- * the one git's own refusal gives, status 128 with the reason on stderr.
+ * the one git's own refusal gives, status 128 with the reason on stderr. The
+ * look is handed the environment git inherits, since the lane keeps it: with
+ * `GIT_DIR` there git runs no discovery, the folder it runs in cannot answer,
+ * and no look is taken for that call.
  */
 export const runGit: WorktreeGitRunner = (invocation) =>
   new Promise<GitOutcome>((settle) => {
-    if (gitDiscoveryMeetsBareShape(invocation.cwd)) {
+    if (gitDiscoveryMeetsBareShape(invocation.cwd, process.env)) {
       settle({ status: 128, stdout: "", stderr: `${bareShapeRefusal(invocation.cwd)}\n` });
       return;
     }

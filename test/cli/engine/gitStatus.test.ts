@@ -364,6 +364,24 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     expect(history).toBeNull();
   });
 
+  // review/43 of run 2026-10-11_release-1-14-0, signed off: the look refuses
+  // git's own shape for a repository folder and nothing wider. A clone that
+  // holds `HEAD` beside `objects` alone above the setup root (sample files, an
+  // API mock) is no folder any git opens, so it is read as before.
+  it("still reads a real clone that holds HEAD beside objects alone above the setup root", async () => {
+    const clone = getRoot().path("clone");
+    const app = getRoot().path("clone", "packages", "app");
+    await mkdir(app, { recursive: true });
+    git(clone, ["init", "-q"]);
+    commit(clone, "one", ALICE);
+    await getRoot().seedFiles({ "clone/packages/HEAD": "a sample\n", "clone/packages/objects/sample.txt": "x\n" });
+
+    withProcessEnv(await readEnv(getRoot().path("home")), () => {
+      expect(readHistoryFacts(app)).toEqual({ commitCount: 1, contributorCount: 1 });
+      expect(readWorkingTreeStatus(app).available).toBe(true);
+    });
+  });
+
   it("reads the setup root's own repository and history whatever GIT_DIR names", async () => {
     const other = getRoot().path("other");
     const target = getRoot().path("target");

@@ -270,10 +270,10 @@ describe("runGit at a root shaped like a bare repository", () => {
     });
   }
 
-  /** The lane keeps its caller's environment, so the read is isolated by `HOME`, restored after. */
-  async function withEmptyHome<T>(home: string, body: () => Promise<T>): Promise<T> {
+  /** The lane keeps its caller's environment, so the read is isolated by `HOME`, restored after; `extra` rides along. */
+  async function withEmptyHome<T>(home: string, body: () => Promise<T>, extra: Record<string, string> = {}): Promise<T> {
     await mkdir(home, { recursive: true });
-    const overrides: Record<string, string> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CEILING_DIRECTORIES: getRoot().dir };
+    const overrides: Record<string, string> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CEILING_DIRECTORIES: getRoot().dir, ...extra };
     const previous = new Map(Object.keys(overrides).map((key) => [key, process.env[key]]));
     Object.assign(process.env, overrides);
     try {
@@ -341,6 +341,33 @@ describe("runGit at a root shaped like a bare repository", () => {
       expect(refusal.stderr).toContain("git was not started");
     }
     expect(gitSpawns.args).toEqual([]);
+  });
+
+  // review/46 of run 2026-10-11_release-1-14-0, signed off: the lane keeps its
+  // environment, and with `GIT_DIR` in it git runs no discovery, so the folder
+  // it runs in cannot answer and the look is not taken. Without the variable
+  // the same folder is not handed to git. The folder is empty files under the
+  // names git looks for; the repository `GIT_DIR` names is a plain one.
+  it("takes no look where GIT_DIR names the repository, and refuses the same folder without it", async (ctx) => {
+    const repo = getRoot().path("repo");
+    await mkdir(repo);
+    try {
+      seedGit(repo, ["init", "-q"]);
+    } catch {
+      ctx.skip();
+    }
+    seedGit(repo, ["config", "fixture.answers", "repo"]);
+    await getRoot().seedFiles({ "shaped/HEAD": "", "shaped/objects/keep": "", "shaped/refs/keep": "" });
+    const read = { args: ["config", "--get", "fixture.answers"], cwd: getRoot().path("shaped") };
+    gitSpawns.args.length = 0;
+
+    const named = await withEmptyHome(getRoot().path("home"), () => runGit(read), { GIT_DIR: getRoot().path("repo", ".git") });
+    const discovered = await withEmptyHome(getRoot().path("home"), () => runGit(read));
+
+    expect({ status: named.status, stdout: named.stdout.trim() }).toEqual({ status: 0, stdout: "repo" });
+    expect(discovered.status).toBe(128);
+    expect(discovered.stderr).toContain("git was not started");
+    expect(gitSpawns.args).toHaveLength(1);
   });
 
   it("still counts a real checkout's changes, with both options ahead of the command", async (ctx) => {

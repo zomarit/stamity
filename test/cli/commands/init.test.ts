@@ -4,7 +4,7 @@ import { link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
@@ -615,9 +615,11 @@ describe("init — --maturity flag", () => {
  * A git repository whose origin points at `url`, or a skip on a machine
  * without git. `git remote add` runs with config isolated the way the shared
  * seeder isolates it, which keeps user-level config out of that write only.
- * Init reads origin in-process with `git remote get-url`, which inherits this
- * process's environment and applies any `url.<base>.insteadOf` rewrite at read
- * time — so the read is isolated too, by {@link withIsolatedGitConfig}.
+ * Init reads origin in-process with `git remote get-url`, which applies any
+ * `url.<base>.insteadOf` rewrite the host's git config holds at read time, and
+ * no variable can cut that config off: the read runs through the pinned runner
+ * (`src/cli/engine/gitStatus.ts::gitCheckRunner`), which drops every `GIT_*`
+ * variable. So `url` is the isolation: see {@link SELF_HOSTED_GITHUB_ORIGIN}.
  */
 async function seedRepoWithOrigin(root: string, url: string, skip: () => void): Promise<void> {
   try {
@@ -640,31 +642,27 @@ async function seedRepoWithOrigin(root: string, url: string, skip: () => void): 
 }
 
 /**
- * Run `body` with this process's git reading no global and no system config,
- * restored after. The in-process init spawns git with `process.env`, so this is
- * what keeps a host's `url.<base>.insteadOf` rewrite (or any other user-level
- * git setting) from changing the origin init reads. The case relies only on
- * git honouring `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM`, as the shared
- * seeder does; the repository's own `.git/config`, which holds the origin
- * under test, is still read.
+ * A GitHub origin no host's git config rewrites: a self-hosted GitHub name
+ * under the reserved `.invalid` top-level domain. A host that rewrites the
+ * well-known hosts (`url.<mirror>.insteadOf https://github.com/`), in its user
+ * or its system config, matches nothing here, so init reads the URL as seeded.
+ * The platform is read off the host's `github` label, the same test the
+ * well-known host takes (`src/workspace/git.ts::platformForHost`).
  */
-async function withIsolatedGitConfig<T>(body: () => Promise<T>): Promise<T> {
-  vi.stubEnv("GIT_CONFIG_GLOBAL", NO_GIT_CONFIG);
-  vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
-  try {
-    return await body();
-  } finally {
-    vi.unstubAllEnvs();
-  }
-}
+const SELF_HOSTED_GITHUB_ORIGIN = "https://github.acme.invalid/acme/demo.git";
 
 describe("init — the detected platform (REQ-FLOW-022)", () => {
+  // TEST CHANGE, justified: 2026-10-11, run 2026-10-11_release-1-14-0
+  // review/45. The case stubbed `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM`
+  // around init, and the pinned runner now drops both, so a host rewrite of
+  // `https://github.com/` turned it red (review/51 is the row that asked for
+  // the isolation). The origin is now one no rewrite touches; every assertion
+  // is as it was.
   it("names the platform it read off a GitHub origin and writes it to the manifest", async (ctx) => {
     const root = await makeRepo();
-    await seedRepoWithOrigin(root, "https://github.com/acme/demo.git", () => ctx.skip());
+    await seedRepoWithOrigin(root, SELF_HOSTED_GITHUB_ORIGIN, () => ctx.skip());
 
-    // review/51: isolated, so a host `insteadOf` rewrite cannot turn this red.
-    const result = await withIsolatedGitConfig(() => runInit(root, ["-y"]));
+    const result = await runInit(root, ["-y"]);
 
     expect(result.code).toBe(0);
     expect((await readManifest(root))?.platform).toBe("github");

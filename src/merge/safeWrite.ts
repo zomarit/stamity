@@ -999,44 +999,115 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-/** True when `lstat` finds an entry of that name in `dir`, whatever its type. No link is followed and nothing is read. */
-function hasEntry(dir: string, name: string): boolean {
+/** What `lstat` finds at `path`, or `null` for nothing. The last name is never followed as a link and nothing is read. */
+function entryAt(path: string): Stats | null {
   try {
-    lstatSync(join(dir, name));
-    return true;
+    return lstatSync(path);
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** True when `lstat` finds an entry of that name in `dir`, whatever its type. */
+function hasEntry(dir: string, name: string): boolean {
+  return entryAt(join(dir, name)) !== null;
+}
+
+/**
+ * Git's own test for a folder it opens as a repository, by entry names alone
+ * (`is_git_directory` in git's `setup.c`): `HEAD`, and both `objects` and
+ * `refs`, which git looks up in the folder itself or, when a `commondir` file
+ * is there, in the folder that file names. `commondir` is not read, so its
+ * presence stands for both. `objectsElsewhere` is git run with
+ * `GIT_OBJECT_DIRECTORY`, which stands in for `objects`. A link standing in for
+ * an entry counts as that entry, and on a file system that folds letter case
+ * `lstat` answers for `head` as git's own open would.
+ */
+function hasRepositoryEntries(dir: string, objectsElsewhere: boolean): boolean {
+  if (!hasEntry(dir, "HEAD")) return false;
+  if (hasEntry(dir, "commondir")) return true;
+  return (objectsElsewhere || hasEntry(dir, "objects")) && hasEntry(dir, "refs");
+}
+
+/**
+ * True when git's own walk ends at this level's `.git` entry: a `.git` file,
+ * which git reads and then either opens the folder it names or stops with an
+ * error, or a `.git` folder that passes {@link hasRepositoryEntries}. Git walks
+ * past anything else of that name (an empty folder, a half-removed one, a
+ * dangling link) and tests the level itself, so the walk here does too. A
+ * `.git` link is typed by `lstat` and never read; the names under it are
+ * reached through it by the operating system, as git reaches them, so a live
+ * link to a repository folder ends the walk and a dangling one does not.
+ */
+function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean {
+  const gitPath = join(dir, ".git");
+  const entry = entryAt(gitPath);
+  if (entry === null) return false;
+  return entry.isFile() || hasRepositoryEntries(gitPath, objectsElsewhere);
 }
 
 /**
  * The look every pinned git call takes before git is started: would git's own
- * discovery, walking from `startDir` towards the filesystem root, meet a folder
- * shaped like a bare repository before it meets a `.git` entry?
+ * discovery, walking from `startDir` towards the filesystem root, open a folder
+ * as a bare repository before its walk ends?
  *
  * `safe.bareRepository=explicit` refuses such a folder from git 2.38 on, and an
  * older git ignores the option without an error. This walk is the same refusal
- * with no git in it, so it holds on every version: a level holding a `.git`
- * entry ends it as safe, as it ends git's, and a level holding `HEAD` beside any
- * of `objects`, `refs` or `commondir` is the shape. It asks `lstat` whether
- * each name exists and nothing more: no content is read and no link among those
- * entries is followed, so a link standing in for one counts as that entry. The
- * walk starts where the folder really is, as the process git runs in would. It
- * refuses a little more than git does: a genuine bare repository, which the
- * option refuses too, and a folder holding `HEAD` beside only one of the
- * others. A `.git` entry is taken at its word, since git tracks no path of
- * that name and so no repository writer can commit one.
+ * with no git in it, so it holds on every version. Level by level, as git:
+ *
+ * - a `.git` entry git would stop at ends the walk as safe
+ *   ({@link gitEntryEndsDiscovery});
+ * - a level that passes git's own test for a repository folder is the shape
+ *   ({@link hasRepositoryEntries}), and nothing wider: a level holding `HEAD`
+ *   beside only one of `objects` and `refs` does not pass it, and an ordinary
+ *   project can hold one;
+ * - the first level on another device than the starting folder's ends the walk
+ *   as safe, and so does the filesystem root: git goes no further either.
+ *
+ * It asks `lstat` whether a name exists, its type and its device, and nothing
+ * more: no content is read. For a git started with none of its own variables,
+ * which is how the pinned runners start it, the look refuses a little more than
+ * git does and never less: a genuine bare repository, which the option refuses
+ * too, and a folder whose `HEAD` or `commondir` holds nothing git can use. No
+ * commit can hold a `.git` entry, so the `.git` rules are for a leftover in the
+ * operator's own tree. The walk starts where the folder really is, as the
+ * process git runs in would.
+ *
+ * `env` is the environment git will be started in, as far as it changes git's
+ * discovery. The pinned runners drop every `GIT_*` variable and pass none. A
+ * caller that keeps its environment passes it, and three variables are read,
+ * each as git reads it: with `GIT_DIR` git runs no discovery, so there is
+ * nothing to look for; `GIT_OBJECT_DIRECTORY` stands in for `objects`; and with
+ * `GIT_DISCOVERY_ACROSS_FILESYSTEM` set at all the walk does not stop at a
+ * device, since git may not. `GIT_CEILING_DIRECTORIES` is not read: it can only
+ * end git's walk earlier, so the look covers every level git tests and some git
+ * does not. That is the safe direction, and the one the two variables before it
+ * are read for: the look must never stop below a level git goes on to test.
+ * `GIT_COMMON_DIR` is not read either: with it git takes `objects` and `refs`
+ * from the folder the variable names, and the look still asks for them here.
+ * Git for Windows compares no device (its `stat` reports none), so there the
+ * walk climbs to the drive's root as git's does.
  */
-export function gitDiscoveryMeetsBareShape(startDir: string): boolean {
+export function gitDiscoveryMeetsBareShape(startDir: string, env: NodeJS.ProcessEnv = {}): boolean {
+  if (env["GIT_DIR"] !== undefined) return false;
+  const objectsElsewhere = env["GIT_OBJECT_DIRECTORY"] !== undefined;
+  const oneFileSystem = process.platform !== "win32" && env["GIT_DISCOVERY_ACROSS_FILESYSTEM"] === undefined;
   let dir: string;
   try {
     dir = realpathSync(startDir);
   } catch {
     dir = resolve(startDir);
   }
+  // The device of the first level that exists; a start folder that does not exist yet has none.
+  let startDevice: number | undefined;
   for (;;) {
-    if (hasEntry(dir, ".git")) return false;
-    if (hasEntry(dir, "HEAD") && ["objects", "refs", "commondir"].some((name) => hasEntry(dir, name))) return true;
+    if (oneFileSystem) {
+      const device = entryAt(dir)?.dev;
+      if (startDevice === undefined) startDevice = device;
+      else if (device !== startDevice) return false;
+    }
+    if (gitEntryEndsDiscovery(dir, objectsElsewhere)) return false;
+    if (hasRepositoryEntries(dir, objectsElsewhere)) return true;
     const parent = dirname(dir);
     if (parent === dir) return false;
     dir = parent;
@@ -1045,7 +1116,7 @@ export function gitDiscoveryMeetsBareShape(startDir: string): boolean {
 
 /** What a caller is told when {@link gitDiscoveryMeetsBareShape} keeps a folder from git, in the form of git's own refusal. */
 export function bareShapeRefusal(cwd: string): string {
-  return `fatal: ${cwd}, or a folder above it, has the layout of a bare repository and no .git entry; git was not started there`;
+  return `fatal: ${cwd}, or a folder above it, has the layout of a bare repository and no .git entry that git opens; git was not started there`;
 }
 
 /**

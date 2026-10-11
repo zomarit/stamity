@@ -3,7 +3,8 @@ import { spawnSync } from "node:child_process";
 // import that could race the `vi.mock` hoisting.
 import type * as ChildProcessModule from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readdir, readFile, stat, symlink, utimes, writeFile } from "node:fs/promises";
+import type * as FsModule from "node:fs";
+import { chmod, mkdir, readdir, readFile, realpath, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -61,6 +62,28 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
+/**
+ * The device `lstatSync` reports for a folder, by its real path. A spy, not a
+ * stub: the real call still runs and only `dev` is replaced, for the paths a
+ * case names. No test can mount a second file system, and the device is the one
+ * thing git's own walk reads to know it has reached one.
+ */
+const fakeDevices = vi.hoisted(() => ({ byPath: new Map<string, number>() }));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof FsModule>();
+  const original = actual.lstatSync as unknown as (...args: unknown[]) => { dev: number };
+  return {
+    ...actual,
+    lstatSync: (...args: unknown[]): unknown => {
+      const stats = original(...args);
+      const device = fakeDevices.byPath.get(String(args[0]));
+      if (device !== undefined) stats.dev = device;
+      return stats;
+    },
+  };
+});
+
 const VERSION = "1.0.0";
 const LOCK_ENV_KEYS = ["STAMITY_LOCK", "STAMITY_LOCK_STALE_MS"] as const;
 
@@ -81,6 +104,7 @@ afterEach(() => {
     else process.env[key] = value;
   }
   resetCrossProcessLocking();
+  fakeDevices.byPath.clear();
 });
 
 /** Whole-file bytes an adapter would hand the writer for `body`. */
@@ -1542,9 +1566,20 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
 /**
  * Pure cases, no git: empty files and empty folders under the names git's
  * discovery looks for. Nothing here is a repository any git would open.
+ *
+ * TEST CHANGE, justified: 2026-10-11, run 2026-10-11_release-1-14-0, three
+ * signed-off rows. review/43: the shape is git's own test for a repository
+ * folder, `HEAD` and (`commondir`, or both `objects` and `refs`), so the two
+ * rows holding `HEAD` beside one of the two now assert no refusal: no git opens
+ * such a folder, and an ordinary project can hold one. review/49: a `.git`
+ * entry ends the walk only where git's own walk ends, so the cases that seeded
+ * an empty `.git` folder or a dangling `.git` link as "safe" now seed a `.git`
+ * git opens, and the leftovers git walks past have cases of their own.
+ * review/50: the walk stops at the device boundary git's stops at.
  */
 describe("gitDiscoveryMeetsBareShape — the look before git is started", () => {
   const FILES = new Set(["HEAD", "commondir"]);
+  const SHAPE = ["HEAD", "objects", "refs"];
 
   /** Seeds `names` in `dir`: `HEAD` and `commondir` as empty files, every other name as an empty folder. */
   async function seed(dir: string, names: readonly string[]): Promise<string> {
@@ -1558,13 +1593,13 @@ describe("gitDiscoveryMeetsBareShape — the look before git is started", () => 
 
   it.each([
     { names: ["HEAD", "objects", "refs"], refused: true },
-    { names: ["HEAD", "refs"], refused: true },
-    { names: ["HEAD", "objects"], refused: true },
+    // review/43, signed off: `HEAD` beside one of the two is not a folder git opens, so neither is refused.
+    { names: ["HEAD", "refs"], refused: false },
+    { names: ["HEAD", "objects"], refused: false },
     { names: ["HEAD", "commondir"], refused: true },
     { names: ["objects", "refs", "commondir"], refused: false },
     { names: ["HEAD"], refused: false },
     { names: [], refused: false },
-    { names: ["HEAD", "objects", "refs", ".git"], refused: false },
   ])("answers $refused for a folder holding $names", async ({ names, refused }) => {
     const dir = await seed(join(tempDir().dir, "folder"), names);
 
@@ -1572,16 +1607,24 @@ describe("gitDiscoveryMeetsBareShape — the look before git is started", () => 
   });
 
   it("refuses a folder under the shape, and a folder that does not exist yet under it", async () => {
-    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects", "refs"]);
+    const above = await seed(join(tempDir().dir, "above"), SHAPE);
     const below = await seed(join(above, "packages", "app"), []);
 
     expect(gitDiscoveryMeetsBareShape(below)).toBe(true);
     expect(gitDiscoveryMeetsBareShape(join(below, "missing"))).toBe(true);
   });
 
-  it("stops at the first level holding a .git entry, a file or a folder, as git's own walk does", async () => {
-    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects", "refs"]);
-    const checkout = await seed(join(above, "checkout"), [".git"]);
+  it("does not refuse a folder under a level holding HEAD beside one of the two", async () => {
+    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects"]);
+
+    expect(gitDiscoveryMeetsBareShape(await seed(join(above, "packages", "app"), []))).toBe(false);
+  });
+
+  // review/49: the `.git` folder here holds what git needs to open it; an empty one no longer ends the walk.
+  it("stops at the first level holding a .git git opens, a file or a repository folder, as git's own walk does", async () => {
+    const above = await seed(join(tempDir().dir, "above"), SHAPE);
+    const checkout = await seed(join(above, "checkout"), []);
+    await seed(join(checkout, ".git"), SHAPE);
     const linked = await seed(join(above, "linked"), []);
     await writeFile(join(linked, ".git"), "gitdir: elsewhere\n", "utf8");
 
@@ -1589,29 +1632,93 @@ describe("gitDiscoveryMeetsBareShape — the look before git is started", () => 
     expect(gitDiscoveryMeetsBareShape(linked)).toBe(false);
   });
 
+  it("ends at a .git file, whatever it holds, and at a .git repository folder, with the shape beside them", async () => {
+    const file = await seed(join(tempDir().dir, "file"), SHAPE);
+    await writeFile(join(file, ".git"), "", "utf8");
+    const folder = await seed(join(tempDir().dir, "folder"), SHAPE);
+    await seed(join(folder, ".git"), SHAPE);
+    const worktreeStyle = await seed(join(tempDir().dir, "worktree-style"), SHAPE);
+    await seed(join(worktreeStyle, ".git"), ["HEAD", "commondir"]);
+
+    expect(gitDiscoveryMeetsBareShape(file)).toBe(false);
+    expect(gitDiscoveryMeetsBareShape(folder)).toBe(false);
+    expect(gitDiscoveryMeetsBareShape(worktreeStyle)).toBe(false);
+  });
+
+  // review/49: git walks past a `.git` folder it cannot open and tests the
+  // folder beside it, so these leftovers end nothing.
+  it("walks past a .git folder git would not open, and tests that level like any other", async () => {
+    const empty = await seed(join(tempDir().dir, "empty"), [...SHAPE, ".git"]);
+    const headOnly = await seed(join(tempDir().dir, "head-only"), SHAPE);
+    await seed(join(headOnly, ".git"), ["HEAD"]);
+    const above = await seed(join(tempDir().dir, "above"), SHAPE);
+    const below = await seed(join(above, "leftover"), [".git"]);
+    const plain = await seed(join(tempDir().dir, "plain"), [".git"]);
+
+    expect(gitDiscoveryMeetsBareShape(empty)).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(headOnly)).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(below)).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(plain)).toBe(false);
+  });
+
   it("answers false for a folder that does not exist, with nothing shaped above it", () => {
     expect(gitDiscoveryMeetsBareShape(join(tempDir().dir, "missing", "deeper"))).toBe(false);
   });
 
   // Symbolic links need a privilege on Windows that CI's legs do not hold.
-  it.skipIf(process.platform === "win32")("counts a symbolic link as the entry it stands in for, and follows none", async () => {
+  it.skipIf(process.platform === "win32")("counts a symbolic link as the entry it stands in for", async () => {
     const dir = await seed(join(tempDir().dir, "folder"), []);
-    await symlink(join(tempDir().dir, "nowhere"), join(dir, "HEAD"));
-    await symlink(join(tempDir().dir, "nowhere"), join(dir, "objects"));
-    const guarded = await seed(join(tempDir().dir, "guarded"), ["HEAD", "refs"]);
-    await symlink(join(tempDir().dir, "nowhere"), join(guarded, ".git"));
+    for (const name of SHAPE) await symlink(join(tempDir().dir, "nowhere"), join(dir, name));
 
     expect(gitDiscoveryMeetsBareShape(dir)).toBe(true);
-    expect(gitDiscoveryMeetsBareShape(guarded)).toBe(false);
+  });
+
+  // review/49: a dangling `.git` link is nothing to git, which tests the folder
+  // beside it; a live one is where git stops. Skipped on Windows as above.
+  it.skipIf(process.platform === "win32")("walks past a dangling .git link, and ends at one that leads to a repository folder", async () => {
+    const dangling = await seed(join(tempDir().dir, "dangling"), SHAPE);
+    await symlink(join(tempDir().dir, "nowhere"), join(dangling, ".git"));
+    const live = await seed(join(tempDir().dir, "live"), SHAPE);
+    await symlink(await seed(join(tempDir().dir, "elsewhere"), SHAPE), join(live, ".git"));
+
+    expect(gitDiscoveryMeetsBareShape(dangling)).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(live)).toBe(false);
   });
 
   it.skipIf(process.platform === "win32")("walks from where a linked working folder really is", async () => {
-    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects", "refs"]);
+    const above = await seed(join(tempDir().dir, "above"), SHAPE);
     const real = await seed(join(above, "inner"), []);
     const link = join(tempDir().dir, "link");
     await symlink(real, link);
 
     expect(gitDiscoveryMeetsBareShape(link)).toBe(true);
+  });
+
+  // review/50: git's walk ends at the first level on another device, so the
+  // look does too. Git for Windows compares no device, so there the look
+  // climbs to the drive's root and this case has nothing to show.
+  it.skipIf(process.platform === "win32")("stops where the device changes, as git's own walk does, unless git is told to cross", async () => {
+    const above = await seed(join(tempDir().dir, "above"), SHAPE);
+    const inner = await seed(join(above, "mount", "inner"), []);
+    fakeDevices.byPath.set(await realpath(above), -1);
+
+    expect(gitDiscoveryMeetsBareShape(inner)).toBe(false);
+    expect(gitDiscoveryMeetsBareShape(inner, { GIT_DISCOVERY_ACROSS_FILESYSTEM: "1" })).toBe(true);
+    // The level git starts at is tested whatever device it is on.
+    expect(gitDiscoveryMeetsBareShape(above)).toBe(true);
+  });
+
+  // The variables a caller that keeps its environment hands on to git: each
+  // one changes what git's discovery does, so each one changes the look.
+  it("reads what changes git's discovery from the environment it is given", async () => {
+    const shaped = await seed(join(tempDir().dir, "shaped"), SHAPE);
+    const headAndRefs = await seed(join(tempDir().dir, "head-and-refs"), ["HEAD", "refs"]);
+
+    // review/46: with `GIT_DIR` git runs no discovery.
+    expect(gitDiscoveryMeetsBareShape(shaped, { GIT_DIR: "elsewhere" })).toBe(false);
+    // `GIT_OBJECT_DIRECTORY` stands in for `objects`, so git opens `HEAD` beside `refs`.
+    expect(gitDiscoveryMeetsBareShape(headAndRefs, { GIT_OBJECT_DIRECTORY: "elsewhere" })).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(headAndRefs, { PATH: "elsewhere" })).toBe(false);
   });
 });
 
