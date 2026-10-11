@@ -90,6 +90,17 @@ import { document } from "./downstreamFixture.js";
  *            CLI's own reinstall message names and the one that re-records `.2` down to `.1`. The
  *            row records that third command's exit code and the sha-256 of its output, because a
  *            page's route is only documented once something has run it.
+ *            WHERE THE RECORD IS READ. On a directory marketplace the client loads the plugin in
+ *            place, and the TEXT of `claude plugin list` prints the version of the folder it reads
+ *            (its `Read from:` line), not the recorded one. Measured 2026-10-11 on 2.1.290 and
+ *            2.1.296: the text's `Version:` fell back to `.1` on the first list after the clone
+ *            moved back, with no client command in between, while the record still named `.2` —
+ *            so a substring of that text stopped reading the record (on 2.1.278 it still did).
+ *            The record is the `version` field of `claude plugin list --json`, and the folder's
+ *            version is its `folderVersion`. After the first two rollback commands the walk
+ *            asserts both, `.2` recorded over a folder at `.1`, and after the third it asserts
+ *            `version` at `.1`. The `rollback-subcommand` row names the build that answered, read
+ *            from `claude --version`, not the build this prose was first measured on.
  *   copilot  A local directory marketplace loads the plugin LIVE: `plugin install` answers "it is
  *            loaded live from <path> … nothing was copied", and `plugin update` answers "there is
  *            nothing to update". The version therefore follows the marketplace directory, so
@@ -927,6 +938,84 @@ const skipReason = (client: Client): string =>
     : "dist/cli.js absent; run npm run build";
 const armed = (client: Client): boolean => BUILT && process.env[`STAMITY_${client.toUpperCase()}_BIN`] !== undefined;
 
+/**
+ * One installed plugin out of `claude plugin list --json`, by its id.
+ *
+ * Measured 2026-10-11 on 2.1.290 and 2.1.296: each installed plugin is one object carrying `id`
+ * (`stamity@stamity`), `version` — the RECORDED version — and `folderVersion`, the version of the
+ * folder the client reads (`readFromFolder`), beside `scope`, `enabled`, `installPath`,
+ * `installedAt`, `lastUpdated`, `projectPath` and `projectEnabled`. The top level is EXPECTED to be
+ * an array of those objects; the armed walk is what checks that against a binary. The names are the
+ * client's, so every way this can miss — no JSON, another top-level shape, no entry under the id —
+ * throws with the text the client printed: a moved shape must read as "the client changed its
+ * answer", never as a bare `undefined` three lines later.
+ */
+function claudeListed(stdout: string, id: string): Record<string, unknown> {
+  const received = `\`claude plugin list --json\` printed:\n${stdout}`;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    throw new Error(`expected a JSON array of installed plugins and got no JSON at all; ${received}`);
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`expected a JSON array of installed plugins at the top level; ${received}`);
+  }
+  const entry = (parsed as unknown[]).find(
+    (item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && (item as Record<string, unknown>)["id"] === id,
+  );
+  if (entry === undefined) throw new Error(`expected an installed plugin and found no entry whose id is ${id}; ${received}`);
+  return entry;
+}
+
+describe("the Claude walk's reading of plugin list --json", () => {
+  /**
+   * A hand-written answer in the measured shape, because no client runs in the unarmed file: the
+   * walk below is the proof against a real binary, and this group only proves the lookup. What is
+   * measured are the field NAMES and the state after the first two rollback commands — recorded at
+   * the second version while the folder already stands at the first; the array around the entries
+   * is the expected shape, and every other value is a placeholder. Two entries, so a lookup that
+   * took the first one would return the wrong plugin.
+   */
+  const entry = (id: string, version: string, folderVersion: string): Record<string, unknown> => ({
+    id,
+    version,
+    scope: "project",
+    enabled: true,
+    installPath: `/scratch/claude-config/plugins/cache/${id}/${version}`,
+    readFromFolder: `/scratch/mirror/${id}`,
+    folderVersion,
+    installedAt: "2026-10-11T19:30:00.000Z",
+    lastUpdated: "2026-10-11T19:31:00.000Z",
+    projectPath: "/scratch/project",
+    projectEnabled: true,
+  });
+  const LISTED = JSON.stringify([entry("neighbour@elsewhere", "0.3.0", "0.3.0"), entry("stamity@stamity", V2, V1)], null, 2);
+
+  it("returns the entry under the id, with the recorded version and the folder's own kept apart", () => {
+    expect(claudeListed(LISTED, "stamity@stamity")).toMatchObject({ id: "stamity@stamity", version: V2, folderVersion: V1 });
+  });
+
+  it("refuses a top level that is not an array and prints what the client sent", () => {
+    const wrapped = JSON.stringify({ installed: [entry("stamity@stamity", V2, V1)] });
+    expect(() => claudeListed(wrapped, "stamity@stamity")).toThrow("expected a JSON array of installed plugins");
+    expect(() => claudeListed(wrapped, "stamity@stamity")).toThrow(wrapped);
+  });
+
+  it("refuses a list with no entry under the id and prints what the client sent", () => {
+    const others = JSON.stringify([entry("neighbour@elsewhere", "0.3.0", "0.3.0")]);
+    expect(() => claudeListed(others, "stamity@stamity")).toThrow("no entry whose id is stamity@stamity");
+    expect(() => claudeListed(others, "stamity@stamity")).toThrow(others);
+  });
+
+  it("refuses output that is not JSON and prints what the client sent", () => {
+    const text = `Installed plugins:\n\n  stamity@stamity\n    Version: ${V1}\n`;
+    expect(() => claudeListed(text, "stamity@stamity")).toThrow("no JSON at all");
+    expect(() => claudeListed(text, "stamity@stamity")).toThrow(text);
+  });
+});
+
 describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk", () => {
   let walk: Walk;
   let bin = "";
@@ -965,6 +1054,13 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
   /** Where a project-scope install of this marketplace lands: one directory per version. */
   const installedRoot = (version: string): string =>
     join(walk.home, "claude-config", "plugins", "cache", "stamity", "stamity", version);
+
+  /** This plugin's entry in `claude plugin list --json`: the record, and the folder the client reads. */
+  const listed = (label: string): Record<string, unknown> => {
+    const list = claude(["plugin", "list", "--json"], label);
+    expect(list.status, list.stderr).toBe(0);
+    return claudeListed(list.stdout, "stamity@stamity");
+  };
 
   it(
     "installs at the first version, updates to the second and rolls back to the first",
@@ -1039,10 +1135,17 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       assertCompatible("claude", installedRoot(V2), walk.project, V2, "updated");
 
       // ── rollback ──────────────────────────────────────────────────────
-      // Measured on 2.1.278: there is no `rollback` subcommand at all.
+      // First measured on 2.1.278, and asserted on whichever build runs: there is no `rollback`
+      // subcommand at all. The row names the build that answered, read from the binary — the first
+      // line of `claude --version`, `2.1.296 (Claude Code)` in form — and never a fixed one, so the
+      // row cannot go on citing a build this walk did not drive.
       const absent = claude(["plugin", "rollback", "stamity"]);
       expect(`${absent.stdout}${absent.stderr}`).toContain("unknown command 'rollback'");
-      row("claude", "rollback-subcommand", "SKIPPED", "claude 2.1.278 has no rollback subcommand");
+      const version = claude(["--version"]);
+      expect(version.status, version.stderr).toBe(0);
+      const build = version.stdout.trim().split("\n")[0]?.trim() ?? "";
+      expect(build, `claude --version printed no build: ${JSON.stringify(version.stdout)}`).not.toBe("");
+      row("claude", "rollback-subcommand", "SKIPPED", `claude ${build} has no rollback subcommand`);
 
       // THE DOCUMENTED ROUTE, all three commands, executed in the order `docs/plugins.md` prints
       // them and with the spelling it prints — including the QUALIFIED `stamity@stamity` on the
@@ -1064,12 +1167,29 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       expect(JSON.parse(reinstall.stdout)).toMatchObject({ message: expect.stringContaining("already installed") });
       // The first two commands do not re-record the version by themselves, which is exactly why the
       // page carries a third. Asserted here so the third command's effect is attributable to it.
-      expect(claude(["plugin", "list"]).stdout).toContain(V2);
+      // TEST CHANGE, justified (2026-10-11, inbox row 120): this step read the TEXT of `claude
+      // plugin list` and expected the second version as a substring of it, which encoded what the
+      // text printed on 2.1.278. Measured on 2.1.290 and 2.1.296 (run
+      // 2026-10-11_debug-claude-plugin-walk): on a directory marketplace the client loads the
+      // plugin in place, and the text's `Version:` line is the version of the FOLDER it reads (its
+      // `Read from:` line), which `moveMirror` above has already moved back. The text therefore
+      // showed the first version while the record still named the second, so a substring of that
+      // text no longer reads the record, and the step went red although the fact it asserts held.
+      // The record is the `version` field of `plugin list --json` and the folder is its
+      // `folderVersion`. Nothing is loosened: two exact fields replace one substring, and a third
+      // exact read after the third command pins the re-record on the same field.
+      const afterTwo = listed("plugin list --json (after the first two rollback commands)");
+      expect(afterTwo, `the entry the client listed: ${JSON.stringify(afterTwo)}`).toMatchObject({
+        version: V2,
+        folderVersion: V1,
+      });
 
       const third = ["plugin", "update", "stamity@stamity", "--scope", "project", "--json"];
       const back = claude(third, "plugin update stamity@stamity --scope project (documented rollback)");
       expect(back.status, back.stderr).toBe(0);
       expect(JSON.parse(back.stdout)).toMatchObject({ updateOutcome: "updated", oldVersion: V2, newVersion: V1 });
+      const afterThird = listed("plugin list --json (after the third rollback command)");
+      expect(afterThird, `the entry the client listed: ${JSON.stringify(afterThird)}`).toMatchObject({ version: V1 });
       // PASS, and the reason names the three commands as EXECUTED plus the third one's exit code and
       // output digest: a route this repository publishes is documented once something has run it,
       // and the digest is what a run record cites when it says which run that was.
