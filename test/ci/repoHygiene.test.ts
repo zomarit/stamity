@@ -239,10 +239,20 @@ describe("repository hygiene over the Git index", () => {
   // expected list, its message and the title moved; the body already reads the exempt paths. The
   // retirement proof is unchanged: every retired summary and its neighbour is still staged over
   // budget and must be refused like any other file.
-  it("exempts exactly the run 44 summary and refuses its neighbour and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-11, after run 44): the window holds a second entry. Run 44 read
+  // FAIL on five cases, each diagnosed as a defect of the case and fixed; run 45 re-measured those
+  // five, composed with run 44 and carried the other 136, and the composed run reads PASS. Run 45's
+  // exported summary is 5357888 bytes, over the budget, and the next increment in the same
+  // configuration reads it from the retention commit. Run 44's summary stays, because run 45
+  // composes with it. Both summaries are pinned, and each one's same-directory neighbour is still
+  // refused; only the expected list, its message and the title moved, and the retired summaries'
+  // refusals are unchanged.
+  it("exempts exactly the run 44 and run 45 summaries and refuses their neighbours and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.14.0 window's run 44 summary").toEqual([
+    expect(exempt, "the size-exception map's paths are not the 1.14.0 window's run 44 and run 45 summaries").toEqual([
       "evals/runs/2026-10-11-run-44/summary.json",
+      "evals/runs/2026-10-11-run-45/summary.json",
     ]);
 
     const root = fixture();

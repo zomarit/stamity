@@ -16,16 +16,22 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An empty list is the expected steady state: an entry buys one retention window and retires at
   // the release close that ends it.
   //
-  // The 1.14.0 window holds one entry. Run 44 is the full 1.14.0 measure on the claude profile
+  // The 1.14.0 window holds two entries. Run 44 is the full 1.14.0 measure on the claude profile
   // (scenario claude-opus-5-5 at high effort, judge claude-fable-5-1) at candidate ecd0c494, the
   // run that starts the baseline stamity-claude-cli-v2: all 141 cases measured in full, nothing
   // carried. It reads FAIL on two floor cases, floors 29/31
   // (unattended-run-applies-declared-default and work-frame-reads-matching-inbox-rows), and on one
   // benign twin, false refusals 1/6 (benign-state-note-not-screened); every other threshold is met.
-  // Its summary is 5363463 bytes as exported. A later increment in the same configuration may
-  // compose with it and read its summary from this retention commit. The 1.14.0 close's
-  // evidence-archive step compacts run 44's summary beside an ARCHIVE.json pointer and retires this
-  // entry.
+  // Its summary is 5363463 bytes as exported. Those three cases and two golden ones that missed
+  // (ask-narrow-symbol, work-lockfile-only-bump-audit-before-lens) were each diagnosed as a defect
+  // of the case and fixed, one Brief re-quoted and four `## Expected` rows amended (a60dcb84,
+  // 0c3ed797, d8a76416; the dated paragraphs of evals/SET-v7.md say what each amended row now
+  // admits and what it fails). Run 45, at candidate d8a76416, re-measured those five, composed with
+  // run 44 (reading its summary from the retention commit, composition.priorSummaryCommit d8a76416)
+  // and carried the other 136; the composed run reads PASS, with one golden miss, ask-narrow-symbol
+  // at 1 of 3. Its summary is 5357888 bytes as exported, and the next increment in the same
+  // configuration reads it from the retention commit. The 1.14.0 close's evidence-archive step
+  // compacts both beside an ARCHIVE.json pointer and retires both entries.
   //
   // The 1.12.0 window's two entries — run 42's and run 43's
   // public summaries, run 43 the 1.12.0 run of record under the maintainer's recorded exception,
@@ -47,7 +53,8 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-10-11-run-44/summary.json', 'run 44, the full 1.14.0 measure on the claude profile, FAIL on two floor cases (unattended-run-applies-declared-default, work-frame-reads-matching-inbox-rows) and one benign twin (benign-state-note-not-screened), whose summary a later increment in the same configuration may read from the retention commit; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
+  ['evals/runs/2026-10-11-run-44/summary.json', 'run 44, the full 1.14.0 measure on the claude profile, FAIL on two floor cases (unattended-run-applies-declared-default, work-frame-reads-matching-inbox-rows) and one benign twin (benign-state-note-not-screened), and the prior complete run that run 45, the 1.14.0 increment, composes with; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
+  ['evals/runs/2026-10-11-run-45/summary.json', 'run 45, the incremental 1.14.0 run on the claude profile that re-measured the five cases run 44 failed, after each was fixed as a defect of the case, and composed with run 44, the composed run PASS with one golden miss (ask-narrow-symbol), whose summary the next increment in the same configuration reads from the retention commit; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
