@@ -77,10 +77,21 @@ export const GIT_FETCH_TIMEOUT_MS = 60_000;
  * stderr rather than as a rejection, so every caller has exactly one shape to
  * read and the "git is not installed" case reaches the operator through the
  * same wrapper that names what was being attempted.
+ *
+ * Two options go ahead of every command, the ones the CLI's other git reads
+ * pin (`../cli/engine/gitStatus.ts::gitCheckRunner`):
+ * `safe.bareRepository=explicit` (protected configuration, so honoured from
+ * the command line) refuses a committed folder shaped like a bare repository,
+ * so the lane's first call fails there and every verb refuses, and
+ * `core.fsmonitor=false` runs no file-system monitor command for the dirty
+ * counts. Unlike those reads the lane keeps its caller's environment: an
+ * external `GIT_DIR` is a layout it accepts, and `fetch` and `worktree add`
+ * run with the operator's own transport and identity variables.
  */
 export const runGit: WorktreeGitRunner = (invocation) =>
   new Promise<GitOutcome>((settle) => {
-    const child = spawn("git", [...invocation.args], {
+    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...invocation.args];
+    const child = spawn("git", pinned, {
       cwd: invocation.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       // Per-invocation, not global: only the callers that ask for a ceiling get

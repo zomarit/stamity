@@ -1,11 +1,18 @@
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { EngineError } from "../../src/types/errors.ts";
 import {
   addWorktree,
+  readDirtyCounts,
+  runGit,
   type GitInvocation,
   type GitOutcome,
   type WorktreeGitRunner,
 } from "../../src/worktree/git.ts";
+import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
+import { useTempDir } from "../support/tempDir.ts";
 
 /**
  * U3: `addWorktree`'s retry of the Windows `commondir` race.
@@ -209,5 +216,94 @@ describe("addWorktree and the commondir race", () => {
     await expect(addWorktree(run, "/repo", REQUEST)).rejects.toBeInstanceOf(EngineError);
 
     expect(calls).toHaveLength(2);
+  });
+});
+
+/**
+ * The lane's one spawn, against the real binary: the two options ahead of every
+ * command are git's own to honour, so no stub can stand in for it. The folder is
+ * the shape `test/cli/engine/gitStatus.test.ts` builds for the pinned reads
+ * (review/112), marker-writing monitor included, and nothing more.
+ */
+describe("runGit at a root shaped like a bare repository", () => {
+  const getRoot = useTempDir("worktree-git");
+
+  /** Sync git for seeding only, the host's global and system config cut off. */
+  function seedGit(cwd: string, args: readonly string[]): void {
+    execFileSync("git", [...args], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+        GIT_CONFIG_SYSTEM: NO_GIT_CONFIG,
+        GIT_AUTHOR_NAME: "Fixture One",
+        GIT_AUTHOR_EMAIL: "fixture.invalid",
+        GIT_COMMITTER_NAME: "Fixture One",
+        GIT_COMMITTER_EMAIL: "fixture.invalid",
+      },
+      windowsHide: true,
+    });
+  }
+
+  /** The lane keeps its caller's environment, so the read is isolated by `HOME`, restored after. */
+  async function withEmptyHome<T>(home: string, body: () => Promise<T>): Promise<T> {
+    await mkdir(home, { recursive: true });
+    const overrides: Record<string, string> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CEILING_DIRECTORIES: getRoot().dir };
+    const previous = new Map(Object.keys(overrides).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, overrides);
+    try {
+      return await body();
+    } finally {
+      for (const [key, value] of previous) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  it("fails the dirty count and runs no file-system monitor the folder configures", async (ctx) => {
+    const root = getRoot().path("planted");
+    await mkdir(root);
+    const marker = getRoot().path("ran").replaceAll("\\", "/");
+    try {
+      seedGit(root, ["init", "-q", "--bare", "."]);
+    } catch {
+      ctx.skip();
+    }
+    await getRoot().seedFiles({ "planted/AGENTS.md": "# Charter\n" });
+    seedGit(root, ["--git-dir=.", "--work-tree=.", "add", "--", "AGENTS.md"]);
+    seedGit(root, ["--git-dir=.", "--work-tree=.", "commit", "-q", "-m", "planted"]);
+    seedGit(root, ["config", "--file", "config", "core.bare", "false"]);
+    seedGit(root, ["config", "--file", "config", "core.worktree", "."]);
+    seedGit(root, ["config", "--file", "config", "core.fsmonitor", `touch '${marker}'; false`]);
+
+    const failure = await withEmptyHome(getRoot().path("home"), () =>
+      readDirtyCounts(runGit, root).then(
+        () => null,
+        (error: unknown) => error,
+      ),
+    );
+
+    expect(existsSync(marker)).toBe(false);
+    expect(failure).toBeInstanceOf(EngineError);
+    expect((failure as EngineError).code).toBe("FS_ERROR");
+  });
+
+  it("still counts a real checkout's changes", async (ctx) => {
+    const root = getRoot().path("repo");
+    await mkdir(root);
+    try {
+      seedGit(root, ["init", "-q"]);
+    } catch {
+      ctx.skip();
+    }
+    await getRoot().seedFiles({ "repo/tracked.txt": "one\n", "repo/untracked.txt": "x\n" });
+    seedGit(root, ["add", "--", "tracked.txt"]);
+
+    const counts = await withEmptyHome(getRoot().path("home"), () => readDirtyCounts(runGit, root));
+
+    expect(counts).toEqual({ modified: 1, untracked: 1 });
   });
 });
