@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -324,6 +324,42 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     const history = withProcessEnv(env, () => readHistoryFacts(root));
 
     expect(existsSync(marker)).toBe(false);
+    expect(status).toEqual(UNAVAILABLE);
+    expect(history).toBeNull();
+  });
+
+  // A git older than 2.38 does not know `safe.bareRepository` and would answer
+  // from the planted folder. No such binary is on the runners, so a stand-in
+  // takes git's place on `PATH` for the reads alone: a script this test writes
+  // into its own temp folder, which logs the arguments it was started with and
+  // answers a clean tree. In a plain folder the runner starts it, with both
+  // options ahead of the command. At the planted folder the runner looks first
+  // and starts nothing. Windows starts no shebang script, so the case runs on
+  // POSIX hosts.
+  it.skipIf(process.platform === "win32")("hands a planted bare repository to no git at all, whatever git is on PATH", async () => {
+    const root = getRoot().path("planted");
+    const plain = getRoot().path("plain");
+    await mkdir(root);
+    await mkdir(plain);
+    git(root, ["init", "-q", "--bare", "."]);
+    git(root, ["config", "--file", "config", "core.bare", "false"]);
+    git(root, ["config", "--file", "config", "core.worktree", "."]);
+    const standIn = getRoot().path("stand-in");
+    const started = getRoot().path("started.log");
+    await mkdir(standIn);
+    await writeFile(join(standIn, "git"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${started}'\nexit 0\n`, "utf8");
+    await chmod(join(standIn, "git"), 0o755);
+    const env = await readEnv(getRoot().path("home"), { PATH: standIn });
+    const PINNED_STATUS = "-c safe.bareRepository=explicit -c core.fsmonitor=false status --porcelain\n";
+
+    // Non-degenerate: the stand-in is what a read starts, and what it is handed.
+    expect(withProcessEnv(env, () => readWorkingTreeStatus(plain))).toEqual({ available: true, dirty: false, changedCount: 0 });
+    expect(readFileSync(started, "utf8")).toBe(PINNED_STATUS);
+
+    const status = withProcessEnv(env, () => readWorkingTreeStatus(root));
+    const history = withProcessEnv(env, () => readHistoryFacts(root));
+
+    expect(readFileSync(started, "utf8")).toBe(PINNED_STATUS);
     expect(status).toEqual(UNAVAILABLE);
     expect(history).toBeNull();
   });

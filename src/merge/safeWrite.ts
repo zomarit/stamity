@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { constants as FS } from "node:fs";
+import { constants as FS, lstatSync, realpathSync } from "node:fs";
 import type { Stats } from "node:fs";
 // `open` is aliased: `readPrefixFrontmatterField` already binds that name to its
 // frontmatter-fence cursor, and the local reads better than the import would.
@@ -999,15 +999,66 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/** True when `lstat` finds an entry of that name in `dir`, whatever its type. No link is followed and nothing is read. */
+function hasEntry(dir: string, name: string): boolean {
+  try {
+    lstatSync(join(dir, name));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The look every pinned git call takes before git is started: would git's own
+ * discovery, walking from `startDir` towards the filesystem root, meet a folder
+ * shaped like a bare repository before it meets a `.git` entry?
+ *
+ * `safe.bareRepository=explicit` refuses such a folder from git 2.38 on, and an
+ * older git ignores the option without an error. This walk is the same refusal
+ * with no git in it, so it holds on every version: a level holding a `.git`
+ * entry ends it as safe, as it ends git's, and a level holding `HEAD` beside any
+ * of `objects`, `refs` or `commondir` is the shape. It asks `lstat` whether
+ * each name exists and nothing more: no content is read and no link among those
+ * entries is followed, so a link standing in for one counts as that entry. The
+ * walk starts where the folder really is, as the process git runs in would. It
+ * refuses a little more than git does: a genuine bare repository, which the
+ * option refuses too, and a folder holding `HEAD` beside only one of the
+ * others. A `.git` entry is taken at its word, since git tracks no path of
+ * that name and so no repository writer can commit one.
+ */
+export function gitDiscoveryMeetsBareShape(startDir: string): boolean {
+  let dir: string;
+  try {
+    dir = realpathSync(startDir);
+  } catch {
+    dir = resolve(startDir);
+  }
+  for (;;) {
+    if (hasEntry(dir, ".git")) return false;
+    if (hasEntry(dir, "HEAD") && ["objects", "refs", "commondir"].some((name) => hasEntry(dir, name))) return true;
+    const parent = dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
+  }
+}
+
+/** What a caller is told when {@link gitDiscoveryMeetsBareShape} keeps a folder from git, in the form of git's own refusal. */
+export function bareShapeRefusal(cwd: string): string {
+  return `fatal: ${cwd}, or a folder above it, has the layout of a bare repository and no .git entry; git was not started there`;
+}
+
 /**
  * One read-only git command by argument array, no shell, run in the setup root;
  * rejects on any non-zero exit. The leading options hold for every call:
  * `--literal-pathspecs` reads the path as a name, `safe.bareRepository=explicit`
  * (protected configuration, so honoured from the command line) refuses a
  * committed folder shaped like a bare repository, and `core.fsmonitor=false`
- * runs no file-system monitor command, whatever any config says.
+ * runs no file-system monitor command, whatever any config says. Before any of
+ * it, {@link gitDiscoveryMeetsBareShape} rejects the call with no git started.
  */
 function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
+  if (gitDiscoveryMeetsBareShape(cwd)) return Promise.reject(new Error(bareShapeRefusal(cwd)));
   return new Promise((resolvePromise, rejectPromise) => {
     execFile(
       "git",

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
+import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../merge/safeWrite.ts";
 import { EngineError } from "../types/errors.ts";
 import type { GitPathClass } from "./policy.ts";
 
@@ -87,9 +88,18 @@ export const GIT_FETCH_TIMEOUT_MS = 60_000;
  * counts. Unlike those reads the lane keeps its caller's environment: an
  * external `GIT_DIR` is a layout it accepts, and `fetch` and `worktree add`
  * run with the operator's own transport and identity variables.
+ *
+ * A git older than 2.38 ignores the first option, so the lane looks before it
+ * starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would meet a
+ * folder shaped like a bare repository, no git is started and the outcome is
+ * the one git's own refusal gives, status 128 with the reason on stderr.
  */
 export const runGit: WorktreeGitRunner = (invocation) =>
   new Promise<GitOutcome>((settle) => {
+    if (gitDiscoveryMeetsBareShape(invocation.cwd)) {
+      settle({ status: 128, stdout: "", stderr: `${bareShapeRefusal(invocation.cwd)}\n` });
+      return;
+    }
     const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...invocation.args];
     const child = spawn("git", pinned, {
       cwd: invocation.cwd,

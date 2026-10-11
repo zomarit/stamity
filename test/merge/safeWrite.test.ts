@@ -3,11 +3,12 @@ import { spawnSync } from "node:child_process";
 // import that could race the `vi.mock` hoisting.
 import type * as ChildProcessModule from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   classPathOf,
+  gitDiscoveryMeetsBareShape,
   hasLedgerDrift,
   isManagedPath,
   ledgerHashIndex,
@@ -1452,6 +1453,28 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     }
   });
 
+  // A git older than 2.38 does not know `safe.bareRepository`, so there the
+  // option refuses nothing. The check looks at the folder first: a setup root
+  // shaped like a bare repository is not handed to git at all. The folder is the
+  // shape `test/cli/engine/gitStatus.test.ts` builds (review/112).
+  it("starts no git at a setup root shaped like a bare repository, and takes the .bak", async () => {
+    const root = join(tempDir().dir, "planted");
+    await mkdir(root);
+    git(root, "init", "-q", "--bare", ".");
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    git(root, "--git-dir=.", "--work-tree=.", "add", "--", "AGENTS.md");
+    git(root, "--git-dir=.", "--work-tree=.", "commit", "-q", "-m", "planted");
+    git(root, "config", "--file", "config", "core.bare", "false");
+    git(root, "config", "--file", "config", "core.worktree", ".");
+    gitCheckCalls.args.length = 0;
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(gitCheckCalls.args).toEqual([]);
+    expect(result.warning).toContain(GIT_UNCONFIRMED);
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([OWNER_CHARTER]);
+  });
+
   // The controls: the engine's own files keep updating with no `.bak`.
   it("updates the engine's own clean, tracked AGENTS.md after a version bump with no .bak", async () => {
     const root = tempDir().dir;
@@ -1516,6 +1539,82 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
  * native separator as `/`; the shown text stays native. The Windows CI leg is
  * the proof of record; this pins the conversion on every platform.
  */
+/**
+ * Pure cases, no git: empty files and empty folders under the names git's
+ * discovery looks for. Nothing here is a repository any git would open.
+ */
+describe("gitDiscoveryMeetsBareShape — the look before git is started", () => {
+  const FILES = new Set(["HEAD", "commondir"]);
+
+  /** Seeds `names` in `dir`: `HEAD` and `commondir` as empty files, every other name as an empty folder. */
+  async function seed(dir: string, names: readonly string[]): Promise<string> {
+    await mkdir(dir, { recursive: true });
+    for (const name of names) {
+      if (FILES.has(name)) await writeFile(join(dir, name), "", "utf8");
+      else await mkdir(join(dir, name));
+    }
+    return dir;
+  }
+
+  it.each([
+    { names: ["HEAD", "objects", "refs"], refused: true },
+    { names: ["HEAD", "refs"], refused: true },
+    { names: ["HEAD", "objects"], refused: true },
+    { names: ["HEAD", "commondir"], refused: true },
+    { names: ["objects", "refs", "commondir"], refused: false },
+    { names: ["HEAD"], refused: false },
+    { names: [], refused: false },
+    { names: ["HEAD", "objects", "refs", ".git"], refused: false },
+  ])("answers $refused for a folder holding $names", async ({ names, refused }) => {
+    const dir = await seed(join(tempDir().dir, "folder"), names);
+
+    expect(gitDiscoveryMeetsBareShape(dir)).toBe(refused);
+  });
+
+  it("refuses a folder under the shape, and a folder that does not exist yet under it", async () => {
+    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects", "refs"]);
+    const below = await seed(join(above, "packages", "app"), []);
+
+    expect(gitDiscoveryMeetsBareShape(below)).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(join(below, "missing"))).toBe(true);
+  });
+
+  it("stops at the first level holding a .git entry, a file or a folder, as git's own walk does", async () => {
+    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects", "refs"]);
+    const checkout = await seed(join(above, "checkout"), [".git"]);
+    const linked = await seed(join(above, "linked"), []);
+    await writeFile(join(linked, ".git"), "gitdir: elsewhere\n", "utf8");
+
+    expect(gitDiscoveryMeetsBareShape(await seed(join(checkout, "src"), []))).toBe(false);
+    expect(gitDiscoveryMeetsBareShape(linked)).toBe(false);
+  });
+
+  it("answers false for a folder that does not exist, with nothing shaped above it", () => {
+    expect(gitDiscoveryMeetsBareShape(join(tempDir().dir, "missing", "deeper"))).toBe(false);
+  });
+
+  // Symbolic links need a privilege on Windows that CI's legs do not hold.
+  it.skipIf(process.platform === "win32")("counts a symbolic link as the entry it stands in for, and follows none", async () => {
+    const dir = await seed(join(tempDir().dir, "folder"), []);
+    await symlink(join(tempDir().dir, "nowhere"), join(dir, "HEAD"));
+    await symlink(join(tempDir().dir, "nowhere"), join(dir, "objects"));
+    const guarded = await seed(join(tempDir().dir, "guarded"), ["HEAD", "refs"]);
+    await symlink(join(tempDir().dir, "nowhere"), join(guarded, ".git"));
+
+    expect(gitDiscoveryMeetsBareShape(dir)).toBe(true);
+    expect(gitDiscoveryMeetsBareShape(guarded)).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")("walks from where a linked working folder really is", async () => {
+    const above = await seed(join(tempDir().dir, "above"), ["HEAD", "objects", "refs"]);
+    const real = await seed(join(above, "inner"), []);
+    const link = join(tempDir().dir, "link");
+    await symlink(real, link);
+
+    expect(gitDiscoveryMeetsBareShape(link)).toBe(true);
+  });
+});
+
 describe("classPathOf — the class decisions read a /-separated path on every platform (prove/3)", () => {
   it("reads a win32-shaped absolute charter path as an instruction file, as a POSIX one already is", () => {
     const win = "C:\\Users\\dev\\repo\\AGENTS.md";

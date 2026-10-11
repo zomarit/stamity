@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import type { GitRunner } from "../../workspace/git.ts";
 
 /**
@@ -122,6 +123,11 @@ export interface GitCheckRunnerOptions {
  * `core.fsmonitor=false` runs no file-system monitor command, whatever any
  * config says (`../../merge/safeWrite.ts::runGitCheck`).
  *
+ * A git older than 2.38 ignores the first option, so the runner looks before
+ * it starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would
+ * meet a folder shaped like a bare repository, no git is started and the call
+ * throws as it does when git refuses the folder, exit status 128 included.
+ *
  * Exported so every other git read of the CLI runs the same construction:
  * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's
  * diff can outgrow a status probe.
@@ -129,8 +135,9 @@ export interface GitCheckRunnerOptions {
 export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
   const timeout = options.timeoutMs ?? GIT_FACT_TIMEOUT_MS;
   const { maxBuffer } = options;
-  return (args, cwd) =>
-    execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
+  return (args, cwd) => {
+    if (gitDiscoveryMeetsBareShape(cwd)) throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128 });
+    return execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
       cwd,
       env: gitCheckEnv(),
       encoding: "utf8",
@@ -139,6 +146,7 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
       ...(maxBuffer === undefined ? {} : { maxBuffer }),
       windowsHide: true,
     });
+  };
 }
 
 /** The seam both readers run by default: {@link gitCheckRunner} at its 5-second default. */

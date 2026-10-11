@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
+// Type-only, so the `importOriginal<...>()` argument below adds no runtime
+// import that could race the `vi.mock` hoisting.
+import type * as ChildProcessModule from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EngineError } from "../../src/types/errors.ts";
 import {
   addWorktree,
@@ -13,6 +16,26 @@ import {
 } from "../../src/worktree/git.ts";
 import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
+
+/**
+ * Every argument array the lane hands `spawn("git", …)`. A spy, not a stub: the
+ * real `spawn` still runs. The options the lane puts ahead of each command are
+ * the subject, only the real call site spells them, and a case that looks at
+ * what git did cannot tell them from a refusal that came from somewhere else.
+ */
+const gitSpawns = vi.hoisted(() => ({ args: [] as string[][] }));
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcessModule>();
+  const original = actual.spawn as unknown as (...args: unknown[]) => unknown;
+  return {
+    ...actual,
+    spawn: (...args: unknown[]): unknown => {
+      if (args[0] === "git" && Array.isArray(args[1])) gitSpawns.args.push(args[1].map(String));
+      return original(...args);
+    },
+  };
+});
 
 /**
  * U3: `addWorktree`'s retry of the Windows `commondir` race.
@@ -291,7 +314,36 @@ describe("runGit at a root shaped like a bare repository", () => {
     expect((failure as EngineError).code).toBe("FS_ERROR");
   });
 
-  it("still counts a real checkout's changes", async (ctx) => {
+  // A git older than 2.38 does not know `safe.bareRepository`, so the lane looks
+  // at the folder before it starts git: the refusal below is the lane's own,
+  // in the shape of git's (status 128, nothing on stdout), on any git version.
+  it("is not handed to git: the refusal is the lane's own, shaped like git's", async (ctx) => {
+    const root = getRoot().path("planted");
+    await mkdir(root);
+    try {
+      seedGit(root, ["init", "-q", "--bare", "."]);
+    } catch {
+      ctx.skip();
+    }
+    seedGit(root, ["config", "--file", "config", "core.bare", "false"]);
+    seedGit(root, ["config", "--file", "config", "core.worktree", "."]);
+    const below = getRoot().path("planted", "packages");
+    await mkdir(below);
+    gitSpawns.args.length = 0;
+
+    const outcomes = await withEmptyHome(getRoot().path("home"), () =>
+      Promise.all([root, below].map((cwd) => runGit({ args: ["rev-parse", "--show-toplevel"], cwd }))),
+    );
+
+    for (const refusal of outcomes) {
+      expect(refusal.status).toBe(128);
+      expect(refusal.stdout).toBe("");
+      expect(refusal.stderr).toContain("git was not started");
+    }
+    expect(gitSpawns.args).toEqual([]);
+  });
+
+  it("still counts a real checkout's changes, with both options ahead of the command", async (ctx) => {
     const root = getRoot().path("repo");
     await mkdir(root);
     try {
@@ -301,9 +353,15 @@ describe("runGit at a root shaped like a bare repository", () => {
     }
     await getRoot().seedFiles({ "repo/tracked.txt": "one\n", "repo/untracked.txt": "x\n" });
     seedGit(root, ["add", "--", "tracked.txt"]);
+    gitSpawns.args.length = 0;
 
     const counts = await withEmptyHome(getRoot().path("home"), () => readDirtyCounts(runGit, root));
 
     expect(counts).toEqual({ modified: 1, untracked: 1 });
+    // The two options are pinned here, where git is started: the case above no
+    // longer reaches git, so it cannot show them.
+    expect(gitSpawns.args).toEqual([
+      ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "status", "--porcelain"],
+    ]);
   });
 });
