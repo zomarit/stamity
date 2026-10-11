@@ -18,7 +18,10 @@ title: Enterprise forks
      `.github/workflows/fork-release.yml`, or a key or the client floor moves in
      `scripts/plugins/managed-settings.mjs`; the rollout section's vendor facts were read
      2026-09-24, and its client facts were measured 2026-09-26 in the managed-settings walk, so
-     re-open it too when a later walk of that template records a different outcome. -->
+     re-open it too when a later walk of that template records a different outcome.
+     Re-open the gates section when the census in `test/ci/testInputsGuard.test.ts` changes what
+     it asks of a test's reads, or the `*.md` entry leaves the `testInputs` map of
+     `.stamity/change-classes.json`. -->
 
 # Enterprise forks
 
@@ -236,9 +239,12 @@ Your rename needs no test edit at all. Every suite that has to know who this pac
 publisher, whether the package is private, whether a registry serves it, which registry its pinned
 calls name, and the `<owner>/<repository>` route your `repository.url` names. So a test asserts the remedy string, the
 marketplace source or the Renovate pin that YOUR identity implies, and the inherited gate is green
-on your tree for the same reason it is green upstream. Two things are still yours to keep true, and
-both are data rather than tests: the identity step above (the manifest and the two Renovate
-presets), and the branch filters in the paragraph before this one. Run the regenerate list in the
+on your tree for the same reason it is green upstream. Three things are still yours to keep true, and
+all three are data rather than tests: the identity step above (the manifest and the two Renovate
+presets), the branch filters in the paragraph before this one, and the test-input map. A test your
+fork adds declares the tracked documents it names in the `testInputs` map of
+`.stamity/change-classes.json`, as **Write the gates that decide the upgrade** below shows for its
+sample. Run the regenerate list in the
 same commit as the rename, because the generated trees are compared byte for byte and a skipped
 regeneration reads as drift.
 
@@ -486,6 +492,23 @@ It can rely on `dist/cli.js` because the recommended `regenerate` list built it 
 release that rewrites the charter in a file your fork never edited merges perfectly cleanly and
 fails this test, which is the point. **A clean textual merge proves nothing about behaviour.** A
 fork with no gates gets `Stamity-Upstream-Gates: none`, so silence never reads as a pass.
+
+Declare the test's reads in the same commit. The suite carries a test-input census,
+`test/ci/testInputsGuard.test.ts` over `src/change/testInputs.ts`. It takes every string literal in a
+test source that names a tracked file other than code as a read of that file. A read of a page, of a
+record, or of any path an entry of the `testInputs` map in `.stamity/change-classes.json` matches
+then needs an entry whose glob matches the path and whose `tests` list names the test, or a folder
+holding it. The sample names `README.md` and `AGENTS.md`, both tracked, and the map's `*.md` entry
+lists upstream's tests by name. Added as printed, the sample fails the census once per read:
+
+```text
+test/enterprise/charter-clause.test.ts reads AGENTS.md, and no map entry matching AGENTS.md lists test/enterprise/charter-clause.test.ts
+```
+
+With the recommended gate that is a red `npm run check`, and `integrate` ends `validation-failed`.
+The entry the sample needs is one line in the `tests` list of the map's `*.md` entry,
+`"test/enterprise/charter-clause.test.ts"`. Upstream edits that list too. A release that changes the
+lines beside yours conflicts there, and the resolution keeps both sides.
 
 ## Land the update branch
 
@@ -969,8 +992,8 @@ Set `version` in `package.json`, commit it on the release branch, and push the t
 `v<version>`. A suffix keeps a fork's releases apart from upstream's, and the tag carries it too:
 
 ```sh
-git tag v1.12.0-acme.1
-git push origin v1.12.0-acme.1
+git tag v1.14.0-acme.1
+git push origin v1.14.0-acme.1
 ```
 
 A dispatch of the workflow is a rehearsal unless you say otherwise. Its `dry_run` input starts at
@@ -1064,7 +1087,7 @@ is the file the renderer writes for this repository at the tag its `ref` names:
       "source": {
         "source": "github",
         "repo": "zomarit/stamity",
-        "ref": "plugins/v1.12.0"
+        "ref": "plugins/v1.14.0"
       }
     }
   },
@@ -1075,7 +1098,7 @@ is the file the renderer writes for this repository at the tag its `ref` names:
     {
       "source": "github",
       "repo": "zomarit/stamity",
-      "ref": "plugins/v1.12.0"
+      "ref": "plugins/v1.14.0"
     }
   ],
   "requiredMinimumVersion": "2.1.277"
@@ -1339,8 +1362,11 @@ approved private location.
 ancestry, or the run does not claim `integrated`. Everything happens on an isolated update branch in
 its own worktree, so your integration branch and your working tree are never written. No conflict
 marker is ever committed. Every commit reachable from your branch and from the release stays
-reachable from the merge commit. Every verb is idempotent: run it twice and there is still one
-branch, one worktree, one record, one pull request, one issue.
+reachable from the merge commit. Every verb but `validate` is idempotent: run it twice and there is
+still one branch, one worktree, one record, one pull request, one issue. `validate` keeps those at
+one each too, but every run stamps the record again and commits it, so a second run adds a commit
+to the update branch. Where that branch is already pushed, your local branch is then ahead of the
+remote one, which the workflow leaves as it is, so the new record reaches it only when you push.
 
 **Your gates decide whether the merged product still behaves.** A clean merge is a statement about
 text and nothing more. `Stamity-Upstream-Gates: none` is the lane telling you nobody asked.
