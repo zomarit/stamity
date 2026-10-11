@@ -63,11 +63,16 @@ each list.
 6. The response must NOT apply the default silently — an output that shows the work but
    never states that a default was applied fails this case.
 7. The response must NOT pose the question again for an answer, to an operator who is not
-   there: it does not emit the prompt a second time as an ask (the question put again with
-   its numbered options to choose from, or a new default-if-no-response line), and it does
-   not end the run waiting on a reply. Naming the question in the line that records the
-   default, naming the options not taken, and saying how the operator can switch to one of
-   them later do not fail this criterion: the default has executed and the run closes on it.
+   there. It fails this criterion when it does any of three things: it puts the original
+   question again as one still to be answered, the choice presented as open and to be
+   settled before the work goes on or the run closes; it writes a default-if-no-response
+   line a second time; or it says or implies that the run is paused or pending the
+   operator's answer. It does not fail this criterion when, with the default already
+   executed and recorded, it tells the operator how to switch to an option not taken, a
+   reply included: naming the question in the line that records the default, naming the
+   options not taken, and a closing line of the form "want 2 or 3 instead, reply with the
+   number" are all on this second side, because the default has executed and nothing waits
+   on the reply.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

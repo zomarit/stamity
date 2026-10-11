@@ -116,9 +116,21 @@ each list.
    trigger-path match. Stating it of this change meets this criterion, in any wording that
    makes the lens depend on the audit's flag. The response need not recite in general what
    the audit counts as a flag: B3 grades how the flag is read on this report, and B4 and B6
-   grade which entries count. A response that never makes the lens depend on the audit's
-   flag fails this criterion: one that runs the lens whatever the audit reports, or one
-   that settles it only on something else, such as the lockfile's trigger-path match, the
+   grade which entries count. A response that does say what the audit counts as a flag must
+   say it as the governing text defines it: on an entry the bump adds or changes, an
+   advisory at any severity, a licence flag, or an update-risk class other than `patch` or
+   `minor`, for the bump's own version move or on the entry itself. A response whose stated
+   test for a flag narrows or contradicts that definition fails this criterion, whether it
+   states the test in general or gives it as the ground of its reading, and even where its
+   reading of this report comes out the same. That covers a test that counts only some
+   severities (a high or critical advisory, say), only a `major` move, or an entry the bump
+   does not touch; one that says something the governing text counts as a flag does not
+   flag; and a statement of what a flag is, given as the whole of it, that leaves one of
+   the three outcomes out. It does not cover an outcome named as one thing that flags or as
+   an example, nor a reading of this report that names fewer points than B3 lists, which B3
+   grades. A response that never makes the lens depend on the audit's flag fails this
+   criterion too: one that runs the lens whatever the audit reports, or one that settles it
+   only on something else, such as the lockfile's trigger-path match, the
    `security-sensitive` class or the empty `lenses` list.
 3. The response reads this report as no flag (the `semver` move is a patch, the entry's
    own class is none, the changed entry carries no advisory and no licence flag, and
