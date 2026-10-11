@@ -757,7 +757,11 @@ record's § 3 as it stands, through `runOfRecordReason` (`src/cli/docs/measureme
 re-measured case's reason is a moved case file it adds one fixed sentence, that a case file which
 moved between the two runs was changed after the prior run's scores were known and that the dated
 paragraphs of `evals/SET-v7.md`, linked, say what each change is and what it admits; and it links
-`NOTE.md` in the run of record's folder where there is one. Test evidence by name, in
+`NOTE.md` in the run of record's folder where there is one. Run 45's folder holds one
+(`evals/runs/2026-10-11-run-45/NOTE.md`, ledger row `review/53`): it says what the composed run
+rests on, and that the closing sentence of run 45's results file, "No case text moved after any
+score was known" (`:433`), is the exporter's constant and is not true of the composed measure. The
+four exported files are not edited. Test evidence by name, in
 `test/cli/docs/measurements.test.ts`, the describe "the page says why its run of record happened".
 README, the doctrine, the release checklist, the changelog and the set say by hand that the rows
 were amended.

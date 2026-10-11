@@ -178,6 +178,7 @@ Run 45's results file states why the run happened, in its § 3, quoted as it sta
 
 A case file that moved between run 44 and run 45 was changed after run 44's scores were known,
 and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.
+Run 45 carries a note beside its results file, [`NOTE.md`](../evals/runs/2026-10-11-run-45/NOTE.md), to be read with it.
 
 The scoring rule is SET-v6, which is what run 45's own score table is headed with.
 The figures below score that whole set:

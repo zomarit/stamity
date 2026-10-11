@@ -2541,9 +2541,12 @@ records what the re-quote may leave open. The PASS is the composed run's and not
 Run 44's scored failures stay as recorded, and what the paragraphs above say of the four amended
 rows holds for this result: each row now admits an answer its old wording refused or could be read
 to refuse, so the pass on those four is a change in the case as much as in the model. No threshold,
-scoring rule, floor tag or roster count moved between run 44 and run 45, and none moves here. No
-exception is recorded for 1.14.0; the 1.12.0 release exception recorded under "Running v7" below
-was 1.12.0's alone. Run 45 read this file at sha256
+scoring rule, floor tag or roster count moved between run 44 and run 45, and none moves here. The
+closing sentence of run 45's results file, "No case text moved after any score was known", is the
+exporter's constant and is not true of the composed measure, because the five case files moved
+after run 44's scores were known; the note beside the run (`evals/runs/2026-10-11-run-45/NOTE.md`)
+says so. No exception is recorded for 1.14.0; the 1.12.0 release exception recorded under
+"Running v7" below was 1.12.0's alone. Run 45 read this file at sha256
 `c5a90310e0fd34f4d360fd1c8722c60b69c98716090bff39a7254a00b9aae9a0` (its `RESULTS.md`, § 1); this
 paragraph is added after it, so the file's hash moves and nothing a run scores moves with it: no
 case, `## Expected` block, count or rule.
