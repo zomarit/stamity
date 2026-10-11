@@ -66,6 +66,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuse with `CLEAN_ERROR`, before touching anything, while a file they would keep is one a
   `sync` with this version rewrites (after an upgrade, or after the detected stack or the gates
   moved since the last `sync`): run `sync`, then `clean -y`.
+- **A secret in a change's added lines stops `/st-quick` and `/st-work`.** Both flows run
+  `stamity gate scan` before their gates. It reads the lines the change adds and its untracked
+  files and, against a base commit, the added lines of every commit since that base, so a value
+  committed and then removed still stops the run. A hit names the path, the line and the rule, and
+  the commit when it sits in the branch's history, never the value. There is no allow-list and no
+  waiver: the flows never clear a hit by rewriting the value and scanning again, and a hit on a
+  deliberate fixture is yours to settle. A code file the scan could not read is listed under
+  `Not done:` as unscanned, never read as clean, and a scan that could not run is listed there as
+  `secret scan: not run` while every gate runs.
+- **The security lens runs on what a change touches, at every tier.** `/st-work` runs the
+  `security` lens whenever `stamity gate classify` names the change `security-sensitive`, the
+  light tier included, and whenever no class could be read, so an unread change is still reviewed.
+  The lens's trigger paths gain CI workflows and composite actions, shell and PowerShell scripts,
+  container build files, the package managers' install-steering files (`.npmrc`, `.yarnrc`,
+  `.yarnrc.yml`, `.pnpmfile.cjs`, `npm-shrinkwrap.json`), the clients' and the engine's hook
+  folders and `.husky/`, and the clients' settings and MCP server files. A changed line in a
+  JavaScript, TypeScript or Python file that is no test file places the change in that class too:
+  a child process, a file delete or overwrite, a network or registry call, or a token or secret
+  name given a literal or an environment value. So does a code file whose lines could not be
+  read. A `/st-quick` batch in that class moves to `/st-work` as it stands, with no size floor.
+
+### Added
+
+- **`stamity gate`, a fourth hidden verb, names a change's class and scans it for secrets.**
+  `gate classify` reads the change from git (staged, unstaged and untracked, against
+  `--base <ref>`) or takes `--paths`, and names one class of seven: `security-sensitive`,
+  `public-contract`, `product`, `config`, `tests`, `docs` or `records`. With the class come the
+  checks it calls for, the review lenses it adds, the tests it selects and the rule that placed
+  each path, as text or as `--json`. Out of the box `docs/**` and top-level Markdown are `docs`,
+  the engine's run records, inbox and handoffs are `records`, the security lens's paths and the
+  engine's own manifest and overrides are `security-sensitive`, and everything else is `product`,
+  the agent instruction files (`AGENTS.md`, `CLAUDE.md`) included at any depth. A code file, a
+  config-format file or an extensionless file other than a doc name such as `LICENSE` is never
+  `docs` or `records`, except the data the engine writes under its own record paths. Every
+  unclear read gives the stronger answer: a failed git read gives `product`, a call with no
+  `--base` over commits no remote-tracking ref holds gives at least `product`, and a `--base` that
+  does not resolve gives no class and exits 1. `gate scan` is the secret scan the Security entry
+  above describes: it exits 1 on a hit and on a change it could not read. Neither subcommand
+  writes anything. The verb is kept off `stamity --help`, as `learn`, `handoff` and `ledger` are;
+  `docs/cli-reference.md`, the README and `docs/getting-started.md` name it.
+- **A repository can declare its own change classes and test inputs.**
+  `.stamity/change-classes.json` holds two optional keys: `classes`, the globs that join a class,
+  and `testInputs`, which maps a glob over changed paths to the test files it selects, or to
+  `all`. `gate classify` reads the file from the base commit only, never from the change, so a
+  change cannot lower its own checks, and a change to the file is `security-sensitive`. The
+  classes `tests`, `config` and `public-contract` are reached only through this file. `check`
+  gains a `change-classes` row, printed only when the file exists: it fails naming the first
+  error, and `docs/troubleshooting.md` lists what it refuses. With no file, or with no map in it,
+  a class that selects tests runs every test. The injection-screening rule names the file beside
+  the manifest as the second file under `.stamity/` that configures gates.
+- **`stamity ledger inbox` reads the deferral inbox by what a change touches.** A fourth
+  subcommand of the hidden `ledger` verb prints the rows of `.stamity/inbox.md` that name a
+  changed path (`--paths`), a plan (`--plan`) or a word (`--area`), and under `--due [date]` the
+  rows whose `by:` day has come. A row tagged `critical-deferred` or `decision-waiting` always
+  prints. Each line is screened as it prints: a row the screen withholds shows its line, severity
+  and location with no summary, and a row that does not parse is listed as `unparsed` with the
+  reason. The query writes nothing, refuses an inbox that is a hard link, and reads at most 1 MiB.
+- **Copilot agents carry their class's effort level.** Each
+  `.github/agents/stamity-<id>.agent.md` ends its frontmatter with `reasoning-effort: <level>`:
+  `high`, `medium` or `low` by default, or the level `config set effort.<class>` names, narrowed
+  to Copilot's scale of `low` to `max`. Prompt files gain nothing. The capability matrix's
+  `effort-axis` row names the sources; the key is the Copilot CLI's, the cloud agent's handling
+  of it is undocumented, and the APM package's Copilot agents do not carry it yet.
+- **`ultra` joins the effort levels, above `max`.** Codex documents it, so
+  `config set effort.<class> ultra` is taken where every selected client can express it and
+  refused where one cannot, naming that client and where its scale ends (Claude Code and Copilot
+  end at `max`).
+- **Plan-lint gains L5, an advisory check of plan size.** The structural coverage script reports
+  `unit-size` (a unit past 60 lines), `unit-oversize` (past 100), `unit-prewritten` (a fenced
+  block, or five or more `>` lines, inside a unit) and `delta-verbose` (a requirement entry past
+  six lines). None fails the pass or blocks the write; `/st-plan`'s return line reads `L5 none`,
+  `L5 <n> advisory` or `L5 not run`.
+- **A plan unit on a security-sensitive path carries a threat note, and a plan can say what it
+  leaves out.** `/st-plan` adds a `threat` row to a unit whose files `gate classify` places
+  `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that
+  stops it, in at most five lines. When no class can be read, every unit carries the row. The
+  plan shape gains two optional sections: Follow-ups, each with a date or a trigger, and a Drop
+  list of items with neither, which are filed nowhere.
+- **A `/st-work` run record says what each phase cost and what the close left.** As a phase or a
+  review round ends, the run adds a `usage:` line with its minutes and, where the client reports
+  them, its tokens. The close adds a `leftovers:` line counting what it showed, fixed, scheduled
+  and dropped. The record's head gains `Base: <commit>`, the run's branch point, which the scan
+  and the classify read.
 
 ### Changed
 
@@ -107,6 +190,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   full `clean` keeps such a file too, but it removes the setup, ledger included, so its report
   says to delete the file by hand unless it is yours. Either report names why the rendering could
   not be built.
+- **Charter invariant 4 names the gates of the change's class (invariants 1.2.0).** It read "Done
+  means the verification gates above exit 0" and now reads "Done means the gates `gate classify`
+  names exit 0 (all if it did not run)". A change nothing classified still runs every gate, and
+  the `Not done:` line is unchanged. A repository picks the wording up on its next `sync`; one
+  that never re-syncs keeps the 1.1.0 wording, which runs every gate on every change.
+- **`/st-quick` and `/st-work` run the gates the change's class calls for.** After the secret
+  scan, each flow asks `stamity gate classify` for the class. From `config` up every gate runs,
+  as before. A `tests` change runs its selected tests, lint and typecheck; a `docs` change its
+  selected tests and, in `/st-work`, one review pass in place of the loop; a `records` change its
+  selected tests. The narrower sets rest on one condition, which the flows state: the
+  repository's CI runs the full matrix on every `product` or stronger change and on a schedule.
+  Where the charter's `CI provider` reads `unknown`, where the CLI or its `gate` verb cannot run,
+  where the classify fails or names a failed read, or where the test command takes no file list,
+  every gate runs.
+- **A lockfile-only bump is audited before the security lens reads it.** When a change's only
+  security-sensitive paths are `package-lock.json` files that parse at lockfile version 2 or 3 on
+  both sides, no `package.json` changed and no bumped package carries an install script,
+  `/st-work` runs the dependency audit first and the `security` lens only if the audit flags
+  something: an advisory, a licence flag, a risk class other than `patch` or `minor`, or an audit
+  that is partial or cannot run. Any other lockfile format, a parse failure or a package with an
+  install script keeps the lens. The `st-dep-audit` skill gains this role and stays report-only.
+- **The review loop stops at three rounds by default, two at the light tier, and escalates on
+  what the run shows.** `review.maxIterations` defaults to 3, down from 4; a value you set stays,
+  within 1 to 10. The fixed step "round 4, a fresh fixer on a stronger model class" is gone. A
+  finding two re-reviews found not fixed, a gate red after a fix, or a finding still open
+  entering the last round goes to a fresh fixer at one effort level above its own, on the same
+  model, where the client's dispatch takes an effort setting; a finding that fixer leaves open
+  stops the run for you. The re-review after an escalation runs once on a stronger class. A
+  reviewer's self-rated confidence no longer starts a round: an approval below the record's
+  confidence gate counts, and the proof block names it as below the gate.
+- **Findings are recorded by consequence, on one severity scale.** The reviewer, the three
+  lenses, the implementer and the fixer share one definition of `Critical`, `Warning` and
+  `Minor`, and `/st-rework` uses the same words. A finding names who or what is affected and how.
+  A remark with no consequence (wording, naming, style, a tidier shape) is a note, not a finding:
+  the written report lists it, the digest ends `notes left out: <n>`, and it starts no fix round.
+  A person's own "nit" in `/st-rework` stays a `Minor` finding.
+- **A run's close decides every leftover in one question.** `/st-work`'s closing question gains a
+  fourth part, by a rule `/st-board` states: each finding neither fixed nor rejected, each inbox
+  row the change touched or whose day has come, and every row waiting on a decision, each with a
+  recommendation to fix now, schedule or drop. A `Critical` or `Warning` is never pre-set to drop,
+  and only you drop one. With no answer nothing real is dropped: each leftover of the run is filed
+  tagged `decision-waiting`, and the next attended close asks about it first. `/st-quick` files
+  no inbox row: what a batch cannot finish goes to `/st-work`, whose close asks.
+- **A deferred row carries a date or a trigger, or it is not filed.** New rows in
+  `.stamity/inbox.md` go below a `## Rows under the schedule rule` heading and carry
+  `by: <YYYY-MM-DD>` or `when: <trigger>`, with `files:` when they name no location. A trigger
+  made only of vague words (`later`, `someday`, `tbd`) does not parse, and a day is written under
+  `by:`. Rows above the heading stay valid as they are. All five writers follow it: `/st-work`'s
+  close, `/st-plan`, `/st-rework`, `/st-pr-resolve` and the `st-dep-audit` skill.
+  `stamity ledger close --retired` holds its value to the same rule: `fixed <ref>`,
+  `cut <reason>`, or `scheduled <place>` with `by <YYYY-MM-DD>` or `when <trigger>`; anything else
+  is refused and nothing is written.
+- **`/st-work` reads only the inbox rows its change touches.** Frame asks `stamity ledger inbox`
+  for the rows that name the change's paths or its plan, where it read the whole file before. It
+  reads the whole file only when the CLI or that query is absent, and says so.
+- **The QA walk-through asks for a person only where one adds something.** A row needs a person
+  for a rendered surface someone must look at, a live third-party client or account, or a step
+  that cannot be undone. Every other row is auto-proven by a check the test-runner runs; a row
+  whose check is missing, cannot run or fails stays with the person, and so does a security
+  refusal row no committed test covers. A change whose class is `docs`, `records` or `tests`
+  closes with "no walk-through required" and no ask, unless it changes a page the site build
+  renders, which keeps one person row.
+- **Codex's effort scale is `low` to `ultra`.** A `max` is written as `max`, where 1.12.0 wrote
+  `xhigh`. `minimal`, which Codex's reference no longer lists, is still accepted on a Codex or
+  Copilot selection and written as `low`, with a warning at `sync`.
+- **The plugin's `st-setup` body routes out of a generated setup as `sync`, then `clean -y`, then
+  `plugin setup`,** the order every CLI remedy prints, since `clean` refuses until this version's
+  `sync` has run.
+- **The capability matrix's always-on figures move with the charter:** the shared `AGENTS.md` is
+  5,363 bytes and Codex's `AGENTS.override.md` 25,504. Its Copilot rows name the two new agent
+  keys, and its effort rows the new scales.
+- **The eval set grows to 141 cases.** `SET-v7` adds 28 cases, 20 golden and 8 adversarial, 8 of
+  them tagged `floor`. They cover, among other things, test selection and the class's gates, the
+  security lens and the lockfile audit, the secret scan, the review rounds and the escalation,
+  capture by consequence, the scoped inbox read, the person QA rows and the close's leftovers.
+  That makes 81 golden, 30 adversarial and 30 probes, with 31 floor cases. The thresholds and the
+  scoring rule do not move.
 
 ### Fixed
 
@@ -126,6 +286,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its ledger does not record, the preview now reads that file as the forced write leaves it. A
   hook script the new file stops running shows as deleted, not kept. A hooks file the forced write
   cannot replace, such as a link, is still read from disk.
+- **A Copilot CLI sub-agent loads `AGENTS.md`.** Every `.github/agents/stamity-<id>.agent.md` the
+  engine emits now carries `include-custom-instructions: true`. Without it, an agent Copilot CLI
+  1.0.89 dispatched as a sub-agent loaded no repository instruction file, so the charter and its
+  invariants never reached it; with it, a live check on that version read the charter back. Two
+  things follow. Copilot's reviewer and lenses now load the checkout's instruction files, so a
+  branch that edits one is reviewed by roles already following the edit. And by Copilot's command
+  reference `--no-custom-instructions` still overrides the key. The cloud agent's handling of the
+  key is undocumented, and the APM package's Copilot agents do not carry it yet.
+- **The plan coverage script no longer reads an indented `### ` line inside a unit as a new
+  unit,** so a plan that quotes a heading in a unit's prose is read as written.
 
 ## [1.12.0] - 2026-10-08
 
