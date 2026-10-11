@@ -21,8 +21,10 @@ One prerequisite, and one strong recommendation.
 
 - **Node 22.22.2 or newer.** That is the only prerequisite, and the published floor.
   `stamity check` verifies it as its `node-version` row.
-- **Recommended: a git repository.** Git is optional for every verb but `worktree`, which needs
-  a `git` binary on PATH and refuses without one; `init` proceeds without it. But setup writes
+- **Recommended: a git repository.** `init` proceeds without one, but two verbs need git.
+  `worktree` needs a `git` binary on PATH and refuses without one. The hidden verb `gate` reads
+  every change from git: without it `gate scan` exits 1, so `/st-quick` and `/st-work` list
+  `secret scan: not run` under `Not done:`. Every other verb runs without git. Setup also writes
   dozens of files, and git is your revert path. Run `git init` first if this directory is fresh.
 
 If you skip the second one, an interactive `init` stops and asks before it writes anything. A
@@ -214,12 +216,15 @@ Four things, because each is about how two parts fit together rather than about 
   it where there is one and reports its absence where there is not; `plugin setup` refuses on a
   manifest, because writing one is what it does. `learn`, `handoff` and `ledger` ask only that
   `.stamity/` exists.
-- **Which verbs need git.** `init`, `sync` and `check` read git where it is, and carry on where
-  it is not. So do `handoff`, which records the branch and commit a handoff was made on and
-  checks that branch on resume, and `config detect`, which reads the repository's remote to
-  identify its platform: without git, each records or reports nothing for that part and carries
-  on. The `worktree` verbs need a `git` binary on PATH and refuse without one. The rest never
-  call git.
+- **Which verbs need git.** Two do. The `worktree` verbs need a `git` binary on PATH and refuse
+  without one. The hidden verb `gate` reads every change from git: where git does not answer,
+  `gate scan` exits 1, and `gate classify` answers `product` with the failure named. So in a
+  repository with no git, `/st-quick` and `/st-work` run the full gates and list
+  `secret scan: not run` under `Not done:`. Every other verb runs without git. `init`, `sync`
+  and `check` read git where it is, and carry on where it is not. So do `handoff`, which
+  records the branch and commit a handoff was made on and checks that branch on resume, and
+  `config detect`, which reads the repository's remote to identify its platform: without git,
+  each records or reports nothing for that part and carries on.
 - **Run `sync` after any `config` change.** `config` edits state and never regenerates managed
   output, so no client file moves until a sync runs. The one exception is `config mcp add`,
   which provisions `.env.mcp` and its `.gitignore` line on the spot.

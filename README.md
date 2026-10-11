@@ -52,14 +52,14 @@ npx @zomarit/stamity init
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
-Git is optional for every verb but `worktree`, which needs a `git` binary on PATH and refuses
-without one. Three things reach the network, all documented in [`SECURITY.md`](SECURITY.md). `add`
-fetches the Sigstore trust root when it installs a signed pack. `worktree setup` fetches your own
-`origin` remote when it needs a branch with no local copy. A startup notice asks npm about newer
-versions until you switch it off. Two touchpoints go further, because `/st-board` and
-`/st-pr-resolve` call the authenticated GitHub CLI, `gh`. [Getting started](docs/getting-started.md)
-has the prerequisites in full, what `init` asks and writes per client, and a second install route
-that needs no npm.
+Two verbs need git. `worktree` needs a `git` binary on PATH and refuses without one. The plumbing verb `gate`
+reads every change from git: without it `gate scan` exits 1, so `/st-quick` and `/st-work` list
+`secret scan: not run` under `Not done:`. Every other verb runs without git. Three things reach the network,
+all documented in [`SECURITY.md`](SECURITY.md). `add` fetches the Sigstore trust root when it installs a signed
+pack. `worktree setup` fetches your own `origin` remote when it needs a branch with no local copy. A startup
+notice asks npm about newer versions until you switch it off. Two touchpoints go further, because `/st-board`
+and `/st-pr-resolve` call the authenticated GitHub CLI, `gh`. [Getting started](docs/getting-started.md) has the
+prerequisites in full, what `init` asks and writes per client, and a second install route that needs no npm.
 
 ## How it works
 
