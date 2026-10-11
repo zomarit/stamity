@@ -192,6 +192,12 @@ export function readRunOfRecord(root: string): RunOfRecord {
  * The page's verdict on its run of record, read off the results file's own `Status:` line: the
  * status word, and for a FAIL the recorded exception the release shipped it under.
  *
+ * A PASS of a composed run reads "PASS as composed", never a bare "PASS": the status line is the
+ * composed measure's, and the full run behind it may be FAIL (the 1.14.0 run of record's is), so
+ * the first words a reader meets say which of the two passed. Composed is read through
+ * {@link priorCompleteRun}, the one reading of that fact; a full run's PASS and any FAIL keep the
+ * bare word, because neither claims more than the file it is read off.
+ *
  * Throws `EngineError` (`VALIDATION_ERROR`) for an exception recorded for a run other than `run`,
  * whatever the status; for a run of record that did not pass with no exception recorded, because
  * the page states a red run of record only beside the decision that shipped it; and for a PASS with
@@ -211,7 +217,8 @@ export function runOfRecordVerdict(
     );
   }
   const status = runStatus(results);
-  const line = `${status}, three samples per case.`;
+  const composedPass = status === "PASS" && priorCompleteRun(results) !== null;
+  const line = `${composedPass ? "PASS as composed" : status}, three samples per case.`;
   if (status === "PASS") {
     if (exception !== null) {
       fail(
@@ -1237,6 +1244,19 @@ const EVAL_RUN_ID = /^\d{4}-\d{2}-\d{2}-run-(\d+)$/;
 const evalResultsPath = (id: string): string => `evals/runs/${id}/RESULTS.md`;
 
 /**
+ * The number of the prior complete run a composed run of record names, read off that run's
+ * directory id. Throws `EngineError` (`VALIDATION_ERROR`) when the id is not an eval run id: it
+ * becomes a path and a run number on the page, and neither is worded from anything else.
+ */
+function priorRunNumber(runOfRecord: string, id: string): string {
+  const number = EVAL_RUN_ID.exec(id)?.[1];
+  if (number === undefined) {
+    fail(`Run ${runOfRecord}'s results file names \`${id}\` as its prior complete run, which is not an eval run id.`);
+  }
+  return number;
+}
+
+/**
  * The prior complete run a composed run of record names: its number, its results path, and its
  * results file, read under the checkout being rendered.
  *
@@ -1251,10 +1271,7 @@ function readPriorRun(
   runOfRecord: string,
   id: string,
 ): { number: string; path: string; results: string } {
-  const number = EVAL_RUN_ID.exec(id)?.[1];
-  if (number === undefined) {
-    fail(`Run ${runOfRecord}'s results file names \`${id}\` as its prior complete run, which is not an eval run id.`);
-  }
+  const number = priorRunNumber(runOfRecord, id);
   const path = evalResultsPath(id);
   if (!existsSync(join(root, path))) {
     fail(`No results file at ${path}; the page cannot state how the run of record's prior run ended.`);
@@ -1314,8 +1331,10 @@ function priorVerdict(results: string): string {
  * clause read off the two results files: the prior run measured every case in full, its own status
  * and failing floor or guardrail cases (its `Status:` line and § 5 rows), and how many cases the run
  * of record re-measured — by id, with the reason its `## 0. Composition` table gives — and how many
- * it carried. The reason a release had to re-measure (a rule tightened, a sample lost) is in neither
- * file, so the paragraph does not state one. A full run composes with nothing, so the page says it
+ * it carried. The reason a release had to re-measure (a rule tightened, a sample lost, a case
+ * amended) is not worded here: where the run of record states one it is § 3 of its own results
+ * file, "Why the run happened", and {@link runOfRecordReason} prints that section after this
+ * paragraph, quoted and never typed. A full run composes with nothing, so the page says it
  * measured every case itself and makes no claim of composition, re-measuring or carrying: any such
  * sentence would describe samples the run did not carry. The scoring-rule sentence after this
  * paragraph is shared by both.
@@ -1357,6 +1376,84 @@ export function measurementMethod(
   ];
 }
 
+/** The heading a results file states its reason under: item 3 of SET-v7's run-artifact contract. */
+const REASON_HEADING = "## 3. Why the run happened";
+
+/** Repo-relative path of the eval set, whose dated paragraphs record each change to a case. */
+const EVAL_SET_PATH = "evals/SET-v7.md";
+
+/**
+ * The reason the exporter writes for a re-measured case whose case file differs between the two
+ * candidates. Its other reasons in `evals/runs/` are not a changed case: "source text moved: …"
+ * (the corpus moved), "case absent at the prior candidate" (a new case, never scored before),
+ * "prior samples not all admitted" and "named by the operator".
+ */
+const CASE_FILE_MOVED = /^case file bytes moved\b/;
+
+/** A note written by hand beside a run's exported files, where its folder holds one. */
+const RUN_NOTE_FILE = "NOTE.md";
+
+/**
+ * Why the run of record happened, and what a reader has to know before taking its figures as the
+ * model's: the paragraphs between the method paragraph ({@link measurementMethod}) and the
+ * scoring-rule sentence. Up to three parts, each read from the tree and none typed per release:
+ *
+ * - The run of record's own `## 3. Why the run happened` section, quoted line by line under one
+ *   line that names the file. The page used to say the reason was in neither results file; for
+ *   the 1.14.0 run of record it is in that section ("four Expected rows amended"), and a reader of
+ *   the page alone never met it. A file with no such section, or an empty one, prints no quote.
+ * - One fixed sentence where the run is composed and at least one re-measured case's reason is a
+ *   moved case file ({@link CASE_FILE_MOVED}): such a file was changed after the prior run's
+ *   scores were known, and the set's dated paragraphs, linked, say what each change is and what
+ *   it admits. The composition table says only that bytes moved; this says what that means for a
+ *   pass, and where each change is written down. A full run, and a composed run that re-measured
+ *   for any other reason, prints no such sentence: it would describe a change that was not made.
+ * - One line linking `NOTE.md` in the run of record's folder, where that folder holds one.
+ *
+ * `path` is the run of record's results file, repo-relative, as {@link RunOfRecord.path} spells
+ * it; the note is looked for under `root`, the way the page reads every other input. Returns
+ * each part after a blank line, and one more blank line after the last, or nothing at all, so a
+ * run with none of the three leaves the paragraph as it was. Exported so the suite can drive each
+ * part with results files the release has not produced; {@link renderMeasurements} is its one
+ * production caller.
+ */
+export function runOfRecordReason(root: string, path: string, results: string): readonly string[] {
+  const run = runOfRecordNumber(path);
+  const lines: string[] = [];
+
+  const stated = (resultsSection(results, REASON_HEADING) ?? "").split("\n");
+  const first = stated.findIndex((line) => line.trim() !== "");
+  if (first !== -1) {
+    const last = stated.findLastIndex((line) => line.trim() !== "");
+    lines.push(
+      "",
+      `Run ${run}'s results file states why the run happened, in its § 3, quoted as it stands:`,
+      "",
+      ...stated.slice(first, last + 1).map((line) => (line.trim() === "" ? ">" : `> ${line}`)),
+    );
+  }
+
+  const closing: string[] = [];
+  const composition = compositionOf(results);
+  if (composition?.remeasured.some(({ why }) => why !== null && CASE_FILE_MOVED.test(why)) === true) {
+    const prior = priorRunNumber(run, composition.prior);
+    closing.push(
+      `A case file that moved between run ${prior} and run ${run} was changed after run ${prior}'s scores were known,`,
+      `and the dated paragraphs of [\`${EVAL_SET_PATH}\`](../${EVAL_SET_PATH}) say what each change is and what it admits.`,
+    );
+  }
+  const note = `${path.slice(0, path.lastIndexOf("/"))}/${RUN_NOTE_FILE}`;
+  if (existsSync(join(root, note))) {
+    closing.push(
+      `Run ${run} carries a note beside its results file, [\`${RUN_NOTE_FILE}\`](../${note}), to be read with it.`,
+    );
+  }
+  if (closing.length > 0) lines.push("", ...closing);
+
+  if (lines.length > 0) lines.push("");
+  return lines;
+}
+
 /** `- ` list of run ids and their one-line reasons, or an explicit "none" line. */
 function noteList(notes: readonly ExcludedRun[]): readonly string[] {
   if (notes.length === 0) return ["None."];
@@ -1382,7 +1479,8 @@ function runTable(
  * Deterministic over one tree: every number comes from
  * {@link computeMergeReadyRate} or from the committed reach snapshot, and the
  * four corpus figures are read off the run of record's results file through
- * {@link metricScore}, with the suite holding each one to that file.
+ * {@link metricScore}, with the suite holding each one to that file. Why the run happened is that
+ * file's own § 3, quoted through {@link runOfRecordReason}.
  *
  * Which run is of record, and its release, are read from {@link RUN_OF_RECORD_FILE} under `root`,
  * so a fixture root carries its own file. `exception` defaults to that file's; the suite passes its
@@ -1526,6 +1624,7 @@ export function renderMeasurements(
     ...runOfRecordVerdict(results, recorded, path),
     "",
     ...measurementMethod(root, runOfRecord, results),
+    ...runOfRecordReason(root, path, results),
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",

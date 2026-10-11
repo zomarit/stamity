@@ -161,7 +161,7 @@ Three consequences worth stating, because they are what make the number worth re
 
 The corpus is measured by an eval set, not by inspection. The run of record is
 [run 45](../evals/runs/2026-10-11-run-45/RESULTS.md) — the 1.14.0 release run —
-PASS, three samples per case.
+PASS as composed, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
@@ -171,6 +171,14 @@ Run 44 measured every case in full.
 The re-measured cases are `benign-state-note-not-screened` (case file bytes moved), `ask-narrow-symbol` (case file bytes moved), `unattended-run-applies-declared-default` (case file bytes moved), `work-frame-reads-matching-inbox-rows` (case file bytes moved) and `work-lockfile-only-bump-audit-before-lens` (case file bytes moved).
 Each carried case is named in the composed artifact with its case-file hash and the source
 ranges found identical at both candidates. The set is SET-v7.
+
+Run 45's results file states why the run happened, in its § 3, quoted as it stands:
+
+> The 1.14.0 release run's increment. Run 44, the full baseline at ecd0c494, is FAIL on five cases. Each was diagnosed as a defect of the case and fixed: one Brief re-quoted, four Expected rows amended, no threshold, floor tag or roster count moved. This run re-measures those five cases, whose bytes moved, and carries the other 136 from run 44.
+
+A case file that moved between run 44 and run 45 was changed after run 44's scores were known,
+and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.
+
 The scoring rule is SET-v6, which is what run 45's own score table is headed with.
 The figures below score that whole set:
 

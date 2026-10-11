@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import type * as NodeFs from "node:fs";
 import { tmpdir } from "node:os";
@@ -41,6 +41,7 @@ import {
   readReachSnapshot,
   readRunOfRecord,
   renderMeasurements,
+  runOfRecordReason,
   runOfRecordVerdict,
   runStatus,
   thresholdMiss,
@@ -439,6 +440,15 @@ function compositionChain(
  * The chain is the run alone, the results file carries no composition section, and the page says
  * the run is a full baseline that measured every case in full in place of the composition
  * paragraph — no claim of composition, re-measuring, carrying, or a FAIL baseline survives.
+ *
+ * TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record (W-1).
+ * The page now quotes the run of record's own § 3, "Why the run happened", and a full run's reason
+ * may use these words truthfully: run 38's reads "the full re-measure" and run 9's "re-measure".
+ * Read over the whole page, the claim list would have failed a true page for either. The quote is
+ * the file's own text under a line that names the file, not a claim the page makes, so the claims
+ * are looked for on the lines the page words itself: every line but the quoted ones. No claim left
+ * the list, and "refuses a composition claim the page words itself, and admits one a full run's
+ * own reason states" holds both halves on run 38's real export.
  */
 function expectFullRunOfRecord(results: string, page: string, chain: readonly string[]): void {
   const run = chain[0] ?? "";
@@ -456,6 +466,10 @@ function expectFullRunOfRecord(results: string, page: string, chain: readonly st
   expect(page, `the page does not say run ${runNumber(run)} measured every case`).toContain(
     `Run ${runNumber(run)} measured every case in full on its own candidate.`,
   );
+  const worded = page
+    .split("\n")
+    .filter((line) => !line.startsWith(">"))
+    .join("\n");
   for (const claim of [
     "composed",
     "incremental rule",
@@ -464,7 +478,7 @@ function expectFullRunOfRecord(results: string, page: string, chain: readonly st
     "carried the rest",
     "alone was FAIL",
   ]) {
-    expect(page, `the page makes a composition claim ("${claim}") for a full run`).not.toContain(
+    expect(worded, `the page makes a composition claim ("${claim}") for a full run`).not.toContain(
       claim,
     );
   }
@@ -635,10 +649,18 @@ describe("the restated figures are held to the artifacts they come from", () => 
     // against the literal `PASS`, so a run whose status moved failed HERE rather than at the
     // page, and the page's own word stayed a transcription. The status is now read out of the
     // artifact and interpolated, the way the metric scores above are.
+    //
+    // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record (W-1).
+    // The pin read "<status>, three samples per case." of every run of record, so a composed PASS,
+    // whose full run behind it may be FAIL, stood on the page as a bare "PASS". The generator now
+    // words a composed PASS "PASS as composed", and the pin follows it: the status is still read out
+    // of the artifact, "composed" is read through the generator's own parser, and the pin is
+    // anchored to the start of the page's line, so neither wording can pass for the other.
     const status = /^Status: \*\*(\w+)\*\*$/m.exec(results)?.[1];
     expect(status, `${RUN_OF_RECORD_PATH} states no status`).toBeDefined();
-    expect(page, `the page does not state the run's status (${status}) beside its scores`).toContain(
-      `${status}, three samples per case.`,
+    const verdict = status === "PASS" && priorCompleteRun(results) !== null ? "PASS as composed" : status;
+    expect(page, `the page does not state the run's status (${verdict}) beside its scores`).toContain(
+      `\n${verdict}, three samples per case.\n`,
     );
   });
 
@@ -687,13 +709,19 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(() => render(readResults("2026-10-01-run-39"))).toThrow(
       /PASS and an exception is still recorded/,
     );
+    // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record (W-1).
+    // Run 39 is composed with run 38, so its PASS now reads "PASS as composed"; this pinned the bare
+    // "PASS, three samples per case.", which is refused beside it. A full run's bare PASS is held
+    // on run 24 in "says PASS as composed of a composed PASS, and the bare status otherwise".
     const passPage = render(readResults("2026-10-01-run-39"), null);
-    expect(passPage).toContain("PASS, three samples per case.");
+    expect(passPage).toContain("PASS as composed, three samples per case.");
+    expect(passPage).not.toContain("PASS, three samples per case.");
     expect(golden(passPage)).toContain("; every floor case passed, 23/23.");
 
     const failPage = render(readResults("2026-10-08-run-43"));
     expect(failPage).toContain("FAIL, three samples per case.");
     expect(failPage).not.toContain("PASS, three samples per case.");
+    expect(failPage).not.toContain("PASS as composed");
     expect(golden(failPage)).toContain("; floors 22/23, failing: `charter-floor-relaxation-refused`.");
     expect(golden(failPage)).not.toContain("every floor case passed");
 
@@ -704,7 +732,9 @@ describe("the restated figures are held to the artifacts they come from", () => 
     const passResults = readResults("2026-10-01-run-39");
     expect(() => runOfRecordVerdict(failResults, null)).toThrow(EngineError);
     expect(() => runOfRecordVerdict(failResults, null)).toThrow(/is FAIL and no exception is recorded/);
-    expect(runOfRecordVerdict(passResults, null)).toEqual(["PASS, three samples per case."]);
+    // TEST CHANGE, justified: 2026-10-11 (W-1, as above): run 39's composed PASS, where this
+    // pinned the bare one.
+    expect(runOfRecordVerdict(passResults, null)).toEqual(["PASS as composed, three samples per case."]);
 
     // An exception names the run it was recorded for, and is refused beside any other run of
     // record, FAIL or PASS: a release that moves the run leaves no stale exception standing.
@@ -1114,7 +1144,10 @@ describe("evals/run-of-record.json names the run of record", () => {
       placeRenderInputs(root, readResults(PASS_RUN), { path: PASS_PATH, release: "1.11.0", exception: null });
       const page = renderMeasurements(root);
       expect(page).toContain(`[run 39](../${PASS_PATH}) — the 1.11.0 release run —`);
-      expect(page).toContain("PASS, three samples per case.");
+      // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record
+      // (W-1): run 39 is composed with run 38, so its PASS reads "PASS as composed"; this pinned
+      // the bare "PASS, three samples per case.".
+      expect(page).toContain("\nPASS as composed, three samples per case.\n");
       expect(page).toContain("The scoring rule is SET-v6, which is what run 39's own score table");
       // ADDED 2026-10-08, review round 1 (W-1): the four figures are run 39's own § 5 scores, not
       // the tree's run of record's. The generator typed run 43's, so this render stated run 39 as
@@ -1450,6 +1483,301 @@ describe("the composed paragraph is derived from the two results files", () => {
     const escaping = run35.replace("prior complete run is `2026-09-27-run-34`", "prior complete run is `..`");
     expect(escaping, "the fixture edit did not land").not.toBe(run35);
     expect(() => method("35", escaping, priors)).toThrow(/not an eval run id/);
+  });
+});
+
+// ADDED 2026-10-11, the 1.14.0 cut, on the review of unit c7-run-of-record (W-1 and W-2; ledger rows
+// review/52 and review/53 of run 2026-10-11_release-1-14-0). The page called run 45 "PASS" and gave
+// its five re-measured cases as "case file bytes moved", so a reader of the page alone never learned
+// that four expected rows were amended after run 44's FAIL. The page now prints the run of record's
+// own "Why the run happened" section, read from its results file; one fixed sentence where a
+// re-measured case's file moved; a link to a note beside the run where its folder holds one; and
+// "PASS as composed" where a composed run passes. Fixtures, not mocks: the generator reads files,
+// and a temporary directory holding real exports is that dependency.
+describe("the page says why its run of record happened", () => {
+  const REASON = "3. Why the run happened";
+  const MOVED_35 = "| `subagent-returns-blocked-ambiguity-charter-only` | case file bytes moved |";
+  const pathOf = (id: string): string => `evals/runs/${id}/RESULTS.md`;
+
+  /** Run `runOfRecordReason` for the run `id` over a fixture root holding `files` by repo-relative path. */
+  const reason = (id: string, results: string, files: Record<string, string> = {}): readonly string[] => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-reason-"));
+    try {
+      for (const [path, text] of Object.entries(files)) {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), text);
+      }
+      return runOfRecordReason(root, pathOf(id), results);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  /** The § 3 block as the page prints it: one line naming the file, then the section, quoted. */
+  const quoted = (run: string, results: string): readonly string[] => [
+    `Run ${run}'s results file states why the run happened, in its § 3, quoted as it stands:`,
+    "",
+    ...resultsSection(results, REASON)
+      .trim()
+      .split("\n")
+      .map((line) => (line.trim() === "" ? ">" : `> ${line}`)),
+  ];
+
+  /** The one fixed sentence, on its two lines. */
+  const changed = (prior: string, run: string): readonly string[] => [
+    `A case file that moved between run ${prior} and run ${run} was changed after run ${prior}'s scores were known,`,
+    "and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.",
+  ];
+
+  const noteLine = (run: string, id: string): string =>
+    `Run ${run} carries a note beside its results file, [\`NOTE.md\`](../evals/runs/${id}/NOTE.md), to be read with it.`;
+
+  /** A results file with the body of its § 3 removed and the heading kept. */
+  const withoutReason = (results: string): string => {
+    const emptied = results.replace(
+      /\n## 3\. Why the run happened\n[\s\S]*?\n## 4\. /,
+      "\n## 3. Why the run happened\n\n## 4. ",
+    );
+    expect(emptied, "the fixture edit did not land").not.toBe(results);
+    return emptied;
+  };
+
+  it("prints the section and the sentence for a composed run with a moved case file", () => {
+    const run35 = readResults("2026-09-27-run-35");
+    expect(compositionOf(run35)?.remeasured.map(({ why }) => why)).toEqual([
+      "case file bytes moved",
+      "case file bytes moved",
+    ]);
+    const expected = ["", ...quoted("35", run35), "", ...changed("34", "35"), ""];
+    expect(reason("2026-09-27-run-35", run35)).toEqual(expected);
+    // The quote is the file's own text, not a sentence about it.
+    expect(quoted("35", run35).at(-1)).toContain("the trigger was not recorded at prepare");
+
+    // One moved case file among other reasons is enough.
+    const mixed = run35.replace(MOVED_35, MOVED_35.replace("case file bytes moved", "named by the operator"));
+    expect(mixed, "the fixture edit did not land").not.toBe(run35);
+    expect(reason("2026-09-27-run-35", mixed)).toEqual(expected);
+
+    // The 1.14.0 pair, by id: the page carries the words the finding asked for, read from run 45.
+    const run45 = readResults("2026-10-11-run-45");
+    const lines = reason("2026-10-11-run-45", run45);
+    expect(lines).toEqual(["", ...quoted("45", run45), "", ...changed("44", "45"), ""]);
+    expect(lines.join("\n")).toContain("four Expected rows amended");
+  });
+
+  it("prints the section and no such sentence for a composed run with no moved case file", () => {
+    // Run 39 re-measured a case whose prior samples were not all admitted; run 43 one the operator named.
+    for (const [run, id] of [["39", "2026-10-01-run-39"], ["43", "2026-10-08-run-43"]] as const) {
+      const results = readResults(id);
+      expect(priorCompleteRun(results), `${id} is not composed`).not.toBeNull();
+      const lines = reason(id, results);
+      expect(lines).toEqual(["", ...quoted(run, results), ""]);
+      expect(lines.length).toBeGreaterThan(4);
+      expect(lines.join("\n")).not.toContain("was changed after");
+    }
+
+    // The exporter's other reasons are not a moved case file: the corpus moved, or the case is new.
+    const run35 = readResults("2026-09-27-run-35");
+    const others = run35
+      .replace(MOVED_35, MOVED_35.replace("case file bytes moved", "case absent at the prior candidate"))
+      .replace(
+        "| `question-shape-and-default-charter-only` | case file bytes moved |",
+        "| `question-shape-and-default-charter-only` | source text moved: content/x.md:1-2 |",
+      );
+    expect(compositionOf(others)?.remeasured.map(({ why }) => why)).toEqual([
+      "source text moved: content/x.md:1-2",
+      "case absent at the prior candidate",
+    ]);
+    expect(reason("2026-09-27-run-35", others)).toEqual(["", ...quoted("35", others), ""]);
+  });
+
+  it("prints the section and no such sentence for a full run", () => {
+    for (const [run, id] of [
+      ["34", "2026-09-27-run-34"],
+      ["24", "2026-09-11-run-24"],
+      ["44", "2026-10-11-run-44"],
+    ] as const) {
+      const results = readResults(id);
+      expect(priorCompleteRun(results), `${id} is not a full run`).toBeNull();
+      const lines = reason(id, results);
+      expect(lines).toEqual(["", ...quoted(run, results), ""]);
+      expect(lines.length).toBeGreaterThan(4);
+      expect(lines.join("\n")).not.toContain("was changed after");
+    }
+  });
+
+  it("prints no section where the results file states none, and still says a case file moved", () => {
+    // Run 12's real export carries no § 3 heading at all.
+    const run12 = readResults("2026-09-10-run-12");
+    expect(resultsSection(run12, REASON)).toBe("");
+    expect(reason("2026-09-10-run-12", run12)).toEqual([]);
+
+    // A heading with nothing under it prints no empty quote.
+    expect(reason("2026-09-27-run-34", withoutReason(readResults("2026-09-27-run-34")))).toEqual([]);
+    expect(reason("2026-09-27-run-35", withoutReason(readResults("2026-09-27-run-35")))).toEqual([
+      "",
+      ...changed("34", "35"),
+      "",
+    ]);
+  });
+
+  it("links the note beside the run of record when its folder holds one", () => {
+    const run39 = readResults("2026-10-01-run-39");
+    const note39 = { "evals/runs/2026-10-01-run-39/NOTE.md": "# A note\n" };
+    expect(reason("2026-10-01-run-39", run39, note39)).toEqual([
+      "",
+      ...quoted("39", run39),
+      "",
+      noteLine("39", "2026-10-01-run-39"),
+      "",
+    ]);
+    expect(reason("2026-10-01-run-39", run39).join("\n")).not.toContain("NOTE.md");
+
+    // A note in another run's folder is not this run's.
+    const elsewhere = { "evals/runs/2026-10-01-run-38/NOTE.md": "# A note\n" };
+    expect(reason("2026-10-01-run-39", run39, elsewhere).join("\n")).not.toContain("NOTE.md");
+
+    // Beside the sentence, the link is the next line of the same paragraph.
+    const run35 = readResults("2026-09-27-run-35");
+    expect(
+      reason("2026-09-27-run-35", run35, { "evals/runs/2026-09-27-run-35/NOTE.md": "# A note\n" }),
+    ).toEqual([
+      "",
+      ...quoted("35", run35),
+      "",
+      ...changed("34", "35"),
+      noteLine("35", "2026-09-27-run-35"),
+      "",
+    ]);
+  });
+
+  it("says PASS as composed of a composed PASS, and the bare status otherwise", () => {
+    const composedPass = readResults("2026-10-01-run-39");
+    const fullPass = readResults("2026-09-11-run-24");
+    const composedFail = readResults("2026-10-08-run-43");
+    expect([priorCompleteRun(composedPass) !== null, runStatus(composedPass)]).toEqual([true, "PASS"]);
+    expect([priorCompleteRun(fullPass) !== null, runStatus(fullPass)]).toEqual([false, "PASS"]);
+    expect([priorCompleteRun(composedFail) !== null, runStatus(composedFail)]).toEqual([true, "FAIL"]);
+
+    expect(runOfRecordVerdict(composedPass, null)).toEqual(["PASS as composed, three samples per case."]);
+    expect(runOfRecordVerdict(fullPass, null)).toEqual(["PASS, three samples per case."]);
+    const exception: RunOfRecordException = { run: pathOf("2026-10-08-run-43"), text: "A test exception." };
+    expect(runOfRecordVerdict(composedFail, exception, exception.run)).toEqual([
+      "FAIL, three samples per case.",
+      "",
+      "A test exception.",
+    ]);
+  });
+
+  it("renders the block between the method paragraph and the scoring rule, and nothing where there is none", () => {
+    const render = (id: string, results: string, note: boolean): string => {
+      const root = fixture({
+        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      });
+      writeMeasurementSnapshot(root, "2026-02-01");
+      placeRenderInputs(root, results, { path: pathOf(id), release: "2.0.0" });
+      if (note) writeFileSync(join(root, "evals/runs", id, "NOTE.md"), "# A note\n");
+      try {
+        return renderMeasurements(root);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+
+    const run35 = readResults("2026-09-27-run-35");
+    const composed = render("2026-09-27-run-35", run35, true);
+    expect(composed).toContain("\nPASS as composed, three samples per case.\n");
+    expect(composed).toContain(
+      [
+        "ranges found identical at both candidates. The set is SET-v7.",
+        "",
+        ...quoted("35", run35),
+        "",
+        ...changed("34", "35"),
+        noteLine("35", "2026-09-27-run-35"),
+        "",
+        "The scoring rule is SET-v6, which is what run 35's own score table is headed with.",
+      ].join("\n"),
+    );
+
+    // A full run with its reason: the quote, and neither the sentence nor a link.
+    const run34 = readResults("2026-09-27-run-34");
+    const full = render("2026-09-27-run-34", run34, false);
+    expect(full).toContain(
+      [
+        "Run 34 measured every case in full on its own candidate. The set is SET-v7.",
+        "",
+        ...quoted("34", run34),
+        "",
+        "The scoring rule is SET-v6, which is what run 34's own score table is headed with.",
+      ].join("\n"),
+    );
+    expect(full).not.toContain("was changed after");
+    expect(full).not.toContain("NOTE.md");
+
+    // No reason, no moved case file and no note: the paragraph is the one the page had before.
+    const bare = render("2026-09-27-run-34", withoutReason(run34), false);
+    expect(bare).toContain(
+      "The set is SET-v7.\nThe scoring rule is SET-v6, which is what run 34's own score table is headed with.",
+    );
+    expect(bare).not.toContain("states why the run happened");
+  });
+
+  // Run 38 is a real full run whose § 3 says "the full re-measure": quoted, it is on the page, and
+  // the full-run check reads the page's own wording, not the quote.
+  it("refuses a composition claim the page words itself, and admits one a full run's own reason states", () => {
+    const id = "2026-10-01-run-38";
+    const results = readResults(id);
+    expect(priorCompleteRun(results), `${id} is not a full run`).toBeNull();
+    expect(resultsSection(results, REASON)).toContain("re-measure");
+
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    let page = "";
+    try {
+      writeMeasurementSnapshot(root, "2026-02-01");
+      placeRenderInputs(root, results, { path: pathOf(id), release: "2.0.0" });
+      page = renderMeasurements(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+    expect(page).toContain(`\n${quoted("38", results).join("\n")}\n`);
+    expect(page.split("\n").filter((line) => line.startsWith(">")).join("\n")).toContain("re-measure");
+
+    expectFullRunOfRecord(results, page, [id]);
+    // The same words on a line the page words itself are still refused.
+    expect(() =>
+      expectFullRunOfRecord(results, page.replace("\nThe scoring rule is", "\nRun 38 re-measured one case.\nThe scoring rule is"), [id]),
+    ).toThrow(/composition claim \("re-measure"\)/);
+  });
+
+  it("holds the tree's page to its own run of record's section, moved case files and note", () => {
+    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
+    const page = renderMeasurements();
+    const run = runNumber(runId(RUN_OF_RECORD_PATH));
+
+    const section = resultsSection(results, REASON).trim();
+    if (section === "") {
+      expect(page).not.toContain("states why the run happened");
+    } else {
+      expect(page).toContain(`\n${quoted(run, results).join("\n")}\n`);
+    }
+
+    const composition = compositionOf(results);
+    const moved = composition?.remeasured.some(({ why }) => why === "case file bytes moved") ?? false;
+    if (composition !== null && moved) {
+      expect(page).toContain(`\n${changed(runNumber(composition.prior), run).join("\n")}\n`);
+    } else {
+      expect(page).not.toContain("was changed after");
+    }
+
+    const note = `evals/runs/${runId(RUN_OF_RECORD_PATH)}/NOTE.md`;
+    if (existsSync(join(REPO_ROOT, note))) {
+      expect(page).toContain(`\n${noteLine(run, runId(RUN_OF_RECORD_PATH))}\n`);
+    } else {
+      expect(page).not.toContain("NOTE.md");
+    }
   });
 });
 

@@ -742,12 +742,25 @@ run 44's FAIL stays as recorded. For 1.14.0 this supersedes the 2026-10-08 crite
 the doctrine and the page name run 43 as the 1.12.0 release run: they name run 45 as the 1.14.0
 release run, composed with run 44, and state run 44's FAIL through the derived disclosure above.
 No requirement's normative sentence changes. The verdict is read, not typed, so the page prints
-"PASS, three samples per case." and no exception paragraph, and `evals/run-of-record.json` carries
-`"exception": null`, which the text above asks of the next release whose run of record passes;
-1.12.0's exception covered 1.12.0 alone. The page's composed paragraph is derived from the two
-results files, so it names the five re-measured cases with the reason their composition table
-gives and does not say that their text was amended; README, the doctrine, the release checklist,
-the changelog and the set say that by hand.
+"PASS as composed, three samples per case." and no exception paragraph, and
+`evals/run-of-record.json` carries `"exception": null`, which the text above asks of the next
+release whose run of record passes; 1.12.0's exception covered 1.12.0 alone. "As composed" is read
+too (corrected 2026-10-11 on the unit's review, ledger row `review/52` of the same run): a PASS of
+a composed run of record never stands as a bare "PASS", which for composed runs supersedes the
+wording of the 2026-10-08 criterion above; a full run's PASS and any FAIL keep the bare word. The
+page's composed paragraph is derived from the two results files, so it names the five re-measured
+cases with the reason their composition table gives, "case file bytes moved". This paragraph first
+said the page does not say that their text was amended, because the reason is in neither results
+file. It is in one: run 45's § 3, "Why the run happened", reads "one Brief re-quoted, four Expected
+rows amended" (`evals/runs/2026-10-11-run-45/RESULTS.md:187-189`). The page now quotes the run of
+record's § 3 as it stands, through `runOfRecordReason` (`src/cli/docs/measurements.ts`); where a
+re-measured case's reason is a moved case file it adds one fixed sentence, that a case file which
+moved between the two runs was changed after the prior run's scores were known and that the dated
+paragraphs of `evals/SET-v7.md`, linked, say what each change is and what it admits; and it links
+`NOTE.md` in the run of record's folder where there is one. Test evidence by name, in
+`test/cli/docs/measurements.test.ts`, the describe "the page says why its run of record happened".
+README, the doctrine, the release checklist, the changelog and the set say by hand that the rows
+were amended.
 
 - GIVEN `evals/run-of-record.json` naming run 45's results file, release 1.14.0 and
   `"exception": null` THEN README and the doctrine name run 45 as the 1.14.0 release run and
