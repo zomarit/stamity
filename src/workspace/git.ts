@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { gitProgramFor, programNotFound } from "../shared/programPath.ts";
 import type { Platform } from "../types/core.ts";
 
 /**
@@ -133,14 +134,16 @@ export function detectPlatformFromRemote(remoteUrl: string): Platform | null {
  * channel to route a probe failure into — the null in the returned identity
  * IS the report.
  *
- * With no `runner` passed the read is plain git ({@link execGit}): none of the
- * options the CLI's verbs pass, no look at the folder before git starts, and
- * the caller's whole environment. In a folder that has the layout of a bare
- * repository, or below one, that git reads the folder's own settings and
- * returns the origin it names. Both callers in the CLI pass the pinned runner
- * (`../cli/engine/gitStatus.ts::gitCheckRunner`), which this module sits below
- * and cannot import; a caller of the library that reads a tree it does not
- * trust passes a runner of its own that does the same (fix/30).
+ * With no `runner` passed the read is {@link execGit}: git started by the
+ * absolute path found on `PATH`, never a file of git's name in `cwd`, and plain
+ * git in every other way: none of the options the CLI's verbs pass, no look at
+ * the folder before git starts, and the caller's whole environment. In a folder
+ * that has the layout of a bare repository, or below one, that git reads the
+ * folder's own settings and returns the origin it names. Both callers in the
+ * CLI pass the pinned runner (`../cli/engine/gitStatus.ts::gitCheckRunner`),
+ * which this module sits below and cannot import; a caller of the library that
+ * reads a tree it does not trust passes a runner of its own that does the same
+ * (fix/30).
  */
 export function detectRepoGitIdentity(cwd: string, runner: GitRunner = execGit): RepoGitIdentity {
   const remoteUrl = probe(runner, ["remote", "get-url", "origin"], cwd);
@@ -153,14 +156,25 @@ export function detectRepoGitIdentity(cwd: string, runner: GitRunner = execGit):
   };
 }
 
-/** Default seam: synchronous git, stdout captured, stderr discarded, bounded wall time. */
-const execGit: GitRunner = (args, cwd) =>
-  execFileSync("git", args, {
+/**
+ * Default seam: synchronous git, stdout captured, stderr discarded, bounded wall time.
+ *
+ * Git is started by an absolute path, the one {@link gitProgramFor} resolves on
+ * `PATH` for the working folder, never by its bare name: a file of git's name
+ * in the folder git runs in is not the program started, on any platform. Where
+ * no `PATH` entry holds git the call throws what Node throws on a machine with
+ * no git installed, and no program is started.
+ */
+const execGit: GitRunner = (args, cwd) => {
+  const git = gitProgramFor(cwd, process.env);
+  if (git === null) throw programNotFound("git", "spawnSync", args);
+  return execFileSync(git, args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     timeout: GIT_PROBE_TIMEOUT_MS,
   });
+};
 
 function probe(runner: GitRunner, args: readonly string[], cwd: string): string | null {
   try {
