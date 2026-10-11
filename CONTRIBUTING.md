@@ -31,7 +31,12 @@ npm run check
 | Build | `npm run build` | tsdown produces `dist/cli.js`, `dist/index.js` and their shared chunk `dist/src.js`, plus the declarations under `dist/types/` |
 | Unused code | `npm run knip` | No orphan file, export or dependency |
 
-CI runs the same six steps on your pull request.
+CI runs the same six steps on your pull request, with one difference in the test step. `npm run test`
+is `vitest run`, with no coverage instrument, so `npm run check` never evaluates the coverage floors
+in `vitest.config.ts`. CI's floor and LTS legs run the suite as
+`node scripts/ci/test-run.mjs --coverage`, where those floors block. A green `npm run check` can
+therefore still fail CI on coverage: run that command yourself when your change touches the merge or
+emit core or `src/manifest/ownedPaths.ts`.
 
 Two declared dependencies exist for their types alone. `@sigstore/rekor-types` and
 `@types/make-fetch-happen` complete the declaration graph that Sigstore's own published types
@@ -120,11 +125,18 @@ lanes, the engine's `.gitkeep` excepted at every location:
 - `website`: `website/` and every other path under `docs/`.
 
 The job runs the suites that read the lanes the change fell in, the generate-and-diff step, the
-leak gate and, on pull requests, the hygiene scan. The `learnings` lane adds the CLI build and its
+leak gate and, on pull requests, the hygiene scan. Those suites come from the test-input map, the
+`testInputs` list in `.stamity/change-classes.json`, read from the base commit and never from the
+change itself: the union of the `tests` of every entry a changed path matches. A test you add that
+names a tracked page or record in a string literal is a reader of it and belongs in that map:
+`test/ci/testInputsGuard.test.ts` fails until an entry matching the path lists the test. The
+`learnings` lane adds the CLI build and its
 dogfood `check`, because the session hook reads the learnings. The `website` lane adds the docs site
 build and the root typecheck, because a test imports a `website/` module. Any path in no lane, an
 empty diff, a push with no earlier commit to compare, a diff the script cannot read, the weekly
-schedule and a manual run get the full three lanes. On that side the LTS leg also builds the docs
+schedule and a manual run get the full three lanes. So does a change the map cannot answer, though
+every path of it is in a lane: no valid map at the base commit, a changed path no entry matches, or
+a matching entry that says `"all"`. On that side the LTS leg also builds the docs
 site, last, when the change touches a `website` path or no diff was read.
 
 A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed

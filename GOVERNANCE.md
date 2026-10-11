@@ -92,10 +92,13 @@ There are four lanes: `records` (run records, the deferral inbox, handoffs and p
 `docs/` path). The job runs what those paths can break: the suites that read them, the
 generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. The `learnings` lane
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
-typecheck. `scripts/ci/records-only.mjs` decides. Any path in no lane, an empty diff, a diff it
-cannot read, the weekly schedule and a manual run get the full three lanes, and there the LTS leg
-also builds the docs site when the change touches a `website` path or no diff was read.
-[CONTRIBUTING.md](CONTRIBUTING.md) lists each lane's paths.
+typecheck. `scripts/ci/records-only.mjs` decides, and it reads the suites from the test-input map in
+the base commit's `.stamity/change-classes.json`, never from the change's own copy. Any path in no
+lane, an empty diff, a diff it cannot read, the weekly schedule and a manual run get the full three
+lanes. So does a change whose every path is in a lane when that map cannot answer: no valid map at
+the base commit, a changed path no entry matches, or a matching entry that selects every test. On
+the full side the LTS leg also builds the docs site when the change touches a `website` path or no
+diff was read. [CONTRIBUTING.md](CONTRIBUTING.md) lists each lane's paths.
 
 A push to `main` whose tree a pull request already proved skips both sides.
 `scripts/ci/pr-proven.mjs` answers proven only when the pushed tree is the head tree of a pull
