@@ -173,7 +173,7 @@ describe("a committed ledger row outside the owned-path bound refuses the manife
     const manifestRow = doc.doctor?.find((row) => row.id === "manifest");
     expect(manifestRow?.status).toBe("fail");
     expect(manifestRow?.detail).toMatch(/`ledger\[\d+\]\.path` "docs\/owner\.md" lies outside the paths a stamity release writes/);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("sync -y and clean -y exit 1 with CONFIG_ERROR naming the row and change nothing", async () => {
     const root = await initialisedRepo();
@@ -191,7 +191,7 @@ describe("a committed ledger row outside the owned-path bound refuses the manife
     expect(clean.doc.error?.code).toBe("CONFIG_ERROR");
     expect(failureText(clean.doc)).toContain('"docs/owner.md"');
     expect(await snapshot(root)).toEqual(before);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("refuses every row of the measured reproduction, hashless and hashed, in one error", async () => {
     const root = await initialisedRepo();
@@ -218,7 +218,7 @@ describe("a committed ledger row outside the owned-path bound refuses the manife
     expect(clean.code).toBe(1);
     for (const row of forged) expect(failureText(clean.doc)).toContain(JSON.stringify(row.path));
     expect(await snapshot(root)).toEqual(before);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("clean -y --pack acts on nothing either", async () => {
     const root = await initialisedRepo();
@@ -233,7 +233,7 @@ describe("a committed ledger row outside the owned-path bound refuses the manife
     expect(clean.doc.error?.code).toBe("CONFIG_ERROR");
     expect(failureText(clean.doc)).toContain('"docs/owner.md"');
     expect(await snapshot(root)).toEqual(before);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 });
 
 describe("inside the bound, a row with no content hash proves nothing", () => {
@@ -253,7 +253,7 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
     expect(entry?.action).toBe("skipped-unsafe-path");
     expect(entry?.detail).toContain("records no content hash");
     expect(await readFile(join(root, GONE), "utf8")).toBe(GONE_BYTES);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
   // this case asserted the delete a hand-added row earned by recording the hash
@@ -279,7 +279,7 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
     expect(entry?.detail).toContain("delete it by hand");
     expect(entry).not.toHaveProperty("proof");
     expect(await readFile(join(root, GONE), "utf8")).toBe(GONE_BYTES);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // The co-owned lane: `.claude/settings.json` sits in the bound by its exact
   // path, so a hand-added row with no hash in a repository that never selected
@@ -350,7 +350,7 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       expect(entry?.detail).toContain(`Your previous file is at ${join(root, `${SETTINGS}.bak`)}.`);
       expect(await readFile(join(root, `${SETTINGS}.bak`), "utf8")).toBe(owner);
       if (left !== null) expect(await readFile(join(root, SETTINGS), "utf8")).toBe(left);
-    });
+    }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
     it.each([
       { verb: "sync", command: syncCommand },
@@ -361,7 +361,7 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       expect(entry?.action).toBe("skipped-user-content");
       expect(await readFile(join(root, SETTINGS), "utf8")).toBe(OWNER_DENY_ONLY);
       await expect(readFile(join(root, `${SETTINGS}.bak`), "utf8")).rejects.toThrow(/ENOENT/);
-    });
+    }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
   });
 });
 
@@ -440,7 +440,7 @@ describe("a content-folder file leaves only as a rendering the engine produces",
     expect(entry?.action).toBe("skipped-user-content");
     expect(entry?.detail).toContain("delete it by hand");
     expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // review/61's other half: bytes judged against a built rendering and
   // matching none are not the engine's, so the row leaves with the sweep and
@@ -462,7 +462,7 @@ describe("a content-folder file leaves only as a rendering the engine produces",
       .ledger;
     expect(ledger.map((row) => row.path)).not.toContain(LOCAL);
     expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("clean -y keeps the same skill, and names it skipped-user-content", async () => {
     const root = await initialisedRepo();
@@ -476,7 +476,7 @@ describe("a content-folder file leaves only as a rendering the engine produces",
     expect(entry?.action).toBe("skipped-user-content");
     expect(entry?.detail).toContain("delete it by hand");
     expect(await readFile(join(root, LOCAL), "utf8")).toBe(LOCAL_BYTES);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // The control: the engine's own unedited skill is a rendering, so `clean`
   // still removes it, and an engine skill the owner edited is still kept.
@@ -498,7 +498,7 @@ describe("a content-folder file leaves only as a rendering the engine produces",
     expect(existsSync(join(root, untouched.path))).toBe(false);
     expect(entries.find((entry) => entry.path === edited.path)?.action).toBe("skipped-user-content");
     expect(await readFile(join(root, edited.path), "utf8")).toBe(editedBytes);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // The control for a client deselected after setup: its unedited content
   // files are renderings the running engine still produces for that client.
@@ -521,7 +521,7 @@ describe("a content-folder file leaves only as a rendering the engine produces",
       expect(entries.find((entry) => entry.path === row.path)?.action, row.path).toBe("deleted");
       expect(existsSync(join(root, row.path)), row.path).toBe(false);
     }
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 });
 
 /**
@@ -683,7 +683,7 @@ describe("the renderings are the setup's own", () => {
     const unproved = await previewReclaim(root, handBuilt, T0);
     expect(unproved?.entries.find((entry) => entry.path === path)?.action).toBe("skipped-user-content");
     expect(existsSync(join(root, path))).toBe(true);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 });
 
 /**
@@ -738,7 +738,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] }).ledger;
     expect(ledger.some((row) => row.adapter === "pack:ops")).toBe(true);
     for (const copy of copies) expect(ledger.map((row) => row.path), copy).not.toContain(copy);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("keeps an owner's own file at one of those names under a forged row hashing it", async () => {
     const { root } = await opsProjected();
@@ -757,7 +757,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     const entry = (JSON.parse(sync.stdout.trim()) as SyncDoc).reclaim.entries.find((candidate) => candidate.path === copy);
     expect(entry?.action).toBe("skipped-user-content");
     expect(await readFile(join(root, copy), "utf8")).toBe(ownerBytes);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // review/61 and review/67 (signed off: unproven is not disproven): a denied
   // pack whose folder was pruned by hand reaches the missing-folder refusal
@@ -788,7 +788,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     for (const copy of copies) {
       expect(ledger.some((row) => row.path === copy && row.adapter === "claude"), copy).toBe(true);
     }
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // review/87 (declared default): the full `clean` removes the setup, ledger and all, so no
   // row and no later sync outlive it. A copy the proof could not judge is kept, and its entry
@@ -816,7 +816,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
       expect(entry?.detail, copy).not.toContain("kept with its ledger row");
       expect(existsSync(join(root, copy)), copy).toBe(true);
     }
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("admits a denied pack to discovery only inside the proof's opt-out", async () => {
     const { root } = await opsProjected();
@@ -833,7 +833,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
 
     // Scoped to the call: the next discovery honours the policy again.
     expect((await discoverInstalledPacksWithPolicy(root, manifest)).denied.map((pack) => pack.id)).toEqual(["ops"]);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 });
 
 describe("an import decision binds only as init records it", () => {
@@ -859,7 +859,7 @@ describe("an import decision binds only as init records it", () => {
         new RegExp(`\`importChoice\\[\\d+\\]\\.path\` ${JSON.stringify(path).replaceAll(".", "\\.")} is not an instruction file init imports`),
       );
     }
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("refuses a skip decision beside a ledger row for the same path, and sync leaves AGENTS.md as it is", async () => {
     const root = await supplementedRepo();
@@ -943,7 +943,7 @@ describe("an instruction file leaves only on its own bytes", () => {
     expect(entry?.action).toBe("skipped-user-content");
     expect(entry?.detail).toContain("only when its own bytes show the engine wrote it");
     expect(await readFile(join(root, "docs/AGENTS.md"), "utf8")).toBe(owner);
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("deletes the engine's unedited per-package charter once its package leaves", async () => {
     const root = getTemp().path("repo");
@@ -968,7 +968,7 @@ describe("an instruction file leaves only on its own bytes", () => {
       action: "deleted",
       proof: "hash",
     });
-  });
+  }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   // review/106, through the real planner: an owner's root AGENTS.md that init
   // imported leaves the nested copies the bare charter, so the proof renders
@@ -1360,7 +1360,7 @@ describe("the engine's own AGENTS.override.md proves itself by its appendix head
       expect(entry?.action).toBe("skipped-user-content");
       expect(entry?.detail).toContain("only when its own bytes show the engine wrote it");
       expect(await readFile(join(root, OVERRIDE), "utf8")).toBe(OWNER_OVERRIDE);
-    });
+    }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
   });
 });
 
