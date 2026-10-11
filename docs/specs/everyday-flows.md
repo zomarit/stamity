@@ -1314,7 +1314,7 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p8
 - **`/st-rework`.** A person's own nit, polish or cosmetic feedback is a Minor finding, never a note: their ask is its
   consequence (`content/commands/st-rework.md:110-114`; `review/72`). A leftover-scan hit with no named consequence
   is a note, listed under the phase-4 table and counted, never routed; the proof block counts notes beside the
-  findings (`:125-126`, `:159-161`, `:272-275`).
+  findings (`:125-126`, `:159-161`, `:274-277`).
 - **The findings grammar** — one JSON object per line, `id`, `severity`, `locator`, a `summary` of at most 300
   characters, and where true `decision_needed` and `security` — is spelled in the implementer's, the fixer's and the
   spec-author's return contracts (`content/agents/stamity-implementer.md:118-122`;
@@ -1355,7 +1355,9 @@ whole-branch review's fix round moved, and the `content/commands/st-work.md` one
 `5cd61743`. The ranges of `src/cli/commands/ledger.ts` that reach past its line 896 and of `src/runs/inboxStore.ts`
 that reach past its line 296, here and under `## Risks` and `## Concerns`, read at `cb73f8f1`: the fix batch for the
 pull request's review bot (`review/105` to `review/107`) moved them, and each was re-pointed to the lines that hold
-its text.
+its text. The ranges of `content/commands/st-rework.md` that reach past its line 176 read at `278af670`: the fix round
+at the run's close (2026-10-11; `qa/5`, `review/101`) added one line at 177 to 179 and one at 205 to 206, and each
+was re-pointed to the lines that hold its text.
 
 Frame reads and surfaces the deferral inbox rows whose paths overlap the change's files through the `ledger` verb's
 `inbox` query, which returns those rows, the rows it always shows, and its total and unmatched counts; from a bare
@@ -1500,7 +1502,7 @@ runs to the line before the next such `### ` or `## ` heading, trailing blank li
 (`content/commands/st-plan.md:286`), and its return line reads
 `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run` (`:416-417`). `/st-rework`
 runs the same gate, names `L5` as advisory, and closes its own line with `R1 pass|fail`
-(`content/commands/st-rework.md:245-251`, `:274-275`). The verify skill names the four codes as L5
+(`content/commands/st-rework.md:247-253`, `:276-277`). The verify skill names the four codes as L5
 (`content/skills/st-verify/SKILL.md:26`).
 
 - **As built, where the delta differed:**
@@ -1584,7 +1586,7 @@ and `q10b-flow-close-pointers` and their fix rounds. The rule's text is `/st-boa
   REQ-FLOW-075's, beside "leave uncommitted".
 - **The other flows.** `/st-pr-resolve` decides each DEFER row in its phase-3 triage ask and adds no closing ask
   (`content/commands/st-pr-resolve.md:323-325`). `/st-rework` decides its DEFER rows at phase 4's routing table and
-  asks no leftovers question at its handoff (`content/commands/st-rework.md:262-265`). `/st-quick` has no leftovers
+  asks no leftovers question at its handoff (`content/commands/st-rework.md:264-267`). `/st-quick` has no leftovers
   ask (REQ-FLOW-077).
 - **As built, where the delta differed:**
   - The delta said "the answer is applied before the record is written". No sentence states it in those words; what
@@ -1709,14 +1711,14 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   when: touched`, or `· by: <YYYY-MM-DD>` when the user names one, and a FIX that stays blocked lands as the same row
   (`content/commands/st-pr-resolve.md:315-318`).
 - **`/st-rework`.** A DEFER row ends `· source: rework <branch> · when: touched`, with `files: <path>` when the
-  location is `—` (`content/commands/st-rework.md:174-176`, `:181-183`). The critical-deferred row reads
+  location is `—` (`content/commands/st-rework.md:174-176`, `:182-184`). The critical-deferred row reads
   `Critical · <file:line> · <the consequence in one line> · source: rework <branch> · when: touched ·
   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`, or `by: <YYYY-MM-DD>` when the user names
-  one; at `—` it adds `files: <path>` straight after `when: touched`, or carries the user's day (`:195-204`). The
+  one; at `—` it adds `files: <path>` straight after `when: touched`, or carries the user's day (`:196-206`). The
   meta row reads `Minor · — · <one line> · source: rework <branch> · when: next board fill · meta`, or
-  `by: <YYYY-MM-DD>` in the trigger's place when the user names a day (`:291`). Amended 2026-10-10 (the whole-branch
+  `by: <YYYY-MM-DD>` in the trigger's place when the user names a day (`:293`). Amended 2026-10-10 (the whole-branch
   review's fix round; `review/93`, `review/89`): with no path to name, the rationale question also asks for the day, and
-  with neither no row is written (`:203-204`); the meta row's alternative now ends "never a day under `when:`" (`:291`).
+  with neither no row is written (`:204-205`); the meta row's alternative now ends "never a day under `when:`" (`:293`).
 - **The dep-audit skill.** A deferred item lands as
   `<Warning with an advisory, else Minor> · <manifest path:line> · <package> <current> → <target>, <risk class>[, <severity> advisory <advisory id>] · source: dep-audit · files: <lockfile path> · by: <YYYY-MM-DD>`,
   or `· when: touched` in the day's place. `files:` names the lockfile that holds the entry, so a bump of that
@@ -1737,7 +1739,7 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   - The plan's clause that `/st-quick` asks when its batch leaves a leftover was withdrawn before the build, so the
     lane offers no choice a scan hit, a red gate or a refusal could be closed around (`plan/40`).
   - `/st-rework` decides its DEFER rows at phase 4's routing table, not at its handoff ask
-    (`content/commands/st-rework.md:262-265`).
+    (`content/commands/st-rework.md:264-267`).
   - The dep-audit row carries `files:` and the advisory's severity word, and the day rule for a `critical` or `high`
     advisory, none of which the plan's template had (`review/65`, `review/67`).
 - **Proof:** `test/corpus/commands/plan.test.ts`, `test/corpus/commands/feedbackPair.test.ts`,
