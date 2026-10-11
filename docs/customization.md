@@ -83,7 +83,13 @@ back with `stamity config set ruleDelivery always-on`.
 
 An override of one of those rules still lands at `.stamity/overrides/rules/<id>.md`. Its delivery
 is then decided from your file's own frontmatter, exactly as it was decided from the bundled
-rule's. A rule of yours that declares `globs:` is attached conditionally instead.
+rule's. A rule of yours that declares `globs:` is attached conditionally instead. The `sync` that
+moves the delivery keeps the shipped rule's skill copies. With an override of `question-protocol`
+declaring `globs: ["src/**"]` on a setup with all four clients, it kept
+`.claude/skills/stamity-question-protocol/SKILL.md` and
+`.agents/skills/stamity-question-protocol/SKILL.md` with the shipped text unchanged and named
+both under `kept file(s) are yours now`, so the text you replaced stays on disk beside your rule
+until you delete those two files by hand.
 
 ## How do you author one?
 
