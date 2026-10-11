@@ -1493,6 +1493,33 @@ describe("check — installed pack integrity", () => {
     );
   });
 
+  it("says in the next step what clean --pack and sync each do, not that sync removes the copies", async () => {
+    // The step's closing reason said "after clean, sync only removes the pack's client copies,
+    // which add would otherwise find still owned". Since plan 019 file 1 `clean --pack` removes
+    // those copies itself, keeping and naming one it cannot prove, and the `sync` after it
+    // deletes none: it regenerates the clients' files without the pack, as `clean --pack`'s own
+    // next step says (walked on the built CLI on 2026-10-11, run 2026-10-11_release-1-14-0,
+    // unit f1-printed-remedies: 18 copies deleted by `clean --pack`, 2 kept and named, then a
+    // `sync` of 0 created, 2 updated and no file removed).
+    const handle = getRepo();
+    const { root, relPath } = await seedInstalledPack(handle, "# demo agent\n");
+    await writeFile(join(root, relPath), "# demo agent\nplus something nobody installed\n", "utf8");
+
+    const human = await runHuman(root);
+
+    const nextBlock = human.stdout.slice(human.stdout.indexOf("next:"));
+    expect(nextBlock).not.toContain("sync only removes the pack's client copies");
+    expect(nextBlock).not.toContain("which add would otherwise find still owned");
+    expect(nextBlock).toContain(
+      "clean --pack removes the pack's client copies itself and keeps and names any it cannot " +
+        "prove, and the sync after it regenerates the clients' files without the pack",
+    );
+    // The instruction this reason follows does not move.
+    expect(nextBlock).toContain(
+      "do not run sync first: it would carry the current bytes into the generated setup",
+    );
+  });
+
   it("reports a pack file that was deleted after install", async () => {
     const handle = getRepo();
     const { root, relPath } = await seedInstalledPack(handle, "# demo agent\n");

@@ -2150,8 +2150,9 @@ function renderNextSteps(
       )} — re-install the pack whose installed files no longer match, where <source> is the ` +
         `catalog id, local path or package name its install receipt records, as the row's ` +
         `finding line for that pack prints it; do not run sync first: ` +
-        `it would carry the current bytes into the generated setup; after clean, sync only ` +
-        `removes the pack's client copies, which add would otherwise find still owned`,
+        `it would carry the current bytes into the generated setup; clean --pack removes the ` +
+        `pack's client copies itself and keeps and names any it cannot prove, and the sync after ` +
+        `it regenerates the clients' files without the pack`,
     );
   }
   if (outcome.kind === "failed") {
