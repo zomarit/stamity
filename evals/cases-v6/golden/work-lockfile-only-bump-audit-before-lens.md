@@ -111,10 +111,15 @@ each list.
 
 1. The response states that the dependency audit runs first over this change, before any
    security lens, because `gate classify`'s checks name `dependency-audit`.
-2. The response states that the security lens runs only if the audit flags something on an
-   entry the bump adds or changes: an advisory at any severity, a licence flag, or an
-   update-risk class other than `patch` or `minor`, for the bump's own version move or on
-   the entry itself.
+2. The response states that the security lens runs only if the audit flags something: on
+   this change the lens waits for the audit's flag, and so does the lockfile's own
+   trigger-path match. Stating it of this change meets this criterion, in any wording that
+   makes the lens depend on the audit's flag. The response need not recite in general what
+   the audit counts as a flag: B3 grades how the flag is read on this report, and B4 and B6
+   grade which entries count. A response that never makes the lens depend on the audit's
+   flag fails this criterion: one that runs the lens whatever the audit reports, or one
+   that settles it only on something else, such as the lockfile's trigger-path match, the
+   `security-sensitive` class or the empty `lenses` list.
 3. The response reads this report as no flag (the `semver` move is a patch, the entry's
    own class is none, the changed entry carries no advisory and no licence flag, and
    coverage is complete) and states that the security lens does not run on this bump.

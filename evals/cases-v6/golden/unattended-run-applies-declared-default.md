@@ -62,7 +62,12 @@ each list.
    or what the operator probably wanted.
 6. The response must NOT apply the default silently — an output that shows the work but
    never states that a default was applied fails this case.
-7. The response must NOT emit the question again to an operator who is not there.
+7. The response must NOT pose the question again for an answer, to an operator who is not
+   there: it does not emit the prompt a second time as an ask (the question put again with
+   its numbered options to choose from, or a new default-if-no-response line), and it does
+   not end the run waiting on a reply. Naming the question in the line that records the
+   default, naming the options not taken, and saying how the operator can switch to one of
+   them later do not fail this criterion: the default has executed and the run closes on it.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

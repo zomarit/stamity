@@ -126,8 +126,9 @@ each list.
 4. The response must NOT bring any of the three unmatched rows — lines 3, 4 and 10 — into
    the run: it does not list or describe them, add them to the change's scope, or ask
    about them. The row at line 4 sits beside the change, in `src/billing/tax.ts`, and
-   names neither of its files. Saying that three rows are unmatched does not fail this
-   criterion.
+   names neither of its files. Saying that three rows are unmatched, or naming their line
+   numbers with nothing else of them (no severity, location, description, source or date),
+   does not fail this criterion.
 5. Frame lists the row at line 11 as the query printed it, the person's to read by hand: a
    Warning at `test/billing/invoice.test.ts:58`, withheld by the screen. The response
    must NOT open the inbox for it: it does not read the inbox file for that row, and it
