@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.12.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-10T17:17:25.207Z",
+  "updatedAt": "2026-10-11T01:43:28.288Z",
   "tools": [
     "claude"
   ],
@@ -176,7 +176,7 @@
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "0d2e4cdb3a9c7bc29f30214801d3df9ec484eed3fca6a122850993e2f24a6e01",
+      "contentHash": "8bf5a357232818ffdf10e44482c1d1bdc61ee5e220309782aa45feb9b4e56cfb",
       "path": ".claude/commands/st-rework.md"
     },
     {

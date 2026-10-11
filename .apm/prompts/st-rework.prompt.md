@@ -168,8 +168,9 @@ under the presented table as `note · file:line · category · remedy` and count
 - DEFER findings append to `.stamity/inbox.md` as one dated block per rework run, each row
   `severity · file:line · one-line description · source: rework <branch> · when: touched`, with
   `files: <path>` when the location is `—`, written through the persistence guard above. That inbox
-  has two guaranteed readers — `/st-board` fill triages it, and `/st-work` surfaces overlapping
-  items when its framing phase touches the same files — so a deferral is tracked, not lost.
+  has three guaranteed readers — `/st-board` fill triages it, `/st-work` surfaces overlapping items
+  when its framing phase touches the same files, and `/st-plan` folds overlapping items into its
+  shared intake — so a deferral is tracked, not lost.
 - Present the whole routing table once and take one batched correction
   (*"revise 3, defer 7 and 9"*), not a prompt per finding.
 - Present each finding's disposition in the shape it will take: a REVISE finding as the plan
@@ -195,7 +196,8 @@ A Critical finding the user wants deferred **is deferred** — with a record:
    the user names one). A row whose location is `—` adds `files: <path>` straight after
    `when: touched`, or carries the day the user names: the reader refuses a touch trigger that
    names no path. With no path to name, the rationale question also asks for the day; with neither,
-   no row is written. A row missing the date or the rationale is not this record.
+   no row is written. The run then closes naming the unwritten row as its open item. A row missing
+   the date or the rationale is not this record.
 
 Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
 the branch next. **Default if the rationale question goes unanswered:** the deferral stands and
