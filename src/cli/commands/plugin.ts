@@ -374,10 +374,17 @@ async function runSetup(ctx: CliContext, opts: Record<string, unknown>): Promise
       why: "a plugin-backed setup records ownership on a manifest it creates, and this repository already has one",
       // `clean` deletes the whole state directory (clean.ts removeStateDir), so
       // the route is destructive: the hint says so and names the save-first step.
+      // The put-back step does not restore a pack: the fresh manifest holds no
+      // `pack:<id>` row, so the copied files are not an installed pack (`check`
+      // reports none, `sync` projects nothing) and `add` refuses each as a file
+      // the pack does not own. The hint says so and names `add` instead.
       next:
         `${packageCommand("clean -y")} deletes the whole ${STATE_DIR}/ directory ` +
         `(learnings, handoffs, overrides, run records, packs and user hooks included): copy out what you want to keep first ` +
-        `and put it back after plugin setup; ${packageCommand("clean --dry-run")} lists what it removes`,
+        `and put it back after plugin setup, all but a pack; a pack copied back is not installed (no ledger row ` +
+        `records it, and add refuses over the copied files), so install each pack again after plugin setup with ` +
+        `${packageCommand("add <source>")}, where <source> is the catalog id, local path or package name you ` +
+        `installed it from; ${packageCommand("clean --dry-run")} lists what it removes`,
     });
   }
 

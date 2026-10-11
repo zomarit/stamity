@@ -768,6 +768,32 @@ describe("plugin setup — what it refuses", () => {
     expect(next).toContain(npxCommand("clean --dry-run"));
   });
 
+  it("says a pack is installed again with add after plugin setup, not copied back", async () => {
+    // The hint sent everything back into `.stamity/` after `plugin setup`, packs included. A
+    // pack copied back is files with no ledger row: `check` reports no installed pack, `sync`
+    // projects nothing from it, and `add` refuses each path as "a file already exists there
+    // that pack … does not own" until the copies are removed (`collectCollisions` in
+    // `src/pack/install.ts`, `collisionPart` in `src/cli/commands/add.ts`; walked on the built
+    // CLI on 2026-10-11, run 2026-10-11_release-1-14-0, unit f1-printed-remedies).
+    const root = await makeRepo();
+    await seedGenerated(root);
+    const installed = await pluginRoot("claude-root");
+
+    const result = await plugin(root, ["setup", "--plugin-root", installed, "-y"]);
+
+    expect(result.code).toBe(1);
+    const next = result.stderr.split("\n").find((line) => /^\s*next:/.test(line)) ?? "";
+    // The step that restores a pack, in the pinned call form, and when it runs.
+    expect(next).toContain(
+      `install each pack again after plugin setup with ${npxCommand("add <source>")}`,
+    );
+    // Why the copy does not do it, so the reader does not try the copy first.
+    expect(next).toContain("a pack copied back is not installed");
+    expect(next).toContain("add refuses over the copied files");
+    // The put-back step still stands for the rest, and now names its one exception.
+    expect(next).toContain("put it back after plugin setup, all but a pack");
+  });
+
   it("refuses when neither a flag nor a root variable names a root", async () => {
     const root = await makeRepo();
 
