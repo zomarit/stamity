@@ -31,6 +31,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-12
+
+### Upgrading from 1.12.0
+
+Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
+read what it will write. Run that `sync` before any `clean`, as the second item says.
+
+- **The first `sync` rewrites the charter.** Invariant 4 changes (invariants 1.2.0), so
+  `AGENTS.md` moves, and with Codex selected `AGENTS.override.md` too. Where the file is tracked
+  and clean in a repository whose top level is the setup root, `sync` names it in a notice and
+  takes no `.bak`: the previous text is in git history. For an uncommitted or untracked file, a
+  setup in a monorepo subfolder, or a git check that fails, `sync` keeps your previous file as
+  `AGENTS.md.bak` (and `AGENTS.override.md.bak`) and warns.
+- **`clean` and `clean --pack` refuse until this version's `sync` has run.** After the upgrade
+  they stop with `CLEAN_ERROR` before touching anything, naming files this version renders
+  differently. Run `sync`, then `clean -y`. The CLI's remedies and the plugin's `st-setup` body
+  print the route in that order.
+- **`.claude/settings.json` loses the `Read`, `Grep` and `Glob` allow rows.** The first `sync`
+  removes the three rows 1.12.0 wrote, with no backup, and from now on the engine writes only its
+  hook entries there, so Claude Code may ask before a read outside the project. A scoped row such
+  as `Read(./src/**)`, your `deny` and `ask` rules and any row you add afterwards are yours and
+  stay.
+- **Done now means the gates of the change's class.** After the `sync`, `/st-quick` and
+  `/st-work` ask `stamity gate classify` which gates a change needs. A change to code, to
+  configuration or to any path no rule places is `product` or stronger and runs every gate, as
+  before. A change made only of `docs/**`, top-level Markdown (the agent instruction files
+  excepted) or the engine's run records, inbox and handoffs runs the secret scan and the tests,
+  not lint or typecheck. That rests on your CI running every gate on `product` and stronger
+  changes: where the charter's `CI provider` reads `unknown`, both flows run every gate whatever
+  the class. A `/st-work` run opened at 1.12.0 has no `Base:` line in its record, so when it
+  finishes after the upgrade it runs every gate unclassified and, once work is committed, lists
+  `secret scan: not run` under `Not done:`.
+- **A secret-shaped value in a change stops the run.** Both flows scan the change's added lines
+  first, and a hit stops them, naming the path, the line and the rule. There is no allow-list: a
+  hit on a deliberate test fixture is yours to settle before the run goes on.
+- **More changes reach the security lens, and fewer fit the quick lane.** A change to a CI
+  workflow, a shell script, a container build file, a package manager's install-steering file, or
+  a client's hooks, settings or MCP file is now `security-sensitive`, and so is a changed line in
+  JavaScript, TypeScript or Python code that spawns a process, deletes or overwrites a file,
+  calls the network or assigns a secret name. `/st-work` runs the `security` lens on it at every
+  tier, and `/st-quick` hands such a batch to `/st-work`.
+- **The review loop's default cap is 3 rounds, down from 4.** A setup that never set
+  `review.maxIterations` takes the new default on the first `sync`, which also rewrites the cap
+  in Claude Code's generated review-gate hook. A value you set stays. To keep four rounds, run
+  `stamity config set review.maxIterations 4`, then `sync`.
+- **Copilot agent files gain two keys.** The first `sync` adds
+  `include-custom-instructions: true` and `reasoning-effort: <level>` to every
+  `.github/agents/stamity-<id>.agent.md`, so a Copilot CLI sub-agent loads `AGENTS.md` and asks
+  for its class's effort: `high`, `medium` or `low`, unless `config set effort.<class>` names
+  another level.
+- **Two effort levels are written differently.** An `effort.<class>` of `minimal` is now written
+  as `low` on Codex and on Copilot, and `sync` warns naming the client. A `max` is written as
+  `max` on Codex, where 1.12.0 wrote `xhigh`.
+- **Deferred rows need a date or a trigger.** The flows file new rows in `.stamity/inbox.md`
+  below a `## Rows under the schedule rule` heading they add, each with `by:` or `when:`. The
+  rows you already have stay valid above it and need no edit. A row written by hand below the
+  heading with neither does not parse, and the inbox query lists it as `unparsed`.
+  `stamity ledger close --retired` now refuses a value that is not `fixed <ref>`, `cut <reason>`
+  or `scheduled <place>` with a date or a trigger.
+- **A `/st-work` close asks about leftovers, and QA asks for a person less often.** The closing
+  question gains a part listing each finding left open and each due or touched inbox row, with a
+  recommendation for each; an unattended close drops nothing real and files the run's own
+  leftovers as `decision-waiting`. The QA walk-through keeps a person row only for a rendered
+  surface, a live third-party client or account, or a step that cannot be undone, and a change of
+  class `docs`, `records` or `tests` closes with no walk-through and no ask unless it changes a
+  rendered page.
+- **`clean --pack <id>` also removes the pack's client copies.** It keeps and names a copy you
+  edited or one it cannot prove the engine wrote, and the pack remedies gain a step by hand for
+  those: delete each kept copy, unless it is yours, then run `sync`.
+
+1.13.0 was skipped on purpose: no release carries that number, and 1.14.0 follows 1.12.0.
+
 ### Security
 
 - **The Claude Code settings the engine writes pre-approve no tool.** The `Read`, `Grep` and
@@ -267,6 +339,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   capture by consequence, the scoped inbox read, the person QA rows and the close's leftovers.
   That makes 81 golden, 30 adversarial and 30 probes, with 31 floor cases. The thresholds and the
   scoring rule do not move.
+- **The 1.14.0 release eval run.** The release rule calls for a full run of the set: files a run
+  hashes as its inputs moved, and the 1.12.0 run of record is FAIL. The run's id, its status and
+  its numbers land here after the run.
 
 ### Fixed
 
@@ -1878,7 +1953,8 @@ as its item below says.
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/zomarit/stamity/compare/v1.12.0...v1.14.0
 [1.12.0]: https://github.com/zomarit/stamity/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/zomarit/stamity/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/zomarit/stamity/compare/v1.9.1...v1.10.0
