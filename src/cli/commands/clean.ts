@@ -449,6 +449,17 @@ const STALE_NAMED = 3;
  * `sync` the proof holds and the clean removes it. Runs on the preview sweep,
  * before the confirmation, so `--dry-run` refuses the same way. A retired
  * artifact, an edited file and one the proof could not judge are never marked.
+ *
+ * One case is not cleared by that `sync`, and the next step names it: a pack
+ * file edited after install renders other bytes at its client copy, so the copy
+ * is marked here too, in both forms of the command, and a `sync` would carry
+ * the edit into the client's files — the step `check`'s pack-integrity row
+ * forbids (`packReinstallSteps`, `../../pack/verifyInstalled.ts`). With the
+ * edited file out of the pack's directory no rendering names the copy, so it
+ * is kept and named and the run goes through with no `sync`. The exception is
+ * worded on an edited file, not on a failing row: once the file is out the row
+ * reports it missing, a `sync` carries nothing of it, and a copy that is stale
+ * for another reason still needs that `sync`.
  */
 function refuseStaleRenderings(ctx: CliContext, manifest: SetupManifest, preview: ReclaimReport, rerun: string): void {
   const stale = preview.entries.filter((entry) => entry.staleRendering === true).map((entry) => entry.path);
@@ -464,7 +475,12 @@ function refuseStaleRenderings(ctx: CliContext, manifest: SetupManifest, preview
       `each still hashes to what the ledger records, but this version (${ctx.app.version}) renders other bytes at its path, ` +
       `so the delete cannot be proven and clean would leave the file behind.${wroteBy} Nothing was removed. ` +
       `A sync rewrites these paths, so if one of them is yours rather than the engine's, move it aside first.`,
-    next: `run ${packageCommand("sync")} with this version first, then ${packageCommand(rerun)}`,
+    next:
+      `run ${packageCommand("sync")} with this version first, then ${packageCommand(rerun)} — ` +
+      `unless the pack-integrity row of ${packageCommand("check")} names an edited pack file, one that no longer ` +
+      `hashes to what its install recorded: then do not run sync, which would carry the edited bytes into the ` +
+      `clients' files; move that file out of the pack's directory first, as that row says, and run ` +
+      `${packageCommand(rerun)} again`,
   });
 }
 

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
@@ -1038,6 +1038,69 @@ describe("clean --pack — the pack's projected copies", () => {
       expect(await readFile(manifestFile, "utf-8")).toBe(manifestBefore);
     },
     60_000,
+  );
+
+  // Run 2026-10-11_release-1-14-0, rows build/18, fix/1 and review/10 (one
+  // defect). A pack file edited after install renders other bytes at its client
+  // copy, so the copy, which still hashes to the ledger, is one a `sync`
+  // rewrites, and the refusal's next step said to `sync` first: the step
+  // `check`'s pack-integrity row forbids, since that `sync` carries the edited
+  // bytes into the client's files. The step now names the exception, in both
+  // forms of the command, and what it says is held here too: with the file out
+  // of the pack's directory the same commands run, with no `sync` in between.
+  it(
+    "refuses over the copy of an edited pack file, and its next step keeps that pack away from sync",
+    async () => {
+      const root = await copyOf(opsSynced);
+      const packAgent = `${STATE_DIR}/packs/ops/agents/stamity-devops.md`;
+      const agentCopy = ".claude/agents/stamity-devops.md";
+      const copyBefore = await readFile(join(root, agentCopy), "utf-8");
+      const edited = `${await readFile(join(root, packAgent), "utf-8")}\nA line added after install.\n`;
+      await writeFile(join(root, packAgent), edited, "utf-8");
+
+      const forms = [
+        { argv: ["--pack", "ops", "--json", "-y"], rerun: "clean --pack ops" },
+        { argv: ["--json", "--dry-run"], rerun: "clean -y" },
+      ];
+      for (const { argv, rerun } of forms) {
+        const refused = await runClean(root, argv);
+
+        expect(refused.code, rerun).toBe(1);
+        const error = parseSingleDoc(refused.stdout)["error"] as { code: string; message: string; next: string };
+        expect(error.code, rerun).toBe("CLEAN_ERROR");
+        expect(error.message, rerun).toContain(`1 file(s) the ledger records as unedited`);
+        expect(error.message, rerun).toContain(agentCopy);
+        // The step it always gave, word for word.
+        expect(error.next, rerun).toContain(
+          `run ${npxCommand("sync")} with this version first, then ${npxCommand(rerun)}`,
+        );
+        // The exception, in the same step.
+        expect(error.next, rerun).toContain(
+          `unless the pack-integrity row of ${npxCommand("check")} names an edited pack file`,
+        );
+        expect(error.next, rerun).toContain("then do not run sync");
+        expect(error.next, rerun).toContain(
+          `move that file out of the pack's directory first, as that row says, and run ${npxCommand(rerun)} again`,
+        );
+      }
+      // Refused twice, and the edit reached no client file.
+      expect(await readFile(join(root, agentCopy), "utf-8")).toBe(copyBefore);
+
+      await rename(join(root, packAgent), join(root, "stamity-devops.edited.md"));
+
+      const fullPreview = await runClean(root, ["--dry-run"]);
+      expect(fullPreview.code, fullPreview.stderr).toBe(0);
+      const scoped = await runClean(root, ["--pack", "ops", "-y"]);
+      expect(scoped.code, scoped.stderr).toBe(0);
+      // The moved file's own copy is kept and named; it never held the edit.
+      expect(scoped.stdout).toContain(`skipped-user-content  ${agentCopy}`);
+      expect(await readFile(join(root, agentCopy), "utf-8")).toBe(copyBefore);
+      expect(existsSync(join(root, STATE_DIR, "packs", "ops"))).toBe(false);
+      expect(rowsOwnedBy(await readLedgerOnDisk(root), "pack:ops")).toEqual([]);
+      // The copies of the pack's unedited files left with it.
+      expect(existsSync(join(root, EDITED_COPY))).toBe(false);
+    },
+    90_000,
   );
 
   it(
