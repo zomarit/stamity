@@ -1,3 +1,3 @@
-<!-- STAMITY:BEGIN v1.12.0 -->
+<!-- STAMITY:BEGIN v1.14.0 -->
 @AGENTS.md
 <!-- STAMITY:END -->

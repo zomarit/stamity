@@ -115,7 +115,7 @@ product code changed as well as an artifact authored is not Tier 1 — it leaves
    location, retires it after the gate is green. A row whose `Ref:` names a ledger row is
    retired there first, through
    `npx --no stamity ledger close --run <its run> --id <row id> --retired "fixed by /st-quick"`
-   (`npx -y @zomarit/stamity@1.12.0` in place of `npx --no stamity` where npm refuses); then its bullet leaves
+   (`npx -y @zomarit/stamity@1.14.0` in place of `npx --no stamity` where npm refuses); then its bullet leaves
    `.stamity/inbox.md`. When neither form runs, the bullet stays. The batch report names each
    row retired — quick keeps no run record, so the report is the record — and each named row
    left in place, with why.
@@ -143,7 +143,7 @@ of 5 growing past a threshold stops the batch there:
 
 Gates run on every batch, a one-line typo fix included.
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.12.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.14.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, the batch runs `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` and the report lists `secret scan: not run` under `Not done:`. An installed copy with no `gate` verb counts as neither form running.
 
 The gate is three steps, in order, after the last item lands:
