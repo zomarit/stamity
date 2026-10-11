@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   gitCheckRunner,
@@ -453,5 +453,88 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
 
     expect(status).toEqual({ available: true, dirty: false, changedCount: 0 });
     expect(history).toEqual({ commitCount: 1, contributorCount: 1 });
+  });
+
+  // Windows only, and only a real Windows host can run it: there the runtime
+  // looks for a bare program name in the folder the child runs in before it
+  // looks on `PATH`, which no POSIX host does and no in-process stand-in
+  // reproduces. The file under git's name is a copy of the Node binary running
+  // this suite: handed git's arguments it exits with an error and does nothing
+  // else. The reads answer for the repository only when the git on `PATH` is
+  // the program that was started. The copy goes in after the seeding, whose
+  // own git calls run in the same folder by bare name.
+  it.runIf(process.platform === "win32")("reads a repository whose root holds a program file under git's name", async () => {
+    const repo = getRoot().path("repo");
+    await mkdir(repo);
+    git(repo, ["init", "-q"]);
+    commit(repo, "one", ALICE);
+    copyFileSync(process.execPath, join(repo, "git.exe"));
+
+    withProcessEnv(await readEnv(getRoot().path("home")), () => {
+      expect(readWorkingTreeStatus(repo).available).toBe(true);
+      expect(readHistoryFacts(repo)).toEqual({ commitCount: 1, contributorCount: 1 });
+    });
+  });
+});
+
+/**
+ * Which program the default runner starts. The stand-ins are scripts this
+ * suite writes into its own temp folder, and Windows starts no shebang script,
+ * so the cases that start one run on POSIX hosts. There an empty `PATH` entry
+ * and a relative one both name the folder the child runs in, which is how a
+ * bare program name comes to be looked up there.
+ */
+describe("the default runner starts the git an absolute PATH entry holds", () => {
+  const getRoot = useTempDir("gitstatus-path");
+
+  /** A script under git's name in `folder` that logs `line` and prints `stdout`. */
+  async function seedScript(folder: string, line: string, stdout: string): Promise<void> {
+    await mkdir(folder, { recursive: true });
+    const started = getRoot().path("started.log");
+    await writeFile(join(folder, "git"), `#!/bin/sh\nprintf '%s\\n' "${line}" >> '${started}'\nprintf '%s' '${stdout}'\nexit 0\n`, "utf8");
+    await chmod(join(folder, "git"), 0o755);
+  }
+
+  it.skipIf(process.platform === "win32")("never a file of git's name in the working folder, whatever PATH says of that folder", async () => {
+    const work = getRoot().path("work");
+    const standIn = getRoot().path("stand-in");
+    await seedScript(work, "the working folder's file", "?? planted.txt\n");
+    await seedScript(standIn, "$0", "");
+    const started = getRoot().path("started.log");
+    const env = await readEnv(getRoot().path("home"));
+
+    for (const path of [`${delimiter}${standIn}`, `.${delimiter}${standIn}`, `${work}${delimiter}${standIn}`]) {
+      expect(withProcessEnv({ ...env, PATH: path }, () => readWorkingTreeStatus(work)), path).toEqual({ available: true, dirty: false, changedCount: 0 });
+    }
+
+    // The stand-in logs the path it was started by: the absolute one, three times.
+    expect(readFileSync(started, "utf8")).toBe(`${join(standIn, "git")}\n`.repeat(3));
+  });
+
+  it.skipIf(process.platform === "win32")("reports that git did not answer where only the working folder holds a file of its name", async () => {
+    const work = getRoot().path("work");
+    const empty = getRoot().path("empty");
+    await seedScript(work, "the working folder's file", "");
+    await mkdir(empty);
+    const env = await readEnv(getRoot().path("home"));
+
+    for (const path of ["", ".", work, `${delimiter}${empty}${delimiter}.`]) {
+      expect(withProcessEnv({ ...env, PATH: path }, () => readWorkingTreeStatus(work)), path).toEqual(UNAVAILABLE);
+      expect(withProcessEnv({ ...env, PATH: path }, () => readHistoryFacts(work)), path).toBeNull();
+    }
+
+    expect(existsSync(getRoot().path("started.log"))).toBe(false);
+  });
+
+  it("reports that git did not answer where no PATH entry holds git, on every host", async () => {
+    const work = getRoot().path("work");
+    const empty = getRoot().path("empty");
+    await mkdir(work);
+    await mkdir(empty);
+
+    const env = await readEnv(getRoot().path("home"), { PATH: empty });
+
+    expect(withProcessEnv(env, () => readWorkingTreeStatus(work))).toEqual(UNAVAILABLE);
+    expect(withProcessEnv(env, () => readHistoryFacts(work))).toBeNull();
   });
 });

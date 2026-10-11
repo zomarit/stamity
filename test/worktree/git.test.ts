@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 // import that could race the `vi.mock` hoisting.
 import type * as ChildProcessModule from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { delimiter, isAbsolute, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { EngineError } from "../../src/types/errors.ts";
 import {
@@ -18,12 +19,19 @@ import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
- * Every argument array the lane hands `spawn("git", …)`. A spy, not a stub: the
- * real `spawn` still runs. The options the lane puts ahead of each command are
- * the subject, only the real call site spells them, and a case that looks at
- * what git did cannot tell them from a refusal that came from somewhere else.
+ * Every argument array the lane hands `spawn` for git, and the program each
+ * call named. A spy, not a stub: the real `spawn` still runs. The options the
+ * lane puts ahead of each command are the subject, only the real call site
+ * spells them, and a case that looks at what git did cannot tell them from a
+ * refusal that came from somewhere else.
+ *
+ * TEST CHANGE, justified: the lane starts git by the absolute path it resolved
+ * on `PATH`, where it used to hand `spawn` the bare name, so the spy matched
+ * `args[0] === "git"` and would now record nothing. It matches the program's
+ * file name instead, bare or under a folder, and keeps the program so a case
+ * can pin how git was named. Every existing assertion over `args` is unchanged.
  */
-const gitSpawns = vi.hoisted(() => ({ args: [] as string[][] }));
+const gitSpawns = vi.hoisted(() => ({ args: [] as string[][], programs: [] as string[] }));
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcessModule>();
@@ -31,7 +39,10 @@ vi.mock("node:child_process", async (importOriginal) => {
   return {
     ...actual,
     spawn: (...args: unknown[]): unknown => {
-      if (args[0] === "git" && Array.isArray(args[1])) gitSpawns.args.push(args[1].map(String));
+      if (/(?:^|[\\/])git(?:\.exe|\.com)?$/i.test(String(args[0])) && Array.isArray(args[1])) {
+        gitSpawns.programs.push(String(args[0]));
+        gitSpawns.args.push(args[1].map(String));
+      }
       return original(...args);
     },
   };
@@ -396,5 +407,94 @@ describe("runGit at a root shaped like a bare repository", () => {
     expect(gitSpawns.args).toEqual([
       ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "status", "--porcelain"],
     ]);
+  });
+});
+
+/**
+ * Which program the lane starts. The stand-ins are scripts this suite writes
+ * into its own temp folder, and Windows starts no shebang script, so the cases
+ * that start one run on POSIX hosts. There an empty `PATH` entry and a relative
+ * one both name the folder the child runs in, which is how a bare program name
+ * comes to be looked up there.
+ */
+describe("runGit starts the git an absolute PATH entry holds", () => {
+  const getRoot = useTempDir("worktree-git-path");
+
+  /** A script under git's name in `folder` that prints `word`. */
+  async function seedScript(folder: string, word: string): Promise<void> {
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "git"), `#!/bin/sh\nprintf '%s' '${word}'\nexit 0\n`, "utf8");
+    await chmod(join(folder, "git"), 0o755);
+  }
+
+  /** Runs `body` with `PATH` set on this process, which the lane's child inherits; restored after. */
+  async function withPath<T>(path: string, body: () => Promise<T>): Promise<T> {
+    const previous = process.env["PATH"];
+    process.env["PATH"] = path;
+    try {
+      return await body();
+    } finally {
+      if (previous === undefined) delete process.env["PATH"];
+      else process.env["PATH"] = previous;
+    }
+  }
+
+  const READ = ["rev-parse", "--is-inside-work-tree"];
+
+  it.skipIf(process.platform === "win32")("never a file of git's name in the working folder, whatever PATH says of that folder", async () => {
+    const work = getRoot().path("work");
+    const standIn = getRoot().path("stand-in");
+    await seedScript(work, "the file in the working folder");
+    await seedScript(standIn, "the git on PATH");
+    gitSpawns.programs.length = 0;
+
+    for (const path of [`${delimiter}${standIn}`, `.${delimiter}${standIn}`, `${work}${delimiter}${standIn}`]) {
+      // oxlint-disable-next-line no-await-in-loop -- each row sets PATH on this process; two at once would start under each other's
+      const answer = await withPath(path, () => runGit({ args: READ, cwd: work }));
+      expect(answer, path).toEqual({ status: 0, stdout: "the git on PATH", stderr: "" });
+    }
+
+    expect(gitSpawns.programs).toEqual([join(standIn, "git"), join(standIn, "git"), join(standIn, "git")]);
+  });
+
+  it.skipIf(process.platform === "win32")("answers as it does with no git installed where only the working folder holds a file of its name", async () => {
+    const work = getRoot().path("work");
+    await seedScript(work, "the file in the working folder");
+    gitSpawns.programs.length = 0;
+
+    for (const path of ["", ".", work]) {
+      // oxlint-disable-next-line no-await-in-loop -- each row sets PATH on this process; two at once would start under each other's
+      const answer = await withPath(path, () => runGit({ args: READ, cwd: work }));
+      expect(answer, path).toEqual({ status: 127, stdout: "", stderr: "spawn git ENOENT" });
+    }
+
+    expect(gitSpawns.programs).toEqual([]);
+  });
+
+  it("answers status 127 where no PATH entry holds git, on every host", async () => {
+    const work = getRoot().path("work");
+    const empty = getRoot().path("empty");
+    await mkdir(work);
+    await mkdir(empty);
+
+    const answer = await withPath(empty, () => runGit({ args: READ, cwd: work }));
+
+    expect(answer).toEqual({ status: 127, stdout: "", stderr: "spawn git ENOENT" });
+  });
+
+  // On every host: the program the lane hands `spawn` is a full path to a file
+  // that exists, never a bare name the runtime would look up for itself.
+  it("starts the host's git by an absolute path", async (ctx) => {
+    const work = getRoot().path("work");
+    await mkdir(work);
+    gitSpawns.programs.length = 0;
+
+    const answer = await runGit({ args: ["--version"], cwd: work });
+    if (answer.status === 127) ctx.skip();
+
+    expect(answer.stdout).toContain("git version");
+    expect(gitSpawns.programs).toHaveLength(1);
+    expect(isAbsolute(gitSpawns.programs[0] ?? "")).toBe(true);
+    expect(existsSync(gitSpawns.programs[0] ?? "")).toBe(true);
   });
 });

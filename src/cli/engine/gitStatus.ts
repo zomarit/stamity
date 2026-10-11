@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
+import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
 import type { GitRunner } from "../../workspace/git.ts";
 
 /**
@@ -156,6 +157,12 @@ export interface GitCheckRunnerOptions {
  * The look holds for a tree git checked out, and what it leaves is said on it
  * (`../../merge/safeWrite.ts::gitDiscoveryMeetsBareShape`).
  *
+ * Git is started by an absolute path, the one {@link gitProgramFor} resolves on
+ * `PATH` for the working folder, never by its bare name: a file of git's name
+ * in the folder git runs in is not the program started, on any platform. Where
+ * no `PATH` entry holds git the call throws what Node throws on a machine with
+ * no git installed (`ENOENT`, no exit status), and no program is started.
+ *
  * Exported so every other git read of the CLI runs the same construction:
  * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's
  * diff can outgrow a status probe.
@@ -167,9 +174,13 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
     if (gitDiscoveryMeetsBareShape(cwd)) {
       throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
     }
-    return execFileSync("git", ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args], {
+    const env = gitCheckEnv();
+    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
+    const git = gitProgramFor(cwd, env);
+    if (git === null) throw programNotFound("git", "spawnSync", pinned);
+    return execFileSync(git, pinned, {
       cwd,
-      env: gitCheckEnv(),
+      env,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
       timeout,

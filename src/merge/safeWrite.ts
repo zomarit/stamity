@@ -17,6 +17,7 @@ import {
 } from "../denyscan/denyScan.ts";
 import type { DenyHit } from "../denyscan/denyScan.ts";
 import { bytesShowEngineOutput, renderingProofClass } from "../manifest/ownedPaths.ts";
+import { gitProgramFor, programNotFound } from "../shared/programPath.ts";
 import type { MergeResult, SourceRefusal } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import { MANAGED_BLOCK_VARIANTS, getMarkersForPath } from "../types/markers.ts";
@@ -1141,14 +1142,24 @@ export function bareShapeRefusal(cwd: string): string {
  * committed folder shaped like a bare repository, and `core.fsmonitor=false`
  * runs no file-system monitor command, whatever any config says. Before any of
  * it, {@link gitDiscoveryMeetsBareShape} rejects the call with no git started.
+ *
+ * Git is started by an absolute path, the one {@link gitProgramFor} resolves on
+ * `PATH` for the setup root, never by its bare name: a file of git's name in
+ * the setup root is not the program started, on any platform. Where no `PATH`
+ * entry holds git the call rejects as it does on a machine with no git
+ * installed, and no program is started.
  */
 function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
   if (gitDiscoveryMeetsBareShape(cwd)) return Promise.reject(new Error(bareShapeRefusal(cwd)));
+  const env = gitCheckEnv();
+  const pinned = ["--literal-pathspecs", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
+  const git = gitProgramFor(cwd, env);
+  if (git === null) return Promise.reject(programNotFound("git", "spawn", pinned));
   return new Promise((resolvePromise, rejectPromise) => {
     execFile(
-      "git",
-      ["--literal-pathspecs", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args],
-      { cwd, env: gitCheckEnv(), encoding: "utf8", timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
+      git,
+      pinned,
+      { cwd, env, encoding: "utf8", timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error === null) resolvePromise(stdout);
         else rejectPromise(error);

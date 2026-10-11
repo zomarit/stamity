@@ -47,7 +47,11 @@ vi.mock("node:child_process", async (importOriginal) => {
   return {
     ...actual,
     execFileSync: (...args: unknown[]): unknown => {
-      if (args[0] === "git" && Array.isArray(args[1]) && args[1][1] === "safe.bareRepository=explicit") {
+      // TEST CHANGE, justified: the runner starts git by the absolute path it resolved on `PATH`,
+      // where it used to hand `execFileSync` the bare name, so `args[0] === "git"` would now match
+      // no call of the verb's. The program is matched by its file name, bare or under a folder; the
+      // runner's own option still tells the verb's calls from the fixtures'.
+      if (/(?:^|[\\/])git(?:\.exe|\.com)?$/i.test(String(args[0])) && Array.isArray(args[1]) && args[1][1] === "safe.bareRepository=explicit") {
         const argv = args[1].map(String);
         gitSpy.calls.push(argv);
         const { fault } = gitSpy;

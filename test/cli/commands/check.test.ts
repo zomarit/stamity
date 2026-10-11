@@ -2973,7 +2973,10 @@ describe("check — the gates it did not run (REQ-FLOW-008)", () => {
       expect(result.stdout).toContain("gates not run: lint, typecheck, test");
       expect(result.stdout).not.toContain("cannot be resolved");
       // The doctor's own git probe is the one spawner check has; nothing else was asked for.
-      expect(attempted.filter((file) => file !== "git")).toEqual([]);
+      // TEST CHANGE, justified: that probe starts git by the absolute path it resolved on `PATH`,
+      // where it used to name it bare, so the program is matched by its file name, bare or under
+      // a folder. The claim is unchanged: git is the only program check reaches for.
+      expect(attempted.filter((file) => !/(?:^|[\\/])git(?:\.exe|\.com)?$/i.test(file))).toEqual([]);
     } finally {
       vi.doUnmock("node:child_process");
       vi.resetModules();

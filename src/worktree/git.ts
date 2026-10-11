@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../merge/safeWrite.ts";
+import { gitProgramFor, programNotFound } from "../shared/programPath.ts";
 import { EngineError } from "../types/errors.ts";
 import type { GitPathClass } from "./policy.ts";
 
@@ -86,6 +87,12 @@ export const GIT_FETCH_TIMEOUT_MS = 60_000;
  * read and the "git is not installed" case reaches the operator through the
  * same wrapper that names what was being attempted.
  *
+ * Git is started by an absolute path, the one {@link gitProgramFor} resolves on
+ * `PATH` for the working folder, never by its bare name: a file of git's name
+ * in the folder git runs in is not the program started, on any platform. Where
+ * no `PATH` entry holds git the outcome is the "git is not installed" one,
+ * status 127 with Node's own message, and no program is started.
+ *
  * Two options go ahead of every command, the ones the CLI's other git reads
  * pin (`../cli/engine/gitStatus.ts::gitCheckRunner`):
  * `safe.bareRepository=explicit` (protected configuration, so honoured from
@@ -115,7 +122,12 @@ export const runGit: WorktreeGitRunner = (invocation) =>
       return;
     }
     const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...invocation.args];
-    const child = spawn("git", pinned, {
+    const git = gitProgramFor(invocation.cwd, process.env);
+    if (git === null) {
+      settle({ status: 127, stdout: "", stderr: programNotFound("git", "spawn", pinned).message });
+      return;
+    }
+    const child = spawn(git, pinned, {
       cwd: invocation.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       // Per-invocation, not global: only the callers that ask for a ceiling get

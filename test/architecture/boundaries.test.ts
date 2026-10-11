@@ -267,6 +267,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The pinned CLI call (sw26-cli-token): imports only the errors module, read
   // by the wave-2 substitution pass, so it sits with the other shared leaves.
   "src/shared/cliCall.ts": { unit: "sw26-cli-token", wave: 1 },
+  // Where a program started by its bare name is looked up: zero internal
+  // imports (node builtins only), read by every module that starts git, in the
+  // engine and in the CLI, so it sits with the other shared leaves, below all
+  // of them.
+  "src/shared/programPath.ts": { unit: "s3-program-path", wave: 1 },
   "src/denyscan/denyScan.ts": { unit: "p1-04", wave: 1 },
   "src/mcp/secretScan.ts": { unit: "p1-05", wave: 1 },
   "src/roster/triggers.ts": { unit: "p1-06", wave: 1 },

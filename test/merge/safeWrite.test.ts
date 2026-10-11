@@ -5,7 +5,7 @@ import type * as ChildProcessModule from "node:child_process";
 import { createHash } from "node:crypto";
 import type * as FsModule from "node:fs";
 import { chmod, mkdir, readdir, readFile, realpath, stat, symlink, utimes, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   classPathOf,
@@ -44,11 +44,18 @@ import { useTempDir } from "../support/tempDir.ts";
 /* oxlint-disable no-await-in-loop */
 
 /**
- * Every argument array `safeWrite.ts` hands `execFile("git", …)` — the
- * tracked-and-clean check's calls. The real `execFile` still runs; the fixtures'
- * `spawnSync` is not wrapped and records nothing.
+ * Every argument array `safeWrite.ts` hands `execFile` for git — the
+ * tracked-and-clean check's calls — and the program each call named. The real
+ * `execFile` still runs; the fixtures' `spawnSync` is not wrapped and records
+ * nothing.
+ *
+ * TEST CHANGE, justified: the check starts git by the absolute path it resolved
+ * on `PATH`, where it used to hand `execFile` the bare name, so the spy matched
+ * `args[0] === "git"` and would now record nothing. It matches the program's
+ * file name instead, bare or under a folder, and keeps the program so a case
+ * can pin how git was named. Every existing assertion over `args` is unchanged.
  */
-const gitCheckCalls = vi.hoisted(() => ({ args: [] as string[][] }));
+const gitCheckCalls = vi.hoisted(() => ({ args: [] as string[][], programs: [] as string[] }));
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcessModule>();
@@ -56,7 +63,10 @@ vi.mock("node:child_process", async (importOriginal) => {
   return {
     ...actual,
     execFile: (...args: unknown[]): unknown => {
-      if (args[0] === "git" && Array.isArray(args[1])) gitCheckCalls.args.push(args[1].map(String));
+      if (/(?:^|[\\/])git(?:\.exe|\.com)?$/i.test(String(args[0])) && Array.isArray(args[1])) {
+        gitCheckCalls.programs.push(String(args[0]));
+        gitCheckCalls.args.push(args[1].map(String));
+      }
       return original(...args);
     },
   };
@@ -1475,6 +1485,76 @@ describe("safeWriteFile — an unproven overwrite at a charter or Copilot's hook
     for (const args of gitCheckCalls.args) {
       expect(configBeforeSubcommand(args)).toEqual(expect.arrayContaining(["safe.bareRepository=explicit", "core.fsmonitor=false"]));
     }
+  });
+
+  // On every host: the program the check hands `execFile` is a full path to a
+  // file that exists, never a bare name the runtime would look up for itself.
+  it("starts git by an absolute path for every call the check makes", async () => {
+    const root = tempDir().dir;
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    gitCheckCalls.args.length = 0;
+    gitCheckCalls.programs.length = 0;
+
+    const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+    expect(result.notice).toContain("its previous content is in git history");
+    expect(gitCheckCalls.programs).toHaveLength(3);
+    for (const program of gitCheckCalls.programs) {
+      expect(isAbsolute(program), program).toBe(true);
+      expect(await exists(program), program).toBe(true);
+    }
+  });
+
+  // The stand-in is a script this suite writes, and Windows starts no shebang
+  // script, so the two cases below run on POSIX hosts. There an empty `PATH`
+  // entry names the folder the child runs in, which is how a bare program name
+  // comes to be looked up in the setup root.
+  it.skipIf(process.platform === "win32")("answers from the git on PATH where the setup root holds a file of git's name", async () => {
+    const root = tempDir().dir;
+    const marker = markerPath();
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    await put(root, "git", `#!/bin/sh\ntouch '${marker}'\nexit 1\n`);
+    await chmod(join(root, "git"), 0o755);
+    vi.stubEnv("PATH", `${delimiter}${process.env["PATH"] ?? ""}`);
+    try {
+      const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+
+      // The real git answered: tracked and clean, so the notice and no `.bak`.
+      expect(result.notice).toContain("its previous content is in git history");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(await exists(marker)).toBe(false);
+    expect(await backupsOf(root, "AGENTS.md")).toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32")("takes the .bak, and starts nothing, where only the setup root holds a file of git's name", async () => {
+    const root = tempDir().dir;
+    const marker = markerPath();
+    gitRepo(root);
+    await put(root, "AGENTS.md", OWNER_CHARTER);
+    commit(root, "AGENTS.md");
+    await put(root, "git", `#!/bin/sh\ntouch '${marker}'\nexit 0\n`);
+    await chmod(join(root, "git"), 0o755);
+    gitCheckCalls.args.length = 0;
+
+    for (const path of ["", ".", root]) {
+      vi.stubEnv("PATH", path);
+      try {
+        const result = await safeWriteFile(join(root, "AGENTS.md"), ENGINE_CHARTER("2.0.0"), rowFor(root, "AGENTS.md", OWNER_CHARTER));
+        expect(result.warning, path).toContain(GIT_UNCONFIRMED);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+      await writeFile(join(root, "AGENTS.md"), OWNER_CHARTER, "utf8");
+    }
+
+    expect(await exists(marker)).toBe(false);
+    expect(gitCheckCalls.args).toEqual([]);
   });
 
   // A git older than 2.38 does not know `safe.bareRepository`, so there the
