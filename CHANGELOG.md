@@ -301,11 +301,12 @@ where git would read a bare repository.
   release on Windows in a checkout of work you had not read, look in the folder you ran it in for a
   file of either name, and if one is there, treat it as a program that ran with your rights. One
   thing can change for you: where your only git sits behind an entry the walk skips, the verbs now
-  answer as on a machine with no git, and `check`'s `git-available` row says the engine found no git
-  to start and which entries it takes git from; put git's folder on `PATH` by its full path. This
-  covers the folder git runs in and nothing wider. The walk takes the `PATH` the engine is started
-  with as given, so an entry that is a full path to some other folder is searched as it stands, a
-  folder inside the checkout included; `SECURITY.md` carries the row and its residual.
+  answer as on a machine with no git, and `check`'s `git-available` row, `init`'s note and the
+  `worktree` verbs' refusal say the engine found no git to start and which entries it takes git
+  from; put git's folder on `PATH` by its full path. This covers the folder git runs in and nothing
+  wider. The walk takes the `PATH` the engine is started with as given, so an entry that is a full
+  path to some other folder is searched as it stands, a folder inside the checkout included;
+  `SECURITY.md` carries the row and its residual.
 
 ### Added
 
@@ -608,7 +609,9 @@ where git would read a bare repository.
   `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The row also says that
   git may only have been slow to answer the check, and that both verbs may still run in that case.
   It names no git command to type: it says whether the engine found a git binary on `PATH`, in a
-  text of its own where it found none, naming the `PATH` entries git is taken from, and tells
+  text of its own where it found none, naming the `PATH` entries git is taken from. `init`'s note
+  has the same two texts and no longer names `git init`, and so has the refusal of the `worktree`
+  verbs, which said the folder is in no repository whatever the cause. The row tells
   no repository from a slow git by a `.git` entry found by name. Where the engine did not start git
   because the folder or one above it has the layout of a bare repository, the row says that instead,
   names no git command to run, and says to start no flow there until the folder is moved, as the

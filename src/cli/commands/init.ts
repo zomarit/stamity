@@ -13,6 +13,7 @@ import {
   type PredecessorDefaults,
 } from "../../migration/carry.ts";
 import { detectPredecessorState, type PredecessorState } from "../../migration/detect.ts";
+import { gitProgramFor } from "../../shared/programPath.ts";
 import type { MergeResult } from "../../types/content.ts";
 import type { ImportDecision } from "../../types/manifest.ts";
 import {
@@ -324,11 +325,19 @@ async function askProceedWithoutGit(
  * The line every non-git run prints — interactive, piped, `-y` and `--json`
  * alike — so the disclosure never depends on whether anyone was asked.
  *
- * Its second sentence carries the clauses of `check`'s `git-available` row
+ * It carries the clauses of `check`'s `git-available` row
  * (`./check.ts::checkGit`): this is the verb an operator with no repository
  * runs first, so it cannot say less than the row they read one command later.
- * What the two verbs lose is worded on git or the repository being absent, as
- * in that row, because the probe also fails on a git that was only slow.
+ * As that row does, it asks the engine's own walk whether a git was found
+ * (`../../shared/programPath.ts::gitProgramFor`, under the `PATH` the read
+ * itself walked) and has a text for each answer. Where the walk found none the
+ * note says so, says which `PATH` entries git is taken from, and states what
+ * the two verbs lose outright. Where it found one, the note says that, which
+ * leaves a missing repository or a git that was only slow, so what the two
+ * verbs lose is worded on the repository being absent. Neither text names a
+ * git command to type: a git typed at a prompt is found by the shell's rules,
+ * not by the engine's walk, so the note says what the engine found where it
+ * once said to type `git init`.
  *
  * Where the look the engine takes before it starts git kept this folder from
  * git (`reason`, the status's own), the note is that row's other text instead:
@@ -340,7 +349,7 @@ async function askProceedWithoutGit(
  * cause, so beside what the flows list the note says to start none there until
  * the folder is moved, as that row does (review/72).
  */
-function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"]): string {
+function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], rootDir: string): string {
   const tense = dryRun ? "would be written" : "were written";
   if (reason === "bare-layout") {
     return (
@@ -356,11 +365,22 @@ function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"]): string
       `here until that folder is moved off this path.`
     );
   }
+  if (gitProgramFor(rootDir, process.env) === null) {
+    return (
+      `git did not answer here, so the files that ${tense} have no revert path: the engine found ` +
+      `no git to start. It takes git only from a PATH entry that is a full path to a folder other ` +
+      `than this one, and no such entry holds a git binary: install git, or put the folder that ` +
+      `holds it on PATH by its full path. Two verbs need git: worktree refuses without it, and ` +
+      `gate reads every change from it, so here gate scan exits 1 and /st-quick and /st-work list ` +
+      `\`secret scan: not run\` under \`Not done:\`.`
+    );
+  }
   return (
     `no git repository: git did not answer in this directory, so the files that ${tense} have ` +
-    `no revert path — \`git init\` here first if you want one. Two verbs need git: worktree ` +
-    `refuses without it, and gate reads every change from it, so with no git or no repository ` +
-    `gate scan exits 1 and /st-quick and /st-work list \`secret scan: not run\` under \`Not done:\`.`
+    `no revert path. The engine found a git binary on PATH, so this directory is not a ` +
+    `repository, or git was only slow to answer. Two verbs need git: worktree refuses without ` +
+    `it, and gate reads every change from it, so with no repository gate scan exits 1 and ` +
+    `/st-quick and /st-work list \`secret scan: not run\` under \`Not done:\`.`
   );
 }
 
@@ -1167,7 +1187,7 @@ export const initCommand: CommandModule = {
     // FIRST, and on every non-git run whether or not anyone was asked: the
     // disclosure is about what this run can and cannot be undone by, which the
     // operator needs before reading anything else the panel says.
-    if (!git.available) notes.push(noGitNote(ctx.dryRun, git.reason));
+    if (!git.available) notes.push(noGitNote(ctx.dryRun, git.reason, rootDir));
     // Printed for BOTH modes, never only for the one a flag asked for: the
     // state that most needs saying out loud is a machine run that took `skip`
     // because nobody was there to consent to `full`.

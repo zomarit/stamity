@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
@@ -1205,15 +1205,101 @@ describe("init — the no-git note", () => {
     const notes = result.stdout.split("\n").filter((line) => line.trimStart().startsWith("no git repository:"));
     expect(notes).toHaveLength(1);
     const note = notes[0] ?? "";
-    expect(note).toContain(`so the files that ${tense} have no revert path — \`git init\` here first if you want one.`);
+    // TEST CHANGE, justified: the note went on "— `git init` here first if you want one", and this
+    // case held it to that clause. A git typed at a prompt is found by the shell's rules, which are
+    // not the engine's: the engine takes git only from a `PATH` entry that is a full path to a
+    // folder other than this one (`src/shared/programPath.ts`), so the typed command can start a
+    // program the engine never would. The note now says what the engine itself found, as `check`'s
+    // row does, and names no git command. The fixture is a folder with no repository on a host
+    // that has git on `PATH`, so this is the text for a git that was found.
+    expect(note).toContain(`so the files that ${tense} have no revert path.`);
+    expect(note).toContain("The engine found a git binary on PATH");
+    expect(note).toContain("so this directory is not a repository, or git was only slow to answer");
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse", "git --"]) {
+      expect(note, `the note names ${call}`).not.toContain(call);
+    }
     expect(note).not.toContain("Nothing in stamity requires git");
     expect(note).not.toContain("not undoable");
     expect(note).toContain("Two verbs need git");
     expect(note).toContain("worktree refuses without it");
     expect(note).toContain("gate reads every change from it");
-    expect(note).toContain("so with no git or no repository gate scan exits 1");
+    // TEST CHANGE, justified: the clause read "so with no git or no repository gate scan exits 1".
+    // On this text the engine has found a git binary, so the loss is conditional on the repository
+    // alone; a git the engine did not find has the note's other text, the next case's.
+    expect(note).toContain("so with no repository gate scan exits 1");
     expect(note).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+    expect(note.trimStart()).toBe(
+      `no git repository: git did not answer in this directory, so the files that ${tense} have ` +
+        "no revert path. The engine found a git binary on PATH, so this directory is not a " +
+        "repository, or git was only slow to answer. Two verbs need git: worktree refuses without " +
+        "it, and gate reads every change from it, so with no repository gate scan exits 1 and " +
+        "/st-quick and /st-work list `secret scan: not run` under `Not done:`.",
+    );
   });
+
+  // The note had one text wherever git did not answer and the look refused nothing: "no git
+  // repository", and "`git init` here first". The engine takes git only from a `PATH` entry that
+  // is a full path to a folder other than the one git runs in (`resolveProgramOnPath`,
+  // `src/shared/programPath.ts`). Where git is reachable through no such entry there may be a
+  // repository, and the command the note named starts whatever the shell finds, which is not what
+  // the engine would start. The engine knows whether it found a git, so the note says so in words
+  // of its own, as `check`'s `git-available` row does, and names no command to type.
+  //
+  // Two `PATH` values per run, each read from the process environment as the read itself reads
+  // it: an empty one, and one whose only entry is the setup root, which holds files of git's
+  // program names (`git` for POSIX, `git.exe` for Windows). The engine skips an entry that is the
+  // folder git runs in, so neither file is started; their bodies never run. The client is named,
+  // so no detection of this run hangs on the `PATH` under test.
+  it.each([
+    { name: "a real run", argv: ["-y", "--tools", "copilot"], tense: "were written" },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y", "--tools", "copilot"], tense: "would be written" },
+  ])(
+    "says the engine found no git to start, and names no git command, where no PATH entry it takes git from holds one, on $name",
+    async ({ argv, tense }) => {
+      const emptyRoot = await makeRepo("empty-path");
+      const ownRoot = await makeRepo("own-folder");
+      await writeFile(join(ownRoot, "git"), "#!/bin/sh\nexit 1\n", "utf8");
+      await chmod(join(ownRoot, "git"), 0o755);
+      await writeFile(join(ownRoot, "git.exe"), "not a program\n", "utf8");
+
+      // One run at a time: the note reads the process's own `PATH`, which the two runs set in turn.
+      const runWith = async (root: string, path: string): Promise<{ path: string; result: InProcessResult }> => {
+        vi.stubEnv("PATH", path);
+        try {
+          return { path, result: await runInit(root, argv) };
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      };
+      const empty = await runWith(emptyRoot, "");
+      const ownFolder = await runWith(ownRoot, ownRoot);
+
+      for (const { path, result } of [empty, ownFolder]) {
+        expect(result.code, `PATH=${path}`).toBe(0);
+        const lines = result.stdout.split("\n").map((line) => line.trimStart());
+        expect(lines.filter((line) => line.startsWith("no git repository:")), `PATH=${path}`).toEqual([]);
+        const notes = lines.filter((line) => line.startsWith("git did not answer here"));
+        expect(notes, `PATH=${path}`).toHaveLength(1);
+        const note = notes[0] ?? "";
+        // None of the causes that are not this one, and no command to type.
+        expect(note, `PATH=${path}`).not.toContain("not a repository");
+        expect(note, `PATH=${path}`).not.toContain("slow to answer");
+        for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse", "git --"]) {
+          expect(note, `PATH=${path}: the note names ${call}`).not.toContain(call);
+        }
+        // Revert path first, as in the other two notes; with no git the two verbs' loss is stated
+        // outright, as in the note for a folder kept from git.
+        expect(note, `PATH=${path}`).toBe(
+          `git did not answer here, so the files that ${tense} have no revert path: the engine found ` +
+            "no git to start. It takes git only from a PATH entry that is a full path to a folder other " +
+            "than this one, and no such entry holds a git binary: install git, or put the folder that " +
+            "holds it on PATH by its full path. Two verbs need git: worktree refuses without it, and " +
+            "gate reads every change from it, so here gate scan exits 1 and /st-quick and /st-work list " +
+            "`secret scan: not run` under `Not done:`.",
+        );
+      }
+    },
+  );
 
   // Run 2026-10-11_release-1-14-0, fix/20, review/59 and review/44. Before the engine starts git
   // it looks at the folder and the folders above it, and a folder there with the layout of a bare
@@ -1412,11 +1498,17 @@ describe("init — the no-git note", () => {
     "`Not done:`. Neither flow stops at this cause, and the git a flow's session and its sub-agents " +
     "start is not set to refuse such a folder as the engine's is, so start no flow here until that " +
     "folder is moved off this path.";
+  // TEST CHANGE, justified: this text ended its first sentence on "— `git init` here first if you
+  // want one" and worded the loss on "no git or no repository". It is the note for a folder with no
+  // repository on a host whose git the engine found, as "init — the no-git note" holds above: it
+  // says what the engine found and names no git command. What this constant is for is unchanged:
+  // the note outside a refused folder carries no sentence about flows.
   const PLAIN_NOTE =
     "no git repository: git did not answer in this directory, so the files that were written have " +
-    "no revert path — `git init` here first if you want one. Two verbs need git: worktree " +
-    "refuses without it, and gate reads every change from it, so with no git or no repository " +
-    "gate scan exits 1 and /st-quick and /st-work list `secret scan: not run` under `Not done:`.";
+    "no revert path. The engine found a git binary on PATH, so this directory is not a " +
+    "repository, or git was only slow to answer. Two verbs need git: worktree refuses without " +
+    "it, and gate reads every change from it, so with no repository gate scan exits 1 and " +
+    "/st-quick and /st-work list `secret scan: not run` under `Not done:`.";
 
   /** The numbered rows the panel prints last, without their numbers. */
   function panelSteps(stdout: string): string[] {

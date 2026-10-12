@@ -9,9 +9,14 @@ import { accessSync, constants, realpathSync, statSync } from "node:fs";
  * there first, before any `PATH` entry, and on POSIX an empty `PATH` entry or a
  * relative one names that folder. The engine starts git in the setup root, a
  * folder whose files are a repository's content, so the program it starts must
- * never be one of them. {@link resolveProgramOnPath} takes the same walk over
- * the `PATH` entries that are full paths to some other folder, and the caller
- * starts the absolute path it returns.
+ * never be a file of the folder git runs in. {@link resolveProgramOnPath} takes
+ * the same walk over the `PATH` entries that are full paths to some other
+ * folder, and the caller starts the absolute path it returns.
+ *
+ * That folder is all the walk keeps out. It takes `PATH` as given: an entry
+ * that is a full path to another folder is searched as it stands, a folder
+ * elsewhere in the same checkout included, so whatever sets the `PATH` the
+ * engine is started with chooses the program.
  *
  * The walk is pure over its parameters: the platform whose rules apply, the
  * `PATH` value, the working folder and the probe that reads the disk are all

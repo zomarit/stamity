@@ -1,6 +1,6 @@
 import { chmod, lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { partialCleanupErrorDocument, worktreeCommand } from "../../../src/cli/commands/worktree.ts";
 import type { CleanupWorktreeReport, WorktreeCleanupResult } from "../../../src/worktree/cleanup.ts";
 import { runGit } from "../../../src/worktree/git.ts";
@@ -168,9 +168,109 @@ describe.skipIf(!gitAvailable)("worktree dispatch", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("is not inside a git repository");
-    // The next step outside a repository is the one it was (fix/21 moves it only where the
-    // lane's look before git refused the folder, below).
-    expect(result.stderr).toContain("Run the command from inside a clone, or create one with `git init`.");
+    // TEST CHANGE, justified: the next step read "Run the command from inside a clone, or create
+    // one with `git init`.", and this case held it to that sentence. A git typed at a prompt is
+    // found by the shell's rules, which are not the engine's: the engine takes git only from a
+    // `PATH` entry that is a full path to a folder other than the one git runs in
+    // (`src/shared/programPath.ts`), so the typed command can start a program the engine never
+    // would. The step now says how to tell a clone by name, and names no git command. This block
+    // runs only where the host has git, so this is the refusal for a git the engine found.
+    expect(result.stderr).toContain(
+      "Run the command from inside a clone. A .git entry in this folder or in a folder above it, " +
+        "found by name, shows whether this is one.",
+    );
+    expect(result.stderr).not.toContain("the engine found no git to start");
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse", "git --"]) {
+      expect(result.stderr, `the refusal names ${call}`).not.toContain(call);
+    }
+  });
+});
+
+// Where the first call failed without the mark, every verb said the folder "is not inside a git
+// repository" and to "create one with `git init`", whatever the cause. The lane starts git by an
+// absolute path it resolves itself, from a `PATH` entry that is a full path to a folder other than
+// the one git runs in (`resolveProgramOnPath`, `src/shared/programPath.ts`), and where no such
+// entry holds git it starts no program (`runGit`, status 127). There the folder may well be in a
+// repository, and the command the refusal named starts whatever the shell finds, which is not what
+// the lane would start. The engine knows whether it found a git, so the refusal says so in words of
+// its own, as `check`'s `git-available` row does, and names no command to type.
+//
+// Two `PATH` values, each read from the process environment as the seam reads it: an empty one, and
+// one whose only entry is the folder the verb runs in, which holds files of git's program names
+// (`git` for POSIX, `git.exe` for Windows). The lane skips an entry that is the folder git runs in,
+// so neither file is started and their bodies never run: these cases need no git on the host.
+describe("worktree where the engine found no git to start", () => {
+  async function seedOwnFolder(): Promise<string> {
+    const folder = join(getTemp().dir, "own-folder");
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "git"), "#!/bin/sh\nexit 1\n", "utf8");
+    await chmod(join(folder, "git"), 0o755);
+    await writeFile(join(folder, "git.exe"), "not a program\n", "utf8");
+    return folder;
+  }
+
+  /** One run at a time: the seam reads the process's own `PATH`, which each run sets in turn. */
+  async function runWithPath(cwd: string, path: string, args: readonly string[]): Promise<InProcessResult> {
+    vi.stubEnv("PATH", path);
+    try {
+      return await runWorktree(cwd, args);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it.each([
+    { verb: "the bare read", args: [] },
+    { verb: "list", args: ["list"] },
+    { verb: "setup", args: ["setup", "feat", "-y"] },
+    { verb: "cleanup", args: ["cleanup", "--all", "-y"] },
+  ] as const)("refuses $verb with that cause, and names no git command and no missing repository", async ({ args }) => {
+    const folder = await seedOwnFolder();
+
+    const empty = await runWithPath(folder, "", args);
+    const ownFolder = await runWithPath(folder, folder, args);
+
+    for (const [path, result] of [["", empty], [folder, ownFolder]] as const) {
+      expect(result.code, `PATH=${path}`).toBe(1);
+      expect(result.stderr, `PATH=${path}`).toContain(
+        `git did not answer in ${folder}: the engine found no git to start, and every worktree verb ` +
+          "acts on a repository git opens.",
+      );
+      expect(result.stderr, `PATH=${path}`).toContain(
+        "The engine takes git only from a PATH entry that is a full path to a folder other than the " +
+          "one git runs in, and no such entry holds a git binary.",
+      );
+      expect(result.stderr, `PATH=${path}`).toContain(
+        "Install git, or put the folder that holds it on PATH by its full path, and run the command again.",
+      );
+      // None of the causes that are not this one, no raw spawn error, and no command to type.
+      expect(result.stderr, `PATH=${path}`).not.toContain("is not inside a git repository");
+      expect(result.stderr, `PATH=${path}`).not.toContain("inside a clone");
+      expect(result.stderr, `PATH=${path}`).not.toContain("ENOENT");
+      for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse", "git --"]) {
+        expect(result.stderr, `PATH=${path}: the refusal names ${call}`).not.toContain(call);
+      }
+    }
+  });
+
+  it("keeps the error document's code and keys under --json", async () => {
+    const folder = await seedOwnFolder();
+    const shaped = join(getTemp().dir, "shaped");
+    await mkdir(join(shaped, "objects"), { recursive: true });
+    await mkdir(join(shaped, "refs"));
+    await writeFile(join(shaped, "HEAD"), "", "utf8");
+
+    const noGit = singleDoc(await runWithPath(folder, "", ["list", "--json"]));
+    // The refusal at a folder the look before git refused starts no git either, on any host.
+    const refused = singleDoc(await runWorktree(shaped, ["list", "--json"]));
+
+    const error = noGit["error"] as Record<string, string>;
+    expect(noGit["ok"]).toBe(false);
+    expect(error["code"]).toBe("VALIDATION_ERROR");
+    expect(Object.keys(noGit).toSorted()).toEqual(Object.keys(refused).toSorted());
+    expect(Object.keys(error).toSorted()).toEqual(Object.keys(refused["error"] as Record<string, string>).toSorted());
+    expect(error["message"]).toContain("the engine found no git to start");
+    expect(`${error["message"] ?? ""} ${error["why"] ?? ""} ${error["next"] ?? ""}`).not.toContain("git init");
   });
 });
 

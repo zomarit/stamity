@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { confirm, promptGate, sanitizeLabel, type PromptGate } from "../kit/prompts.ts";
+import { gitProgramFor } from "../../shared/programPath.ts";
 import { EngineError } from "../../types/errors.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import {
@@ -125,6 +126,16 @@ interface Lane {
  * other git command (fix/21): inside a real checkout `git init` nests a
  * repository in the folder the lane had just kept from git. The code is the one
  * every other refusal here carries.
+ *
+ * Where that first call fails without the mark, the refusal has two texts, told
+ * apart by what the engine's own walk found
+ * (`../../shared/programPath.ts::gitProgramFor`, the walk the seam took before
+ * it started anything, under the same environment). Where it found no git, the
+ * seam started no program, and the refusal says so and says which `PATH`
+ * entries git is taken from, never that the folder is in no repository. Where
+ * it found one, the folder is in no repository git opens. Neither names a git
+ * command to type: a git typed at a prompt is found by the shell's rules, not
+ * by the engine's walk.
  */
 async function resolveLane(ctx: CliContext): Promise<Lane> {
   const run = runGit;
@@ -145,12 +156,26 @@ async function resolveLane(ctx: CliContext): Promise<Lane> {
         "the command from a checkout that does not keep it there.",
     });
   }
+  if (outcome.status !== 0 && gitProgramFor(cwd, process.env) === null) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message:
+        `git did not answer in ${cwd}: the engine found no git to start, and every worktree verb ` +
+        `acts on a repository git opens.`,
+      why:
+        "The engine takes git only from a PATH entry that is a full path to a folder other than the " +
+        "one git runs in, and no such entry holds a git binary.",
+      next: "Install git, or put the folder that holds it on PATH by its full path, and run the command again.",
+    });
+  }
   if (outcome.status !== 0) {
     throw new CliFailure({
       code: "VALIDATION_ERROR",
       message: `${cwd} is not inside a git repository, and every worktree verb acts on one.`,
       why: sanitizeLabel(outcome.stderr.trim() || outcome.stdout.trim()),
-      next: "Run the command from inside a clone, or create one with `git init`.",
+      next:
+        "Run the command from inside a clone. A .git entry in this folder or in a folder above it, " +
+        "found by name, shows whether this is one.",
     });
   }
   const topLevel = resolve(outcome.stdout.trim());

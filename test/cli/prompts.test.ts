@@ -1171,7 +1171,7 @@ describe("the raw menu — the answer echo after Enter", () => {
   });
 
   it("keeps every character of the shipped migrate answer at 80 columns", async () => {
-    // The question and the two choices `../../src/cli/commands/init.ts:267-277`
+    // The question and the two choices `../../src/cli/commands/init.ts:268-278`
     // ships, spelled out here rather than imported: what this leg is about is
     // the WIDTHS that reach the renderer, so a later reword of that prompt
     // should make these numbers stale loudly instead of quietly re-measuring
