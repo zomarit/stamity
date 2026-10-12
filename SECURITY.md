@@ -246,16 +246,16 @@ where it depends on it.
   alias), Codex runs none of the hooks, the guards included: `sync` and `init` keep it and warn,
   and `check` exits 1 naming the line. Codex runs hooks by default (codex-cli 0.160.1, read
   2026-10-07), so a `[features]` table without the key leaves them on. The second is the project's
-  trust level. The third is the
-  per-hook review through the interactive `/hooks` command, or `--dangerously-bypass-hook-trust`
-  for automation that cannot take that step. Headless `codex exec` on codex-cli 0.154.0 ran no
-  project hook in three runs in the 2026-09-15 measurement, and on 0.155.1 it again ran none in 3 of
-  3 runs (2026-09-30). Both trusted the project only through a per-invocation override, so the
-  cause is not isolated, and a run trusted in the home config is unmeasured. So a hook on that
-  client is enforcement in the interactive session and nothing measured in the headless lane
-  (`src/adapters/codex.ts`, the `hook enforcement` fact).
-  An MCP server definition likewise becomes a launcher your editor spawns at start-up. Read all
-  five, and read the `runs on this machine` block `stamity add` prints before accepting a pack.
+  trust level. The third is the per-hook review through the interactive `/hooks` command, or
+  `--dangerously-bypass-hook-trust` for automation that cannot take that step. Headless `codex exec`
+  on codex-cli 0.154.0 ran no project hook in three runs in the 2026-09-15 measurement, and on
+  0.155.1 it again ran none in 3 of 3 runs (2026-09-30). Both trusted the project only through a
+  per-invocation override, so the cause is not isolated, and a run trusted in the home config is
+  unmeasured. So a hook on that client is enforcement in the interactive session and nothing
+  measured in the headless lane (`src/adapters/codex.ts`, the `hook enforcement` fact). An
+  MCP server definition likewise becomes a launcher your editor spawns at start-up. Read all five,
+  and read the `runs on this machine` block `stamity add` prints before accepting a pack. Hook lines
+  and MCP launchers name a program bare: see residuals (2) and (3) of the row on how git is started.
 - **Who a signature names.** A verified bundle proves that an identity signed exactly these bytes. It
   does not prove that identity was entitled to publish this pack. The pin comes from the pack's own
   `signing.signer`, so a pack naming its own author verifies whoever that is. There is no
