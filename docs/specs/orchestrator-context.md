@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 status: shipped-with-1.14.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
@@ -61,6 +61,14 @@ body, were re-pointed to `9a0ba4cf`, since that run's QA fix round lengthened th
 second, from that run's whole-branch review's fix round the same day: REQ-CTX-020's three citations of
 `content/commands/st-board.md` were re-pointed to `5cd61743`, where that round lengthened the "Leftovers at a close"
 bullet, and the clause it added under "A stopped close" cites that head.
+
+On 2026-10-12 the spec merge of run `2026-10-12_board-writes` (its unit `s1-spec-merge`) changed no requirement here.
+It re-pointed to that run's integration head `3415e721`, outside the Context section, every citation in this file of
+`content/commands/st-work.md`, `content/commands/st-plan.md`, `content/commands/st-board.md` and
+`src/runs/ledgerStore.ts` whose text that run moved, and the four citations of `src/cli/commands/ledger.ts` under
+REQ-CTX-005, which rounds before it had already moved off their text. Those citations read at `3415e721` wherever
+another paragraph of this preamble, or a line beside the citation, names an older head for them. Every other citation of those five files, outside the Context section,
+holds its text there, and the Context section's stay at `fed39ac`.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -360,19 +368,19 @@ Implements C1.
   trailing ` decision-needed` on the line of a row carrying `decision_needed: true`
   (amendment A5).
 - **One report, one role, once.** `append --report` refuses a `--source` other than the
-  `<role>` segment of the report's name (`src/cli/commands/ledger.ts:286-296`); a `--stdin`
+  `<role>` segment of the report's name (`src/cli/commands/ledger.ts:389-400`); a `--stdin`
   append names no report, so no role is compared. A report the ledger already carries rows
   from is refused, naming those rows: a report is appended once
-  (`src/runs/ledgerStore.ts:469-480`).
+  (`src/runs/ledgerStore.ts:477-488`).
 - **Ids a close reads.** `close --report` reads every id, in `--ids` and in the closures block,
   through `qualifyLedgerId`: a short `<phase>/<n>` is qualified with the `--run` id, any other
   spelling is taken as given, and an id whose first segment names another run refuses the whole
-  close (`src/runs/ledgerStore.ts:542-556`, `:733`, `:760`).
+  close (`src/runs/ledgerStore.ts:550-564`, `:741`, `:768`).
 - **Write scope.** It writes only under `.stamity/runs/<run-id>/`. A report path must resolve
   inside that run's `reports/`.
 - **Locking.** It serializes through the engine's write lock (`acquireWriteLock`, R22): a lock
   directory, `<ledger>.lock`, created exclusively beside the ledger and stale after 15 s by
-  default; the ledger then lands through a temp file plus rename (`src/runs/ledgerStore.ts:36-42`,
+  default; the ledger then lands through a temp file plus rename (`src/runs/ledgerStore.ts:44-50`,
   `src/merge/atomicWrite.ts:162`, `:381`).
 
 Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two changes:
@@ -384,14 +392,14 @@ Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two chan
   row left is appended as a new row, so a re-piped block files nothing and names each original id once. The ledger is
   read under the lock, so two concurrent appends of one block file it once. Only rows already in the ledger are
   matched, never the block's own earlier findings, and only rows whose id belongs to this run
-  (`src/runs/ledgerStore.ts:400-447`, `:482-506`). A matched finding prints that row's line with the suffix
+  (`src/runs/ledgerStore.ts:408-455`, `:490-514`). A matched finding prints that row's line with the suffix
   `already-filed`, with the row's own severity and `decision-needed` marker read from the ledger, not the incoming
-  finding's (`src/cli/commands/ledger.ts:243-253`; `review/127`); each `--json` row carries `alreadyFiled`. The append
+  finding's (`src/cli/commands/ledger.ts:333-343`; `review/127`); each `--json` row carries `alreadyFiled`. The append
   exits 0.
 - **The stdin refusal names the size.** It reads
   `the block piped on stdin is at least <n> bytes, over the <ceiling> byte input ceiling`, where `<n>` is what was read
   when the ceiling tripped: the pipe is not drained further, so the message states the figure as a lower bound
-  (`src/cli/commands/ledger.ts:177-197`, the message at `:189`, read at `a9e94f06`; ledger `build/118`, `review/149`).
+  (`src/cli/commands/ledger.ts:267-287`, the message at `:279`, read at `3415e721`; ledger `build/118`, `review/149`).
 
 As built, beyond the delta: a `--stdin` finding also matches a row that was filed from a report, since the rule names
 phase, source and evidence only (ledger `build/120`).
@@ -452,10 +460,10 @@ place and refuses an unknown id.
 
 Amended 2026-09-30 (plan 013 file 3, units `sw21-ledger-cli-papercuts` and `sw13-runs-retire-fixed-inbox-rows`).
 `--id` reads its id through `qualifyLedgerId`, as `--ids` already did: a short `<phase>/<n>` names the `--run` run's
-row, and an id whose first segment names another run is refused (`src/runs/ledgerStore.ts:830-860`). The same reading
+row, and an id whose first segment names another run is refused (`src/runs/ledgerStore.ts:838-868`). The same reading
 serves `ledger close --id <row> --retired "<disposition>"`, which keeps a `deferred` row's state and sets its dated
-`retired` field (REQ-FLOW-024; `src/runs/ledgerStore.ts:899-942`). A manual close's refusal names the rationale's
-length (`:851-858`).
+`retired` field (REQ-FLOW-024; `src/runs/ledgerStore.ts:907-950`). A manual close's refusal names the rationale's
+length (`:859-866`).
 
 Implements C9, C7 (D3).
 
@@ -464,7 +472,7 @@ Implements C9, C7 (D3).
 A dispatch names the persisted plan unit by path and unit id, never by line number, plus
 run-specific parameters, in at most 15 lines. An in-flow plan is persisted once, as
 `.stamity/runs/<run-id>/plan.md`, in `/st-plan`'s unit shape
-(`content/commands/st-plan.md:342-354`). That replaces "persisted nowhere" in the
+(`content/commands/st-plan.md:345-357`). That replaces "persisted nowhere" in the
 Plan-artifact intake bullet of `content/commands/st-work.md`.
 
 Implements C10 (D4).
@@ -506,12 +514,12 @@ The two new lines are written at Frame.
 Amended 2026-10-09 (run `2026-10-08_product-core`, the p3 fix rounds for `review/115` and `review/133`). The head
 carries four lines among its first 15: `Status:`, `Plan:`, `Base: <commit>` and `Invocation:`. `Base:` is the run's
 branch point, recorded as the commit id `git rev-parse HEAD` gives at Frame, never the word `HEAD`, which would
-resolve later and narrow the Prove pass's scan and class (`content/commands/st-work.md:399-403`). The Prove pass reads
+resolve later and narrow the Prove pass's scan and class (`content/commands/st-work.md:408-412`). The Prove pass reads
 it as the base of `gate scan` and `gate classify` (`:188`, `:193`), and the proof block's `Gate results` label line
 names it (`:313-314`; `review/137`). A run with no `Base:` line runs the full gates unclassified (REQ-FLOW-063).
 
 Amended 2026-10-10 (run `2026-10-10_next-tier`, unit `f0-make-room`). The body now states the four head lines, and the
-`reports/` folder with its ignore file, in the Proof block's record paragraph (`content/commands/st-work.md:399-403`);
+`reports/` folder with its ignore file, in the Proof block's record paragraph (`content/commands/st-work.md:408-412`);
 Frame step 5 opens the record "with the head lines and the `reports/` folder the Proof block names" (`:31-32`). Frame
 still writes the head, and the requirement does not change.
 
@@ -1070,13 +1078,13 @@ The close adds one line to the record's Proof block:
   close (`content/commands/st-work.md:332-333`).
 - **The count rule.** n = f + s + d, k ≤ d and a ≤ n. A `decision-waiting` append and a kept inbox row count in s, an
   inbox row already tagged `decision-waiting` among them, so every `decision-waiting` row the close took counts in
-  n. Unattended, d = k = c = 0 (`:333`; `content/commands/st-board.md:434-440`). The notes are counted under `notes`
+  n. Unattended, d = k = c = 0 (`:333`; `content/commands/st-board.md:472-478`). The notes are counted under `notes`
   and outside n: an unattended close drops its notes and still reads d = 0.
 - **`real` and `changed`.** `real` counts the Critical and Warning rows among those shown, and `changed` the rows
-  whose recommendation the person changed (`content/commands/st-board.md:449-451`).
-- **A stopped close** counts as an unattended one: each leftover is counted as scheduled (`:442-449`). Its notes are
+  whose recommendation the person changed (`content/commands/st-board.md:487-489`).
+- **A stopped close** counts as an unattended one: each leftover is counted as scheduled (`:480-487`). Its notes are
   dropped as an unattended close drops them, and `/st-board`'s third answer names every leftover row on `Not done:`, no
-  note (`:423-424`; amended 2026-10-10, the whole-branch review's fix round of run `2026-10-10_next-tier`, its ledger
+  note (`:461-462`; amended 2026-10-10, the whole-branch review's fix round of run `2026-10-10_next-tier`, its ledger
   row `review/91`; the answer read "every leftover on `Not done:`").
 
 As built, where the delta differed: `real` and `changed` are defined in `/st-board`'s "Leftovers at a close" bullet,
