@@ -254,7 +254,16 @@ where git would read a bare repository.
   checked out, the refusal therefore holds on git 2.38 and later by the option and on older git
   by the look. Three narrow residuals remain, and `SECURITY.md` names them. Each needs something
   a checkout cannot carry: a damaged `.git` folder of your own, on older git, or a git variable
-  in the environment a `worktree` verb inherits. Where a folder is refused, the verbs report git
+  in the environment a `worktree` verb inherits. A fourth is wider, and a checkout can carry it:
+  all of this is the engine's own git and no other. Git that a client's own tools, a flow's
+  session and its sub-agents, or your own shell start in such a folder is not pinned and takes no
+  look, and a refused folder does not stop `/st-quick` or `/st-work`, which go on with the
+  session's own git. `SECURITY.md` names this one with the others, and the one setting git
+  documents against it, which is yours to make and which the engine neither sets nor checks:
+  `safe.bareRepository` set to `explicit` in your user-level or system-level git configuration
+  (git 2.38 and later). Every git that reads that configuration then opens a bare repository only
+  where `--git-dir` or `GIT_DIR` names it, so git run inside a real bare repository has to name
+  it that way too. Where a folder is refused, the verbs report git
   as not answering, as they do with no repository, and the `worktree` verbs refuse; the last
   item under "Upgrading from 1.12.0" says what that looks like.
 
