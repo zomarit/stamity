@@ -186,6 +186,66 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-10-12, plan 015 re-planned in-flow, unit b6-dogfood-sync (run
+  //     2026-10-12_board-writes; REQ-BOARD-001, REQ-BOARD-009, REQ-FLOW-078,
+  //     REQ-FLOW-079; units b1, b2, w2). Four touchpoints moved, plus the
+  //     manifest rows that record them. No emitted path was added or removed.
+  //
+  //     CHANGED the st-board touchpoint wherever it is emitted
+  //       (`.claude/commands/st-board.md` and
+  //       `.github/prompts/st-board.prompt.md` 28482 -> 35980,
+  //       `.agents/skills/st-board/SKILL.md` 28528 -> 36026), by +7498 bytes;
+  //       the corpus source moved 28663 -> 36158 (471 -> 509 lines, +7495),
+  //       the three bytes between them being the one new `${STAMITY:CLI}`
+  //       token (+21 as the fixture resolves it) less the source's longer
+  //       `obsolete_when` (+18), which no copy carries. Twelve
+  //       hunks (b1, then w2): the frontmatter `description` names fill's
+  //       filing after one preview; `## Write-back contract` gains its five
+  //       `###` sections ("Writes the board never makes", "The preview",
+  //       "`--move`", "Item text is data", "Filed items converge"); fill,
+  //       pickup, groom, setup, the platform table and `## Progress
+  //       contract` take the write contract's words; `## Deferral inbox`
+  //       reads the inbox through the screened query and its close writes
+  //       through `ledger inbox-write`, after w2's Running-the-CLI paragraph.
+  //     CHANGED the st-pr-resolve touchpoint wherever it is emitted
+  //       (`.claude/commands/st-pr-resolve.md` and
+  //       `.github/prompts/st-pr-resolve.prompt.md` 21116 -> 20908,
+  //       `.agents/skills/st-pr-resolve/SKILL.md` 21167 -> 20959), by -208
+  //       bytes, the corpus source's own delta (21306 -> 21098, 333 lines
+  //       held), three hunks (b2): the Reply channel row reads "this
+  //       command's own write, outside `/st-board`'s write set", posting
+  //       whether or not a board is linked; the Close names `/st-board`
+  //       fill, `/st-work`'s framing phase and `/st-plan`'s shared intake as
+  //       the inbox's readers and drops "the fourth write-back channel".
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and
+  //       `.github/prompts/st-work.prompt.md` 34645 -> 35418,
+  //       `.agents/skills/st-work/SKILL.md` 34690 -> 35463), by +773 bytes,
+  //       the corpus source's own delta (34920 -> 35693, 485 -> 494 lines),
+  //       three hunks (w2): Frame step 5's file-tool list drops "the
+  //       inbox"; the close's leftovers query gains `--json`; and a
+  //       nine-line paragraph after the leftovers' rules sends inbox
+  //       appends, removals and re-dates through `stamity ledger
+  //       inbox-write --run <run id>`, by hand only with no CLI.
+  //     CHANGED the st-plan touchpoint wherever it is emitted
+  //       (`.claude/commands/st-plan.md` and
+  //       `.github/prompts/st-plan.prompt.md` 27986 -> 28393,
+  //       `.agents/skills/st-plan/SKILL.md` 28029 -> 28436), by +407 bytes,
+  //       the corpus source's own delta (28155 -> 28562, 426 -> 430 lines),
+  //       two hunks (w2): shared intake item 4 reads the inbox through
+  //       `stamity ledger inbox --plan … --paths …`, and the inbox-append
+  //       bullet says a writer adds the absent heading at the file's end.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: the charter, every agent, every rule, every
+  //       skill, every other touchpoint, and every companion, hook script,
+  //       guard and policy document. The dogfood copy of the eval-run skill
+  //       (`.claude/skills/st-eval-run/SKILL.md`, from its override, b4)
+  //       moved in the checkout, 19280 bytes held: its roster counts read
+  //       142 cases, 426 scenarios and 852 calls. Overrides are not fixture
+  //       inputs, so no golden carries it.
+  //
   //   - 2026-10-11, plan 019 file 3, the close's fix round (run
   //     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,
   //     review/101, each decided by the person at the run's close). One

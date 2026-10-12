@@ -20,11 +20,11 @@ Read-only codebase Q&A: parallel facet research, file:line-cited claims, confide
 
 ## `/st-board`
 
-Work a backlog from any source — chat, file, or platform board: fill, pickup with readiness gate and handoff to work, groom, setup.
+Work a backlog from any source — chat, file, or platform board: fill files ready items on a linked board after one preview, pickup gates and hands off to work, groom maintains, setup links.
 
 - **Tags:** `board`, `planning`
 - **Load:** `on-demand`
-- **Obsolete when:** clients natively bridge repo work to platform boards with status-only write-back
+- **Obsolete when:** clients natively file, edit and move platform board items from repo work behind one preview per run
 
 ## `/st-debug`
 

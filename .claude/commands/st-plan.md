@@ -75,8 +75,11 @@ name the first artifact.
 2. `docs/specs/` manifest headers: what truth exists, and where this request lands in it.
 3. `.stamity/learnings/` entries touching the same area — a repeated recorded failure is a
    process defect, so prior failures shape the plan before research widens it.
-4. `.stamity/inbox.md` deferred items overlapping the scope: fold them in, or leave them with a
-   one-line reason.
+4. `stamity ledger inbox --plan <this plan> --paths <the scope's files>` lists the deferral-inbox
+   rows overlapping the scope: fold them in, or leave them with a one-line reason. A row it
+   withholds, skips or cannot parse is listed as it prints, never opened; only an absent CLI or
+   query sends this read to the whole file, said so, and any other failure is a finding. It runs as
+   Running the CLI below says, and again once research names the files.
 5. History for the touched paths (bug, refactor, and migration intents).
 
 **Research fan-out.** Each intent section below names its research questions. Spawn one
@@ -386,8 +389,9 @@ file moves here, and neither side effect is a third write channel for the plan i
   says so, because a silent zero and an unrecorded finding read identically.
 - **Deferral-inbox append.** Follow-ups this plan deliberately left out append to
   `.stamity/inbox.md`, one row each, citing the plan path in `Ref:`, each row carrying `by:` or
-  `when:`, and `files:` when its location is `—`, below the
-  inbox's `## Rows under the schedule rule` heading:
+  `when:`, and `files:` when its location is `—`, below the inbox's
+  `## Rows under the schedule rule` heading, which a writer adds at the end of the file where it is
+  absent:
   `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
   or `· when: <trigger>` in the date's place, with `· files: <path>, …` when the location is `—`.
   A day is written `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the

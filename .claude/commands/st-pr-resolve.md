@@ -47,7 +47,7 @@ configuration, so a refused run fetches no comment at all:
 |---|---|
 | Fork PR | The head branch lives in a fork this run cannot push to — read from the pull request's head repository and push permission, not from any comment. **Refuse**: replies would claim fixes that could never land. Report the two paths — the contributor runs this command on their own checkout, or a maintainer with write access checks the branch out (`gh pr checkout <n>`) and re-runs. |
 | Scope | One pull request per invocation. A round never widens to another PR, and pushes only to the PR's own head branch — never to its base. |
-| Reply channel | The PR-thread reply is `/st-board`'s fourth write-back channel, and a board write happens only where its channel was enabled at setup. When a board setup record exists and that channel is off, the round still evaluates and still records — it posts nothing, and the report names the disabled channel. With no setup record there is no channel state to read: the invocation is the consent, and replies post. |
+| Reply channel | The PR-thread reply is this command's own write, outside `/st-board`'s write set: the invocation is the consent, and replies post whether or not a board is linked. No board link or setup record switches them off. |
 
 **On the fetch result, before any comment body is stored** — thread metadata and this command's
 own replies are all these read. A third-party comment body stays unread until section 0 clears
@@ -305,11 +305,11 @@ reviewer patience in equal measure.
 ## Close
 
 The run's proof block records per finding: decision, evidence, confidence, screening classes and
-action, reply status, and the commit that carried the fix; plus gate results as the runner
-returned them, the round ordinal used, and the head sha pushed. Deferrals land as
-`.stamity/inbox.md` rows — `severity · file:line · description · source: pr-resolve #<n> ·
-when: touched` (or `· by: <YYYY-MM-DD>` when the user names one) — where board fill and the
-framing phase of `/st-work` both read them. A FIX that stays blocked lands as the same row.
+action, reply status, and the commit that carried the fix; plus gate results as the runner returned
+them, the round ordinal used, and the head sha pushed. Deferrals land as `.stamity/inbox.md` rows —
+`severity · file:line · description · source: pr-resolve #<n> · when: touched` (or `· by:
+<YYYY-MM-DD>` when the user names one) — where `/st-board` fill, `/st-work`'s framing phase and
+`/st-plan`'s shared intake all read them. A FIX that stays blocked lands as the same row.
 
 The row carries this run's own one-line description, never a comment body: what enters the state
 directory is text this run wrote, about text that cleared the ingress screen.
@@ -318,8 +318,8 @@ Each DEFER row is decided in the phase-3 triage ask, which stays this round's on
 carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the location is `—`),
 and the round adds no closing ask.
 
-The PR-thread reply is the fourth write-back channel, and it exists only here: progress comment,
-PR link, and status transition are the other three. This command writes no other platform state.
+The PR-thread reply is this command's own write, outside `/st-board`'s write set, and it exists
+only here. This command writes no other platform state.
 
 The block closes on one recommended next step, derived from this run's own state and not from a
 fixed menu: a thread whose reply failed makes re-posting it the step; a `NEEDS_CLARIFICATION`

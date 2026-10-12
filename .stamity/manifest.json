@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.14.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-11T19:32:30.990Z",
+  "updatedAt": "2026-10-12T21:34:52.121Z",
   "tools": [
     "claude"
   ],
@@ -141,7 +141,7 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "b1a589a3dc1ab15083efe16cd22f509c56294ed4b7c053134bc6c914c7ef18e3",
+      "contentHash": "c78fa1f3685355208d4f8ca1d42acb82c94a018890553c87887ae807a99de0c8",
       "path": ".claude/commands/st-board.md"
     },
     {
@@ -155,14 +155,14 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "344fc6a911f4f579c8e6b1d00891940c1edb1f0de5b232dc40d57d0927278cd3",
+      "contentHash": "de6a2f067d1c71b91f61c59c7d59a15a7899128392e86296a1811bd3eb0d6b96",
       "path": ".claude/commands/st-plan.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "266e6260d9b5fc1f48e2aaac682757e615e0ee6c5adc7b964bed4a7dd866847a",
+      "contentHash": "60e6af3b334e2c5d2eda9306fcba715b98985940ac1d1845bf22e9cbf8f5edc7",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "76dbd1974b27ddb900f3c09d8369fea1416a00dd57af7bad436d16b88015561d",
+      "contentHash": "627e795dfe8fa7eb18e6ff09eda67ede7f261e25c3380b21c3a82418f3c988e0",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -337,7 +337,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "d9b39a418c4097b10dfe4f9be9e385faf1c85010cedf3b9480f2bb8277452c77",
+      "contentHash": "e24e3f35b4bf2da77e4171ba3186c6218e420842db2552d3da0408a69d7afa21",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {

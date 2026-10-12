@@ -93,6 +93,32 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-10-12, plan 015 re-planned in-flow, unit b6-dogfood-sync (run
+ *     2026-10-12_board-writes; REQ-FLOW-078, REQ-FLOW-079; unit w2). ONE
+ *     golden moved, SUBSTITUTION:
+ *
+ *     SUBSTITUTION moved on commands/st-work.md, 34920 -> 35693 bytes and
+ *     485 -> 494 lines in the corpus source, three hunks. Frame step 5's
+ *     file-tool list reads "create and extend `record.md`, `plan.md` and
+ *     reports", the inbox dropped from it. The close's leftovers query
+ *     reads `stamity ledger inbox --due --paths <the changed paths>
+ *     --json`. A nine-line paragraph after the leftovers' rules opens
+ *     "Inbox appends, removals and re-dates at the close run `stamity
+ *     ledger inbox-write --run <run id>`" and ends on the by-hand fallback
+ *     with no CLI. The re-attachment cut (`### Specialist pass`) moves
+ *     17097 -> 17086, 914 characters under the budget. No token sits in
+ *     the moved text. Before this refresh a plain run listed
+ *     `agents/stamity-test-runner.md 1` as obsolete: the st-work mismatch
+ *     threw first in the targets loop, so that snapshot was never read. It
+ *     is not obsolete at `41b1899a`, and the update kept it unchanged.
+ *
+ *     NOTHING else moved here. The run's other emitted changes are three
+ *     touchpoints (`commands/st-board.md` 28663 -> 36158 bytes, 471 -> 509
+ *     lines; `commands/st-pr-resolve.md` 21306 -> 21098, 333 held;
+ *     `commands/st-plan.md` 28155 -> 28562, 426 -> 430) and the eval-run
+ *     skill's dogfood copy, which no golden here carries; the sibling
+ *     suite itemises the touchpoints.
+ *
  *   - 2026-10-11, plan 019 file 3, the close's fix round (run
  *     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,
  *     review/101, each decided by the person at the run's close). NOTHING
