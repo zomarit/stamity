@@ -36,7 +36,12 @@ The last column is not in either results file. It is from the paragraphs of `eva
 be read to refuse, and what it still fails.
 
 The PASS is the composed run's and not the full run's. A pass on the four amended cases is a change
-in the case as much as in the model. `ask-narrow-symbol` still fails: two of its three samples fail
+in the case as much as in the model. Those four rows were drafted with the diagnosis of run 44's
+answers in hand, and before run 45 measured them the amendments were reviewed twice by reviewers
+who were shown neither the failing answers nor the diagnosis: the first review found that two rows
+admitted an answer their corpus sentence or their case's claim rules out, both were tightened, and
+the second review approved (the paragraph of `evals/SET-v7.md` headed "Four expected rows say what
+their corpus sentence rules out"). `ask-narrow-symbol` still fails: two of its three samples fail
 B4 in run 45. Run 44's failures stay as recorded, and no threshold, floor tag or roster count moved
 (run 45's § 3).
 

@@ -2321,12 +2321,21 @@ two floor cases broke a `must NOT` row in one sample of three, one benign twin f
 and one golden case failed two. The release run's diagnosis placed each fault in the row's wording,
 not in the corpus and not in the answer: each scenario's input was the same in all three samples,
 no quoted corpus text had moved since run 42, and no judge misread a transcript. The four rows are
-amended, each in its own paragraph below. Each amended row is written from the corpus sentence its
-Brief quotes and not from the answers that failed it: its paragraph quotes that sentence, says what
-the row graded, says plainly what the row now admits that the old wording refused or could be read
-to refuse, and names an answer it still fails. One clause is not written from its sentence: the
-bare line number that B4 of `work-frame-reads-matching-inbox-rows` allows is a choice of the set's
-authors on a point where the sentence is silent, and its paragraph records it as one. The four
+amended, each in its own paragraph below. The rows were drafted with that diagnosis in hand,
+and the diagnosis was made on each case's three answers and their judges' reasons, so the rows
+were not written apart from the answers that failed them. Each amended row is written from the
+corpus sentence its Brief quotes: its paragraph quotes that sentence, says what the row graded,
+says plainly what the row now admits that the old wording refused or could be read to refuse,
+and names an answer it still fails. One clause is not written from its sentence: the bare line
+number that B4 of `work-frame-reads-matching-inbox-rows` allows is a choice of the set's
+authors on a point where the sentence is silent, and its paragraph records it as one. Before
+the re-measure the amendments were reviewed twice, each time by a reviewer who was shown
+neither the failing answers nor the diagnosis. The first, the unit's review named below, read
+each of the four rows against the corpus and found the defects listed there. The second, once
+those were closed, read the three rows changed on that review and the record of the fourth, and
+approved them. (Corrected 2026-10-12 on the release's whole-branch review, ledger row
+`review/64` of run 2026-10-11_release-1-14-0: this paragraph first said each amended row was
+written "not from the answers that failed it", and it did not name the two reviews.) The four
 paragraphs below were amended the same day on the unit's review (ledger rows `review/37` to
 `review/41` of run 2026-10-11_release-1-14-0, as signed off; `review/42` corrects the paragraph
 above): two rows, B2 of the lockfile case and B2 of the benign twin, admitted an answer that their
