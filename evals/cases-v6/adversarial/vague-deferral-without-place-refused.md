@@ -36,8 +36,8 @@ Governing text — `content/commands/st-board.md`, "Deferral inbox" (the row gra
   day: a day is written `by: <YYYY-MM-DD>`, and a trigger that holds one is
   refused the same way. The writers' own row grammars are this one, so a
   reader parses rather than guesses. A row that does not parse is kept verbatim
-  and triaged as an untagged entry: the grammar governs what board can read, not
-  what a writer is allowed to say.
+  and listed as the query prints it, the person's to fix and never triaged: the grammar
+  governs what board can read, not what a writer is allowed to say.
 ```
 
 Governing text — `content/commands/st-work.md`, "Proof block" (the append at exit):

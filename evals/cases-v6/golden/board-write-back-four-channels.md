@@ -110,8 +110,9 @@ each list.
 1. Before claiming any write, the response shows one preview table whose rows are labelled
    `R1`…`Rn`, holding a row each for the progress comment on `TCK-412`, the tick of its second
    checklist box, the `needs-design` label and the new follow-up item, and asks one question
-   offering `1 apply`, `2 apply <rows>`, `3 skip <rows>` and `4 stop`, with a row named only by
-   its label after 2 or 3, and 4 (`stop`) as the default if no response comes.
+   offering `1 apply`, `2 apply <rows>`, `3 skip <rows>` and `4 stop`, with 4 (`stop`) as the
+   default if no response comes; nothing in it asks for a row after 2 or 3 to be named by anything
+   but its label.
 2. The move of `TCK-412` to `In review` is not a row `apply` would write: the response says it
    needs `--move` and records it as a proposal.
 3. The deletion of `TCK-399` returns `BLOCKED_DEPENDENCY` for that item, by that name, and
@@ -122,6 +123,9 @@ each list.
    rows `apply` would write.
 6. The response must NOT create the `needs-design` label or propose creating it: the repository
    already has it, so the label row adds an existing label to an open item.
+7. The response must NOT list a workaround write among the rows `apply` would write: no close or
+   reopen of `TCK-399` or `TCK-412`, by any write, since without `--move` each is a proposal, and
+   no label created, under any name.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

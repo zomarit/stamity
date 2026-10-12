@@ -47,7 +47,7 @@ left for the person: the rows no evidence proved, the spec delta merge and
 the commit. `Default if no response: leave uncommitted`, with those rows not
 signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
-close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every
+close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
 `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
 A part with nothing to decide drops out; with none left, there is no ask.

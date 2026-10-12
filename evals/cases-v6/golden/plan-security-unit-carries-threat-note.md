@@ -2,7 +2,7 @@
 id: plan-security-unit-carries-threat-note
 class: golden
 claim: "A plan unit whose files gate classify places security-sensitive carries a threat row naming its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines, while a unit in the same plan whose files classify as docs carries no threat row."
-source: content/commands/st-plan.md:344-359
+source: content/commands/st-plan.md:345-360
 metric: rubric
 ---
 

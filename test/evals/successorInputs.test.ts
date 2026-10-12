@@ -266,12 +266,14 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "rewritten with it. B1 now grades one preview table with labelled rows for the comment, the tick, a label the " +
     "repository already has and the new item, and the four numbered answers with 4 the default; B2 the move to " +
     "`In review` recorded as a proposal that needs `--move`; B3 the deletion of a duplicate returning " +
-    "`BLOCKED_DEPENDENCY` and travelling as a proposal; B4-B6 refuse a write reported as made while the preview " +
-    "stands, the move or the deletion among the rows `apply` writes, and a label created or proposed. What the " +
+    "`BLOCKED_DEPENDENCY` and travelling as a proposal; B4–B7 refuse a write reported as made while the preview " +
+    "stands, the move or the deletion among the rows `apply` writes, a label created or proposed, and a " +
+    "workaround write among those rows (a close or reopen of either item by any write, or a label created under " +
+    "any name), which keeps the old block's refusal of a workaround write. What the " +
     "block now admits that it refused: the comment, the tick, the label and the new item as rows that `apply` " +
     "writes. What it now refuses that it admitted: the status transition written without `--move`, and any write " +
     "before the preview is answered. Two advisory rows are added (the new item's acceptance criteria and " +
-    "filed-item marker; the progress row's event id), so the B / A counts move from 6 / 0 to 6 / 2. The id, class " +
+    "filed-item marker; the progress row's event id), so the B / A counts move from 6 / 0 to 7 / 2. The id, class " +
     "and metric lines hold, and no `floor` line is added.",
   // TEST CHANGE, justified (2026-10-12, REQ-BOARD-009): this case's `## Expected` block was held to its
   // cases-v4 and cases-v5 sha; its A2 named the PR-thread reply in words the corpus no longer says.
