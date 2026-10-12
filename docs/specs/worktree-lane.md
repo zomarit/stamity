@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, and excluded from the site build.
 status: shipped-with-1.1.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
 ---
@@ -227,6 +227,97 @@ every mutation this verb performs takes a name.
 the command table for one concern, and the shared flag matrix would be
 registered three times.
 
+**Amended 2026-10-12** (run `2026-10-11_release-1-14-0`, units
+`s1-every-git-read-pinned` and `s2-bare-shape-guard` with their fix rounds,
+the fix round `fa07900d` for ledger row `fix/21`, and the round of
+`e0cc89dd` and `e62ec3f2` for ledger rows `fix/30` and `review/79`; cited
+at `e62ec3f2`; ships with 1.14.0). Every git call the three subcommands make
+goes through the lane's one seam, `runGit`
+(`src/worktree/git.ts:14-16`, `src/cli/commands/worktree.ts:130`), and that
+seam now starts git one way:
+
+- **Two options go ahead of every command**: `safe.bareRepository=explicit`,
+  which refuses a committed folder shaped like a bare repository, and
+  `core.fsmonitor=false`, so the dirty counts run no file-system monitor
+  command a configuration names (`src/worktree/git.ts:89-95`, `:117`). Git
+  honours the first from 2.38 and an older git ignores it without an error
+  (`src/merge/safeWrite.ts:1057-1058`).
+- **The lane keeps its caller's environment, git's own variables included.**
+  The seam passes git no environment of its own (`src/worktree/git.ts:118-124`):
+  an external `GIT_DIR` is a layout the lane accepts, and `fetch` and
+  `worktree add` run with the operator's own transport and identity variables
+  (`:95-97`). The git the CLI's other verbs start strips every `GIT_*`
+  variable (`src/cli/engine/gitStatus.ts:123-130`); this lane does not. The
+  library's origin read, called with no runner, is no verb's start of git and
+  strips nothing (`src/workspace/git.ts:136-145`, `:157-163`); REQ-PLUGIN-046
+  states it.
+- **Before git is started the lane takes the look REQ-PLUGIN-046 states**
+  (`docs/specs/plugin-lifecycle.md`, amended 2026-10-12;
+  `gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts:1105-1129`), from the
+  folder the call runs in, and hands it the environment it keeps
+  (`src/worktree/git.ts:113`). Where the look refuses, no git is started and
+  the call's outcome has the shape of git's own refusal, status 128, nothing
+  on stdout and the reason on stderr, and it alone carries the mark
+  `keptFromGit` (`:59-65`, `:113-116`). A caller that names the cause reads
+  the mark, never the stderr text.
+- **At a folder the look refused, the first call of every subcommand refuses
+  with that cause and names no git command.** That call is
+  `resolveLane`'s `rev-parse --show-toplevel`
+  (`src/cli/commands/worktree.ts:132`, `:975`). On a marked outcome it throws
+  `VALIDATION_ERROR`, the code every other refusal there carries, with a text
+  of its own (`:133-147`): the message says git was not started in the folder
+  the verb ran in, because that folder or one above it has the layout of a
+  bare repository; the `why` names the layout; and the next step says to find
+  that folder by looking at entries by name, to run no git in it or in any
+  folder under it, and to move it off that path or run from a checkout that
+  does not keep it there. Outside a repository the refusal is the text it
+  was, `git init` in its next step included (`:148-155`), and the `--json`
+  error document has the same code and keys in both places. Where git itself
+  refuses a folder the look passed, the outcome carries no mark and that
+  older text prints (ledger row `2026-10-11_release-1-14-0/fix/25`).
+  `resolveLane` reads the mark (`:133`); no wrapper of `src/worktree/git.ts`
+  does. A wrapper takes a marked outcome as any other non-zero status, so a
+  call the look refuses after that first one, in another folder than the
+  verb's own, fails as a git failure does there: the dirty count, for one,
+  with `FS_ERROR`, "failed (git exited 128)" and the look's reason as its
+  `why`, an exit status no git gave (`gitFailed`,
+  `src/worktree/git.ts:156-162`, called at `:432`). This requirement owns
+  the lane's mark and this refusal; what `check`, `sync`, `init` and `gate`
+  print at such a folder is REQ-PLUGIN-046's to state.
+- **Handed that environment, the look reads three of git's variables and no
+  other** (`src/merge/safeWrite.ts:1106-1108`): with `GIT_DIR` set no look is
+  taken, since git then runs no discovery; `GIT_OBJECT_DIRECTORY` stands in
+  for `objects`; and with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set at all the
+  walk does not end at another file system.
+
+So for a tree git checked out, and for the git the lane itself starts, a
+verb started in or under a committed folder in the shape of a bare
+repository, with no `.git` git would stop at between, does not let that
+folder answer: on git 2.38 and later by the option and by the look, on an
+older git by the look alone. Four cases are known residuals in 1.14.0, named
+in `SECURITY.md`'s row on such a folder and tracked as ledger rows of the
+run: the one REQ-PLUGIN-046 states for every caller of the look
+(`2026-10-11_release-1-14-0/fix/13`); two that are this lane's alone, because
+it keeps git's variables — `GIT_COMMON_DIR` exported with no `GIT_DIR`, on a
+git older than 2.38 (`2026-10-11_release-1-14-0/fix/14`), and a `GIT_DIR` of
+any value, under which no look is taken while git resolves a relative value
+against the folder it runs in, on any git version
+(`2026-10-11_release-1-14-0/review/51`; `src/merge/safeWrite.ts:1083-1085`,
+`:1100-1101`); and git that anything other than a CLI verb starts, which
+carries neither option and takes no look. Started in or under a committed
+folder of the shape that git can open, such a git reads that folder, and
+that does not take a refusal by the look: the look walks upward from the
+folder a call runs in (`src/merge/safeWrite.ts:1117-1128`), so a folder of
+the shape below that one meets no look
+(`2026-10-11_release-1-14-0/review/70`, and `review/79` of the same run for
+the folder below). Before this change the seam passed the command alone and
+took no look. Proof: `test/worktree/git.test.ts`, the describe "runGit at a
+root shaped like a bare repository", and
+`test/cli/commands/worktree.test.ts`, the describe "worktree at a folder the
+look before git refused" and, for the refusal outside a repository, the case
+"refuses outside a git repository, naming the directory" of the describe
+"worktree dispatch".
+
 ### REQ-WORKTREE-002 — The farm sits outside the repository, and a farm inside it is refused
 
 **Decision.** Worktrees are created under a *farm* directory that defaults to
@@ -245,25 +336,30 @@ operator is standing in. `resolveLane` therefore takes
 `git rev-parse --git-common-dir` — one per clone, the same absolute path from
 every linked worktree — and reads the repo root back off it, falling back to the
 top level only for a layout whose common dir is not named `.git`
-(`src/cli/commands/worktree.ts:100-136`, `src/worktree/git.ts:488-502`). One
+(`src/cli/commands/worktree.ts:95-161`, `src/worktree/git.ts:588-601`, both at
+`e62ec3f2`; amended 2026-10-12, they read `:100-136` and `:488-502`). One
 lane, one farm, one policy file, whichever checkout the verb is invoked from.
 
 **Rationale.** Three separate mechanisms in this tree walk the repository
 recursively and none of them knows about a second checkout inside it: the orphan
 temp-file sweep, whose skip list is a fixed set that unlinks matching files it
-finds (`src/merge/atomicWrite.ts:1170-1180`, `src/merge/atomicWrite.ts:1232-1272`);
+finds (`src/merge/atomicWrite.ts:1246-1259`, `src/merge/atomicWrite.ts:1261-1351`);
 the leak gate, which scans "tracked + untracked-but-not-ignored files, so the
-working tree is covered before it is staged" (`scripts/leak-gate.mjs:456-468`);
+working tree is covered before it is staged" (`scripts/leak-gate.mjs:739-751`);
 and the workspace sub-repo scan, which qualifies any directory carrying a `.git`
-entry as a repository (`src/workspace/detect.ts:130-138`). A farm inside the repo
+entry as a repository (`src/workspace/detect.ts:129-137`). A farm inside the repo
 would put a full second tree in front of all three, and would additionally
 require an ignore or exclude rule to keep it out of the repo's own status —
 which is the machinery invariant 1 exists to avoid. The default's leading dot
 also keeps the farm out of the workspace scan at the parent level, which skips
-dot-directories at every level by construction (`src/workspace/detect.ts:125`,
+dot-directories at every level by construction (`src/workspace/detect.ts:124`,
 documented `src/workspace/detect.ts:101-104`). The published documentation
-already teaches a sibling layout (`docs/working-with-stamity.md:122-125`), so the
-default is where a reader is already looking.
+already teaches a sibling layout (`docs/working-with-stamity.md:121`), so the
+default is where a reader is already looking. (Amended 2026-10-12: the
+citations of this paragraph were re-read at `e62ec3f2`; they read
+`src/merge/atomicWrite.ts:1170-1180` and `:1232-1272`,
+`scripts/leak-gate.mjs:456-468`, `src/workspace/detect.ts:130-138` and `:125`,
+and `docs/working-with-stamity.md:122-125`.)
 
 **Dropped.** An in-repo `.worktrees/` farm, the reference implementation's
 layout, kept out of git status by a managed block in `.git/info/exclude`. It
@@ -708,22 +804,25 @@ plus a path-safety pass refusing `..` segments, a leading `-`, a backslash, and
 any control character.
 
 **Rationale.** `NETWORK_ERROR` is declared in the `ErrorCode` union
-(`src/types/errors.ts:38-47`) and the generated CLI page labelled it "Reserved,
+(`src/types/errors.ts:38-48`) and the generated CLI page labelled it "Reserved,
 never thrown: … no code path in this build produces it". This lane's fetch is
 the first real transport operation in the CLI, so it is the code's first honest
-use, and `fetchBranch` is the throw site (`src/worktree/git.ts:458-483`).
+use, and `fetchBranch` is the throw site (`src/worktree/git.ts:551-582`).
 That made the page's note false the moment the code shipped, so the note is gone
 and the table row names this producer instead
-(`src/cli/docs/cliReference.ts:113-135`) — closed under REQ-WORKTREE-018.
+(`src/cli/docs/cliReference.ts:146-156`) — closed under REQ-WORKTREE-018.
 Deferring the fetch on `--dry-run` is what keeps a preview free of network
 state, matching the reference's behaviour and this CLI's rule that a dry run
 touches nothing.
 
 The classification that decides between a fall-through and a failure is one
 sentence of stderr, so it is a named constant with a pure classifier over it
-rather than an inline regex (`src/worktree/git.ts:443-456`): a git release that
+rather than an inline regex (`src/worktree/git.ts:536-549`): a git release that
 reworded "couldn't find remote ref" would otherwise turn every missing branch
-into a transport failure, silently.
+into a transport failure, silently. (Amended 2026-10-12: the citations of
+these two paragraphs were re-read at `e62ec3f2`; they read
+`src/types/errors.ts:38-47`, `src/worktree/git.ts:458-483` and `:443-456`, and
+`src/cli/docs/cliReference.ts:113-135`.)
 
 **Dropped.** Fetching unconditionally, including on `--dry-run`. A preview that
 mutates remote-tracking refs is a preview that changed something.
@@ -1101,13 +1200,16 @@ trigger nobody will trust the next time.
 
 ## Acceptance criteria
 
-One set per requirement. Eighty-seven criteria; each is machine-checkable unless
+One set per requirement. Ninety-two criteria; each is machine-checkable unless
 tagged otherwise. (The count read "forty-seven" while the list held sixty-six,
 and the riders of the build rounds then took it to eighty-seven: a hand-kept
 number over a list several rounds have appended to. Restated here against the
 current list — `grep -c "^- GIVEN"` between this heading and the next is how it
 was derived, and is the check worth running the next time this section grows
-rather than counting by eye.)
+rather than counting by eye. Amended 2026-10-12: it read "Eighty-seven" while
+the list held eighty-eight, the criterion added 2026-09-30 under
+REQ-WORKTREE-003 having moved no number, and the four added 2026-10-12 under
+REQ-WORKTREE-001 take it to ninety-two.)
 
 **REQ-WORKTREE-001**
 
@@ -1118,6 +1220,37 @@ rather than counting by eye.)
 - GIVEN a repo with no worktrees WHEN `stamity worktree` runs with stdin a TTY
   and again with stdin a pipe THEN both produce the identical inventory output
   and neither prompts.
+- GIVEN a real checkout with one file added to the index and one untracked
+  WHEN the lane reads its dirty counts THEN it starts git once, with
+  `-c safe.bareRepository=explicit -c core.fsmonitor=false` ahead of
+  `status --porcelain`, and counts one modified and one untracked (added
+  2026-10-12).
+- GIVEN a folder made as a bare repository, with no `.git`, whose config
+  names a file-system monitor command WHEN the lane reads its dirty counts
+  there THEN the read fails with `FS_ERROR` and the command has not run;
+  GIVEN that shape with no monitor line WHEN the seam is asked
+  `rev-parse --show-toplevel` in the folder and in a folder under it THEN
+  each outcome is status 128 with nothing on stdout and a reason on stderr
+  saying git was not started, each carries the mark `keptFromGit`, and no git
+  was started (added 2026-10-12).
+- GIVEN a folder holding an empty `HEAD` beside `objects` and `refs`, and
+  `GIT_DIR` naming a plain repository elsewhere, WHEN the seam reads a
+  setting there THEN git answers from the named repository and the outcome
+  carries no mark; GIVEN the same read without the variable THEN it is
+  refused with status 128 and the mark, and no git is started for it (added
+  2026-10-12).
+- GIVEN a folder holding an empty `HEAD` beside empty `objects` and `refs`,
+  with no `.git`, WHEN bare `worktree`, `list`, `setup <name> -y` or
+  `cleanup --all -y` runs in it or two folders under it THEN each exits 1,
+  says git was not started in the folder it ran in and that this folder or
+  one above it has the layout of a bare repository, says to run no git in it
+  or in any folder under it, and names none of `git init`, `git status`,
+  `git diff`, `git log` and `git rev-parse`; GIVEN `list --json` there and in
+  a plain folder with no repository THEN the refused document carries
+  `VALIDATION_ERROR` and no `git init`, and the two documents have the same
+  keys, at the top and under `error`; GIVEN `list` in a folder outside any
+  repository THEN the refusal is the one it was, its next step naming
+  `git init` (added 2026-10-12).
 
 **REQ-WORKTREE-002**
 

@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, and excluded from the site build.
 status: shipped-with-1.14.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -38,7 +38,10 @@ file 2), unit `p2c-ci-lanes-from-map`, merged by its unit `p9-spec-merge`; it ci
 and shipped with 1.14.0. The amendment dated 2026-10-09 to REQ-PROVE-009 comes from the same run's close (ledger
 `build/99`); it cites the integration head `46121954` and shipped with 1.14.0, which set `status: shipped-with-1.14.0`.
 The amendment dated 2026-10-11 to REQ-PROVE-020 was written at the 1.14.0 cut in run `2026-10-11_release-1-14-0`, unit
-`c7-run-of-record`; it cites the run files at `31d1ea1d` and ships with 1.14.0.
+`c7-run-of-record`; it cites the run files at `31d1ea1d` and ships with 1.14.0. The criterion added 2026-10-12 to
+REQ-PROVE-020 comes from the spec delta of the same run's fix for its ledger rows `review/52`, `build/34` and
+`review/53` (commits `11225842` and `6dfce5e1`); it cites the generator, its suite and the note beside run 45 as the
+release branch holds them at `e62ec3f2`, and ships with 1.14.0.
 
 ## Intent
 
@@ -777,6 +780,20 @@ were amended.
   the page too, between the file's move and the pages'); in `test/cli/docs/measurements.test.ts`,
   "byte-matches the committed page" (red the same way) and the `null` branch of "holds the tree's
   recorded exception to the run of record and to every miss it excuses".
+- GIVEN a composed run of record with a re-measured case whose reason reads "case file bytes moved"
+  WHEN the page renders THEN, between the method paragraph and the scoring-rule sentence, it quotes
+  that run's § 3, "Why the run happened", as it stands and prints one fixed sentence that names both
+  runs and links `evals/SET-v7.md`; GIVEN a composed run that re-measured for any other reason, or a
+  full run, THEN it quotes § 3 and prints no such sentence; GIVEN a results file with no § 3, or an
+  empty one, THEN it prints no quote; GIVEN a `NOTE.md` in the run of record's folder THEN one line
+  links it, and a note in another run's folder is not linked; GIVEN a composed run whose status is
+  PASS THEN the status line reads "PASS as composed, three samples per case.", while a full run's
+  PASS and any FAIL keep the bare word. For a composed PASS this supersedes the wording of the
+  2026-10-08 criterion above, whose named case now pins the composed wording on run 39's results
+  file (added 2026-10-12; `runOfRecordReason` and `runOfRecordVerdict`,
+  `src/cli/docs/measurements.ts`). Test evidence by name: in `test/cli/docs/measurements.test.ts`,
+  the describe "the page says why its run of record happened" and the status pins of "renders the
+  status and the floor line a PASS or a FAIL results file states".
 
 ### REQ-PROVE-021 — QA automation and binding
 

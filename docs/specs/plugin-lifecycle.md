@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, and excluded from the site build.
 status: shipped-with-1.14.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -45,6 +45,13 @@ shipped with 1.14.0.
 The paragraph headed "Amended 2026-10-09" under REQ-PLUGIN-003 comes from run `2026-10-08_product-core` (plan 019
 file 2), unit `p6-setup-route` and its ledger row `build/42`, merged by the unit `p9-spec-merge`; it cites the
 integration head `90710ba5` and shipped with 1.14.0, which set `status` to `shipped-with-1.14.0`.
+
+The paragraphs headed "Amended 2026-10-12" under REQ-PLUGIN-046, and the criteria added that day, come from the spec
+deltas of run `2026-10-11_release-1-14-0`, the 1.14.0 release run: the units `s1-every-git-read-pinned` and
+`s2-bare-shape-guard` with their fix round, the fix rounds for what is printed at a folder the look refuses, the last
+of them commits `fbcdc652`, `e0cc89dd` and `e62ec3f2` for the ledger rows `review/71` to `review/73`, `review/79` and
+`fix/30`, and the unit `f3-clean-refusal-names-the-pack-exception`. They answer that run's ledger rows `build/30` and
+`review/33`, are read against the release branch at `e62ec3f2`, and ship with 1.14.0.
 
 ## Intent
 
@@ -1798,12 +1805,36 @@ edited file, and a file the proof could not judge are not counted. The sweep mar
 a preview run before the confirmation (`refuseStaleRenderings`, `src/cli/commands/clean.ts`; `syncRenderingsFor`,
 `src/cli/engine/emissionWrite.ts`; gate 4's `renderingRefusal`, `src/merge/reclaim.ts`).
 
+Amended 2026-10-12 (run `2026-10-11_release-1-14-0`, unit `f3-clean-refusal-names-the-pack-exception`; ledger rows
+`build/18`, `fix/1` and `review/10`, one defect, and `review/33` for this passage). The refusal above has one more
+cause, and its next step one exception. A pack file edited after install renders other bytes at its client copy, so
+the copy, which still hashes to the recorded hash, is one a `sync` with this version rewrites, and both forms of the
+command refuse over it. There the `sync` the step names would carry the edited bytes into the clients' files, which
+`check`'s `pack-integrity` remedy forbids. So the step still says to run `sync` with this version first and then the
+same `clean`, and now names the exception in the same sentence: unless the `pack-integrity` row of `check` names an
+edited pack file, one that no longer hashes to what its install recorded. Then `sync` is not run; that file is moved
+out of the pack's directory first, as that row says, and the same `clean` is run again (`clean --pack <id>` after the
+pack form, `clean -y` after the full one). With the file out of the pack's directory no rendering names its copy, so
+the sweep keeps and names the copy and the run needs no `sync`. The exception is worded on an edited file, not on a
+failing row: once the file is out the row reports it missing, and a copy that is stale for another reason still needs
+that `sync`. The exception reaches an edited file only where that row names it. The row counts every finding and names
+the first five (`checkPackIntegrity` and `MAX_NAMES_INLINE`, `src/cli/commands/check.ts`), so with more than five an
+edited file past the fifth is counted and not named, and the step's words then lead to the `sync` (ledger row
+`review/30`, deferred with `build/20`, `review/31` and `fix/8`, the other routes where the next steps of the two
+commands differ). Only the step's text moved: the refusal's condition, code, exit status, message and `why` are as the
+paragraph above states them, and its sentence on the step stays true and was incomplete (`refuseStaleRenderings`,
+`src/cli/commands/clean.ts`; `packReinstallSteps` and `describePackIntegrityFinding`, `src/pack/verifyInstalled.ts`).
+
 `SECURITY.md`'s manifest-forgery row names three known residuals inside the bound. (1) At an instruction file and at
 `.github/hooks/stamity.json`, an overwrite of a file git tracks with no uncommitted change takes no `.bak`, under a
 forged row hashing an owner's file too: the owner's previous content is in git history, and the overwrite shows in
-`git status` and in the notice. Git before 2.38 ignores `safe.bareRepository`, and the engine does not check git's
-version, so there a setup root with no `.git` of its own that holds committed bare-repository files can answer the
-check from its own index. Elsewhere inside the bound a backup-free overwrite still rests on the recorded hash alone,
+`git status` and in the notice. Git before 2.38 ignores `safe.bareRepository`, so there the check rests on the look
+the amendment of 2026-10-12 below states: for a tree git checked out, a setup root with no `.git` of its own that
+holds committed bare-repository files is refused before git starts, its index answers nothing, and that overwrite
+takes the `.bak`; what the look leaves on such a git is the ledger row `2026-10-11_release-1-14-0/fix/13` (amended
+2026-10-12; the sentence read "and the engine does not check git's version, so there a setup root with no `.git` of
+its own that holds committed bare-repository files can answer the check from its own index"). Elsewhere inside the
+bound a backup-free overwrite still rests on the recorded hash alone,
 and so does a delete at the state and pack folders and at the `stamity-` Cursor guards. (2) A planted pack or override
 whose rendering copies an owner's file byte for byte, beside a forged row hashing it, still proves that delete through
 `sync`, `clean` and `clean --pack`, and a planted pack folder widens what the proof renders even under a policy that
@@ -1813,6 +1844,104 @@ when no server is selected, are proved by their record alone (REQ-FLOW-037): a f
 owner's bare `[mcp_servers]` makes it the engine's, and owner servers written under it as dotted keys are then
 refreshed away with no `.bak`. It is tracked as the deferred row `2026-10-08_inbox-pass/pass/3`
 (`.stamity/runs/2026-10-08_inbox-pass/ledger.jsonl`).
+
+Amended 2026-10-12 (run `2026-10-11_release-1-14-0`, units `s1-every-git-read-pinned` and `s2-bare-shape-guard` with
+their fix round; ledger rows `review/14` and `fix/2`, one finding, `review/43`, `review/49` and `review/50` of the fix
+round, and `build/30` for the sentence amended above). The tracked-and-clean check no longer rests on
+`safe.bareRepository=explicit` alone, which git honours only from 2.38. Before each of its git calls starts git, the
+check takes a look of its own, with no git in it (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`): from the
+real path of the setup root it walks towards the filesystem root, asking `lstat` alone whether a name exists, its type
+and its device, and reading no file's content. A level is refused when it passes git's own test for a repository
+folder by entry names: `HEAD` beside `commondir`, or beside both `objects` and `refs`, a link counting as the entry it
+stands in for. The walk ends without a refusal at a level whose `.git` is a regular file, or a folder (or a live link
+to one) that passes the same test; at the first level on another file system than the starting folder's, except on
+Windows; and at the filesystem root. A `.git` of any other kind (an empty folder, one holding `HEAD` alone, a dangling
+link) ends nothing, and that level is tested like any other. On a refusal no git is started, the check answers as it
+does when a git call fails, and the overwrite takes the verified `.bak`. So for a tree git checked out, a committed
+folder of that shape at the setup root, or above it with no such `.git` between, does not answer the check: on git
+2.38 and later by the option and by the look, on an older git by the look alone. The look decides by names, so it also
+refuses a level that holds the names and that git could not open. What an older git opens is read from git's source
+and was probed on git 2.52 with the option switched off; no git older than 2.38 was run.
+
+The same look is taken by the shared runner (`gitCheckRunner`, `src/cli/engine/gitStatus.ts`), which throws as it does
+when git refuses the folder, exit status 128 included, and by the `worktree` verbs' one start of git, which is handed
+the environment those verbs keep (REQ-WORKTREE-001 of `docs/specs/worktree-lane.md`, amended 2026-10-12). The check
+and the shared runner strip every `GIT_*` variable and hand the look none. Which reads go through the shared runner
+is `SECURITY.md`'s to state, in its row on a folder committed in the shape of a bare repository; no requirement of
+this spec restates that list. All of it is the CLI verbs' and not the library's. The package's API also carries the
+origin read as a function, `detectRepoGitIdentity` (`src/workspace/git.ts`), whose default runner is plain git: called
+with no runner it starts git with neither option, no look and the caller's whole environment, and at a folder git
+opens as a bare repository it returns the origin that folder names. `init` and `config detect` pass it the shared
+runner (`detectPlatform`, `src/cli/commands/init/plan.ts`; `runDetect`, `src/cli/commands/config.ts`), so no verb
+reaches that default. The module sits below the shared runner and cannot import it, as the function's own comment
+says; `SECURITY.md`'s row states the same boundary, and a default that is the pinned runner is deferred (ledger row
+`fix/30`).
+
+A refusal by the look is told apart from every other way git does not answer where the mark below is read, and
+nowhere else (the same run's fix rounds, commits `f01c76ba`, `fa07900d`, `c6354ecd`, `82016965` and `fbcdc652`; ledger
+rows `review/44`, `review/55`, `review/57` to `review/61`, `review/66`, `review/71` to `review/73`, `fix/20`, `fix/23`
+and `fix/24`). The error the shared runner throws at such a folder, and no other, carries the mark `keptFromGit`, and
+the working-tree status read through it carries `reason: "bare-layout"` (`keptFromGit` and `readWorkingTreeStatus`,
+`src/cli/engine/gitStatus.ts`); the mark is read, never git's message. Each text printed where the mark is read
+states that cause, that git was not started because this folder or a folder above it has the layout of a bare
+repository, and names no git command: `check`'s `git-available` row, still a `warn`, which says to find that folder
+by looking at entries by name, to run no git in it or in any folder under it, and to start no flow there until the
+folder is moved off that path, since the git a flow's session and its sub-agents start is not set to refuse such a
+folder (`checkGit`, `src/cli/commands/check.ts`); `sync`'s closing step after a write, which says how to review
+without git and, where the report folded rows out of its list, that the list was cut short and what the manifest's
+ledger and `sync --json` do and do not say (`syncClosingLines`, `src/cli/commands/sync.ts`); `init`'s question, its
+no-git note, which closes on the sentence about flows that `check`'s row carries, the security line of its ready
+panel and of its dry-run preview, and its refusal when the question is declined (`askProceedWithoutGit` and
+`noGitNote`, `src/cli/commands/init.ts`; `gitignoreLine`, `src/cli/commands/init/panel.ts`); the first of `init`'s
+next steps, which says to move that folder off the path, or to work from a checkout that does not keep it there,
+before a client or a flow is started, and which the ready panel puts at the head of each client's list and
+`init --json` carries once, first in `nextSteps`, the usual steps following it unchanged (`refusedFolderSteps`,
+`src/cli/commands/init/panel.ts`); after a guided migration that leaves paths of the previous setup behind, the
+clause of the uninstall line that says to copy the files holding the operator's own prose out of the folder with no
+git command, where everywhere else it says to commit, on the ready panel and in the dry-run preview (`residueLines`,
+the same file); and `gate`'s reason, which names no git call as failed and no exit status, inside the sentence
+REQ-FLOW-065 gives a change that could not be read (`describeGitFailure`, `src/cli/commands/gate.ts`). Two things at
+such a folder do not turn on the mark. The overwrite's `.bak` warning is the one printed whenever git could not
+confirm the previous bytes, with its list of other causes and no git command: the check's own git call rejects there
+with no mark (`runGitCheck` and `isTrackedAndClean`, `src/merge/safeWrite.ts`). And `init --json` prints no note, its
+stdout being the one document, and that document carries no field naming the cause: the step is its one sign of it
+(`src/cli/kit/program.ts`; ledger rows `fix/9`, deferred, and `fix/32`). Everywhere else each of those texts is the
+one it was and the step is absent, but for `check`'s other `git-available` text: it no longer names `git status`, and
+tells an absent git, a missing repository and a slow git apart by `git --version` and by a `.git` entry found by
+name. No key, type, exit status or error code moved: `check` exits as before, `gate classify` gives `product` at
+exit 0 and `gate scan` exits 1, `init`'s refusal keeps `VALIDATION_ERROR` and its message, the document of
+`init --json` has the keys it has in a plain folder, with `nextSteps` the flat list of strings it was and one string
+more, first, at such a folder only, and the `dirty` block of `sync --json` holds `available`, `dirty` and
+`changedCount` and no reason (`syncJsonPayload`, `src/cli/commands/sync/report.ts`). `handoff`, `config detect` and
+the history and origin reads of `init` read the refusal as git not answering, as before. Where git itself refuses a
+folder the look passed, the layout of residual (1) below on git 2.38 and later, no mark is set and the ordinary texts
+print (ledger rows `fix/25`, `review/65` and `review/68`, deferred). This requirement owns the look, the shared
+runner's mark and these texts; the `worktree` verbs' refusal at such a folder is REQ-WORKTREE-001's.
+
+`SECURITY.md`'s row bounds the claim to a tree git checked out and to the git the CLI's verbs start, and names
+four known residuals in 1.14.0, each tracked as a ledger row of the run. (1) On a git older than 2.38, a `.git` folder
+that holds those names and that git cannot open ends the look as safe, while that git walks past it and opens a
+folder of the shape at that level or at any level above it; that walk was run on git 2.52 with the option at its
+default, which is how an older git reads it, and on no older git. No commit can hold a `.git` entry, so this takes a
+leftover or damaged `.git` on the operator's own machine, or a tree that did not come from git
+(`2026-10-11_release-1-14-0/fix/13`). The next two are the `worktree` verbs' alone, since only they keep git's own
+variables. (2) With `GIT_COMMON_DIR` exported and no `GIT_DIR`, a git older than 2.38 takes part of a repository from
+the folder the variable names and so opens a committed folder on fewer entries than the look asks for; the look does
+not read that variable, so it passes a folder that such a git opens (`2026-10-11_release-1-14-0/fix/14`). (3) With
+`GIT_DIR` set they take no look, whatever the value, and git resolves a relative value against the folder it runs in,
+so such a value can name a folder the tree holds, on any git version (`2026-10-11_release-1-14-0/review/51`). (4)
+Everything above is the git the CLI's verbs themselves start, and no other: git that a client's own tools, a flow's
+session and the sub-agents it dispatches, or the operator's shell start carries neither option and takes no look, and
+started in or under a committed folder of the shape that git can open, it reads that folder as the repository. That
+does not take a refusal by the look. The look is taken from the folder a verb runs in and walks upward, so a
+committed folder of the shape elsewhere in the tree, below the setup root, meets no look and no warning: `check`'s
+`git-available` row says nothing of it and passes where git answers at the setup root. Where the look does refuse a
+folder, that does not stop a flow either, since `/st-quick` and `/st-work` read `gate`'s reason as a scan that did not
+run and go on with the session's own git; `check`'s row, `init`'s note and the first of `init`'s next steps say there
+to start no flow until the folder is moved. The one setting git documents against it, `safe.bareRepository` set to
+`explicit` in the operator's own user-level or system-level git configuration, is the operator's to make, and it
+covers a folder below the setup root as it covers one the look refuses; the engine neither sets it nor checks for it
+(`2026-10-11_release-1-14-0/review/70`, and `review/79` of the same run for the folder below the setup root).
 
 - GIVEN an owner's `.claude/skills/st-local/SKILL.md`, an owner's `.cursor/hooks/mcp-guard.mjs` whose bytes are not the
   setup's 1.11.0 re-render, an owner `AGENTS.md` copying the charter's title and four headings at the root, an owner
@@ -1844,10 +1973,87 @@ refreshed away with no `.bak`. It is tracked as the deferred row `2026-10-08_inb
   runs and then `clean -y` THEN every file the ledger named is gone and so is `.stamity/`; GIVEN an owner's file at a
   pack copy's name under a forged row hashing it WHEN `clean --pack <id> -y` runs THEN it refuses the same way and the
   file and the manifest are unchanged (added 2026-10-08, `review/128`).
+- GIVEN a setup root made as a bare repository, with no `.git`, whose own index tracks a committed `AGENTS.md`, and a
+  ledger row hashing that file WHEN an overwrite of it runs THEN no git is started, a verified `.bak` holds the
+  previous bytes and the warning says git could not confirm they are committed (added 2026-10-12, `review/14`).
+- GIVEN the look over seeded folders THEN it refuses `HEAD` beside `commondir` or beside both `objects` and `refs`, and
+  a folder under such a level, and passes `HEAD` alone, `HEAD` beside one of the two, and a folder under one of those;
+  it ends without a refusal at a `.git` file, whatever it holds, and at a `.git` folder or a live `.git` link holding
+  those names, and walks past an empty `.git` folder, one holding `HEAD` alone and a dangling `.git` link; a link
+  standing in for an entry counts as that entry; the walk starts from where a linked folder really is; off Windows it
+  ends at the first level on another file system, and the level it starts at is tested whatever its device; and
+  handed an environment it takes no look with `GIT_DIR` set, counts `HEAD` beside `refs` as the shape with
+  `GIT_OBJECT_DIRECTORY` set, and crosses a file system with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set (added 2026-10-12).
+- GIVEN a folder holding an empty `HEAD` beside empty `objects` and `refs`, with no `.git`, THEN the working-tree status
+  read there and in a folder under it carries `reason: "bare-layout"`, the shared runner's error there carries the
+  mark, and an error with status 128 alone does not; WHEN `check` runs there THEN it exits 0 and its `git-available`
+  row is a `warn` that says git was not started, says to run no git in that folder or in any folder under it and to
+  start no flow there until the folder is moved, and names no `git status`; WHEN `sync` writes there THEN its closing
+  step names no git command, and past twenty listed rows it says the list was cut short, while `sync --json` has the
+  keys and the three-field `dirty` block it has in a plain folder; WHEN `init` runs there, live or as a dry run, THEN
+  its note and its security line state that cause, its question asks on it, a declined question exits 1 with nothing
+  written, and no text of the run names `git init`, `git status`, `git diff`, `git log` or `git rev-parse`; WHEN a
+  live `init` runs there THEN its note says to start no flow there until the folder is moved, and under each client's
+  heading the ready panel's next steps are one step that says to move the folder, then the steps a plain folder gets;
+  WHEN `init --json` runs there THEN `nextSteps` is that step followed by the plain folder's list, and the document,
+  its `decisions` and its `report` have the plain folder's keys; WHEN `init` runs there over a previous setup with a
+  full migration, live or as a dry run, THEN the uninstall line names a copy made with no git command, does not say
+  to commit, and no text of the run names one of those five git commands; WHEN `gate classify` or `gate scan` runs
+  there THEN classify gives `product` at exit 0 and scan exits 1, each reason saying git was not started and naming
+  no git call as failed, with the keys a folder with no repository gets; GIVEN a folder with no repository and no
+  such layout THEN each of those texts is the one it was, the step is absent, and `check`'s row names `git --version`
+  and no git command that looks for a repository; GIVEN a folder of that layout below a setup root that git opens
+  WHEN `check` runs at the root THEN the row passes and says nothing of that folder; GIVEN a real bare repository
+  with an origin of its own, on git's own default for `safe.bareRepository`, THEN the library's origin read returns
+  that origin with no runner passed, and nothing through the shared runner (added 2026-10-12, `review/44`; the
+  clauses on flows, the step and the uninstall line follow `review/71` to `review/73`, the folder below the root
+  `review/79`, and the library's read `fix/30`).
+- GIVEN a Claude setup with `ops` added and synced and one of the pack's installed files edited WHEN
+  `clean --pack ops -y` or `clean --dry-run` runs THEN each exits 1 with `CLEAN_ERROR` naming that file's client copy,
+  its next step holds the `sync` step it always gave and then the exception, naming `clean --pack ops` or `clean -y`
+  as the command to run again, and the copy's bytes are unchanged; GIVEN the edited file then moved out of the pack's
+  directory and no `sync` run WHEN `clean --dry-run` and then `clean --pack ops -y` run THEN both exit 0, the moved
+  file's copy is kept and named with the bytes it had before the edit, and the pack's folder and rows are gone (added
+  2026-10-12, `review/33`).
 
 Tests for the criteria added 2026-10-08: `test/cli/commands/clean.test.ts`, `test/cli/ledgerForgery.test.ts`,
 `test/merge/reclaim.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`,
 `test/manifest/ownedPaths.test.ts`, `test/merge/safeWrite.test.ts`, `test/cli/flows.e2e.test.ts`.
+
+Tests for the criteria added 2026-10-12: `test/merge/safeWrite.test.ts` (the describe "gitDiscoveryMeetsBareShape —
+the look before git is started" and the case "starts no git at a setup root shaped like a bare repository, and takes
+the .bak"), `test/cli/engine/gitStatus.test.ts` and `test/worktree/git.test.ts` (the same look at the shared runner
+and at the `worktree` verbs' start of git), `test/workspace/git.test.ts` (the case "reads the folder's own origin with
+no runner passed, and nothing through the pinned runner", green before and after, since the default did not move) and
+`test/cli/commands/clean.test.ts` (the case "refuses over the copy of an edited pack file, and its next step keeps
+that pack away from sync"). For the texts at a refused folder, the cases the fix rounds added, red first but where
+one pins a text or a behaviour that did not move: `test/cli/engine/gitStatus.test.ts` ("says the folder was kept from
+git, at the folder and below it, and reads no history there" and "marks the runner's own refusal for a caller that
+words the failure, and no other error"); `test/cli/commands/check.test.ts` ("says the folder was kept from git, with
+no hint to run git there, where the look before git refused it", which compares the row whole, the `git --version`
+assertions and the whole-row comparison of "names the two verbs that need git on the git-available row where git
+does not answer", and "passes the git-available row, and warns of nothing, for a folder of that layout below the
+setup root"); `test/cli/commands/sync.test.ts` (the describe "sync — a folder the look before git refused", and in
+"syncClosingLines" the cases "names no git command in the review next-step where the folder was kept from git" and
+"says the list was cut short where the report folded rows at such a folder, and nowhere else");
+`test/cli/commands/syncEngine.test.ts` ("carries the three working-tree facts and nothing more, whatever the
+status says of why git did not answer"); `test/cli/commands/init.test.ts` ("states the cause and names no git command
+where the look before git refused the folder, on $name", "refuses a declined question there with that cause, and
+names no git command", "states that cause on the security line there, and no text of the run names a git command, on
+$name", "asks the question on that cause there, and Enter still takes the default and writes", "opens the ready
+panel's next steps with moving the folder there, and the usual steps follow", "opens `--json`'s nextSteps with the
+same step there, and moves no key of the document", "says in the note there to start no flow until the folder is
+moved, and keeps the other note as it was" and "names no commit and no git command on the migration's uninstall line
+there, on $name", with the control cases "keeps the declined question's refusal as it was where there is simply no
+repository", "keeps the security line as it was where there is simply no repository, on $name" and "keeps the
+question as it was where there is simply no repository"); `test/cli/commands/initPanel.test.ts` ("states the cause
+and names no git command where the look before git refused the folder", "carries that cause from the panel's input
+to its security line", "opens every client's steps with moving the folder where the look before git refused it",
+"keeps the steps as they were where git answers and where there is simply no repository", "names no commit and no
+git command on the uninstall line where the look before git refused the folder" and "keeps the uninstall line as it
+was everywhere the look before git refused nothing"); and `test/cli/commands/gate.test.ts` ("says git was not
+started, and names no git call as failed, where the look before git refused the folder" and "exits 1 saying git was
+not started, with the same document, where the look before git refused the folder").
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `d1a2-clean-pack-copies`, with lane D's fixer rounds 1
 and 2). `clean --pack <id>` also removes the copies `sync` projected from that pack into the clients' folders, while the
