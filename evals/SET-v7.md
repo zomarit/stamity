@@ -2562,6 +2562,25 @@ says so. No exception is recorded for 1.14.0; the 1.12.0 release exception recor
 paragraph is added after it, so the file's hash moves and nothing a run scores moves with it: no
 case, `## Expected` block, count or rule.
 
+**Run 46, the 1.14.0 recalibration, recorded 2026-10-12 (the 1.14.0 release, after run 46).** After
+run 45's candidate the emitted hook runner changed, so the cross-client goldens moved, a trigger of
+the release checklist's eval line. Run 46 (`evals/runs/2026-10-12-run-46/`), at candidate
+`04bfbde9`, is an increment on run 45 under the incremental rule: no case file and no source range a
+case names moved between the two candidates, so it re-measured no case and carried all 141 from run
+45 with their three admitted samples, and calibration ran afresh and matched 5 of 5, fixture C4 on
+its second attempt after the first was invalid and redone. Its status is PASS and its scores are run
+45's: every one of its 423 samples is a row run 45 published, 408 of them run 44's and 15 run 45's.
+Run 45 stays the 1.14.0 run of record, the run `evals/run-of-record.json` and the measurements page
+name, because the page words one composition link, a prior run that measured every case in full,
+and run 46's prior run is itself composed. Run 44's FAIL and what the paragraph above says of run 45
+stay as recorded. Run 46's results file ends with the same exporter constant as run 45's, "No case
+text moved after any score was known", which is not true of the composed measure it reports; the
+note beside the run (`evals/runs/2026-10-12-run-46/NOTE.md`) says so. No threshold, scoring rule,
+floor tag or roster count moved, and none moves here. Run 46 read this file at sha256
+`51ec07e62ee40ae05fb549ab11846ce931d96954a2dc956b352bb8e8d56a588f` (its `RESULTS.md`, § 1); this
+paragraph is added after it, so the file's hash moves and nothing a run scores moves with it: no
+case, `## Expected` block, count or rule.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

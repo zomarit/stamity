@@ -581,7 +581,13 @@ where git would read a bare repository.
   Calibration matched 5 of 5 in each run. The one golden miss is `ask-narrow-symbol`, which passed
   1 of 3 samples after its fix. No threshold, floor tag or roster count moved. No exception is
   recorded for this release; the one 1.12.0 shipped under covered 1.12.0 alone. The run is at
-  `evals/runs/2026-10-11-run-45/`, run 44 at `evals/runs/2026-10-11-run-44/`.
+  `evals/runs/2026-10-11-run-45/`, run 44 at `evals/runs/2026-10-11-run-44/`. After run 45's
+  candidate the emitted hook runner changed, so the cross-client goldens moved, and run 46, at
+  candidate `04bfbde9`, is the increment on run 45 that this called for: it re-measured no case,
+  carried all 141 from run 45, and matched calibration 5 of 5. Its status is PASS and its scores
+  are run 45's. Run 45 stays the run of record, because the measurements page words one
+  composition link and run 46's prior run is itself composed. Run 46 is at
+  `evals/runs/2026-10-12-run-46/`, with a note beside it that says what it rests on.
 
 ### Fixed
 

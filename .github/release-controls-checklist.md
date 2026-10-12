@@ -257,6 +257,14 @@ tag or roster count moved. The closing sentence of run 45's results file, "No ca
 any score was known", is the exporter's constant and is not true of the composed measure, because
 the five case files moved after run 44's scores were known; the note beside the run
 (`evals/runs/2026-10-11-run-45/NOTE.md`) says so.
+After run 45's candidate the emitted hook runner changed, so the cross-client goldens moved, a
+trigger of this line. Run 46 (`evals/runs/2026-10-12-run-46/`) is the increment on run 45 at
+candidate `04bfbde9`: it re-measured no case, carried all 141 from run 45, and matched calibration
+5 of 5, fixture C4 on its second attempt. Its status is PASS and its scores are run 45's. Run 45
+stays the run of record, the run `evals/run-of-record.json` and the measurements page name, because
+the page words one composition link and run 46's prior run is itself composed; run 44's FAIL and
+run 45's account stay as recorded. Run 46's results file ends with the same exporter constant, and
+the note beside it (`evals/runs/2026-10-12-run-46/NOTE.md`) corrects it the same way.
 No exception is recorded for 1.14.0; the one 1.12.0 shipped under
 covered 1.12.0 alone. At 1.12.0, when the roster held 113 cases, the full measure was run 42
 (`evals/runs/2026-10-08-run-42/`), on client 2.1.286 at candidate `e6d5618f`. Alone it was FAIL on

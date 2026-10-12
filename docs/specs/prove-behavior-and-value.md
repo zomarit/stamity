@@ -41,7 +41,8 @@ The amendment dated 2026-10-11 to REQ-PROVE-020 was written at the 1.14.0 cut in
 `c7-run-of-record`; it cites the run files at `31d1ea1d` and ships with 1.14.0. The criterion added 2026-10-12 to
 REQ-PROVE-020 comes from the spec delta of the same run's fix for its ledger rows `review/52`, `build/34` and
 `review/53` (commits `11225842` and `6dfce5e1`); it cites the generator, its suite and the note beside run 45 as the
-release branch holds them at `e62ec3f2`, and ships with 1.14.0.
+release branch holds them at `e62ec3f2`, and ships with 1.14.0. The amendment dated 2026-10-12 to REQ-PROVE-020,
+on run 46, comes from the same run; it cites the run files at `60f2e889` and ships with 1.14.0.
 
 ## Intent
 
@@ -797,6 +798,19 @@ were amended.
   `src/cli/docs/measurements.ts`). Test evidence by name: in `test/cli/docs/measurements.test.ts`,
   the describe "the page says why its run of record happened" and the status pins of "renders the
   status and the floor line a PASS or a FAIL results file states".
+
+Amended 2026-10-12 (the 1.14.0 release, run `2026-10-11_release-1-14-0`; the run files cited at
+`60f2e889`). After run 45's candidate the emitted hook runner changed, so the cross-client goldens
+moved, a trigger of the release checklist's eval line. Run 46 is the increment on run 45 at
+candidate `04bfbde9` (`evals/runs/2026-10-12-run-46/RESULTS.md:5,187-189`): 0 cases re-measured
+and 141 carried from run 45 (`:12`), calibration 5 of 5 with fixture C4 on its second attempt
+(`:418`, `:425`), and `Status: **PASS**` (`:3`) on run 45's scores (`:199-202`). Run 45 stays the
+1.14.0 run of record: `evals/run-of-record.json` is unchanged, and the page words one composition
+link, refusing a run of record whose prior run is itself composed, as run 46's is. The criteria
+above, which name run 45, hold unchanged, and run 44's FAIL and run 45's account stay as recorded.
+The note beside run 46 (`evals/runs/2026-10-12-run-46/NOTE.md`) says what its PASS rests on and
+corrects its results file's closing sentence (`:433`) as run 45's note does. No requirement's
+normative sentence changes.
 
 ### REQ-PROVE-021 — QA automation and binding
 
