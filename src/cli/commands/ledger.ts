@@ -11,7 +11,7 @@ import {
 } from "../../denyscan/denyScan.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { BlockProblem } from "../../runs/blocks.ts";
-import type { InboxProblem, InboxRow, MatchedBy } from "../../runs/inboxStore.ts";
+import type { InboxEditOutcome, InboxEditProblem, InboxProblem, InboxRow, MatchedBy } from "../../runs/inboxStore.ts";
 import type { AppendResult, CloseChange, CloseResult } from "../../runs/ledgerStore.ts";
 import type { ResumeCard } from "../../runs/resumeCard.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
@@ -20,10 +20,10 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
 import { sanitizeLabel } from "../kit/prompts.ts";
 
 /**
- * `stamity ledger append`, `stamity ledger close`, `stamity ledger status` and
- * `stamity ledger inbox` — the one serialized writer of a work run's findings
- * ledger, its reader, the deferral inbox's query, and the CLI's third hidden
- * plumbing verb. `append` files a report's findings as `open`
+ * `stamity ledger append`, `stamity ledger close`, `stamity ledger status`,
+ * `stamity ledger inbox` and `stamity ledger inbox-write` — the one serialized
+ * writer of a work run's findings ledger, its reader, the deferral inbox's
+ * query and its one engine writer, and the CLI's third hidden plumbing verb. `append` files a report's findings as `open`
  * rows; `close` moves rows on a re-review's closures block (`--report` with the
  * `--ids` it was handed), by one manual transition (`--id`, `--state`,
  * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
@@ -31,7 +31,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * after a compaction or a resume, and writes nothing; `inbox` prints the
  * deferral inbox's rows a change's paths touch and, under `--due`, the rows
  * whose day has come, each line screened first in the form it prints in, and
- * writes nothing.
+ * writes nothing; `inbox-write` appends inbox rows piped on stdin and removes
+ * the bullets `--remove` names, in one locked write, refusing the whole call
+ * on any row the screen or the grammar refuses.
  * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -56,7 +58,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * retirement's `retired: <value>`, in parentheses),
  * or `<id> unchanged (already recorded)`; for a status, the card's lines, or the
  * one no-run sentence; for an inbox, the count line, then the matched rows, the
- * unparsed lines and the skipped lines, the last two capped in number.
+ * unparsed lines and the skipped lines, the last two capped in number; for an
+ * inbox write, one `removed`, `heading … added`, `appended` or `already-filed`
+ * line each, naming an inbox line and a `Ref:`, never a row's text.
  * Everything else — the nothing-to-do
  * note, the warnings about a line that is not a row or about locking being off
  * — goes to stderr. The dry-run line is the one exception, and it ends the
@@ -73,6 +77,7 @@ const APPEND = "append";
 const CLOSE = "close";
 const STATUS = "status";
 const INBOX = "inbox";
+const INBOX_WRITE = "inbox-write";
 const MANUAL_STATES = ["fixed", "rejected", "deferred"] as const;
 
 /** Where the block came from when it was piped rather than named. */
@@ -94,19 +99,24 @@ const PROBLEMS_LISTED = 20;
  * `omitted`. A message quotes report text (and V8's own window of it, for a
  * line that is not JSON), so every one is sanitised here, where it meets the
  * terminal and the JSON document, not in the parser or the store that names it.
+ * A problem that carries its own `src` is placed by it, and the document
+ * carries that `src` beside its line.
  */
 function refuseWithProblems(
   ctx: CliContext,
   doc: FailureDoc,
   src: string,
-  problems: readonly BlockProblem[],
+  problems: readonly (BlockProblem & { readonly src?: string })[],
 ): CommandResult {
-  const listed = problems
-    .slice(0, PROBLEMS_LISTED)
-    .map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) }));
+  const listed = problems.slice(0, PROBLEMS_LISTED).map((problem): { src?: string; line: number; message: string } => {
+    const message = sanitizeLabel(problem.message);
+    return problem.src === undefined
+      ? { line: problem.line, message }
+      : { src: problem.src, line: problem.line, message };
+  });
   const omitted = problems.length - listed.length;
   if (!ctx.json) {
-    const lines = listed.map((problem) => `${src}:${problem.line}: ${problem.message}`);
+    const lines = listed.map((problem) => `${problem.src ?? src}:${problem.line}: ${problem.message}`);
     if (omitted > 0) lines.push(`… +${omitted} more problem(s)`);
     ctx.io.err(`${renderFailureHuman(doc, ctx.palette)}\n${lines.join("\n")}\n`);
   }
@@ -133,7 +143,9 @@ function missingFlag(subcommand: string, flag: string): CliFailure {
  * The flags a subcommand does not read, keyed by subcommand: each as its
  * commander option key, its spelling, and the subcommands that do read it.
  * `--run` is read by every subcommand but inbox; `--report` by append and close;
- * `--paths`, `--plan`, `--area` and `--due` by inbox alone.
+ * `--paths`, `--plan`, `--area` and `--due` by inbox alone; `--remove` by
+ * inbox-write alone, which also reads `--stdin`. An owner added later comes
+ * last in each list, so a refusal's earlier owners keep their order.
  */
 const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string, readonly string[]])[]>> = {
   [APPEND]: [
@@ -146,20 +158,22 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["plan", "--plan", [INBOX]],
     ["area", "--area", [INBOX]],
     ["due", "--due", [INBOX]],
+    ["remove", "--remove", [INBOX_WRITE]],
   ],
   [CLOSE]: [
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
-    ["stdin", "--stdin", [APPEND]],
+    ["stdin", "--stdin", [APPEND, INBOX_WRITE]],
     ["paths", "--paths", [INBOX]],
     ["plan", "--plan", [INBOX]],
     ["area", "--area", [INBOX]],
     ["due", "--due", [INBOX]],
+    ["remove", "--remove", [INBOX_WRITE]],
   ],
   [STATUS]: [
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
-    ["stdin", "--stdin", [APPEND]],
+    ["stdin", "--stdin", [APPEND, INBOX_WRITE]],
     ["report", "--report", [APPEND, CLOSE]],
     ["ids", "--ids", [CLOSE]],
     ["id", "--id", [CLOSE]],
@@ -170,18 +184,34 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["plan", "--plan", [INBOX]],
     ["area", "--area", [INBOX]],
     ["due", "--due", [INBOX]],
+    ["remove", "--remove", [INBOX_WRITE]],
   ],
   [INBOX]: [
-    ["run", "--run", [APPEND, CLOSE, STATUS]],
+    ["run", "--run", [APPEND, CLOSE, STATUS, INBOX_WRITE]],
     ["phase", "--phase", [APPEND]],
     ["source", "--source", [APPEND]],
-    ["stdin", "--stdin", [APPEND]],
+    ["stdin", "--stdin", [APPEND, INBOX_WRITE]],
     ["report", "--report", [APPEND, CLOSE]],
     ["ids", "--ids", [CLOSE]],
     ["id", "--id", [CLOSE]],
     ["state", "--state", [CLOSE]],
     ["rationale", "--rationale", [CLOSE]],
     ["retired", "--retired", [CLOSE]],
+    ["remove", "--remove", [INBOX_WRITE]],
+  ],
+  [INBOX_WRITE]: [
+    ["phase", "--phase", [APPEND]],
+    ["source", "--source", [APPEND]],
+    ["report", "--report", [APPEND, CLOSE]],
+    ["ids", "--ids", [CLOSE]],
+    ["id", "--id", [CLOSE]],
+    ["state", "--state", [CLOSE]],
+    ["rationale", "--rationale", [CLOSE]],
+    ["retired", "--retired", [CLOSE]],
+    ["paths", "--paths", [INBOX]],
+    ["plan", "--plan", [INBOX]],
+    ["area", "--area", [INBOX]],
+    ["due", "--due", [INBOX]],
   ],
 };
 
@@ -873,20 +903,37 @@ function inboxDue(ctx: CliContext, opts: Record<string, unknown>): string | null
   });
 }
 
+/** What the inbox's sound shape is, as a refusal's `next` names it. */
+const INBOX_SOUND = `the inbox is a regular file with one link, of at most ${INBOX_READ_MAX_BYTES} bytes, inside the repository`;
+
 /**
- * A refused read. Its `next` leads with what the caller must not do: a refusal
- * is no licence to read the file whole by another route, which would hand a
- * run the unscreened text this query exists to screen (a writer can force the
+ * Who a refused inbox read speaks for: the subcommand its message names, and
+ * its `next`. The `next` leads with what the caller must not do: a refusal is
+ * no licence to reach the file whole by another route, which would hand a run
+ * the unscreened text the query exists to screen (a writer can force the
  * refusal by padding the file or replacing it with a link). The refusal is
  * reported as a finding instead.
  */
-function inboxRefusal(message: string, why: string): CliFailure {
-  return new CliFailure({
-    code: "VALIDATION_ERROR",
-    message,
-    why,
-    next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once the inbox is a regular file with one link, of at most ${INBOX_READ_MAX_BYTES} bytes, inside the repository`,
-  });
+interface InboxVoice {
+  readonly verb: string;
+  readonly next: string;
+}
+
+/** The query's voice. */
+const QUERY_VOICE: InboxVoice = {
+  verb: INBOX,
+  next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once ${INBOX_SOUND}`,
+};
+
+/** The writer's voice: an edit tool reads the file whole before it writes, so it is no fallback either. */
+const WRITE_VOICE: InboxVoice = {
+  verb: INBOX_WRITE,
+  next: `do not edit ${STATE_DIR}/inbox.md with the file tools in this write's place, since that reads it whole, unscreened; report this refusal as a finding; the write runs again once ${INBOX_SOUND}`,
+};
+
+/** A refused read, in the voice of the subcommand that read. */
+function inboxRefusal(voice: InboxVoice, message: string, why: string): CliFailure {
+  return new CliFailure({ code: "VALIDATION_ERROR", message, why, next: voice.next });
 }
 
 /**
@@ -910,12 +957,17 @@ function inboxRefusal(message: string, why: string): CliFailure {
  * after them; so the read takes {@link INBOX_READ_MAX_BYTES} plus one byte at
  * most from the open descriptor and refuses when that byte is there, naming
  * the size as more than the ceiling, the only thing it knows of it.
+ *
+ * `voice` names the subcommand each refusal speaks for and its `next`
+ * ({@link InboxVoice}): the query's by default, the writer's for `inbox-write`.
  */
 async function readInbox(
   rootDir: string,
   inboxPath: string,
   isShared: (entry: Stats) => boolean,
+  voice: InboxVoice = QUERY_VOICE,
 ): Promise<string | null> {
+  const refused = `ledger ${voice.verb} refused ${inboxPath}`;
   let walked = rootDir;
   let leaf: Stats | null = null;
   for (const segment of inboxPath.split("/")) {
@@ -925,27 +977,31 @@ async function readInbox(
       leaf = await lstat(walked);
     } catch (cause) {
       if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw inboxRefusal(`ledger inbox cannot read ${inboxPath}`, cause instanceof Error ? cause.message : String(cause));
+      throw inboxRefusal(voice, `ledger ${voice.verb} cannot read ${inboxPath}`, cause instanceof Error ? cause.message : String(cause));
     }
     if (leaf.isSymbolicLink()) {
       throw inboxRefusal(
-        `ledger inbox refused ${inboxPath}: ${segment} is a symbolic link`,
+        voice,
+        `${refused}: ${segment} is a symbolic link`,
         "the inbox is read only as a regular file inside the repository, never through a link",
       );
     }
   }
   const tooLarge = (size: number | "more than the ceiling"): CliFailure =>
     inboxRefusal(
-      `ledger inbox refused ${inboxPath}: it is ${typeof size === "number" ? size : `more than ${INBOX_READ_MAX_BYTES}`} bytes, over the ${INBOX_READ_MAX_BYTES} byte ceiling`,
+      voice,
+      `${refused}: it is ${typeof size === "number" ? size : `more than ${INBOX_READ_MAX_BYTES}`} bytes, over the ${INBOX_READ_MAX_BYTES} byte ceiling`,
       "the inbox's rows are printed into a run's context, so its size is bounded",
     );
   const notFile = inboxRefusal(
-    `ledger inbox refused ${inboxPath}: it is not a regular file`,
+    voice,
+    `${refused}: it is not a regular file`,
     "the inbox is one markdown file of rows",
   );
   const hardLink = (links: number): CliFailure =>
     inboxRefusal(
-      `ledger inbox refused ${inboxPath}: ${inboxPath.slice(inboxPath.lastIndexOf("/") + 1)} is a hard link`,
+      voice,
+      `${refused}: ${inboxPath.slice(inboxPath.lastIndexOf("/") + 1)} is a hard link`,
       `the inbox is read only as a file of its own inside the repository; this one has ${links} links, so its text is shared with another name, which may sit outside the repository`,
     );
   if (leaf === null || !leaf.isFile()) throw notFile;
@@ -1201,21 +1257,278 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   };
 }
 
+/** A refusal of an inbox write that names what the caller left out or got wrong, before any row is read. */
+function inboxWriteUsage(message: string, why: string, next: string): CliFailure {
+  return new CliFailure({ code: "VALIDATION_ERROR", message, why, next });
+}
+
+/** One stdin bullet: its 1-based stdin line and its text, its line end dropped. */
+interface StdinBullet {
+  readonly line: number;
+  readonly text: string;
+}
+
+/**
+ * The stdin positions, first and last, of the bullets a hit in their joined
+ * text spans, when no one bullet carries it: the shortest run of bullets from
+ * the start that hits, then the shortest end of that run that still does, each
+ * found by halving, so a long block costs a few screens and not one per pair.
+ * Should the screen not narrow that way, the whole block is named.
+ */
+function joinedHitSpan(texts: readonly string[]): { first: number; last: number } {
+  const hits = (from: number, to: number): boolean => screenInboxLine(texts.slice(from, to + 1).join("\n")) !== "";
+  let low = 1;
+  let high = texts.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (hits(0, middle)) high = middle;
+    else low = middle + 1;
+  }
+  const last = low;
+  let start = 0;
+  let end = last - 1;
+  while (start < end) {
+    const middle = Math.ceil((start + end) / 2);
+    if (hits(middle, last)) start = middle;
+    else end = middle - 1;
+  }
+  return start < last && hits(start, last) ? { first: start, last } : { first: 0, last: texts.length - 1 };
+}
+
+/** A screen hit's problem text: the pattern id alone, never the text it matched. */
+function screenProblem(pattern: string): string {
+  return `refused by the screen (${pattern})`;
+}
+
+/**
+ * The rows piped to `inbox-write`, checked as the query would read them once
+ * written, before anything is read from the inbox: every non-blank line a `- `
+ * bullet of at most {@link INBOX_BULLET_MAX_CHARS}; each bullet, and the
+ * bullets joined by the line break rows print with, through
+ * {@link screenInboxLine}; the bullets parsed below {@link SCHEDULE_RULE_HEADING}
+ * (so each carries `by:` or `when:`); each parsed row through
+ * {@link screenInboxRow}, the field screen `runInbox` withholds a row by; and
+ * each row carrying a `Ref:` no other stdin bullet carries.
+ *
+ * A bullet any screen hits is refused by its stdin line and pattern id alone,
+ * and its parse message is withheld, as the query drops it; every other parse
+ * message is screened before it is listed, and a hit is listed the same way.
+ * Every problem is placed by its stdin line; the joined text's hit by the
+ * first bullet it spans, naming the last.
+ */
+function checkInboxRows(
+  inboxStore: CliContext["engine"]["runs"]["inboxStore"],
+  input: string,
+): { bullets: StdinBullet[]; problems: BlockProblem[] } {
+  const problems: BlockProblem[] = [];
+  const bullets: StdinBullet[] = [];
+  const lines = input.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  lines.forEach((line, index) => {
+    if (line.trim() === "") return;
+    if (line.startsWith("- ")) bullets.push({ line: index + 1, text: line });
+    else problems.push({ line: index + 1, message: "is not a `- ` bullet; inbox-write takes rows only, and writes every other line itself" });
+  });
+
+  // The stdin lines whose bullet a screen hit: their parse messages are withheld.
+  const hit = new Set<number>();
+  for (const bullet of bullets) {
+    const pattern = bullet.text.length > INBOX_BULLET_MAX_CHARS ? INBOX_OVER_LENGTH : screenInboxLine(bullet.text);
+    if (pattern === "") continue;
+    hit.add(bullet.line);
+    problems.push({
+      line: bullet.line,
+      message:
+        pattern === INBOX_OVER_LENGTH
+          ? `is over ${INBOX_BULLET_MAX_CHARS} characters, so the inbox query would skip it unscreened`
+          : screenProblem(pattern),
+    });
+  }
+  if (hit.size === 0 && bullets.length > 1) {
+    const texts = bullets.map((bullet) => bullet.text);
+    const pattern = screenInboxLine(texts.join("\n"));
+    if (pattern !== "") {
+      const span = joinedHitSpan(texts);
+      const first = bullets[span.first]?.line ?? 0;
+      const last = bullets[span.last]?.line ?? 0;
+      for (const bullet of bullets.slice(span.first, span.last + 1)) hit.add(bullet.line);
+      problems.push({ line: first, message: `${screenProblem(pattern)} across stdin lines ${first}–${last}` });
+    }
+  }
+
+  // Line k + 1 of the parsed text is stdin line k: the heading stands first, above every row.
+  const parsed = inboxStore.parseInbox([inboxStore.SCHEDULE_RULE_HEADING, ...lines].join("\n"));
+  for (const problem of parsed.problems) {
+    const line = problem.line - 1;
+    if (hit.has(line)) continue;
+    const pattern = screenInboxLine(problem.message);
+    problems.push({ line, message: pattern === "" ? problem.message : screenProblem(pattern) });
+  }
+  const refs = new Map<string, number>();
+  for (const row of parsed.rows) {
+    const line = row.line - 1;
+    if (hit.has(line)) continue;
+    const pattern = screenInboxRow(row);
+    if (pattern !== "") {
+      problems.push({ line, message: screenProblem(pattern) });
+    } else if (row.ref === null) {
+      problems.push({ line, message: "carries no `Ref:`; a row is written only with the `Ref:` a later write finds it by" });
+    } else if (refs.has(row.ref)) {
+      problems.push({ line, message: `carries the \`Ref:\` stdin line ${refs.get(row.ref) ?? 0} carries; one row per \`Ref:\`` });
+    } else {
+      refs.set(row.ref, line);
+    }
+  }
+  problems.sort((a, b) => a.line - b.line);
+  return { bullets, problems };
+}
+
+/** An outcome's `Ref:` as it prints: sanitised, or `(withheld)` where it hits the screen (a removal's comes from the command line, unscreened). */
+function outcomeRef(ref: string | null): string | null {
+  if (ref === null || screenInboxLine(ref) !== "") return null;
+  return sanitizeLabel(ref);
+}
+
+/** The stdout line of one inbox-write outcome; its `Ref:` is printed by {@link outcomeRef}. */
+function outcomeLine(outcome: InboxEditOutcome): string {
+  if (outcome.kind === "heading") return `heading ${outcome.line} added`;
+  return `${outcome.kind} ${outcome.line} ${outcomeRef(outcome.ref) ?? "(withheld)"}`;
+}
+
+/**
+ * `ledger inbox-write` (REQ-FLOW-078): the deferral inbox's one engine write.
+ * Rows piped on `--stdin`, one `- ` bullet per line in `/st-board`'s row
+ * grammar, are appended to the run's dated block of today, and the bullets
+ * whose `Ref:` values `--remove` names (comma-separated) leave, in one locked
+ * write; both together re-date a row. An absent inbox is created holding the
+ * schedule heading and the rows.
+ *
+ * The rows are checked first, all or nothing ({@link checkInboxRows}): any
+ * problem refuses the call with every problem listed and nothing read from
+ * the inbox. The store then reads the inbox no-follow, through
+ * {@link readInbox} in the writer's voice, cross-checks every `Ref:` against
+ * the ledger it names, and lands the edit (`ledgerStore.writeInbox`); any
+ * problem there refuses the whole call too. Each problem is placed by its
+ * stdin line, its `--remove` entry or its inbox line, and every message
+ * printed has passed the screen, so no refusal prints a row's text or a
+ * pattern's match. Stdout carries one line per outcome, each naming a line
+ * and a `Ref:` and nothing of a row's text; a dry run reads and answers as a
+ * write would, then prints its dry-run line, and writes nothing.
+ */
+async function runInboxWrite(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+  const rootDir = ctx.app.runtime.cwd;
+  await requireStateDir(rootDir, "to write the deferral inbox into");
+  const run = requireRun(ctx, INBOX_WRITE, opts);
+  const fromStdin = opts["stdin"] === true;
+  const removeFlag = text(opts, "remove");
+  if (!fromStdin && removeFlag === undefined) {
+    throw inboxWriteUsage(
+      "ledger inbox-write takes --stdin, --remove, or both",
+      "it appends the rows piped on stdin and removes the bullets whose Ref: values --remove names",
+      "pipe the rows with --stdin, name the leaving Ref: values with --remove <ref>,<ref>, or both for a re-date",
+    );
+  }
+  const remove = removeFlag === undefined ? [] : handedIds(removeFlag);
+  if (removeFlag !== undefined && remove.length === 0) {
+    throw inboxWriteUsage(
+      "ledger inbox-write --remove names no Ref:",
+      "--remove takes the comma-separated Ref: values whose bullets leave the inbox",
+      "re-run with --remove <ref>,<ref>, or drop it",
+    );
+  }
+  const { ledgerStore, inboxStore } = ctx.engine.runs;
+  await ledgerStore.requireRunDir(rootDir, run);
+
+  const input =
+    fromStdin && !ctx.terminal.stdinIsTTY
+      ? await readAll(ctx.promptIo.input, ctx.engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH)
+      : "";
+  const checked = checkInboxRows(inboxStore, input);
+  const refusal = (why: string): FailureDoc => ({
+    code: "VALIDATION_ERROR",
+    message: "ledger inbox-write refused the call",
+    why,
+    next: "fix every line named above, then re-run the write; a row the screen refuses is rewritten as a claim, never respelled to pass",
+  });
+  if (checked.problems.length > 0) {
+    return refuseWithProblems(ctx, refusal("a row piped on stdin cannot be written, so nothing was"), STDIN_SOURCE, checked.problems);
+  }
+  const rows = checked.bullets.map((bullet) => bullet.text);
+  if (rows.length === 0 && remove.length === 0) {
+    ctx.io.err("ledger inbox-write: no rows on stdin and nothing to remove; nothing written\n");
+  } else {
+    warnIfUnlocked(ctx, "inbox writes");
+  }
+
+  let outcomes: readonly InboxEditOutcome[] = [];
+  if (rows.length > 0 || remove.length > 0) {
+    try {
+      const result = await ledgerStore.writeInbox({
+        rootDir,
+        runId: run,
+        rows,
+        remove,
+        today: ctx.app.runtime.clock.now().toISOString().slice(0, 10),
+        maxBytes: INBOX_READ_MAX_BYTES,
+        dryRun: ctx.dryRun,
+        read: async () =>
+          await readInbox(rootDir, inboxStore.INBOX_PATH, ctx.engine.merge.atomicWrite.isSharedRegularFile, WRITE_VOICE),
+      });
+      outcomes = result.outcomes;
+    } catch (error) {
+      if (!(error instanceof ledgerStore.InboxWriteRefused)) throw error;
+      const placed = error.problems.map((problem: InboxEditProblem) => {
+        const pattern = screenInboxLine(problem.message);
+        const message = pattern === "" ? problem.message : screenProblem(pattern);
+        if (problem.where === "row") return { line: checked.bullets[problem.line - 1]?.line ?? 0, message };
+        return { src: problem.where === "remove" ? "--remove" : inboxStore.INBOX_PATH, line: problem.line, message };
+      });
+      return refuseWithProblems(ctx, refusal("a row or a removal cannot apply, so nothing was written"), STDIN_SOURCE, placed);
+    }
+  }
+
+  for (const outcome of outcomes) ctx.io.out(`${outcomeLine(outcome)}\n`);
+  const appended = outcomes.filter((outcome) => outcome.kind === "appended");
+  const removed = outcomes.filter((outcome) => outcome.kind === "removed");
+  if (ctx.dryRun) {
+    ctx.io.out(
+      `Dry run: ${appended.length} row(s) would be appended and ${removed.length} removed in ${inboxStore.INBOX_PATH}. Nothing was written.\n`,
+    );
+  }
+  return {
+    exitCode: 0,
+    json: {
+      inbox: inboxStore.INBOX_PATH,
+      run,
+      appended: appended.map((outcome) => ({
+        line: outcome.line,
+        ref: outcomeRef(outcome.ref),
+        severity: sanitizeLabel(outcome.severity ?? ""),
+      })),
+      alreadyFiled: outcomes
+        .filter((outcome) => outcome.kind === "already-filed")
+        .map((outcome) => ({ line: outcome.line, ref: outcomeRef(outcome.ref) })),
+      removed: removed.map((outcome) => ({ line: outcome.line, ref: outcomeRef(outcome.ref) })),
+      headingAdded: outcomes.find((outcome) => outcome.kind === "heading")?.line ?? null,
+      dryRun: ctx.dryRun,
+    },
+  };
+}
+
 export const ledgerCommand: CommandModule = {
   name: "ledger",
   summary:
-    "append findings to a run's ledger, close its rows, print its resume card, and read the deferral inbox (plumbing)",
+    "append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing)",
   hidden: true,
   mutating: true,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS, INBOX]))
+      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS, INBOX, INBOX_WRITE]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/")
       .option("--phase <phase>", "the phase the rows are filed under, a lowercase slug (review, build)")
       .option("--source <role>", "the role whose findings these are, a lowercase slug (reviewer)")
       .option("--report <path>", "a report inside the run's reports/ folder")
-      .option("--stdin", "read the findings block from stdin")
+      .option("--stdin", "read the findings block, or inbox-write's rows, from stdin")
       .option("--ids <ledger-ids>", "the comma-separated ledger ids handed to this re-review")
       .option("--id <ledger-id>", "the one row a manual close or a retirement moves")
       .addOption(
@@ -1226,6 +1539,7 @@ export const ledgerCommand: CommandModule = {
         "--retired <disposition>",
         "retire a deferred row whose inbox row left: keeps its state and records the date and this disposition",
       )
+      .option("--remove <refs>", "the comma-separated Ref: values whose inbox bullets inbox-write removes")
       .option("--paths <paths...>", "the paths a change touches; the inbox rows naming them are printed")
       .option("--plan <path>", "a plan path; the inbox rows whose Ref: or location names it are printed")
       .option("--area <words...>", "whole words matched in an inbox row that names no path")
@@ -1237,8 +1551,10 @@ export const ledgerCommand: CommandModule = {
 
   async run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    const subcommand = args[0] === CLOSE || args[0] === STATUS || args[0] === INBOX ? args[0] : APPEND;
+    const subcommand =
+      args[0] === CLOSE || args[0] === STATUS || args[0] === INBOX || args[0] === INBOX_WRITE ? args[0] : APPEND;
     refuseForeignFlags(subcommand, opts);
+    if (subcommand === INBOX_WRITE) return await runInboxWrite(ctx, opts);
     if (subcommand === INBOX) return await runInbox(ctx, opts);
     if (subcommand === STATUS) return await runStatus(ctx, opts);
     return subcommand === CLOSE ? await runClose(ctx, opts) : await runAppend(ctx, opts);

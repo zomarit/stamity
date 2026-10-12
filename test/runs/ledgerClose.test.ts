@@ -1535,6 +1535,10 @@ describe("stamity ledger close", () => {
     ["append", "--id", ["--id", rid(1)], "close"],
     ["append", "--state", ["--state", "fixed"], "close"],
     ["append", "--rationale", ["--rationale", "r"], "close"],
+    // Added 2026-10-12 (w1-inbox-write, REQ-FLOW-078): `--remove` is `inbox-write`'s alone, and that owner comes last.
+    ["close", "--remove", ["--remove", "x"], "inbox-write"],
+    ["append", "--remove", ["--remove", "x"], "inbox-write"],
+    ["close", "--stdin", ["--stdin"], "append and ledger inbox-write"],
   ] as const)(
     "refuses `ledger %s` given %s, a flag of the other subcommand, as a usage error",
     async (subcommand, flag, extra, other) => {

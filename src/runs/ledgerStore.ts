@@ -5,6 +5,14 @@ import { acquireWriteLock, atomicWriteFileUnlocked } from "../merge/atomicWrite.
 import { EngineError } from "../types/errors.ts";
 import { parseDisposition, SCHEDULE_RULE_FROM } from "./disposition.ts";
 import {
+  editInboxText,
+  INBOX_PATH,
+  parseInbox,
+  SCHEDULE_RULE_HEADING,
+  type InboxEditOutcome,
+  type InboxEditProblem,
+} from "./inboxStore.ts";
+import {
   cutReportText,
   printableText,
   quoteReportText,
@@ -997,4 +1005,216 @@ export async function retireRow(req: {
       tagsStripped: cleaned.tagged ? [ledgerId] : [],
     };
   });
+}
+
+/**
+ * An inbox write at least one of whose rows or removals cannot apply. Carries
+ * every problem, each placed among the rows, the removals or the inbox's own
+ * lines ({@link InboxEditProblem}), so the caller lists them the way it lists
+ * a block that does not parse; nothing was written. No message quotes a row's
+ * text, a `Ref:` value or a path a `Ref:` names, beyond a handed row's own
+ * parse message, which the caller has screened before this is reached.
+ */
+export class InboxWriteRefused extends EngineError {
+  readonly problems: readonly InboxEditProblem[];
+
+  constructor(problems: readonly InboxEditProblem[]) {
+    super(`ledger inbox-write refused: ${problems.length} problem(s), so nothing was written`, {
+      code: "VALIDATION_ERROR",
+      next: "fix the rows or the removals named, then re-run the write",
+    });
+    this.problems = problems;
+  }
+}
+
+export interface InboxWriteResult {
+  /** The inbox's repo-relative POSIX path. */
+  readonly inbox: string;
+  /** The edit's outcomes: removals, then the heading where it was added, then each row in the order handed in. */
+  readonly outcomes: readonly InboxEditOutcome[];
+}
+
+/** The states a ledger row is in by the close's grammar, which a refusal may name as they are. */
+const KNOWN_STATES: ReadonlySet<string> = new Set(["open", "fixed", "rejected", "deferred"]);
+
+/** A `Ref:` naming a row of a run's ledger: `.stamity/runs/<run id>/ledger.jsonl#<row id>`. */
+const LEDGER_REF = new RegExp(`^${escapeRegExp(`${RUNS_SEGMENTS.join("/")}/`)}([^/#]+)/${escapeRegExp(LEDGER_FILE)}#(.+)$`);
+
+/** A ledger as {@link writeInbox} reads it: its rows, none at all, or the reason it is refused. */
+type HeldLedger = { readonly rows: readonly LedgerRow[] } | { readonly refused: string };
+
+/**
+ * One run's ledger, read by the store's no-follow rules: each folder from the
+ * repository root to the run's must be a real directory, and the ledger a
+ * regular file ({@link readLedger}). A missing folder or ledger holds no rows.
+ * The refusal names no path, since the run id came from a row's `Ref:`.
+ */
+async function heldLedger(rootDir: string, runId: string): Promise<HeldLedger> {
+  let walked = rootDir;
+  for (const segment of [...RUNS_SEGMENTS, runId]) {
+    walked = join(walked, segment);
+    // eslint-disable-next-line no-await-in-loop -- top-down on purpose: the first bad segment is the one refused
+    const stats = await lstatOrNull(walked);
+    if (stats === null) return { rows: [] };
+    if (stats.isSymbolicLink()) return { refused: "is reached through a folder that is a symbolic link" };
+    if (!stats.isDirectory()) return { refused: "is reached through a path that is not a folder" };
+  }
+  const path = join(walked, LEDGER_FILE);
+  const leaf = await lstatOrNull(path);
+  if (leaf?.isSymbolicLink() === true) return { refused: "is a symbolic link" };
+  try {
+    return { rows: [...parseLedgerText(await readLedger(path, LEDGER_FILE)).rows.values()] };
+  } catch (cause) {
+    if (cause instanceof EngineError) return { refused: "is not a regular file" };
+    throw cause;
+  }
+}
+
+/**
+ * The ledger cross-check of one inbox write (REQ-FLOW-078): every appended
+ * row's `Ref:` and every removal's, against the ledgers they name, read once
+ * each. An appended row's ledger `Ref:` names an existing `deferred` row with
+ * no `retired` value, in any run's ledger; a `Ref:` that is no ledger row's is
+ * appended only as a re-date, removed in the same call. A removal's ledger row
+ * is no longer `deferred`, or carries `retired`, unless the call re-appends its
+ * `Ref:`; a removal naming a row that is not there leaves a dangling bullet,
+ * and is admitted.
+ */
+async function ledgerProblems(
+  rootDir: string,
+  rows: readonly string[],
+  remove: readonly string[],
+): Promise<InboxEditProblem[]> {
+  const ledgers = new Map<string, HeldLedger>();
+  const ledgerOf = async (runId: string): Promise<HeldLedger> => {
+    const known = ledgers.get(runId);
+    if (known !== undefined) return known;
+    const read = await heldLedger(rootDir, runId);
+    ledgers.set(runId, read);
+    return read;
+  };
+  /** The row a ledger `Ref:` names, null where it names none, a string where its ledger is refused; undefined for no ledger `Ref:`. */
+  const rowOf = async (ref: string): Promise<LedgerRow | null | string | undefined> => {
+    const match = LEDGER_REF.exec(ref);
+    if (match === null || !isRunId(match[1] ?? "")) return undefined;
+    const ledger = await ledgerOf(match[1] ?? "");
+    if ("refused" in ledger) return ledger.refused;
+    return ledger.rows.find((row) => row.id === match[2]) ?? null;
+  };
+
+  const problems: InboxEditProblem[] = [];
+  const removed = new Set(remove);
+  // Handed rows are read below the heading, as the edit reads them: line k + 1 is row k.
+  const handed = parseInbox([SCHEDULE_RULE_HEADING, ...rows.map((row) => (/[\r\n]/.test(row) ? "" : row))].join("\n")).rows;
+  const appended = new Set(handed.flatMap((row) => (row.ref === null ? [] : [row.ref])));
+  for (const row of handed) {
+    if (row.ref === null) continue;
+    const at = row.line - 1;
+    // eslint-disable-next-line no-await-in-loop -- one ledger read per run, cached; the rows are few
+    const named = await rowOf(row.ref);
+    if (named === undefined) {
+      if (!removed.has(row.ref)) {
+        problems.push({
+          where: "row",
+          line: at,
+          message: "names a `Ref:` that is not a ledger row, which only a re-date in the same call (`--remove` of that `Ref:`) may append",
+        });
+      }
+    } else if (typeof named === "string") {
+      problems.push({ where: "row", line: at, message: `the ledger its \`Ref:\` names ${named}` });
+    } else if (named === null) {
+      problems.push({ where: "row", line: at, message: "the ledger row its `Ref:` names is not a row of that ledger" });
+    } else if (named.state !== "deferred") {
+      const state = typeof named.state === "string" && KNOWN_STATES.has(named.state) ? `${named.state}, ` : "";
+      problems.push({
+        where: "row",
+        line: at,
+        message: `the ledger row its \`Ref:\` names is ${state}not deferred; only a deferral is filed in the inbox`,
+      });
+    } else if (named.retired !== undefined) {
+      problems.push({
+        where: "row",
+        line: at,
+        message: "the ledger row its `Ref:` names is already retired, so its deferral has left the inbox",
+      });
+    }
+  }
+  for (const [index, ref] of [...removed].entries()) {
+    if (appended.has(ref)) continue;
+    // eslint-disable-next-line no-await-in-loop -- one ledger read per run, cached; the removals are few
+    const named = await rowOf(ref);
+    if (typeof named === "string") {
+      problems.push({ where: "remove", line: index + 1, message: `the ledger it names ${named}` });
+    } else if (named !== null && named !== undefined && named.state === "deferred" && named.retired === undefined) {
+      problems.push({
+        where: "remove",
+        line: index + 1,
+        message: "the ledger row it names is still deferred and not retired; retire it with `ledger close --retired` first, or re-append its `Ref:` in the same call",
+      });
+    }
+  }
+  return problems;
+}
+
+/**
+ * The deferral inbox's one engine write (`stamity ledger inbox-write`,
+ * REQ-FLOW-078): append the rows handed in, remove the bullets the removal
+ * `Ref:` values name, both in one locked, atomic write, and create an absent
+ * inbox holding the heading and the rows (S9). The edit is
+ * {@link editInboxText}'s; this adds the reads and the write around it.
+ *
+ * `read` is the caller's no-follow reader of the inbox — null for an absent
+ * file, a throw for a link, a hard link or an oversized file — handed in as
+ * `isShared` is to the query, so the refusal is worded where it prints. It
+ * runs once before the lock, so a link is refused before a lock is made
+ * beside it, and again under the lock, whose text is the one edited. The lock
+ * and the write stay inside `.stamity/`: `acquireWriteLock` takes a lock on a
+ * path that does not exist yet, and `atomicWriteFileUnlocked` lands the text
+ * by temp-and-rename, so a planted link at the name is replaced, never
+ * written through.
+ *
+ * All or nothing: the ledger cross-check ({@link ledgerProblems}) and the
+ * edit's own problems are gathered, and any one refuses the call with all of
+ * them ({@link InboxWriteRefused}). A text over `maxBytes` is refused, so the
+ * query can still read what the write leaves. A dry run reads and answers as
+ * a write would, takes no lock, and writes nothing.
+ */
+export async function writeInbox(req: {
+  readonly rootDir: string;
+  readonly runId: string;
+  readonly rows: readonly string[];
+  readonly remove: readonly string[];
+  readonly today: string;
+  readonly maxBytes: number;
+  readonly dryRun: boolean;
+  readonly read: () => Promise<string | null>;
+}): Promise<InboxWriteResult> {
+  if (!isRunId(req.runId)) throw refuseRunId(req.runId);
+  const stateDir = join(req.rootDir, RUNS_SEGMENTS[0]);
+  const inboxPath = join(req.rootDir, ...INBOX_PATH.split("/"));
+  await req.read();
+  const release = req.dryRun ? null : await acquireWriteLock(inboxPath, stateDir);
+  try {
+    const text = await req.read();
+    const problems = await ledgerProblems(req.rootDir, req.rows, req.remove);
+    const edit = editInboxText(text, { rows: req.rows, remove: req.remove, runId: req.runId, today: req.today });
+    if ("problems" in edit) problems.push(...edit.problems);
+    if (problems.length > 0 || "problems" in edit) throw new InboxWriteRefused(problems);
+    const bytes = Buffer.byteLength(edit.text, "utf8");
+    if (bytes > req.maxBytes) {
+      throw new EngineError(
+        `ledger inbox-write refused ${INBOX_PATH}: the write would make it ${bytes} bytes, over the ${req.maxBytes} byte ceiling`,
+        {
+          code: "VALIDATION_ERROR",
+          why: "the inbox query reads at most that much, so a larger inbox could no longer be read",
+          next: "remove the rows that have left first, then re-run the write",
+        },
+      );
+    }
+    const changed = edit.outcomes.some((outcome) => outcome.kind !== "already-filed");
+    if (!req.dryRun && changed) await atomicWriteFileUnlocked(inboxPath, edit.text, { boundaryDir: stateDir });
+    return { inbox: INBOX_PATH, outcomes: edit.outcomes };
+  } finally {
+    await release?.();
+  }
 }

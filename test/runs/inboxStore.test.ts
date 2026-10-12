@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { parseDisposition } from "../../src/runs/disposition.ts";
 import {
   ALWAYS_SHOW_TAGS,
+  editInboxText,
   INBOX_PATH,
   locationPaths,
   matchInbox,
@@ -623,5 +624,156 @@ describe("matchInbox", () => {
     const result = matchInbox(rows, { paths: ["src/a.ts"] });
     expect(result.matched.map((match) => match.row.line)).toEqual([2]);
     expect(result.unmatched).toBe(1);
+  });
+});
+
+describe("editInboxText (w1-inbox-write, REQ-FLOW-078)", () => {
+  const RUN = "2026-10-12_demo";
+  const TODAY = "2026-10-12";
+  const HEAD = "Rows appended 2026-10-12 by the run `2026-10-12_demo`; each row's `Ref:` names its source.";
+  const ref = (n: number): string => `.stamity/runs/${RUN}/ledger.jsonl#${RUN}/review/${n}`;
+  const bullet = (n: number, schedule = "by: 2026-11-01"): string =>
+    `- Minor · src/a.ts:${n} · finding ${n} · source: /st-work · Ref: ${ref(n)} · ${schedule}`;
+  const edit = (text: string | null, rows: readonly string[], remove: readonly string[] = []) =>
+    editInboxText(text, { rows, remove, runId: RUN, today: TODAY });
+
+  /** The edit's text, failing the case with its problems when it refused. */
+  function edited(result: ReturnType<typeof editInboxText>): string {
+    if ("problems" in result) throw new Error(`refused: ${JSON.stringify(result.problems)}`);
+    return result.text;
+  }
+
+  it("makes an absent inbox the heading and one dated block holding the rows (S9)", () => {
+    const result = edit(null, [bullet(1), bullet(2)]);
+
+    expect(edited(result)).toBe([SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), bullet(2), ""].join("\n"));
+    expect(result).toMatchObject({
+      outcomes: [
+        { kind: "heading", line: 1, ref: null },
+        { kind: "appended", line: 5, ref: ref(1), severity: "Minor" },
+        { kind: "appended", line: 6, ref: ref(2), severity: "Minor" },
+      ],
+    });
+    expect(parseInbox(edited(result)).problems).toEqual([]);
+  });
+
+  it("adds the heading at the end where it is absent, so the older bare rows above it stay valid", () => {
+    const before = ["# Deferral inbox", "", "- Minor · src/z.ts:1 · an older row · source: x", ""].join("\n");
+
+    const text = edited(edit(before, [bullet(1)]));
+
+    expect(text).toBe(`${before}\n${SCHEDULE_RULE_HEADING}\n\n${HEAD}\n\n${bullet(1)}\n`);
+    const parsed = parseInbox(text);
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.rows.map((parsedRow) => [parsedRow.line, parsedRow.belowRule])).toEqual([
+      [3, false],
+      [9, true],
+    ]);
+  });
+
+  it("refuses an inbox carrying the heading twice, naming the inbox lines", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", bullet(1), SCHEDULE_RULE_HEADING, ""].join("\n");
+
+    const result = edit(before, [bullet(2)]);
+
+    expect(result).toMatchObject({ problems: [{ where: "inbox", line: 4 }] });
+    expect(JSON.stringify(result)).toContain("lines 1 and 4");
+  });
+
+  it("opens a new block after another run's block and after this run's block of another day", () => {
+    const otherRun = [SCHEDULE_RULE_HEADING, "", HEAD.replace(RUN, "2026-10-11_other"), "", bullet(1), ""].join("\n");
+    const otherDay = [SCHEDULE_RULE_HEADING, "", HEAD.replace(TODAY, "2026-10-11"), "", bullet(1), ""].join("\n");
+
+    expect(edited(edit(otherRun, [bullet(2)]))).toBe(`${otherRun}\n${HEAD}\n\n${bullet(2)}\n`);
+    expect(edited(edit(otherDay, [bullet(2)]))).toBe(`${otherDay}\n${HEAD}\n\n${bullet(2)}\n`);
+  });
+
+  it("reuses this run's block of today when it is the file's last block, and only then", () => {
+    const last = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), ""].join("\n");
+    const notLast = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), "", "A later paragraph.", ""].join("\n");
+
+    expect(edited(edit(last, [bullet(2)]))).toBe(`${SCHEDULE_RULE_HEADING}\n\n${HEAD}\n\n${bullet(1)}\n${bullet(2)}\n`);
+    expect(edited(edit(notLast, [bullet(2)]))).toBe(`${notLast}\n${HEAD}\n\n${bullet(2)}\n`);
+  });
+
+  it("reports a row whose Ref: a staying bullet carries as already-filed and leaves the text byte-equal", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), ""].join("\n");
+
+    const result = edit(before, [bullet(1, "when: the next release")]);
+
+    expect(edited(result)).toBe(before);
+    expect(result).toMatchObject({ outcomes: [{ kind: "already-filed", line: 5, ref: ref(1) }] });
+  });
+
+  it("refuses a removal matching no bullet and one matching two, naming the --remove entry", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", bullet(1), bullet(1), bullet(2), ""].join("\n");
+
+    const result = edit(before, [], [ref(2), ref(3), ref(1)]);
+
+    expect(result).toMatchObject({
+      problems: [
+        { where: "remove", line: 2 },
+        { where: "remove", line: 3 },
+      ],
+    });
+    expect(JSON.stringify(result)).toContain("matches no bullet");
+    expect(JSON.stringify(result)).toContain("lines 3 and 4");
+  });
+
+  it("removes a bullet by its Ref: and keeps every other line byte for byte", () => {
+    const before = ["# Inbox", "", SCHEDULE_RULE_HEADING, "", bullet(1), bullet(2), "trailing prose", ""].join("\n");
+
+    const result = edit(before, [], [ref(1)]);
+
+    expect(edited(result)).toBe(["# Inbox", "", SCHEDULE_RULE_HEADING, "", bullet(2), "trailing prose", ""].join("\n"));
+    expect(result).toMatchObject({ outcomes: [{ kind: "removed", line: 5, ref: ref(1) }] });
+  });
+
+  it("re-dates a row in one edit: its bullet leaves, and one bullet with the same Ref: and the new day lands", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", HEAD.replace(TODAY, "2026-10-01"), "", bullet(1), bullet(2), ""].join("\n");
+    const redated = bullet(1, "by: 2026-12-24");
+
+    const result = edit(before, [redated], [ref(1)]);
+    const text = edited(result);
+
+    expect(text.split("\n").filter((line) => line.includes(ref(1)))).toEqual([redated]);
+    expect(text).toBe(`${SCHEDULE_RULE_HEADING}\n\n${HEAD.replace(TODAY, "2026-10-01")}\n\n${bullet(2)}\n\n${HEAD}\n\n${redated}\n`);
+    expect(result).toMatchObject({
+      outcomes: [
+        { kind: "removed", line: 5, ref: ref(1) },
+        { kind: "appended", line: 9, ref: ref(1) },
+      ],
+    });
+    // The same re-date again finds its bullet as written: already-filed, nothing moves.
+    expect(edited(edit(text, [redated], [ref(1)]))).toBe(text);
+    expect(edit(text, [redated], [ref(1)])).toMatchObject({ outcomes: [{ kind: "already-filed", line: 9 }] });
+  });
+
+  it("keeps a CRLF file's line ends, on the lines it adds too", () => {
+    const before = ["# Inbox", "", SCHEDULE_RULE_HEADING, "", bullet(1), ""].join("\r\n");
+
+    const text = edited(edit(before, [bullet(2)], [ref(1)]));
+
+    expect(text).toBe(["# Inbox", "", SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(2), ""].join("\r\n"));
+  });
+
+  it.each([
+    ["no by: and no when:", "- Minor · src/a.ts:1 · d · source: /st-work · Ref: x.md#a", "carries neither"],
+    ["no Ref:", "- Minor · src/a.ts:1 · d · source: /st-work · by: 2026-11-01", "carries no `Ref:`"],
+    ["no bullet", "Minor · src/a.ts:1 · d · source: /st-work · Ref: x.md#a · by: 2026-11-01", "not a `- ` bullet"],
+  ])("refuses a row with %s, naming its position among the rows", (_label, given, message) => {
+    const before = `${SCHEDULE_RULE_HEADING}\n`;
+
+    const result = edit(before, [bullet(1), given]);
+
+    expect(result).toMatchObject({ problems: [{ where: "row", line: 2 }] });
+    expect(JSON.stringify(result)).toContain(message);
+  });
+
+  it("refuses two rows carrying one Ref:", () => {
+    const result = edit(null, [bullet(1), bullet(2), bullet(1, "when: the next release")]);
+
+    expect(result).toMatchObject({ problems: [{ where: "row", line: 3 }] });
+    expect(JSON.stringify(result)).toContain("row 1 carries");
   });
 });

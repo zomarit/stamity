@@ -30,7 +30,8 @@ import { LEDGER_FILE } from "./layout.ts";
  *
  * Two callers read one grammar: `stamity ledger inbox`, which prints the rows a
  * run's Frame folds in, and the records gate (`test/records/ledgers.test.ts`),
- * which holds the committed inbox to it.
+ * which holds the committed inbox to it. One writer composes by it:
+ * {@link editInboxText}, the edit `stamity ledger inbox-write` lands.
  *
  * Pure: text in, verdict out. Nothing here opens a path, and nothing here
  * screens or sanitises: the inbox is user-tier state any writer can author, so
@@ -428,4 +429,235 @@ export function matchInbox(
     else if (row.when !== null) triggers += 1;
   }
   return { matched, unmatched: rows.length - matched.length, triggers };
+}
+
+/** What one inbox write did to one line: the line it names is in the new text, but a removal's is in the old. */
+export interface InboxEditOutcome {
+  readonly kind: "appended" | "already-filed" | "removed" | "heading";
+  readonly line: number;
+  /** The `Ref:` the line carries; null for the heading. */
+  readonly ref: string | null;
+  /** The appended or already-filed row's severity, as the row being written carries it; null otherwise. */
+  readonly severity: string | null;
+}
+
+/**
+ * Why an inbox write is refused, and where: `row` is the 1-based position among
+ * the rows handed in, `remove` among the removal `Ref:` values, `inbox` a line
+ * of the inbox as it stands. No message quotes a row's text or a `Ref:` value,
+ * except a parse message of the row handed in, which the caller screens.
+ */
+export interface InboxEditProblem extends InboxProblem {
+  readonly where: "row" | "remove" | "inbox";
+}
+
+export interface InboxEditRequest {
+  /** The bullets to append, each one whole `- ` line as it will be written. */
+  readonly rows: readonly string[];
+  /** The `Ref:` values whose bullets leave. */
+  readonly remove: readonly string[];
+  /** The run whose dated block the rows land in; the caller has checked it is a run id. */
+  readonly runId: string;
+  /** The UTC day, `YYYY-MM-DD`, the block is dated. */
+  readonly today: string;
+}
+
+/**
+ * The head line of a block the inbox writer opens, composed from the run and
+ * the day alone, never from a caller's text. A block is reused only when the
+ * file's last block opens with exactly this line.
+ */
+export function inboxBlockHead(runId: string, today: string): string {
+  return `Rows appended ${today} by the run \`${runId}\`; each row's \`Ref:\` names its source.`;
+}
+
+/** The order an edit's problems are listed in: the inbox's own, then the rows', then the removals'. */
+const PROBLEM_ORDER: Readonly<Record<InboxEditProblem["where"], number>> = { inbox: 0, row: 1, remove: 2 };
+
+/** A line without the `\r` a CRLF file leaves on it once split at `\n`. */
+function bare(line: string): string {
+  return line.endsWith("\r") ? line.slice(0, -1) : line;
+}
+
+/**
+ * The inbox's next text after one write (`stamity ledger inbox-write`,
+ * REQ-FLOW-078), or every problem that refuses it; `text` is null for an
+ * absent inbox. All or nothing: any problem refuses the whole edit.
+ *
+ * A row handed in is one `- ` bullet on one line, parses under the schedule
+ * rule as if written below {@link SCHEDULE_RULE_HEADING} (so it carries `by:`
+ * or `when:`), and carries a `Ref:` no other row handed in carries. A removal
+ * `Ref:` matches exactly one bullet of the inbox. The inbox carries the
+ * heading at most once.
+ *
+ * A row whose `Ref:` a bullet that stays already carries is `already-filed`
+ * and not written again; so is a row a removal of its own `Ref:` would replace
+ * with the same bytes, which keeps a repeated re-date a no-op. A removal and a
+ * row sharing a `Ref:` are a re-date: the bullet leaves, and the row lands at
+ * the end. Rows land at the end of the file: the heading first where it is
+ * absent, then the run's block of today when the file's last block opens with
+ * {@link inboxBlockHead}'s line, else a new block under that head. Every line
+ * not removed stays byte for byte, and the file's line end (CRLF when its
+ * first line ends so) is used for the lines added. Nothing changed returns the
+ * text as it was.
+ */
+export function editInboxText(
+  text: string | null,
+  req: InboxEditRequest,
+): { text: string; outcomes: InboxEditOutcome[] } | { problems: InboxEditProblem[] } {
+  const problems: InboxEditProblem[] = [];
+  const cr = text !== null && /^[^\n]*\r\n/.test(text) ? "\r" : "";
+  const lines = text === null || text === "" ? [] : text.split("\n");
+  const terminated = text === null || text === "" || text.endsWith("\n");
+  if (terminated && lines.length > 0) lines.pop();
+
+  const headings = lines.flatMap((line, index) => (bare(line).trimEnd() === SCHEDULE_RULE_HEADING ? [index + 1] : []));
+  if (headings.length > 1) {
+    problems.push({
+      where: "inbox",
+      line: headings[1] ?? 0,
+      message: `\`${SCHEDULE_RULE_HEADING}\` appears at lines ${headings.join(" and ")}; the inbox carries it once`,
+    });
+  }
+
+  // The rows handed in, read as if below the heading: line k + 1 of this text is row k.
+  const shaped = req.rows.map((row, index) => {
+    if (/[\r\n]/.test(row)) {
+      problems.push({ where: "row", line: index + 1, message: "holds a line break; a row is one line" });
+      return false;
+    }
+    if (!row.startsWith("- ")) {
+      problems.push({ where: "row", line: index + 1, message: "is not a `- ` bullet; the writer composes every other line itself" });
+      return false;
+    }
+    return true;
+  });
+  const handed = parseInbox([SCHEDULE_RULE_HEADING, ...req.rows.map((row, index) => (shaped[index] === true ? row : ""))].join("\n"));
+  for (const problem of handed.problems) problems.push({ where: "row", line: problem.line - 1, message: problem.message });
+  const handedRefs = new Map<string, number>();
+  for (const row of handed.rows) {
+    const at = row.line - 1;
+    if (row.ref === null) {
+      problems.push({ where: "row", line: at, message: "carries no `Ref:`; a row is written only with the `Ref:` a later write finds it by" });
+      continue;
+    }
+    const first = handedRefs.get(row.ref);
+    if (first !== undefined) {
+      problems.push({ where: "row", line: at, message: `carries the \`Ref:\` row ${first} carries; one row per \`Ref:\`` });
+      continue;
+    }
+    handedRefs.set(row.ref, at);
+  }
+
+  // The inbox's own bullets by `Ref:`, each at its 0-based index.
+  const held = new Map<string, number[]>();
+  for (const row of parseInbox(lines.map(bare).join("\n")).rows) {
+    if (row.ref === null) continue;
+    held.set(row.ref, [...(held.get(row.ref) ?? []), row.line - 1]);
+  }
+  const removing = new Map<string, number>();
+  [...new Set(req.remove)].forEach((ref, index) => {
+    const at = held.get(ref) ?? [];
+    if (at.length === 1) removing.set(ref, at[0] ?? 0);
+    else if (at.length === 0) problems.push({ where: "remove", line: index + 1, message: "matches no bullet in the inbox" });
+    else {
+      problems.push({
+        where: "remove",
+        line: index + 1,
+        message: `matches ${at.length} bullets, at lines ${at.map((line) => line + 1).join(" and ")}; a removal names one bullet`,
+      });
+    }
+  });
+  problems.sort((a, b) => PROBLEM_ORDER[a.where] - PROBLEM_ORDER[b.where] || a.line - b.line);
+  if (problems.length > 0) return { problems };
+
+  // Which rows land, which are already filed, and which bullets leave.
+  const landing: { row: InboxRow; bullet: string }[] = [];
+  const filed: { row: InboxRow; index: number }[] = [];
+  for (const row of handed.rows) {
+    const ref = row.ref ?? "";
+    const bullet = req.rows[row.line - 2] ?? "";
+    const replaced = removing.get(ref);
+    if (replaced !== undefined && bare(lines[replaced] ?? "") === bullet) {
+      removing.delete(ref);
+      filed.push({ row, index: replaced });
+    } else if (replaced === undefined && held.has(ref)) {
+      filed.push({ row, index: held.get(ref)?.[0] ?? 0 });
+    } else {
+      landing.push({ row, bullet });
+    }
+  }
+  const outcomes: InboxEditOutcome[] = [...removing].map(([ref, index]) => ({
+    kind: "removed",
+    line: index + 1,
+    ref,
+    severity: null,
+  }));
+  if (landing.length === 0 && removing.size === 0) {
+    return {
+      text: text ?? "",
+      outcomes: filed.map(({ row, index }) => ({ kind: "already-filed", line: index + 1, ref: row.ref, severity: row.severity })),
+    };
+  }
+
+  const gone = new Set(removing.values());
+  const kept: string[] = [];
+  const movedTo = new Map<number, number>();
+  lines.forEach((line, index) => {
+    if (gone.has(index)) return;
+    movedTo.set(index, kept.length);
+    kept.push(line);
+  });
+  if (landing.length > 0) {
+    // A last line written with no line end gets one before anything follows it.
+    const lastIndex = kept.length - 1;
+    if (!terminated && lastIndex >= 0 && movedTo.get(lines.length - 1) === lastIndex) kept[lastIndex] = `${kept[lastIndex] ?? ""}${cr}`;
+    const push = (line: string): number => kept.push(`${line}${cr}`);
+    const blankBefore = (): void => {
+      if (kept.length > 0 && bare(kept[kept.length - 1] ?? "").trim() !== "") push("");
+    };
+    const head = inboxBlockHead(req.runId, req.today);
+    if (headings.length === 0) {
+      blankBefore();
+      outcomes.push({ kind: "heading", line: push(SCHEDULE_RULE_HEADING), ref: null, severity: null });
+    }
+    // The file's last block: its last line that is neither blank nor a bullet.
+    const lastProse = kept.findLast((line) => bare(line).trim() !== "" && !line.startsWith("- "));
+    const appended: InboxEditOutcome[] = [];
+    if (lastProse !== undefined && bare(lastProse) === head) {
+      // Land straight after the block's last line, before any blank lines that end the file.
+      let at = kept.length;
+      while (at > 0 && bare(kept[at - 1] ?? "").trim() === "") at -= 1;
+      const tail = kept.splice(at);
+      for (const { row, bullet } of landing) {
+        appended.push({ kind: "appended", line: kept.push(`${bullet}${cr}`), ref: row.ref, severity: row.severity });
+      }
+      kept.push(...tail);
+    } else {
+      if (headings.length === 0) push("");
+      else blankBefore();
+      push(head);
+      push("");
+      for (const { row, bullet } of landing) {
+        appended.push({ kind: "appended", line: push(bullet), ref: row.ref, severity: row.severity });
+      }
+    }
+    // Rows in the order handed in, each where it stands now.
+    const byRef = new Map(appended.map((outcome) => [outcome.ref, outcome]));
+    for (const row of handed.rows) {
+      const landed = byRef.get(row.ref);
+      if (landed !== undefined) outcomes.push(landed);
+      const stays = filed.find((entry) => entry.row === row);
+      if (stays !== undefined) {
+        outcomes.push({ kind: "already-filed", line: (movedTo.get(stays.index) ?? 0) + 1, ref: row.ref, severity: row.severity });
+      }
+    }
+  } else {
+    for (const { row, index } of filed) {
+      outcomes.push({ kind: "already-filed", line: (movedTo.get(index) ?? 0) + 1, ref: row.ref, severity: row.severity });
+    }
+  }
+  // A file that ended with no line end keeps that, unless its last line left or rows follow it.
+  const ends = terminated || landing.length > 0 || gone.has(lines.length - 1);
+  return { text: kept.join("\n") + (ends && kept.length > 0 ? "\n" : ""), outcomes };
 }

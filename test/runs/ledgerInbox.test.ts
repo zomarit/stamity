@@ -1256,6 +1256,11 @@ describe("stamity ledger inbox", () => {
     [["ledger", "append", "--due", "2026-12-01"], "ledger append takes no --due; it is a flag of ledger inbox"],
     [["ledger", "close", "--due"], "ledger close takes no --due; it is a flag of ledger inbox"],
     [["ledger", "status", "--due"], "ledger status takes no --due; it is a flag of ledger inbox"],
+    // Added 2026-10-12 (w1-inbox-write, REQ-FLOW-078): `inbox-write` joins the owner lists, last.
+    [["ledger", "inbox", "--run", "2026-09-23_demo"], "it is a flag of ledger append and ledger close and ledger status and ledger inbox-write"],
+    [["ledger", "inbox", "--stdin"], "ledger inbox takes no --stdin; it is a flag of ledger append and ledger inbox-write"],
+    [["ledger", "inbox", "--remove", "a"], "ledger inbox takes no --remove; it is a flag of ledger inbox-write"],
+    [["ledger", "status", "--remove", "a"], "ledger status takes no --remove; it is a flag of ledger inbox-write"],
   ])("refuses %j as a usage error naming the owner", async (argv, message) => {
     const dir = tempDir();
     await mkdir(dir.path(".stamity"));
