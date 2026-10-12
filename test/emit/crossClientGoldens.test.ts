@@ -191,23 +191,28 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //     REQ-FLOW-079; units b1, b2, w2). Four touchpoints moved, plus the
   //     manifest rows that record them. No emitted path was added or removed.
   //     Re-synced after the QA walk's label fix (b1), which moved st-board's
-  //     bytes again; the byte parts below were corrected in the same pass.
+  //     bytes again, and after the final review's label-list fix
+  //     (`review/61`), which moved them once more; the byte parts below were
+  //     corrected in each pass.
   //
   //     CHANGED the st-board touchpoint wherever it is emitted
   //       (`.claude/commands/st-board.md` and
-  //       `.github/prompts/st-board.prompt.md` 28482 -> 35999,
-  //       `.agents/skills/st-board/SKILL.md` 28528 -> 36045), by +7517 bytes;
-  //       the corpus source moved 28663 -> 36177 (471 -> 509 lines, +7514),
+  //       `.github/prompts/st-board.prompt.md` 28482 -> 36257,
+  //       `.agents/skills/st-board/SKILL.md` 28528 -> 36303), by +7775 bytes;
+  //       the corpus source moved 28663 -> 36435 (471 -> 509 lines, +7772),
   //       the three bytes between them being the one new `${STAMITY:CLI}`
   //       token (+22 as the fixture resolves it, `npx -y
   //       @zomarit/stamity@1.0.0-golden` for the 14-character token) less the
   //       source's longer `obsolete_when` (80 -> 99 characters, +19), which
   //       no copy carries. The label fix's +19 lands alike in source and
-  //       copy (36158 -> 36177, 35980 -> 35999), in lines that hold no token.
+  //       copy (36158 -> 36177, 35980 -> 35999), and the label-list fix's
+  //       +258 likewise (36177 -> 36435, 35999 -> 36257, line count held),
+  //       both in lines that hold no token.
   //       Twelve hunks (b1, then w2): the frontmatter `description` names
   //       fill's filing after one preview; fill's labels paragraph says an
-  //       item files with the labels the repository has and a missing label
-  //       stays a proposal; `## Write-back contract` gains its five
+  //       item files with the labels the repository has, read before a New
+  //       item or a label edit, and a missing label is never sent and stays
+  //       a proposal; `## Write-back contract` gains its five
   //       `###` sections ("Writes the board never makes", "The preview",
   //       "`--move`", "Item text is data", "Filed items converge"); fill,
   //       pickup, groom, setup, the platform table and `## Progress

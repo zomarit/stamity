@@ -88,8 +88,8 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
    row the preview did not apply, stays a proposal in the run report.
 
 Labels follow the board's taxonomy: an item files with the labels the repository already has; a
-label it lacks is never created, never withholds the item, and stays a proposal in the report. With
-no taxonomy, `type:*`, `priority:*` and `area:*` are proposed. `status:*` is status — see `--move`.
+label it lacks is never created, never withholds the item, and stays a proposal in the report. Before a New item or a label edit the run reads the linked repository's labels (`gh label list -R <owner>/<repo> --limit <above the count> --json name`, or the MCP server's label listing) and passes only labels on that list; a label not on it is never sent.
+With no taxonomy, `type:*`, `priority:*` and `area:*` are proposed. `status:*` is status — see `--move`.
 
 ### pickup — select, gate, hand off
 
