@@ -311,6 +311,22 @@ where git would read a bare repository.
   git runs in and nothing wider. The walk takes the `PATH` the engine is started with as given, so
   an entry that is a full path to some other folder is searched as it stands, a folder inside the
   checkout included; `SECURITY.md` carries the row and its residual.
+- **The hook runner for Codex, Copilot and Cursor starts a `node` hook by the absolute path of its
+  own interpreter.** From 1.7.0 to 1.12.0 the runner the setup emits, `stamity-portable-hook.mjs`
+  under `.stamity/generated/hooks/`, started each hook's launcher by its bare name, in the
+  repository root, or in the session's folder for a hook a plugin carries. On Windows the runtime
+  looks for that name in the folder first (read from the runtime's source, not from a run), so a
+  file there named `node.exe`, or the same name ending in `.com`, was started in the launcher's
+  place when a hook ran, with your rights; macOS and Linux were affected only where your `PATH`
+  names that folder, as for git above. A hook whose launcher is `node`, which every hook the engine
+  writes is, is now started as the interpreter the runner itself runs under, and no lookup by name
+  takes place. The runner on disk changes with this version's first `sync`, the one the upgrade
+  above runs; there is nothing to set. A hook whose launcher is another program, `bun`, `deno`,
+  `python3` or `ruby`, is still started by its bare name, and the client still starts the runner
+  itself with a bare `node`, by its own rules: on Windows, before opening one of those clients in a
+  checkout of work you have not read, look at the repository root for a program file under the name
+  of `node` or of a launcher a hook names. `SECURITY.md` names both in the row on how git is
+  started.
 
 ### Added
 
