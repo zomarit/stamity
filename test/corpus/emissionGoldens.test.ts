@@ -113,11 +113,12 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  *     is not obsolete at `41b1899a`, and the update kept it unchanged.
  *
  *     NOTHING else moved here. The run's other emitted changes are three
- *     touchpoints (`commands/st-board.md` 28663 -> 36158 bytes, 471 -> 509
+ *     touchpoints (`commands/st-board.md` 28663 -> 36177 bytes, 471 -> 509
  *     lines; `commands/st-pr-resolve.md` 21306 -> 21098, 333 held;
  *     `commands/st-plan.md` 28155 -> 28562, 426 -> 430) and the eval-run
  *     skill's dogfood copy, which no golden here carries; the sibling
- *     suite itemises the touchpoints.
+ *     suite itemises the touchpoints. The re-sync after the QA walk's label
+ *     fix (b1, st-board +19 bytes) moved no golden here.
  *
  *   - 2026-10-11, plan 019 file 3, the close's fix round (run
  *     2026-10-10_next-tier; ledger rows qa/5 and, under REQ-FLOW-077,

@@ -87,9 +87,9 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
    criteria, a `Ref:` when the item names a spec, and the filed-item marker. An unready item, or a
    row the preview did not apply, stays a proposal in the run report.
 
-Labels come from the board's own taxonomy: a filed item carries labels the repository already has,
-and the run creates no label. With no taxonomy in the source, `type:*`, `priority:*` and `area:*`
-are proposed in the report. `status:*` labels are status, not taxonomy — see `--move`.
+Labels follow the board's taxonomy: an item files with the labels the repository already has; a
+label it lacks is never created, never withholds the item, and stays a proposal in the report. With
+no taxonomy, `type:*`, `priority:*` and `area:*` are proposed. `status:*` is status — see `--move`.
 
 ### pickup — select, gate, hand off
 
@@ -267,9 +267,9 @@ write, outside this set.
 ### Writes the board never makes
 
 Deleting an item, any edit to a completed item, a write to any repository or board other than the
-linked one (on a Projects board, to another repository's item), a label the repository does not
-already have, and a `status:*` label where the board has a status field. Such a request stops and
-returns `BLOCKED_DEPENDENCY` rather than improvising one, for that item alone, and travels as a
+linked one (on a Projects board, to another repository's item), creating a label (the item still
+files, without it), and a `status:*` label where the board has a status field. Such a request stops
+and returns `BLOCKED_DEPENDENCY` rather than improvising one, for that item alone, and travels as a
 proposal in the report, decided before any write; other writes are reported apart, the run status
 carrying the blocked action. A reopen under `--move` is the status-transition write, not an edit.
 

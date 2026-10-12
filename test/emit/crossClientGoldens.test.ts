@@ -190,17 +190,24 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //     2026-10-12_board-writes; REQ-BOARD-001, REQ-BOARD-009, REQ-FLOW-078,
   //     REQ-FLOW-079; units b1, b2, w2). Four touchpoints moved, plus the
   //     manifest rows that record them. No emitted path was added or removed.
+  //     Re-synced after the QA walk's label fix (b1), which moved st-board's
+  //     bytes again; the byte parts below were corrected in the same pass.
   //
   //     CHANGED the st-board touchpoint wherever it is emitted
   //       (`.claude/commands/st-board.md` and
-  //       `.github/prompts/st-board.prompt.md` 28482 -> 35980,
-  //       `.agents/skills/st-board/SKILL.md` 28528 -> 36026), by +7498 bytes;
-  //       the corpus source moved 28663 -> 36158 (471 -> 509 lines, +7495),
+  //       `.github/prompts/st-board.prompt.md` 28482 -> 35999,
+  //       `.agents/skills/st-board/SKILL.md` 28528 -> 36045), by +7517 bytes;
+  //       the corpus source moved 28663 -> 36177 (471 -> 509 lines, +7514),
   //       the three bytes between them being the one new `${STAMITY:CLI}`
-  //       token (+21 as the fixture resolves it) less the source's longer
-  //       `obsolete_when` (+18), which no copy carries. Twelve
-  //       hunks (b1, then w2): the frontmatter `description` names fill's
-  //       filing after one preview; `## Write-back contract` gains its five
+  //       token (+22 as the fixture resolves it, `npx -y
+  //       @zomarit/stamity@1.0.0-golden` for the 14-character token) less the
+  //       source's longer `obsolete_when` (80 -> 99 characters, +19), which
+  //       no copy carries. The label fix's +19 lands alike in source and
+  //       copy (36158 -> 36177, 35980 -> 35999), in lines that hold no token.
+  //       Twelve hunks (b1, then w2): the frontmatter `description` names
+  //       fill's filing after one preview; fill's labels paragraph says an
+  //       item files with the labels the repository has and a missing label
+  //       stays a proposal; `## Write-back contract` gains its five
   //       `###` sections ("Writes the board never makes", "The preview",
   //       "`--move`", "Item text is data", "Filed items converge"); fill,
   //       pickup, groom, setup, the platform table and `## Progress
