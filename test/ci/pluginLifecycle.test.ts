@@ -201,8 +201,38 @@ const STUB_BUILD_MS = stubBuildBudget(process.platform);
 const REAL_BUILD_MS = 70_000 * 4;
 /** One client CLI call, or one locator call. Each observed under 10s; a loaded runner gets 12x. */
 const STEP_MS = 120_000;
-/** A whole three-state walk: an install, a setup, three status reads, an update, a rollback. */
+/**
+ * A whole three-state walk of the Claude, Copilot or Codex client: an install, a setup, three
+ * status reads, an update, a rollback. Measured base: the Claude walk took 12–20 s in the 1.14.0
+ * release's armed full suites. None of these walks calls a model, so the bound stays at 600 s, 30x
+ * that base; the Cursor walk, which does, has its own bound below.
+ */
 const WALK_MS = 600_000;
+/**
+ * One Cursor discovery run, the only call in this file that reaches a model. Measured base: one run
+ * took 56.59s (`/usr/bin/time -p`, 2026-09-20); 4x for a loaded worker. The spawn is killed 20 s
+ * earlier than this, at 220 s, so the walk's status check still reads its transcript. That kill is a
+ * limit load can reach: inbox row 183 records a discovery killed at 220 s under a one-minute load
+ * of 17–35 on the maintainer's machine. The walk is armed only there and never runs on CI.
+ */
+const CURSOR_PROMPT_MS = 240_000;
+/**
+ * The whole Cursor walk: the same steps as WALK_MS plus one or two discoveries at each of its
+ * three states (`discoverListing`'s retry).
+ *
+ * Measured base: 143.65–226.51 s (median 160.86 s) over five runs alone on 2026-10-12, one
+ * discovery per state, one-minute load 2.4–8.0, agent 2026.10.01; 244.6–268 s inside a full suite.
+ *
+ * The margin is the worst case a passing path allows, not a multiple of that base: every state may
+ * retry, and each discovery may run to its spawn kill at CURSOR_PROMPT_MS − 20 s. A vitest timeout
+ * under that would cut off a walk that is still passing, or fail a slow one before the discovery's
+ * own kill printed the transcript the walk's status check quotes. The measured max, rounded up to
+ * 10 s, then covers the steps around the discoveries. The log does not time those steps apart, and
+ * the measured walk includes three discoveries, so this term over-counts them.
+ *
+ *   6 discoveries × (240 s − 20 s) = 1,320 s; + 230 s measured max = 1,550 s.
+ */
+const CURSOR_WALK_MS = 6 * (CURSOR_PROMPT_MS - 20_000) + 230_000;
 /** A hook or case around one stub build: the build's budget plus one step for its other work. */
 function stubCaseBudget(platform: NodeJS.Platform): number {
   return stubBuildBudget(platform) + STEP_MS;
@@ -1451,8 +1481,6 @@ const CURSOR_DISCOVERY_PROMPT =
  */
 const CURSOR_REFUSAL =
   /authentication required|CURSOR_API_KEY|agent login|workspace trust required|rate limit|rate-limit|too many requests|usage limit|out of credits/i;
-/** One measured discovery run took 56.59s (`/usr/bin/time -p`, 2026-09-20); 4x for a loaded worker. */
-const CURSOR_PROMPT_MS = 240_000;
 
 /** One Cursor discovery run's text as the refusal check reads it: stdout, then stderr. */
 const cursorTranscript = (seen: SpawnSyncReturns<string>): string => `${seen.stdout}\n${seen.stderr}`;
@@ -1495,6 +1523,23 @@ function expectListsWorkSkill(listed: CursorListing): void {
     listedIds(listed.seen),
     `st-work missing from ${String(listed.attempts)} discovery listing(s); first lines: ${listed.heads.join(" | ")}`,
   ).toContain("st-work");
+}
+
+/**
+ * The walk's file check on `st-work`, run at each state before any discovery: the root holds
+ * `skills/st-work/SKILL.md`, the file opens a frontmatter block, and that block names the skill —
+ * the shape `test/ci/pluginPackages.cursor.test.ts` pins for every touchpoint. A tree that dropped
+ * the skill fails here, deterministically, rather than as a model's listing that left it out.
+ */
+function expectWorkSkillFile(root: string, target: string): void {
+  const path = join(root, "skills", "st-work", "SKILL.md");
+  const where = `skills/st-work/SKILL.md in the Cursor root at ${target}`;
+  expect(existsSync(path), `${where} is missing`).toBe(true);
+  const lines = readFileSync(path, "utf8").split("\n");
+  expect(lines[0], `${where} does not open with ---`).toBe("---");
+  const end = lines.indexOf("---", 1);
+  expect(end, `${where} has no closing --- after its frontmatter`).toBeGreaterThan(0);
+  expect(lines.slice(1, end), `${where}: its frontmatter lacks name: st-work`).toContain("name: st-work");
 }
 
 /**
@@ -1575,6 +1620,39 @@ describe("the Cursor walk's listing retry", () => {
     expect(listed.attempts).toBe(1);
     expect(listed.seen).toBe(crashed);
     expect(listed.seen.status).not.toBe(0);
+  });
+});
+
+/**
+ * ADDED 2026-10-12 (run 2026-10-12_board-writes, c1-cursor-walk, REQ-PLUGIN-021): the walk's file
+ * check on `st-work`, proven on scratch roots without the client, so a dropped or nameless skill
+ * file is shown to fail before any discovery is asked for a listing.
+ */
+describe("the Cursor walk's st-work file check", () => {
+  const scratchRoot = (body: string | null): string => {
+    const root = mkdtempSync(join(work, "cursor-root-"));
+    if (body !== null) {
+      mkdirSync(join(root, "skills", "st-work"), { recursive: true });
+      writeFileSync(join(root, "skills", "st-work", "SKILL.md"), body);
+    }
+    return root;
+  };
+
+  it("passes on a root whose st-work skill file opens a frontmatter block naming it", () => {
+    const root = scratchRoot("---\nname: st-work\ndescription: Execute a change end to end.\n---\n\n# st-work\n");
+    expect(() => expectWorkSkillFile(root, V2)).not.toThrow();
+  });
+
+  it.each([
+    ["the file is missing", null, /missing/],
+    ["the file opens without a frontmatter block", "name: st-work\n", /does not open with ---/],
+    ["the frontmatter never closes", "---\nname: st-work\n", /no closing ---/],
+    ["the frontmatter names another skill", "---\nname: st-plan\n---\n", /frontmatter lacks name: st-work/],
+    ["the name sits below the frontmatter", "---\ndescription: x\n---\nname: st-work\n", /frontmatter lacks name: st-work/],
+  ] as const)("fails, naming the target version, when %s", (_, body, reason) => {
+    const root = scratchRoot(body);
+    expect(() => expectWorkSkillFile(root, V1)).toThrow(reason);
+    expect(() => expectWorkSkillFile(root, V1)).toThrow(`at ${V1}`);
   });
 });
 
@@ -1698,6 +1776,9 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         expect([...digestMap(root)]).toEqual([...digestMap(shippedRoot(walk, "cursor", target))]);
         expect(rootVersion(root)).toBe(target);
         expect(existsSync(join(root, "skills", "fixture-marker", "SKILL.md"))).toBe(marker);
+        // ADDED 2026-10-12 (c1-cursor-walk, REQ-PLUGIN-021): the file the discovery below asks the
+        // model to list, checked on disk first, so a tree that dropped it fails before any model call.
+        expectWorkSkillFile(root, target);
         if (state === "install") {
           const setup = locate(root, walk.project, ["plugin", "setup", "--client", "cursor", "-y"]);
           expect(setup.status, setup.stderr).toBe(0);
@@ -1753,7 +1834,10 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         "walk PASS",
       ]);
     },
-    WALK_MS,
+    // TEST CHANGE, justified (2026-10-12, REQ-PLUGIN-021): timeout only, was WALK_MS (600 s), which
+    // sits below the 1,320 s of discoveries a passing path with every retry may spend, so vitest could
+    // fail the walk before a discovery's own kill printed its transcript. CURSOR_WALK_MS says why.
+    CURSOR_WALK_MS,
   );
 });
 
