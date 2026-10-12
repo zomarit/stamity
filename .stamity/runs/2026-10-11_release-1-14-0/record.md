@@ -1,6 +1,6 @@
 # Run 2026-10-11_release-1-14-0 — the 1.14.0 release: the cut from public main
 
-Status: in progress
+Status: closed 2026-10-12
 Plan: .stamity/runs/2026-10-11_release-1-14-0/plan.md
 Base: 751aaa5eae48668736edbc404af6dcb396fac378
 Invocation: /st-work Prepare and cut 1.14.0 from public main (751aaa5e, 294 commits since v1.12.0, mainly plan 019's three files #92, #95, #96): the version and its regenerations, one full eval run on the release's own account (baseline v2, all 141 cases, nothing carried), the CHANGELOG entries for #95 and #96 and the 1.14.0 section, the spec statuses, and `.github/release-controls-checklist.md` lines three to six; one release PR; the fast-forward, the tag and the publish held for the maintainer's morning yes. No package work is added. Unattended overnight: the opening batch is answered; every later choice takes its recommended default and goes on the morning list.
@@ -11,26 +11,18 @@ Opened: 2026-10-11T19:26Z
 
 ## Morning list (kept current through the night; read this first)
 
-**State at 2026-10-12T14:15Z, after the push of the security fix (`793a663d`, CI green) and the review bot's batch** (a fresh session continued the run
-at 08:33Z; the list under this paragraph is as it stood at 02:12Z). The maintainer's answers stand verbatim where
-they were given: the opening batch, "The close's question" and the dated entries after it. Since the close's
-question: the extra round `f8` landed and its closure review approved; the spec delta was reviewed, amended,
-reviewed again and merged (`c2da882f`); one changelog sentence was fixed (`f9`); those were pushed with the records
-as `a17b29df`, CI green. Then a security fix joined the release (the dated entries from "a security fix joins the
-release" on; the 1.14.0 Security entry of `CHANGELOG.md` says what changed and what to do): green on Windows CI
-three times; a reviewer and the security lens on its wording unit, on fix rounds 1 to 3 and on its hook-runner
-unit, the security lens on its last text pass, and one reviewer's public-text read of the last commits and these
-records; the whole branch reviewed again on Fable 5.1 as a delta through the hook-runner unit and fix round 3
-(approve). Eval run 46 re-ran calibration after the emitted hook
-runner changed (PASS); run 45 stays the run of record. The final gates are green on the final product tree, with
-the full suite alone and four live clients armed (293 files, 13,879 passed, 0 failed). The four reworded eval rows
-are confirmed and the six scan lines of the three eval exports are settled as a false match, on the maintainer's
-word. The ledger holds 216 rows, none open. **Not done:** CI on the head that carries the review bot's batch; the
-QA rows for the security fix (23 to 36, added at 13:41Z) leave rows 30 and 31 H and not proven, the maintainer's
-to accept or to have proven before the sign-off; the cut — the fast-forward, the tag and the publish — asked once,
-after them; the advisory, the
-maintainer's to publish; the QA sign-off with its three person rows (at and after the cut); on Windows, no run of
-the fix's new cases against the unfixed source; this record's close.
+**Closed 2026-10-12: 1.14.0 is released** (a fresh session continued the run at 08:33Z; the list under this
+paragraph is as it stood at 02:12Z). The maintainer's answers stand verbatim where they were given: the opening
+batch, "The close's question" and the dated entries after it. The release carries plan 019's three files, the
+cut's own fixes and a security fix (the 1.14.0 Security entry of `CHANGELOG.md` says what changed and what to do),
+which was green on Windows CI three times before it was public, reviewed in every round and read by the security
+lens, and reviewed with the whole branch on Fable 5.1. `main` was fast-forwarded to `c3d81529` and tagged `v1.14.0`
+at 14:37Z; npm `latest` is 1.14.0 with provenance since 14:50:44Z; the GitHub release, `plugins/v1.14.0` and the
+docs are published. Eval: run 45 the run of record (PASS as composed); run 46 a recalibration (PASS). QA signed by
+the maintainer at 14:56:24Z. The ledger holds 217 rows, none open. **Not done:** the advisory, the maintainer's to
+publish; QA rows 30 and 31 (the fix's Windows-only cases never run against the unfixed source; `close/13`, the
+next release's preparation); the 66 scheduled rows of the inbox's 2026-10-12 block, 17 of them waiting for a
+decision at the next attended close.
 
 Rewritten 2026-10-12T02:12Z. The code is final at `ca2677e3`; one commit after it, the re-made `g1` (`e7a2fd4d`),
 adds two test paths to the test-input map in `.stamity/change-classes.json`; the commit after that holds these
@@ -1763,7 +1755,7 @@ meets no look and no warning.
   sign-off, the title, the dist size budget, `all-pr-checks`. The docs site 38227443165: the build. Skipped by
   their own conditions: `prove-pr` (a pull request is not a push to `main`), `lanes` (the change is product, so
   the whole matrix ran) and the site's deploy. The pull request stays a draft.
-- 2026-10-12T09:29Z, asked through the question tool, attended; the maintainer's answer, verbatim: the three open
+- 2026-10-12T09:30Z, asked through the question tool, attended; the maintainer's answer, verbatim: the three open
   Minor rows — **"Accept all three (Recommended)"**. So: `review/86` is fixed now, as unit `f9` (a fixer on Opus
   5.5, `high`, dispatched 09:32Z: the one closing sentence of the changelog's Fixed entry, scoped to what the two
   pages say); `fix/32` is `deferred`, tagged `decision-waiting`, placed with the designed unit that already holds
@@ -1816,7 +1808,7 @@ meets no look and no warning.
   item in how the engine starts other programs on Windows; it predates 1.12.0. The morning's batch also answered
   how it ships, verbatim: **"Prove privately, cut after
   (Recommended)"** (1.14.0 waits and ships with the fix and an advisory together) and **"Private repo, hosted
-  runner (Recommended)"**; at 08:44Z, how the proof runs: **"1. I create the repo, ordinary CI (Recommended)"**.
+  runner (Recommended)"**; at 08:45Z, how the proof runs: **"1. I create the repo, ordinary CI (Recommended)"**.
   What 1.14.0 changes, who was affected and what to do is the Security entry of the 1.14.0 section of
   `CHANGELOG.md` and the rows of `SECURITY.md` and `docs/security-mapping.md`; this record keeps to the work. Every
   commit named below is on the branch as it was pushed; the fix was built on a side branch and moved onto
@@ -1981,6 +1973,50 @@ meets no look and no warning.
   `review/91` (fixed); **216 rows, none open** — 134 fixed, 72 deferred, 10 rejected. The inbox gains `fix/33`'s row
   among the tagged ones: the block holds 65 rows, 17 waiting for a decision. The replies to the four threads are
   recorded here, not posted: the first two fixed in `ff9bc3cb`, the third and fourth answered as above.
+- 2026-10-12T14:16Z–14:29Z: these records committed as `c3d81529` (the records gates green on `1009ea40`) and
+  pushed at 14:17:21Z, #97's description updated first. **CI on `c3d81529`: green, every leg read to its end**
+  (14:17Z–14:29Z): CI 38261823339 (`check` on floor, lts, `windows-1` and `windows-2`; the three apm routes; the
+  plugin route; `all-ci-checks`), PR checks 38261823332, the docs site 38261823362. 14:30Z: the three alerts read
+  again live, unchanged, no patched version.
+- **The cut question, asked 14:30:31Z, answered 14:36:42Z, verbatim:** QA rows 30 and 31 — **"Accept for 1.14.0
+  (Recommended)"**; `fix/33` — **"Schedule it (Recommended)"**; the review bot's four threads — **"Post them
+  (Recommended)"**; the cut — **"Cut now (Recommended)"**.
+- 2026-10-12T14:37:14Z: **`main` fast-forwarded `751aaa5e..c3d81529`** under the admin bypass; GitHub marked #97
+  merged at 14:37:17Z. 14:37:36Z: **the annotated tag `v1.14.0`** (object `10819914`, message "1.14.0", as
+  `v1.12.0`'s) on `c3d81529`, pushed. `main`'s push runs, green: CI 38264252377 (`prove-pr` — the pull request had
+  proved this tree — and `all-ci-checks`), the pack-signing rehearsal 38264252362 (prepare, sign, verify), the docs
+  site 38264252470 (the build). 14:38Z: the four replies posted on the bot's threads, each saying the release run
+  drafted it; the threads stay open for the maintainer.
+- 2026-10-12T14:37:40Z–14:48:19Z: **the release run 38264296728, success.** `gates and pack` and `apm route smoke`
+  passed; `publish` waited at `npm-publish` from 14:47:02Z and was approved through the API at 14:47:13Z on the
+  maintainer's word; then every step green: the tarball's and the plugin distribution's digests verified,
+  "Publish to npm with provenance", the plugin archives attested, the plugin distribution pushed, the release
+  manifest stamped, the GitHub release created. **The GitHub release `v1.14.0`** published 14:48:14Z, not a
+  draft, targeting `c3d81529`. **`plugin-dist` and the tag `plugins/v1.14.0`** at `4a2ba540`. The docs deploy
+  (38265593559, on the release run's completion, 14:48:25Z–14:51:22Z): the build and "Deploy to GitHub Pages".
+- 2026-10-12T14:50:44Z: **npm `latest` is 1.14.0**, with registry attestations (`provenance/v1`), and
+  `npx -y @zomarit/stamity@1.14.0 --version` prints `1.14.0` in an empty folder. The three release controls:
+  `npm-publish` keeps its required reviewer and its branch and tag policy; the `release-tags` ruleset is active; the
+  trusted publisher shows through the provenance.
+- 2026-10-12T14:52Z–14:55Z: **the three person rows of the QA table, checked by machine.** Row 1: the npm and
+  `npx` results above and the GitHub release's notes. Row 2: Claude Code 2.1.296, in a scratch repository with a
+  configuration folder of its own (both deleted after), ran `claude plugin marketplace add
+  zomarit/stamity#plugin-dist`, `claude plugin install stamity@stamity --scope project` and `claude plugin list
+  --json`, each exit 0: `stamity@stamity` at version 1.14.0, project scope, enabled. Row 3: the deployed
+  `/docs/measurements/` reads "PASS as composed", says three samples per case and links run 45's note;
+  `/docs/troubleshooting/` shows `generated by 1.14.0` and invariants 1.2.0; `/docs/security-mapping/` carries the
+  row on a folder in the shape of a bare repository and the `node.exe` wording.
+- **The close's last question, asked 14:54:07Z, answered 14:56:24Z, verbatim:** the QA sign-off — **"Sign it
+  (Recommended)"**; the evidence archive of runs 44 to 46 — **"Archive now (Recommended)"**; the private copy of the
+  repository and this run's local lanes and side branches — **"Delete and clean (Recommended)"**; the leftovers —
+  **"Accept as placed (Recommended)"**.
+- 2026-10-12T14:57Z: the closing records. `close/13` (Warning), QA rows 30 and 31: the security fix's four
+  Windows-only cases have never been run on Windows against the source before the fix; accepted for 1.14.0,
+  scheduled for the next release's preparation, with its inbox row. The ledger: **217 rows, none open** — 134 fixed,
+  73 deferred (seven retired, 66 with an inbox row), 10 rejected; 17 inbox rows wait for a decision at the next
+  attended close. Two answer stamps above were corrected to the session's own transcript times (08:45Z, 09:30Z).
+  **Leftovers:** the 66 rows of the inbox's 2026-10-12 block, each with its place or trigger, accepted as placed by
+  the maintainer at 14:56:24Z; nothing is dropped.
 - 2026-10-11T23:56Z: an early `gate scan --base 751aaa5e` on the lane at `3338ee97`: exit 1, 91 files scanned, none
   skipped or unscanned, **four hits**, all rule `inline-api-key-assignment`, all in the two eval exports:
   `evals/runs/2026-10-11-run-44/summary.json:40303` and `:103402` (commit `90681fec`),
@@ -2125,9 +2161,9 @@ Left for a person (sorted by risk, then minutes; 13 minutes and the workflow's w
 
 | # | Scenario | Steps | Expected | Risk | Minutes | Proof |
 |---|---|---|---|---|---|---|
-| 1 | The published 1.14.0 runs and carries provenance | Start: the tag `v1.14.0` is pushed and the release workflow waits at its approval. (1) Approve the `npm-publish` environment. (2) When the workflow ends, run `npm view @zomarit/stamity@1.14.0 version`. (3) In an empty folder run `npx -y @zomarit/stamity@1.14.0 --version`. (4) Open the GitHub release `v1.14.0`. | (2) and (3) print `1.14.0`; the package page shows provenance from this repository's release workflow; (4) the notes are the changelog's 1.14.0 section, opening on "Upgrading from 1.12.0". | M | 4, and the workflow's wait | [ ] open — a step that cannot be undone |
-| 2 | The plugin installs at 1.14.0 from the public distribution | Start: the release workflow has ended; a scratch git repository; Claude Code signed in. (1) `claude plugin marketplace add zomarit/stamity#plugin-dist`. (2) `claude plugin install stamity@stamity --scope project`. (3) `claude plugin list --json`. | (1) and (2) exit 0; (3) lists `stamity@stamity` with `"version": "1.14.0"`. | M | 3 | [ ] open — a live third-party client and account |
-| 3 | The documentation site shows the changed pages as written | Start: the pull request's checks have ended. (1) Build the site: `npm --prefix website ci`, then `npm --prefix website run build`, then `npm --prefix website run serve`. (2) Open Measurements. (3) Open Troubleshooting. (4) Open Security. (5) Follow one link out of each and back. | (2) reads "PASS as composed, three samples per case.", quotes the run's reason, and its link to the note beside run 45 resolves; (3) the `check` sample shows invariants 1.2.0 and `generated by 1.14.0`; (4) the row on a folder committed in the shape of a bare repository renders whole, with four numbered residuals; (5) no broken link. | L | 6 | [ ] open — a rendered surface |
+| 1 | The published 1.14.0 runs and carries provenance | Start: the tag `v1.14.0` is pushed and the release workflow waits at its approval. (1) Approve the `npm-publish` environment. (2) When the workflow ends, run `npm view @zomarit/stamity@1.14.0 version`. (3) In an empty folder run `npx -y @zomarit/stamity@1.14.0 --version`. (4) Open the GitHub release `v1.14.0`. | (2) and (3) print `1.14.0`; the package page shows provenance from this repository's release workflow; (4) the notes are the changelog's 1.14.0 section, opening on "Upgrading from 1.12.0". | M | 4, and the workflow's wait | [x] checked by machine after the publish, 14:50:44Z: npm `latest` 1.14.0 with `provenance/v1` attestations; `npx -y @zomarit/stamity@1.14.0 --version` prints `1.14.0`; the GitHub release `v1.14.0` (14:48:14Z) targets `c3d81529` |
+| 2 | The plugin installs at 1.14.0 from the public distribution | Start: the release workflow has ended; a scratch git repository; Claude Code signed in. (1) `claude plugin marketplace add zomarit/stamity#plugin-dist`. (2) `claude plugin install stamity@stamity --scope project`. (3) `claude plugin list --json`. | (1) and (2) exit 0; (3) lists `stamity@stamity` with `"version": "1.14.0"`. | M | 3 | [x] checked by machine at 14:52Z: Claude Code 2.1.296 in a scratch repository with a configuration folder of its own: `marketplace add`, `install`, `plugin list --json` each exit 0, `stamity@stamity` 1.14.0 at project scope, enabled |
+| 3 | The documentation site shows the changed pages as written | Start: the pull request's checks have ended. (1) Build the site: `npm --prefix website ci`, then `npm --prefix website run build`, then `npm --prefix website run serve`. (2) Open Measurements. (3) Open Troubleshooting. (4) Open Security. (5) Follow one link out of each and back. | (2) reads "PASS as composed, three samples per case.", quotes the run's reason, and its link to the note beside run 45 resolves; (3) the `check` sample shows invariants 1.2.0 and `generated by 1.14.0`; (4) the row on a folder committed in the shape of a bare repository renders whole, with four numbered residuals; (5) no broken link. | L | 6 | [x] checked by machine at 14:53Z: the deployed `/docs/measurements/`, `/docs/troubleshooting/` and `/docs/security-mapping/` carry the text (2) to (4) names; the rendering is the maintainer's to look at |
 
 Appendix — auto-proven (`H` first):
 
@@ -2178,39 +2214,43 @@ Rows 23–36 cover the security fix, which joined after this table was first bui
 
 **Sign-off** — the 1.14.0 release branch, 2026-10-12
 
-- [ ] Every H row walked or auto-proven, and passing — an H row accepted unwalked blocks release. (All ten H rows
+- [x] Every H row walked or auto-proven, and passing — an H row accepted unwalked blocks release. (All ten H rows
   are auto-proven and passing; none is left for a person.) Of the rows added for the security fix, rows 30 and 31
   are H and **not proven**: no run of the new cases against the unfixed source exists on Windows, the half of the
-  proof the maintainer's answer of 08:44Z left out; under this rule they are the maintainer's to accept or to have
-  proven before signing. Row 32 is H and proven by a run on the release head.
-- [ ] Every failing M row has a filed follow-up, linked. (No M row fails; rows 1 and 2 cannot be walked before the
-  cut.)
-- L failures are recorded, not blocking. (None recorded; row 3 is open.)
+  proof the maintainer's answer of 08:45Z left out. **The maintainer accepted both for 1.14.0 at 14:36:42Z**
+  ("Accept for 1.14.0 (Recommended)"); they are `close/13`, scheduled for the next release's preparation. Row 32
+  is H and proven by a run on the release head.
+- [x] Every failing M row has a filed follow-up, linked. (No M row fails; rows 1 and 2 were checked by machine
+  after the publish.)
+- L failures are recorded, not blocking. (None recorded; row 3 was checked by machine on the deployed site.)
 - Rollback: before the tag, close the pull request and nothing is released. After the fast-forward and before the
   publish, decline the `npm-publish` approval and take `main` back by a revert of the range `751aaa5e..<head>`; the
   tag moves only on the maintainer's word. After the publish, `npm deprecate @zomarit/stamity@1.14.0 "<reason>"` and
   a 1.14.1: a published version is not taken back.
-- Shippable: **not signed** — an unattended run asks nothing; the three open rows ride the close's one question.
+- Shippable: **signed** by the maintainer at 14:56:24Z, "Sign it (Recommended)": on rows 1 to 3 checked by machine
+  after the publish, every other row proven, and rows 30 and 31 accepted for 1.14.0.
 
-Handback: 22 rows derived; 19 auto-proven with the pointers above; 3 left for a person, each open (no input hash is
-recorded for an open row); sign-off not signed. Added for the security fix: 14 rows, 23 to 36; 11 auto-proven, one
+Handback: 22 rows derived; 19 auto-proven with the pointers above; 3 left for a person, each checked by machine
+after the publish; sign-off signed by the maintainer. Added for the security fix: 14 rows, 23 to 36; 11 auto-proven, one
 (row 32) proven by a run on the release head, two (rows 30 and 31) not proven; no person row added. Browser evidence: not applicable, the change has no UI of its own;
 the rendered documentation site is row 3.
 
 ## Proof block
 
-**Updated 2026-10-12T13:27Z, before the push of the security fix; this paragraph supersedes the lines below where
-they differ.** Gates: on the final product tree `03696ecb` — the full suite alone with coverage and the four live
-clients armed, 293 files, 13,879 passed, 0 failed, 18 skipped, the floors held, the four live walks passed; build,
-`sync`, `check`, lint, typecheck, knip, the leak gate and hygiene exit 0; the tag-time records check at a local tag,
-deleted at once — and the records gates on the commits after it, exit 0 (the dated entries above give each run).
-Scan: `gate scan` exits 1 on six lines of the three eval exports, settled by the maintainer as a false match (four
-at the close's question, two at 12:59Z–13:03Z). Reviews: `review/71`, `review/72`, `review/73`, `review/79` and
-`fix/30` fixed by `f8`; the spec delta merged (`c2da882f`); the security fix as the dated entries tell it. CI: green
-on #97 at `a17b29df` and at `793a663d`, every leg; at the head after the review bot's batch, the next records commit
-says. Eval: run 45 the run of record,
-PASS as composed; run 46, at `04bfbde9`, PASS (a recalibration, every case carried). Not done: as the opening of
-this record lists.
+**Closed 2026-10-12T14:58Z: 1.14.0 released; this paragraph supersedes the lines below where they differ.** Gates:
+on the final product tree `03696ecb`, the full suite alone with coverage and the four live clients armed (293 files;
+13,879 passed, 0 failed, 18 skipped; the floors held; the four live walks passed), build, `sync`, `check`, lint,
+typecheck, knip, the leak gate and hygiene exit 0, and the tag-time records check at a local tag deleted at once;
+the records gates on every commit after it, exit 0; the review bot's batch (`ff9bc3cb`, `1009ea40`) by its scoped
+gates, its review and its security lens. CI: green on #97 at `a17b29df`, at `793a663d` and at `c3d81529`, every leg,
+both Windows legs among them; `main`'s push runs at `c3d81529` green. Scan: `gate scan` exits 1 on six lines of the
+three eval exports, settled by the maintainer as a false match. Reviews: every unit reviewed, every security-bearing
+unit read by the security lens, the whole branch on Fable 5.1 (approve). Eval: run 45 the run of record, PASS as
+composed; run 46 at `04bfbde9`, PASS (a recalibration, every case carried). The cut: `main` fast-forwarded to
+`c3d81529` (14:37:14Z), the tag `v1.14.0` (14:37:36Z), the release run 38264296728 green (14:48:19Z), npm `latest`
+1.14.0 with provenance (14:50:44Z), the GitHub release and `plugins/v1.14.0`, the docs deployed. QA: signed by the
+maintainer at 14:56:24Z. Ledger: 217 rows, none open. Not done: the advisory, the maintainer's to publish; QA rows
+30 and 31 (`close/13`); the leftovers the opening lists.
 
 Written 2026-10-12T02:12Z, before the close question is answered: the run is `in progress` and this block is
 completed by the closing records commit (the CI line, the sign-off, the leftovers line). The notes above are the
@@ -2223,7 +2263,7 @@ below rests on an agent's bare statement that it finished.
 checks scan, gates-all, review; lens `stamity-security`), base `751aaa5eae48668736edbc404af6dcb396fac378`, the tree
 the gates ran on `77f6dad4` (65 commits, 106 files, 263,619 lines added — the two eval exports are most of them — and
 442 removed). The pushed head is that tree with this run's own record files and the inbox rewritten and nothing else
-moved. On `77f6dad4`, by the run's test-runner, each gate once, at 01:47Z–01:58Z:
+moved. Gate results on `77f6dad4`, by the run's test-runner, each gate once, at 01:47Z–01:58Z:
 
 | Gate | Command | Result |
 |---|---|---|
