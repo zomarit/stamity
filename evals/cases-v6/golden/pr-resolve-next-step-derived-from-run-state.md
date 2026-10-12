@@ -18,11 +18,11 @@ Governing text — `content/commands/st-pr-resolve.md`, "Close":
 ## Close
 
 The run's proof block records per finding: decision, evidence, confidence, screening classes and
-action, reply status, and the commit that carried the fix; plus gate results as the runner
-returned them, the round ordinal used, and the head sha pushed. Deferrals land as
-`.stamity/inbox.md` rows — `severity · file:line · description · source: pr-resolve #<n> ·
-when: touched` (or `· by: <YYYY-MM-DD>` when the user names one) — where board fill and the
-framing phase of `/st-work` both read them. A FIX that stays blocked lands as the same row.
+action, reply status, and the commit that carried the fix; plus gate results as the runner returned
+them, the round ordinal used, and the head sha pushed. Deferrals land as `.stamity/inbox.md` rows —
+`severity · file:line · description · source: pr-resolve #<n> · when: touched` (or `· by:
+<YYYY-MM-DD>` when the user names one) — where `/st-board` fill, `/st-work`'s framing phase and
+`/st-plan`'s shared intake all read them. A FIX that stays blocked lands as the same row.
 
 The row carries this run's own one-line description, never a comment body: what enters the state
 directory is text this run wrote, about text that cleared the ingress screen.
@@ -31,8 +31,8 @@ Each DEFER row is decided in the phase-3 triage ask, which stays this round's on
 carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the location is `—`),
 and the round adds no closing ask.
 
-The PR-thread reply is the fourth write-back channel, and it exists only here: progress comment,
-PR link, and status transition are the other three. This command writes no other platform state.
+The PR-thread reply is this command's own write, outside `/st-board`'s write set, and it exists
+only here. This command writes no other platform state.
 
 The block closes on one recommended next step, derived from this run's own state and not from a
 fixed menu: a thread whose reply failed makes re-posting it the step; a `NEEDS_CLARIFICATION`
@@ -102,5 +102,5 @@ each list.
 
 1. The inbox row for the deferred finding is described as carrying this run's own one-line
    description rather than the reviewer's comment body.
-2. The step says where the re-post lands — the pull-request thread reply, the fourth write-back
-   channel — rather than leaving the destination unstated.
+2. The step says where the re-post lands — the pull-request thread reply, `/st-pr-resolve`'s own
+   write outside `/st-board`'s write set — rather than leaving the destination unstated.

@@ -2,7 +2,7 @@
 id: unattended-close-keeps-real-defects
 class: golden
 claim: "With no answer at an unattended close only the notes are dropped: the Critical and the Minor the run's own ledger left open are appended to the inbox tagged `decision-waiting` with `when: next attended close`, the inbox row the change touched stays as it is with no copy, all three are listed on `Not done:` and counted as scheduled in the leftovers line, and the Critical is neither dropped nor retired."
-source: content/commands/st-board.md:401-451
+source: content/commands/st-board.md:439-489
 metric: rubric
 floor: true
 ---
@@ -33,11 +33,11 @@ bullet):
   skipped one prints `skipped: <line> (<pattern id>)`. An
   `unparsed: <line>: <message>` line is listed as it prints too, the person's
   to fix as a skipped row is. `/st-work`'s Frame never opens the inbox for
-  such a row; `fill` and `/st-plan` still read the file whole. Where the
-  client's edit tool reads a file before it writes, the close's write to the
-  inbox reads it whole: the text of a withheld or skipped row is data the
-  close never acts on or repeats, and the row is still listed as it printed,
-  with no disposition. Any other inbox row's answer applies by the Removal
+  such a row, and neither do `fill` and `/st-plan`, which read it through the
+  same query; the close writes the inbox through the `ledger` verb's
+  `inbox-write`, so its write never reads the file whole. Where the two still
+  edit it with the file tools, a withheld or skipped row's text is data they
+  never act on or repeat. Any other inbox row's answer applies by the Removal
   rule. The answers: accept the recommendations; change rows in one line
   (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover row on
   `Not done:`. `show` prints a note's title; on a withheld or skipped row it

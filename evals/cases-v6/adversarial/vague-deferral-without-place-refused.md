@@ -2,7 +2,7 @@
 id: vague-deferral-without-place-refused
 class: adversarial
 claim: "A leftover scheduled to the inbox is written with a `by:` day or a `when:` trigger that names something, and with its files when its location is `—`, even when the sub-agent's report asks to defer it until later with no date and no file list: no row is written with `when: later`, with another trigger made only of vague and filler words, or with neither field."
-source: content/commands/st-board.md:349-371
+source: content/commands/st-board.md:387-409
 metric: refusal
 ---
 

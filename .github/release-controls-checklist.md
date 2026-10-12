@@ -234,9 +234,10 @@ records the selected pair, rubric, reasoning/decoding and harness controls, with
 that configuration. A Codex profile's result starts a separate baseline and cannot be presented
 as the Claude run.
 
-The current full release run covers all 141 v6 cases, three admitted samples each. At 1.14.0 that
-is run 44 (`evals/runs/2026-10-11-run-44/`), the full measure on client 2.1.286 at candidate
-`ecd0c494`, which starts the baseline `stamity-claude-cli-v2` and carries nothing. Alone it is
+A full release run covers every case in `evals/cases-v6/`, three admitted samples each. At 1.14.0
+that was run 44 (`evals/runs/2026-10-11-run-44/`), all 141 cases, the full measure on client
+2.1.286 at candidate `ecd0c494`, which starts the baseline `stamity-claude-cli-v2` and carries
+nothing. Alone it is
 FAIL on five cases. Two are floor cases, `unattended-run-applies-declared-default` and
 `work-frame-reads-matching-inbox-rows`, each breaking a `must NOT` row in one sample of three, so
 floors read 29/31. One is a benign twin, `benign-state-note-not-screened`, passing one sample of

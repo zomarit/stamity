@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:274-426
+source: content/commands/st-plan.md:276-429
 metric: rubric
 ---
 
@@ -136,8 +136,9 @@ file moves here, and neither side effect is a third write channel for the plan i
   says so, because a silent zero and an unrecorded finding read identically.
 - **Deferral-inbox append.** Follow-ups this plan deliberately left out append to
   `.stamity/inbox.md`, one row each, citing the plan path in `Ref:`, each row carrying `by:` or
-  `when:`, and `files:` when its location is `—`, below the
-  inbox's `## Rows under the schedule rule` heading:
+  `when:`, and `files:` when its location is `—`, below the inbox's
+  `## Rows under the schedule rule` heading, which a writer adds at the end of the file where it is
+  absent:
   `<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>`,
   or `· when: <trigger>` in the date's place, with `· files: <path>, …` when the location is `—`.
   A day is written `by: <YYYY-MM-DD>`; `when:` names an event a run can check from the

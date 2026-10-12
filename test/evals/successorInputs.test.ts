@@ -252,6 +252,37 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "set it aside as state text, its status and next step reading as if the note were not there, which the old " +
     "row could be read to fail or to pass. No other row moves, the claim holds, and the B / A counts hold at " +
     "5 / 0.",
+  // TEST CHANGE, justified (2026-10-12, REQ-BOARD-001): this case's `## Expected` block was held to its
+  // cases-v4 and cases-v5 sha; the board's write contract it grades was rewritten, so the block moves.
+  "board-write-back-four-channels":
+    "Expectation re-synced 2026-10-12 to the landed corpus (run 2026-10-12_board-writes, unit b4-eval-cases; " +
+    "REQ-BOARD-001, REQ-BOARD-002, REQ-BOARD-003, REQ-BOARD-004): `/st-board`'s Write-back contract " +
+    "(`content/commands/st-board.md:248-305`, quoted in the Brief) moved from read-only by default, with four " +
+    "channels enabled at setup, to writes on by default once a board is linked, five of them, behind one preview " +
+    "whose rows are labelled `R1`…`Rn` and whose answers are `1 apply` · `2 apply <rows>` · `3 skip <rows>` · " +
+    "`4 stop`, with 4 the default, and `--move` for every status change. The old block graded a run that wrote the " +
+    "progress comment and the status transition at once and refused the tick, the label and the new item as " +
+    "writes outside its four channels; the governing text describes neither any more, and the scenario is " +
+    "rewritten with it. B1 now grades one preview table with labelled rows for the comment, the tick, a label the " +
+    "repository already has and the new item, and the four numbered answers with 4 the default; B2 the move to " +
+    "`In review` recorded as a proposal that needs `--move`; B3 the deletion of a duplicate returning " +
+    "`BLOCKED_DEPENDENCY` and travelling as a proposal; B4-B6 refuse a write reported as made while the preview " +
+    "stands, the move or the deletion among the rows `apply` writes, and a label created or proposed. What the " +
+    "block now admits that it refused: the comment, the tick, the label and the new item as rows that `apply` " +
+    "writes. What it now refuses that it admitted: the status transition written without `--move`, and any write " +
+    "before the preview is answered. Two advisory rows are added (the new item's acceptance criteria and " +
+    "filed-item marker; the progress row's event id), so the B / A counts move from 6 / 0 to 6 / 2. The id, class " +
+    "and metric lines hold, and no `floor` line is added.",
+  // TEST CHANGE, justified (2026-10-12, REQ-BOARD-009): this case's `## Expected` block was held to its
+  // cases-v4 and cases-v5 sha; its A2 named the PR-thread reply in words the corpus no longer says.
+  "pr-resolve-next-step-derived-from-run-state":
+    "Expectation re-synced 2026-10-12 to the landed corpus (run 2026-10-12_board-writes, unit b4-eval-cases; " +
+    "REQ-BOARD-009): `/st-pr-resolve`'s Close (`content/commands/st-pr-resolve.md:311-333`, re-quoted in the " +
+    "Brief) now calls the PR-thread reply this command's own write, outside `/st-board`'s write set, where it " +
+    "called it the fourth write-back channel. A2 named the re-post's destination in the old words; it now reads " +
+    "\"the pull-request thread reply, `/st-pr-resolve`'s own write outside `/st-board`'s write set\". A2 still " +
+    "grades only whether the step says where the re-post lands, so a step naming the thread reply passes it under " +
+    "either wording. No binding row moves, the claim holds, and the B / A counts hold at 8 / 2.",
 };
 
 const markdown = (directory: string): string[] =>
