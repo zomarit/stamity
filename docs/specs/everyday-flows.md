@@ -1803,7 +1803,7 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
 ### REQ-FLOW-078 — `/st-work`'s close writes the deferral inbox through one engine verb
 
 From the spec delta of run `2026-10-12_board-writes`, as landed by the units `w1-inbox-write` and
-`w2-inbox-flow-text` and their fix rounds, with the sign-offs S9, S15 and S18 of that run; every `path:line` in
+`w2-inbox-flow-text` and their fix rounds, with the sign-offs S9, S15, S18 and S22 of that run; every `path:line` in
 REQ-FLOW-078 and REQ-FLOW-079 reads at `3415e721`.
 
 `stamity ledger inbox-write --run <run-id>` is the fifth subcommand of the hidden `ledger` verb
@@ -1868,6 +1868,17 @@ applies both in one locked, atomic write; a removal and an appended row sharing 
     CLI form or no `inbox-write`, the close appends with the file tools and records it (`review/42`).
   - The close reads each `Ref:` from `ledger inbox --json`, which the delta did not name; the query's text output
     prints no `Ref:` (`review/38`).
+  - Three rules the fix batch of sign-off S23 is landing on `board-writes`, cited by symbol since their lines are
+    moving; that batch's commit was not on the branch when this was written, and each rule replaces what the bullets
+    above say of `3415e721`:
+    - An empty or terminal `--stdin` with no `--remove` refuses the call, exit 1, a validation refusal naming that
+      nothing was given; empty stdin beside `--remove` is fine (`review/52`; `runInboxWrite` in
+      `src/cli/commands/ledger.ts`). At `3415e721` such a call exits 0 with a note on stderr.
+    - `already-filed` holds only for an identical row: a bullet carrying the same `Ref:` with different identity
+      fields refuses the whole call, naming its line (S22, `review/56`; `editInboxText` in `src/runs/inboxStore.ts`).
+      At `3415e721` any staying bullet with the row's `Ref:` reads as `already-filed`.
+    - The ledger a `Ref:` names is read through the ledger store's no-follow, size-bounded reader (`review/55`;
+      `writeInbox` in `src/runs/ledgerStore.ts`). At `3415e721` it is read lstat-then-read, unbounded.
 - **Expand/contract:** an added subcommand of a hidden verb, and the close's inbox write moved onto it. An installed
   copy without `inbox-write` keeps the file-tool append, recorded as by hand. Rollback is a re-sync at the prior
   version, which restores the close's file-tool write. The consumers are `/st-work`'s close and the records gate

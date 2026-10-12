@@ -7,15 +7,15 @@ obsolete_when: every requirement below is pinned by a test or an eval case that 
 # Board writes
 
 What `/st-board` writes to a linked board, when it asks first, and what it never writes. The area code is `BOARD`.
-Before run `2026-10-12_board-writes` the command was read-only by default, opened write channels per session at setup,
-and left item creation and labels as proposals (`content/commands/st-board.md:180-183`, `:255-287`, read at
-`41b1899a`). It now writes to a linked board by default behind one preview per run, changes where an item stands only
-with `--move`, and keeps a fixed list of writes it never makes (`content/commands/st-board.md:13-16`, `:248-330`).
-The status stays `design` until the release that ships the change sets `shipped-with-<version>`.
+As built on the branch `board-writes`, the command writes to a linked board by default behind one preview per run;
+files each ready item with the labels the repository already has, a missing label staying a proposal; changes where an
+item stands only with `--move`; and keeps a fixed list of writes it never makes (`content/commands/st-board.md:13-16`,
+`:248-330`; the label rule `:96-98` and `:276-278`, read at `0b3f8bd3`). The status stays `design` until the release
+that ships the change sets `shipped-with-<version>`.
 
 The requirement text comes from the `## Spec delta` of `docs/plans/015-board-writes.md` (`:101-347`), as the run's
 in-flow re-plan, `.stamity/runs/2026-10-12_board-writes/plan.md` (pass r2), amended it, and from the run's sign-offs
-S9 to S19, merged at the run's Prove phase by its unit `s1-spec-merge`. Every `path:line` below reads at the integration
+S9 to S21, merged at the run's Prove phase by its unit `s1-spec-merge`. Every `path:line` below reads at the integration
 head `3415e721` unless it names another tree. Where the plan's text and the landed text differ, the requirement states
 what landed, and a line headed "As built" says what moved. A ledger id (`review/22`) is that run's own unless a run is
 named beside it.
@@ -52,10 +52,10 @@ outlives the session (`:171-177`).
 `fill` files each `ready` item after the run's preview as an issue in the linked repository, added to the linked
 project when one is linked, its body carrying the acceptance criteria, a `Ref:` when the item names a spec, and the
 filed-item marker; an unready item, or a row the preview did not apply, stays a proposal in the run report (`:90-94`).
-A filed item carries only labels the repository already has, and the run creates no label; with no taxonomy in the
-source, `type:*`, `priority:*` and `area:*` are proposed (`:96-98`). `groom` applies evidence comments and edits to
-open items on `apply` (`:148-149`). Progress comments, checklist ticks and PR links from `/st-work` events are written
-without `--move`, and a tick re-reads the body just before writing and changes only that criterion's box
+An item files with the labels the repository already has; a label it lacks is never created, never withholds the item,
+and stays a proposal in the report; with no taxonomy, `type:*`, `priority:*` and `area:*` are proposed (`:96-98`, read
+at `0b3f8bd3`). `groom` applies evidence comments and edits to open items on `apply` (`:148-149`). Progress
+comments, checklist ticks and PR links from `/st-work` events are written without `--move`, and a tick re-reads the body just before writing and changes only that criterion's box
 (`:261-265`, `:338-343`). Writes go out one at a time, at least one second apart, and stop on a `retry-after`; a write
 carries only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids — never file contents,
 logs, environment values or credentials (`:268-270`).
@@ -63,6 +63,12 @@ logs, environment values or credentials (`:268-270`).
 - **As built:** the bound on what a write carries is beyond plan 015's text (`review/23`). The write check is stated
   once, in the Write-back contract's opening, and setup step 2 and `fill` step 1 point at it (`:52-54`, `:175-176`,
   `:255-257`), where plan 015 placed the check in setup step 2 and `fill` step 1 themselves.
+- **As built (`0b3f8bd3`, sign-off S20):** at `3415e721` the Labels paragraph read "a filed item carries labels the
+  repository already has, and the run creates no label", and the never-makes list named "a label the repository does
+  not already have", so QA row R2(c) saw an item proposing `priority:high` withheld whole as `BLOCKED_DEPENDENCY`
+  (`qa/1`). The fix follows plan 015's Decision 3: the item files with the labels the repository has, and the missing
+  label stays a proposal (`content/commands/st-board.md:96-98` at `0b3f8bd3`; pinned at
+  `test/corpus/commands/board.test.ts:381-392` there).
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`; QA row R2.
 
 1. GIVEN `### setup — wiring` WHEN read THEN it has no step that chooses or enables write channels, the body nowhere
@@ -81,7 +87,8 @@ logs, environment values or credentials (`:268-270`).
    label. *(eval: board-write-back-four-channels)*
 5. GIVEN the scratch repository (labels `type:feature`, `area:docs`, auto-add off) and a `fill` of two chat items, one
    proposing `priority:high`, WHEN the preview is answered `1` (`apply`) THEN two issues exist, each on the project
-   once, `type:feature` applied, and the report lists `priority:high` as a proposal. *(QA R2)*
+   once, `type:feature` applied, and the report lists `priority:high` as a proposal. *(QA R2; R2(c) failed at
+   `3415e721` and is owed again after S20's fix)*
 
 ### REQ-BOARD-002 — One preview per run, and no answer means stop
 
@@ -165,21 +172,28 @@ the item, pickup changes no status and its `handoff` carries `status-write: skip
 ### REQ-BOARD-004 — Writes the board never makes
 
 The board never deletes an item, never makes any edit to a completed item, never writes to any repository or board
-other than the linked one (on a Projects board, to another repository's item), never writes a label the repository
-does not already have, and never writes a `status:*` label where the board has a status field. Such a request stops
+other than the linked one (on a Projects board, to another repository's item), never creates a label — the item still
+files, without it — and never writes a `status:*` label where the board has a status field. Such a request stops
 and returns `BLOCKED_DEPENDENCY` rather than improvising one, for that item alone, and travels as a proposal in the
 report; this is decided before any write, and the other writes are reported apart, the run status carrying the
 blocked action. A reopen under `--move` is the status-transition write, not an edit
-(`content/commands/st-board.md:273-280`). A completed item is appended to or superseded, never rewritten
-(`:161-163`, `:201`).
+(`content/commands/st-board.md:273-280`, the label clause `:276-278` read at `0b3f8bd3`). For a label the refused
+request is the label's creation, never the item: the item files with the labels the repository has (REQ-BOARD-001),
+the missing label stays a proposal, and the refused creation is reported in the run status like every other
+never-makes request. A completed item is appended to or superseded, never rewritten (`:161-163`, `:201`).
 
+- **As built (`0b3f8bd3`, sign-offs S20 and S21):** at `3415e721` the list named "a label the repository does not
+  already have", which withheld the whole item (QA row R2(c), `qa/1`); it now names "creating a label (the item still
+  files, without it)" (`content/commands/st-board.md:276-278` at `0b3f8bd3`; pinned at
+  `test/corpus/commands/board.test.ts:331-334` there). The fix left the run status as written: a missing label is
+  reported there as a refused label creation while the item files, which REQ-BOARD-001 criterion 5 allows (S21).
 - **Proof:** `test/corpus/commands/board.test.ts`, `test/packs/product-audit.test.ts` (which reads the
   `BLOCKED_DEPENDENCY` phrase); the eval case `board-write-back-four-channels`.
 
 1. GIVEN `### Writes the board never makes` WHEN read THEN it lists the five, counts a write to another repository's
-   item on a Projects board as a write to another repository, contains "any edit to a completed item" and
-   "`BLOCKED_DEPENDENCY` rather than improvising one", and says a reopen under `--move` is the status-transition write,
-   not an edit. *(corpus)*
+   item on a Projects board as a write to another repository, contains "any edit to a completed item",
+   "creating a label (the item still files, without it)" and "`BLOCKED_DEPENDENCY` rather than improvising one", and
+   says a reopen under `--move` is the status-transition write, not an edit. *(corpus; the label phrase as built, S20)*
 2. GIVEN a request to delete a duplicate item beside other requested writes WHEN the run answers THEN the deletion
    returns `BLOCKED_DEPENDENCY` for that item and travels as a proposal, is not a row `apply` would write, and the other
    rows stay in the preview. *(eval: board-write-back-four-channels)*
@@ -392,7 +406,7 @@ requirement exists, it is the normative record for that requirement.
 
 - `docs/plans/015-board-writes.md` — the decisions, the maintainer's walk and the `## Spec delta` this spec merges.
 - `.stamity/runs/2026-10-12_board-writes/plan.md` (the in-flow re-plan, pass r2, whose `## Spec delta` amends plan 015),
-  `record.md` (sign-offs S9 to S19) and `ledger.jsonl` (the `review/` and `build/` rows cited above).
+  `record.md` (sign-offs S9 to S21) and `ledger.jsonl` (the `review/` and `build/` rows cited above).
 - `test`: `test/corpus/commands/board.test.ts` (REQ-BOARD-001 to REQ-BOARD-008, REQ-BOARD-009 criterion 3),
   `test/corpus/commands/feedbackPair.test.ts` (REQ-BOARD-009 criteria 1 and 2), `test/packs/product-audit.test.ts`
   (REQ-BOARD-004's phrase, REQ-BOARD-010).
@@ -416,8 +430,12 @@ requirement exists, it is the normative record for that requirement.
 
 ## Concerns
 
-- The criteria tagged *(QA R2)* and *(QA R3)* rest on the run's live walk; the run record held no result for either row
-  when this merge was written.
+- The criteria tagged *(QA R2)* and *(QA R3)* rest on the run's live walk at `3415e721`
+  (`.stamity/runs/2026-10-12_board-writes/reports/qa/r2-r3-walk.md`; `record.md:193`). R2(a), R2(b) and R3(a) passed.
+  R2(c) failed: the item proposing `priority:high` was withheld whole as `BLOCKED_DEPENDENCY`, the label defect the QA
+  walk found and `0b3f8bd3` fixed (S20). R3(b) failed by the walk's own setup, two pickups chosen on one file. R2(c),
+  R2(d), R3(b) with disjoint write surfaces and R3(c) are owed after the fix, and REQ-BOARD-007 criterion 5's id source
+  is not yet recorded, since no status write ran.
 - REQ-BOARD-005's planted issue from a second account was not performed: the maintainer has one GitHub account, and the
   eval case carries it (`plan.md:556-557`).
 - `fill` step 5 annotates an inbox entry in place, while the Removal rule says triage does not rewrite an entry in
