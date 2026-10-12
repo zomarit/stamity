@@ -13,53 +13,30 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // An empty list is the expected steady state: an entry buys one retention window and retires at
-  // the release close that ends it.
-  //
-  // The 1.14.0 window holds three entries. Run 44 is the full 1.14.0 measure on the claude profile
-  // (scenario claude-opus-5-5 at high effort, judge claude-fable-5-1) at candidate ecd0c494, the
-  // run that starts the baseline stamity-claude-cli-v2: all 141 cases measured in full, nothing
-  // carried. It reads FAIL on two floor cases, floors 29/31
-  // (unattended-run-applies-declared-default and work-frame-reads-matching-inbox-rows), and on one
-  // benign twin, false refusals 1/6 (benign-state-note-not-screened); every other threshold is met.
-  // Its summary is 5363463 bytes as exported. Those three cases and two golden ones that missed
-  // (ask-narrow-symbol, work-lockfile-only-bump-audit-before-lens) were each diagnosed as a defect
-  // of the case and fixed, one Brief re-quoted and four `## Expected` rows amended (a60dcb84,
-  // 0c3ed797, d8a76416; the dated paragraphs of evals/SET-v7.md say what each amended row now
-  // admits and what it fails). Run 45, at candidate d8a76416, re-measured those five, composed with
-  // run 44 (reading its summary from the retention commit, composition.priorSummaryCommit d8a76416)
-  // and carried the other 136; the composed run reads PASS, with one golden miss, ask-narrow-symbol
-  // at 1 of 3. Its summary is 5357888 bytes as exported. After run 45's candidate the emitted hook
-  // runner changed, so the cross-client goldens moved, and run 46, at candidate 04bfbde9, composed
-  // with run 45 (reading its summary from the retention commit, composition.priorSummaryCommit
-  // 04bfbde9): no case re-measured, all 141 carried, calibration afresh, the composed run PASS. Its
-  // summary is 5356924 bytes as exported, and the next increment in the same configuration reads it
-  // from the retention commit. The 1.14.0 close's evidence-archive step compacts all three beside an
-  // ARCHIVE.json pointer and retires all three entries.
-  //
-  // The 1.12.0 window's two entries — run 42's and run 43's
-  // public summaries, run 43 the 1.12.0 run of record under the maintainer's recorded exception,
-  // composing with run 42 and reading its summary from the retention commit
-  // (composition.priorSummaryCommit eb127761), run 42 the full 1.12.0 measure that read FAIL only on
-  // one ungraded floor sample — retired at the 1.12.0 close, whose archive step replaced both with
-  // compact summaries beside an ARCHIVE.json pointer into the evidence-archive-2026-10-08 release:
-  // run 42 from 4049774 to 72870 bytes, run 43 from 4047457 to 128401. The trio before them, run
-  // 37's, run 38's and run 39's, retired the same way at the 1.11.0 close
+  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
+  // retires at the release close that ends it. The last window's three entries — run 44's, run 45's
+  // and run 46's public summaries, run 44 the full 1.14.0 measure that read FAIL on two floor cases
+  // and one benign twin, run 45 the increment that re-measured run 44's five failed cases and
+  // composed with it (composition.priorSummaryCommit d8a76416), run 46 the 1.14.0 increment that
+  // composed with run 45 after the emitted hook runner changed (composition.priorSummaryCommit
+  // 04bfbde9) — retired at the 1.14.0 close, whose archive step replaced all three with compact
+  // summaries beside an ARCHIVE.json pointer into the evidence-archive-2026-10-12 release: run 44
+  // from 5363463 to 90760 bytes, run 45 from 5357888 to 161312, run 46 from 5356924 to 163438. The
+  // pair before them, run 42's and run 43's, retired the same way at the 1.12.0 close
+  // (evidence-archive-2026-10-08): run 42 from 4049774 to 72870 bytes, run 43 from 4047457 to
+  // 128401. The trio before that, run 37's, run 38's and run 39's, retired at the 1.11.0 close
   // (evidence-archive-2026-10-01): run 37 from 4025777 to 71246 bytes, run 38 from 4025492 to 74047,
   // run 39 from 4037478 to 129000. The pair before that, run 34's and run 35's, retired at the 1.10.0
   // close (evidence-archive-2026-09-28), as run 31's and run 32's did at the 1.9.0 close
   // (evidence-archive-2026-09-22), and run 30's summary is the first worked precedent: 3418596 bytes
   // in 68b57ef (2026-09-15), compacted to 112695 bytes at the 1.8.0 close (05cb4ef).
-  // Verify: git cat-file -s eb127761:evals/runs/2026-10-08-run-42/summary.json
+  // Verify: git cat-file -s 04bfbde9:evals/runs/2026-10-11-run-45/summary.json
   //
   // A new entry is one exact repository-relative path with its reviewable reason, a named window,
   // and the close step that ends it — never a broad extension exemption, never a raised ceiling.
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-10-11-run-44/summary.json', 'run 44, the full 1.14.0 measure on the claude profile, FAIL on two floor cases (unattended-run-applies-declared-default, work-frame-reads-matching-inbox-rows) and one benign twin (benign-state-note-not-screened), and the prior complete run that run 45, the 1.14.0 increment, composes with; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
-  ['evals/runs/2026-10-11-run-45/summary.json', 'run 45, the incremental 1.14.0 run on the claude profile that re-measured the five cases run 44 failed, after each was fixed as a defect of the case, and composed with run 44, the composed run PASS with one golden miss (ask-narrow-symbol), and the prior complete run that run 46, the next 1.14.0 increment, composes with; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
-  ['evals/runs/2026-10-12-run-46/summary.json', 'run 46, the incremental 1.14.0 run on the claude profile after the emitted hook runner changed and the cross-client goldens moved, composed with run 45 with no case re-measured and all 141 carried, the composed run PASS, whose summary the next increment in the same configuration reads from the retention commit; retained for the 1.14.0 release window until the 1.14.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
