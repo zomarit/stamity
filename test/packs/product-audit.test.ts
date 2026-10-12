@@ -897,14 +897,22 @@ describe("the pack claims no board capability the write-back contract withholds"
    * TEST CHANGE, justified (2026-10-12, REQ-BOARD-010): the creation half of the
    * probe matched only `CREATION_VERB` (`creat*`). The pack's verb for putting an
    * item on a board is now "files", so "files"/"filed"/"filing" is read too. Two
-   * exemptions keep the sentences that are true: `/st-board` named just before the
-   * verb (the board files, the pack does not), and an object negated right after it
+   * exemptions keep the sentences that are true: `/st-board` as the verb's subject
+   * (the board files, the pack does not; see `FILING_SUBJECT`), and an object negated right after it
    * ("files no board item"). `NEGATION` gains "nobody", which leads the frame's
    * "work nobody has filed yet"; its list was no, none, not, never, nothing,
    * neither, nor, outside and without.
    */
   const FILING_VERB = /\bfil(?:es|ed|ing)\b/gi;
-  const FILING_SUBJECT = /\/st-board\b/;
+  /**
+   * TEST CHANGE, justified (2026-10-12, REQ-BOARD-010; review/53): the exemption
+   * was `/\/st-board\b/` anywhere in the 50 characters before the verb, so
+   * "after `/st-board` links the board, this command files its epic" passed. It
+   * now holds only where `/st-board` is the verb's subject: the name, bare or as a
+   * backticked invocation (`/st-board fill --source <report>`), optionally
+   * followed by ", which", and then only whitespace up to the verb.
+   */
+  const FILING_SUBJECT = /(?:`\/st-board(?: [^`]*)?`|\/st-board)(?:, which)?\s+$/;
   const FILING_SUBJECT_WINDOW = 50;
   const NEGATED_OBJECT = /^\s+(?:no|nothing|none)\b/i;
   const LABEL_VERB = /\b(?:carr|appl|writ|add|attach|stamp)\w*/gi;
@@ -1159,6 +1167,26 @@ describe("the pack claims no board capability the write-back contract withholds"
       "The set is proposed, never filed by this command.",
     ].join("\n\n");
     expect(boardClaims(cleared)).toEqual([]);
+  });
+
+  it("fixture: the /st-board exemption holds only where /st-board is the filing verb's subject (review/53)", () => {
+    // `/st-board` within reach of the verb but in another role: the pack is still the one filing.
+    for (const claim of [
+      "After `/st-board` links the board, this command files its epic.",
+      "Once /st-board is set up, this command files the epic.",
+      "Unlike `/st-board fill`, this command files each sub-issue itself.",
+    ]) {
+      expect(boardClaims(claim).join(" | "), claim).toMatch(/board-item filing: /);
+    }
+
+    // `/st-board` as the subject, bare, as an invocation, or through "which".
+    const subject = [
+      "`/st-board` files the epic.",
+      "/st-board files each sub-issue.",
+      "`/st-board fill --source <report>` files the epic and each item through its preview.",
+      "The board primitive lives in `/st-board`, which files, edits and moves items on a board.",
+    ].join("\n\n");
+    expect(boardClaims(subject)).toEqual([]);
   });
 });
 
