@@ -278,9 +278,34 @@ where git would read a bare repository.
   reads that configuration then opens a bare repository only where `--git-dir` or `GIT_DIR` names
   it, so git run inside a real bare repository has to name it that way too. The pinning is the
   CLI verbs': the package's library function for the origin read, called with no runner passed,
-  still starts plain git, and `SECURITY.md` says so. Where a folder is refused, the verbs report git
-  as not answering, as they do with no repository, and the `worktree` verbs refuse; the last
-  item under "Upgrading from 1.12.0" says what that looks like.
+  still starts git with neither option and no look, and `SECURITY.md` says so. Where a folder is
+  refused, the verbs report git as not answering, as they do with no repository, and the
+  `worktree` verbs refuse; the last item under "Upgrading from 1.12.0" says what that looks like.
+- **Git is started by an absolute path found on `PATH`, so a file of git's name in the folder it
+  runs in is not started in its place.** Every release from 1.0.0 to 1.12.0 started git by its bare
+  name and left the lookup to the runtime, in the folder the verb runs in: the setup root, for
+  `workspace sync` each member's folder, and for the `worktree` verbs the folder they are started
+  in. On Windows the runtime looks for a program named that way in that folder first, before any
+  `PATH` entry (read from the runtime's source, not from a run). So on Windows a file named
+  `git.exe`, or the same name ending in `.com`, in that folder was started in git's place, with your
+  rights, by every verb that reads git, the ones the item above lists. Such a file can be committed,
+  so it can arrive on a branch someone else wrote, and `check` is the verb a workflow runs on a pull
+  request. macOS and Linux do not look in that folder for a bare name; they were affected only where
+  your own `PATH` holds an empty entry or a relative one such as `.`, which names it. Each of the
+  four places that start git now resolves it once per folder and `PATH`, to an absolute path, and
+  starts that path: the verbs' pinned runner, the tracked-and-clean check before an overwrite, the
+  `worktree` verbs' runner, and the library's origin read called with no runner. The walk takes only
+  a `PATH` entry that is a full path, skips an empty entry, a relative one and an entry that is the
+  folder git runs in, and on Windows tries git's name with `.com` added, then with `.exe`. Git found
+  on `PATH` is the git that ran before. There is nothing to set: upgrade. If you ran an older
+  release on Windows in a checkout of work you had not read, look in the folder you ran it in for a
+  file of either name, and if one is there, treat it as a program that ran with your rights. One
+  thing can change for you: where your only git sits behind an entry the walk skips, the verbs now
+  answer as on a machine with no git, and `check`'s `git-available` row says the engine found no git
+  to start and which entries it takes git from; put git's folder on `PATH` by its full path. This
+  covers the folder git runs in and nothing wider. The walk takes the `PATH` the engine is started
+  with as given, so an entry that is a full path to some other folder is searched as it stands, a
+  folder inside the checkout included; `SECURITY.md` carries the row and its residual.
 
 ### Added
 
@@ -582,8 +607,9 @@ where git would read a bare repository.
   `gate` reads every change from it, so with no git or no repository `gate scan` exits 1 and
   `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The row also says that
   git may only have been slow to answer the check, and that both verbs may still run in that case.
-  It tells the causes apart with no git command that looks for a repository: `git --version` for the
-  binary, and a `.git` entry found by name for the repository. Where the engine did not start git
+  It names no git command to type: it says whether the engine found a git binary on `PATH`, in a
+  text of its own where it found none, naming the `PATH` entries git is taken from, and tells
+  no repository from a slow git by a `.git` entry found by name. Where the engine did not start git
   because the folder or one above it has the layout of a bare repository, the row says that instead,
   names no git command to run, and says to start no flow there until the folder is moved, as the
   note does. The row stays a warning and no exit code moves. The README and
