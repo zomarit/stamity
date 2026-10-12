@@ -1413,7 +1413,16 @@ intent it queries again with the plan's files (`content/commands/st-work.md:21-2
   one by one, an unparsed line's message alone, and each matched row's line once more as composed (`:819-870`,
   `:1203-1209`, `:1219-1229`). A hit prints `skipped: <line> (<pattern id>)`, never the row's text nor its parse
   message. A bullet longer than 4,096 UTF-16 code units is skipped unscreened, as `over-length` (`:760-772`,
-  `:1176-1183`). Every printed field passes `sanitizeLabel` (`:1050-1071`, `:1246-1249`).
+  `:1176-1183`). Every printed field passes `sanitizeLabel` (`:1050-1071`, `:1246-1249`). Amended 2026-10-12 (the
+  review bot's pass on the `board-writes` pull request; S24, `pr/1`): the matched rows and the unparsed lines print
+  one after another, the headings gone and the rows the filters left out with them, so two rows from different
+  blocks, or kept apart in the file only by a row the query leaves out, print adjacent. That sequence is now screened
+  as it prints, in windows of adjacent lines through the write side's window helper, and a hit withholds every line
+  it spans: a row is not matched and an unparsed line not listed, and each prints its skip line instead, a clean one
+  by the pattern the window hit, a withheld row by the pattern that withheld it, in the human output and the JSON
+  alike; each withholding re-reads the lines around the seam it opens (`runInbox`, `inboxSequenceHits` and
+  `screenPrintedLines` in `src/cli/commands/ledger.ts`). Before it each line was screened alone, so such a split
+  printed.
 - **Withheld rows.** A row the screen hits that still parses, and whose severity and location each pass the screen
   alone, is withheld rather than dropped. A copy holding its line, severity and location goes to the match, with its
   always-shown tag, its `by:` day and its `files:` entries where each passes the screen alone, so the row still
@@ -1879,6 +1888,19 @@ applies both in one locked, atomic write; a removal and an appended row sharing 
       At `3415e721` any staying bullet with the row's `Ref:` reads as `already-filed`.
     - The ledger a `Ref:` names is read through the ledger store's no-follow, size-bounded reader (`review/55`;
       `writeInbox` in `src/runs/ledgerStore.ts`). At `3415e721` it is read lstat-then-read, unbounded.
+  - Two rules from the review bot's pass on the pull request (sign-offs S25 and S26), cited by symbol, each replacing
+    what the bullets above say of `3415e721`:
+    - After the inbox's lock the write takes the lock of each run ledger a `Ref:` names, sorted by path, re-reads the
+      inbox and re-checks each referenced row under them, writes, then releases; a ledger lock it cannot take refuses
+      the call, naming no path (`pr/2`; `writeInbox` and `referencedLedgers` in `src/runs/ledgerStore.ts`). Nothing
+      takes the inbox's lock while holding a ledger's. At `3415e721` the rows are checked under the inbox's lock alone,
+      so a concurrent `ledger close` can move one between that check and the write.
+    - An appended row whose `Ref:` holds a comma is refused, exit 1, naming its stdin line and not the `Ref:`, since
+      `--remove` splits its list on commas and could never name it; `--remove` is unchanged (`pr/3`; `editInboxText` in
+      `src/runs/inboxStore.ts`). At `3415e721` such a row lands and cannot be removed by the verb.
+  - The query now screens the lines it prints in windows of adjacent lines (S24, `pr/1`; REQ-FLOW-068, the screen), so
+    a split the landing screen cannot see — across two blocks, or across a row a filter leaves out — is withheld on
+    read. The landing screen stays as described above.
 - **Expand/contract:** an added subcommand of a hidden verb, and the close's inbox write moved onto it. An installed
   copy without `inbox-write` keeps the file-tool append, recorded as by hand. Rollback is a re-sync at the prior
   version, which restores the close's file-tool write. The consumers are `/st-work`'s close and the records gate
@@ -1915,6 +1937,10 @@ residual.
   - The Leftovers keep a sentence that `fill` and `/st-plan` still edit the inbox with the file tools, beside the
     delta's wording (the implementer's addition, judged true at review).
   - `/st-plan`'s item 4 also runs the query again once research names the files.
+  - Amended 2026-10-12 (S24, `pr/1`): the query both readers run screens the lines it prints in windows of adjacent
+    lines, so two halves of a pattern from different blocks, or made adjacent by `/st-plan`'s `--plan` and `--paths`
+    filter, print as two skip lines, which both readers list as they list any skip line (REQ-FLOW-068, the screen;
+    `inboxSequenceHits` in `src/cli/commands/ledger.ts`). Neither reader's text moved.
 - **Expand/contract:** two readers move onto an existing query. An installed copy without the query keeps the
   whole-file read, said so. Rollback is a re-sync at the prior version.
 - **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/cliCallForm.test.ts` (the `CALL_SITES` row for
@@ -2830,7 +2856,9 @@ exists, it is the normative record for that requirement.
     `when: touched` row to a path, and `/st-rework`'s meta row stands at `—` with none (REQ-FLOW-076, REQ-FLOW-077).
   - **What the grammar still lets through.** A row placed above the heading passes with no day and no trigger
     (`build/19`); one prose word in `files:` passes as a path (`review/37`); and the screen reads the inbox row by row,
-    so a pattern split over two adjacent rows passes (`src/cli/commands/ledger.ts:1176-1183`; `review/26`).
+    so a pattern split over two adjacent rows passes (`src/cli/commands/ledger.ts:1176-1183`; `review/26`). Amended
+    2026-10-12 (S24, `pr/1`): the query now screens the lines it prints in windows of adjacent lines, so that split is
+    withheld; what passes is a pattern spread over printed lines that share no window (REQ-FLOW-068, the screen).
   - **The close edits the inbox whole.** It removes and appends bullets with the file tools, and no text limits its
     read to the lines it changes, so a whole-file read there brings a withheld row's text into the orchestrator's
     context, which the query kept out (`content/commands/st-work.md:380-390`; `review/50`). Amended 2026-10-10 (the
@@ -2863,7 +2891,9 @@ exists, it is the normative record for that requirement.
   - **The joined screens read windows.** A window holds the adjacent bullets that fit in 8,193 characters, so a screen
     pattern split across three or more bullets that share no window passes `inbox-write`
     (`src/cli/commands/ledger.ts:1318-1356`; `review/18`, rejection upheld), as a split over two rows passes the query's
-    row-by-row read (`review/26` of run `2026-10-10_next-tier`, above).
+    row-by-row read (`review/26` of run `2026-10-10_next-tier`, above). Amended 2026-10-12 (S24, `pr/1`): the query
+    reads its printed lines in the same windows, so one limit now bounds both: a split over lines that share no window
+    passes either.
   - **A decided row with no unique `Ref:` stays.** `inbox-write` removes only by a `Ref:` that matches exactly one
     bullet, so the close leaves such a row and lists it on `Not done:` (`src/runs/inboxStore.ts:552-570`;
     `content/commands/st-work.md:396-397`; the run plan's Follow-ups, a Minor).

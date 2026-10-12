@@ -58,6 +58,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and records `inbox: by hand (no CLI)`. The other inbox edits still use the file tools:
   `/st-board fill`'s removal and `/st-plan`'s follow-up append among them, a residual
   `SECURITY.md` names.
+- **`stamity ledger inbox` screens the lines it prints as one sequence.** The query prints its
+  matched rows one after another, the headings gone and the rows its filters left out with them,
+  so two rows each clean alone could print adjacent and complete a pattern between them — from
+  different blocks, across a row a `--paths` or `--plan` filter left out, or, before, from two
+  adjacent bullets, the residual 1.14.0 named. The printed rows and unparsed lines are now screened
+  in windows of adjacent lines as well, and a hit withholds every line it spans as a skip line
+  naming the pattern id, in the text and the `--json` output alike. The windows are bounded, so a
+  pattern spread over three or more lines that share no window still passes; `SECURITY.md` says
+  where.
 
 ### Added
 
@@ -84,12 +93,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`stamity ledger inbox-write` appends and removes deferral-inbox rows in one checked write.**
   `stamity ledger inbox-write --run <run> [--stdin] [--remove <ref>,…] [--dry-run] [--json]` takes
   rows on stdin and removes bullets by their `Ref:` values, all or nothing: every row passes the
-  inbox screen, carries a `Ref:` no other row in the call carries, and, where that `Ref:` names a
-  ledger row, names a deferred one not yet retired. A row whose `Ref:` a bullet already carries is
-  `already-filed` only when that bullet has the same severity, location, description and source;
-  otherwise the call is refused, naming the bullet's line. A call that brings no row and no removal
-  is refused too. It writes under the inbox's lock by atomic rename inside `.stamity/`, creates an
-  absent inbox with its schedule heading, and prints lines and `Ref:` values, never a row's text.
+  inbox screen, carries a `Ref:` that holds no comma (`--remove`'s list is comma-separated) and that
+  no other row in the call carries, and, where that `Ref:` names a ledger row, names a deferred one
+  not yet retired. A row whose `Ref:` a bullet already carries is `already-filed` only when that
+  bullet has the same severity, location, description and source; otherwise the call is refused,
+  naming the bullet's line. A call that brings no row and no removal is refused too. It writes
+  under the inbox's lock and the lock of each ledger a `Ref:` names, checking each referenced row
+  again under them so a concurrent `ledger close` cannot move it before the write lands, by atomic
+  rename inside `.stamity/`; a ledger lock it cannot take refuses the call. It creates an absent
+  inbox with its schedule heading, and prints lines and `Ref:` values, never a row's text.
 
 ### Changed
 
