@@ -170,6 +170,7 @@
         "test/ci/testInputsGuard.test.ts",
         "test/ci/workflow.test.ts",
         "test/cli/commands/clean.test.ts",
+        "test/cli/commands/handoff.test.ts",
         "test/cli/commands/init.test.ts",
         "test/cli/commands/initApply.test.ts",
         "test/cli/commands/initPanel.test.ts",
@@ -219,6 +220,7 @@
         "test/upstream/lane.test.ts",
         "test/upstream/workflowRecovery.test.ts",
         "test/worktree/engine.test.ts",
+        "test/worktree/git.test.ts",
         "test/worktree/policy.test.ts"
       ]
     },
