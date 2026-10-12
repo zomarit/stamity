@@ -11,7 +11,7 @@ Opened: 2026-10-11T19:26Z
 
 ## Morning list (kept current through the night; read this first)
 
-**State at 2026-10-12T13:28Z, before the push that publishes the security fix** (a fresh session continued the run
+**State at 2026-10-12T14:15Z, after the push of the security fix (`793a663d`, CI green) and the review bot's batch** (a fresh session continued the run
 at 08:33Z; the list under this paragraph is as it stood at 02:12Z). The maintainer's answers stand verbatim where
 they were given: the opening batch, "The close's question" and the dated entries after it. Since the close's
 question: the extra round `f8` landed and its closure review approved; the spec delta was reviewed, amended,
@@ -25,9 +25,10 @@ records; the whole branch reviewed again on Fable 5.1 as a delta through the hoo
 runner changed (PASS); run 45 stays the run of record. The final gates are green on the final product tree, with
 the full suite alone and four live clients armed (293 files, 13,879 passed, 0 failed). The four reworded eval rows
 are confirmed and the six scan lines of the three eval exports are settled as a false match, on the maintainer's
-word. The ledger holds 211 rows, none open. **Not done:** CI on the pushed head and the review bot's pass; the QA
-table (built at 02:01Z, before the security fix joined) has no row for the fix yet: its rows are built before the
-cut is asked; the cut — the fast-forward, the tag and the publish — asked once, after them; the advisory, the
+word. The ledger holds 216 rows, none open. **Not done:** CI on the head that carries the review bot's batch; the
+QA rows for the security fix (23 to 36, added at 13:41Z) leave rows 30 and 31 H and not proven, the maintainer's
+to accept or to have proven before the sign-off; the cut — the fast-forward, the tag and the publish — asked once,
+after them; the advisory, the
 maintainer's to publish; the QA sign-off with its three person rows (at and after the cut); on Windows, no run of
 the fix's new cases against the unfixed source; this record's close.
 
@@ -1871,7 +1872,8 @@ meets no look and no warning.
   - **Windows CI on the fix, in a private copy of the repository, read by job result:** at the integration
     (09:00Z–09:25Z) and at the wording unit (10:09Z–10:33Z), every job green, both Windows legs among them; at
     `b75f2a6e`, see below. **Not done:** every red-first run was on macOS; no run of the new cases against the
-    unfixed source exists on Windows, and the three cases that run only on Windows have never been seen to fail.
+    unfixed source exists on Windows, and the four cases that run only on Windows (one for git, three for the hook
+    runner) have passed there by CI job result but have never been seen to fail.
 - 2026-10-12T12:16Z–12:28Z: **eval run 46, PASS.** `prepare` at 12:16:36Z (one earlier attempt at 12:16:21Z
   refused for a missing instrument note, having made only an empty run folder): candidate `04bfbde9`, an increment
   on run 45 under the incremental rule, run because the emitted hook runner changed after run 45's candidate and
@@ -1938,6 +1940,47 @@ meets no look and no warning.
   item the remedy for every platform that `SECURITY.md` gives; the docs tests (4 files, 129 cases), lint and the
   leak gate exit 0. The read found the account of the proof in a private copy of the repository fit for a public
   record once the fix and its advisory are out.
+- 2026-10-12T13:30:38Z: **the push.** These records committed as `793a663d` (the leak gate on the committed head
+  exit 0; all 27 commits after `a17b29df` signed off) and `release-1-14-0` fast-forwarded from `a17b29df` to
+  `793a663d` on the remote; `main` and the tags untouched. #97's description replaced to tell the security fix at
+  the changelog's level; the pull request stays a draft until the review bot's pass.
+- 2026-10-12T13:30Z–13:41Z: **CI on #97 at `793a663d`: green, every leg read to its end.** CI 38256197809:
+  `check` on floor (node 22.22.2), lts (node 24), `windows-1` and `windows-2`; the three apm routes; the plugin
+  route; the two advisory jobs; `all-ci-checks`. PR checks 38256210243 (13:30:55Z): the DCO sign-off, the title,
+  the dist size budget, `all-pr-checks`; the run started with the push (38256197681) was cancelled by it, as the
+  workflow's concurrency rule does on the description's edit, and its aggregator's failure is that cancel's alone.
+  The docs site 38256197642: the build.
+- 2026-10-12T13:31Z–13:41Z: **the QA rows for the security fix** (an implementer on Opus 5.5, `high`, through the
+  `st-qa` skill, read-only): rows 23 to 36, added under the QA checkpoint's table. Row 32 (an upgrade over a 1.12.0
+  setup replaces the hook runner with the fixed one) was closed by a run on the release head at 13:40Z (a
+  test-runner on Opus 5.5, `high`, in a scratch repository deleted after): 1.12.0's `init`, then this build's
+  `sync` (exit 0, 27 updated, no collision, the runner among them), the fixed start then present, `check` drift
+  clean, and a second `sync` updated none of its 66 files (it stamps the manifest's `updatedAt`, as every sync
+  does). Rows 30 and 31 stay H and not proven. The same builder found that four cases run only on Windows, not
+  three (one for git, three for the hook runner); the account above is corrected.
+- 2026-10-12T13:42:58Z: #97 marked ready, for the review bot's one pass. **The review bot** (chatgpt-codex-connector,
+  13:43Z–13:51Z, review 5491755408 on `793a663d`): four inline comments, each P2 — a `.git` link that resolves to a
+  gitfile (`src/merge/safeWrite.ts:1050`), the cross-filesystem setting read as git reads a boolean (`:1109`), this
+  repository's own qualified `owner/repo#n` references in the measurements reader
+  (`src/cli/docs/measurements.ts:714`), and a git without an execute bit (`src/shared/programPath.ts:141`). No P0
+  or P1, so no second bot review is asked for after the batch.
+- 2026-10-12T13:55Z–14:14Z: **the bot batch**, with #97 back in draft (a fixer on Opus 5.5, `high`;
+  `reports/bot-fixer-r1.md`). `ff9bc3cb` (committed 14:02:17Z) fixes the first two in the look before git, each
+  held by a case red before it (`test/merge/safeWrite.test.ts:1771`, `:1808`), with the pages that describe the
+  look; `1009ea40` re-pins six spec citations into `safeWrite.ts`. The third is answered: the same finding as
+  `review/76`, which stays scheduled; no record or changelog section uses the form today. The fourth is answered:
+  Node does report a permission error there, and handling it means new no-git texts in `check`, `worktree` and
+  `init`, a wording choice (`fix/33`, scheduled, waiting for a decision). The fixer also checked one QA note: the
+  origin read is reachable from the package entry (`createEngine().workspace.git.detectRepoGitIdentity`), so
+  `SECURITY.md` stands as written. Its scoped gates exit 0 (build, `check`, 48 files and 2,213 cases, lint,
+  typecheck, knip, the leak gate). The reviewer (`reports/bot-reviewer-r1.md`, Opus 5.5, `high`): **approve,
+  confidence high**; both fixes right, the three answers right, one Minor on a reply's wording, fixed by filing
+  `fix/33` first. The security lens (`reports/bot-security-r1.md`, Opus 5.5, `high`): **ready to push, confidence
+  high, no finding**; the look now refuses less only where git also stops. The ledger: the bot's three findings as
+  `review/88` (fixed), `review/89` (fixed), `review/90` (rejected as `review/76`'s duplicate); `fix/33` (deferred);
+  `review/91` (fixed); **216 rows, none open** — 134 fixed, 72 deferred, 10 rejected. The inbox gains `fix/33`'s row
+  among the tagged ones: the block holds 65 rows, 17 waiting for a decision. The replies to the four threads are
+  recorded here, not posted: the first two fixed in `ff9bc3cb`, the third and fourth answered as above.
 - 2026-10-11T23:56Z: an early `gate scan --base 751aaa5e` on the lane at `3338ee97`: exit 1, 91 files scanned, none
   skipped or unscanned, **four hits**, all rule `inline-api-key-assignment`, all in the two eval exports:
   `evals/runs/2026-10-11-run-44/summary.json:40303` and `:103402` (commit `90681fec`),
@@ -2110,10 +2153,36 @@ Appendix — auto-proven (`H` first):
 | A18 | The measurements reader takes a passing gate row with zero failed as a pass, and a qualified `owner/repo#n` as no pull request of this repository | L | `test/cli/docs/measurements.test.ts:1942` (`:1954-1957`), `:2102` (`:2130-2131`), `:2134` (`:2161`) |
 | A19 | The four container manifests and the APM package state the package's version, and the dogfood tree is what this build generates | L | `test/ci/pluginManifests.test.ts:337` (`:341`, `:352`); `test/ci/apmPackage.test.ts:394` (`:399`); the gate's `node dist/cli.js check`, exit 0, drift clean |
 
+Added 2026-10-12T13:41Z for the security fix, which joined after this table was built: rows 23 to 36, by the `st-qa` skill, called by name, read from the release head `793a663d`.
+
+The security fix (the last two items of the 1.14.0 Security entry: git, and a hook whose launcher is `node`, started by an absolute path), sorted by risk, then minutes. `$ST` stands for the release head's CLI started by full paths, `"$(command -v node)" /path/to/release-checkout/dist/cli.js`; `/tmp/st-qa` is a git repository set up with `$ST init -y --tools copilot`, whose root holds an executable file `git` reading `#!/bin/sh` then `touch /tmp/st-qa-ran`. Each `auto-proven` pointer is a committed case and its deciding assertions, read at `793a663d`, next to the final gate run on `03696ecb` (the record's 12:38Z–12:48Z entry). `test/` and `src/` are byte-identical across `b75f2a6e`, `03696ecb` and `793a663d`.
+
+| # | Scenario | Steps | Expected | Risk | Minutes | Proof |
+|---|---|---|---|---|---|---|
+| 23 | Denied, by the Windows rules held in-process: the walk never takes the bare name or the working folder (in any letter case or with a trailing separator), and skips every entry that is not a full path | Start: a checkout of the release head with `npm ci` run. (1) `npx vitest run test/shared/programPath.test.ts -t "win32"`. | Exit 0, no case failed. | H | 1 | `auto-proven`: `test/shared/programPath.test.ts:160` (`:163-165`), `:168` (`:171-172`), `:180` (`:184-185`), `:189` (`:202-203`), `:206` (`:207-213`), `:281` (`:282-284`); the platform is passed in, so these run on every host; final gate run, exit 0. Holds the rules, not the Windows runtime's own lookup: row 30 |
+| 24 | Denied (macOS, Linux): the tracked-and-clean check before an overwrite starts no file of git's name in the setup root. It answers from the git on `PATH`, or takes the verified `.bak` where only the root holds one | Start: as row 23. (1) `npx vitest run test/merge/safeWrite.test.ts -t "file of git's name"`. | Exit 0, no case failed. | H | 1 | `auto-proven`: `test/merge/safeWrite.test.ts:1514` (`:1527`, `:1531-1532`), `:1535` (`:1549`, `:1556-1557`); on every host, all three of the check's git calls name an absolute path to a file that exists: `:1492` (`:1503-1507`); final gate run, exit 0 |
+| 25 | Denied (macOS, Linux): the library's origin read, called with no runner, starts git by an absolute path and never a file of git's name in the working folder | Start: as row 23. (1) `npx vitest run test/workspace/git.test.ts -t "absolute"`. | Exit 0, no case failed. | H | 1 | `auto-proven`: `test/workspace/git.test.ts:358` (`:402-406`), `:453` (`:460`, `:467-468`), `:471` (`:476`, `:479`); final gate run, exit 0 |
+| 26 | The hook runner a setup gets for Codex, Copilot and Cursor starts a `node` launcher as the interpreter it runs under | Start: as row 23. (1) `npx vitest run test/corpus/emissionGoldens.test.ts -t "portable runner bytes"`. | Exit 0, no case failed. The committed snapshot of each of the three runners holds the line `const launcher = command[0] === "node" ? process.execPath : command[0];`. | H | 1 | `auto-proven`: `test/corpus/emissionGoldens.test.ts:1567` (`:1572`) against `test/corpus/__snapshots__/emissionGoldens.test.ts.snap:5963` (codex), `:6215` (copilot), `:6467` (cursor); final gate run, exit 0. Says nothing about the runner already on disk in an existing setup: row 32 |
+| 27 | Denied (macOS, Linux): a hook whose launcher is `node` starts no file of node's name in the repository root or in a plugin session's folder, whatever `PATH` entry names that folder. With no `node` on `PATH`, it still runs | Start: as row 23. (1) `npx vitest run test/hooks/portableRunner.test.ts -t "which program a row's launcher starts"`. | Exit 0, no case failed (the three Windows-only cases skip). | H | 1 | `auto-proven`: `test/hooks/portableRunner.test.ts:669` (`:681-683`, three `PATH` spellings), `:686` (`:695-697`); on every host, `:641` (`:648-650`) and `:654` (`:661-663`); final gate run, exit 0 |
+| 28 | Denied (macOS, Linux): a `worktree` verb starts no file of git's name in the folder it runs in. Where only that folder holds one, it answers as on a machine with no git | Start: `/tmp/st-qa`, `/tmp/st-qa-ran` absent. (1) `cd /tmp/st-qa && PATH=":$PATH" $ST worktree list`. (2) `ls /tmp/st-qa-ran`. | (1) lists the repository's checkout, exit 0. (2) `No such file or directory`. | H | 2 | `auto-proven`: `test/worktree/git.test.ts:444` (`:454`, `:457`), `:460` (`:468`, `:471`); final gate run, exit 0 |
+| 29 | Denied (macOS, Linux): the verbs' git reads (`check`, `sync`, `init`, `gate` and the others the Security entry lists) start no file of git's name in the folder they run in, whether `PATH` names it by an empty entry, a relative one or its full path | Start: `/tmp/st-qa`, `/tmp/st-qa-ran` absent. (1) `cd /tmp/st-qa && PATH=":$PATH" $ST check --json`. (2) `PATH=".:$PATH" $ST sync`. (3) `ls /tmp/st-qa-ran`. | (1) the `git-available` row reads `pass`. (2) exit 0. (3) `No such file or directory`. | H | 3 | `auto-proven`: `test/cli/engine/gitStatus.test.ts:498` (`:507`, `:511`: the git on `PATH` started by its absolute path, three times), `:514` (`:522-523`, `:526`: the folder's file never started); the walk: `test/shared/programPath.test.ts:49` (`:54`, `:56`), `:71` (`:77-78`), `:81` (`:88-89`), `:96` (`:103-105`); final gate run, exit 0 |
+| 30 | Denied on a Windows host: a `git.exe` or `git.com` in the folder a verb runs in is not started in git's place | Start: a throwaway branch from the release head, in a copy of the repository whose CI runs the Windows legs. (1) `git checkout a17b29df -- src/cli/engine/gitStatus.ts`, then commit. (2) Push and let CI end. (3) In the Windows legs' logs, read `reads a repository whose root holds a program file under git's name`. | (3) fails on the branch; on the release head it passes. | H | 3, and CI's wait | [ ] **not proven**. The one case that plants a file under git's name runs only on Windows: `test/cli/engine/gitStatus.test.ts:466` (`:474-475`). It has passed in the Windows legs of the three CI runs on the fix before it was pushed, read by job result. It has never run against the unfixed source on Windows, so it has never been seen to fail. It plants `git.exe` alone, never `git.com`, and only at the verbs' runner. On Windows the overwrite check, the `worktree` lane and the library's origin read rest on rows 23–25's absolute-path cases. That the Windows runtime looks in the folder first is read from its source, not from a run. Closable by the steps here, run by CI with no person |
+| 31 | Denied on a Windows host: a hook whose launcher is `node` starts no `node.exe` or `node.com` in the repository root, and no `node.exe` in a plugin session's folder | Start: as row 30. (1) `git checkout a17b29df -- src/hooks/portableRunner.ts`, then commit. (2) Push and let CI end. (3) In the Windows legs' logs, read the three cases under `on a Windows host, where the runtime takes the child's folder first`. | (3) all three fail on the branch; on the release head all three pass. | H | 3, and CI's wait | [ ] **not proven**. The three cases run only on Windows: `test/hooks/portableRunner.test.ts:723` (`node.exe`, `node.com`; `:730-733`), `:736` (`:743-746`). They were added after the first two Windows runs, so they have run in one CI run only, at `b75f2a6e`, green by job result. They have never run against the unfixed source on Windows, so they have never been seen to fail. Closable by CI with no person |
+| 32 | An upgrade from 1.12.0 replaces the hook runner already on disk with the fixed one at the first `sync` | Start: macOS or Linux, an empty git repository `/tmp/st-up`. (1) `npx -y @zomarit/stamity@1.12.0 init -y --tools copilot`, then commit. (2) `$ST sync`. (3) `grep -c 'process.execPath : command\[0\]' .stamity/generated/hooks/copilot/stamity-portable-hook.mjs`. | (2) exit 0, and the runner is listed as updated. (3) prints `1`. | H | 3 | `proven` by a run on the release head `793a663d` (the test-runner, 2026-10-12T13:40Z, in a scratch repository deleted after): 1.12.0's `init -y --tools copilot`, committed, left the runner without the fixed start (count 0); `$ST sync` exit 0, 27 updated, 39 unchanged, no collision, the runner among the updated; the count then 1; `$ST check` exit 0, drift clean; a second `sync` updated none of its 66 files (it stamps the manifest's `updatedAt`, as every sync does) |
+| 33 | An ordinary setup is unchanged: the git found on `PATH` is the git that ran before, started by an absolute path, and a git installed later is found | Start: an ordinary git repository with a 1.14.0 setup, git on `PATH` by full path. (1) `$ST check --json`. | The `git-available` row reads `pass`. | M | 1 | `auto-proven`: `test/worktree/git.test.ts:487` (`:495-498`), `test/merge/safeWrite.test.ts:1492` (`:1502-1507`), `test/workspace/git.test.ts:358` (`:402-406`), on every host, Windows legs included. `test/shared/programPath.test.ts:59` (`:66-68`), `:254` (`:255-258`), `:332` (`:338-342`); final gate run, exit 0 |
+| 34 | Where the only git sits behind an entry the walk skips, `check`, `init` and the `worktree` verbs say the engine found no git to start, say which entries it takes git from, and name no git command | Start: `/tmp/st-qa`. (1) `cd /tmp/st-qa && env PATH="" $ST check --json`. (2) `env PATH="" $ST worktree list`. | (1) `git-available` reads `warn`, its detail opens "git did not answer here — the engine found no git to start." (2) exit 1, stderr holds "the engine found no git to start" and no `git init`. | M | 2 | `auto-proven`: `test/cli/commands/check.test.ts:1251` (`:1286-1305`); `test/cli/commands/init.test.ts:1253` (`:1277-1299`), `:1515` (`:1521-1529`), `:1532` (`:1538-1551`); `test/cli/commands/initPanel.test.ts:868` (`:871-873`); `test/cli/commands/worktree.test.ts:222` (`:233-252`), `:256` (`:267-273`); final gate run, exit 0 |
+| 35 | Where git did not answer, `sync`'s closing step and `gate`'s reason name no git command to type | Start: as row 23. (1) `npx vitest run test/cli/commands/sync.test.ts test/cli/commands/gate.test.ts -t "no git command"`. | Exit 0, no case failed. | L | 1 | `auto-proven`: `test/cli/commands/sync.test.ts:424` (`:440-449`), `:452` (`:459-462`); `test/cli/commands/gate.test.ts:733` (`:740-759`); final gate run, exit 0 |
+| 36 | The fix's boundary holds as the Security entry states it: a launcher other than the word `node` is still started by the name the hook gives, found on `PATH` | Start: as row 23. (1) `npx vitest run test/hooks/portableRunner.test.ts -t "still starts any other launcher"`. | Exit 0, no case failed. | L | 1 | `auto-proven`: `test/hooks/portableRunner.test.ts:703` (`:711-712`); final gate run, exit 0 |
+
+Rows 23–36 cover the security fix, which joined after this table was first built: 14 rows. Eleven are `auto-proven` by committed cases beside the final gate run on `03696ecb` (`node scripts/ci/test-run.mjs --coverage`, the four live clients armed, exit 0; 293 files, 13,879 passed, 0 failed, 18 skipped). Every security negative among them rests on a committed assertion. Every red-first run the record names was on macOS. No person row is added, and the run stays at its three. Each gap left is one a machine run can close, so a person would show nothing a run cannot. Two rows stay **not proven**, each H. On Windows, rows 30 and 31: no run of the new cases against the unfixed source exists there, and the four cases that run only on Windows (one for git, three for the hook runner) have passed by CI job result but have never been seen to fail. Row 32 was closed at 13:40Z by a run on the release head (its proof cell). CI on the pushed head `793a663d` is still running and is not counted here.
+
 **Sign-off** — the 1.14.0 release branch, 2026-10-12
 
 - [ ] Every H row walked or auto-proven, and passing — an H row accepted unwalked blocks release. (All ten H rows
-  are auto-proven and passing; none is left for a person.)
+  are auto-proven and passing; none is left for a person.) Of the rows added for the security fix, rows 30 and 31
+  are H and **not proven**: no run of the new cases against the unfixed source exists on Windows, the half of the
+  proof the maintainer's answer of 08:44Z left out; under this rule they are the maintainer's to accept or to have
+  proven before signing. Row 32 is H and proven by a run on the release head.
 - [ ] Every failing M row has a filed follow-up, linked. (No M row fails; rows 1 and 2 cannot be walked before the
   cut.)
 - L failures are recorded, not blocking. (None recorded; row 3 is open.)
@@ -2124,7 +2193,8 @@ Appendix — auto-proven (`H` first):
 - Shippable: **not signed** — an unattended run asks nothing; the three open rows ride the close's one question.
 
 Handback: 22 rows derived; 19 auto-proven with the pointers above; 3 left for a person, each open (no input hash is
-recorded for an open row); sign-off not signed. Browser evidence: not applicable, the change has no UI of its own;
+recorded for an open row); sign-off not signed. Added for the security fix: 14 rows, 23 to 36; 11 auto-proven, one
+(row 32) proven by a run on the release head, two (rows 30 and 31) not proven; no person row added. Browser evidence: not applicable, the change has no UI of its own;
 the rendered documentation site is row 3.
 
 ## Proof block
@@ -2137,7 +2207,8 @@ deleted at once — and the records gates on the commits after it, exit 0 (the d
 Scan: `gate scan` exits 1 on six lines of the three eval exports, settled by the maintainer as a false match (four
 at the close's question, two at 12:59Z–13:03Z). Reviews: `review/71`, `review/72`, `review/73`, `review/79` and
 `fix/30` fixed by `f8`; the spec delta merged (`c2da882f`); the security fix as the dated entries tell it. CI: green
-on #97 at `a17b29df`, every leg; at the pushed head, the next records commit says. Eval: run 45 the run of record,
+on #97 at `a17b29df` and at `793a663d`, every leg; at the head after the review bot's batch, the next records commit
+says. Eval: run 45 the run of record,
 PASS as composed; run 46, at `04bfbde9`, PASS (a recalibration, every case carried). Not done: as the opening of
 this record lists.
 
