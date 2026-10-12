@@ -233,9 +233,10 @@ the fix round `fa07900d` for ledger row `fix/21`, and the round of
 `e0cc89dd` and `e62ec3f2` for ledger rows `fix/30` and `review/79`; cited
 at `e62ec3f2`, and its citations into `src/worktree/git.ts`,
 `src/merge/safeWrite.ts`, `src/cli/engine/gitStatus.ts` and
-`src/workspace/git.ts` at `c026ea4e`; ships with 1.14.0). Every git call the
-three subcommands make goes through the lane's one seam, `runGit`
-(`src/worktree/git.ts:15-17`, `src/cli/commands/worktree.ts:130`), and that
+`src/workspace/git.ts` at `c026ea4e`, and those into
+`src/cli/commands/worktree.ts` at `d01a9c62`; ships with 1.14.0). Every git
+call the three subcommands make goes through the lane's one seam, `runGit`
+(`src/worktree/git.ts:15-17`, `src/cli/commands/worktree.ts:141`), and that
 seam now starts git one way:
 
 - **Two options go ahead of every command**: `safe.bareRepository=explicit`,
@@ -251,9 +252,8 @@ seam now starts git one way:
   is not the program started; REQ-PLUGIN-046 states the walk. Where no `PATH`
   entry the walk takes holds git, no program is started and the outcome is
   status 127 with nothing on stdout and no mark (`:126-129`), the outcome a
-  machine with no git installed gives: `resolveLane` words it as it words any
-  first call that fails without the mark, with the refusal it prints outside
-  a repository.
+  machine with no git installed gives: `resolveLane` gives it a refusal of
+  its own, which the bullet on the first call of every subcommand states.
 - **The lane keeps its caller's environment, git's own variables included.**
   The seam passes git no environment of its own (`src/worktree/git.ts:130-136`):
   an external `GIT_DIR` is a layout the lane accepts, and `fetch` and
@@ -275,19 +275,33 @@ seam now starts git one way:
 - **At a folder the look refused, the first call of every subcommand refuses
   with that cause and names no git command.** That call is
   `resolveLane`'s `rev-parse --show-toplevel`
-  (`src/cli/commands/worktree.ts:132`, `:975`). On a marked outcome it throws
+  (`src/cli/commands/worktree.ts:143`, `:1000`). On a marked outcome it throws
   `VALIDATION_ERROR`, the code every other refusal there carries, with a text
-  of its own (`:133-147`): the message says git was not started in the folder
+  of its own (`:144-158`): the message says git was not started in the folder
   the verb ran in, because that folder or one above it has the layout of a
   bare repository; the `why` names the layout; and the next step says to find
   that folder by looking at entries by name, to run no git in it or in any
   folder under it, and to move it off that path or run from a checkout that
-  does not keep it there. Outside a repository the refusal is the text it
-  was, `git init` in its next step included (`:148-155`), and the `--json`
-  error document has the same code and keys in both places. Where git itself
-  refuses a folder the look passed, the outcome carries no mark and that
-  older text prints (ledger row `2026-10-11_release-1-14-0/fix/25`).
-  `resolveLane` reads the mark (`:133`); no wrapper of `src/worktree/git.ts`
+  does not keep it there. Where that first call fails without the mark, the
+  refusal has two texts, told apart by what the engine's own walk found, and
+  neither names a git command: `resolveLane` asks `gitProgramFor`
+  (`src/shared/programPath.ts`) under the environment the seam walked. Where
+  the walk found no git, the message says git did not answer in the folder
+  because the engine found no git to start, the `why` says git is taken only
+  from a `PATH` entry that is a full path to a folder other than the one git
+  runs in, and the next step says to install git or to put its folder on
+  `PATH` by its full path (`:159-170`); it does not say the folder is in no
+  repository. Where the walk found one, the message is the one it was, that
+  the folder is not inside a git repository, with git's own output as the
+  `why`, and the next step says to run from inside a clone and tells one by
+  a `.git` entry found by name (`:171-180`). Until this was amended, the
+  same day, both cases printed that message and a next step naming
+  `git init`: a git typed at a prompt is found by the shell's rules and not
+  by the engine's walk. The `--json` error document has the same code and
+  keys in all three places. Where git itself refuses a folder the look
+  passed, the outcome carries no mark and the text for a git that was found
+  prints (ledger row `2026-10-11_release-1-14-0/fix/25`).
+  `resolveLane` reads the mark (`:144`); no wrapper of `src/worktree/git.ts`
   does. A wrapper takes a marked outcome as any other non-zero status, so a
   call the look refuses after that first one, in another folder than the
   verb's own, fails as a git failure does there: the dirty count, for one,
@@ -326,9 +340,10 @@ the folder below). Before this change the seam passed the command alone and
 took no look. Proof: `test/worktree/git.test.ts`, the describe "runGit at a
 root shaped like a bare repository", and
 `test/cli/commands/worktree.test.ts`, the describe "worktree at a folder the
-look before git refused" and, for the refusal outside a repository, the case
-"refuses outside a git repository, naming the directory" of the describe
-"worktree dispatch".
+look before git refused", the describe "worktree where the engine found no
+git to start", red before `resolveLane` asked the walk, and, for the refusal
+outside a repository, the case "refuses outside a git repository, naming the
+directory" of the describe "worktree dispatch".
 
 ### REQ-WORKTREE-002 — The farm sits outside the repository, and a farm inside it is refused
 
@@ -348,9 +363,9 @@ operator is standing in. `resolveLane` therefore takes
 `git rev-parse --git-common-dir` — one per clone, the same absolute path from
 every linked worktree — and reads the repo root back off it, falling back to the
 top level only for a layout whose common dir is not named `.git`
-(`src/cli/commands/worktree.ts:95-161` at `e62ec3f2`,
+(`src/cli/commands/worktree.ts:96-186` at `d01a9c62`,
 `src/worktree/git.ts:600-613` at `c026ea4e`; amended 2026-10-12, they read
-`:100-136` and `:488-502`). One
+`:100-136` and `:488-502`, and the first read `:95-161` at `e62ec3f2`). One
 lane, one farm, one policy file, whichever checkout the verb is invoked from.
 
 **Rationale.** Three separate mechanisms in this tree walk the repository
@@ -1265,8 +1280,19 @@ REQ-WORKTREE-001 take it to ninety-two.)
   a plain folder with no repository THEN the refused document carries
   `VALIDATION_ERROR` and no `git init`, and the two documents have the same
   keys, at the top and under `error`; GIVEN `list` in a folder outside any
-  repository THEN the refusal is the one it was, its next step naming
-  `git init` (added 2026-10-12).
+  repository, on a host with git on `PATH`, THEN the refusal says the folder
+  is not inside a git repository, and its next step tells a clone by a `.git`
+  entry found by name and names no git command; GIVEN a folder that holds
+  files of git's program names WHEN bare `worktree`, `list`,
+  `setup <name> -y` or `cleanup --all -y` runs in it under a `PATH` with no
+  entry the engine takes git from, first an empty one and then one whose only
+  entry is that folder, THEN each exits 1, says git did not answer there
+  because the engine found no git to start and that git is taken only from a
+  `PATH` entry that is a full path to a folder other than the one git runs
+  in, and names no missing repository, no clone and no git command, and
+  `list --json` there carries `VALIDATION_ERROR` with the keys of the refused
+  document (added 2026-10-12; the clause outside a repository amended, and
+  the one after it added, the same day).
 
 **REQ-WORKTREE-002**
 
