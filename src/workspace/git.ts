@@ -132,6 +132,15 @@ export function detectPlatformFromRemote(remoteUrl: string): Platform | null {
  * returns data and never writes to a console, so there is no diagnostic
  * channel to route a probe failure into — the null in the returned identity
  * IS the report.
+ *
+ * With no `runner` passed the read is plain git ({@link execGit}): none of the
+ * options the CLI's verbs pass, no look at the folder before git starts, and
+ * the caller's whole environment. In a folder that has the layout of a bare
+ * repository, or below one, that git reads the folder's own settings and
+ * returns the origin it names. Both callers in the CLI pass the pinned runner
+ * (`../cli/engine/gitStatus.ts::gitCheckRunner`), which this module sits below
+ * and cannot import; a caller of the library that reads a tree it does not
+ * trust passes a runner of its own that does the same (fix/30).
  */
 export function detectRepoGitIdentity(cwd: string, runner: GitRunner = execGit): RepoGitIdentity {
   const remoteUrl = probe(runner, ["remote", "get-url", "origin"], cwd);

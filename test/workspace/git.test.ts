@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { mkdir } from "node:fs/promises";
+import { describe, expect, it, vi } from "vitest";
+import { gitCheckRunner } from "../../src/cli/engine/gitStatus.ts";
 import {
   detectPlatformFromRemote,
   detectRepoGitIdentity,
@@ -7,6 +10,8 @@ import {
   type GitRunner,
 } from "../../src/workspace/git.ts";
 import type { Platform } from "../../src/types/core.ts";
+import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
+import { useTempDir } from "../support/tempDir.ts";
 
 const REMOTE_ARGS = ["remote", "get-url", "origin"];
 const SYMREF_ARGS = ["symbolic-ref", "refs/remotes/origin/HEAD"];
@@ -299,5 +304,69 @@ describe("detectRepoGitIdentity", () => {
       defaultBranch: "trunk",
       platform: null,
     });
+  });
+});
+
+// Run 2026-10-11_release-1-14-0, fix/30. The default seam of this module is plain git: neither
+// of the two options the CLI's verbs pass, no look before git, and the caller's whole
+// environment. Both callers in the CLI hand in the pinned runner (`gitCheckRunner`,
+// `src/cli/engine/gitStatus.ts`), so no verb reaches the default; a caller of the library that
+// passes no runner does. The module sits below the look in the wave map
+// (`test/architecture/boundaries.test.ts`), so the default stayed and `SECURITY.md` says whose
+// the claim is. This case holds both halves: what a call with no runner reads at a folder in the
+// shape of a bare repository, and what the same call reads through the pinned runner. The
+// folder is a real bare repository with an origin of its own, as in
+// `test/cli/commands/initPlan.test.ts`; it skips on a host with no git.
+describe("detectRepoGitIdentity (default runner, a folder in the shape of a bare repository)", () => {
+  const getRoot = useTempDir("workspace-git-default");
+  const PLANTED_ORIGIN = "https://github.com/planted/planted.git";
+
+  it("reads the folder's own origin with no runner passed, and nothing through the pinned runner", async (ctx) => {
+    const root = getRoot().path("shaped");
+    await mkdir(root, { recursive: true });
+    const seedGit = (args: readonly string[]): string =>
+      execFileSync("git", [...args], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_CONFIG_SYSTEM: NO_GIT_CONFIG },
+        windowsHide: true,
+      }).trim();
+    try {
+      seedGit(["init", "-q", "--bare", "."]);
+    } catch {
+      ctx.skip();
+    }
+    seedGit(["config", "--file", "config", "remote.origin.url", PLANTED_ORIGIN]);
+
+    // The default runner keeps the caller's environment, so the host's own git settings are cut
+    // here: one that already refuses a discovered bare repository would hide what the default does.
+    // The setting itself is held at `all`, the value git ships, through git's own environment
+    // form, so the case does not turn on a later git shipping another default. The pinned runner
+    // drops every `GIT_*` variable and takes its look before git, so none of this reaches it.
+    const home = getRoot().path("home");
+    await mkdir(home, { recursive: true });
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("XDG_CONFIG_HOME", home);
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", NO_GIT_CONFIG);
+    vi.stubEnv("GIT_CONFIG_SYSTEM", NO_GIT_CONFIG);
+    vi.stubEnv("GIT_CONFIG_COUNT", "1");
+    vi.stubEnv("GIT_CONFIG_KEY_0", "safe.bareRepository");
+    vi.stubEnv("GIT_CONFIG_VALUE_0", "all");
+    try {
+      expect(detectRepoGitIdentity(root)).toEqual({
+        remoteUrl: PLANTED_ORIGIN,
+        defaultBranch: null,
+        platform: "github",
+      });
+      expect(detectRepoGitIdentity(root, gitCheckRunner())).toEqual({
+        remoteUrl: null,
+        defaultBranch: null,
+        platform: null,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
