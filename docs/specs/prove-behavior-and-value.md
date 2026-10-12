@@ -427,10 +427,11 @@ and rendered as RESULTS §6b by the driver of record.
 
 ### REQ-PROVE-014 — Windows worktree add retried once
 
-`addWorktree` (`src/worktree/git.ts:625-659`) retries `git worktree add` exactly once, after a short
+`addWorktree` (`src/worktree/git.ts:699-768`) retries `git worktree add` exactly once, after a short
 delay, when git exits 128 with stderr matching `failed to read .*commondir`. Named collisions stay
-`VALIDATION_ERROR` (`:640-657`), the rest `FS_ERROR` (`:658`); a learning lands via `stamity learn
-capture`.
+`VALIDATION_ERROR` (`:736-761`), the rest `FS_ERROR` (`:762-767`); a learning lands via `stamity learn
+capture`. (Amended 2026-10-12: the citations of this paragraph were re-read at `c026ea4e`; they read
+`src/worktree/git.ts:625-659`, `:640-657` and `:658`.)
 
 - GIVEN a stubbed runner failing that way once then exiting 0 WHEN `addWorktree` runs THEN it is
   called exactly twice and resolves; failing every time it is still called exactly twice.
@@ -507,12 +508,14 @@ not.
 
 ### REQ-PROVE-019 — Security mapping written
 
-`SECURITY.md`'s two open proof rows (`:260-261`) cite the pack-signing rehearsal run 34758487370 and
+`SECURITY.md`'s two open proof rows (`:370-371`) cite the pack-signing rehearsal run 34758487370 and
 the release run 34771477218 as closed evidence. `docs/security-mapping.md` carries the version-pinned
 OWASP (agentic 2026, LLM 2025, web 2021), NSA/CISA and NIST AI RMF mappings — publisher, edition and
 read date, no URL, the hand-page link policy admitting only this repository's GitHub home (`:41-100`)
 — and the actor/vector/control/residual table with mapped ids, every control traced to `path:line`;
-`SECURITY.md:214-216` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
+`SECURITY.md:320-322` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
+(Amended 2026-10-12: the two citations into `SECURITY.md` were re-read at `c41d5789`; they read
+`:260-261` and `SECURITY.md:214-216`.)
 
 - GIVEN the new page WHEN the docs suite runs THEN seven `###` surface headings stand (six engine
   surfaces plus the release publish path) over a `## Gaps` section, every control symbol resolves in the

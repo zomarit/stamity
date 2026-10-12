@@ -231,34 +231,46 @@ registered three times.
 `s1-every-git-read-pinned` and `s2-bare-shape-guard` with their fix rounds,
 the fix round `fa07900d` for ledger row `fix/21`, and the round of
 `e0cc89dd` and `e62ec3f2` for ledger rows `fix/30` and `review/79`; cited
-at `e62ec3f2`; ships with 1.14.0). Every git call the three subcommands make
-goes through the lane's one seam, `runGit`
-(`src/worktree/git.ts:14-16`, `src/cli/commands/worktree.ts:130`), and that
+at `e62ec3f2`, and its citations into `src/worktree/git.ts`,
+`src/merge/safeWrite.ts`, `src/cli/engine/gitStatus.ts` and
+`src/workspace/git.ts` at `c026ea4e`; ships with 1.14.0). Every git call the
+three subcommands make goes through the lane's one seam, `runGit`
+(`src/worktree/git.ts:15-17`, `src/cli/commands/worktree.ts:130`), and that
 seam now starts git one way:
 
 - **Two options go ahead of every command**: `safe.bareRepository=explicit`,
   which refuses a committed folder shaped like a bare repository, and
   `core.fsmonitor=false`, so the dirty counts run no file-system monitor
-  command a configuration names (`src/worktree/git.ts:89-95`, `:117`). Git
+  command a configuration names (`src/worktree/git.ts:96-102`, `:124`). Git
   honours the first from 2.38 and an older git ignores it without an error
-  (`src/merge/safeWrite.ts:1057-1058`).
+  (`src/merge/safeWrite.ts:1058-1059`).
+- **Git is started by an absolute path, never by its bare name.** The seam
+  asks `gitProgramFor` (`src/shared/programPath.ts`) for the git of the
+  folder the call runs in and starts the path it answers
+  (`src/worktree/git.ts:125`, `:130`), so a file of git's name in that folder
+  is not the program started; REQ-PLUGIN-046 states the walk. Where no `PATH`
+  entry the walk takes holds git, no program is started and the outcome is
+  status 127 with nothing on stdout and no mark (`:126-129`), the outcome a
+  machine with no git installed gives: `resolveLane` words it as it words any
+  first call that fails without the mark, with the refusal it prints outside
+  a repository.
 - **The lane keeps its caller's environment, git's own variables included.**
-  The seam passes git no environment of its own (`src/worktree/git.ts:118-124`):
+  The seam passes git no environment of its own (`src/worktree/git.ts:130-136`):
   an external `GIT_DIR` is a layout the lane accepts, and `fetch` and
   `worktree add` run with the operator's own transport and identity variables
-  (`:95-97`). The git the CLI's other verbs start strips every `GIT_*`
-  variable (`src/cli/engine/gitStatus.ts:123-130`); this lane does not. The
+  (`:102-104`). The git the CLI's other verbs start strips every `GIT_*`
+  variable (`src/cli/engine/gitStatus.ts:124-131`); this lane does not. The
   library's origin read, called with no runner, is no verb's start of git and
-  strips nothing (`src/workspace/git.ts:136-145`, `:157-163`); REQ-PLUGIN-046
+  strips nothing (`src/workspace/git.ts:137-146`, `:159-177`); REQ-PLUGIN-046
   states it.
 - **Before git is started the lane takes the look REQ-PLUGIN-046 states**
   (`docs/specs/plugin-lifecycle.md`, amended 2026-10-12;
-  `gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts:1105-1129`), from the
+  `gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts:1106-1130`), from the
   folder the call runs in, and hands it the environment it keeps
-  (`src/worktree/git.ts:113`). Where the look refuses, no git is started and
+  (`src/worktree/git.ts:120`). Where the look refuses, no git is started and
   the call's outcome has the shape of git's own refusal, status 128, nothing
   on stdout and the reason on stderr, and it alone carries the mark
-  `keptFromGit` (`:59-65`, `:113-116`). A caller that names the cause reads
+  `keptFromGit` (`:60-66`, `:120-123`). A caller that names the cause reads
   the mark, never the stderr text.
 - **At a folder the look refused, the first call of every subcommand refuses
   with that cause and names no git command.** That call is
@@ -281,11 +293,11 @@ seam now starts git one way:
   verb's own, fails as a git failure does there: the dirty count, for one,
   with `FS_ERROR`, "failed (git exited 128)" and the look's reason as its
   `why`, an exit status no git gave (`gitFailed`,
-  `src/worktree/git.ts:156-162`, called at `:432`). This requirement owns
+  `src/worktree/git.ts:168-174`, called at `:444`). This requirement owns
   the lane's mark and this refusal; what `check`, `sync`, `init` and `gate`
   print at such a folder is REQ-PLUGIN-046's to state.
 - **Handed that environment, the look reads three of git's variables and no
-  other** (`src/merge/safeWrite.ts:1106-1108`): with `GIT_DIR` set no look is
+  other** (`src/merge/safeWrite.ts:1107-1109`): with `GIT_DIR` set no look is
   taken, since git then runs no discovery; `GIT_OBJECT_DIRECTORY` stands in
   for `objects`; and with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set at all the
   walk does not end at another file system.
@@ -302,12 +314,12 @@ it keeps git's variables — `GIT_COMMON_DIR` exported with no `GIT_DIR`, on a
 git older than 2.38 (`2026-10-11_release-1-14-0/fix/14`), and a `GIT_DIR` of
 any value, under which no look is taken while git resolves a relative value
 against the folder it runs in, on any git version
-(`2026-10-11_release-1-14-0/review/51`; `src/merge/safeWrite.ts:1083-1085`,
-`:1100-1101`); and git that anything other than a CLI verb starts, which
+(`2026-10-11_release-1-14-0/review/51`; `src/merge/safeWrite.ts:1084-1086`,
+`:1101-1102`); and git that anything other than a CLI verb starts, which
 carries neither option and takes no look. Started in or under a committed
 folder of the shape that git can open, such a git reads that folder, and
 that does not take a refusal by the look: the look walks upward from the
-folder a call runs in (`src/merge/safeWrite.ts:1117-1128`), so a folder of
+folder a call runs in (`src/merge/safeWrite.ts:1118-1129`), so a folder of
 the shape below that one meets no look
 (`2026-10-11_release-1-14-0/review/70`, and `review/79` of the same run for
 the folder below). Before this change the seam passed the command alone and
@@ -336,8 +348,9 @@ operator is standing in. `resolveLane` therefore takes
 `git rev-parse --git-common-dir` — one per clone, the same absolute path from
 every linked worktree — and reads the repo root back off it, falling back to the
 top level only for a layout whose common dir is not named `.git`
-(`src/cli/commands/worktree.ts:95-161`, `src/worktree/git.ts:588-601`, both at
-`e62ec3f2`; amended 2026-10-12, they read `:100-136` and `:488-502`). One
+(`src/cli/commands/worktree.ts:95-161` at `e62ec3f2`,
+`src/worktree/git.ts:600-613` at `c026ea4e`; amended 2026-10-12, they read
+`:100-136` and `:488-502`). One
 lane, one farm, one policy file, whichever checkout the verb is invoked from.
 
 **Rationale.** Three separate mechanisms in this tree walk the repository
@@ -544,9 +557,10 @@ copy overrides out of its symlinked state directory in the first place — an
 atomic temp+rename through a symlink either de-links the name or clobbers the
 shared original — "temp+rename publishes a fresh inode, so the merge silently
 converts this tree's name for the bytes into an INDEPENDENT copy of them"
-(`src/merge/safeWrite.ts:205-215`), and the rename "replaces the link with a
+(`src/merge/safeWrite.ts:229-231`), and the rename "replaces the link with a
 regular file" rather than writing through it
-(`src/merge/atomicWrite.ts:960-966`).
+(`src/merge/atomicWrite.ts:960-966`). (Amended 2026-10-12: the citation into
+`src/merge/safeWrite.ts` was re-read at `c026ea4e`; it read `:205-215`.)
 Disk space is the weaker consideration, and `symlink` remains one edit away for
 an operator who has weighed it.
 
@@ -807,7 +821,7 @@ any control character.
 (`src/types/errors.ts:38-48`) and the generated CLI page labelled it "Reserved,
 never thrown: … no code path in this build produces it". This lane's fetch is
 the first real transport operation in the CLI, so it is the code's first honest
-use, and `fetchBranch` is the throw site (`src/worktree/git.ts:551-582`).
+use, and `fetchBranch` is the throw site (`src/worktree/git.ts:563-594`).
 That made the page's note false the moment the code shipped, so the note is gone
 and the table row names this producer instead
 (`src/cli/docs/cliReference.ts:146-156`) — closed under REQ-WORKTREE-018.
@@ -817,10 +831,11 @@ touches nothing.
 
 The classification that decides between a fall-through and a failure is one
 sentence of stderr, so it is a named constant with a pure classifier over it
-rather than an inline regex (`src/worktree/git.ts:536-549`): a git release that
+rather than an inline regex (`src/worktree/git.ts:548-561`): a git release that
 reworded "couldn't find remote ref" would otherwise turn every missing branch
 into a transport failure, silently. (Amended 2026-10-12: the citations of
-these two paragraphs were re-read at `e62ec3f2`; they read
+these two paragraphs were re-read at `e62ec3f2`, and the two into
+`src/worktree/git.ts` again at `c026ea4e`; they read
 `src/types/errors.ts:38-47`, `src/worktree/git.ts:458-483` and `:443-456`, and
 `src/cli/docs/cliReference.ts:113-135`.)
 
@@ -935,7 +950,8 @@ strategy each path resolved to, and every consent gate the real run would hit
 with the answer it would get for this invocation. **The dry-run entry table and
 the real run's entry table agree row for row and strategy for strategy**, which
 is the parity property the merge engine already holds itself to
-(`src/merge/safeWrite.ts:43-48`, `src/merge/safeWrite.ts:593-598`).
+(`src/merge/safeWrite.ts:48-53`, `src/merge/safeWrite.ts:707-712`; amended
+2026-10-12, re-read at `c026ea4e`, they read `:43-48` and `:593-598`).
 
 **A dry run never prompts, on any stream.** "Touches nothing" includes the
 operator's attention: a preview that stops to ask about a branch it is not going
@@ -1619,7 +1635,9 @@ The suites that extend, and what each takes:
 ## References
 
 Cited as `path:line` against the tree at the time of writing; line numbers drift
-and the surrounding symbol is the durable address.
+and the surrounding symbol is the durable address. (Amended 2026-10-12: the two
+`src/merge/safeWrite.ts` rows were re-read at `c026ea4e`; they read
+`43-48,593-598` and `186-250`.)
 
 | Pointer | Target | Why |
 |---|---|---|
@@ -1632,8 +1650,8 @@ and the surrounding symbol is the durable address.
 | `source` | `src/merge/atomicWrite.ts:143-171,297-358` | the cross-process lock REQ-WORKTREE-010 reuses, and its budgets |
 | `source` | `src/merge/atomicWrite.ts:694-718,943-978,1024-1041` | containment, mode preservation, and the EEXIST discipline REQ-WORKTREE-005 copies |
 | `source` | `src/merge/atomicWrite.ts:1170-1180,1232-1272` | the recursive sweep that must not meet a second checkout |
-| `source` | `src/merge/safeWrite.ts:43-48,593-598` | the dry-run/apply parity property REQ-WORKTREE-012 adopts |
-| `source` | `src/merge/safeWrite.ts:186-250` | the shared-name policy, and the de-linking harm behind the `node_modules` default |
+| `source` | `src/merge/safeWrite.ts:48-53,707-712` | the dry-run/apply parity property REQ-WORKTREE-012 adopts |
+| `source` | `src/merge/safeWrite.ts:212-276` | the shared-name policy, and the de-linking harm behind the `node_modules` default |
 | `source` | `src/mcp/env.ts:110-126,180,544-561` | the credential file, its ignore entry, and the win32 mode residual |
 | `source` | `src/emit/stateScaffold.ts:20-45` | the committed state directories, and why they carry placeholders |
 | `source` | `src/hooks/scripts.ts:153,1879` | the machine-local counter that must not travel between worktrees |
