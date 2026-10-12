@@ -153,7 +153,12 @@ where git would read a bare repository.
   `secret scan: not run` under `Not done:`. `init` treats the folder as it does one with no
   repository: at a terminal it asks before it writes, and it prints a no-git note. There the
   question, the note, the security line of the ready panel and of the dry-run preview, and the
-  refusal when you decline the question, state this cause and name no `git init`. `init` and
+  refusal when you decline the question, state this cause and name no `git init`. The ready
+  panel's next steps, and `nextSteps` in `init --json`, open there with one step more: move the
+  folder off that path, or work from a checkout that does not keep it there, before you start a
+  client or a flow. The usual steps follow it unchanged, and the document's keys are the ones
+  they were. After a guided migration, the line on the previous setup's uninstall says there to
+  copy your own files out with no git command, where elsewhere it says to commit. `init` and
   `plugin setup` seed no maturity tier from the history and record no hosting platform, and
   `config detect` reads none and leaves the recorded one. `handoff prepare` records no git ref and
   says so, and `handoff resume` cannot measure drift. Every `worktree` verb refuses with
@@ -163,8 +168,11 @@ where git would read a bare repository.
   included: git started anywhere under it finds it as the engine did, and only the engine's own git
   calls are pinned. A flow is no exception: `/st-quick` and `/st-work` do not stop there, and the
   git their session and sub-agents start is not pinned, so start no flow there until the folder
-  is moved. Move the folder off that path, or run the verbs from a checkout that does not
-  keep it there. One more change comes with the same hardening: every verb but the `worktree` ones
+  is moved; the row and `init`'s note say so too. Move the folder off that path, or run the verbs
+  from a checkout that does not keep it there. The row warns only of a folder met on the way up
+  from the folder a verb runs in: one of that layout elsewhere in the tree, below the setup root,
+  meets no look, and the row says nothing of it. The last item under "Security" says what that
+  leaves. One more change comes with the same hardening: every verb but the `worktree` ones
   now drops the caller's `GIT_*` variables when it reads git, `handoff` included. An inherited
   `GIT_DIR` no longer points them at another repository, and a setup whose repository is named only
   by `GIT_DIR` reads as having none.
@@ -227,7 +235,7 @@ where git would read a bare repository.
   a child process, a file delete or overwrite, a network or registry call, or a token or secret
   name given a literal or an environment value. So does a code file whose lines could not be
   read. A `/st-quick` batch in that class moves to `/st-work` as it stands, with no size floor.
-- **Every git read the engine makes is pinned, and the engine looks at the folder before it
+- **Every git read a verb makes is pinned, and the engine looks at the folder before it
   starts git.** Up to 1.12.0 each verb that reads git ran plain `git` in the caller's
   environment: at the setup root, for `workspace sync` in each member's folder, and for the
   `worktree` verbs in the folder they are started in. `sync`, `workspace sync`, `check` and
@@ -258,14 +266,19 @@ where git would read a bare repository.
   a checkout cannot carry: a damaged `.git` folder of your own, on older git, or a git variable
   in the environment a `worktree` verb inherits. A fourth is wider, and a checkout can carry it:
   all of this is the engine's own git and no other. Git that a client's own tools, a flow's
-  session and its sub-agents, or your own shell start in such a folder is not pinned and takes no
-  look, and a refused folder does not stop `/st-quick` or `/st-work`, which go on with the
-  session's own git. `SECURITY.md` names this one with the others, and the one setting git
-  documents against it, which is yours to make and which the engine neither sets nor checks:
-  `safe.bareRepository` set to `explicit` in your user-level or system-level git configuration
-  (git 2.38 and later). Every git that reads that configuration then opens a bare repository only
-  where `--git-dir` or `GIT_DIR` names it, so git run inside a real bare repository has to name
-  it that way too. Where a folder is refused, the verbs report git
+  session and its sub-agents, or your own shell start in or under such a folder is not pinned and
+  takes no look. That does not take a refusal: the look is taken from the folder a verb runs in
+  and walks upward, so a committed folder of that shape elsewhere in the tree, below the setup
+  root, meets no look and no warning, and git that anything other than the engine starts in or
+  under it reads it. A folder the look does refuse does not stop `/st-quick` or `/st-work`
+  either, which go on with the session's own git. `SECURITY.md` names this one with the others,
+  and the one setting git documents against it, which is yours to make and which the engine
+  neither sets nor checks: `safe.bareRepository` set to `explicit` in your user-level or
+  system-level git configuration (git 2.38 and later). It covers both placements: every git that
+  reads that configuration then opens a bare repository only where `--git-dir` or `GIT_DIR` names
+  it, so git run inside a real bare repository has to name it that way too. The pinning is the
+  CLI verbs': the package's library function for the origin read, called with no runner passed,
+  still starts plain git, and `SECURITY.md` says so. Where a folder is refused, the verbs report git
   as not answering, as they do with no repository, and the `worktree` verbs refuse; the last
   item under "Upgrading from 1.12.0" says what that looks like.
 
@@ -571,8 +584,9 @@ where git would read a bare repository.
   git may only have been slow to answer the check, and that both verbs may still run in that case.
   It tells the causes apart with no git command that looks for a repository: `git --version` for the
   binary, and a `.git` entry found by name for the repository. Where the engine did not start git
-  because the folder or one above it has the layout of a bare repository, the row says that instead
-  and names no git command to run. The row stays a warning and no exit code moves. The README,
+  because the folder or one above it has the layout of a bare repository, the row says that instead,
+  names no git command to run, and says to start no flow there until the folder is moved, as the
+  note does. The row stays a warning and no exit code moves. The README,
   `docs/getting-started.md` and the troubleshooting page's `git-available` row say the same.
 
 ## [1.12.0] - 2026-10-08
