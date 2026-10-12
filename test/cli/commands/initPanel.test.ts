@@ -730,6 +730,63 @@ describe("renderInitPanel — security disclosure", () => {
     expect(output).toContain(".env.mcp");
     expect(output).toContain("github, filesystem");
   });
+
+  // Run 2026-10-11_release-1-14-0, fix/23. The line's tail is a claim about a repository, so it has
+  // one text per state of the git probe. Where the look the engine takes before it starts git kept
+  // the folder from git (the status's `reason`), the tail said "not a git repository yet" and "the
+  // rule takes effect on the first `git init`", under a note that says not to run git there. The
+  // three tails are compared whole: the first two are the texts they were, the third is new.
+  const ONE_ENTRY_HEAD =
+    "security: this line — .env.mcp (MCP server credentials) — was added to your .gitignore, so git " +
+    "leaves those files out of commits. Nothing else in your .gitignore is touched";
+  const REFUSED_TAIL =
+    ". git was not started here: this folder, or a folder above it, has the layout of a bare " +
+    "repository, so the engine did not hand it to git and cannot say what is tracked or ignored here. " +
+    "The rule takes effect wherever a repository holds this folder in its working tree, and the " +
+    ".stamity/ state directory is meant to be committed there.";
+
+  it("keeps the tail it had where git answers", () => {
+    const line = gitignoreLine({ dryRun: false, gitAvailable: true, entries: [".env.mcp"], mcpConfigured: false });
+
+    expect(line).toBe(`${ONE_ENTRY_HEAD}, and the rest of the .stamity/ state directory is committed on purpose.`);
+  });
+
+  it("keeps the tail it had where there is simply no repository", () => {
+    const line = gitignoreLine({ dryRun: false, gitAvailable: false, entries: [".env.mcp"], mcpConfigured: false });
+
+    expect(line).toBe(
+      `${ONE_ENTRY_HEAD}. This directory is not a git repository yet, so nothing is tracked or ignored ` +
+        "here at all: the rule takes effect on the first `git init`, and the .stamity/ state directory " +
+        "is meant to be committed once there is somewhere to commit it.",
+    );
+  });
+
+  it("states the cause and names no git command where the look before git refused the folder", () => {
+    const line = gitignoreLine({
+      dryRun: false,
+      gitAvailable: false,
+      gitReason: "bare-layout",
+      entries: [".env.mcp"],
+      mcpConfigured: false,
+    });
+
+    expect(line).toBe(`${ONE_ENTRY_HEAD}${REFUSED_TAIL}`);
+    expect(line).not.toContain("not a git repository yet");
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse"]) {
+      expect(line, `the line names ${call}`).not.toContain(call);
+    }
+  });
+
+  it("carries that cause from the panel's input to its security line", () => {
+    const refused = renderInitPanel(panelInput({ gitAvailable: false, gitReason: "bare-layout" }));
+    const plain = renderInitPanel(panelInput({ gitAvailable: false }));
+    const securityLine = (output: string): string => output.split("\n").find((row) => row.includes("security:")) ?? "";
+
+    expect(securityLine(refused).endsWith(REFUSED_TAIL)).toBe(true);
+    expect(securityLine(refused)).not.toContain("git init");
+    expect(securityLine(plain)).toContain("This directory is not a git repository yet");
+    expect(securityLine(plain)).toContain("the rule takes effect on the first `git init`");
+  });
 });
 
 describe("renderInitPanel — stack suggestions", () => {

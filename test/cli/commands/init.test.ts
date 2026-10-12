@@ -1292,6 +1292,99 @@ describe("init — the no-git note", () => {
     );
     expect(await readManifest(root)).toBeNull();
   });
+
+  // Run 2026-10-11_release-1-14-0, fix/23 and fix/24. Two more texts init prints at such a folder
+  // still gave the other cause: the security line under the note said "not a git repository yet"
+  // and "the rule takes effect on the first `git init`", and the question asked on "No git
+  // repository here (git did not answer, or this directory is not a repo)". Both now state the
+  // cause the note states, and no text of the run names a git command.
+  const GIT_CALLS = ["git init", "git status", "git diff", "git log", "git rev-parse"];
+  const REFUSED_SECURITY_TAIL =
+    ". git was not started here: this folder, or a folder above it, has the layout of a bare " +
+    "repository, so the engine did not hand it to git and cannot say what is tracked or ignored here. " +
+    "The rule takes effect wherever a repository holds this folder in its working tree, and the " +
+    ".stamity/ state directory is meant to be committed there.";
+  const PLAIN_SECURITY_TAIL =
+    ". This directory is not a git repository yet, so nothing is tracked or ignored here at all: " +
+    "the rule takes effect on the first `git init`, and the .stamity/ state directory is meant to " +
+    "be committed once there is somewhere to commit it.";
+  const REFUSED_QUESTION =
+    "git was not started here: this folder, or a folder above it, has the layout of a bare " +
+    "repository, so the engine did not hand it to git. Files written now have no revert path the " +
+    "engine could check. Continue? [Y/n] ";
+  const PLAIN_QUESTION =
+    "No git repository here (git did not answer, or this directory is not a repo). " +
+    "Files written now cannot be reverted with git. Continue? [Y/n] ";
+
+  function securityLines(stdout: string): string[] {
+    return stdout
+      .split("\n")
+      .map((line) => line.trimStart())
+      .filter((line) => line.startsWith("security:"));
+  }
+
+  it.each([
+    { name: "a real run", argv: ["-y"] },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y"] },
+  ])("states that cause on the security line there, and no text of the run names a git command, on $name", async ({ argv }) => {
+    const root = await makeShapedRepo();
+
+    const result = await runInit(root, argv);
+
+    expect(result.code).toBe(0);
+    const security = securityLines(result.stdout);
+    expect(security).toHaveLength(1);
+    const line = security[0] ?? "";
+    expect(line.endsWith(REFUSED_SECURITY_TAIL)).toBe(true);
+    expect(line).not.toContain("not a git repository yet");
+    expect(line).not.toContain("takes effect on the first");
+    for (const call of GIT_CALLS) {
+      expect(result.stdout, `the run names ${call}`).not.toContain(call);
+    }
+  });
+
+  // Everywhere else the security line is the text it was: no repository and no such layout.
+  it.each([
+    { name: "a real run", argv: ["-y"] },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y"] },
+  ])("keeps the security line as it was where there is simply no repository, on $name", async ({ argv }) => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, argv);
+
+    expect(result.code).toBe(0);
+    const security = securityLines(result.stdout);
+    expect(security).toHaveLength(1);
+    expect((security[0] ?? "").endsWith(PLAIN_SECURITY_TAIL)).toBe(true);
+  });
+
+  it("asks the question on that cause there, and Enter still takes the default and writes", async () => {
+    const root = await makeShapedRepo();
+
+    // Enter keeps the tools default; Enter again takes the question's default, yes.
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(REFUSED_QUESTION);
+    expect(result.stdout).not.toContain("No git repository here");
+    expect(result.stdout).not.toContain("not a repo)");
+    expect(countConfirmations(result.stdout)).toBe(1);
+    for (const call of GIT_CALLS) {
+      expect(result.stdout, `the run names ${call}`).not.toContain(call);
+    }
+    expect(await readManifest(root)).not.toBeNull();
+  });
+
+  it("keeps the question as it was where there is simply no repository", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(PLAIN_QUESTION);
+    expect(countConfirmations(result.stdout)).toBe(1);
+    expect(await readManifest(root)).not.toBeNull();
+  });
 });
 
 // ── Hooks-planner findings ─────────────────────────────────────────

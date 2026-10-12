@@ -294,12 +294,27 @@ async function askMigrate(gate: PromptGate, promptIo: PromptIo): Promise<Migrate
  * without asking, because that is what those inputs mean and because init
  * creates files rather than replacing any — but the disclosure below prints on
  * every one of those runs, which is the half that was missing.
+ *
+ * Where the look the engine takes before it starts git kept this folder from
+ * git (`reason`, the status's own), the question asks on that cause, in the
+ * words of the note and the refusal that follow it ({@link noGitNote}), and
+ * names no git command (fix/24): the operator answered on "not a repo", and the
+ * next text printed said otherwise. The answer taken, its default and what
+ * each answer does are the same on both branches.
  */
-async function askProceedWithoutGit(gate: PromptGate, promptIo: PromptIo): Promise<boolean> {
+async function askProceedWithoutGit(
+  gate: PromptGate,
+  promptIo: PromptIo,
+  reason: WorkingTreeStatus["reason"],
+): Promise<boolean> {
   return await confirm(gate, promptIo, {
     question:
-      "No git repository here (git did not answer, or this directory is not a repo). " +
-      "Files written now cannot be reverted with git. Continue?",
+      reason === "bare-layout"
+        ? "git was not started here: this folder, or a folder above it, has the layout of a bare " +
+          "repository, so the engine did not hand it to git. Files written now have no revert " +
+          "path the engine could check. Continue?"
+        : "No git repository here (git did not answer, or this directory is not a repo). " +
+          "Files written now cannot be reverted with git. Continue?",
     defaultYes: true,
   });
 }
@@ -789,7 +804,7 @@ function renderDryRun(
   carry: CarryReport | null,
   residue: MigrationResidue | undefined,
   notes: readonly string[],
-  gitAvailable: boolean,
+  git: WorkingTreeStatus,
 ): void {
   const { io, palette } = ctx;
   io.out(`${palette.bold("Dry run")} — nothing was written. A real run would:\n`);
@@ -807,7 +822,8 @@ function renderDryRun(
   io.out(
     `  ${gitignoreLine({
       dryRun: true,
-      gitAvailable,
+      gitAvailable: git.available,
+      ...(git.reason === undefined ? {} : { gitReason: git.reason }),
       entries: REQUIRED_GITIGNORE_ENTRIES,
       mcpConfigured: mcpServers.length > 0,
     })}\n`,
@@ -1042,7 +1058,7 @@ export const initCommand: CommandModule = {
     // The no-repository gate, LAST of the questions and still before the first
     // byte: an operator who declines has answered about this run's whole write,
     // and an abort here leaves the directory exactly as it was found.
-    if (!git.available && !alreadyInitialised && !(await askProceedWithoutGit(gate, ctx.promptIo))) {
+    if (!git.available && !alreadyInitialised && !(await askProceedWithoutGit(gate, ctx.promptIo, git.reason))) {
       closePrompts(ctx.promptIo);
       // Where the engine's look kept this folder from git, the refusal states
       // that cause and names no git command, as the note does ({@link noGitNote}).
@@ -1178,7 +1194,7 @@ export const initCommand: CommandModule = {
     }
 
     if (ctx.dryRun) {
-      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git.available);
+      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git);
     } else {
       for (const note of notes) ctx.io.out(`${note}\n`);
       // The mark, once, on the one surface that is a first screen for a person.
@@ -1209,6 +1225,7 @@ export const initCommand: CommandModule = {
           mcpServers,
           palette: ctx.palette,
           gitAvailable: git.available,
+          ...(git.reason === undefined ? {} : { gitReason: git.reason }),
           predecessorDetected: predecessor !== null,
           ...(residue === undefined ? {} : { residue }),
           // The live analysis the plan already carries, classified into

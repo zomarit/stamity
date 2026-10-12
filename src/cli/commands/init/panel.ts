@@ -20,6 +20,7 @@ import {
   REVIEW_GATE_TEMP_INFIX,
   STATE_DIR,
 } from "../../../types/markers.ts";
+import type { WorkingTreeStatus } from "../../engine/gitStatus.ts";
 import { packageCommand } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { InitApplyReport } from "./apply.ts";
@@ -74,6 +75,13 @@ export interface InitPanelInput {
    * repository and are false where there is none.
    */
   gitAvailable?: boolean;
+  /**
+   * Why git did not answer, where the probe knows (`readWorkingTreeStatus().reason`):
+   * `"bare-layout"` where the look the engine takes before it starts git kept
+   * this folder from git. Absent everywhere else. Read by the security
+   * disclosure beside {@link InitPanelInput.gitAvailable}.
+   */
+  gitReason?: WorkingTreeStatus["reason"];
   /**
    * Whether a previous setup was found, whatever the operator then chose to do
    * with it. Read by {@link detectedLabel}, which must not call a repo carrying
@@ -643,6 +651,8 @@ export interface GitignoreLineInput {
   dryRun: boolean;
   /** Whether git answers for this directory; see {@link InitPanelInput.gitAvailable}. */
   gitAvailable?: boolean;
+  /** Why it does not, where the probe knows; see {@link InitPanelInput.gitReason}. */
+  gitReason?: WorkingTreeStatus["reason"];
   /**
    * The entries named. A live run passes exactly what it appended
    * (`InitApplyReport.gitignoreAdded`); a preview, which writes nothing and so
@@ -694,11 +704,28 @@ export function gitignoreLine(input: GitignoreLineInput): string {
   // commits that cannot happen. The rule file is still written (it is an
   // ordinary file, and it is what makes the guarantee true the moment a repo
   // exists), so the branch requalifies the promise rather than dropping it.
-  return gitAvailable
-    ? `${head}, and the rest of the ${STATE_DIR}/ state directory is committed on purpose.`
-    : `${head}. This directory is not a git repository yet, so nothing is tracked or ignored ` +
-        `here at all: the rule takes effect on the first \`git init\`, and the ${STATE_DIR}/ ` +
-        `state directory is meant to be committed once there is somewhere to commit it.`;
+  if (gitAvailable) {
+    return `${head}, and the rest of the ${STATE_DIR}/ state directory is committed on purpose.`;
+  }
+  // Where the look the engine takes before it starts git kept this folder from
+  // git, "not a git repository yet" is not known to be true and "the first
+  // `git init`" is the wrong step: inside a real checkout it nests a
+  // repository in the folder the engine had just kept from git. The tail
+  // states the cause init's note states (`../init.ts::noGitNote`), says what
+  // the engine therefore cannot say, and names no git command (fix/23).
+  if (input.gitReason === "bare-layout") {
+    return (
+      `${head}. git was not started here: this folder, or a folder above it, has the layout of a ` +
+      `bare repository, so the engine did not hand it to git and cannot say what is tracked or ` +
+      `ignored here. The rule takes effect wherever a repository holds this folder in its working ` +
+      `tree, and the ${STATE_DIR}/ state directory is meant to be committed there.`
+    );
+  }
+  return (
+    `${head}. This directory is not a git repository yet, so nothing is tracked or ignored ` +
+    `here at all: the rule takes effect on the first \`git init\`, and the ${STATE_DIR}/ ` +
+    `state directory is meant to be committed once there is somewhere to commit it.`
+  );
 }
 
 /** Credential disclosure, shown only when MCP servers are configured. */
@@ -803,6 +830,7 @@ export function renderInitPanel(input: InitPanelInput): string {
       `  ${gitignoreLine({
         dryRun: false,
         gitAvailable: input.gitAvailable ?? true,
+        ...(input.gitReason === undefined ? {} : { gitReason: input.gitReason }),
         entries: report.gitignoreAdded,
         mcpConfigured: mcpServers.length > 0,
       })}`,
