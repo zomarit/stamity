@@ -33,20 +33,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Board writes go to one linked repository, and board text never drives them.** Every write
-  `/st-board` makes names the one repository the link records, never the checkout's default, and
-  a link writes only after a check through `gh` finds `admin` or `write` permission for the
-  acting account and, on a Projects board, the right to update the project; a failed or missing
-  check leaves the link read-only. Item, comment and pull-request text is data under the
-  injection-screening rule, reported by class and position and never followed. Where the text's
-  repository or the linked one is public, text from an author without `admin` or `write`
+- **Board writes go to one linked repository, and board text never drives them.** Every `gh issue`
+  and `gh api` write `/st-board` makes names the one repository the link records, never the
+  checkout's default, and a link writes only after a check through `gh` finds `admin` or `write`
+  permission for the acting account and, on a Projects board, the right to update the project; a
+  failed or missing check leaves the link read-only. Item, comment and pull-request text is data
+  under the injection-screening rule, reported by class and position and never followed. Where the
+  text's repository or the linked one is public, text from an author without `admin` or `write`
   permission never supplies a write's content or trigger. A write carries only titles, criteria,
   labels, `Ref:` values, phase or outcome words and ids, never file contents, logs, environment
   values or credentials. Every filed item ends with a `<!-- stamity:item <key> -->` marker, and
   only a marker in an issue the account wrote is matched, so a planted one is reported as
-  `marker-forgery`. The guards are command text the model follows; the new adversarial eval case
-  `board-item-directive-is-data` measures them. `SECURITY.md` describes them under "Network and
-  data handling".
+  `marker-forgery`. The guards are command text the model follows. The new adversarial eval case
+  `board-item-directive-is-data` measures three of them: a planted directive is reported by class
+  and position and never followed, an author without `admin` or `write` permission on a public
+  repository drives no write, and no file contents reach a write. It does not test the
+  linked-repository target, the permission check before a link writes, or marker matching.
+  `SECURITY.md` describes them under "Network and data handling".
 - **`/st-work`'s close writes the deferral inbox through the engine.** The close no longer edits
   `.stamity/inbox.md` with the client's file tools, so a whole-file read before an edit no longer
   brings a withheld row's text into the session; it pipes rows to `stamity ledger inbox-write`,
@@ -65,9 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   write the preview did not list is not made, and a write the board never makes (a deletion, an
   edit to a completed item, a label the repository lacks, another repository or board) stops
   with `BLOCKED_DEPENDENCY` and travels as a proposal. A filed item carries a marker, so a retry
-  updates it instead of filing it twice. Setup no longer opens write channels one by one: it
-  records the one repository a Projects board writes to, and its post-merge advisory names what
-  GitHub does to an item by itself. A Projects board needs the `project` token scope
+  updates it instead of filing it twice. For chat intake the marker holds within one run only,
+  so a chat retry in a new run can file the item again. Setup no longer opens write channels one
+  by one: it records the one repository a Projects board writes to, and its post-merge advisory
+  names what GitHub does to an item by itself. A Projects board needs the `project` token scope
   (`gh auth refresh -s project`).
 - **`--move` lets `/st-board` change where an item stands.** Status stays put by default. With
   `--move`, forward transitions apply as the run reaches them, and a backward transition, a close

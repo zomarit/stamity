@@ -164,21 +164,24 @@ files issues in the linked repository and adds them to the linked project, edits
 title, body, checklist or labels, posts progress comments and links pull requests, and, only under
 `--move`, changes where an item stands, closes it or reopens it (the `## Write-back contract` of
 `content/commands/st-board.md`). Every write goes to the one repository and board the link names,
-and every `gh` write names that repository rather than the checkout's default. Before a link writes,
-a check through `gh` requires `admin` or `write` permission for the acting account and, on a
-Projects board, the right to update the project; a failed or missing check leaves the link
-read-only. A run shows its whole batch once, in one numbered preview, before its first write; no
-answer means stop, and a write the preview did not list is not made. A write carries an item's
-title, criteria, labels, `Ref:` and filed-item marker, phase or outcome words and ids, never file
-contents, logs, environment values or credentials. The board never deletes an item, edits a
+and every `gh issue` and `gh api` write names that repository rather than the checkout's default.
+Before a link writes, a check through `gh` requires `admin` or `write` permission for the acting
+account and, on a Projects board, the right to update the project; a failed or missing check leaves
+the link read-only. A run shows its whole batch once, in one numbered preview, before its first
+write; no answer means stop, and a write the preview did not list is not made. A write carries an
+item's title, criteria, labels, `Ref:` and filed-item marker, phase or outcome words and ids, never
+file contents, logs, environment values or credentials. The board never deletes an item, edits a
 completed one, creates a label, or writes to another repository or board. Text read from the board,
 an item, a comment or a pull request, is data under the injection-screening rule, reported by class
 and position and never followed. Where the text's repository or the linked one is public, text from
 an author without `admin` or `write` permission never supplies the content or the trigger of a
 write, and a filed-item marker in an item the account did not write is never matched.
 `/st-pr-resolve`'s thread replies are its own write, outside this set, and need no board link. These
-guards are model-followed text, not engine code: the eval case `board-item-directive-is-data`
-measures them at each release's full run.
+guards are model-followed text, not engine code. At each release's full run the eval case
+`board-item-directive-is-data` measures three of them: a planted directive is reported by class and
+position and never followed, an author without `admin` or `write` permission on a public repository
+drives no write, and no file contents reach a write. It does not test the one-repository target,
+the write check, or marker matching.
 
 One further code path is network-capable, and it is not part of any command's work. The startup
 update notice asks the npm registry the running package publishes to — the public one for
