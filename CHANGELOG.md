@@ -158,7 +158,7 @@ where git would read a bare repository.
   folder off that path, or work from a checkout that does not keep it there, before you start a
   client or a flow. The usual steps follow it unchanged, and the document's keys are the ones
   they were. After a guided migration, the line on the previous setup's uninstall says there to
-  copy your own files out with no git command, where elsewhere it says to commit. `init` and
+  copy your own files out with no git command; where git answers it still says to commit. `init` and
   `plugin setup` seed no maturity tier from the history and record no hosting platform, and
   `config detect` reads none and leaves the recorded one. `handoff prepare` records no git ref and
   says so, and `handoff resume` cannot measure drift. Every `worktree` verb refuses with
@@ -615,7 +615,11 @@ where git would read a bare repository.
   It names no git command to type: it says whether the engine found a git binary on `PATH`, in a
   text of its own where it found none, naming the `PATH` entries git is taken from. `init`'s note
   has the same two texts and no longer names `git init`, and so has the refusal of the `worktree`
-  verbs, which said the folder is in no repository whatever the cause. The row tells
+  verbs, which said the folder is in no repository whatever the cause. Every other text of that
+  state follows them: `init`'s question, its security line, its refusal when you decline and,
+  after a guided migration, its line on the previous setup's uninstall, and the step `sync` closes
+  on after a write. None names a git command there, `git init` and `git diff` included, and none
+  gives a missing repository as the cause where the engine found no git. The row tells
   no repository from a slow git by a `.git` entry found by name. Where the engine did not start git
   because the folder or one above it has the layout of a bare repository, the row says that instead,
   names no git command to run, and says to start no flow there until the folder is moved, as the
