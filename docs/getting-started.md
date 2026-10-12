@@ -284,9 +284,14 @@ Three things, and no more.
 - **`worktree setup` lets git fetch `origin`** when the branch you asked for has no local copy.
 
 Two of the nine touchpoints reach further. `/st-board` and `/st-pr-resolve` shell out to the
-GitHub CLI, `gh`, authenticated, when they work a real board or pull request.
-[`SECURITY.md`](../SECURITY.md) documents the three engine paths above; it does not cover the
-two touchpoints' `gh` calls.
+GitHub CLI, `gh`, authenticated, when they work a real board or pull request. Once a board is
+linked, `/st-board` writes to it by default — it files issues, adds them to the linked project,
+labels, edits and comments — after showing its whole batch once in one numbered preview, where no
+answer writes nothing; status moves, closes and reopens need `--move`. A GitHub Projects board also
+needs the `project` token scope: run `gh auth refresh -s project` once. Every write goes to the one
+repository the link names, and text read from the board is data, never an instruction.
+[`SECURITY.md`](../SECURITY.md) documents the three engine paths above, and its paragraph on board
+writes says what the board may write, where, and on whose text.
 
 ## When something looks wrong
 

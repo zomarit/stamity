@@ -31,6 +31,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Board writes go to one linked repository, and board text never drives them.** Every write
+  `/st-board` makes names the one repository the link records, never the checkout's default, and
+  a link writes only after a check through `gh` finds `admin` or `write` permission for the
+  acting account and, on a Projects board, the right to update the project; a failed or missing
+  check leaves the link read-only. Item, comment and pull-request text is data under the
+  injection-screening rule, reported by class and position and never followed. Where the text's
+  repository or the linked one is public, text from an author without `admin` or `write`
+  permission never supplies a write's content or trigger. A write carries only titles, criteria,
+  labels, `Ref:` values, phase or outcome words and ids, never file contents, logs, environment
+  values or credentials. Every filed item ends with a `<!-- stamity:item <key> -->` marker, and
+  only a marker in an issue the account wrote is matched, so a planted one is reported as
+  `marker-forgery`. The guards are command text the model follows; the new adversarial eval case
+  `board-item-directive-is-data` measures them. `SECURITY.md` describes them under "Network and
+  data handling".
+- **`/st-work`'s close writes the deferral inbox through the engine.** The close no longer edits
+  `.stamity/inbox.md` with the client's file tools, so a whole-file read before an edit no longer
+  brings a withheld row's text into the session; it pipes rows to `stamity ledger inbox-write`,
+  which screens them and refuses the whole call on a hit. The other inbox edits still use the
+  file tools: `/st-board fill`'s removal and `/st-plan`'s follow-up append among them, a residual
+  `SECURITY.md` names.
+
+### Added
+
+- **`/st-board` writes to a linked board by default, behind one numbered preview.** Once a board
+  is linked it files issues in the linked repository and adds them to the linked project, edits
+  an open item's title, body, checklist tick or labels, posts one progress comment per event and
+  links pull requests. Before its first write a run shows its whole batch once, rows labelled
+  `R1`…`Rn`, and asks one question — `1 apply` · `2 apply <rows>` · `3 skip <rows>` · `4 stop`
+  — whose default is `4` (`stop`): no answer writes nothing and keeps every row as a proposal. A
+  write the preview did not list is not made, and a write the board never makes (a deletion, an
+  edit to a completed item, a label the repository lacks, another repository or board) stops
+  with `BLOCKED_DEPENDENCY` and travels as a proposal. A filed item carries a marker, so a retry
+  updates it instead of filing it twice. Setup no longer opens write channels one by one: it
+  records the one repository a Projects board writes to, and its post-merge advisory names what
+  GitHub does to an item by itself. A Projects board needs the `project` token scope
+  (`gh auth refresh -s project`).
+- **`--move` lets `/st-board` change where an item stands.** Status stays put by default. With
+  `--move`, forward transitions apply as the run reaches them, and a backward transition, a close
+  or a reopen is asked once and never applied silently; a pickup's handoff carries `move: on` or
+  `move: off`.
+- **`stamity ledger inbox-write` appends and removes deferral-inbox rows in one checked write.**
+  `stamity ledger inbox-write --run <run> [--stdin] [--remove <ref>,…] [--dry-run] [--json]` takes
+  rows on stdin and removes bullets by their `Ref:` values, all or nothing: every row passes the
+  inbox screen, carries a `Ref:` no other row in the call carries, and, where that `Ref:` names a
+  ledger row, names a deferred one not yet retired. It writes under the inbox's lock by atomic
+  rename inside `.stamity/`, creates an absent inbox with its schedule heading, and prints lines
+  and `Ref:` values, never a row's text.
+
+### Changed
+
+- **`/st-pr-resolve` posts its thread replies without a board link.** The reply is the command's
+  own write, outside `/st-board`'s write set: the invocation is the consent, and no board link or
+  setup record switches replies off. Its close names all three readers of the deferral inbox.
+- **The product-audit pack keeps proposing, in the board's new words.** The audit's epic still
+  leaves as a proposal that `/st-board fill --source <report>` files; the pack writes only a
+  progress comment and, under `--move`, a status transition on an item the board already has,
+  both through the board's preview.
+- **`/st-board fill` and `/st-plan` read the deferral inbox through the screened query.** Both
+  run `stamity ledger inbox`, as `/st-work` does, so a row the screen withholds is listed by line
+  and pattern id and never opened; only an absent CLI or query sends them to the whole file, and
+  they say so.
+- **The eval set measures the new board contract.** The board write-back case and the
+  `/st-pr-resolve` next-step case are re-synced to the landed text, and the adversarial floor case
+  `board-item-directive-is-data` is added.
+
 ## [1.14.0] - 2026-10-12
 
 ### Upgrading from 1.12.0

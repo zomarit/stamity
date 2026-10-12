@@ -109,8 +109,8 @@ closing in a single pass. A bug with no known cause starts at `/st-debug` and re
 Every flow that changes product code ends on the charter's verification gates. Here that is `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`, the full gate this repository's charter declares: its test step is the coverage run, which holds the per-file coverage floors that a plain `npm run test` never evaluates.
 `/st-work` and `/st-quick` run them. `/st-debug`, `/st-rework` and `/st-pr-resolve` reach them through `/st-work` or a `test-runner` spawn.
 `/st-quick` delegates its gates even though it applies its own edits inline. This holds at every tier and in every lane that edits code. `/st-spec`,
-`/st-plan` and `/st-board` write records rather than product files, so they end on that artifact or on a handoff into `/st-work`. A run that cannot
-reach green ships a `Not done:` list naming each open gap.
+`/st-plan` and `/st-board` write records rather than product files, so they end on that artifact or on a handoff into `/st-work`; `/st-board` also
+writes to a linked board, behind its one preview. A run that cannot reach green ships a `Not done:` list naming each open gap.
 
 ## Running two changes at once
 
