@@ -55,9 +55,11 @@ export function parsePorcelainStatus(output: string): { dirty: boolean; changedC
  * git failure collapses to `available: false` with a clean-looking zero count,
  * which callers must read as "unknown", not "clean".
  *
- * `cwd` is the setup root, and the default runner is {@link execGitCheck}: a
- * folder a repository writer committed in the shape of a bare repository never
- * answers, and no configured file-system monitor command runs (review/112).
+ * `cwd` is the setup root, and the default runner is {@link execGitCheck}: for
+ * a tree git checked out, a folder a repository writer committed in the shape
+ * of a bare repository does not answer, but for what that runner's look leaves
+ * ({@link gitCheckRunner}), and no configured file-system monitor command runs
+ * (review/112).
  * Where that runner's look kept the folder from git, the status says so in its
  * `reason`, so a caller can name that cause and send nobody to run git there.
  */
@@ -146,11 +148,13 @@ export interface GitCheckRunnerOptions {
  * config says (`../../merge/safeWrite.ts::runGitCheck`).
  *
  * A git older than 2.38 ignores the first option, so the runner looks before
- * it starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would
- * meet a folder shaped like a bare repository, no git is started and the call
- * throws as it does when git refuses the folder, exit status 128 included. That
- * error alone is marked `keptFromGit`, which {@link readWorkingTreeStatus} and
- * {@link keptFromGit}'s other callers read.
+ * it starts git (`gitDiscoveryMeetsBareShape`): where that look finds git's
+ * discovery would meet a folder shaped like a bare repository, no git is
+ * started and the call throws as it does when git refuses the folder, exit
+ * status 128 included. That error alone is marked `keptFromGit`, which
+ * {@link readWorkingTreeStatus} and {@link keptFromGit}'s other callers read.
+ * The look holds for a tree git checked out, and what it leaves is said on it
+ * (`../../merge/safeWrite.ts::gitDiscoveryMeetsBareShape`).
  *
  * Exported so every other git read of the CLI runs the same construction:
  * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's
