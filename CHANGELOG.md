@@ -291,22 +291,26 @@ where git would read a bare repository.
   rights, by every verb that reads git, the ones the item above lists. Such a file can be committed,
   so it can arrive on a branch someone else wrote, and `check` is the verb a workflow runs on a pull
   request. macOS and Linux do not look in that folder for a bare name; they were affected only where
-  your own `PATH` holds an empty entry or a relative one such as `.`, which names it. Each of the
-  four places that start git now resolves it once per folder and `PATH`, to an absolute path, and
-  starts that path: the verbs' pinned runner, the tracked-and-clean check before an overwrite, the
-  `worktree` verbs' runner, and the library's origin read called with no runner. The walk takes only
-  a `PATH` entry that is a full path, skips an empty entry, a relative one and an entry that is the
-  folder git runs in, and on Windows tries git's name with `.com` added, then with `.exe`. Git found
-  on `PATH` is the git that ran before. There is nothing to set: upgrade. If you ran an older
-  release on Windows in a checkout of work you had not read, look in the folder you ran it in for a
-  file of either name, and if one is there, treat it as a program that ran with your rights. One
-  thing can change for you: where your only git sits behind an entry the walk skips, the verbs now
-  answer as on a machine with no git, and `check`'s `git-available` row, `init`'s note and the
-  `worktree` verbs' refusal say the engine found no git to start and which entries it takes git
-  from; put git's folder on `PATH` by its full path. This covers the folder git runs in and nothing
-  wider. The walk takes the `PATH` the engine is started with as given, so an entry that is a full
-  path to some other folder is searched as it stands, a folder inside the checkout included;
-  `SECURITY.md` carries the row and its residual.
+  your own `PATH` names that folder: by an empty entry, by a relative one such as `.`, or by an
+  entry that is its full path. Each of the four places that start git now resolves it once per
+  folder and `PATH`, to an absolute path, and starts that path: the verbs' pinned runner, the
+  tracked-and-clean check before an overwrite, the `worktree` verbs' runner, and the library's
+  origin read called with no runner. The walk takes only a `PATH` entry that is a full path, skips
+  an empty entry, a relative one and an entry that is the folder git runs in, and on Windows tries
+  git's name with `.com` added, then with `.exe`. Git found on `PATH` is the git that ran before.
+  There is nothing to set: upgrade. If you ran an older release in a checkout of work you had not
+  read, on Windows, or on macOS or Linux with a `PATH` that named the folder, look in each folder
+  git ran in: the setup root, each member's folder if you ran `workspace sync`, and the folder you
+  started a `worktree` verb in. On Windows look for a file of either name, on macOS and Linux for
+  one named `git`. Look on the branches you had checked out then as well, since such a file leaves
+  the folder when you switch away from its branch. If one is there, treat it as a program that ran
+  with your rights. One thing can change for you: where your only git sits behind an entry the walk
+  skips, the verbs now answer as on a machine with no git, and `check`'s `git-available` row,
+  `init`'s note and the `worktree` verbs' refusal say the engine found no git to start and which
+  entries it takes git from; put git's folder on `PATH` by its full path. This covers the folder
+  git runs in and nothing wider. The walk takes the `PATH` the engine is started with as given, so
+  an entry that is a full path to some other folder is searched as it stands, a folder inside the
+  checkout included; `SECURITY.md` carries the row and its residual.
 
 ### Added
 
