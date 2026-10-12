@@ -113,6 +113,7 @@ async function write(
   dir: TempDirHandle,
   args: readonly string[],
   stdin: readonly string[] = [],
+  stdinIsTTY = false,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -131,7 +132,7 @@ async function write(
       },
     },
     promptIo: { input, output: new Writable({ write: (_chunk, _encoding, callback) => callback() }) },
-    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: false },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY },
     clock: { now: () => NOW },
   });
   return { code, stdout: stdout.join(""), stderr: stderr.join("") };
@@ -204,6 +205,24 @@ describe("stamity ledger inbox-write — appends (REQ-FLOW-078 criteria 1 and 4)
     expect(again.code, again.stderr).toBe(0);
     expect(again.stdout).toBe(`already-filed 5 ${ref(1)}\n`);
     expect(await readText(dir, INBOX_PATH)).toBe(once);
+  });
+
+  // S22, review/56: a bullet already carrying the row's `Ref:` stands for it only when it is the same row.
+  it("refuses the whole call when a bullet carries the row's Ref: with other identity fields, naming its line only", async () => {
+    const dir = tempDir();
+    const planted = `- Minor · src/b.ts:9 · quiet planted words · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`;
+    const before = `${SCHEDULE_RULE_HEADING}\n\n${planted}\n`;
+    await seed(dir, { [INBOX_PATH]: before, [ledgerOf(RUN)]: `${ledgerRow(1)}\n${ledgerRow(2)}\n` });
+
+    const result = await write(dir, ["--stdin"], [bullet(2), bullet(1)]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "stdin:2: carries the `Ref:` inbox line 3 carries, with another severity, location, description or source",
+    );
+    expectNoRowText(result, "planted", "src/b.ts");
+    expect(await readText(dir, INBOX_PATH)).toBe(before);
   });
 
   it("lets the lock and the re-read under it settle two concurrent writes of one row: one appends, one finds it filed", async () => {
@@ -478,6 +497,52 @@ describe("stamity ledger inbox-write — the inbox and the ledgers are read no-f
     expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n`);
   });
 
+  // review/55: the ledger a `Ref:` names is read by a no-follow, size-bounded open, as the inbox is.
+  it.skipIf(WINDOWS)("refuses a Ref: into another run's ledger that is a hard link", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: "", [ledgerOf(OTHER_RUN)]: `${ledgerRow(4, {}, OTHER_RUN)}\n` });
+    linkSync(dir.path(ledgerOf(OTHER_RUN)), dir.path("twin.jsonl"));
+
+    const result = await write(dir, ["--stdin"], [bullet(4, "by: 2026-11-01", ref(4, OTHER_RUN))]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("stdin:1: the ledger its `Ref:` names is a hard link");
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n`);
+  });
+
+  it("refuses a Ref: into a ledger over the 4 MiB read ceiling as a refusal, unread, and writes nothing", async () => {
+    const dir = tempDir();
+    const padding = `${"p".repeat(4_194_304)}\n`;
+    await seed(dir, {
+      [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`,
+      [ledgerOf(RUN)]: "",
+      [ledgerOf(OTHER_RUN)]: `${ledgerRow(4, {}, OTHER_RUN)}\n${padding}`,
+    });
+
+    const result = await write(dir, ["--stdin"], [bullet(4, "by: 2026-11-01", ref(4, OTHER_RUN))]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("stdin:1: the ledger its `Ref:` names is over the 4194304 byte read ceiling");
+    expectNoRowText(result);
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n`);
+  });
+
+  it("reads a Ref:'s ledger at the 4 MiB read ceiling exactly", async () => {
+    const dir = tempDir();
+    const row = `${ledgerRow(4, {}, OTHER_RUN)}\n`;
+    await seed(dir, {
+      [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`,
+      [ledgerOf(RUN)]: "",
+      // Bytes, not characters: the row's evidence carries a dash of three bytes.
+      [ledgerOf(OTHER_RUN)]: `${row}${"p".repeat(4_194_304 - Buffer.byteLength(row, "utf8") - 1)}\n`,
+    });
+
+    const result = await write(dir, ["--stdin"], [bullet(4, "by: 2026-11-01", ref(4, OTHER_RUN))]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`appended 5 ${ref(4, OTHER_RUN)}\n`);
+  });
+
   it("refuses an inbox over the 1 MiB ceiling, and a write that would take it over", async () => {
     const dir = tempDir();
     const padding = `<!-- ${"p".repeat(1_048_576 - 200)} -->\n`;
@@ -618,16 +683,43 @@ describe("stamity ledger inbox-write — usage and the refusal document (review/
     expect(result.stdout).toBe("");
   });
 
-  it("says so on stderr when stdin holds no rows and nothing is removed, and writes nothing", async () => {
+  // TEST CHANGE, justified (2026-10-12, REQ-FLOW-078): this case asserted exit 0, an empty stdout
+  // and the stderr note "ledger inbox-write: no rows on stdin and nothing to remove; nothing
+  // written" for a stdin of blank lines. A close that reads the exit code alone took that call as
+  // landed (review/52), so a `--stdin` that brings no row, piped empty or left on a terminal, with
+  // no `--remove`, is now a validation refusal naming that nothing was given.
+  it.each([
+    ["a piped stdin of blank lines", ["", "  "], false],
+    ["an empty pipe", [], false],
+    ["a terminal stdin", [], true],
+  ] as const)("refuses --stdin with no --remove when it brings no row, from %s, and writes nothing", async (_label, stdin, tty) => {
     const dir = tempDir();
     await seed(dir, { [ledgerOf(RUN)]: "" });
 
-    const result = await write(dir, ["--stdin"], ["", "  "]);
+    const result = await write(dir, ["--stdin"], stdin, tty);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("ledger inbox-write was given nothing to write: no row on stdin and no --remove");
+    expect(result.stderr).not.toContain("nothing written");
+    await expect(stat(dir.path(INBOX_PATH))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each([
+    ["an empty pipe", false],
+    ["a terminal stdin", true],
+  ] as const)("still removes with --stdin beside --remove when stdin brings no row, from %s", async (_label, tty) => {
+    const dir = tempDir();
+    await seed(dir, {
+      [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n\n${bullet(1)}\n`,
+      [ledgerOf(RUN)]: `${ledgerRow(1, { state: "fixed" })}\n`,
+    });
+
+    const result = await write(dir, ["--stdin", "--remove", ref(1)], [], tty);
 
     expect(result.code, result.stderr).toBe(0);
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("ledger inbox-write: no rows on stdin and nothing to remove; nothing written");
-    await expect(stat(dir.path(INBOX_PATH))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(result.stdout).toBe(`removed 3 ${ref(1)}\n`);
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n\n`);
   });
 
   it("places a --remove and an inbox problem by their own src in the --json refusal, and a stdin one by none", async () => {

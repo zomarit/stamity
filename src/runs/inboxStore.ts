@@ -474,6 +474,11 @@ export function inboxBlockHead(runId: string, today: string): string {
 /** The order an edit's problems are listed in: the inbox's own, then the rows', then the removals'. */
 const PROBLEM_ORDER: Readonly<Record<InboxEditProblem["where"], number>> = { inbox: 0, row: 1, remove: 2 };
 
+/** Whether two rows are one row by the identity fields `/st-board`'s item marker hashes; the `Ref:` is compared by the caller. */
+function sameIdentity(a: InboxRow, b: InboxRow): boolean {
+  return a.severity === b.severity && a.location === b.location && a.description === b.description && a.source === b.source;
+}
+
 /** A line without the `\r` a CRLF file leaves on it once split at `\n`. */
 function bare(line: string): string {
   return line.endsWith("\r") ? line.slice(0, -1) : line;
@@ -491,8 +496,13 @@ function bare(line: string): string {
  * heading at most once.
  *
  * A row whose `Ref:` a bullet that stays already carries is `already-filed`
- * and not written again; so is a row a removal of its own `Ref:` would replace
- * with the same bytes, which keeps a repeated re-date a no-op. A removal and a
+ * and not written again, when that bullet is the same row by its identity
+ * fields — severity, location, description and `source:`, the fields
+ * `/st-board`'s item marker hashes, so a schedule field may differ; a staying
+ * bullet carrying the `Ref:` with any of them different refuses the edit,
+ * naming its line, since a planted bullet would otherwise stand for the row
+ * (S22). A row a removal of its own `Ref:` would replace with the same bytes
+ * is `already-filed` too, which keeps a repeated re-date a no-op. A removal and a
  * row sharing a `Ref:` are a re-date: the bullet leaves, and the row lands at
  * the end. Rows land at the end of the file: the heading first where it is
  * absent, then the run's block of today when the file's last block opens with
@@ -551,9 +561,24 @@ export function editInboxText(
 
   // The inbox's own bullets by `Ref:`, each at its 0-based index.
   const held = new Map<string, number[]>();
+  const heldRows = new Map<string, InboxRow[]>();
   for (const row of parseInbox(lines.map(bare).join("\n")).rows) {
     if (row.ref === null) continue;
     held.set(row.ref, [...(held.get(row.ref) ?? []), row.line - 1]);
+    heldRows.set(row.ref, [...(heldRows.get(row.ref) ?? []), row]);
+  }
+  // A staying bullet stands for a row only when it is that row (S22): one carrying its `Ref:` as another row refuses.
+  const removals = new Set(req.remove);
+  for (const row of handed.rows) {
+    if (row.ref === null || removals.has(row.ref)) continue;
+    const others = (heldRows.get(row.ref) ?? []).filter((stays) => !sameIdentity(stays, row)).map((stays) => stays.line);
+    if (others.length === 0) continue;
+    const named = others.length === 1 ? `inbox line ${others[0] ?? 0} carries` : `inbox lines ${others.join(" and ")} carry`;
+    problems.push({
+      where: "row",
+      line: row.line - 1,
+      message: `carries the \`Ref:\` ${named}, with another severity, location, description or source, so that bullet is not this row`,
+    });
   }
   const removing = new Map<string, number>();
   [...new Set(req.remove)].forEach((ref, index) => {

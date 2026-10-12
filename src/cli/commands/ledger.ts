@@ -1643,43 +1643,47 @@ async function runInboxWrite(ctx: CliContext, opts: Record<string, unknown>): Pr
   }
   const rows = checked.bullets.map((bullet) => bullet.text);
   if (rows.length === 0 && remove.length === 0) {
-    ctx.io.err("ledger inbox-write: no rows on stdin and nothing to remove; nothing written\n");
-  } else {
-    warnIfUnlocked(ctx, "inbox writes");
+    // review/52: a call that lands nothing exits 1, so a close reading the exit code alone never takes it as filed.
+    throw inboxWriteUsage(
+      "ledger inbox-write was given nothing to write: no row on stdin and no --remove",
+      ctx.terminal.stdinIsTTY
+        ? "stdin is a terminal, so no rows were piped, and a call that writes nothing is refused rather than read as landed"
+        : "the piped stdin held no `- ` bullet, and a call that writes nothing is refused rather than read as landed",
+      "pipe the rows with --stdin, one bullet a line, or name the leaving Ref: values with --remove <ref>,<ref>",
+    );
   }
+  warnIfUnlocked(ctx, "inbox writes");
 
   // The store numbers a removal among the entries `handedIds` kept; the caller typed blanks and repeats too.
   const typed = (removeFlag ?? "").split(",").map((item) => item.trim());
   const typedEntry = (position: number): number => typed.indexOf(remove[position - 1] ?? "") + 1;
   // The landing screen's problems are the engine's own words, listed as they are.
   const own = new Set<InboxEditProblem>();
-  let outcomes: readonly InboxEditOutcome[] = [];
-  if (rows.length > 0 || remove.length > 0) {
-    try {
-      const result = await ledgerStore.writeInbox({
-        rootDir,
-        runId: run,
-        rows,
-        remove,
-        today: ctx.app.runtime.clock.now().toISOString().slice(0, 10),
-        maxBytes: INBOX_READ_MAX_BYTES,
-        dryRun: ctx.dryRun,
-        read: async () =>
-          await readInbox(rootDir, inboxStore.INBOX_PATH, ctx.engine.merge.atomicWrite.isSharedRegularFile, WRITE_VOICE),
-        screen: (block) => screenLanding(block, checked, own),
-      });
-      outcomes = result.outcomes;
-    } catch (error) {
-      if (!(error instanceof ledgerStore.InboxWriteRefused)) throw error;
-      const placed = error.problems.map((problem: InboxEditProblem) => {
-        const pattern = own.has(problem) ? "" : screenInboxLine(problem.message);
-        const message = pattern === "" ? problem.message : screenProblem(pattern);
-        if (problem.where === "row") return { line: checked.bullets[problem.line - 1]?.line ?? 0, message };
-        if (problem.where === "remove") return { src: "--remove", line: typedEntry(problem.line), message };
-        return { src: inboxStore.INBOX_PATH, line: problem.line, message };
-      });
-      return refuseWithProblems(ctx, refusal("a row or a removal cannot apply, so nothing was written"), STDIN_SOURCE, placed);
-    }
+  let outcomes: readonly InboxEditOutcome[];
+  try {
+    const result = await ledgerStore.writeInbox({
+      rootDir,
+      runId: run,
+      rows,
+      remove,
+      today: ctx.app.runtime.clock.now().toISOString().slice(0, 10),
+      maxBytes: INBOX_READ_MAX_BYTES,
+      dryRun: ctx.dryRun,
+      read: async () =>
+        await readInbox(rootDir, inboxStore.INBOX_PATH, ctx.engine.merge.atomicWrite.isSharedRegularFile, WRITE_VOICE),
+      screen: (block) => screenLanding(block, checked, own),
+    });
+    outcomes = result.outcomes;
+  } catch (error) {
+    if (!(error instanceof ledgerStore.InboxWriteRefused)) throw error;
+    const placed = error.problems.map((problem: InboxEditProblem) => {
+      const pattern = own.has(problem) ? "" : screenInboxLine(problem.message);
+      const message = pattern === "" ? problem.message : screenProblem(pattern);
+      if (problem.where === "row") return { line: checked.bullets[problem.line - 1]?.line ?? 0, message };
+      if (problem.where === "remove") return { src: "--remove", line: typedEntry(problem.line), message };
+      return { src: inboxStore.INBOX_PATH, line: problem.line, message };
+    });
+    return refuseWithProblems(ctx, refusal("a row or a removal cannot apply, so nothing was written"), STDIN_SOURCE, placed);
   }
 
   for (const outcome of outcomes) ctx.io.out(`${outcomeLine(outcome)}\n`);

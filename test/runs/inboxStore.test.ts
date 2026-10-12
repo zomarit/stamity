@@ -705,6 +705,54 @@ describe("editInboxText (w1-inbox-write, REQ-FLOW-078)", () => {
     expect(result).toMatchObject({ outcomes: [{ kind: "already-filed", line: 5, ref: ref(1) }] });
   });
 
+  // S22, review/56: a staying bullet stands for a row only when it is that row by its identity fields.
+  it("reports a row identical to a staying bullet as already-filed, the text byte-equal", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), bullet(2), ""].join("\n");
+
+    const result = edit(before, [bullet(2), bullet(1)]);
+
+    expect(edited(result)).toBe(before);
+    expect(result).toMatchObject({
+      outcomes: [
+        { kind: "already-filed", line: 6, ref: ref(2) },
+        { kind: "already-filed", line: 5, ref: ref(1) },
+      ],
+    });
+  });
+
+  it.each([
+    ["severity", `- Warning · src/a.ts:1 · finding 1 · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`],
+    ["location", `- Minor · src/b.ts:1 · finding 1 · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`],
+    ["description", `- Minor · src/a.ts:1 · planted words · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`],
+    ["source", `- Minor · src/a.ts:1 · finding 1 · source: /st-plan · Ref: ${ref(1)} · by: 2026-11-01`],
+  ])("refuses a row whose Ref: a staying bullet carries with another %s, naming the bullet's line and none of its text", (_field, held) => {
+    const before = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(2), held, ""].join("\n");
+
+    const result = edit(before, [bullet(2), bullet(1)]);
+
+    expect(result).toEqual({
+      problems: [
+        {
+          where: "row",
+          line: 2,
+          message:
+            "carries the `Ref:` inbox line 6 carries, with another severity, location, description or source, so that bullet is not this row",
+        },
+      ],
+    });
+  });
+
+  it("names every staying bullet that carries the row's Ref: as another row, and passes one removed in the same call", () => {
+    const other = `- Minor · src/b.ts:1 · finding 1 · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`;
+    const before = [SCHEDULE_RULE_HEADING, "", bullet(1), other, other, ""].join("\n");
+
+    expect(edit(before, [bullet(1)])).toMatchObject({
+      problems: [{ where: "row", line: 1, message: expect.stringContaining("inbox lines 4 and 5 carry") }],
+    });
+    const once = [SCHEDULE_RULE_HEADING, "", HEAD, "", other, ""].join("\n");
+    expect(edited(edit(once, [bullet(1)], [ref(1)]))).toBe([SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), ""].join("\n"));
+  });
+
   it("refuses a removal matching no bullet and one matching two, naming the --remove entry", () => {
     const before = [SCHEDULE_RULE_HEADING, "", bullet(1), bullet(1), bullet(2), ""].join("\n");
 

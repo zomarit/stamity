@@ -1,7 +1,7 @@
 import { constants as FS, type Stats } from "node:fs";
 import { lstat, mkdir, open, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { acquireWriteLock, atomicWriteFileUnlocked } from "../merge/atomicWrite.ts";
+import { acquireWriteLock, atomicWriteFileUnlocked, isSharedRegularFile } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
 import { parseDisposition, SCHEDULE_RULE_FROM } from "./disposition.ts";
 import {
@@ -25,6 +25,7 @@ import {
 import {
   isRunId,
   LEDGER_FILE,
+  LEDGER_READ_MAX_BYTES,
   RATIONALE_MAX,
   REPORT_NAME_PATTERN,
   REPORT_READ_MAX_BYTES,
@@ -1074,10 +1075,18 @@ const LEDGER_REF = new RegExp(`^${escapeRegExp(`${RUNS_SEGMENTS.join("/")}/`)}([
 type HeldLedger = { readonly rows: readonly LedgerRow[] } | { readonly refused: string };
 
 /**
- * One run's ledger, read by the store's no-follow rules: each folder from the
- * repository root to the run's must be a real directory, and the ledger a
- * regular file ({@link readLedger}). A missing folder or ledger holds no rows.
- * The refusal names no path, since the run id came from a row's `Ref:`.
+ * One run's ledger, read by the inbox read's no-follow, size-bounded rules
+ * (review/55): each folder from the repository root to the run's must be a
+ * real directory, and the ledger a regular file with one link, so neither a
+ * symbolic link nor a hard link is read through, of at most
+ * {@link LEDGER_READ_MAX_BYTES}, the bound the resume card reads the same file
+ * under. The open is no-follow where the platform has it, the type, the link
+ * count and the size are asked again of the open descriptor, and the read
+ * takes at most the bound plus one byte from it, so a ledger swapped or grown
+ * after the checks is refused too. A missing folder or ledger holds no rows.
+ * The refusal names no path, since the run id came from a row's `Ref:`. This
+ * read is the inbox write's own; `ledger append` and `ledger close` keep
+ * {@link readLedger}.
  */
 async function heldLedger(rootDir: string, runId: string): Promise<HeldLedger> {
   let walked = rootDir;
@@ -1090,13 +1099,34 @@ async function heldLedger(rootDir: string, runId: string): Promise<HeldLedger> {
     if (!stats.isDirectory()) return { refused: "is reached through a path that is not a folder" };
   }
   const path = join(walked, LEDGER_FILE);
+  const unreadable = (stats: Stats): string | null => {
+    if (stats.isSymbolicLink()) return "is a symbolic link";
+    if (!stats.isFile()) return "is not a regular file";
+    if (isSharedRegularFile(stats)) return "is a hard link";
+    if (stats.size > LEDGER_READ_MAX_BYTES) return `is over the ${LEDGER_READ_MAX_BYTES} byte read ceiling`;
+    return null;
+  };
   const leaf = await lstatOrNull(path);
-  if (leaf?.isSymbolicLink() === true) return { refused: "is a symbolic link" };
+  if (leaf === null) return { rows: [] };
+  const refused = unreadable(leaf);
+  if (refused !== null) return { refused };
+
+  const handle = await open(path, FS.O_RDONLY | (FS.O_NOFOLLOW ?? 0));
   try {
-    return { rows: [...parseLedgerText(await readLedger(path, LEDGER_FILE)).rows.values()] };
-  } catch (cause) {
-    if (cause instanceof EngineError) return { refused: "is not a regular file" };
-    throw cause;
+    const opened = unreadable(await handle.stat());
+    if (opened !== null) return { refused: opened };
+    const bytes = Buffer.alloc(LEDGER_READ_MAX_BYTES + 1);
+    let filled = 0;
+    while (filled < bytes.length) {
+      // eslint-disable-next-line no-await-in-loop -- one descriptor read in order: each read starts where the last one ended
+      const { bytesRead } = await handle.read(bytes, filled, bytes.length - filled, null);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    if (filled > LEDGER_READ_MAX_BYTES) return { refused: `is over the ${LEDGER_READ_MAX_BYTES} byte read ceiling` };
+    return { rows: [...parseLedgerText(bytes.toString("utf8", 0, filled)).rows.values()] };
+  } finally {
+    await handle.close();
   }
 }
 
