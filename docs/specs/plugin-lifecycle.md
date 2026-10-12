@@ -57,7 +57,9 @@ default runner and on `check`'s texts where git did not answer, and the criterio
 no-git note prints where git did not answer is read a step later again, at `d01a9c62`: its sentences in that paragraph,
 its clauses in those two criteria and its cases in the tests paragraph. The other texts printed in that state, `init`'s
 question, security line, declined-question refusal and uninstall line, `sync`'s closing step and `gate`'s reason for
-its first read, are read at `0971f18a`, in the same paragraph, criteria and tests paragraph.
+its first read, are read at `0971f18a`, in the same paragraph, criteria and tests paragraph. The paragraph headed
+"Amended 2026-10-12" under REQ-PLUGIN-005, on how the emitted hook runner starts a `node` launcher, is read at
+`bf880dd8` and ships with 1.14.0.
 
 ## Intent
 
@@ -270,6 +272,16 @@ A missing, oversized, unparseable or linked document is a refusal; there is noth
 to. The codex hook configuration's own `description`
 now derives its scripts directory from the context, so it no longer tells a plugin-root reader that
 the scripts live under `.stamity/generated/hooks/codex/`.
+
+Amended 2026-10-12 (read at `bf880dd8`). The emitted runner starts a row whose launcher is the word `node` as
+`process.execPath`, the interpreter the runner itself runs under, so no lookup by name takes place; a row naming any
+other launcher, `node.exe` and a path to node included, is started by the name the row gives (`buildPortableHookRunner`,
+`src/hooks/portableRunner.ts`). The working folder, `shell: false`, the timeout and the buffer are unchanged.
+`SECURITY.md`'s row on how git is started names this start beside git's, and a hook with any other launcher as a
+residual. No requirement id and no criterion is added. Tests: `test/hooks/portableRunner.test.ts`, the describe "which
+program a row's launcher starts"; its three cases under "on a Windows host, where the runtime takes the child's folder
+first" run on Windows only, and the cases under "on a POSIX host whose PATH names the folder the child runs in" are
+skipped there.
 
 ### REQ-PLUGIN-006 Bundled runtime runs standalone and passes the leak gate
 
