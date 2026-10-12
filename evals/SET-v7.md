@@ -2330,7 +2330,9 @@ and names an answer it still fails. One clause is not written from its sentence:
 number that B4 of `work-frame-reads-matching-inbox-rows` allows is a choice of the set's
 authors on a point where the sentence is silent, and its paragraph records it as one. Before
 the re-measure the amendments were reviewed twice, each time by a reviewer who was shown
-neither the failing answers nor the diagnosis. The first, the unit's review named below, read
+neither the failing answers nor the diagnosis. Both did read the four paragraphs below, the text
+under review, and each of those says in a sentence what the failing sample did.
+The first, the unit's review named below, read
 each of the four rows against the corpus and found the defects listed there. The second, once
 those were closed, read the three rows changed on that review and the record of the fourth, and
 approved them. (Corrected 2026-10-12 on the release's whole-branch review, ledger row
