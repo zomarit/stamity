@@ -161,7 +161,9 @@ where git would read a bare repository.
   reason, look at the entries of this folder and of each folder above it by name to find the one
   with that layout, and do not run git in it or in any folder under it, the one you stand in
   included: git started anywhere under it finds it as the engine did, and only the engine's own git
-  calls are pinned. Move the folder off that path, or run the verbs from a checkout that does not
+  calls are pinned. A flow is no exception: `/st-quick` and `/st-work` do not stop there, and the
+  git their session and sub-agents start is not pinned, so start no flow there until the folder
+  is moved. Move the folder off that path, or run the verbs from a checkout that does not
   keep it there. One more change comes with the same hardening: every verb but the `worktree` ones
   now drops the caller's `GIT_*` variables when it reads git, `handoff` included. An inherited
   `GIT_DIR` no longer points them at another repository, and a setup whose repository is named only
