@@ -4,9 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
 import {
   INBOX_BULLET_MAX_CHARS,
+  INBOX_JOINED_MAX_CHARS,
   INBOX_LISTED_MAX,
   INBOX_OVER_LENGTH,
   INBOX_SCREEN,
+  inboxSequenceHits,
 } from "../../src/cli/commands/ledger.ts";
 import { runCli } from "../../src/cli/kit/program.ts";
 import { SESSION_START_SCREEN, SESSION_START_SCREEN_PATTERN_IDS } from "../../src/hooks/scripts.ts";
@@ -1271,6 +1273,195 @@ describe("stamity ledger inbox", () => {
     expect(human.code).toBe(1);
     expect(human.stderr).toContain(message);
     expect(JSON.parse(json.stdout)).toMatchObject({ ok: false, error: { code: "USAGE" } });
+  });
+});
+
+/** The two halves of a markdown image link, each clean alone; printed on adjacent lines they hit `image-url-exfiltration`. */
+const IMAGE_OPEN = ["!", "[quiet"].join("");
+const IMAGE_CLOSE = ["](", "ht", "tps://collector.example/q"].join("");
+const IMAGE = "image-url-exfiltration";
+
+// S24, pr/1: the query prints the rows it matched one after another, across headings and past the rows
+// its filters left out, so it screens the lines it prints in windows of adjacent lines, not row by row.
+describe("stamity ledger inbox — the printed sequence is screened in windows of adjacent lines", () => {
+  /** Two halves in two blocks, under different headings, with nothing between them in what prints. */
+  const ACROSS_BLOCKS = [
+    "# Deferral inbox",
+    "",
+    "## Rows appended by one run",
+    "",
+    `- Minor · src/a.ts:1 · ${IMAGE_OPEN} · source: x`,
+    "",
+    "## Rows appended by another run",
+    "",
+    `- Minor · src/a.ts:2 · ${IMAGE_CLOSE} · source: x`,
+    "",
+  ].join("\n");
+
+  /** Two halves kept apart by a row whose closing bracket breaks the pattern, a row `--paths src/a.ts` leaves out. */
+  const ACROSS_A_FILTERED_ROW = [
+    `- Minor · src/a.ts:1 · ${IMAGE_OPEN} · source: x`,
+    "- Minor · docs/b.md:1 · a ] between · source: x",
+    `- Minor · src/a.ts:3 · ${IMAGE_CLOSE} · source: x`,
+    "",
+  ].join("\n");
+
+  it("withholds both halves of a pattern split across two blocks under different headings, as skip lines", async () => {
+    const dir = tempDir();
+    await seedInbox(dir, ACROSS_BLOCKS);
+
+    const human = await inbox(dir);
+    const json = await inbox(dir, "--json");
+
+    expect(human.code).toBe(0);
+    expect(human.stdout).toBe(
+      `inbox: 2 rows · 0 matched · 0 unmatched · 0 unparsed · 2 skipped\nskipped: 5 (${IMAGE})\nskipped: 9 (${IMAGE})\n`,
+    );
+    for (const word of ["quiet", "collector"]) {
+      expect(human.stdout).not.toContain(word);
+      expect(json.stdout).not.toContain(word);
+    }
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      total: 2,
+      matched: [],
+      counts: { Critical: 0, Warning: 0, Minor: 0, Info: 0 },
+      unmatched: 0,
+      skipped: [
+        { line: 5, pattern: IMAGE },
+        { line: 9, pattern: IMAGE },
+      ],
+    });
+  });
+
+  it("withholds both halves a --paths filter makes adjacent, and prints the same rows unchanged when nothing does", async () => {
+    const dir = tempDir();
+    await seedInbox(dir, ACROSS_A_FILTERED_ROW);
+
+    const filtered = await inbox(dir, "--paths", "src/a.ts");
+    const filteredJson = await inbox(dir, "--paths", "src/a.ts", "--json");
+    const whole = await inbox(dir);
+
+    expect(filtered.stdout).toBe(
+      `inbox: 3 rows · 0 matched · 1 unmatched · 0 unparsed · 2 skipped\nskipped: 1 (${IMAGE})\nskipped: 3 (${IMAGE})\n`,
+    );
+    expect(filteredJson.stdout).not.toContain("collector");
+    expect(JSON.parse(filteredJson.stdout)).toMatchObject({
+      matched: [],
+      unmatched: 1,
+      skipped: [
+        { line: 1, pattern: IMAGE },
+        { line: 3, pattern: IMAGE },
+      ],
+    });
+    // A clean sequence prints as it did: the row between breaks the pattern.
+    expect(whole.stdout).toBe(
+      [
+        "inbox: 3 rows · 3 matched · 0 unmatched · 0 unparsed · 0 skipped",
+        `1 Minor · src/a.ts:1 · ${IMAGE_OPEN} (all)`,
+        "2 Minor · docs/b.md:1 · a ] between (all)",
+        `3 Minor · src/a.ts:3 · ${IMAGE_CLOSE} (all)`,
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("still prints adjacent withheld lines whose pattern ids spell their own screen row's word", async () => {
+    const dir = tempDir();
+    await seedInbox(
+      dir,
+      [`- Warning · src/a.ts:1 · a row to ${SPACELESS_HIT} · source: x`, `- Warning · src/a.ts:2 · another to ${SPACELESS_HIT} · source: x`, ""].join("\n"),
+    );
+
+    const result = await inbox(dir, "--paths", "src/a.ts");
+
+    expect(result.stdout).toBe(
+      [
+        "inbox: 2 rows · 2 matched · 0 unmatched · 0 unparsed · 2 skipped",
+        `1 Warning · src/a.ts:1 · withheld by the screen (${SPACELESS_HIT}); read it by hand (path)`,
+        `2 Warning · src/a.ts:2 · withheld by the screen (${SPACELESS_HIT}); read it by hand (path)`,
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("withholds a withheld row between two halves with them, by its own pattern", async () => {
+    const dir = tempDir();
+    await seedInbox(
+      dir,
+      [
+        `- Minor · src/a.ts:1 · ${IMAGE_OPEN} · source: x`,
+        `- Warning · src/a.ts:2 · a row to ${SPACELESS_HIT} · source: x`,
+        `- Minor · src/a.ts:3 · ${IMAGE_CLOSE} · source: x`,
+        "",
+      ].join("\n"),
+    );
+
+    const result = await inbox(dir);
+
+    expect(result.stdout).toBe(
+      `inbox: 3 rows · 0 matched · 0 unmatched · 0 unparsed · 3 skipped\nskipped: 1 (${IMAGE})\nskipped: 2 (${SPACELESS_HIT})\nskipped: 3 (${IMAGE})\n`,
+    );
+  });
+
+  it("withholds a half split from an unparsed line printed after the matched rows", async () => {
+    const dir = tempDir();
+    // Two bare words after the source: the parse message quotes them, the closing half with them.
+    await seedInbox(dir, [`- Minor · src/a.ts:1 · ${IMAGE_OPEN} · source: x`, `- Minor · — · d · source: x · two ${IMAGE_CLOSE}`, ""].join("\n"));
+
+    const result = await inbox(dir);
+
+    expect(result.stdout).toBe(`inbox: 2 rows · 0 matched · 0 unmatched · 0 unparsed · 2 skipped\nskipped: 1 (${IMAGE})\nskipped: 2 (${IMAGE})\n`);
+  });
+
+  it("withholds the rows a withholding makes adjacent in turn, on a large inbox", async () => {
+    const dir = tempDir();
+    const depth = 40;
+    const clean = Array.from({ length: 3000 }, (_, index) => `- Minor · src/c.ts:${index + 1} · clean row ${index + 1} · source: x`);
+    // Nested halves: each pair meets only once the pair inside it is withheld.
+    const opens = Array.from({ length: depth }, (_, index) => `- Minor · src/a.ts:${index + 1} · ${IMAGE_OPEN} ${index} · source: x`);
+    const closes = Array.from({ length: depth }, (_, index) => `- Minor · src/a.ts:${depth - index} · ${IMAGE_CLOSE} · source: x`);
+    await seedInbox(dir, [...clean, ...opens, ...closes, ...clean.slice(0, 10), ""].join("\n"));
+
+    const result = await inbox(dir, "--json");
+
+    expect(result.code).toBe(0);
+    // A boolean, so a failure does not print the document's three thousand rows.
+    expect(result.stdout.includes("collector")).toBe(false);
+    const doc = JSON.parse(result.stdout) as { matched: unknown[]; skipped: { line: number }[]; truncated: { skipped: number } };
+    expect(doc.matched).toHaveLength(3010);
+    expect(doc.skipped.length + doc.truncated.skipped).toBe(2 * depth);
+    expect(doc.skipped[0]?.line).toBe(3001);
+  });
+
+  it("reads each line a bounded number of times, however many withholdings cascade", () => {
+    const count = 20_000;
+    const depth = 2_000;
+    // Lines 0..count-2*depth-1 are clean; then depth opening halves and depth closing halves, nested.
+    const pairOf = (index: number): number | null => {
+      const first = count - 2 * depth;
+      if (index < first) return null;
+      return index < first + depth ? index - first : count - 1 - index;
+    };
+    const lengths = Array.from({ length: count }, () => 60);
+    let read = 0;
+    const screen = (indices: readonly number[]): string => {
+      read += indices.reduce((sum, index) => sum + (lengths[index] ?? 0), 0) + indices.length - 1;
+      for (let at = 0; at + 1 < indices.length; at += 1) {
+        const left = indices[at] ?? 0;
+        const right = indices[at + 1] ?? 0;
+        if (right > left && pairOf(left) !== null && pairOf(left) === pairOf(right)) return "pair";
+      }
+      return "";
+    };
+
+    const withheld = inboxSequenceHits(lengths, screen);
+
+    expect(withheld.size).toBe(2 * depth);
+    for (const index of withheld.keys()) expect(pairOf(index)).not.toBeNull();
+    const total = count * 60 + count - 1;
+    // Each withholding costs a few windows' reads, never a read of the whole sequence again.
+    expect(read).toBeLessThanOrEqual(3 * total + 2 * depth * 40 * INBOX_JOINED_MAX_CHARS);
+    expect(read).toBeLessThan(depth * total);
   });
 });
 

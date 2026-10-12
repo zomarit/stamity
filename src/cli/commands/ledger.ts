@@ -1076,6 +1076,34 @@ function withheldBody(pattern: string): string {
 }
 
 /**
+ * One line the query prints for a bullet, a matched row's or an unparsed
+ * one's, as the screen of the printed sequence reads it: its inbox line, the
+ * line as it prints, that line with a withheld row's pattern id left out of
+ * its body (`bare`), and the engine's words in it no author wrote (`own`, a
+ * withheld row's body; "" otherwise).
+ */
+interface PrintedLine {
+  readonly line: number;
+  readonly printed: string;
+  readonly bare: string;
+  readonly own: string;
+}
+
+/**
+ * The screen of printed lines joined by the line break they print with, ""
+ * when they pass: first with every withheld row's pattern id left out, against
+ * every screen row, so an author's two halves meet whatever pattern withheld a
+ * row between them; then, where a withheld line is among them, as they print,
+ * leaving out the rows those lines' own words hit alone, as
+ * {@link screenInboxPrinted} does for one line.
+ */
+function screenPrintedLines(lines: readonly PrintedLine[]): string {
+  const bare = screenInboxLine(lines.map((entry) => entry.bare).join("\n"));
+  const own = lines.flatMap((entry) => (entry.own === "" ? [] : [entry.own])).join("\n");
+  return bare !== "" || own === "" ? bare : screenInboxPrinted(lines.map((entry) => entry.printed).join("\n"), own);
+}
+
+/**
  * A matched row's human line as composed, before it is sanitised; a withheld
  * row's carries {@link withheldBody} where its description would stand. The
  * caller screens this string and prints its `sanitizeLabel` form.
@@ -1131,6 +1159,16 @@ function listedLines(label: string, lines: readonly string[]): string[] {
  * row whose line hits is not matched, in the human output and the document
  * alike: it prints its skip line and counts under skipped alone, a clean row
  * by the pattern its line hit, a withheld one by the pattern that withheld it.
+ *
+ * The lines then print one after another, the headings gone and the rows the
+ * filters left out with them, so two rows from different blocks, or kept apart
+ * in the file only by a row the query leaves out, print adjacent. The
+ * sequence of matched and unparsed lines is therefore screened as it prints,
+ * in bounded windows of adjacent lines ({@link inboxSequenceHits}, through
+ * {@link screenPrintedLines}; S24). A hit withholds every line it spans, in
+ * both outputs: a row is not matched, and an unparsed line not listed, and
+ * each prints its skip line instead, a clean one by the pattern the window
+ * hit, a withheld row by the pattern that withheld it.
  *
  * Every printed field is sanitised. Each bullet counts once under matched,
  * unmatched, unparsed or skipped, but for a matched withheld row, which counts
@@ -1227,6 +1265,36 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
     if (pattern === "") matched.push({ row, matchedBy, line });
     else if (by === null) skipped.push({ line: row.line, pattern });
   }
+  // The lines print one after another, across headings and past the rows the filters left out, so
+  // they are screened as they print, in windows of adjacent lines (S24): a hit withholds every line
+  // it spans, a row as a skip line by the pattern that hit it or, withheld already, by its own.
+  const emitted: PrintedLine[] = [
+    ...matched.map(({ row, matchedBy, line }): PrintedLine => {
+      const by = withheld.get(row.line) ?? null;
+      const printed = sanitizeLabel(line);
+      return by === null
+        ? { line: row.line, printed, bare: printed, own: "" }
+        : { line: row.line, printed, bare: sanitizeLabel(inboxRowLine(row, matchedBy, "")), own: withheldBody(by) };
+    }),
+    ...problems.map((problem): PrintedLine => {
+      const printed = sanitizeLabel(`unparsed: ${problem.line}: ${problem.message}`);
+      return { line: problem.line, printed, bare: printed, own: "" };
+    }),
+  ];
+  const sequenceHits = inboxSequenceHits(
+    emitted.map((entry) => entry.printed.length),
+    (indices) => screenPrintedLines(indices.map((index) => emitted[index] ?? { line: 0, printed: "", bare: "", own: "" })),
+  );
+  const heldLines = new Set<number>();
+  for (const [index, pattern] of sequenceHits) {
+    const line = emitted[index]?.line ?? 0;
+    heldLines.add(line);
+    if (!withheld.has(line)) skipped.push({ line, pattern });
+  }
+  if (heldLines.size > 0) {
+    matched.splice(0, matched.length, ...matched.filter(({ row }) => !heldLines.has(row.line)));
+    problems.splice(0, problems.length, ...problems.filter((problem) => !heldLines.has(problem.line)));
+  }
   skipped.sort((a, b) => a.line - b.line);
   for (const { row } of matched) counts[row.severity] = (counts[row.severity] ?? 0) + 1;
   const total = parsed.rows.length + parsed.problems.length;
@@ -1289,16 +1357,16 @@ interface StdinBullet {
 }
 
 /**
- * The stdin positions, first and last, of the bullets a hit in their joined
- * text spans, when no one bullet carries it: the shortest run of bullets from
- * the start that hits, then the shortest end of that run that still does, each
- * found by halving, so a long block costs a few screens and not one per pair.
- * Should the screen not narrow that way, the whole block is named.
+ * The positions, first and last, of the `count` lines a hit in their joined
+ * text spans, when no one line carries it, `hits` screening the lines from one
+ * position to another joined: the shortest run of lines from the start that
+ * hits, then the shortest end of that run that still does, each found by
+ * halving, so a long block costs a few screens and not one per pair. Should
+ * the screen not narrow that way, the whole block is named.
  */
-function joinedHitSpan(texts: readonly string[]): { first: number; last: number } {
-  const hits = (from: number, to: number): boolean => screenInboxLine(texts.slice(from, to + 1).join("\n")) !== "";
+function joinedHitSpan(count: number, hits: (from: number, to: number) => boolean): { first: number; last: number } {
   let low = 1;
-  let high = texts.length - 1;
+  let high = count - 1;
   while (low < high) {
     const middle = Math.floor((low + high) / 2);
     if (hits(0, middle)) high = middle;
@@ -1312,7 +1380,7 @@ function joinedHitSpan(texts: readonly string[]): { first: number; last: number 
     if (hits(middle, last)) start = middle;
     else end = middle - 1;
   }
-  return start < last && hits(start, last) ? { first: start, last } : { first: 0, last: texts.length - 1 };
+  return start < last && hits(start, last) ? { first: start, last } : { first: 0, last: count - 1 };
 }
 
 /**
@@ -1371,10 +1439,70 @@ function joinedHit(
     const window = texts.slice(first, last + 1);
     const pattern = screenInboxLine(window.join("\n"));
     if (pattern === "") continue;
-    const span = joinedHitSpan(window);
+    const span = joinedHitSpan(window.length, (from, to) => screenInboxLine(window.slice(from, to + 1).join("\n")) !== "");
     return { pattern, first: first + span.first, last: first + span.last };
   }
   return null;
+}
+
+/**
+ * The lines of a printed sequence a screen of adjacent lines withholds, each
+ * by its index with the pattern id of the hit that withheld it (S24). `lengths`
+ * are the lines' lengths and `screen` the screen of the lines it is handed,
+ * joined in that order: "" when they pass, else a pattern id.
+ *
+ * The sequence is read window by window ({@link inboxScreenWindows}). A window
+ * that hits withholds the lines its hit spans ({@link joinedHitSpan}), and is
+ * read again without them until it passes. A withholding makes the lines
+ * either side of it adjacent, so the lines around that seam — back from it, and
+ * on from it, while each side's joined text is at most
+ * {@link INBOX_BULLET_MAX_CHARS}, and at least one line each side — are read
+ * the same way, and so is every seam a later withholding opens. Every two
+ * adjacent lines of what is left, and every run of them at most that long,
+ * has then passed in one window, and each withholding costs a few windows'
+ * reads rather than a read of the whole sequence again.
+ */
+export function inboxSequenceHits(
+  lengths: readonly number[],
+  screen: (indices: readonly number[]) => string,
+): Map<number, string> {
+  const withheld = new Map<number, string>();
+  const before = lengths.map((_, index) => index - 1);
+  const after = lengths.map((_, index) => (index + 1 < lengths.length ? index + 1 : -1));
+  const kept = (index: number): boolean => !withheld.has(index);
+  const length = (index: number): number => lengths[index] ?? 0;
+  /** The kept lines, in order, from `step`'s side of `from` while their joined text stays at most one bullet's cap. */
+  const reach = (from: number, step: number[]): number[] => {
+    const lines = [from];
+    let run = length(from);
+    for (let at = step[from] ?? -1; at !== -1 && run + 1 + length(at) <= INBOX_BULLET_MAX_CHARS; at = step[at] ?? -1) {
+      run += 1 + length(at);
+      lines.push(at);
+    }
+    return lines;
+  };
+
+  const pending: number[][] = [lengths.map((_, index) => index)];
+  for (let lines = pending.pop(); lines !== undefined; lines = pending.pop()) {
+    const read = lines.filter(kept);
+    for (const [first, last] of inboxScreenWindows(read.map(length))) {
+      for (;;) {
+        const window = read.slice(first, last + 1).filter(kept);
+        if (window.length < 2) break;
+        const pattern = screen(window);
+        if (pattern === "") break;
+        const span = joinedHitSpan(window.length, (from, to) => screen(window.slice(from, to + 1)) !== "");
+        const spanned = window.slice(span.first, span.last + 1);
+        for (const index of spanned) withheld.set(index, pattern);
+        const left = before[spanned[0] ?? 0] ?? -1;
+        const right = after[spanned[spanned.length - 1] ?? 0] ?? -1;
+        if (left !== -1) after[left] = right;
+        if (right !== -1) before[right] = left;
+        if (left !== -1 && right !== -1) pending.push([...reach(left, before).toReversed(), ...reach(right, after)]);
+      }
+    }
+  }
+  return withheld;
 }
 
 /** A screen hit's problem text: the pattern id alone, never the text it matched. */
