@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-10",
+  "generated": "2026-10-11",
   "rule": "verified merge-ready = the final gate table all pass, the last review verdict an approval at or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with no open row; merge evidence is reported per run, never a clause; self-declared wording never counts",
   "denominator": [
     {
@@ -223,6 +223,14 @@
     {
       "run": "2026-10-08_product-core",
       "reason": "gates in prose only — no gate row carries a pass or fail"
+    },
+    {
+      "run": "2026-10-11_debug-claude-plugin-walk",
+      "reason": "no proof block"
+    },
+    {
+      "run": "2026-10-11_release-1-14-0",
+      "reason": "run in progress"
     }
   ],
   "rate": {
@@ -231,8 +239,8 @@
     "value": 0.412
   },
   "computedFrom": {
-    "records": 47,
-    "newestRecordDate": "2026-10-10",
+    "records": 49,
+    "newestRecordDate": "2026-10-11",
     "changelogHead": "1.14.0"
   }
 }

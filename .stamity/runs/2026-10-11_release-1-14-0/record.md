@@ -11,16 +11,25 @@ Opened: 2026-10-11T19:26Z
 
 ## Morning list (kept current through the night; read this first)
 
-**State at 2026-10-12T09:40Z** (a fresh session continued the run at 08:33Z; the list under this paragraph is as it
-stood at 02:12Z). The maintainer's answers are in "The close's question", every one the recommended option. Since
-them: the extra round `f8` landed and its closure review approved (high; `review/71`, `review/72`, `review/73`,
-`fix/30` and `review/79` fixed); the spec delta was reviewed, amended, reviewed again and merged (`c2da882f`); one
-changelog sentence was fixed (`f9`, `8fb47c46`); the four reworded eval rows are confirmed and the secret scan's
-four hits are accepted as a false match, both on the maintainer's word. CI on #97 is green at `e62ec3f2`, every
-leg; the pull request is still a draft. The ledger holds 202 rows, none open. **Not done:** the QA sign-off with
-its three person rows (at and after the cut); the full suite on the final tree and the delta pass of the
-whole-branch review, which follow the last commit before the cut; the cut itself — the fast-forward, the tag and the
-publish — held for the maintainer; this record's close.
+**State at 2026-10-12T13:28Z, before the push that publishes the security fix** (a fresh session continued the run
+at 08:33Z; the list under this paragraph is as it stood at 02:12Z). The maintainer's answers stand verbatim where
+they were given: the opening batch, "The close's question" and the dated entries after it. Since the close's
+question: the extra round `f8` landed and its closure review approved; the spec delta was reviewed, amended,
+reviewed again and merged (`c2da882f`); one changelog sentence was fixed (`f9`); those were pushed with the records
+as `a17b29df`, CI green. Then a security fix joined the release (the dated entries from "a security fix joins the
+release" on; the 1.14.0 Security entry of `CHANGELOG.md` says what changed and what to do): green on Windows CI
+three times; a reviewer and the security lens on its wording unit, on fix rounds 1 to 3 and on its hook-runner
+unit, the security lens on its last text pass, and one reviewer's public-text read of the last commits and these
+records; the whole branch reviewed again on Fable 5.1 as a delta through the hook-runner unit and fix round 3
+(approve). Eval run 46 re-ran calibration after the emitted hook
+runner changed (PASS); run 45 stays the run of record. The final gates are green on the final product tree, with
+the full suite alone and four live clients armed (293 files, 13,879 passed, 0 failed). The four reworded eval rows
+are confirmed and the six scan lines of the three eval exports are settled as a false match, on the maintainer's
+word. The ledger holds 211 rows, none open. **Not done:** CI on the pushed head and the review bot's pass; the QA
+table (built at 02:01Z, before the security fix joined) has no row for the fix yet: its rows are built before the
+cut is asked; the cut — the fast-forward, the tag and the publish — asked once, after them; the advisory, the
+maintainer's to publish; the QA sign-off with its three person rows (at and after the cut); on Windows, no run of
+the fix's new cases against the unfixed source; this record's close.
 
 Rewritten 2026-10-12T02:12Z. The code is final at `ca2677e3`; one commit after it, the re-made `g1` (`e7a2fd4d`),
 adds two test paths to the test-input map in `.stamity/change-classes.json`; the commit after that holds these
@@ -1791,6 +1800,144 @@ meets no look and no warning.
   corrected time stamps were written after that run; nothing else moved. `gate classify` reads the pending change
   as `product`, because no rule places a file under `.stamity/learnings/`, so its gates are the full ones: CI runs
   them on the push, and the full suite runs alone on the final tree before the cut.
+- 2026-10-12T09:42Z: these records committed as `a17b29df` (the leak gate and the records and learnings suites run
+  once more on the committed tree, exit 0 each) and **pushed to #97 with `c2da882f` and `8fb47c46`**, a
+  fast-forward of three commits; the pull request stays a draft.
+- 2026-10-12T09:53Z: **CI on #97 at `a17b29df`: green on its first attempt, every leg read to its end**
+  (09:42Z–09:53Z). CI 38231617450: `check` on floor (node 22.22.2), lts (node 24), `windows-1` and `windows-2`;
+  the three apm routes; the plugin route; the two advisory jobs; `all-ci-checks`. PR checks 38231617406: the DCO
+  sign-off, the title, the dist size budget, `all-pr-checks`. The docs site 38231617552: the build. Skipped by
+  their own conditions, as before: `prove-pr`, `lanes`, the site's deploy.
+- 2026-10-12T10:28Z: the three open alerts re-read live through the API: #23 and #27 (`http-cache-semantics`, the
+  root and the website lockfile) and #26 (`braces`, the website lockfile), each high, each still with no patched
+  version. Unchanged since 00:20Z; nothing to take. They are read once more at the cut.
+- 2026-10-12, 07:46Z to the push: **a security fix joins the release.** The night's security reads found one more
+  item in how the engine starts other programs on Windows; it predates 1.12.0. The morning's batch also answered
+  how it ships, verbatim: **"Prove privately, cut after
+  (Recommended)"** (1.14.0 waits and ships with the fix and an advisory together) and **"Private repo, hosted
+  runner (Recommended)"**; at 08:44Z, how the proof runs: **"1. I create the repo, ordinary CI (Recommended)"**.
+  What 1.14.0 changes, who was affected and what to do is the Security entry of the 1.14.0 section of
+  `CHANGELOG.md` and the rows of `SECURITY.md` and `docs/security-mapping.md`; this record keeps to the work. Every
+  commit named below is on the branch as it was pushed; the fix was built on a side branch and moved onto
+  `a17b29df` once, at 12:13Z, with its tree bytes unchanged.
+  - **The fix and its integration:** `33c7045b` and `f9d24f23`, built in the night and integrated onto the release
+    head between 08:47Z and 08:59Z (an implementer on Opus 5.5, `high`): nine files had changed on both sides; the
+    release round's case on the origin read's default runner was rewritten to hold the new default.
+  - **The wording unit** (09:32Z–10:06Z): `85db3729` (`check`'s `git-available` row and its tests, two findings of
+    the integration, red first), `ebaac2f2` (the Security entry; the row on `SECURITY.md` and the standards
+    mapping; six page sentences the fix had made untrue), `2031ab79` (the specs: 33 citations re-pinned, one
+    criterion added under REQ-PLUGIN-046). A draft advisory was written for the maintainer to publish.
+  - **Its review and security lens** (10:06Z–10:27Z, both Opus 5.5, `high`): the lens found the code sound and
+    reaching every place it targets, and asked for one revise round of the texts; the reviewer asked for changes,
+    resting on one wording question that was the maintainer's.
+  - **The maintainer's answers, given between 11:13Z and 11:35Z, verbatim:** the remaining residuals on the
+    security page — **"Name them as drafted (Recommended)"**; one more place the fix did not reach, in the emitted
+    hook runner — **"Size it first, then decide (Recommended)"**; publishing the fix — **"Stop and ask me first
+    (Recommended)"**. A read-only sizing (11:35Z–11:38Z): a code change for the `node` launcher touches a few lines
+    of the emitted runner, moves the two golden snapshot files and triggers the checklist's eval line with no case
+    to re-measure. Then, about 11:39Z: **"Fix the node launcher now (Recommended)"**.
+  - **Fix round 1** (10:27Z–10:59Z): `d53af1dd` (two more texts of the same class and a module header; eleven cases
+    red first), `b7d3a8f0` (two changelog sentences), `34ee4dbc` (the remaining residuals named on the two security
+    pages), `e48622a6` (specs). Seven findings fixed.
+  - **Fix round 2** (11:00Z–11:29Z): `db6ac4a8` (two more texts, and a census of every text of that class across
+    `src/`: 46 texts — 22 already agreeing, 4 fixed in round 1, 9 fixed in this round, 11 left with a reason each;
+    23 cases red first), `070da38a` (a pointer from "Hook and MCP execution" to those residuals), `9c67b758` (pages),
+    `c4caf1ef` (specs). Its closing review and lens (11:35Z–11:54Z): the reviewer approved, with the census read
+    whole and none of its 46 rows wrongly classed; the lens closed every handed finding, none regressed, and found
+    all nine residuals named in full.
+  - **The hook runner unit** (11:40Z–12:01Z, on the maintainer's word): `1b492297` (the emitted runner starts a
+    `node` launcher the fixed way; twelve cases, eight red first, one boundary case green on purpose, three that run
+    only on Windows; the two snapshot files moved by the runner's bytes and the digests that hash them, nothing
+    else; `sync` moved no emitted copy), `604b3b10` (pages).
+  - **Fix round 3** (12:02Z–12:13Z), the last under the cap: `4c9c84f7` (one `gate` string, red first), `b4e07966`
+    (pages: who was affected and where to look), `5fdc0784` (the hook unit's spec paragraph). Six findings fixed,
+    and the advisory draft corrected.
+  - **The move onto `a17b29df`** (12:13Z): 18 commits re-picked with no conflict; `git range-diff` shows 16
+    identical patches, one changed only by a context line beside `8fb47c46`, and one changed only in its message;
+    `04bfbde9` then moves the specs' commit stamps to the moved commits (36 sha tokens, nothing else).
+  - **The closing review and lens** of the hook unit and round 3 (12:14Z–12:21Z, Opus 5.5): the reviewer approved
+    and the lens found nothing that should stop the release. Their findings were three: the history sentence on
+    `SECURITY.md:114` left out two setups the changelog names, and a hook launcher written `node.exe` is not on
+    the fixed path — the two the maintainer answered at 12:25Z below — and two sentences of the advisory draft,
+    corrected in the draft. **The final whole-branch review on Fable 5.1** (12:15Z–12:29Z, a delta pass over
+    `383ae036..04bfbde9`): approve, confidence medium; pages, specs, the changelog and the
+    advisory draft true of the tree; one Warning, the eval trigger the hook runner moved, answered by run 46
+    below; three Minor: tracked rows for the newly named residuals (written with these records), the history
+    clause (fixed by the text pass below), and two citations in this run's learning to commits not on the branch
+    (fixed by `b75f2a6e`, a recapture through the write gate).
+  - **The maintainer's answers, about 12:25Z, verbatim:** which run the pages name — **"Keep run 45
+    (Recommended)"**; a launcher written `node.exe` — **"Name it on the pages (Recommended)"**; the history clause
+    on `SECURITY.md` — **"Add it now (Recommended)"**.
+  - **Windows CI on the fix, in a private copy of the repository, read by job result:** at the integration
+    (09:00Z–09:25Z) and at the wording unit (10:09Z–10:33Z), every job green, both Windows legs among them; at
+    `b75f2a6e`, see below. **Not done:** every red-first run was on macOS; no run of the new cases against the
+    unfixed source exists on Windows, and the three cases that run only on Windows have never been seen to fail.
+- 2026-10-12T12:16Z–12:28Z: **eval run 46, PASS.** `prepare` at 12:16:36Z (one earlier attempt at 12:16:21Z
+  refused for a missing instrument note, having made only an empty run folder): candidate `04bfbde9`, an increment
+  on run 45 under the incremental rule, run because the emitted hook runner changed after run 45's candidate and
+  the cross-client goldens moved; 0 cases re-measured, 141 carried, 5 calls. Calibration 12:16:52Z–12:17:47Z, 5 of
+  5 matched (C4 on its second attempt, the first classed `grade-fail-decider`, retryable, kept on record); scoring
+  ended at once with nothing to score; exported 12:18:14Z. Landed as `60f2e889` (the four files byte for byte,
+  sha256 prefixes `d0997f2a`, `5639fbba`, `536271f1`, `fb2f82e5`; the size exception in `scripts/repo-hygiene.mjs`
+  with its pin, red first) and `3ff8fd4e` (run 46 recorded as the release's recalibration on the checklist's eval
+  line, the changelog's eval bullet, the spec, one dated paragraph of the set and `NOTE.md` beside the run). Its
+  first form could not name run 46 the run of record: the measurements page words one composition link and
+  refuses a run composed on a composed run (its code, the spec and two tests pin that); on the maintainer's answer
+  run 45 stays the run of record, with the same scores. `gate scan --base 751aaa5e`: exit 1, six hits, all
+  `inline-api-key-assignment`, two in each of the `summary.json` files of runs 44, 45 and 46: run 46's two are the
+  same carried sentence as the four the maintainer settled as a false match.
+- 2026-10-12T12:31Z–12:43Z: `b75f2a6e` recaptures this run's learning through the write gate so that it cites only
+  commits on the branch (the final review's M-3). **The text pass** (`03696ecb`, committed 12:37:15Z; a fixer on Opus
+  5.5, `high`, on the maintainer's 12:25Z word): the history clause on `SECURITY.md`, a launcher written `node.exe`
+  named where the pages describe what the hook runner leaves open, and the changelog sentence that needed it; five
+  items fixed. The security lens read it with the advisory draft (12:38Z–12:42Z): **approve, confidence high**; the
+  pages and the draft agree with each other and with the code; nothing should stop the tag or the advisory. Its one
+  Minor was in the advisory draft and was corrected there.
+- 2026-10-12T12:38Z–12:48Z: **the final gates on `03696ecb`, green** (a test-runner on Opus 5.5, `high`, alone on
+  the machine). Build, `sync` (67 unchanged), `check` (drift clean), lint (0 errors, the one old warning), typecheck,
+  knip, the leak gate (0 hits, 1,881 files), hygiene: exit 0 each; `gate classify`: `security-sensitive`; `gate
+  scan`: exit 1, exactly the six known lines. **The full suite with coverage and all four live clients armed**
+  (claude 2.1.296, cursor agent 2026.10.01, copilot 1.0.89, codex 0.155.1): 293 of 293 files; **13,879 passed, 0
+  failed, 18 skipped**; 421.56 s; no timeout and no re-run; the coverage floors held (statements 97.29, branches
+  91.77, functions 99.15, lines 98.12); the four live plugin walks passed (Claude 14.7 s, Copilot 14.9 s, Codex
+  11.9 s, Cursor 244.6 s). The tag-time records check: no `v1.14*` tag before; a local `v1.14.0` at the head; the
+  records, authoring and docs suites, 5 files and 202 cases, exit 0; the tag deleted; none after, locally or on the
+  remote. The tree clean.
+- 2026-10-12T12:34Z–12:58Z: **the third Windows run, green**, at `b75f2a6e` (its code is the final tree's; the text
+  pass after it changed pages only): every job of this repository's CI matrix, both Windows legs among them.
+- **The maintainer's answers, given between 12:59Z and 13:03Z, verbatim:** two text gaps (the changelog's
+  after-upgrade check named fewer clients than the security page; the advisory draft lacked one of the page's
+  remedies) — **"Fix both now (Recommended)"**; run 46's two scan lines — **"Same false match (Recommended)"**;
+  today's open items — **"Accept them (Recommended)"**; publishing — **"Push, ask before the cut (Recommended)"**.
+- 2026-10-12T13:04Z: `587527bc` (a fixer on Opus 5.5, `high`): the 1.14.0 Security entry's after-upgrade check now
+  covers every client, as `SECURITY.md` does; the docs tests, lint and the leak gate exit 0. The advisory draft
+  gained the remedy it lacked.
+- 2026-10-12T13:06Z–13:15Z: **the closing records** (an implementer on Opus 5.5, `high`, which did not commit; the
+  orchestrator committed them). Nine ledger rows, each `deferred` with its trigger and an inbox row: `close/4` to
+  `close/8`, residuals (1) to (5) of `SECURITY.md:114` (two Warning, three Minor); `close/9`, a hook launcher written
+  `node.exe` (the next release); `close/10`, the measurements page cannot name a run composed on a composed run
+  (when `src/cli/docs/measurements.ts` is next touched; waiting for a decision); `close/11`, two tests that time out
+  under heavy load in narrow runs (at the second miss in CI; pre-existing); `close/12`, fourteen inbox rows that cite
+  lines in files this release moved (re-pinned when each row is worked). One more row of that kind, `build/23`'s,
+  was re-pinned here to `CHANGELOG.md:723`, where its sentence now stands. **The ledger: 211 rows, none open** — 131
+  fixed, 71 deferred (seven of them retired, 64 with an inbox row), 9 rejected; the inbox's 2026-10-12 block holds
+  64 rows, 16 of them waiting for a decision. **The checklist's fifth line:** the merge-ready snapshot retaken (the
+  day's file removed and written again, as `faf731a1` did) and the measurements page regenerated: the rate is
+  unchanged at 7 of 17 (0.412); the records read rose from 47 to 49 and the exclusions from 35 to 37, this run's
+  folder and the debug run's.
+- 2026-10-12T13:16Z–13:28Z: the records gates on these records, uncommitted (a test-runner on Opus 5.5, `high`):
+  build, `check`, `validate`, `ledger status` (none open), 21 files and 750 cases, lint, the leak gate and hygiene,
+  exit 0 each. **The public-text read before the push** (a reviewer on Opus 5.5, `high`, 13:16Z–13:24Z, over
+  `60f2e889`, `3ff8fd4e`, `b75f2a6e`, `587527bc`, these records and the pull request's new description):
+  request-changes, confidence medium, four Warnings and six Minors, each fixed before the push. This record's
+  opening says "green on Windows CI", not "proven", and says where the answers stand; the closing pair's findings are
+  named above; the description states the review coverage exactly and scopes the git-read claim to the verbs; the
+  QA table's missing rows for the fix are under Not done in both; the fix's first entry keeps to what its source
+  supports; the Proof block carries a dated update. `b1da9b5b` recaptures the learning to cite the 01:41Z entry,
+  which holds the full suite's exit 1. `83d04a54` (a fixer on Opus 5.5, `high`) gives the changelog's hook-runner
+  item the remedy for every platform that `SECURITY.md` gives; the docs tests (4 files, 129 cases), lint and the
+  leak gate exit 0. The read found the account of the proof in a private copy of the repository fit for a public
+  record once the fix and its advisory are out.
 - 2026-10-11T23:56Z: an early `gate scan --base 751aaa5e` on the lane at `3338ee97`: exit 1, 91 files scanned, none
   skipped or unscanned, **four hits**, all rule `inline-api-key-assignment`, all in the two eval exports:
   `evals/runs/2026-10-11-run-44/summary.json:40303` and `:103402` (commit `90681fec`),
@@ -1981,6 +2128,18 @@ recorded for an open row); sign-off not signed. Browser evidence: not applicable
 the rendered documentation site is row 3.
 
 ## Proof block
+
+**Updated 2026-10-12T13:27Z, before the push of the security fix; this paragraph supersedes the lines below where
+they differ.** Gates: on the final product tree `03696ecb` — the full suite alone with coverage and the four live
+clients armed, 293 files, 13,879 passed, 0 failed, 18 skipped, the floors held, the four live walks passed; build,
+`sync`, `check`, lint, typecheck, knip, the leak gate and hygiene exit 0; the tag-time records check at a local tag,
+deleted at once — and the records gates on the commits after it, exit 0 (the dated entries above give each run).
+Scan: `gate scan` exits 1 on six lines of the three eval exports, settled by the maintainer as a false match (four
+at the close's question, two at 12:59Z–13:03Z). Reviews: `review/71`, `review/72`, `review/73`, `review/79` and
+`fix/30` fixed by `f8`; the spec delta merged (`c2da882f`); the security fix as the dated entries tell it. CI: green
+on #97 at `a17b29df`, every leg; at the pushed head, the next records commit says. Eval: run 45 the run of record,
+PASS as composed; run 46, at `04bfbde9`, PASS (a recalibration, every case carried). Not done: as the opening of
+this record lists.
 
 Written 2026-10-12T02:12Z, before the close question is answered: the run is `in progress` and this block is
 completed by the closing records commit (the CI line, the sign-off, the leftovers line). The notes above are the

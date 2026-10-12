@@ -6,7 +6,7 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-10-10 — the newest
+What this repository can prove about its own output, as of 2026-10-11 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
@@ -108,10 +108,12 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-10-08_inbox-pass` — no proof block
 - `2026-10-08_maintainer-tooling` — gates in prose only — no gate row carries a pass or fail
 - `2026-10-08_product-core` — gates in prose only — no gate row carries a pass or fail
+- `2026-10-11_debug-claude-plugin-walk` — no proof block
+- `2026-10-11_release-1-14-0` — run in progress
 
 ### What the number is limited by, stated rather than tuned away
 
-35 run directories are outside the measure and every one of them is named
+37 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
