@@ -244,7 +244,7 @@ seam now starts git one way:
   `core.fsmonitor=false`, so the dirty counts run no file-system monitor
   command a configuration names (`src/worktree/git.ts:96-102`, `:124`). Git
   honours the first from 2.38 and an older git ignores it without an error
-  (`src/merge/safeWrite.ts:1058-1059`).
+  (`src/merge/safeWrite.ts:1073-1074`).
 - **Git is started by an absolute path, never by its bare name.** The seam
   asks `gitProgramFor` (`src/shared/programPath.ts`) for the git of the
   folder the call runs in and starts the path it answers
@@ -265,7 +265,7 @@ seam now starts git one way:
   states it.
 - **Before git is started the lane takes the look REQ-PLUGIN-046 states**
   (`docs/specs/plugin-lifecycle.md`, amended 2026-10-12;
-  `gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts:1106-1130`), from the
+  `gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts:1122-1147`), from the
   folder the call runs in, and hands it the environment it keeps
   (`src/worktree/git.ts:120`). Where the look refuses, no git is started and
   the call's outcome has the shape of git's own refusal, status 128, nothing
@@ -311,7 +311,7 @@ seam now starts git one way:
   the lane's mark and this refusal; what `check`, `sync`, `init` and `gate`
   print at such a folder is REQ-PLUGIN-046's to state.
 - **Handed that environment, the look reads three of git's variables and no
-  other** (`src/merge/safeWrite.ts:1107-1109`): with `GIT_DIR` set no look is
+  other** (`src/merge/safeWrite.ts:1123-1126`): with `GIT_DIR` set no look is
   taken, since git then runs no discovery; `GIT_OBJECT_DIRECTORY` stands in
   for `objects`; and with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set to any value
   git does not read as false (empty, `false`, `no`, `off` or a zero) the
@@ -329,12 +329,12 @@ it keeps git's variables — `GIT_COMMON_DIR` exported with no `GIT_DIR`, on a
 git older than 2.38 (`2026-10-11_release-1-14-0/fix/14`), and a `GIT_DIR` of
 any value, under which no look is taken while git resolves a relative value
 against the folder it runs in, on any git version
-(`2026-10-11_release-1-14-0/review/51`; `src/merge/safeWrite.ts:1084-1086`,
-`:1101-1102`); and git that anything other than a CLI verb starts, which
+(`2026-10-11_release-1-14-0/review/51`; `src/merge/safeWrite.ts:1099-1101`,
+`:1117-1118`); and git that anything other than a CLI verb starts, which
 carries neither option and takes no look. Started in or under a committed
 folder of the shape that git can open, such a git reads that folder, and
 that does not take a refusal by the look: the look walks upward from the
-folder a call runs in (`src/merge/safeWrite.ts:1118-1129`), so a folder of
+folder a call runs in (`src/merge/safeWrite.ts:1135-1146`), so a folder of
 the shape below that one meets no look
 (`2026-10-11_release-1-14-0/review/70`, and `review/79` of the same run for
 the folder below). Before this change the seam passed the command alone and
@@ -344,7 +344,10 @@ root shaped like a bare repository", and
 look before git refused", the describe "worktree where the engine found no
 git to start", red before `resolveLane` asked the walk, and, for the refusal
 outside a repository, the case "refuses outside a git repository, naming the
-directory" of the describe "worktree dispatch".
+directory" of the describe "worktree dispatch". (Amended 2026-10-12: the six
+citations into `src/merge/safeWrite.ts` in this section were re-read at
+`ff9bc3cb`; they read `:1058-1059`, `:1106-1130`, `:1107-1109`,
+`:1084-1086`, `:1101-1102` and `:1118-1129`.)
 
 ### REQ-WORKTREE-002 — The farm sits outside the repository, and a farm inside it is refused
 
