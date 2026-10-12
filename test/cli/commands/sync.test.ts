@@ -312,7 +312,100 @@ describe("sync — a folder the look before git refused", () => {
     expect(shapedDoc["dirty"]).toEqual({ available: false, dirty: false, changedCount: 0 });
     expect(shapedDoc["dirty"]).toEqual(plainDoc["dirty"]);
   });
+
+  // Run 2026-10-11_release-1-14-0, review/66. The step says to read "the files listed above", and
+  // the report lists twenty rows and folds the rest into `… and N more`. Past twenty the step now
+  // says so, and says what the tree holds instead. These cases run the real report beside the step,
+  // so the number the step counts to and the number the report folds at cannot part unseen: twenty
+  // rows fold nothing and keep the step, one more folds one and moves it.
+  function guideOutputs(count: number): AdapterOutput[] {
+    return Array.from({ length: count }, (_unused, index) =>
+      managedOutput(`.claude/rules/stamity-guide-${String(index + 1).padStart(2, "0")}.md`, `guide body ${index + 1}`),
+    );
+  }
+
+  it("says the list was cut short, and what the tree holds instead, past twenty rows", async () => {
+    const handle = tempDir();
+    const root = await seedShaped(handle, "repo");
+    plannerOutputs.value = guideOutputs(21);
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("synced: 21 created, 0 updated, 0 unchanged, 0 skipped");
+    expect(result.stdout).toContain("\n  … and 1 more\n");
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} ${listCutShortText(1)}\n`);
+    for (const call of ["git diff", "git status", "git log", "git rev-parse", "git init"]) {
+      expect(result.stdout, `the run names ${call}`).not.toContain(call);
+    }
+
+    // What the added words rest on. The ledger names every file the run wrote, and marks none as
+    // changed by it: a row holds a path, its owner and a hash.
+    const ledger = (await readManifest(root))?.ledger ?? [];
+    const written = plannerOutputs.value.map((output) => output.path);
+    expect(ledger.map((row) => row.path).toSorted()).toEqual(written.toSorted());
+    expect(Object.keys(ledger[0] ?? {}).toSorted()).toEqual(
+      ["adapter", "artifactId", "artifactType", "contentHash", "path", "stampedVersion"],
+    );
+    // And a `--json` run given now reports the files this run wrote as unchanged.
+    const again = parseSingleDoc((await runSync(root, ["--json"])).stdout);
+    const rows = again["wrote"] as { path: string; action: string }[];
+    expect(rows.map((row) => row.path).toSorted()).toEqual(written.toSorted());
+    expect(rows.every((row) => row.action === "unchanged")).toBe(true);
+  });
+
+  it("holds every row under `wrote` in the --json document of the run that wrote them", async () => {
+    const handle = tempDir();
+    const root = await seedShaped(handle, "repo");
+    plannerOutputs.value = guideOutputs(21);
+
+    const doc = parseSingleDoc((await runSync(root, ["--json"])).stdout);
+
+    const rows = doc["wrote"] as { path: string; action: string }[];
+    expect(rows).toHaveLength(21);
+    expect(rows.every((row) => row.action === "created")).toBe(true);
+  });
+
+  it("keeps the step as it was at twenty rows, unchanged files not counted", async () => {
+    const handle = tempDir();
+    const root = await seedShaped(handle, "repo");
+    plannerOutputs.value = guideOutputs(1);
+    expect((await runSync(root)).code).toBe(0);
+    plannerOutputs.value = guideOutputs(21);
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("synced: 20 created, 0 updated, 1 unchanged, 0 skipped");
+    expect(result.stdout).not.toContain("more\n");
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}\n`);
+    expect(result.stdout).not.toContain("cut short");
+  });
+
+  it("keeps the step as it was outside such a folder, however long the list", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    plannerOutputs.value = guideOutputs(21);
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("\n  … and 1 more\n");
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_LINE}\n`);
+    expect(result.stdout).not.toContain("cut short");
+  });
 });
+
+/** The words the step adds where the report's list was cut short, whole (review/66). */
+function listCutShortText(folded: number): string {
+  return (
+    `That list was cut short at \`… and ${folded} more\`, and the engine keeps no record of which ` +
+    `files those are. The \`ledger\` in ${STATE_DIR}/manifest.json names every file the engine ` +
+    "manages, each file this run wrote among them, and does not say which of them changed; " +
+    "sync --json prints every row under `wrote`, but only for the run it is given on, and a run " +
+    "now reports the files this one wrote as unchanged."
+  );
+}
 
 describe("sync --dry-run", () => {
   it("exits 0 on a would-collision plan, marks it 'would refuse', and writes nothing", async () => {
@@ -705,5 +798,42 @@ describe("syncClosingLines", () => {
       NEXT_AFTER_WRITE_LINE,
     ]);
     expect(NEXT_AFTER_WRITE_LINE).toBe("next: git diff to review, stamity check to verify");
+  });
+
+  // review/66: the report lists twenty rows and folds the rest, so past twenty "the files listed
+  // above" are not all of them. There, and only at such a folder, the step says so after the
+  // sentence it had. Unchanged rows are not listed and do not count.
+  it("says the list was cut short where the report folded rows at such a folder, and nowhere else", () => {
+    const unavailable = { available: false, dirty: false, changedCount: 0 } as const;
+    const kept = planFixture({ dirty: { ...unavailable, reason: "bare-layout" } });
+    const rows = (count: number, action: "created" | "updated" | "skipped" | "unchanged") =>
+      Array.from({ length: count }, (_unused, index) => ({ path: `.claude/rules/${action}-${index}.md`, action }));
+    const twenty = [...rows(12, "created"), ...rows(7, "updated"), ...rows(1, "skipped"), ...rows(5, "unchanged")];
+    const thirtySeven = [...twenty, ...rows(17, "updated")];
+
+    expect(syncClosingLines(kept, reportFixture({ created: 12, updated: 7, wrote: twenty }))).toEqual([
+      NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE,
+    ]);
+    expect(syncClosingLines(kept, reportFixture({ created: 12, updated: 24, wrote: thirtySeven }))).toEqual([
+      `${NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} ${listCutShortText(17)}`,
+    ]);
+    for (const call of ["git diff", "git status", "git log", "git rev-parse", "git init"]) {
+      expect(listCutShortText(17), `the step names ${call}`).not.toContain(call);
+    }
+    // The step it had is the string it was.
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toBe(
+      "next: review without git, stamity check to verify — git was not started here: this folder, or a " +
+        "folder above it, has the layout of a bare repository, so do not run git in it or in any folder " +
+        "under it, this one included. To review, read the files listed above, and compare a file with " +
+        "the .bak a warning above names for it.",
+    );
+
+    // Everywhere else the step is the line it was, however long the list.
+    expect(syncClosingLines(planFixture(), reportFixture({ created: 12, updated: 24, wrote: thirtySeven }))).toEqual([
+      NEXT_AFTER_WRITE_LINE,
+    ]);
+    expect(
+      syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 12, updated: 24, wrote: thirtySeven })),
+    ).toEqual([NEXT_AFTER_WRITE_LINE]);
   });
 });

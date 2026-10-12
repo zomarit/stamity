@@ -1,5 +1,7 @@
 import type { Command } from "commander";
 import { scopeRegistryArg } from "../../shared/cliCall.ts";
+import { MANIFEST_FILE } from "../../types/manifest.ts";
+import { STATE_DIR } from "../../types/markers.ts";
 import { hasNpmChannel, npmRegistry, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
@@ -98,6 +100,44 @@ export const NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE =
   "the .bak a warning above names for it.";
 
 /**
+ * How many per-file rows the report prints before it folds the rest into one
+ * `… and N more` row. The number is `./sync/report.ts`'s `MAX_FILE_LINES`, which
+ * that module keeps to itself, so it is spelled a second time here. Two cases
+ * run the real report beside the step and hold the two together
+ * (`test/cli/commands/sync.test.ts`): a run of this many rows, and one more.
+ */
+const LISTED_FILE_ROWS = 20;
+
+/**
+ * What {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} adds where the report's list
+ * was cut short, or `null` where it was printed whole (review/66). The step
+ * says to read "the files listed above", and past the fold they are not all
+ * listed; the usual way to see the rest is git, which this step cannot name.
+ *
+ * It says only what the tree holds. Nothing the engine writes records which
+ * files one run changed: the manifest's ledger names every managed path with
+ * its owner and a hash, each file this run wrote among them
+ * (`../engine/emissionWrite.ts::ledgerRowsForOutput`), and the `--json` payload
+ * holds every row under `wrote` (`./sync/report.ts::syncJsonPayload`) for the
+ * run that prints it, where a later run plans the same files as unchanged.
+ *
+ * The rows counted are the ones the report lists: every `wrote` row but the
+ * unchanged ones, a skipped write included.
+ */
+function listCutShortLine(report: SyncApplyReport): string | null {
+  const listed = report.wrote.filter((result) => result.action !== "unchanged").length;
+  const folded = listed - LISTED_FILE_ROWS;
+  if (folded <= 0) return null;
+  return (
+    `That list was cut short at \`… and ${folded} more\`, and the engine keeps no record of which ` +
+    `files those are. The \`ledger\` in ${STATE_DIR}/${MANIFEST_FILE} names every file the engine ` +
+    `manages, each file this run wrote among them, and does not say which of them changed; ` +
+    `sync --json prints every row under \`wrote\`, but only for the run it is given on, and a run ` +
+    `now reports the files this one wrote as unchanged.`
+  );
+}
+
+/**
  * The one stderr warning line for a dirty working tree, or `null` when there
  * is nothing to warn about: a clean tree needs no warning, and an unavailable
  * git (`available: false`) cannot be warned about — unknown is not dirty.
@@ -118,13 +158,21 @@ export function dirtyTreeWarning(dirty: WorkingTreeStatus): string | null {
  * nothing (the report's own honesty lines cover both; this layer never
  * duplicates them). The step is {@link NEXT_AFTER_WRITE_LINE} everywhere but at
  * a folder the look before git refused, where it is
- * {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}.
+ * {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}, followed on the same line by
+ * {@link listCutShortLine} where the report folded rows out of its list.
  */
 export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): string[] {
   const lines: string[] = [];
   if (plan.manifestMigrated) lines.push(`manifest schema migrated to ${plan.manifest.version}`);
   if (!report.dryRun && report.created + report.updated > 0) {
-    lines.push(plan.dirty.reason === "bare-layout" ? NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE : NEXT_AFTER_WRITE_LINE);
+    if (plan.dirty.reason === "bare-layout") {
+      const cutShort = listCutShortLine(report);
+      lines.push(
+        cutShort === null ? NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE : `${NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} ${cutShort}`,
+      );
+    } else {
+      lines.push(NEXT_AFTER_WRITE_LINE);
+    }
   }
   // Last line, because it is the one the exit code is about. A partial run
   // prints its successes above; without this the operator would read a report
