@@ -227,12 +227,12 @@ function describeGitFailure(err: GitReadError): string {
   if (failure.code === "ENOENT" && !existsSync(err.cwd)) return `the directory git runs in, ${err.cwd}, does not exist`;
   if (failure.code === "ENOENT") return "git could not run (no git binary was found)";
   const firstRead = err.step === "rev-parse --show-prefix";
-  const what = firstRead ? "the engine's look for a git work tree" : `git ${err.step}`;
+  const what = firstRead ? "git's search for a work tree here" : `git ${err.step}`;
   if (failure.code === "ETIMEDOUT") return `${what} did not finish within ${GATE_GIT_TIMEOUT_MS / 1000} seconds`;
   if (failure.code === "ENOBUFS") return `${what} printed more than ${GATE_GIT_MAX_BUFFER / 1024 / 1024} MiB`;
   const status = typeof failure.status === "number" ? `, exit ${failure.status}` : "";
   if (firstRead) {
-    return `no git work tree was found here (the engine found a git binary, and its look for one failed${status})`;
+    return `no git work tree was found here (the engine found a git binary, and git's search for one failed${status})`;
   }
   return `git ${err.step} failed${status}`;
 }

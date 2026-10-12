@@ -428,7 +428,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     ["the output bound on the diff", "diff", () => realFailure("process.stdout.write('x'.repeat(4096))", { maxBuffer: 16 }), "git diff --name-status printed more than 64 MiB"],
     // The first read is named in words, never as a call a reader could type: where it fails, git
     // did not answer here, and a git typed at a prompt is found by the shell's rules.
-    ["a timeout on the first read", "--show-prefix", () => realFailure("setTimeout(() => {}, 10000)", { timeout: 200 }), "the engine's look for a git work tree did not finish within 60 seconds"],
+    ["a timeout on the first read", "--show-prefix", () => realFailure("setTimeout(() => {}, 10000)", { timeout: 200 }), "git's search for a work tree here did not finish within 60 seconds"],
   ])("says product and names %s as the cause", async (_label, step, failure, cause) => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
@@ -728,7 +728,7 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
   // Where git does not answer in a folder with no repository, the reason named the call that
   // failed, `git rev-parse --show-prefix`. Its reader is a session that may type a named call, and
   // a git typed at a prompt is found by the shell's rules, so it answers for a program the engine
-  // may never start. The reason now says what the engine found, a git binary whose look for a work
+  // may never start. The reason now says what the engine found, a git binary whose search for a work
   // tree failed, with git's own exit status, and names no git command. A host with git on `PATH`.
   it("names no git command in the reason where there is simply no repository, for classify and for scan", async () => {
     const plain = getRoot().path("plain");
@@ -740,13 +740,18 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(classified.code).toBe(0);
     expect(classified.doc["class"]).toBe("product");
     expect(classified.doc["reason"]).toBe(
-      "the change could not be read (no git work tree was found here (the engine found a git binary, and its " +
-        "look for one failed, exit 128)), so the class is product",
+      "the change could not be read (no git work tree was found here (the engine found a git binary, and git's " +
+        "search for one failed, exit 128)), so the class is product",
     );
     expect(scanned.code).toBe(1);
     expect(scanned.doc["reason"]).toContain(
-      "no git work tree was found here (the engine found a git binary, and its look for one failed, exit 128)",
+      "no git work tree was found here (the engine found a git binary, and git's search for one failed, exit 128)",
     );
+    // The first read is git's own search, not the engine's look before git, which the pages name
+    // "the look": a reader of this reason must not take the engine's walk to have failed.
+    for (const doc of [classified.doc, scanned.doc]) {
+      expect(doc["reason"], "the reason names the look").not.toContain("look");
+    }
     for (const doc of [classified.doc, scanned.doc]) {
       for (const call of ["git rev-parse", "rev-parse", "git status", "git diff", "git init", "git --"]) {
         expect(doc["reason"], `the reason names ${call}`).not.toContain(call);
