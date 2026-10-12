@@ -209,11 +209,11 @@ function runGit(runner: GitRunner, cwd: string, step: string, args: readonly str
 
 /**
  * Why a git read failed, in words: the step and the cause the error carries.
- *
- * First, the one failure no git gave: the runner's look before git kept the
- * folder from git (`keptFromGit`). No git call failed there and git gave no
- * exit status, so none is named (review/60): the reader is a session that may
- * re-run a named call by hand, and plain git run in that folder opens it.
+ * Two failures name no git call, since the reader is a session that may re-run
+ * a named call by hand. One no git gave: the look before git kept the folder
+ * from git (`keptFromGit`), so no call failed, git gave no status, and plain
+ * git run there opens it (review/60). The other is the first read, which fails
+ * wherever git does not answer here: a typed git is found by the shell's rules.
  */
 function describeGitFailure(err: GitReadError): string {
   if (keptFromGit(err.failure)) {
@@ -226,13 +226,13 @@ function describeGitFailure(err: GitReadError): string {
   // A spawn in a missing directory fails ENOENT as a missing binary does (review/18).
   if (failure.code === "ENOENT" && !existsSync(err.cwd)) return `the directory git runs in, ${err.cwd}, does not exist`;
   if (failure.code === "ENOENT") return "git could not run (no git binary was found)";
-  if (failure.code === "ETIMEDOUT") {
-    return `git ${err.step} did not finish within ${GATE_GIT_TIMEOUT_MS / 1000} seconds`;
-  }
-  if (failure.code === "ENOBUFS") return `git ${err.step} printed more than ${GATE_GIT_MAX_BUFFER / 1024 / 1024} MiB`;
+  const firstRead = err.step === "rev-parse --show-prefix";
+  const what = firstRead ? "the engine's look for a git work tree" : `git ${err.step}`;
+  if (failure.code === "ETIMEDOUT") return `${what} did not finish within ${GATE_GIT_TIMEOUT_MS / 1000} seconds`;
+  if (failure.code === "ENOBUFS") return `${what} printed more than ${GATE_GIT_MAX_BUFFER / 1024 / 1024} MiB`;
   const status = typeof failure.status === "number" ? `, exit ${failure.status}` : "";
-  if (err.step === "rev-parse --show-prefix") {
-    return `no git work tree was found here (git rev-parse --show-prefix failed${status})`;
+  if (firstRead) {
+    return `no git work tree was found here (the engine found a git binary, and its look for one failed${status})`;
   }
   return `git ${err.step} failed${status}`;
 }

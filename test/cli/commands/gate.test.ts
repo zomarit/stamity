@@ -426,6 +426,9 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     ["a git failure", "--verify", () => realFailure("process.exit(128)"), "git rev-parse --verify failed, exit 128"],
     ["a timeout on the diff", "diff", () => realFailure("setTimeout(() => {}, 10000)", { timeout: 200 }), "git diff --name-status did not finish within 60 seconds"],
     ["the output bound on the diff", "diff", () => realFailure("process.stdout.write('x'.repeat(4096))", { maxBuffer: 16 }), "git diff --name-status printed more than 64 MiB"],
+    // The first read is named in words, never as a call a reader could type: where it fails, git
+    // did not answer here, and a git typed at a prompt is found by the shell's rules.
+    ["a timeout on the first read", "--show-prefix", () => realFailure("setTimeout(() => {}, 10000)", { timeout: 200 }), "the engine's look for a git work tree did not finish within 60 seconds"],
   ])("says product and names %s as the cause", async (_label, step, failure, cause) => {
     const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
     await getRoot().seedFiles({ "repo/docs/a.md": "changed\n" });
@@ -711,7 +714,44 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     }
     // The document's shape is the one a folder with no repository gets: only the reason's words differ.
     expect(Object.keys(refused.doc).toSorted()).toEqual(Object.keys(outside.doc).toSorted());
-    expect(outside.doc["reason"]).toContain("no git work tree was found here (git rev-parse --show-prefix failed, exit 128)");
+    // TEST CHANGE, justified: this read `toContain("no git work tree was found here (git rev-parse
+    // --show-prefix failed, exit 128)")`. That call did run and git did give the status, so the
+    // text was true; but it names a git command to a session that may re-run it by hand, in a
+    // folder where git did not answer the engine, and a typed git is found by the shell's rules,
+    // not by the engine's walk (`src/shared/programPath.ts`). The reason keeps the cause and the
+    // status and names the read in words; the next case holds it whole.
+    expect(outside.doc["reason"]).toContain("no git work tree was found here");
+    expect(outside.doc["reason"]).toContain("exit 128");
+    expect(outside.doc["reason"]).not.toContain("rev-parse");
+  });
+
+  // Where git does not answer in a folder with no repository, the reason named the call that
+  // failed, `git rev-parse --show-prefix`. Its reader is a session that may type a named call, and
+  // a git typed at a prompt is found by the shell's rules, so it answers for a program the engine
+  // may never start. The reason now says what the engine found, a git binary whose look for a work
+  // tree failed, with git's own exit status, and names no git command. A host with git on `PATH`.
+  it("names no git command in the reason where there is simply no repository, for classify and for scan", async () => {
+    const plain = getRoot().path("plain");
+    await mkdir(plain, { recursive: true });
+
+    const classified = await classifyIn(plain, []);
+    const scanned = await gateIn(plain, ["scan", "--json"]);
+
+    expect(classified.code).toBe(0);
+    expect(classified.doc["class"]).toBe("product");
+    expect(classified.doc["reason"]).toBe(
+      "the change could not be read (no git work tree was found here (the engine found a git binary, and its " +
+        "look for one failed, exit 128)), so the class is product",
+    );
+    expect(scanned.code).toBe(1);
+    expect(scanned.doc["reason"]).toContain(
+      "no git work tree was found here (the engine found a git binary, and its look for one failed, exit 128)",
+    );
+    for (const doc of [classified.doc, scanned.doc]) {
+      for (const call of ["git rev-parse", "rev-parse", "git status", "git diff", "git init", "git --"]) {
+        expect(doc["reason"], `the reason names ${call}`).not.toContain(call);
+      }
+    }
   });
 
   it("never reads a committed folder shaped like a bare repository, nor runs its fsmonitor", async () => {

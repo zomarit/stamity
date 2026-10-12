@@ -301,13 +301,17 @@ async function askMigrate(gate: PromptGate, promptIo: PromptIo): Promise<Migrate
  * git (`reason`, the status's own), the question asks on that cause, in the
  * words of the note and the refusal that follow it ({@link noGitNote}), and
  * names no git command (fix/24): the operator answered on "not a repo", and the
- * next text printed said otherwise. The answer taken, its default and what
- * each answer does are the same on both branches.
+ * next text printed said otherwise. For the same reason the question has a
+ * third text where the engine's walk found no git to start (`gitFound`, see
+ * {@link noGitNote}): the note that follows says so, and the question does too.
+ * The answer taken, its default and what each answer does are the same on
+ * every branch.
  */
 async function askProceedWithoutGit(
   gate: PromptGate,
   promptIo: PromptIo,
   reason: WorkingTreeStatus["reason"],
+  gitFound: boolean,
 ): Promise<boolean> {
   return await confirm(gate, promptIo, {
     question:
@@ -315,8 +319,11 @@ async function askProceedWithoutGit(
         ? "git was not started here: this folder, or a folder above it, has the layout of a bare " +
           "repository, so the engine did not hand it to git. Files written now have no revert " +
           "path the engine could check. Continue?"
-        : "No git repository here (git did not answer, or this directory is not a repo). " +
-          "Files written now cannot be reverted with git. Continue?",
+        : gitFound
+          ? "No git repository here (git did not answer, or this directory is not a repo). " +
+            "Files written now cannot be reverted with git. Continue?"
+          : "git did not answer here: the engine found no git to start. " +
+            "Files written now cannot be reverted with git. Continue?",
     defaultYes: true,
   });
 }
@@ -328,13 +335,14 @@ async function askProceedWithoutGit(
  * It carries the clauses of `check`'s `git-available` row
  * (`./check.ts::checkGit`): this is the verb an operator with no repository
  * runs first, so it cannot say less than the row they read one command later.
- * As that row does, it asks the engine's own walk whether a git was found
- * (`../../shared/programPath.ts::gitProgramFor`, under the `PATH` the read
- * itself walked) and has a text for each answer. Where the walk found none the
- * note says so, says which `PATH` entries git is taken from, and states what
- * the two verbs lose outright. Where it found one, the note says that, which
- * leaves a missing repository or a git that was only slow, so what the two
- * verbs lose is worded on the repository being absent. Neither text names a
+ * As that row does, it goes by what the engine's own walk found (`gitFound`:
+ * `../../shared/programPath.ts::gitProgramFor`, asked once by the command
+ * under the `PATH` the read itself walked, and handed to every text of the run
+ * that words this state) and has a text for each answer. Where the walk found
+ * none the note says so, says which `PATH` entries git is taken from, and
+ * states what the two verbs lose outright. Where it found one, the note says
+ * that, which leaves a missing repository or a git that was only slow, so what
+ * the two verbs lose is worded on the repository being absent. Neither names a
  * git command to type: a git typed at a prompt is found by the shell's rules,
  * not by the engine's walk, so the note says what the engine found where it
  * once said to type `git init`.
@@ -349,7 +357,7 @@ async function askProceedWithoutGit(
  * cause, so beside what the flows list the note says to start none there until
  * the folder is moved, as that row does (review/72).
  */
-function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], rootDir: string): string {
+function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], gitFound: boolean): string {
   const tense = dryRun ? "would be written" : "were written";
   if (reason === "bare-layout") {
     return (
@@ -365,7 +373,7 @@ function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], rootDir
       `here until that folder is moved off this path.`
     );
   }
-  if (gitProgramFor(rootDir, process.env) === null) {
+  if (!gitFound) {
     return (
       `git did not answer here, so the files that ${tense} have no revert path: the engine found ` +
       `no git to start. It takes git only from a PATH entry that is a full path to a folder other ` +
@@ -831,6 +839,7 @@ function renderDryRun(
   residue: MigrationResidue | undefined,
   notes: readonly string[],
   git: WorkingTreeStatus,
+  gitFound: boolean,
 ): void {
   const { io, palette } = ctx;
   io.out(`${palette.bold("Dry run")} — nothing was written. A real run would:\n`);
@@ -850,6 +859,7 @@ function renderDryRun(
       dryRun: true,
       gitAvailable: git.available,
       ...(git.reason === undefined ? {} : { gitReason: git.reason }),
+      gitFound,
       entries: REQUIRED_GITIGNORE_ENTRIES,
       mcpConfigured: mcpServers.length > 0,
     })}\n`,
@@ -861,7 +871,7 @@ function renderDryRun(
     io.out(`  ${palette.yellow(`warning: ${warning}`)}\n`);
   }
   if (carry !== null) {
-    for (const line of migrationLines(carry, residue, git.reason)) io.out(`  ${line}\n`);
+    for (const line of migrationLines(carry, residue, git.reason, git.available)) io.out(`  ${line}\n`);
   }
   for (const note of notes) io.out(`  ${note}\n`);
   io.out("\nnext:\n  1. apply it: stamity init\n");
@@ -1005,6 +1015,12 @@ export const initCommand: CommandModule = {
     // earlier: init writes the files whose revert path git IS, so the question
     // belongs here rather than in the verb that inspects the result.
     const git = readWorkingTreeStatus(rootDir);
+    // What the engine's own walk found, asked once, where git did not answer
+    // and the look refused nothing: the question, the note, the refusal and
+    // the security line all word that state on it, so none gives a missing
+    // repository as the cause where the engine found no git to start.
+    const gitFound =
+      git.available || git.reason === "bare-layout" || gitProgramFor(rootDir, process.env) !== null;
     // Already-initialised pre-flight, AHEAD of `buildInitDecisions` (B10):
     // without --force the apply below refuses, so asking two questions first
     // would waste the user's answers — and `buildInitDecisions` runs a
@@ -1084,7 +1100,7 @@ export const initCommand: CommandModule = {
     // The no-repository gate, LAST of the questions and still before the first
     // byte: an operator who declines has answered about this run's whole write,
     // and an abort here leaves the directory exactly as it was found.
-    if (!git.available && !alreadyInitialised && !(await askProceedWithoutGit(gate, ctx.promptIo, git.reason))) {
+    if (!git.available && !alreadyInitialised && !(await askProceedWithoutGit(gate, ctx.promptIo, git.reason, gitFound))) {
       closePrompts(ctx.promptIo);
       // Where the engine's look kept this folder from git, the refusal states
       // that cause and names no git command, as the note does ({@link noGitNote}).
@@ -1104,10 +1120,21 @@ export const initCommand: CommandModule = {
                 "checkout that does not keep it there, and re-run `stamity init`, or re-run with -y to accept " +
                 "a setup whose revert path the engine could not check",
             }
-          : {
-              why: "git does not answer in this directory, so the write would have no revert path",
-              next: "run `git init` here and re-run `stamity init`, or re-run with -y to accept a setup you cannot git-revert",
-            }),
+          : gitFound
+            ? {
+                why: "git does not answer in this directory, so the write would have no revert path",
+                next:
+                  "re-run `stamity init` once this directory is in a repository, which a .git entry in it or " +
+                  "in a folder above it shows by name, or re-run with -y to accept a setup you cannot git-revert",
+              }
+            : {
+                why:
+                  "git did not answer in this directory: the engine found no git to start, so the write " +
+                  "would have no revert path",
+                next:
+                  "install git, or put the folder that holds it on PATH by its full path, and re-run " +
+                  "`stamity init`, or re-run with -y to accept a setup you cannot git-revert",
+              }),
       });
     }
 
@@ -1187,7 +1214,7 @@ export const initCommand: CommandModule = {
     // FIRST, and on every non-git run whether or not anyone was asked: the
     // disclosure is about what this run can and cannot be undone by, which the
     // operator needs before reading anything else the panel says.
-    if (!git.available) notes.push(noGitNote(ctx.dryRun, git.reason, rootDir));
+    if (!git.available) notes.push(noGitNote(ctx.dryRun, git.reason, gitFound));
     // Printed for BOTH modes, never only for the one a flag asked for: the
     // state that most needs saying out loud is a machine run that took `skip`
     // because nobody was there to consent to `full`.
@@ -1220,7 +1247,7 @@ export const initCommand: CommandModule = {
     }
 
     if (ctx.dryRun) {
-      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git);
+      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git, gitFound);
     } else {
       for (const note of notes) ctx.io.out(`${note}\n`);
       // The mark, once, on the one surface that is a first screen for a person.
@@ -1252,6 +1279,7 @@ export const initCommand: CommandModule = {
           palette: ctx.palette,
           gitAvailable: git.available,
           ...(git.reason === undefined ? {} : { gitReason: git.reason }),
+          gitFound,
           predecessorDetected: predecessor !== null,
           ...(residue === undefined ? {} : { residue }),
           // The live analysis the plan already carries, classified into

@@ -85,6 +85,14 @@ export interface InitPanelInput {
    */
   gitReason?: WorkingTreeStatus["reason"];
   /**
+   * Whether the engine's own walk found a git to start
+   * (`../../../shared/programPath.ts::gitProgramFor`). Absent means yes. Read
+   * only where git did not answer and {@link InitPanelInput.gitReason} is
+   * absent: there the security disclosure says the engine found no git, where
+   * it found none, and never gives a missing repository as the cause.
+   */
+  gitFound?: boolean;
+  /**
    * Whether a previous setup was found, whatever the operator then chose to do
    * with it. Read by {@link detectedLabel}, which must not call a repo carrying
    * one "fresh" — including on `--migrate skip`, where no `carry` exists to
@@ -523,6 +531,7 @@ export function migrationLines(
   carry: CarryReport,
   residue?: MigrationResidue,
   gitReason?: WorkingTreeStatus["reason"],
+  gitAvailable = true,
 ): string[] {
   const deleted = carry.strips.filter((row) => row.action === "deleted").map((row) => row.path);
   const stripped = carry.strips.filter((row) => row.action === "stripped").length;
@@ -544,7 +553,7 @@ export function migrationLines(
       `  deleted (held nothing but the old generated block): ${deleted.join(", ")}`,
     );
   }
-  lines.push(...residueLines(residue, carry, gitReason));
+  lines.push(...residueLines(residue, carry, gitReason, gitAvailable));
   return lines;
 }
 
@@ -588,13 +597,17 @@ export function migrationLines(
  * starts git kept this folder from git (`gitReason`, the status's own), "commit
  * this repo" is plain git started in that folder, under a note that says to run
  * none there. The clause then names a copy made with no git command, and the
- * cause in the note's words (review/73). Every other word of these lines, and
- * the clause itself everywhere else, is what it was.
+ * cause in the note's words (review/73). It has a third text wherever else git
+ * did not answer (`gitAvailable`): with no repository, or no git the engine
+ * found, "commit this repo" is a git command typed where the engine's own git
+ * gave no answer, so the clause names the copy there too. Every other word of
+ * these lines, and the clause itself where git answers, is what it was.
  */
 function residueLines(
   residue: MigrationResidue | undefined,
   carry: CarryReport,
   gitReason: WorkingTreeStatus["reason"],
+  gitAvailable: boolean,
 ): string[] {
   if (residue === undefined || residue.paths.length === 0) return [];
   const keepProse =
@@ -602,7 +615,10 @@ function residueLines(
       ? `copy the files that hold it somewhere outside this folder before you run it, and use no ` +
         `git command for that: git was not started here, because this folder, or a folder above ` +
         `it, has the layout of a bare repository. `
-      : "commit this repo before you run it. ";
+      : gitAvailable
+        ? "commit this repo before you run it. "
+        : `copy the files that hold it somewhere outside this folder before you run it: git did ` +
+          `not answer here, so the engine knows of no commit that holds them. `;
   const lines = [
     `  left in place: ${residue.paths.length} predecessor path(s) — ${residue.paths.join(", ")}. ` +
       `The migration carries learnings and credentials and strips old managed blocks; it removes ` +
@@ -707,6 +723,8 @@ export interface GitignoreLineInput {
   gitAvailable?: boolean;
   /** Why it does not, where the probe knows; see {@link InitPanelInput.gitReason}. */
   gitReason?: WorkingTreeStatus["reason"];
+  /** Whether the engine's walk found a git to start; see {@link InitPanelInput.gitFound}. */
+  gitFound?: boolean;
   /**
    * The entries named. A live run passes exactly what it appended
    * (`InitApplyReport.gitignoreAdded`); a preview, which writes nothing and so
@@ -775,10 +793,24 @@ export function gitignoreLine(input: GitignoreLineInput): string {
       `tree, and the ${STATE_DIR}/ state directory is meant to be committed there.`
     );
   }
+  // Everywhere else git did not answer, the tail goes by what the engine's own
+  // walk found, as init's note does (`../init.ts::noGitNote`), and names no git
+  // command: "the first `git init`" is a command typed at a prompt, which the
+  // shell finds by its own rules. Where the walk found no git, "not a git
+  // repository yet" is not known to be true, and the tail says what is.
+  if (input.gitFound === false) {
+    return (
+      `${head}. git did not answer here: the engine found no git to start, so it cannot say what ` +
+      `is tracked or ignored here. The rule takes effect wherever a repository holds this folder ` +
+      `in its working tree, and the ${STATE_DIR}/ state directory is meant to be committed there.`
+    );
+  }
   return (
-    `${head}. This directory is not a git repository yet, so nothing is tracked or ignored ` +
-    `here at all: the rule takes effect on the first \`git init\`, and the ${STATE_DIR}/ ` +
-    `state directory is meant to be committed once there is somewhere to commit it.`
+    `${head}. git did not answer here though the engine found a git binary, so this directory is ` +
+    `not a git repository yet, or git was only slow to answer: nothing is known to be tracked or ` +
+    `ignored here. The rule takes effect once a repository holds this folder in its working tree, ` +
+    `and the ${STATE_DIR}/ state directory is meant to be committed once there is somewhere to ` +
+    `commit it.`
   );
 }
 
@@ -875,7 +907,9 @@ export function renderInitPanel(input: InitPanelInput): string {
   const pinLine = gatePinLine(decisions);
   if (pinLine !== null) lines.push(`  ${pinLine}`);
   if (carry !== null) {
-    for (const line of migrationLines(carry, input.residue, input.gitReason)) lines.push(`  ${line}`);
+    for (const line of migrationLines(carry, input.residue, input.gitReason, input.gitAvailable ?? true)) {
+      lines.push(`  ${line}`);
+    }
   }
   // Only the entries this run appended: a .gitignore that already covered them
   // was not edited, and there is nothing to disclose.
@@ -885,6 +919,7 @@ export function renderInitPanel(input: InitPanelInput): string {
         dryRun: false,
         gitAvailable: input.gitAvailable ?? true,
         ...(input.gitReason === undefined ? {} : { gitReason: input.gitReason }),
+        ...(input.gitFound === undefined ? {} : { gitFound: input.gitFound }),
         entries: report.gitignoreAdded,
         mcpConfigured: mcpServers.length > 0,
       })}`,

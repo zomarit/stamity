@@ -100,6 +100,20 @@ export const NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE =
   "the .bak a warning above names for it.";
 
 /**
+ * The same close wherever else git did not answer for the setup root
+ * (`WorkingTreeStatus.available` false with no `reason`): no repository, no git
+ * the engine found, or a git too slow for the probe. "git diff to review" is a
+ * git command typed where the engine's own git gave no answer, found by the
+ * shell's rules and not by the engine's walk, so this line names none either.
+ * It gives no cause of its own: `check`'s `git-available` row tells the causes
+ * apart by what the engine found, and the line points there.
+ */
+export const NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE =
+  "next: review without git, stamity check to verify — git did not answer here, and the " +
+  "git-available row of stamity check says what the engine found. To review, read the files " +
+  "listed above, and compare a file with the .bak a warning above names for it.";
+
+/**
  * How many per-file rows the report prints before it folds the rest into one
  * `… and N more` row. The number is `./sync/report.ts`'s `MAX_FILE_LINES`, which
  * that module keeps to itself, so it is spelled a second time here. Two cases
@@ -109,7 +123,8 @@ export const NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE =
 const LISTED_FILE_ROWS = 20;
 
 /**
- * What {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} adds where the report's list
+ * What {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} and
+ * {@link NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE} add where the report's list
  * was cut short, or `null` where it was printed whole (review/66). The step
  * says to read "the files listed above", and past the fold they are not all
  * listed; the usual way to see the rest is git, which this step cannot name.
@@ -156,22 +171,28 @@ export function dirtyTreeWarning(dirty: WorkingTreeStatus): string | null {
  * the review next-step only when a live run actually changed files — an
  * all-unchanged or empty-corpus run has nothing to review, and a dry run wrote
  * nothing (the report's own honesty lines cover both; this layer never
- * duplicates them). The step is {@link NEXT_AFTER_WRITE_LINE} everywhere but at
- * a folder the look before git refused, where it is
- * {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}, followed on the same line by
- * {@link listCutShortLine} where the report folded rows out of its list.
+ * duplicates them). The step is {@link NEXT_AFTER_WRITE_LINE} wherever git
+ * answered. At a folder the look before git refused it is
+ * {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}, and wherever else git did not
+ * answer {@link NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE}; each of those two is
+ * followed on the same line by {@link listCutShortLine} where the report folded
+ * rows out of its list.
  */
 export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): string[] {
   const lines: string[] = [];
   if (plan.manifestMigrated) lines.push(`manifest schema migrated to ${plan.manifest.version}`);
   if (!report.dryRun && report.created + report.updated > 0) {
-    if (plan.dirty.reason === "bare-layout") {
-      const cutShort = listCutShortLine(report);
-      lines.push(
-        cutShort === null ? NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE : `${NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE} ${cutShort}`,
-      );
-    } else {
+    const withoutGit =
+      plan.dirty.reason === "bare-layout"
+        ? NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE
+        : plan.dirty.available
+          ? null
+          : NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE;
+    if (withoutGit === null) {
       lines.push(NEXT_AFTER_WRITE_LINE);
+    } else {
+      const cutShort = listCutShortLine(report);
+      lines.push(cutShort === null ? withoutGit : `${withoutGit} ${cutShort}`);
     }
   }
   // Last line, because it is the one the exit code is about. A partial run

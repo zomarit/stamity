@@ -542,17 +542,46 @@ describe("renderInitPanel — migration summary", () => {
     "block does not come back — nothing can regenerate it — so ";
   const UNINSTALL_LINE_TAIL = "And if it finishes by offering to reinstall the old setup, decline.";
 
-  function uninstallLine(gitReason?: "bare-layout"): string {
-    const lines = migrationLines(carryFixture(), { paths: ["/repo/.prior"] }, gitReason);
+  function uninstallLine(gitReason?: "bare-layout", gitAvailable?: boolean): string {
+    const lines = migrationLines(carryFixture(), { paths: ["/repo/.prior"] }, gitReason, gitAvailable);
     return lines.find((line) => line.trimStart().startsWith("eyes open on that uninstall")) ?? "";
   }
 
-  it("keeps the uninstall line as it was everywhere the look before git refused nothing", () => {
+  // TEST CHANGE, justified: this case was "keeps the uninstall line as it was everywhere the look
+  // before git refused nothing", and held a panel whose git did not answer to "commit this repo"
+  // too. With no repository, or no git the engine found, that is a git command typed where the
+  // engine's own git gave no answer; the next case holds what the line says there. Where git
+  // answers the line is the text it was, compared whole.
+  it("keeps the uninstall line as it was where git answers", () => {
     expect(uninstallLine()).toBe(`${UNINSTALL_LINE_HEAD}commit this repo before you run it. ${UNINSTALL_LINE_TAIL}`);
-    // The panel hands the line on unchanged where git answers and where there is no repository.
-    for (const input of [panelInput(), panelInput({ gitAvailable: false })]) {
-      const output = renderInitPanel({ ...input, carry: carryFixture(), residue: { paths: ["/repo/.prior"] } });
-      expect(output).toContain("so commit this repo before you run it. And if it finishes");
+    expect(uninstallLine(undefined, true)).toBe(uninstallLine());
+    const output = renderInitPanel({ ...panelInput(), carry: carryFixture(), residue: { paths: ["/repo/.prior"] } });
+    expect(output).toContain("so commit this repo before you run it. And if it finishes");
+  });
+
+  // The line said "commit this repo before you run it" wherever the look refused nothing, a
+  // folder git did not answer in included. A commit there is a git command typed at a prompt,
+  // found by the shell's rules and not by the engine's walk, and with no repository there is
+  // nothing to commit to. There the line names the copy, as it does at a refused folder, and
+  // says why in the words every other text of that state uses.
+  it("names a copy and no commit on the uninstall line wherever else git did not answer", () => {
+    const line = uninstallLine(undefined, false);
+
+    expect(line).toBe(
+      `${UNINSTALL_LINE_HEAD}copy the files that hold it somewhere outside this folder before you run it: ` +
+        `git did not answer here, so the engine knows of no commit that holds them. ${UNINSTALL_LINE_TAIL}`,
+    );
+    expect(line).not.toContain("commit this repo");
+    for (const call of ["git init", "git commit", "git status", "git diff", "git log", "git rev-parse", "git --"]) {
+      expect(line, `the line names ${call}`).not.toContain(call);
+    }
+    // The panel carries the fact from its input to the line, whatever the engine's walk found.
+    for (const gitFound of [true, false]) {
+      const output = renderInitPanel(
+        panelInput({ carry: carryFixture(), residue: { paths: ["/repo/.prior"] }, gitAvailable: false, gitFound }),
+      );
+      expect(output, `gitFound=${gitFound}`).toContain(`  ${line}`);
+      expect(output, `gitFound=${gitFound}`).not.toContain("commit this repo");
     }
   });
 
@@ -809,14 +838,46 @@ describe("renderInitPanel — security disclosure", () => {
     expect(line).toBe(`${ONE_ENTRY_HEAD}, and the rest of the .stamity/ state directory is committed on purpose.`);
   });
 
-  it("keeps the tail it had where there is simply no repository", () => {
+  // The tail said "This directory is not a git repository yet" and "the rule takes effect on the
+  // first `git init`" wherever git did not answer and the look refused nothing. Where the engine
+  // found no git to start, that gave a missing repository as the cause under a note that says
+  // otherwise; and `git init` is a command typed at a prompt, which the shell finds by its own
+  // rules. The tail now goes by what the engine's walk found, as the note does, in two texts.
+  const FOUND_TAIL =
+    ". git did not answer here though the engine found a git binary, so this directory is not a git " +
+    "repository yet, or git was only slow to answer: nothing is known to be tracked or ignored here. " +
+    "The rule takes effect once a repository holds this folder in its working tree, and the " +
+    ".stamity/ state directory is meant to be committed once there is somewhere to commit it.";
+  const NO_GIT_TAIL =
+    ". git did not answer here: the engine found no git to start, so it cannot say what is tracked " +
+    "or ignored here. The rule takes effect wherever a repository holds this folder in its working " +
+    "tree, and the .stamity/ state directory is meant to be committed there.";
+  const GIT_CALLS = ["git init", "git status", "git diff", "git log", "git rev-parse", "git --"];
+
+  // TEST CHANGE, justified: this case was "keeps the tail it had where there is simply no
+  // repository" and compared the tail with the text above. It is the tail for a git the engine
+  // found, which is what a caller that passes no `gitFound` gets, as one that passes `true` does.
+  it("says the engine found a git binary, and names no git command, where git did not answer", () => {
     const line = gitignoreLine({ dryRun: false, gitAvailable: false, entries: [".env.mcp"], mcpConfigured: false });
 
-    expect(line).toBe(
-      `${ONE_ENTRY_HEAD}. This directory is not a git repository yet, so nothing is tracked or ignored ` +
-        "here at all: the rule takes effect on the first `git init`, and the .stamity/ state directory " +
-        "is meant to be committed once there is somewhere to commit it.",
+    expect(line).toBe(`${ONE_ENTRY_HEAD}${FOUND_TAIL}`);
+    expect(gitignoreLine({ dryRun: false, gitAvailable: false, gitFound: true, entries: [".env.mcp"], mcpConfigured: false })).toBe(line);
+    for (const call of GIT_CALLS) expect(line, `the line names ${call}`).not.toContain(call);
+  });
+
+  it("says the engine found no git to start, and names no missing repository, where its walk found none", () => {
+    const line = gitignoreLine({ dryRun: false, gitAvailable: false, gitFound: false, entries: [".env.mcp"], mcpConfigured: false });
+
+    expect(line).toBe(`${ONE_ENTRY_HEAD}${NO_GIT_TAIL}`);
+    expect(line).not.toContain("not a git repository yet");
+    for (const call of GIT_CALLS) expect(line, `the line names ${call}`).not.toContain(call);
+    // Where git answers, or the look refused the folder, what the walk found moves nothing.
+    expect(gitignoreLine({ dryRun: false, gitAvailable: true, gitFound: false, entries: [".env.mcp"], mcpConfigured: false })).toBe(
+      `${ONE_ENTRY_HEAD}, and the rest of the .stamity/ state directory is committed on purpose.`,
     );
+    expect(
+      gitignoreLine({ dryRun: false, gitAvailable: false, gitReason: "bare-layout", gitFound: false, entries: [".env.mcp"], mcpConfigured: false }),
+    ).toBe(`${ONE_ENTRY_HEAD}${REFUSED_TAIL}`);
   });
 
   it("states the cause and names no git command where the look before git refused the folder", () => {
@@ -842,8 +903,16 @@ describe("renderInitPanel — security disclosure", () => {
 
     expect(securityLine(refused).endsWith(REFUSED_TAIL)).toBe(true);
     expect(securityLine(refused)).not.toContain("git init");
-    expect(securityLine(plain)).toContain("This directory is not a git repository yet");
-    expect(securityLine(plain)).toContain("the rule takes effect on the first `git init`");
+    // TEST CHANGE, justified: the plain panel was held to "This directory is not a git repository
+    // yet" and "the rule takes effect on the first `git init`". Its tail is now the one for a git
+    // the engine found, and a panel told the walk found none carries that tail instead.
+    expect(securityLine(plain).endsWith(FOUND_TAIL)).toBe(true);
+    const noGit = renderInitPanel(panelInput({ gitAvailable: false, gitFound: false }));
+    expect(securityLine(noGit).endsWith(NO_GIT_TAIL)).toBe(true);
+    for (const call of GIT_CALLS) {
+      expect(securityLine(plain), `the line names ${call}`).not.toContain(call);
+      expect(securityLine(noGit), `the line names ${call}`).not.toContain(call);
+    }
   });
 });
 

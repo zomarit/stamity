@@ -1364,8 +1364,13 @@ describe("init — the no-git note", () => {
     expect(await readManifest(root)).toBeNull();
   });
 
-  // Everywhere else the refusal is the text it was: a folder with no repository and no such layout.
-  it("keeps the declined question's refusal as it was where there is simply no repository", async () => {
+  // TEST CHANGE, justified: this case was "keeps the declined question's refusal as it was where
+  // there is simply no repository" and held the next step to "run `git init` here and re-run
+  // `stamity init`…". A git typed at a prompt is found by the shell's rules, not by the engine's
+  // walk (`src/shared/programPath.ts`), so the step now tells a repository by a `.git` entry found
+  // by name and names no git command. The message and the `why` are the texts they were. The
+  // fixture is a folder with no repository on a host that has git on `PATH`.
+  it("names no git command in the declined question's refusal where there is simply no repository", async () => {
     const root = await makeRepo();
 
     const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "n"] });
@@ -1374,8 +1379,12 @@ describe("init — the no-git note", () => {
     expect(result.stderr).toContain("init cancelled — nothing was written");
     expect(result.stderr).toContain("git does not answer in this directory, so the write would have no revert path");
     expect(result.stderr).toContain(
-      "run `git init` here and re-run `stamity init`, or re-run with -y to accept a setup you cannot git-revert",
+      "re-run `stamity init` once this directory is in a repository, which a .git entry in it or in a folder " +
+        "above it shows by name, or re-run with -y to accept a setup you cannot git-revert",
     );
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse", "git --"]) {
+      expect(result.stderr, `the refusal names ${call}`).not.toContain(call);
+    }
     expect(await readManifest(root)).toBeNull();
   });
 
@@ -1390,16 +1399,28 @@ describe("init — the no-git note", () => {
     "repository, so the engine did not hand it to git and cannot say what is tracked or ignored here. " +
     "The rule takes effect wherever a repository holds this folder in its working tree, and the " +
     ".stamity/ state directory is meant to be committed there.";
+  // TEST CHANGE, justified: this tail read "This directory is not a git repository yet, so
+  // nothing is tracked or ignored here at all: the rule takes effect on the first `git init`…".
+  // It is the tail for a folder with no repository on a host whose git the engine found: it says
+  // what the engine found, as the note above it does, and names no git command.
   const PLAIN_SECURITY_TAIL =
-    ". This directory is not a git repository yet, so nothing is tracked or ignored here at all: " +
-    "the rule takes effect on the first `git init`, and the .stamity/ state directory is meant to " +
-    "be committed once there is somewhere to commit it.";
+    ". git did not answer here though the engine found a git binary, so this directory is not a git " +
+    "repository yet, or git was only slow to answer: nothing is known to be tracked or ignored here. " +
+    "The rule takes effect once a repository holds this folder in its working tree, and the " +
+    ".stamity/ state directory is meant to be committed once there is somewhere to commit it.";
+  const NO_GIT_SECURITY_TAIL =
+    ". git did not answer here: the engine found no git to start, so it cannot say what is tracked " +
+    "or ignored here. The rule takes effect wherever a repository holds this folder in its working " +
+    "tree, and the .stamity/ state directory is meant to be committed there.";
   const REFUSED_QUESTION =
     "git was not started here: this folder, or a folder above it, has the layout of a bare " +
     "repository, so the engine did not hand it to git. Files written now have no revert path the " +
     "engine could check. Continue? [Y/n] ";
   const PLAIN_QUESTION =
     "No git repository here (git did not answer, or this directory is not a repo). " +
+    "Files written now cannot be reverted with git. Continue? [Y/n] ";
+  const NO_GIT_QUESTION =
+    "git did not answer here: the engine found no git to start. " +
     "Files written now cannot be reverted with git. Continue? [Y/n] ";
 
   function securityLines(stdout: string): string[] {
@@ -1429,19 +1450,105 @@ describe("init — the no-git note", () => {
     }
   });
 
-  // Everywhere else the security line is the text it was: no repository and no such layout.
+  // TEST CHANGE, justified: this case was "keeps the security line as it was where there is
+  // simply no repository, on $name". The line there named `git init` and gave a missing
+  // repository as the one cause; `PLAIN_SECURITY_TAIL` above says what it is now. With the note
+  // and this line both changed, no text of such a run names a git command, and the case holds that.
   it.each([
     { name: "a real run", argv: ["-y"] },
     { name: "the dry-run preview", argv: ["--dry-run", "-y"] },
-  ])("keeps the security line as it was where there is simply no repository, on $name", async ({ argv }) => {
+  ])(
+    "says on the security line that the engine found a git binary, and no text of the run names a git command, where there is simply no repository, on $name",
+    async ({ argv }) => {
+      const root = await makeRepo();
+
+      const result = await runInit(root, argv);
+
+      expect(result.code).toBe(0);
+      const security = securityLines(result.stdout);
+      expect(security).toHaveLength(1);
+      expect((security[0] ?? "").endsWith(PLAIN_SECURITY_TAIL)).toBe(true);
+      for (const call of [...GIT_CALLS, "git --"]) {
+        expect(result.stdout, `the run names ${call}`).not.toContain(call);
+      }
+    },
+  );
+
+  // Where no `PATH` entry the engine takes git from holds one, the note says the engine found no
+  // git to start (the case above, under "names the two verbs"). Three more texts of the same run
+  // still gave a missing repository as the cause, and two of them named `git init`: the security
+  // line ("not a git repository yet", "the first `git init`"), the question ("No git repository
+  // here") and the refusal of a declined question ("run `git init` here"). Each now says what the
+  // note says. One run at a time: these texts read the process's own `PATH`, set empty here.
+  async function withEmptyPath<T>(body: () => Promise<T>): Promise<T> {
+    vi.stubEnv("PATH", "");
+    try {
+      return await body();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it.each([
+    { name: "a real run", argv: ["-y", "--tools", "copilot"] },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y", "--tools", "copilot"] },
+  ])(
+    "says on the security line that the engine found no git to start, and no text of the run names a git command, on $name",
+    async ({ argv }) => {
+      const root = await makeRepo();
+
+      const result = await withEmptyPath(() => runInit(root, argv));
+
+      expect(result.code).toBe(0);
+      const security = securityLines(result.stdout);
+      expect(security).toHaveLength(1);
+      const line = security[0] ?? "";
+      expect(line.endsWith(NO_GIT_SECURITY_TAIL)).toBe(true);
+      expect(line).not.toContain("not a git repository yet");
+      expect(line).not.toContain("takes effect on the first");
+      for (const call of [...GIT_CALLS, "git --"]) {
+        expect(result.stdout, `the run names ${call}`).not.toContain(call);
+      }
+    },
+  );
+
+  it("asks the question on the engine having found no git, and Enter still takes the default and writes", async () => {
     const root = await makeRepo();
 
-    const result = await runInit(root, argv);
+    // Enter keeps the tools default; Enter again takes the question's default, yes.
+    const result = await withEmptyPath(() => runInit(root, [], { ttyStdin: true, stdinLines: ["", ""] }));
 
     expect(result.code).toBe(0);
-    const security = securityLines(result.stdout);
-    expect(security).toHaveLength(1);
-    expect((security[0] ?? "").endsWith(PLAIN_SECURITY_TAIL)).toBe(true);
+    expect(result.stdout).toContain(NO_GIT_QUESTION);
+    expect(result.stdout).not.toContain("No git repository here");
+    expect(result.stdout).not.toContain("not a repo)");
+    expect(countConfirmations(result.stdout)).toBe(1);
+    for (const call of [...GIT_CALLS, "git --"]) {
+      expect(result.stdout, `the run names ${call}`).not.toContain(call);
+    }
+    expect(await readManifest(root)).not.toBeNull();
+  });
+
+  it("refuses a declined question on the engine having found no git, and names no git command", async () => {
+    const root = await makeRepo();
+
+    // Enter keeps the tools default; `n` declines the write.
+    const result = await withEmptyPath(() => runInit(root, [], { ttyStdin: true, stdinLines: ["", "n"] }));
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("init cancelled — nothing was written");
+    expect(result.stderr).toContain(
+      "git did not answer in this directory: the engine found no git to start, so the write would have no revert path",
+    );
+    expect(result.stderr).toContain(
+      "install git, or put the folder that holds it on PATH by its full path, and re-run `stamity init`, " +
+        "or re-run with -y to accept a setup you cannot git-revert",
+    );
+    expect(result.stderr).not.toContain("in a repository");
+    for (const call of [...GIT_CALLS, "git --"]) {
+      expect(result.stderr, `the refusal names ${call}`).not.toContain(call);
+    }
+    expect(await readManifest(root)).toBeNull();
   });
 
   it("asks the question on that cause there, and Enter still takes the default and writes", async () => {
@@ -1915,7 +2022,16 @@ describe("init --dry-run", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("by DIRECTORY rather than by name");
     expect(result.stdout).toContain("takes THIS setup's generated files with it");
-    expect(result.stdout).toContain("commit this repo before you run it");
+    // TEST CHANGE, justified: this read `toContain("commit this repo before you run it")`. The
+    // fixture is a folder with no repository, where git does not answer, and a commit there is a
+    // git command typed where the engine's own git gave no answer. The clause names the copy
+    // there, as at a refused folder; where git answers it still says to commit
+    // (`test/cli/commands/initPanel.test.ts`, "keeps the uninstall line as it was where git answers").
+    expect(result.stdout).toContain(
+      "copy the files that hold it somewhere outside this folder before you run it: git did not answer " +
+        "here, so the engine knows of no commit that holds them.",
+    );
+    expect(result.stdout).not.toContain("commit this repo");
     expect(result.stdout).toContain("offering to reinstall the old setup, decline");
     // The no-invented-verbs rule holds on the new clause too.
     expect(result.stdout).not.toMatch(/--dry-run|--purge/);

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE,
   NEXT_AFTER_WRITE_LINE,
+  NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE,
   dirtyTreeWarning,
   syncClosingLines,
   syncCommand,
@@ -165,7 +166,10 @@ describe("sync — initialised repo", () => {
     expect(first.stdout).toContain("synced: 1 created, 0 updated, 0 unchanged, 0 skipped");
     expect(first.stdout).toContain(GUIDE_PATH);
     expect(first.stdout).toContain("provenance");
-    expect(first.stdout).toContain(NEXT_AFTER_WRITE_LINE);
+    // TEST CHANGE, justified: this read `toContain(NEXT_AFTER_WRITE_LINE)`. The fixture is a
+    // folder with no repository, where git does not answer, and the step that names `git diff`
+    // is now the step for a folder git answered in ("sync — where git did not answer", below).
+    expect(first.stdout).toContain(`${NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE}\n`);
     const onDisk = await readManifest(root);
     expect(onDisk?.updatedAt).not.toBe(T0.toISOString());
     expect(new Date(onDisk?.updatedAt ?? 0).getTime()).toBeGreaterThan(T0.getTime());
@@ -177,6 +181,7 @@ describe("sync — initialised repo", () => {
     expect(second.stdout).toContain("synced: 0 created, 0 updated, 1 unchanged, 0 skipped");
     // Nothing changed on disk, so the review next-step would be noise.
     expect(second.stdout).not.toContain(NEXT_AFTER_WRITE_LINE);
+    expect(second.stdout).not.toContain("next: review");
   });
 });
 
@@ -382,9 +387,15 @@ describe("sync — a folder the look before git refused", () => {
     expect(result.stdout).not.toContain("cut short");
   });
 
-  it("keeps the step as it was outside such a folder, however long the list", async () => {
+  // TEST CHANGE, justified: this case ran in a folder with no repository and held the step to
+  // `NEXT_AFTER_WRITE_LINE`, "however long the list". That folder is one git does not answer in,
+  // and its step no longer names `git diff` ("sync — where git did not answer", below). What the
+  // case is for is the step where the look refused nothing and the list is long, so it now runs
+  // where git answers: a repository made for it, which is the one place the line it pins prints.
+  it("keeps the step as it was where git answers, however long the list", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
+    execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
     plannerOutputs.value = guideOutputs(21);
 
     const result = await runSync(root);
@@ -393,6 +404,75 @@ describe("sync — a folder the look before git refused", () => {
     expect(result.stdout).toContain("\n  … and 1 more\n");
     expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_LINE}\n`);
     expect(result.stdout).not.toContain("cut short");
+  });
+});
+
+// A sync that wrote files closed on "next: git diff to review" wherever the look before git
+// refused nothing, a folder git did not answer in included: no repository, no git the engine
+// found, or a git too slow for the probe. There is no diff from git to read there, and a git
+// typed at a prompt is found by the shell's rules, not by the engine's walk
+// (`src/shared/programPath.ts`). The step now names no git command wherever git did not answer,
+// and points at `check`'s `git-available` row, which says what the engine found. The fixture is a
+// folder with no repository; under an empty `PATH` it is also one where the engine finds no git.
+describe("sync — where git did not answer", () => {
+  function guideOutputs(count: number): AdapterOutput[] {
+    return Array.from({ length: count }, (_unused, index) =>
+      managedOutput(`.claude/rules/stamity-guide-${String(index + 1).padStart(2, "0")}.md`, `guide body ${index + 1}`),
+    );
+  }
+
+  it.each([
+    { name: "in a folder with no repository", path: undefined },
+    { name: "under a PATH with no entry the engine takes git from", path: "" },
+  ])("closes on a review step that names no git command, $name", async ({ path }) => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    plannerOutputs.value = [managedOutput(GUIDE_PATH, "guide body")];
+
+    if (path !== undefined) vi.stubEnv("PATH", path);
+    let result: Awaited<ReturnType<typeof runSync>>;
+    try {
+      result = await runSync(root);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("synced: 1 created, 0 updated, 0 unchanged, 0 skipped");
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE}\n`);
+    expect(result.stdout).not.toContain(NEXT_AFTER_WRITE_LINE);
+    expect(result.stdout).not.toContain(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE);
+    for (const call of ["git diff", "git status", "git log", "git rev-parse", "git init", "git --"]) {
+      expect(result.stdout, `the run names ${call}`).not.toContain(call);
+    }
+    // Unknown is still not dirty: no warning on stderr either.
+    expect(result.stderr).not.toContain("working tree");
+  });
+
+  it("says the list was cut short there too, past twenty rows", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    plannerOutputs.value = guideOutputs(21);
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("\n  … and 1 more\n");
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE} ${listCutShortText(1)}\n`);
+    expect(result.stdout).not.toContain("git diff");
+  });
+
+  it("keeps the step that names git diff where git answers", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
+    plannerOutputs.value = [managedOutput(GUIDE_PATH, "guide body")];
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_LINE}\n`);
+    expect(result.stdout).not.toContain("review without git");
   });
 });
 
@@ -452,7 +532,9 @@ describe("sync — collision refusal and --force", () => {
     expect(await readFile(join(root, USER_DOC), "utf8")).toBe("generated whole-file\n");
     expect(await readFile(join(root, `${USER_DOC}.bak`), "utf8")).toBe(USER_BYTES);
     // Collisions resolved → the continuous-onboarding close.
-    expect(forced.stdout).toContain(NEXT_AFTER_WRITE_LINE);
+    // TEST CHANGE, justified: this read `toContain(NEXT_AFTER_WRITE_LINE)`. The fixture is a
+    // folder with no repository, and the close there no longer names `git diff`.
+    expect(forced.stdout).toContain(NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE);
   });
 });
 
@@ -768,8 +850,8 @@ describe("syncClosingLines", () => {
   });
 
   // review/58: where the working-tree read says the look before git kept the folder from git, the
-  // review step names no git command and says how to review without one. Everywhere else, a git
-  // that did not answer for another cause included, the step is the line it was.
+  // review step names no git command and says how to review without one. Where git answered, the
+  // step is the line it was; a git that did not answer for another cause has the next case's.
   it("names no git command in the review next-step where the folder was kept from git", () => {
     const unavailable = { available: false, dirty: false, changedCount: 0 } as const;
     const kept = planFixture({ dirty: { ...unavailable, reason: "bare-layout" } });
@@ -793,17 +875,49 @@ describe("syncClosingLines", () => {
       expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE, `the step names ${call}`).not.toContain(call);
     }
 
-    // A git that did not answer for any other cause keeps the line byte for byte.
-    expect(syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 1 }))).toEqual([
+    // TEST CHANGE, justified: this read "A git that did not answer for any other cause keeps the
+    // line byte for byte" and held that plan to `NEXT_AFTER_WRITE_LINE`. Such a plan now gets a
+    // step of its own, the next case's; the line that names `git diff` is the one for a plan whose
+    // working-tree read answered, and it is the string it was.
+    expect(syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 1 }))).not.toEqual([
       NEXT_AFTER_WRITE_LINE,
     ]);
+    expect(syncClosingLines(planFixture(), reportFixture({ created: 1 }))).toEqual([NEXT_AFTER_WRITE_LINE]);
     expect(NEXT_AFTER_WRITE_LINE).toBe("next: git diff to review, stamity check to verify");
   });
 
+  // The step named `git diff` wherever the look refused nothing, a working-tree read that did
+  // not answer included. There git gave the engine no answer, so there is no diff from it to
+  // read, and a git typed at a prompt is found by the shell's rules. The step for that state
+  // names no git command and gives no cause of its own: it points at `check`'s row, which says
+  // what the engine found.
+  it("names no git command in the review next-step wherever else git did not answer", () => {
+    const unanswered = planFixture({ dirty: { available: false, dirty: false, changedCount: 0 } });
+
+    expect(syncClosingLines(unanswered, reportFixture({ created: 1 }))).toEqual([NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE]);
+    expect(syncClosingLines(unanswered, reportFixture({ updated: 2 }))).toEqual([NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE]);
+    // The same two silences as everywhere: nothing written, nothing to review.
+    expect(syncClosingLines(unanswered, reportFixture({ unchanged: 5 }))).toEqual([]);
+    expect(syncClosingLines(unanswered, reportFixture({ created: 1, dryRun: true }))).toEqual([]);
+
+    expect(NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE).toBe(
+      "next: review without git, stamity check to verify — git did not answer here, and the " +
+        "git-available row of stamity check says what the engine found. To review, read the files " +
+        "listed above, and compare a file with the .bak a warning above names for it.",
+    );
+    for (const call of ["git diff", "git status", "git log", "git rev-parse", "git init", "git --"]) {
+      expect(NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE, `the step names ${call}`).not.toContain(call);
+    }
+    // No cause of its own: neither a missing repository nor a missing git.
+    expect(NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE).not.toContain("repository");
+    expect(NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE).not.toContain("no git");
+  });
+
   // review/66: the report lists twenty rows and folds the rest, so past twenty "the files listed
-  // above" are not all of them. There, and only at such a folder, the step says so after the
-  // sentence it had. Unchanged rows are not listed and do not count.
-  it("says the list was cut short where the report folded rows at such a folder, and nowhere else", () => {
+  // above" are not all of them. Wherever the step says to read that list, at such a folder and
+  // wherever else git did not answer, it says so after the sentence it had. Unchanged rows are
+  // not listed and do not count.
+  it("says the list was cut short where the report folded rows, at such a folder and wherever else git did not answer", () => {
     const unavailable = { available: false, dirty: false, changedCount: 0 } as const;
     const kept = planFixture({ dirty: { ...unavailable, reason: "bare-layout" } });
     const rows = (count: number, action: "created" | "updated" | "skipped" | "unchanged") =>
@@ -832,8 +946,14 @@ describe("syncClosingLines", () => {
     expect(syncClosingLines(planFixture(), reportFixture({ created: 12, updated: 24, wrote: thirtySeven }))).toEqual([
       NEXT_AFTER_WRITE_LINE,
     ]);
+    // TEST CHANGE, justified: a plan whose working-tree read did not answer was held to
+    // `NEXT_AFTER_WRITE_LINE` here. Its step now says to read the listed files too, so past
+    // twenty rows it carries the same added words; at twenty it carries none.
     expect(
       syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 12, updated: 24, wrote: thirtySeven })),
-    ).toEqual([NEXT_AFTER_WRITE_LINE]);
+    ).toEqual([`${NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE} ${listCutShortText(17)}`]);
+    expect(
+      syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 12, updated: 7, wrote: twenty })),
+    ).toEqual([NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE]);
   });
 });
