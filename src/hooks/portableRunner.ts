@@ -104,6 +104,13 @@ export function portableHookCommand(
  * Translate the documented portable output at the vendor boundary. No tool or
  * agent identity is fabricated. Unknown output fields are diagnosed by name;
  * their values never enter diagnostics. Executed with shell:false on all OSes.
+ *
+ * The runner is a standalone script that imports `node:` modules alone, so it
+ * cannot take the walk `../shared/programPath.ts` gives the engine's own
+ * starts. For a row whose launcher is the word `node`, which every core hook
+ * row is, it needs none: it starts `process.execPath`, the interpreter it is
+ * running under, and no lookup by name takes place. A row that names any
+ * other launcher is started by that name and found by the runtime's rules.
  */
 export function buildPortableHookRunner(tool: Tool): string {
   return `#!/usr/bin/env node
@@ -185,7 +192,14 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  const child = spawnSync(command[0], command.slice(1), {
+  // A row whose launcher is the word node is started as the interpreter this
+  // runner is already running under, by its absolute path, so the runtime
+  // looks that launcher up nowhere. A bare name is looked up, and on Windows
+  // the lookup takes the folder the child runs in before any PATH entry; that
+  // folder is a repository's, and its files are a checkout's content. Any
+  // other launcher is started by the name the row gives.
+  const launcher = command[0] === "node" ? process.execPath : command[0];
+  const child = spawnSync(launcher, command.slice(1), {
     cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),

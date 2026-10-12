@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../../src/hooks/portableRunner.ts";
 import type { HookInterchange } from "../../src/hooks/model.ts";
@@ -572,4 +572,178 @@ describe("plugin-rooted rows", () => {
       expect(result.status).toBe(expected);
     },
   );
+});
+
+/**
+ * Which program the runner starts for a row. A row whose launcher is the word
+ * `node` is started as the interpreter the runner itself runs under, by its
+ * absolute path, so the runtime looks that launcher up nowhere: not on `PATH`,
+ * and not in the folder the child runs in, which is a repository folder. Any
+ * other launcher is started by the name the row gives, as before.
+ *
+ * The child in these cases reports the interpreter that ran it, and each case
+ * compares that with the interpreter running this suite, by real path on both
+ * sides. The stand-in programs are files this suite writes into its own temp
+ * folders. Windows starts no shebang script, so the cases that plant one run
+ * on POSIX hosts; there a bare name is looked up in a folder only when `PATH`
+ * names it. On Windows the runtime takes the child's folder before any `PATH`
+ * entry, which no POSIX host does, so the cases that plant a program file
+ * there run on Windows only.
+ */
+describe("which program a row's launcher starts", () => {
+  const WINDOWS = process.platform === "win32";
+  const ROOT_VAR = "STAMITY_TEST_PLUGIN_ROOT";
+  const REPORT = 'process.stderr.write("interpreter=" + JSON.stringify(process.execPath) + "\\n");';
+  const STAND_IN = "#!/bin/sh\necho stand-in-started >&2\nexit 0\n";
+
+  /** The host's environment with `PATH` replaced, whatever letter case the host spells it in. */
+  function envWithPath(path: string): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(process.env)) if (key.toLowerCase() !== "path") env[key] = value;
+    delete env[ROOT_VAR];
+    env["PATH"] = path;
+    return env;
+  }
+
+  /** A real, empty folder: a `PATH` that holds no program at all. */
+  async function emptyFolder(): Promise<string> {
+    const folder = await realpath(await mkdtemp(join(tmpdir(), "stamity-hook-path-")));
+    roots.push(folder);
+    return folder;
+  }
+
+  function run(script: string, hook: HookInterchange, opts: { cwd: string; env: NodeJS.ProcessEnv }) {
+    return spawnSync(process.execPath, [script, Buffer.from(JSON.stringify(hook)).toString("base64url")], {
+      cwd: opts.cwd, env: opts.env, input: JSON.stringify({ toolName: "bash" }), encoding: "utf8",
+    });
+  }
+
+  /** The interpreter the child reported, by real path, or `null` when no child of ours ran. */
+  async function interpreterOf(stderr: string): Promise<string | null> {
+    const found = /^interpreter=(".*")$/m.exec(stderr);
+    return found === null ? null : realpath(JSON.parse(found[1]!) as string);
+  }
+
+  /** A vendor container, as the plugin-rooted cases above build it. */
+  async function container(tool: Tool) {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "stamity-plugin-")));
+    roots.push(root);
+    const session = join(root, "session");
+    await mkdir(join(root, "hooks"), { recursive: true });
+    await mkdir(session, { recursive: true });
+    const script = join(root, "hooks", PORTABLE_RUNNER_FILE);
+    await writeFile(script, buildPortableHookRunner(tool));
+    await writeFile(join(root, "hooks", "check.mjs"), REPORT);
+    const hook: HookInterchange = { event: "pre_tool_use", command: ["node", `\${${ROOT_VAR}}/hooks/check.mjs`] };
+    return { root, session, script, hook };
+  }
+
+  it.each(["cursor", "copilot", "codex"] as const)(
+    "%s starts a `node` launcher as the interpreter the runner runs under, with no node on PATH",
+    async (tool) => {
+      const f = await fixture(tool, REPORT, { command: ["node", "check.mjs"] });
+
+      const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(await emptyFolder()) });
+
+      expect(result.stderr).not.toContain("Hook process failed");
+      expect(result.status, result.stderr).toBe(0);
+      expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
+    },
+  );
+
+  it("does the same for a plugin-rooted row, whose child runs in the session's folder", async () => {
+    const f = await container("copilot");
+
+    const result = run(f.script, f.hook, {
+      cwd: f.session, env: { ...envWithPath(await emptyFolder()), [ROOT_VAR]: f.root },
+    });
+
+    expect(result.stderr).not.toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe(0);
+    expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
+  });
+
+  describe.skipIf(WINDOWS)("on a POSIX host whose PATH names the folder the child runs in", () => {
+    const HOST_NODE = dirname(process.execPath);
+
+    it.each([
+      ["an empty entry", () => `${delimiter}${HOST_NODE}`],
+      ["a relative entry", () => `.${delimiter}${HOST_NODE}`],
+      ["the folder's full path", (folder: string) => `${folder}${delimiter}${HOST_NODE}`],
+    ] as const)("starts no file of node's name at the repository root, by %s", async (_name, pathFor) => {
+      const f = await fixture("copilot", REPORT, { command: ["node", "check.mjs"] });
+      const root = await realpath(f.root);
+      await writeFile(join(root, "node"), STAND_IN);
+      await chmod(join(root, "node"), 0o755);
+
+      const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(pathFor(root)) });
+
+      expect(result.stderr).not.toContain("stand-in-started");
+      expect(result.status, result.stderr).toBe(0);
+      expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
+    });
+
+    it("starts no file of node's name in the session's folder, for a plugin-rooted row", async () => {
+      const f = await container("copilot");
+      await writeFile(join(f.session, "node"), STAND_IN);
+      await chmod(join(f.session, "node"), 0o755);
+
+      const result = run(f.script, f.hook, {
+        cwd: f.session, env: { ...envWithPath(`${f.session}${delimiter}${HOST_NODE}`), [ROOT_VAR]: f.root },
+      });
+
+      expect(result.stderr).not.toContain("stand-in-started");
+      expect(result.status, result.stderr).toBe(0);
+      expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
+    });
+
+    // The boundary of the change, held so it cannot widen or narrow unseen: a
+    // launcher that is not the word `node` is still started by the name the
+    // row gives and found on PATH by the runtime.
+    it("still starts any other launcher by the name the row gives, found on PATH", async () => {
+      const f = await fixture("copilot", "", { command: ["stamity-test-launcher", "check.mjs"] });
+      const bin = await emptyFolder();
+      await writeFile(join(bin, "stamity-test-launcher"), STAND_IN);
+      await chmod(join(bin, "stamity-test-launcher"), 0o755);
+
+      const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(`${bin}${delimiter}${HOST_NODE}`) });
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain("stand-in-started");
+    });
+  });
+
+  // Windows only, and only a real Windows host can run these: there the runtime
+  // looks for a bare program name in the folder the child runs in before it
+  // looks on `PATH`, trying the name with `.com` added and then with `.exe`.
+  // The file planted is a copy of the Node binary running this suite, so a
+  // child started from it runs the script all the same and reports the copy's
+  // own path as its interpreter. `PATH` is the host's, untouched.
+  describe.runIf(WINDOWS)("on a Windows host, where the runtime takes the child's folder first", () => {
+    it.each(["node.exe", "node.com"])("starts no %s at the repository root", async (name) => {
+      const f = await fixture("copilot", REPORT, { command: ["node", "check.mjs"] });
+      const planted = join(f.root, name);
+      await copyFile(process.execPath, planted);
+
+      const result = run(f.script, f.hook, { cwd: tmpdir(), env: { ...process.env } });
+
+      expect(result.status, result.stderr).toBe(0);
+      const interpreter = await interpreterOf(result.stderr);
+      expect(interpreter).not.toBe(await realpath(planted));
+      expect(interpreter).toBe(await realpath(process.execPath));
+    });
+
+    it("starts no node.exe in the session's folder, for a plugin-rooted row", async () => {
+      const f = await container("copilot");
+      const planted = join(f.session, "node.exe");
+      await copyFile(process.execPath, planted);
+
+      const result = run(f.script, f.hook, { cwd: f.session, env: { ...process.env, [ROOT_VAR]: f.root } });
+
+      expect(result.status, result.stderr).toBe(0);
+      const interpreter = await interpreterOf(result.stderr);
+      expect(interpreter).not.toBe(await realpath(planted));
+      expect(interpreter).toBe(await realpath(process.execPath));
+    });
+  });
 });

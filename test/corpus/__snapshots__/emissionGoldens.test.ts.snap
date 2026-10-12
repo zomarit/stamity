@@ -5954,7 +5954,14 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  const child = spawnSync(command[0], command.slice(1), {
+  // A row whose launcher is the word node is started as the interpreter this
+  // runner is already running under, by its absolute path, so the runtime
+  // looks that launcher up nowhere. A bare name is looked up, and on Windows
+  // the lookup takes the folder the child runs in before any PATH entry; that
+  // folder is a repository's, and its files are a checkout's content. Any
+  // other launcher is started by the name the row gives.
+  const launcher = command[0] === "node" ? process.execPath : command[0];
+  const child = spawnSync(launcher, command.slice(1), {
     cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
@@ -6199,7 +6206,14 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  const child = spawnSync(command[0], command.slice(1), {
+  // A row whose launcher is the word node is started as the interpreter this
+  // runner is already running under, by its absolute path, so the runtime
+  // looks that launcher up nowhere. A bare name is looked up, and on Windows
+  // the lookup takes the folder the child runs in before any PATH entry; that
+  // folder is a repository's, and its files are a checkout's content. Any
+  // other launcher is started by the name the row gives.
+  const launcher = command[0] === "node" ? process.execPath : command[0];
+  const child = spawnSync(launcher, command.slice(1), {
     cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
@@ -6444,7 +6458,14 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  const child = spawnSync(command[0], command.slice(1), {
+  // A row whose launcher is the word node is started as the interpreter this
+  // runner is already running under, by its absolute path, so the runtime
+  // looks that launcher up nowhere. A bare name is looked up, and on Windows
+  // the lookup takes the folder the child runs in before any PATH entry; that
+  // folder is a repository's, and its files are a checkout's content. Any
+  // other launcher is started by the name the row gives.
+  const launcher = command[0] === "node" ? process.execPath : command[0];
+  const child = spawnSync(launcher, command.slice(1), {
     cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
