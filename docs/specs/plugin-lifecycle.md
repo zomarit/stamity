@@ -1868,13 +1868,14 @@ their fix round; ledger rows `review/14` and `fix/2`, one finding, `review/43`, 
 round, and `build/30` for the sentence amended above). The tracked-and-clean check no longer rests on
 `safe.bareRepository=explicit` alone, which git honours only from 2.38. Before each of its git calls starts git, the
 check takes a look of its own, with no git in it (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`): from the
-real path of the setup root it walks towards the filesystem root, asking `lstat` alone whether a name exists, its type
-and its device, and reading no file's content. A level is refused when it passes git's own test for a repository
-folder by entry names: `HEAD` beside `commondir`, or beside both `objects` and `refs`, a link counting as the entry it
-stands in for. The walk ends without a refusal at a level whose `.git` is a regular file, or a folder (or a live link
-to one) that passes the same test; at the first level on another file system than the starting folder's, except on
-Windows; and at the filesystem root. A `.git` of any other kind (an empty folder, one holding `HEAD` alone, a dangling
-link) ends nothing, and that level is tested like any other. On a refusal no git is started, the check answers as it
+real path of the setup root it walks towards the filesystem root, asking `lstat` whether a name exists, its type and
+its device, and `stat` the type of each `.git` entry, as git takes it, and reading no file's content. A level is
+refused when it passes git's own test for a repository folder by entry names: `HEAD` beside `commondir`, or beside both
+`objects` and `refs`, a link counting as the entry it stands in for. The walk ends without a refusal at a level whose
+`.git` is a regular file (or a live link to one), or a folder (or a live link to one) that passes the same test; at the
+first level on another file system than the starting folder's, except on Windows; and at the filesystem root. A `.git`
+of any other kind (an empty folder, one holding `HEAD` alone, a dangling link) ends nothing, and that level is tested
+like any other. On a refusal no git is started, the check answers as it
 does when a git call fails, and the overwrite takes the verified `.bak`. So for a tree git checked out, a committed
 folder of that shape at the setup root, or above it with no such `.git` between, does not answer the check: on git
 2.38 and later by the option and by the look, on an older git by the look alone. The look decides by names, so it also
@@ -2046,12 +2047,15 @@ covers a folder below the setup root as it covers one the look refuses; the engi
   previous bytes and the warning says git could not confirm they are committed (added 2026-10-12, `review/14`).
 - GIVEN the look over seeded folders THEN it refuses `HEAD` beside `commondir` or beside both `objects` and `refs`, and
   a folder under such a level, and passes `HEAD` alone, `HEAD` beside one of the two, and a folder under one of those;
-  it ends without a refusal at a `.git` file, whatever it holds, and at a `.git` folder or a live `.git` link holding
-  those names, and walks past an empty `.git` folder, one holding `HEAD` alone and a dangling `.git` link; a link
-  standing in for an entry counts as that entry; the walk starts from where a linked folder really is; off Windows it
-  ends at the first level on another file system, and the level it starts at is tested whatever its device; and
-  handed an environment it takes no look with `GIT_DIR` set, counts `HEAD` beside `refs` as the shape with
-  `GIT_OBJECT_DIRECTORY` set, and crosses a file system with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set (added 2026-10-12).
+  it ends without a refusal at a `.git` file, whatever it holds, and at a `.git` link that leads to a file, at a
+  `.git` folder or a live `.git` link holding those names, and walks past an empty `.git` folder, one holding `HEAD`
+  alone and a dangling `.git` link; a link standing in for an entry counts as that entry; the walk starts from where a
+  linked folder really is; off Windows it ends at the first level on another file system, and the level it starts at
+  is tested whatever its device; and handed an environment it takes no look with `GIT_DIR` set, counts `HEAD` beside
+  `refs` as the shape with `GIT_OBJECT_DIRECTORY` set, and crosses a file system with `GIT_DISCOVERY_ACROSS_FILESYSTEM`
+  set to a value git reads as true or cannot read, and not with one git reads as false: empty, `false`, `no`, `off` or
+  a zero (added 2026-10-12; the `.git` link to a file and the value read as false added the same day, after the review
+  of pull request #97).
 - GIVEN a folder holding an empty `HEAD` beside empty `objects` and `refs`, with no `.git`, THEN the working-tree status
   read there and in a folder under it carries `reason: "bare-layout"`, the shared runner's error there carries the
   mark, and an error with status 128 alone does not; WHEN `check` runs there THEN it exits 0 and its `git-available`

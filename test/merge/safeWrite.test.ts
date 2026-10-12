@@ -1765,6 +1765,19 @@ describe("gitDiscoveryMeetsBareShape — the look before git is started", () => 
     expect(gitDiscoveryMeetsBareShape(live)).toBe(false);
   });
 
+  // Git takes a `.git` entry's type with `stat`, which follows a link, so a
+  // `.git` link that leads to a file is a gitfile to git and ends its walk, as
+  // a `.git` file does. Skipped on Windows as above.
+  it.skipIf(process.platform === "win32")("ends at a .git link that leads to a file, as at a .git file", async () => {
+    const linked = await seed(join(tempDir().dir, "linked"), SHAPE);
+    const gitfile = join(tempDir().dir, "gitfile");
+    await writeFile(gitfile, "gitdir: elsewhere\n", "utf8");
+    await symlink(gitfile, join(linked, ".git"));
+
+    expect(gitDiscoveryMeetsBareShape(linked)).toBe(false);
+    expect(gitDiscoveryMeetsBareShape(await seed(join(linked, "src"), []))).toBe(false);
+  });
+
   it.skipIf(process.platform === "win32")("walks from where a linked working folder really is", async () => {
     const above = await seed(join(tempDir().dir, "above"), SHAPE);
     const real = await seed(join(above, "inner"), []);
@@ -1786,6 +1799,23 @@ describe("gitDiscoveryMeetsBareShape — the look before git is started", () => 
     expect(gitDiscoveryMeetsBareShape(inner, { GIT_DISCOVERY_ACROSS_FILESYSTEM: "1" })).toBe(true);
     // The level git starts at is tested whatever device it is on.
     expect(gitDiscoveryMeetsBareShape(above)).toBe(true);
+  });
+
+  // Git reads the variable as a boolean (`git_env_bool`): an empty value,
+  // `false`, `no`, `off` and a zero keep its walk on one file system. A value
+  // it cannot read stops git with an error before any walk, so the look keeps
+  // the wider walk there.
+  it.skipIf(process.platform === "win32")("reads GIT_DISCOVERY_ACROSS_FILESYSTEM as git reads a boolean", async () => {
+    const above = await seed(join(tempDir().dir, "above"), SHAPE);
+    const inner = await seed(join(above, "mount", "inner"), []);
+    fakeDevices.byPath.set(await realpath(above), -1);
+
+    for (const value of ["", "0", "00", "-0", " 0", "0x0", "0k", "false", "No", "OFF"]) {
+      expect(gitDiscoveryMeetsBareShape(inner, { GIT_DISCOVERY_ACROSS_FILESYSTEM: value }), value).toBe(false);
+    }
+    for (const value of ["1", "2", "-1", "1k", "true", "YES", "on", "maybe"]) {
+      expect(gitDiscoveryMeetsBareShape(inner, { GIT_DISCOVERY_ACROSS_FILESYSTEM: value }), value).toBe(true);
+    }
   });
 
   // The variables a caller that keeps its environment hands on to git: each

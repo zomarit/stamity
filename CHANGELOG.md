@@ -258,8 +258,8 @@ where git would read a bare repository.
   another repository. The `worktree` verbs keep the caller's git environment: an external
   `GIT_DIR` is a layout they accept, and `fetch` and `worktree add` run with your own transport
   and identity variables. Git older than 2.38 ignores the first option, so the engine also looks
-  before it starts git, with `lstat` only and reading no file. It walks from the folder upward
-  as far as git's own search goes, and where it meets a folder that passes git's own test for a
+  before it starts git, asking the file system for names, types and devices only and reading no
+  file. It walks from the folder upward as far as git's own search goes, and where it meets a folder that passes git's own test for a
   repository folder, before any `.git` that git stops at, git is not started. For a tree git
   checked out, the refusal therefore holds on git 2.38 and later by the option and on older git
   by the look. Three narrow residuals remain, and `SECURITY.md` names them. Each needs something

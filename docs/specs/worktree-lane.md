@@ -313,7 +313,8 @@ seam now starts git one way:
 - **Handed that environment, the look reads three of git's variables and no
   other** (`src/merge/safeWrite.ts:1107-1109`): with `GIT_DIR` set no look is
   taken, since git then runs no discovery; `GIT_OBJECT_DIRECTORY` stands in
-  for `objects`; and with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set at all the
+  for `objects`; and with `GIT_DISCOVERY_ACROSS_FILESYSTEM` set to any value
+  git does not read as false (empty, `false`, `no`, `off` or a zero) the
   walk does not end at another file system.
 
 So for a tree git checked out, and for the git the lane itself starts, a

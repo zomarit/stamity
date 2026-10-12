@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { constants as FS, lstatSync, realpathSync } from "node:fs";
+import { constants as FS, lstatSync, realpathSync, statSync } from "node:fs";
 import type { Stats } from "node:fs";
 // `open` is aliased: `readPrefixFrontmatterField` already binds that name to its
 // frontmatter-fence cursor, and the local reads better than the import would.
@@ -1038,17 +1038,32 @@ function hasRepositoryEntries(dir: string, objectsElsewhere: boolean): boolean {
  * holds them and that git cannot open ends the walk here while git walks past
  * it: the case {@link gitDiscoveryMeetsBareShape} names. Git walks
  * past anything else of that name (an empty folder, a half-removed one, a
- * dangling link) and tests the level itself, so the walk here does too. A
- * `.git` link is typed by `lstat` and never read; the names under it are
- * reached through it by the operating system, as git reaches them, so a live
- * link to a repository folder ends the walk and a dangling one does not.
+ * dangling link) and tests the level itself, so the walk here does too. The
+ * `.git` entry is typed by `stat`, which follows a link, as git's own read of
+ * it does (`read_gitfile_gently`), and is never read: a link to a file ends the
+ * walk as a `.git` file does, a link to a repository folder ends it, and a
+ * dangling one does not.
  */
 function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean {
   const gitPath = join(dir, ".git");
-  const entry = entryAt(gitPath);
-  if (entry === null) return false;
+  let entry: Stats;
+  try {
+    entry = statSync(gitPath);
+  } catch {
+    return false;
+  }
   return entry.isFile() || hasRepositoryEntries(gitPath, objectsElsewhere);
 }
+
+/**
+ * A variable's value git reads as false (`git_env_bool`, then
+ * `git_parse_maybe_bool` in git's `parse.c`): empty; `false`, `no` or `off` in
+ * any letter case; or a whole number that is zero, as `strtoimax` reads it with
+ * base 0, after optional space and sign and before an optional `k`, `m` or `g`
+ * unit. Git stops with an error on a value it cannot read as a boolean, before
+ * any walk, so such a value is not false here.
+ */
+const GIT_FALSE = /^(?:|false|no|off|[\t\n\v\f\r ]*[+-]?(?:0x0+|0+)[kmg]?)$/i;
 
 /**
  * The look every pinned git call takes before git is started: would git's own
@@ -1069,8 +1084,8 @@ function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean 
  * - the first level on another device than the starting folder's ends the walk
  *   as safe, and so does the filesystem root: git goes no further either.
  *
- * It asks `lstat` whether a name exists, its type and its device, and nothing
- * more: no content is read. For a git started with none of its own variables,
+ * It asks `lstat` whether a name exists, its type and its device, and `stat`
+ * the type of each `.git` entry, and nothing more: no content is read. For a git started with none of its own variables,
  * which is how the pinned runners start it, and for a tree git checked out, the
  * look refuses every level git would open and a little more: a genuine bare
  * repository, which the option refuses too, and a level whose `HEAD` or
@@ -1093,8 +1108,9 @@ function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean 
  * caller that keeps its environment passes it, and three variables are read,
  * each as git reads it: with `GIT_DIR` git runs no discovery, so there is
  * nothing to look for; `GIT_OBJECT_DIRECTORY` stands in for `objects`; and with
- * `GIT_DISCOVERY_ACROSS_FILESYSTEM` set at all the walk does not stop at a
- * device, since git may not. `GIT_CEILING_DIRECTORIES` is not read: it can only
+ * `GIT_DISCOVERY_ACROSS_FILESYSTEM` set to any value but one git reads as false
+ * ({@link GIT_FALSE}) the walk does not stop at a device, since git may not.
+ * `GIT_CEILING_DIRECTORIES` is not read: it can only
  * end git's walk earlier, so the look covers every level git tests and some git
  * does not. That is the safe direction, and the one the two variables before it
  * are read for: the look must never stop below a level git goes on to test.
@@ -1106,7 +1122,8 @@ function gitEntryEndsDiscovery(dir: string, objectsElsewhere: boolean): boolean 
 export function gitDiscoveryMeetsBareShape(startDir: string, env: NodeJS.ProcessEnv = {}): boolean {
   if (env["GIT_DIR"] !== undefined) return false;
   const objectsElsewhere = env["GIT_OBJECT_DIRECTORY"] !== undefined;
-  const oneFileSystem = process.platform !== "win32" && env["GIT_DISCOVERY_ACROSS_FILESYSTEM"] === undefined;
+  const across = env["GIT_DISCOVERY_ACROSS_FILESYSTEM"];
+  const oneFileSystem = process.platform !== "win32" && (across === undefined || GIT_FALSE.test(across));
   let dir: string;
   try {
     dir = realpathSync(startDir);
