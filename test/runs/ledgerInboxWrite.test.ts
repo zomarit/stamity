@@ -640,6 +640,44 @@ describe("stamity ledger inbox-write — the inbox and the ledgers are read no-f
   });
 });
 
+// pr/5: the write rewrites the whole file, so a byte that does not decode would land as U+FFFD on a line the edit never touched.
+describe("stamity ledger inbox-write — the inbox is read as strict UTF-8", () => {
+  it("refuses an inbox with an invalid byte on an untouched line, naming the line and none of its text, and writes nothing", async () => {
+    const dir = tempDir();
+    await seed(dir, { [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    const before = Buffer.concat([
+      Buffer.from("# Deferral inbox\n\n- Minor · src/z.ts:1 · a quiet older row ", "utf8"),
+      Buffer.from([0xff]),
+      Buffer.from(` · source: x\n\n${SCHEDULE_RULE_HEADING}\n`, "utf8"),
+    ]);
+    await writeFile(dir.path(INBOX_PATH), before);
+
+    const result = await write(dir, ["--stdin"], [bullet(1)]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("ledger inbox-write refused .stamity/inbox.md: line 3 is not valid UTF-8");
+    expectNoRowText(result, "older row");
+    expect((await readFile(dir.path(INBOX_PATH))).equals(before)).toBe(true);
+
+    const read = await query(dir);
+    expect(read.stderr).not.toContain("not valid UTF-8");
+  });
+
+  it("edits a valid inbox carrying multi-byte characters byte for byte", async () => {
+    const dir = tempDir();
+    const older = `# Deferral inbox — kept\n\n- Minor · src/z.ts:1 · an older row · source: x\n\n${SCHEDULE_RULE_HEADING}\n`;
+    await seed(dir, { [INBOX_PATH]: older, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    const before = await readFile(dir.path(INBOX_PATH));
+
+    const result = await write(dir, ["--stdin"], [bullet(1)]);
+
+    expect(result.code, result.stderr).toBe(0);
+    const after = await readFile(dir.path(INBOX_PATH));
+    expect(after.subarray(0, before.length).equals(before)).toBe(true);
+    expect(after.subarray(before.length).toString("utf8")).toBe(`\n${HEAD}\n\n${bullet(1)}\n`);
+  });
+});
+
 describe("stamity ledger inbox-write — the run's forms", () => {
   it("writes nothing under --dry-run, and says what it would do", async () => {
     const dir = tempDir();

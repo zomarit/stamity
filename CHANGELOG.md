@@ -97,7 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no other row in the call carries, and, where that `Ref:` names a ledger row, names a deferred one
   not yet retired. A row whose `Ref:` a bullet already carries is `already-filed` only when that
   bullet has the same severity, location, description and source; otherwise the call is refused,
-  naming the bullet's line. A call that brings no row and no removal is refused too. It writes
+  naming the bullet's line. A call that brings no row and no removal is refused too, and so is an
+  inbox that is not valid UTF-8, named by its line, since the write rewrites the whole file. It writes
   under the inbox's lock and the lock of each ledger a `Ref:` names, checking each referenced row
   again under them so a concurrent `ledger close` cannot move it before the write lands, by atomic
   rename inside `.stamity/`; a ledger lock it cannot take refuses the call. It creates an absent

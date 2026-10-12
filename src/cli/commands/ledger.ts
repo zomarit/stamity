@@ -1,3 +1,4 @@
+import { isUtf8 } from "node:buffer";
 import { constants as FS, type Stats } from "node:fs";
 import { lstat, open, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -935,23 +936,46 @@ const INBOX_SOUND = `the inbox is a regular file with one link, of at most ${INB
 interface InboxVoice {
   readonly verb: string;
   readonly next: string;
+  /** Whether bytes that are not UTF-8 refuse the read: the writer's, since it rewrites the whole file. */
+  readonly strictUtf8: boolean;
 }
 
 /** The query's voice. */
 const QUERY_VOICE: InboxVoice = {
   verb: INBOX,
   next: `do not read ${STATE_DIR}/inbox.md whole in this query's place, since a whole read is unscreened; report this refusal as a finding; the query runs again once ${INBOX_SOUND}`,
+  strictUtf8: false,
 };
 
 /** The writer's voice: an edit tool reads the file whole before it writes, so it is no fallback either. */
 const WRITE_VOICE: InboxVoice = {
   verb: INBOX_WRITE,
   next: `do not edit ${STATE_DIR}/inbox.md with the file tools in this write's place, since that reads it whole, unscreened; report this refusal as a finding; the write runs again once ${INBOX_SOUND}`,
+  strictUtf8: true,
 };
 
 /** A refused read, in the voice of the subcommand that read. */
 function inboxRefusal(voice: InboxVoice, message: string, why: string): CliFailure {
   return new CliFailure({ code: "VALIDATION_ERROR", message, why, next: voice.next });
+}
+
+/**
+ * The 1-based number of the first line of `bytes` that is not valid UTF-8, or
+ * null when all of it is. A line is the bytes between two line feeds; a line
+ * feed is never part of a multi-byte sequence, so the lines are valid exactly
+ * when the whole is.
+ */
+function firstNonUtf8Line(bytes: Buffer): number | null {
+  if (isUtf8(bytes)) return null;
+  let line = 1;
+  let start = 0;
+  let end = bytes.indexOf(0x0a);
+  while (end !== -1 && isUtf8(bytes.subarray(start, end))) {
+    line += 1;
+    start = end + 1;
+    end = bytes.indexOf(0x0a, start);
+  }
+  return line;
 }
 
 /**
@@ -978,6 +1002,10 @@ function inboxRefusal(voice: InboxVoice, message: string, why: string): CliFailu
  *
  * `voice` names the subcommand each refusal speaks for and its `next`
  * ({@link InboxVoice}): the query's by default, the writer's for `inbox-write`.
+ * The writer's voice also decodes strictly: the write rewrites the whole file,
+ * so a byte that does not decode would land as U+FFFD on a line the edit never
+ * touched; such an inbox is refused, naming the line and none of its text. The
+ * query decodes as it always has.
  */
 async function readInbox(
   rootDir: string,
@@ -1041,6 +1069,15 @@ async function readInbox(
       filled += bytesRead;
     }
     if (filled > INBOX_READ_MAX_BYTES) throw tooLarge("more than the ceiling");
+    const badLine = voice.strictUtf8 ? firstNonUtf8Line(bytes.subarray(0, filled)) : null;
+    if (badLine !== null) {
+      throw new CliFailure({
+        code: "VALIDATION_ERROR",
+        message: `${refused}: line ${badLine} is not valid UTF-8`,
+        why: "the write rewrites the whole file, so a byte that does not decode would be replaced on a line the write never touched",
+        next: `do not edit ${STATE_DIR}/inbox.md with the file tools in this write's place; report this refusal as a finding; the write runs again once a person re-saves that line as UTF-8`,
+      });
+    }
     return bytes.toString("utf8", 0, filled);
   } finally {
     await handle.close();

@@ -1846,9 +1846,11 @@ applies both in one locked, atomic write; a removal and an appended row sharing 
 - **The read and the write.** The inbox is read through the query's no-follow reader in the writer's voice: a symbolic
   link, a hard link, a non-file or an inbox over 1,048,576 bytes is refused naming `ledger inbox-write`, and the
   refusal's `next` says not to edit the file with the file tools in the write's place (`:946-950`, `:982-1048`,
-  `:1667-1668`). The store reads it once before the lock and again under it, lands the edit through a temp-and-rename
-  write bounded to `.stamity/`, and refuses a result over 1,048,576 bytes, so the query can still read it
-  (`src/runs/ledgerStore.ts:1216-1257`).
+  `:1667-1668`). The writer's read also decodes strictly (S27; `src/cli/commands/ledger.ts::firstNonUtf8Line`): an
+  inbox holding a byte that is not valid UTF-8 is refused, naming the line and none of its text, since the whole-file
+  write would replace that byte on a line it never touched. The store reads it once before the lock and again under it,
+  lands the edit through a temp-and-rename write bounded to `.stamity/`, and refuses a result over 1,048,576 bytes, so
+  the query can still read it (`src/runs/ledgerStore.ts:1216-1257`).
 - **The edit** (`src/runs/inboxStore.ts:482-665`). Rows land at the end of the file: the heading first where it is
   absent, then this run's block of today when the file's last block opens with the engine-composed head
   "Rows appended <YYYY-MM-DD> by the run `<run>`; each row's `Ref:` names its source.", else a new block under that head
