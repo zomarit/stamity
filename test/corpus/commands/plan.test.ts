@@ -381,6 +381,18 @@ describe("/st-plan — intent routing", () => {
     // The shorthand is defined in this file, so the call runs as `npx --no stamity ledger inbox`.
     expect(plan.raw).toContain("**Running the CLI.** Every `stamity <verb>` call in this file runs as");
   });
+
+  // Added 2026-10-12 (REQ-FLOW-079, review round 1 of unit w2-inbox-flow-text): item 4 is the
+  // file's first backticked call, about 270 lines above the paragraph that defines its form, so
+  // it points there, and a call typed bare that fails never reads as an absent CLI. Intake comes
+  // before research finds a feature's files, so the query runs again with the files research
+  // names, and a row touching them is folded into the plan rather than met first at Frame.
+  it("points item 4's query at the CLI form and re-runs it with research's files (REQ-FLOW-079)", () => {
+    const routing = flat(sectionOf(plan.parsed.body, "## Intent routing"));
+    const item = /4\. (.*?) 5\. History for the touched paths/.exec(routing)?.[1] ?? "";
+    expect(item).toContain("It runs as Running the CLI below says, and again once research names the files.");
+    expect(plan.raw.indexOf("**Running the CLI.**")).toBeGreaterThan(plan.raw.indexOf("4. `stamity ledger inbox"));
+  });
 });
 
 describe("/st-plan — intent sections", () => {

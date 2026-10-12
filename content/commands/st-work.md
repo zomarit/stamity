@@ -300,7 +300,7 @@ left for the person: the rows no evidence proved, the spec delta merge and
 the commit. `Default if no response: leave uncommitted`, with those rows not
 signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
-close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every
+close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
 `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
 A part with nothing to decide drops out; with none left, there is no ask.
@@ -392,8 +392,11 @@ reached stays as it is.
 Inbox appends, removals and re-dates at the close run `stamity ledger inbox-write --run <run id>`:
 rows on `--stdin`, a bullet a line; leaving bullets as `--remove <Ref>,…`; a re-date in one call. It
 adds an absent heading, screens each row and prints only line numbers and `Ref:` values; a refusal
-is a finding, never a hand edit. A decided row with no unique `Ref:` stays, on `Not done:` as
-`decided, not applied (no unique Ref:): line <n>`. The close never opens the inbox with file tools.
+is a finding, never a hand edit. Each `Ref:` is the row's `ref` in `ledger inbox --json` (null if
+withheld, never decided). A decided row with no unique `Ref:` stays, on `Not done:` as
+`decided, not applied (no unique Ref:): line <n>`. A call refused on such a `--remove` alone runs
+again without it. Where no CLI form runs or the copy lacks `inbox-write`, the close appends with the
+file tools and records `inbox: by hand (no CLI)`; else it never opens the inbox with them.
 
 Beside `retired`, two more optional fields ride a row appended from a report: `report`, the
 repo-relative path of the report it came from, and `decision_needed`, present only as `true` when

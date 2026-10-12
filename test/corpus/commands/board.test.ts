@@ -1066,7 +1066,13 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(grammar).toContain("names `hygiene batch` at all");
     expect(grammar).toContain("holds no letter or digit is refused");
     // The pre-existing rule the new sentences sit beside still closes the bullet.
-    expect(grammar).toMatch(/A row that does not parse is kept verbatim and triaged as an untagged entry/);
+    // TEST CHANGE, justified (2026-10-12, REQ-FLOW-079): the pin read "kept verbatim and triaged as
+    // an untagged entry". What changed about the contract: `fill` reads the inbox through the
+    // screened query, which prints an unparsed row only as its line and parse message, so the row
+    // is listed for the person to fix and never triaged; triaging it would mean opening the file.
+    expect(grammar).toMatch(
+      /A row that does not parse is kept verbatim and listed as the query prints it, the person's to fix and never triaged/,
+    );
 
     // What the bullet says is what the one parser does. A row carrying every
     // optional field it names parses below the heading, each field read...
@@ -1672,6 +1678,24 @@ describe("st-board — edge cases", () => {
     expect(body.search(/`stamity [a-z]/)).toBeGreaterThan(running);
     expect(body.indexOf("### fill — intake to items")).toBeGreaterThan(running);
     expect(flat(body)).not.toContain("still read the file whole");
+  });
+
+  // Added 2026-10-12 (REQ-FLOW-079, review round 1 of unit w2-inbox-flow-text): step 1 lists a
+  // withheld, skipped or unparsed row as the query prints it and never opens it, so no later rule
+  // may have `fill` triage such a row: step 1 says it is never triaged, step 5 triages only the
+  // entries `fill` read in full, and the Row grammar lists an unparsed row for the person to fix.
+  it("never triages a row the query withholds, skips or cannot parse (REQ-FLOW-079)", async () => {
+    const body = (await board()).parsed.body;
+    const fill = flat(section(section(body, "Modes"), "fill — intake to items", "###"));
+    const collect = /1\. \*\*Collect sources\.\*\*(.*?) 2\. \*\*Scan before creating/.exec(fill)?.[1] ?? "";
+    expect(collect).toContain(
+      "a row it withholds, skips or cannot parse is listed as it prints and never opened or triaged",
+    );
+    const triage = /5\. \*\*Triage the inbox\.\*\*(.*?) 6\. \*\*Verdict per item/.exec(fill)?.[1] ?? "";
+    expect(triage).toContain("Each entry read in full becomes a new item");
+    const inbox = flat(section(body, "Deferral inbox"));
+    expect(inbox).toContain("listed as the query prints it, the person's to fix and never triaged");
+    expect(flat(body)).not.toContain("triaged as an untagged entry");
   });
 
   it("defers one side of a collision instead of assigning overlapping writes in parallel", async () => {

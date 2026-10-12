@@ -84,7 +84,8 @@ name the first artifact.
 4. `stamity ledger inbox --plan <this plan> --paths <the scope's files>` lists the deferral-inbox
    rows overlapping the scope: fold them in, or leave them with a one-line reason. A row it
    withholds, skips or cannot parse is listed as it prints, never opened; only an absent CLI or
-   query sends this read to the whole file, said so, and any other failure is a finding.
+   query sends this read to the whole file, said so, and any other failure is a finding. It runs as
+   Running the CLI below says, and again once research names the files.
 5. History for the touched paths (bug, refactor, and migration intents).
 
 **Research fan-out.** Each intent section below names its research questions. Spawn one

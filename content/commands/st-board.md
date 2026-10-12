@@ -42,10 +42,10 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
 
 1. **Collect sources.** Read the sources named in the invocation, then the source linked for this
    session, then the deferral inbox through `stamity ledger inbox`, no filter: a row it withholds,
-   skips or cannot parse is listed as it prints and never opened, and only an absent CLI or query
-   sends `fill` to the whole file, said so. With no linked source and an empty inbox, fall back to
-   chat intake and ask for the items directly. Nothing is invented: no backlog file is created, no
-   todo file is written, no source is assumed to exist because one usually does.
+   skips or cannot parse is listed as it prints and never opened or triaged, and only an absent CLI
+   or query sends `fill` to the whole file, said so. With no linked source and an empty inbox, fall
+   back to chat intake and ask for the items directly. Nothing is invented: no backlog file is
+   created, no todo file is written, no source is assumed to exist because one usually does.
 
    Invocation grammar: `--source <ref>`, repeatable, where `<ref>` is a repo path, a platform item
    or board identifier, or `chat`. Order is precedence — the first `--source` wins a conflict, and a
@@ -80,8 +80,8 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
    `inferred` so it can be validated. Every criterion names a verifiable
    outcome: "rejects a missing required field with a 400 and a field-level
    message", not "validates input".
-5. **Triage the inbox.** Each entry becomes a new item, folds into an existing item, becomes a
-   recorded proposal, or is dropped with its reason recorded. An entry leaves `.stamity/inbox.md`
+5. **Triage the inbox.** Each entry read in full becomes a new item, folds into an existing item,
+   becomes a recorded proposal, or is dropped, its reason recorded. It leaves `.stamity/inbox.md`
    once its destination item exists — or, where the destination is a proposal this run did not file
    because no board is linked, once the run report records that proposal under an id and the entry
    is annotated with it. That is the drain for proposal-only entries; without it the rendezvous only
@@ -405,8 +405,8 @@ command is what parses it.
   day: a day is written `by: <YYYY-MM-DD>`, and a trigger that holds one is
   refused the same way. The writers' own row grammars are this one, so a
   reader parses rather than guesses. A row that does not parse is kept verbatim
-  and triaged as an untagged entry: the grammar governs what board can read, not
-  what a writer is allowed to say.
+  and listed as the query prints it, the person's to fix and never triaged: the grammar
+  governs what board can read, not what a writer is allowed to say.
 - **Triage order:** rows tagged `critical-deferred` are triaged first, then
   rows tagged `decision-waiting`, both ahead of every other row and regardless
   of file order. The first tag is the elevated-triage signal a deferred

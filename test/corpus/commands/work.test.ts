@@ -1329,8 +1329,13 @@ describe("/st-work — Prove", () => {
   it("joins the leftovers to the close's one question as a fourth part, by /st-board's rule (REQ-FLOW-074)", async () => {
     const raw = (await workFile).raw;
     const qa = collapse(section(await body(), "### QA checkpoint"));
+    // TEST CHANGE, justified (2026-10-12, REQ-FLOW-078): the pin read the query as
+    // `stamity ledger inbox --due --paths <the changed paths>`. What changed about the contract:
+    // the close now removes and re-dates rows through `ledger inbox-write --remove <Ref>`, and the
+    // query's text output prints no `Ref:`, so the close runs it with `--json`, whose `ref` field
+    // carries each row's. Every other word of the pointer is held, and so is its four-line bound.
     const pointer =
-      "The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths>` and takes every `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.";
+      "The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.";
     expect(qa).toContain(pointer);
     expect(qa).toContain("every `decision-waiting` row first");
 
@@ -1686,7 +1691,12 @@ describe("/st-work — Prove", () => {
     expect(proof).toContain(
       "A decided row with no unique `Ref:` stays, on `Not done:` as `decided, not applied (no unique Ref:): line <n>`.",
     );
-    const never = "The close never opens the inbox with file tools.";
+    // TEST CHANGE, justified (2026-10-12, REQ-FLOW-078): the pin read "The close never opens the
+    // inbox with file tools." What changed about the contract: by the run's signed-off reading of
+    // review/42, where no CLI form runs or the installed copy has no `inbox-write`, the close
+    // appends with the file tools as it did before the verb and records it, as Frame's read falls
+    // back; with the verb present the close still never opens the inbox with the file tools.
+    const never = "else it never opens the inbox with them.";
     expect(proof).toContain(never);
     // After the rows the close decides and the row no answer reached, before the optional fields.
     const at = proof.indexOf(verb);
@@ -1694,6 +1704,33 @@ describe("/st-work — Prove", () => {
     expect(proof.indexOf(never)).toBeLessThan(proof.indexOf("Beside `retired`, two more optional fields"));
     // The flags it names are the verb's own; the code side is `test/runs/ledgerInboxWrite.test.ts`.
     expect(proof).not.toMatch(/inbox-write[^.]*--(?!run\b|stdin\b|remove\b)[a-z]/);
+  });
+
+  // Added 2026-10-12 (REQ-FLOW-078, review round 1 of unit w2-inbox-flow-text): three gaps in the
+  // close's write. The query's text output prints no `Ref:`, so the paragraph names where a
+  // `--remove` value comes from, the `ref` field of the `--json` query, null on a withheld row the
+  // close never decides. One bullet repeating a removed row's `Ref:` refuses the whole call, so a
+  // call refused on such a removal alone runs again without it, and the run's appends still land.
+  // And where no CLI form runs or the copy has no `inbox-write`, the close appends with the file
+  // tools and says so in the run record, rather than letting the deferred rows miss the inbox.
+  it("names the close's Ref: source, its re-run after a refused removal, and its no-CLI append (REQ-FLOW-078)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    expect(proof).toContain(
+      "Each `Ref:` is the row's `ref` in `ledger inbox --json` (null if withheld, never decided).",
+    );
+    expect(qa).toContain("`stamity ledger inbox --due --paths <the changed paths> --json`");
+    expect(proof).toContain("A call refused on such a `--remove` alone runs again without it.");
+    // "such" reads back to the row with no unique `Ref:`: the sentence follows D19's line.
+    expect(proof.indexOf("A call refused on such a `--remove` alone")).toBeGreaterThan(
+      proof.indexOf("`decided, not applied (no unique Ref:): line <n>`."),
+    );
+    const fallback =
+      "Where no CLI form runs or the copy lacks `inbox-write`, the close appends with the file tools and records `inbox: by hand (no CLI)`; else it never opens the inbox with them.";
+    expect(proof).toContain(fallback);
+    // The by-hand line mirrors the ledger's own, under the CLI calls bullet.
+    expect(collapse(await body())).toContain("records `ledger: by hand (no CLI)`");
+    expect(proof).not.toContain("The close never opens the inbox with file tools.");
   });
 
   it("closes with a next step derived from the run's own state", async () => {
