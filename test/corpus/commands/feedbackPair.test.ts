@@ -1023,14 +1023,20 @@ describe("pr-resolve — collection and evaluation", () => {
     expect(preflight).toMatch(/stays unread until section 0 clears it/i);
   });
 
-  it("posts nothing when the board reply channel is off, and nothing at all on zero threads", () => {
+  it("replies need no board setup, and nothing posts on zero threads", () => {
     const preflight = clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
 
-    // Board owns the four write-back channels and says a write happens only where
-    // its channel was enabled at setup; this command is channel four.
-    expect(preflight).toMatch(/fourth write-back channel/i);
-    expect(preflight).toMatch(/enabled at setup/i);
-    expect(preflight).toMatch(/it posts nothing/i);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-009): the test was "posts nothing when the
+    // board reply channel is off, and nothing at all on zero threads" and asserted
+    // /fourth write-back channel/i, /enabled at setup/i and /it posts nothing/i. What moved:
+    // `/st-board`'s write-back contract no longer counts channels or switches them at setup, so
+    // the reply is this command's own write and no board record can turn it off. The clause
+    // that let a setup record silence replies is gone, so its "posts nothing" pin goes with it;
+    // the old wording is now pinned absent rather than dropped unseen.
+    expect(preflight).toMatch(/the invocation is the consent/i);
+    expect(preflight).toMatch(/outside `\/st-board`'s write set/i);
+    expect(preflight).not.toMatch(/enabled at setup/i);
+    expect(preflight).not.toMatch(/fourth write-back channel/i);
     // Edge case: zero open threads writes nothing — no inbox row, no commit, no reply.
     expect(preflight).toMatch(/no inbox row, no commit, no reply/i);
   });
@@ -1193,12 +1199,34 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(poll).toMatch(/attempt cap/i);
   });
 
-  it("names the PR-thread reply as the fourth write-back channel", () => {
+  it("names the PR-thread reply as this command's own write", () => {
     const close = clause(artifact(PR_RESOLVE).parsed.body, "## Close");
 
-    expect(close).toMatch(/fourth write-back channel/i);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-009): the test was "names the PR-thread
+    // reply as the fourth write-back channel" and asserted /fourth write-back channel/i. What
+    // moved: `/st-board`'s contract names writes, not four channels, and the reply sits outside
+    // that set, so the Close now says so in the contract's words.
+    expect(close).toMatch(/the PR-thread reply is this command's own write/i);
+    expect(close).toMatch(/outside `\/st-board`'s write set/i);
+    expect(close).not.toMatch(/fourth write-back channel/i);
     expect(close).toContain(INBOX);
     expect(close).toMatch(/proof block/i);
+  });
+
+  it("names every inbox reader where the deferral rows land, `/st-plan` included", () => {
+    const close = clause(artifact(PR_RESOLVE).parsed.body, "## Close");
+
+    // Added 2026-10-12 (inbox row `2026-10-10_next-tier/review/109`): the row paragraph named
+    // two readers, board fill and `/st-work`'s framing phase, while `/st-board`'s census lists
+    // three, `/st-plan`'s shared intake the third. This mirrors the `/st-rework` routing pin
+    // above, so the two writers' texts cannot part from the census again unseen.
+    const census = /\*\*Readers, (\w+), all mandatory:\*\*/.exec(
+      clause(artifact(BOARD).parsed.body, "## Deferral inbox"),
+    )?.[1];
+    expect(census, "`/st-board`'s census states no reader count").toBe("three");
+    expect(close).toContain(
+      "where `/st-board` fill, `/st-work`'s framing phase and `/st-plan`'s shared intake all read them.",
+    );
   });
 
   it("decides each DEFER row in the phase-3 triage ask and adds no closing ask (REQ-FLOW-074, REQ-FLOW-077)", () => {
@@ -1213,10 +1241,16 @@ describe("pr-resolve — triage, fixes, and replies", () => {
         "its row carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the " +
         "location is `—`), and the round adds no closing ask.",
     );
-    // It follows the row paragraph and precedes the write-back paragraph: the sentence is
+    // It follows the row paragraph and precedes the reply paragraph: the sentence is
     // about the row the two paragraphs above it describe.
     expect(close.indexOf("never a comment body")).toBeLessThan(close.indexOf("Each DEFER row is decided"));
-    expect(close.indexOf("adds no closing ask")).toBeLessThan(close.indexOf("fourth write-back channel"));
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-009): the anchor was "fourth write-back
+    // channel", the reply paragraph's old wording; the paragraph now reads "outside `/st-board`'s
+    // write set". The order it pins is unchanged. The anchor is checked present first, so a
+    // missing phrase fails here instead of reading as index -1.
+    const replyParagraph = close.indexOf("outside `/st-board`'s write set");
+    expect(replyParagraph).toBeGreaterThan(-1);
+    expect(close.indexOf("adds no closing ask")).toBeLessThan(replyParagraph);
 
     // The triage section's own promise still holds beside it: after `accept` the only later
     // interruption is the re-poll consent, which is a consent to fetch and not a closing ask.
