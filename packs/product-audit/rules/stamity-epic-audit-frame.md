@@ -1,11 +1,11 @@
 ---
 id: epic-audit-frame
 type: rule
-description: Carries the assessment-epic scaffold the pack's commands share — module taxonomy, epic and sub-issue shape, the proposal-versus-write-back split, failure handling, and the guardrails that keep an assessment from turning into a change.
+description: Carries the assessment-epic scaffold the pack's commands share — module taxonomy, epic and sub-issue shape, the proposal it hands to `/st-board fill`, failure handling, and the guardrails that keep an assessment from turning into a change.
 tags: [board, review]
 load: on-demand
 scope: agent-requested
-obsolete_when: the board write-back contract opens an item-creation channel a pack command can call
+obsolete_when: a pack command can hand its proposal to /st-board's preview in the same run, so a separate fill run adds nothing
 ---
 
 # Epic-Audit Frame
@@ -62,11 +62,11 @@ from memory once it exists on a board.
 
 ## Board write-back
 
-The board primitive lives in `/st-board`, and its write-back contract is four
-channels wide — progress comment, PR link, status transition, PR-thread reply.
-Neither creating an item nor writing a label is among them. This block is the
-wrapper around what those channels already allow — not a second definition of
-them, and not a fifth one.
+The board primitive lives in `/st-board`, which files, edits and moves items on
+a linked board through its own preview. This pack calls none of that: its epic
+and sub-issues leave as a proposal, and `/st-board fill --source <report>` is
+the run that files them. This block wraps the board's contract; it is not a
+second definition of it.
 
 1. **The epic and its sub-issues leave as a proposal.** The report holds the
    authored bodies and the dependency order, ready for a person to apply.
@@ -74,10 +74,10 @@ them, and not a fifth one.
    filed yet has still delivered its result.
 2. **What is written is written on an item the board already has.** One
    progress comment per run, naming the findings that land on that item, and a
-   status transition where the phase map covers it. Both are channels the
-   contract already opens.
-3. **A write that would need a fifth channel stops.** It returns
-   `BLOCKED_DEPENDENCY` naming the channel it wanted, and the intent travels in
+   status transition only when the run was given `--move` and the phase map
+   covers it.
+3. **A write the board's contract does not make stops.** It returns
+   `BLOCKED_DEPENDENCY` naming the write it wanted, and the intent travels in
    the proposal instead.
 
 A board write that fails is a warning, not a run failure: the assessment is
@@ -89,7 +89,7 @@ finished, and the write is repeatable afterwards.
 |---|---|
 | Item search fails | Retry once, then continue on the assumption that no `<epic-kind>` epic is open, and say so |
 | A progress comment or status write fails | Retry once, then warn and continue; the assessment stands and the write is re-runnable |
-| A write would need a channel the contract does not open | Return `BLOCKED_DEPENDENCY` for that write alone; the proposal carries the intent and the run still reports |
+| A write the board's contract does not make | Return `BLOCKED_DEPENDENCY` for that write alone; the proposal carries the intent and the run still reports |
 | The board source is not linked | The command's report is the whole output and the proposal rides in it; this is not an error |
 
 ## Guardrails

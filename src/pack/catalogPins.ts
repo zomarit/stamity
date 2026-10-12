@@ -13,6 +13,6 @@
  */
 export const CATALOG_PINS: Record<string, string> = {
   "ops": "3e11beecbb12f97448ce5ef7c2fb55850654c7e369c52231219f43a45a76db20",
-  "product-audit": "42367889d11d31dfc8fd1e585ee8cc9e61f427ae294bdd9622b326aa40edce9d",
+  "product-audit": "85fc78ce3886ee616bda7af13ad9e790ad0fae8dad6cd71bb84c5254cf6bf498",
   "scaffold": "85016f7438a0fee7502593879155558a6514f425382d835d438701d9fddd6eba",
 };

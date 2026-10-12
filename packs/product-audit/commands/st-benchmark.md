@@ -198,9 +198,9 @@ benchmarks, not a module map — so the shape is stated here instead: one epic
 per run, one sub-issue per regressed benchmark, no dependency edges, since two
 regressed benchmarks are worked in any order.
 
-The set is proposed, never filed: this command reaches a board through the same
-write-back channels every other flow does, and no channel there creates an
-item.
+The set is proposed, never filed by this command: it reaches a board only
+through `/st-board`, and `/st-board fill --source <report>` is the run that
+files it.
 
 The frame's evidence guardrail is not cited either, and this row replaces it: a
 metric regression's evidence is the benchmark name, both measurements with their

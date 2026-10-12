@@ -13,10 +13,10 @@ spawns: [researcher, reviewer]
 Assesses the product as it stands at one commit, and turns the result into work
 someone else picks up. **This command assesses; it never modifies product
 code.** Its only file output is a report; on a linked board it also speaks
-through the write-back channels `/st-board` already opens, and no channel there
-creates an item, so the epic it describes travels in the report as a proposal.
-Every fix routes to `/st-work`; a finding that questions the design routes to
-`/st-plan`.
+through `/st-board`'s writes on items the board already has; the epic it
+describes travels in the report as a proposal, and
+`/st-board fill --source <report>` files it. Every fix routes to `/st-work`; a
+finding that questions the design routes to `/st-plan`.
 
 ## Axes
 
@@ -155,17 +155,18 @@ epic proposal below.
 **The epic proposal.** One epic for the run, one sub-issue per module, one per
 cross-cutting assessment. Module sub-issues carry no dependencies; cross-cutting
 sub-issues depend on the module set, and the dependency section names them. It
-stays a proposal in every repo, linked board or not: no write-back channel
-creates a board item, and none writes a label. The bodies and the dependency
-order are authored here for a person to apply.
+stays a proposal in every repo, linked board or not: this command files no board
+item and writes no label; `/st-board fill --source <report>` files it through
+that run's preview. The bodies and the dependency order are authored here for a
+person to apply.
 
 > Epic scaffold: `stamity-epic-audit-frame` → Epic and sub-issue shape, then
 > Board write-back. Slot: epic-kind = `product audit (<axis>)`; epic-label =
 > `product-audit`.
 
-**Board linked.** The run additionally speaks through the channels already open
-to it: one progress comment per run on an item the board already has, and a
-status transition where the phase map covers it.
+**Board linked.** The run additionally speaks through `/st-board`'s writes: one
+progress comment per run on an item the board already has, and a status
+transition only under `--move` where the phase map covers it.
 
 **No board linked.** That is a repo state, not an error, and it never blocks an
 assessment — the report is unchanged and the proposal rides in it. Linking a
@@ -179,8 +180,8 @@ The boundary, stated as rules rather than intent:
 - **Spawn set.** `researcher` and `reviewer`. No implementer, no fixer. There
   is no path in this command that reaches a code-mutating role.
 - **Write set.** `.stamity/audits/<axis>-<sha>.md`, plus the progress comment
-  and status transition the board contract already opens. No board item is
-  created and no label is written. No source file, no configuration, no
+  and, under `--move`, the status transition `/st-board`'s write-back contract
+  makes. No board item is created and no label is written. No source file, no configuration, no
   dependency manifest, no lockfile — not even a formatting change, and not even
   when the fix is one obvious line.
 - **Refresh set.** Running `st-verify` for a missing axis writes

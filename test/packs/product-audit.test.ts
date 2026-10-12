@@ -834,13 +834,12 @@ describe("the pack claims no board capability the write-back contract withholds"
   /**
    * `/st-board` defines the write-back contract every flow that reaches a board
    * is bound by — this pack included, since it owns no board primitive of its
-   * own. Four channels, and two capabilities named as explicitly outside them:
-   * "Creating an item and writing labels are not among them: a new item is a
-   * proposal in the run report and its labels travel with it." The abstract
-   * contract packs implement is `list`, `get`, `update`, `comment`, `link-PR`
-   * — there is no `create` verb in it to call.
+   * own. The contract files and edits items itself, behind its own preview; this
+   * pack uses two of its writes on an item the board already has, and its epic
+   * leaves as a proposal that `/st-board fill --source <report>` files.
    *
-   * The pack published both refused capabilities anyway. Its command said it
+   * Under the old contract, which filed no item and wrote no label, the pack
+   * published both capabilities anyway. Its command said it
    * "opens one epic with a sub-issue per module", its write set was "Board
    * items", the frame said "Create the epic … then create and link each
    * sub-issue", it carried an "Item creation fails" failure row, its guardrail
@@ -851,15 +850,18 @@ describe("the pack claims no board capability the write-back contract withholds"
    * The epic and sub-issue STRUCTURE is kept — it is a good report shape. What
    * is pinned here is that the structure leaves as a proposal.
    */
-  const BOARD_CHANNELS: readonly string[] = [
-    "progress comment",
-    "PR link",
-    "status transition",
-    "PR-thread reply",
-  ];
+  /**
+   * TEST CHANGE, justified (2026-10-12, REQ-BOARD-010): this listed the four
+   * channels of the old contract (progress comment, PR link, status transition,
+   * PR-thread reply), and the refusal below matched "Creating an item and writing
+   * labels are not among them". The board's contract now names five writes and
+   * files items itself, so the pin is the two writes this pack uses, and the
+   * refusal is the contract's stop for a write it does not make.
+   */
+  const BOARD_WRITES: readonly string[] = ["Progress comment", "Status transition"];
 
-  /** The contract's own refusal sentence. It is what makes the channels a closed set. */
-  const FIFTH_CHANNEL_REFUSAL = /Creating an item and writing labels are not among them/i;
+  /** The contract's own refusal sentence: a write outside it stops instead of being improvised. */
+  const UNMADE_WRITE_REFUSAL = /`BLOCKED_DEPENDENCY` rather than improvising one/;
 
   /**
    * Literal claims the pack used to publish, retired by name. Exact strings
@@ -932,32 +934,39 @@ describe("the pack claims no board capability the write-back contract withholds"
     return hits;
   }
 
-  it("the four channels this pack is bound by are the ones /st-board defines", async () => {
+  it("the two writes this pack uses are ones /st-board defines", async () => {
     const board = (await coreFiles).find((file) => file.relPath === "commands/st-board.md");
     expect(board, "core corpus has no commands/st-board.md to bind against").toBeDefined();
     if (board === undefined) return;
 
     const contract = section(board.parsed.body, "Write-back contract");
     expect(contract, "/st-board carries no write-back contract section").not.toBe("");
-    for (const channel of BOARD_CHANNELS) {
-      expect(flow(contract).toLowerCase()).toContain(channel.toLowerCase());
+    for (const write of BOARD_WRITES) {
+      expect(flow(contract).toLowerCase()).toContain(write.toLowerCase());
     }
-    // The closure clause. Without it the four are a list, not a contract.
-    expect(flow(contract)).toMatch(FIFTH_CHANNEL_REFUSAL);
-    expect(flow(contract)).toMatch(/BLOCKED_DEPENDENCY` rather than improvising one/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-010): this matched the
+    // closure clause "Creating an item and writing labels are not among them" and,
+    // on its own line, the same improvising refusal now held by the constant. The
+    // clause is gone with the old contract; the refusal is the closure that stays.
+    expect(flow(contract)).toMatch(UNMADE_WRITE_REFUSAL);
   });
 
-  it("the frame wraps those channels instead of inventing a fifth", async () => {
+  it("the frame wraps those writes and makes no other", async () => {
     const frame = flow((await packFile(RULE_PATH)).parsed.body);
 
-    for (const channel of BOARD_CHANNELS) {
-      expect(frame.toLowerCase(), `the frame does not name the ${channel} channel`).toContain(
-        channel.toLowerCase(),
+    for (const write of BOARD_WRITES) {
+      expect(frame.toLowerCase(), `the frame does not name the ${write} write`).toContain(
+        write.toLowerCase(),
       );
     }
-    expect(frame).toMatch(/Neither creating an item nor writing a label is among them/i);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-010): this matched "Neither
+    // creating an item nor writing a label is among them" and "would need a fifth
+    // channel stops". The board files items now, so the frame says who files the
+    // proposal, and its stop names a write the board's contract does not make.
     expect(frame).toMatch(/leave as a proposal/i);
-    expect(frame).toMatch(/would need a fifth channel stops/i);
+    expect(frame).toContain("`/st-board fill --source <report>`");
+    expect(frame).toMatch(/A write the board's contract does not make stops/i);
+    expect(frame).toMatch(/status transition only when the run was given `--move`/i);
     expect(frame).toContain("BLOCKED_DEPENDENCY");
   });
 
@@ -965,12 +974,51 @@ describe("the pack claims no board capability the write-back contract withholds"
     const audit = flow((await packFile("commands/st-product-audit.md")).parsed.body);
     const benchmark = flow((await packFile("commands/st-benchmark.md")).parsed.body);
 
-    expect(audit).toMatch(/no write-back channel creates a board item, and none writes a label/i);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-010): these matched "no
+    // write-back channel creates a board item, and none writes a label" (audit) and
+    // "no channel there creates an item" (benchmark). The board's contract now files
+    // items, so each command says it files none itself and names the run that does.
+    expect(audit).toMatch(/this command files no board item and writes no label/i);
     expect(audit).toMatch(/stays a proposal in every repo, linked board or not/i);
-    // The write set names the two channels it does use and refuses the two it does not.
+    expect(audit).toMatch(/a status transition only under `--move`/i);
+    // The write set names the two writes it does use and refuses the two it does not.
     expect(audit).toMatch(/No board item is created and no label is written/i);
-    expect(benchmark).toMatch(/proposed, never filed/i);
-    expect(benchmark).toMatch(/no channel there creates an item/i);
+    expect(audit).toMatch(/under `--move`, the status transition `\/st-board`'s write-back contract makes/);
+    expect(benchmark).toMatch(/proposed, never filed by this command/i);
+    expect(benchmark).toMatch(/it reaches a board only through `\/st-board`/i);
+    for (const [name, text] of [
+      ["st-product-audit", audit],
+      ["st-benchmark", benchmark],
+    ] as const) {
+      expect(text, `${name} does not name the run that files its proposal`).toContain(
+        "`/st-board fill --source <report>`",
+      );
+    }
+  });
+
+  it("no pack file states the retired no-creation claims of the old contract", async () => {
+    // The old contract created no item, so the pack said "no channel there creates" an
+    // item. The board files items now; that sentence would be false (REQ-BOARD-010).
+    const retired = [
+      /no channel there creates/i,
+      /no write-back channel creates/i,
+      /four\s+channels wide/i,
+      /already opens/i,
+    ];
+    const problems: string[] = [];
+    for (const file of await packFiles) {
+      const obsoleteWhen = frontmatterField(file.parsed, "obsolete_when");
+      const text = [
+        description(file),
+        typeof obsoleteWhen === "string" ? obsoleteWhen : "",
+        flow(file.parsed.body),
+      ].join("\n");
+      for (const claim of retired) {
+        if (claim.test(text)) problems.push(`${file.relPath}: still states ${String(claim)}`);
+      }
+    }
+
+    expect(problems).toEqual([]);
   });
 
   it("no pack body or description claims it creates a board item or writes a label", async () => {
