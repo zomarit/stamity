@@ -1,11 +1,13 @@
 ---
 id: board-writes
 intent: feature
-stamp: 88fcfd324c5efeb10c7508d4cfbc13389291c571 2026-10-01
+stamp: 41b1899a69a34597f2b9232bf452c1e3cd97bcab 2026-10-12
 reads: [content/commands/st-board.md, test/corpus/commands/board.test.ts, content/commands/st-pr-resolve.md, test/corpus/commands/feedbackPair.test.ts, content/commands/st-work.md, content/commands/st-debug.md, content/rules/stamity-injection-screening.md, content/rules/stamity-question-protocol.md, packs/product-audit/rules/stamity-epic-audit-frame.md, packs/product-audit/commands/st-product-audit.md, packs/product-audit/commands/st-benchmark.md, test/packs/product-audit.test.ts, evals/cases-v6/golden/board-write-back-four-channels.md, evals/cases-v6/golden/pr-resolve-next-step-derived-from-run-state.md, evals/cases-v6/adversarial/mcp-tool-result-directive-is-data.md, evals/SET-v7.md, evals/README.md, scripts/eval/run.mjs, .stamity/overrides/skills/st-eval-run/SKILL.md, .github/release-controls-checklist.md, test/evals/successorInputs.test.ts, test/evals/roster.test.ts, test/evals/locators.test.ts, test/evals/readmeCurrency.test.ts, test/evals/coverage.test.ts, test/emit/crossClientGoldens.test.ts, README.md, docs/getting-started.md, docs/working-with-stamity.md, SECURITY.md, docs/specs/everyday-flows.md, CHANGELOG.md, test/records/specStatus.test.ts]
 ---
 
 # `/st-board` writes to the linked board by default
+
+Re-planned in-flow on 2026-10-12 by `.stamity/runs/2026-10-12_board-writes/plan.md`, whose cells bind where the two differ; restamped from `88fcfd32` so the spec status gate reads this plan as unshipped.
 
 This file is self-contained. It is the `/st-plan` artifact for Package 19, placed before Package 18 on 2026-10-01:
 `/st-board` files, edits and comments on the items of a linked GitHub board by default, behind one preview per run,

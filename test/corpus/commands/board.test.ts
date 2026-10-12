@@ -21,7 +21,7 @@ const INBOX = [".stamity", "inbox.md"].join("/");
  * specific to THIS command and would otherwise erode silently:
  *
  *   - the sub-agent declaration that makes it a command rather than a skill;
- *   - the four-channel write-back contract, counted, not merely mentioned;
+ *   - the five-write write-back contract, counted, not merely mentioned;
  *   - the single platform reference table (the churn-containment invariant —
  *     a second platform table anywhere in the body defeats it);
  *   - the board/work boundary: dependency vocabulary, readiness gate, handoff.
@@ -61,30 +61,36 @@ const SECTION_SKELETON: readonly string[] = [
   "Return contract",
 ];
 
-/** The write-back channels, in contract order — exactly four, no fifth. */
+/**
+ * The write-back contract's writes, in contract order — exactly five.
+ *
+ * TEST CHANGE, justified (2026-10-12, REQ-BOARD-001): this listed four channels
+ * (Progress comment, PR link, Status transition, PR-thread reply). The board now
+ * files and edits items by default, so New item and Item edit join the set, and
+ * the PR-thread reply leaves it as `/st-pr-resolve`'s own write (REQ-BOARD-009).
+ */
 const WRITE_BACK_CHANNELS: readonly string[] = [
+  "New item",
+  "Item edit",
   "Progress comment",
   "PR link",
   "Status transition",
-  "PR-thread reply",
 ];
 
 /**
- * Board actions that exist on a platform and that NO write-back channel opens.
+ * Board actions that exist on a platform and that NO write of the contract makes.
  *
  * A progress-event mapping naming one of these promises a write the contract
- * refuses, so by the command's own fifth-channel rule the event returns
- * `BLOCKED_DEPENDENCY`. `criterion.done` mapped to a checklist tick — the most
- * routine event on the board — was exactly that shape.
+ * refuses, so by the command's own never-writes rule the event returns
+ * `BLOCKED_DEPENDENCY`.
+ *
+ * TEST CHANGE, justified (2026-10-12, REQ-BOARD-004): this listed checklist
+ * tick, label, create, title and body edit beside delete. Filing an item and
+ * editing an open item's title, body, labels and ticks are now the New item and
+ * Item edit writes, so only a deletion and an edit to a completed item stay
+ * outside the set (`### Writes the board never makes`).
  */
-const NON_CHANNEL_ACTIONS: readonly string[] = [
-  "checklist tick",
-  "label",
-  "create",
-  "title",
-  "body edit",
-  "delete",
-];
+const NON_CHANNEL_ACTIONS: readonly string[] = ["delete", "completed item"];
 
 let cached: Promise<CorpusFile> | undefined;
 
@@ -276,72 +282,251 @@ describe("st-board — section skeleton", () => {
 });
 
 describe("st-board — write-back contract", () => {
-  it("enumerates exactly four channels, in contract order", async () => {
+  it("enumerates exactly five writes, in contract order (REQ-BOARD-001)", async () => {
     const text = section((await board()).parsed.body, "Write-back contract");
     const enumerated = [...text.matchAll(/^(\d+)\.\s+\*\*(.+?)\*\*/gm)];
 
-    expect(enumerated.map((match) => match[1])).toEqual(["1", "2", "3", "4"]);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-001): this counted four
+    // channels, 1 to 4. Filing and editing items joined the set and the
+    // PR-thread reply left it, so the list is the five writes, 1 to 5.
+    expect(enumerated.map((match) => match[1])).toEqual(["1", "2", "3", "4", "5"]);
     expect(enumerated.map((match) => match[2])).toEqual(WRITE_BACK_CHANNELS);
   });
 
-  it("is read-only by default and refuses a fifth channel", async () => {
+  it("is on by default behind one preview and refuses a write outside the set (REQ-BOARD-001, REQ-BOARD-002)", async () => {
     const text = flat(section((await board()).parsed.body, "Write-back contract"));
 
-    expect(text).toMatch(/Read-only by default/);
-    expect(text).toMatch(/enabled at setup/);
-    expect(text).toMatch(/fifth channel stops and returns `BLOCKED_DEPENDENCY`/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-001): this asserted "Read-only
+    // by default", "enabled at setup" and the fifth-channel refusal. Writes are
+    // now on once a board is linked, gated by the run's one preview, whose
+    // unanswered default writes nothing; the refusal phrase the pack binds to stays.
+    expect(text).toMatch(/On by default once a board is linked/);
+    expect(text).toMatch(/Default if no response: 4 \(`stop`\)/);
+    expect(text).toMatch(/`BLOCKED_DEPENDENCY` rather than improvising one/);
   });
 
-  it("scopes the PR-thread reply to the pr-resolve touchpoint", async () => {
+  it("places the PR-thread reply outside the set, as /st-pr-resolve's own write (REQ-BOARD-009)", async () => {
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-009, criterion 3): this
+    // matched a fourth channel "PR-thread reply — … `/st-pr-resolve` only". The
+    // reply is no longer a board write; the contract says so in one sentence.
     expect(flat(section((await board()).parsed.body, "Write-back contract"))).toMatch(
-      /PR-thread reply\*\* — .*`\/st-pr-resolve` only/,
+      /PR-thread replies are\s+`\/st-pr-resolve`'s own write, outside this set/,
     );
   });
 
-  it("excludes item creation and label writes from the sanctioned set", async () => {
-    const body = (await board()).parsed.body;
-    const text = flat(section(body, "Write-back contract"));
+  it("names the writes the board never makes (REQ-BOARD-004)", async () => {
+    const never = flat(
+      section(section((await board()).parsed.body, "Write-back contract"), "Writes the board never makes", "###"),
+    );
 
-    // The four channels are the whole set, so a mode that "creates" an item is
-    // producing a report proposal — not writing one to the source through a
-    // fifth channel the contract never opened. Without this the body promises a
-    // capability no channel implements, and a conforming run has to improvise.
-    expect(text).toMatch(/Those four are the whole set/);
-    expect(text).toMatch(/Creating an item and writing labels are not among\s*them/);
-    expect(text).toMatch(/a new item is a proposal in the run report/);
-    // Status is the one label-shaped write a run may make, through its channel.
-    expect(text).toMatch(/the status field or column the status channel maps/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-004): this asserted that
+    // item creation and label writes sat outside a four-channel set. Filing an
+    // item and applying an existing label are writes now; what stays outside is
+    // the five below, each refused for its item alone.
+    expect(never).toMatch(/Deleting an item/);
+    expect(never).toContain("any edit to a completed item");
+    expect(never).toMatch(/a write to any repository or board other than the linked one/);
+    // On a Projects board, another repository's item counts as another repository.
+    expect(never).toMatch(/on a Projects board, to another repository's item/);
+    expect(never).toMatch(/a label the repository does not already have/);
+    expect(never).toMatch(/a `status:\*` label where the board has a status field/);
+    // `test/packs/product-audit.test.ts` reads this phrase with nothing between
+    // the closing backtick and "rather".
+    expect(never).toContain("`BLOCKED_DEPENDENCY` rather than improvising one");
+    expect(never).toMatch(/for that item alone/);
+    // The refusal is reported, not swallowed: the other writes go on, and the run's
+    // status names the blocked action.
+    expect(never).toMatch(/other writes are reported apart, the run status carrying the blocked action/);
+    // D9: a reopen under `--move` is not an edit to a completed item.
+    expect(never).toMatch(/A reopen under `--move` is the status-transition write, not an edit/);
   });
 
-  it("settles a platform close as channel 3 or as a proposal, and never as a fifth channel", async () => {
+  it("settles a platform close as a `move` or as a proposal (REQ-BOARD-003)", async () => {
     const body = (await board()).parsed.body;
-    const writeBack = flat(section(body, "Write-back contract"));
     const groom = flat(section(section(body, "Modes"), "groom — maintain", "###"));
 
-    // Groom applied confirm-first closes while the contract placed
-    // closes outside all four channels and refused a fifth — so the routine
-    // groom disposition had no legal mechanism. The split is stated once on the
-    // channel and repeated in the question that applies it.
-    expect(writeBack).toMatch(/close rides this channel exactly when the platform models closure/);
-    expect(writeBack).toMatch(/Where closure is a separate operation the status field does not/);
-    expect(writeBack).toMatch(/it is a proposal in the run report/);
-    // The blanket "closes stay outside" claim is gone from the exclusion list.
-    expect(writeBack).toMatch(/Item bodies, titles, checklist ticks, deletions/);
-    expect(writeBack).toMatch(/Closes are the one case that splits/);
-    // groom's bundled question states which mechanism each row takes.
-    expect(groom).toMatch(/question states its mechanism per row/);
-    expect(groom).toMatch(/`status` — the platform models closure as the status field/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-003): this asserted channel
+    // 3's close-rides-the-status-field sentences in the contract and a `status`
+    // mechanism in groom. A close now rides the Status transition write wherever
+    // the board contract's `move` closes the item, under `--move`; groom states
+    // the `move` / `proposal` split and the reference-table fallback it keeps.
+    expect(groom).toMatch(/every one reaches the board through the run's preview/);
+    expect(groom).toMatch(/Status changes need `--move`/);
+    expect(groom).toMatch(/`move` — the board contract's `move` closes the item/);
+    expect(groom).toMatch(/rides the status-transition write under `--move`/);
     expect(groom).toMatch(/`proposal` — closure is a separate operation/);
     expect(groom).toMatch(/the reference table does not settle is a `proposal`/);
   });
 
-  it("says the same at the fill site that would otherwise imply a creation write", async () => {
+  it("files each ready item at the fill site after the run's preview (REQ-BOARD-001)", async () => {
     const fill = flat(
       section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"),
     );
+    const verdict = /6\. \*\*Verdict per item\.\*\*(.*)$/.exec(fill)?.[1] ?? "";
 
-    expect(fill).toMatch(/that contract opens no creation channel/);
-    expect(fill).toMatch(/a new item is a proposal in the run report until a person files it/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-001, criterion 2): this
+    // asserted "that contract opens no creation channel" and that a new item
+    // stays a proposal until a person files it. Step 6 now files each `ready`
+    // item after the preview; an unready item or an unapplied row stays a proposal.
+    expect(verdict).toMatch(/each `ready` item is filed after the run's preview/);
+    expect(verdict).toMatch(/an issue in the linked repository/);
+    expect(verdict).toMatch(/added to the linked project when one is linked/);
+    expect(verdict).toMatch(/the acceptance criteria, a `Ref:` when the item names a spec, and the filed-item marker/);
+    expect(verdict).toMatch(/An unready item, or a row the preview did not apply, stays a\s+proposal in the run report/);
+  });
+
+  it("opens with one write target, one repository and the write check, stated once (REQ-BOARD-001, REQ-BOARD-007)", async () => {
+    const writeBack = section((await board()).parsed.body, "Write-back contract");
+    const opening = flat(writeBack.slice(0, writeBack.indexOf("\n1. ")));
+    const newItem = flat(/^1\. \*\*New item\*\*.*(?:\n {3}.*)*/m.exec(writeBack)?.[0] ?? "");
+
+    expect(opening).toMatch(/A run writes to one board/);
+    expect(opening).toMatch(/A Projects-board link names exactly one repository, from setup step 2/);
+    expect(opening).toMatch(/every write to another repository's item stays a proposal/);
+    expect(opening).toMatch(
+      /With no repository named, the link is read-only: every write stays a proposal, and the run reports `BLOCKED_DEPENDENCY` naming the missing repository and setup step 2/,
+    );
+    // The write check, stated here and nowhere else in full.
+    expect(opening).toMatch(/Once the link has its repository/);
+    expect(opening).toMatch(/requires `admin` or `write` for the acting account/);
+    expect(opening).toMatch(/on a Projects board, `viewerCanUpdate`/);
+    expect(opening).toMatch(/a failed or missing check leaves the link read-only, naming it/);
+    expect(newItem).toMatch(/added\s+to\s+the\s+linked\s+project\s+when\s+one\s+is\s+linked/);
+    // A tick changes one box, read fresh.
+    expect(flat(writeBack)).toMatch(/re-reads the body just before writing and changes only that criterion's box/);
+  });
+
+  it("sends writes one at a time and stops on a retry-after (REQ-BOARD-007)", async () => {
+    expect(flat(section((await board()).parsed.body, "Write-back contract"))).toMatch(
+      /Writes go out one at a time, at least one second apart, and stop on a `retry-after`/,
+    );
+  });
+
+  it("numbers the preview's answers, labels its rows and defaults to stop (REQ-BOARD-002)", async () => {
+    const preview = flat(
+      section(section((await board()).parsed.body, "Write-back contract"), "The preview", "###"),
+    );
+
+    // D5 and S12: rows are `R1`…`Rn`, the four answers are numbered, so a bare
+    // number always names an option and never a row.
+    expect(preview).toMatch(/rows labelled `R1`…`Rn`/);
+    const answers = ["`1 apply`", "`2 apply <rows>`", "`3 skip <rows>`", "`4 stop`"];
+    const positions = answers.map((answer) => preview.indexOf(answer));
+    for (const [index, position] of positions.entries()) {
+      expect(position, `${answers[index] ?? ""} is missing from the preview`).toBeGreaterThan(-1);
+    }
+    expect(positions.toSorted((a, b) => a - b)).toEqual(positions);
+    expect(preview).toMatch(/after 2 or 3 a row is named only by its label/);
+    expect(preview).toContain("Default if no response: 4 (`stop`)");
+    expect(preview).not.toContain("accept (default)");
+    expect(preview).toMatch(/no\s+further\s+prompt,\s+except\s+the\s+end-of-run\s+question\s+`--move`\s+defines/);
+    expect(preview).toMatch(/`stop`, or no answer, writes nothing and keeps every row as a proposal/);
+    expect(preview).toMatch(/A write the preview did not list is not made/);
+  });
+
+  it("names a pickup's later writes in its preview and carries the answer into the handoff (REQ-BOARD-002)", async () => {
+    const preview = flat(
+      section(section((await board()).parsed.body, "Write-back contract"), "The preview", "###"),
+    );
+
+    expect(preview).toMatch(/A pickup preview also names the work run's later writes/);
+    // D7: a tick only for a criterion an `admin` or `write` author wrote.
+    expect(preview).toMatch(
+      /a\s+tick\s+of\s+each\s+acceptance\s+criterion\s+the\s+run\s+verifies where the item's body lists it as a task and an `admin` or `write` author wrote it/,
+    );
+    expect(preview).toMatch(/the PR link and, with `--move`, the forward status changes/);
+    // D6: the answer travels; S13: `stop` or no answer still hands off.
+    expect(preview).toContain("`preview: apply`");
+    expect(preview).toContain("`preview: rows <rows>`");
+    expect(preview).toContain("`preview: stop`");
+    expect(preview).toMatch(
+      /a pickup answered `4` \(`stop`\), or unanswered, still hands off, carrying `preview: stop`, and the work run makes no board write and keeps every write as a proposal/,
+    );
+    expect(preview).toMatch(/is\s+not\s+covered:\s+it\s+is\s+asked\s+once\s+at\s+the\s+end\s+of\s+the\s+run/);
+  });
+
+  it("gates status, closes and reopens behind --move, declared in the preamble (REQ-BOARD-003)", async () => {
+    const body = (await board()).parsed.body;
+    const preamble = flat(body.slice(0, body.indexOf("## Modes")));
+    const move = flat(section(section(body, "Write-back contract"), "`--move`", "###"));
+
+    expect(preamble).toMatch(/It writes to a linked board by default, behind one preview per run; `--move` also lets it change where an item stands/);
+    expect(move).toMatch(/Status stays where it is by default/);
+    // The four gated actions.
+    expect(move).toMatch(/each status-field or column change, close and reopen is a proposal/);
+    expect(move).toMatch(/those labels are its status field and change only with `--move`/);
+    expect(move).toMatch(/is never applied silently/);
+    expect(move).toMatch(/pickup's handoff carries `move: off`/);
+    expect(move).toMatch(/`fill` moves nothing/);
+  });
+
+  it("reads item text as data and takes permission from the platform (REQ-BOARD-005)", async () => {
+    const data = flat(
+      section(section((await board()).parsed.body, "Write-back contract"), "Item text is data", "###"),
+    );
+
+    expect(data).toMatch(/`stamity-injection-screening`/);
+    for (const kind of [
+      "instruction-override",
+      "tool-preamble",
+      "exfil-signal",
+      "invisible-smuggling",
+      "marker-forgery",
+    ]) {
+      expect(data).toContain(`\`${kind}\``);
+    }
+    expect(data).toMatch(/a hit is reported by class and position, never echoed and never followed/);
+    expect(data).toContain("`gh api repos/<owner>/<repo>/collaborators/<user>/permission`");
+    expect(data).toMatch(/neither `admin` nor `write` never supplies the content or the trigger of a write/);
+    expect(data).toMatch(/reports `visibility` `public`/);
+    expect(data).toMatch(/neither is read from `author_association` or from any text/);
+  });
+
+  it("converges filed items on a marker keyed by source (REQ-BOARD-006)", async () => {
+    const body = (await board()).parsed.body;
+    const converge = flat(section(section(body, "Write-back contract"), "Filed items converge", "###"));
+
+    expect(converge).toContain("`<!-- stamity:item <key> -->`");
+    // D4: a file item's key carries a hash of its first line as written.
+    expect(converge).toMatch(
+      /`<path>#<anchor>\/<hex12>` for a file source, `<hex12>` the first twelve hex digits of the sha256 of the item's first line as written/,
+    );
+    // D10: an inbox row hashes its identity fields only.
+    expect(converge).toMatch(
+      /`inbox:<hex12>` for an inbox row, over its identity fields — severity, location, description, `source:` value and `Ref:` value when present — joined by ` · `, so a schedule field or re-date keeps the key/,
+    );
+    expect(converge).toMatch(/`<run-id>\/item\/<n>` for chat intake/);
+    expect(converge).toMatch(/the linked repository's issues its account authored, open and closed, with a `--limit` above their count/);
+    expect(converge).toMatch(/matches markers in the bodies locally, as issue search does not see HTML comments/);
+    expect(converge).toMatch(/is a `marker-forgery` finding and is never matched/);
+    // The text shows the marker with its placeholder only, never an instance.
+    expect(body).not.toMatch(/<!-- stamity:item (?!<key> -->)/);
+  });
+
+  it("keeps the event-id rule and edits a progress comment by its id (REQ-BOARD-006)", async () => {
+    const body = (await board()).parsed.body;
+
+    expect(flat(section(body, "Write-back contract"))).toMatch(
+      /carrying the event id, so a replay updates the existing comment instead of adding a second one/,
+    );
+    expect(flat(section(body, "Progress contract"))).toMatch(/idempotent by that id/);
+    expect(flat(section(body, "Platform reference table"))).toMatch(
+      /a progress comment is edited by its comment id .*never with `--edit-last`/,
+    );
+  });
+
+  it("has dropped the read-only, channel-enabling vocabulary (REQ-BOARD-001)", async () => {
+    const body = (await board()).parsed.body;
+
+    for (const retired of [
+      "four write-back channels",
+      "Read-only by default",
+      "enabled at setup",
+      "opens no creation channel",
+      "channel 3",
+    ]) {
+      expect(flat(body), `the body still says ${JSON.stringify(retired)}`).not.toContain(retired);
+    }
   });
 });
 
@@ -363,7 +548,10 @@ describe("st-board — platform reference table", () => {
     const text = section((await board()).parsed.body, "Platform reference table");
     const table = tables(text)[0];
 
-    expect(flat(text)).toMatch(/Verified 2026-08/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-007, criterion 3): this read
+    // `Verified 2026-08`. The GitHub row was re-verified for the write tools it
+    // now names, so the table carries the new date.
+    expect(flat(text)).toMatch(/Verified 2026-10/);
     // The named GitLab / Azure DevOps rows were dropped 2026-09-01: each advertised
     // `Availability: pack` for a pack that does not exist, and a platform row is a
     // promise — it appears when its pack ships. GitHub stays first-class in core;
@@ -398,6 +586,59 @@ describe("st-board — platform reference table", () => {
     }
   });
 
+  it("lists the seven verbs of the abstract board contract (REQ-BOARD-007)", async () => {
+    const text = flat(section((await board()).parsed.body, "Platform reference table"));
+
+    expect(text).toContain(
+      "one abstract board contract — `list`, `get`, `create`, `update`, `comment`, `link-PR`, `move` —",
+    );
+  });
+
+  it("names every GitHub write tool, command and check the contract uses (REQ-BOARD-007)", async () => {
+    const text = section((await board()).parsed.body, "Platform reference table");
+    const github = tables(text)[0]?.rows[0] ?? [];
+    const [, mcp = "", cli = "", access = ""] = github;
+
+    for (const tool of [
+      "mcp__github__list_issues",
+      "mcp__github__issue_read",
+      "mcp__github__issue_write",
+      "mcp__github__add_issue_comment",
+      "mcp__github__update_issue_comment",
+      "mcp__github__projects_list",
+      "mcp__github__projects_get",
+      "mcp__github__projects_write",
+    ]) {
+      expect(mcp).toContain(`\`${tool}\``);
+    }
+    for (const command of [
+      "`gh issue list/view/create/edit/comment/close/reopen`",
+      "`gh pr view`",
+      "`gh project item-list/item-add/item-edit/field-list`",
+    ]) {
+      expect(cli).toContain(command);
+    }
+    expect(cli).toMatch(/`gh api` \(permission, visibility, comment edit by id, the project's `viewerCanUpdate` through GraphQL\)/);
+    expect(access).toMatch(/`gh auth status` \(`project` scope for a Projects board\)/);
+
+    // The GitHub notes, folded into the row's cells (S11): the toolset beside
+    // the MCP ids, the id flags, the two calls and the listing limit beside the
+    // CLI commands, and the write check beside the access check.
+    expect(mcp).toMatch(/the default toolsets leave out `projects`; setup says to add it/);
+    expect(cli).toMatch(
+      /`gh project item-edit` takes ids only \(`--id`, `--field-id`, `--project-id`, `--single-select-option-id`\)/,
+    );
+    expect(cli).toMatch(/adding an item and setting its Status are two calls/);
+    expect(cli).toMatch(
+      /`gh issue list`, `gh project item-list` and `gh project field-list` return 30 by default, so a listing the run depends on passes a `--limit` above its count/,
+    );
+    expect(access).toContain("`gh api repos/<owner>/<repo>/collaborators/<user>/permission` for the acting account");
+    expect(access).toContain("`viewerCanUpdate` on the GraphQL `ProjectV2` node");
+    // D8: the check has no MCP route, so it reads through `gh` whatever the access path.
+    expect(access).toMatch(/through `gh` on every access path/);
+    expect(access).toMatch(/with no `gh`, the link is read-only, naming the missing check/);
+  });
+
   it("names canonical mcp__server__tool ids with the CLI as the stated fallback", async () => {
     const text = section((await board()).parsed.body, "Platform reference table");
     const table = tables(text)[0];
@@ -427,9 +668,13 @@ describe("st-board — platform reference table", () => {
 
     expect(table?.header.at(-2)).toBe("Status field");
     expect(table?.header.at(-1)).toBe("Availability");
-    // GitHub's status primitive is the one channel 3 writes on the core path.
+    // GitHub's status primitive is the one the Status transition write changes on the core path.
     expect(table?.rows[0]?.at(-2)).toContain("`state`");
-    expect(flat(text)).toMatch(/what decides whether a close is a transition or a proposal/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-003): this read "what decides
+    // whether a close is a transition or a proposal". A close now rides the
+    // Status transition wherever the board contract's `move` closes the item,
+    // under `--move`, so the paragraph says that instead.
+    expect(flat(text)).toMatch(/Where the\s+board contract's `move` can close and reopen an item/);
   });
 });
 
@@ -476,16 +721,16 @@ describe("st-board — board/work boundary", () => {
     ]);
   });
 
-  it("maps every progress event onto a channel that exists", async () => {
+  it("maps every progress event onto one of the five writes, status only under move: on (REQ-BOARD-003)", async () => {
     const body = (await board()).parsed.body;
     const declared = enumeratedChannels(section(body, "Write-back contract"));
     const rows = eventTable(section(body, "Progress contract")).rows;
 
-    // `criterion.done` mapped to a checklist tick, which is an item-body
-    // edit and not one of the four channels — so by this command's own
-    // escalation rule the most routine progress event returned
-    // `BLOCKED_DEPENDENCY`. The channel set is read from the contract rather
-    // than restated, so a renamed channel fails here instead of drifting.
+    // The write set is read from the contract rather than restated, so a
+    // renamed write fails here instead of drifting.
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-003, criterion 2): this
+    // checked the mapping against four channels. The set is the five writes, and
+    // a status transition is now made only where the handoff carries `move: on`.
     expect(declared).toEqual(WRITE_BACK_CHANNELS);
     expect(rows.length).toBeGreaterThan(0);
 
@@ -493,23 +738,34 @@ describe("st-board — board/work boundary", () => {
       const event = row[0] ?? "";
       const mapping = (row[2] ?? "").toLowerCase();
       const named = declared.filter((channel) => mapping.includes(channel.toLowerCase()));
-      expect(named, `${event} maps to nothing in the four-channel set`).not.toEqual([]);
+      expect(named, `${event} maps to nothing in the five-write set`).not.toEqual([]);
       for (const action of NON_CHANNEL_ACTIONS) {
-        expect(mapping, `${event} maps to \`${action}\`, which no channel opens`).not.toContain(
-          action,
-        );
+        expect(mapping, `${event} maps to \`${action}\`, which no write makes`).not.toContain(action);
       }
     }
+
+    const cell = (event: string): string => rows.find((row) => row[0] === `\`${event}\``)?.[2] ?? "";
+    for (const event of ["phase.transition", "run.terminal"]) {
+      const mapping = cell(event);
+      // A status transition appears only beside `move: on`, and a progress comment otherwise.
+      expect(mapping, `${event} allows a status transition without move: on`).toMatch(
+        /status transition[^;]*`move: on`|`move: on`[^;]*status transition/,
+      );
+      expect(mapping, `${event} names no progress comment`).toMatch(/progress comment/);
+    }
+    expect(cell("phase.transition")).toMatch(/otherwise a progress comment naming the phase/);
+    expect(cell("run.terminal")).toMatch(/a closing progress comment naming the outcome, plus a status transition under `move: on`/);
   });
 
-  it("fixture: the pre-fix checklist-tick mapping is flagged", () => {
-    // The exact defect, minimised. Without this the case above passes on a
-    // table whose mapping column merely mentions a channel somewhere.
+  it("fixture: a mapping naming an action outside the five writes is flagged", () => {
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-004): the fixture was the
+    // pre-fix checklist-tick mapping, which the Item edit write now makes. It
+    // follows the constants: a deletion is what no write makes.
     const rows = eventTable(
       [
         "| Event | Emitted when | Board mapping |",
         "|---|---|---|",
-        "| `criterion.done` | a criterion is verified | checklist tick plus a progress comment |",
+        "| `run.terminal` | the run ends | delete the item plus a progress comment |",
       ].join("\n"),
     ).rows;
     const mapping = (rows[0]?.[2] ?? "").toLowerCase();
@@ -517,21 +773,32 @@ describe("st-board — board/work boundary", () => {
     expect(WRITE_BACK_CHANNELS.filter((c) => mapping.includes(c.toLowerCase()))).toEqual([
       "Progress comment",
     ]);
-    expect(NON_CHANNEL_ACTIONS.filter((action) => mapping.includes(action))).toEqual([
-      "checklist tick",
-    ]);
+    expect(NON_CHANNEL_ACTIONS.filter((action) => mapping.includes(action))).toEqual(["delete"]);
   });
 
-  it("says why the tick is gone rather than dropping the event with it", async () => {
+  it("ticks a verified criterion only where a trusted author wrote it (REQ-BOARD-002)", async () => {
+    const progress = section((await board()).parsed.body, "Progress contract");
+
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-002): this asserted why the
+    // tick was gone — "four write-back channels", "an item-body edit, which no
+    // channel opens", the tick carried as a proposal. The tick is an Item edit
+    // now, made only where an `admin` or `write` author wrote the criterion (D7).
+    expect(eventTable(progress).rows.find((row) => row[0] === "`criterion.done`")?.[2]).toMatch(
+      /progress comment, plus an item edit\s+ticking that criterion where the item's body lists it as a task and an `admin` or `write` author wrote it/,
+    );
+    expect(flat(progress)).toMatch(/names one or more of the five writes and nothing else/);
+  });
+
+  it("makes only the later writes the handoff's preview: covers (REQ-BOARD-002)", async () => {
     const progress = flat(section((await board()).parsed.body, "Progress contract"));
 
-    // Edge case: dropping the tick must not silence the board on a verified
-    // criterion. The event survives on the progress-comment channel and the
-    // tick travels as a proposal, which is where every non-channel write goes.
-    expect(progress).toMatch(/names one or more of the four write-back channels and nothing else/);
-    expect(progress).toMatch(/A checklist tick would be an item-body edit, which no channel opens/);
-    expect(progress).toMatch(/the most routine event on the board stays loud/);
-    expect(progress).toMatch(/carries it as a proposal in the report/);
+    // D6: the work run carries no platform knowledge; the mapping reads the
+    // answer the pickup preview put in the handoff. D11: the channel words left.
+    expect(progress).toMatch(/maps them onto the writes above/);
+    expect(progress).toMatch(/makes only the later writes the handoff's `preview:` covers/);
+    expect(progress).toMatch(/under `preview: rows <rows>` a later write no applied row covers is not made/);
+    expect(progress).toMatch(/under `preview: stop` none is/);
+    expect(progress).toMatch(/The phase map the status-transition write resolves against:/);
   });
 
   it("re-homes the phase-to-status map the mapping column resolves against", async () => {
@@ -1131,7 +1398,10 @@ describe("st-board — sources, signals, and the inbox", () => {
     ]) {
       expect(text).toContain(token);
     }
-    expect(text).toMatch(/`writes` — every write-back channel used/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-002): this read "`writes` —
+    // every write-back channel used". The channels became the five writes, and
+    // the block also carries the preview's answer.
+    expect(text).toMatch(/`writes` — every write made, with its item id and event id, and the preview's answer/);
     expect(text).toMatch(/`handoff` — the payload passed to `\/st-work`/);
   });
 
@@ -1158,7 +1428,9 @@ describe("st-board — durable state and authorization", () => {
     // confirm a prior setup and the read-only default had no durable state.
     expect(setup).toMatch(/It is session-carried: no config key and no manifest field holds it/);
     expect(setup).toMatch(/A durable home is not built, and this text claims none/);
-    expect(setup).toMatch(/enablement is session-\s*carried too/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-001, criterion 1): the
+    // assertion that channel enablement is session-carried too is dropped, because
+    // setup no longer enables anything; the link assertions stay.
     expect(fill).toMatch(/the source linked for this session/);
     expect(pickup).toMatch(/The link is session-carried/);
     // No pointer claims repo config any more.
@@ -1177,18 +1449,23 @@ describe("st-board — durable state and authorization", () => {
     expect(pickup).toMatch(/runs `setup` again rather than assuming one/);
   });
 
-  it("makes pickup's status write conditional and reports the read-only case", async () => {
+  it("makes pickup's status write conditional on --move and carries move: and preview: (REQ-BOARD-003, REQ-BOARD-002)", async () => {
     const pickup = flat(
       section(section((await board()).parsed.body, "Modes"), "pickup — select, gate, hand off", "###"),
     );
+    const step = /5\. \*\*Hand off to `\/st-work`\.\*\*(.*)$/.exec(pickup)?.[1] ?? "";
 
-    // Step 5 stated an unconditional status write while every channel
-    // is opt-in and the default is read-only, and neither the step nor the
-    // return contract said what pickup reports when it writes nothing.
-    expect(pickup).toMatch(/Where the status channel was enabled for this session/);
-    expect(pickup).toMatch(/Where it was not — the read-only default/);
-    expect(pickup).toMatch(/`writes` list stays empty and `handoff` carries `status-write: skipped`/);
-    expect(pickup).toMatch(/does not assume a board already showing the item in progress/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-003, criterion 3): this
+    // asserted a status write "Where the status channel was enabled for this
+    // session" and "the read-only default". The status write now follows
+    // `--move`, the payload says which, and it carries the preview's answer; the
+    // skipped-status report and the no-assumption clause stay.
+    expect(step).toMatch(/`move: on` or `move: off`/);
+    expect(step).toMatch(/the pickup preview's answer as `preview:`/);
+    expect(step).toMatch(/`### The preview` names the later writes it covers/);
+    expect(step).toMatch(/With `--move`, the item moves to in progress/);
+    expect(step).toMatch(/`handoff` carries `status-write: skipped`/);
+    expect(step).toMatch(/does not assume a board already showing the item in progress/);
   });
 
   it("drains a proposal-only inbox entry instead of growing the rendezvous", async () => {
@@ -1205,6 +1482,43 @@ describe("st-board — durable state and authorization", () => {
     expect(fill).toMatch(/still unfiled after two further `fill` runs is re-raised/);
     // The removal clause carries the same third exit, so the two agree.
     expect(inbox).toMatch(/when its proposal id is recorded per `fill` step 5/);
+  });
+
+  it("leaves inbox entries in place when the preview is answered stop or not at all (REQ-BOARD-002)", async () => {
+    const fill = flat(
+      section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"),
+    );
+
+    // D3: only "no board is linked" drains an entry through a recorded proposal
+    // id; a stopped or unanswered preview must not drain the backlog silently.
+    expect(fill).toMatch(/a proposal this run did not file because no board is linked/);
+    expect(fill).toMatch(/A preview answered `stop`, or left unanswered, leaves every entry it covered in place/);
+    expect(fill).toMatch(/re-raised in the next preview/);
+  });
+
+  it("points setup and fill at the contract's write check, with no write switch (REQ-BOARD-001, REQ-BOARD-007, REQ-BOARD-008)", async () => {
+    const modes = section((await board()).parsed.body, "Modes");
+    const setup = flat(section(modes, "setup — wiring", "###"));
+    const fill = flat(section(modes, "fill — intake to items", "###"));
+
+    // Step 1: the scope and toolset a Projects board needs.
+    expect(setup).toMatch(/with `project` on its "Token scopes" line for a Projects board/);
+    expect(setup).toMatch(/with the `projects` toolset for a Projects board/);
+    // Step 2: one repository, then the write check the contract states.
+    expect(setup).toMatch(/A Projects-board link also records exactly one repository, the one the operator names/);
+    expect(setup).toMatch(/once the link has it, setup runs the Write-back contract's write check/);
+    // Step 3: nothing to enable.
+    expect(setup).toMatch(/3\. \*\*No write switch\.\*\* Writes are on by default once a board is linked/);
+    expect(setup).not.toMatch(/write-back channels are enabled/);
+    // Step 4: the four facts a GitHub Projects board does by itself.
+    expect(setup).toMatch(/closing an issue and merging a pull request set its Status to Done by default/);
+    expect(setup).toMatch(/auto-add can put items on the board by itself, so the run checks membership before adding one/);
+    expect(setup).toMatch(/a closing keyword in a pull request that targets the default branch closes the issue on merge, whoever wrote it/);
+    expect(setup).toMatch(/the PR link is a comment that mentions the pull request — a cross-reference, not a Development link/);
+    // Fill step 1: a `--source` link writes under the same rule and check.
+    expect(fill).toMatch(
+      /With no board linked, `fill` writes to its first `--source` that names a platform board, under the Write-back contract's one-target rule and write check; every other source is read only/,
+    );
   });
 
   it("defines the --source grammar the plan touchpoint tells operators to pass", async () => {
@@ -1264,7 +1578,7 @@ describe("st-board — edge cases", () => {
     expect(flat(section(body, "Sources and authority"))).toMatch(
       /Completed items are immutable\*\* — append or supersede, never rewrite/,
     );
-    // Editing a completed item is also outside the four write-back channels.
+    // Editing a completed item is also outside the five writes.
     expect(flat(section(body, "Write-back contract"))).toMatch(/any edit to a completed item/);
   });
 });
