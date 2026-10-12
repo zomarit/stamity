@@ -339,6 +339,9 @@ describe("runGit at a root shaped like a bare repository", () => {
       expect(refusal.status).toBe(128);
       expect(refusal.stdout).toBe("");
       expect(refusal.stderr).toContain("git was not started");
+      // The mark a caller reads to tell this refusal from git's own (fix/21): the stderr text
+      // is for a person, and git's own refusals are translated by locale.
+      expect(refusal.keptFromGit).toBe(true);
     }
     expect(gitSpawns.args).toEqual([]);
   });
@@ -367,6 +370,9 @@ describe("runGit at a root shaped like a bare repository", () => {
     expect({ status: named.status, stdout: named.stdout.trim() }).toEqual({ status: 0, stdout: "repo" });
     expect(discovered.status).toBe(128);
     expect(discovered.stderr).toContain("git was not started");
+    // Marked where the lane refused, and on no outcome git itself gave.
+    expect(discovered.keptFromGit).toBe(true);
+    expect(named).not.toHaveProperty("keptFromGit");
     expect(gitSpawns.args).toHaveLength(1);
   });
 

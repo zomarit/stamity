@@ -31,7 +31,7 @@ import {
   type TestSource,
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
-import { gitCheckRunner } from "../engine/gitStatus.ts";
+import { gitCheckRunner, keptFromGit } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { GitRunner } from "../../workspace/git.ts";
@@ -207,8 +207,21 @@ function runGit(runner: GitRunner, cwd: string, step: string, args: readonly str
   }
 }
 
-/** Why a git read failed, in words: the step and the cause the error carries. */
+/**
+ * Why a git read failed, in words: the step and the cause the error carries.
+ *
+ * First, the one failure no git gave: the runner's look before git kept the
+ * folder from git (`keptFromGit`). No git call failed there and git gave no
+ * exit status, so none is named (review/60): the reader is a session that may
+ * re-run a named call by hand, and plain git run in that folder opens it.
+ */
 function describeGitFailure(err: GitReadError): string {
+  if (keptFromGit(err.failure)) {
+    return (
+      "git was not started here: this folder, or a folder above it, has the layout of a bare repository, so the " +
+      "engine did not hand it to git, and plain git run here or in any folder under that one would open it"
+    );
+  }
   const failure = err.failure as { code?: unknown; status?: unknown };
   // A spawn in a missing directory fails ENOENT as a missing binary does (review/18).
   if (failure.code === "ENOENT" && !existsSync(err.cwd)) return `the directory git runs in, ${err.cwd}, does not exist`;

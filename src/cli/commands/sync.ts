@@ -82,6 +82,22 @@ function updatePathHelp(): string {
 export const NEXT_AFTER_WRITE_LINE = "next: git diff to review, stamity check to verify";
 
 /**
+ * The same close where the engine's look before git kept the setup root from
+ * git (`WorkingTreeStatus.reason`, `../engine/gitStatus.ts`): this folder, or a
+ * folder above it, has the layout of a bare repository. Plain git typed there
+ * opens that folder and takes its configuration, so this line names no git
+ * command (review/58). It says why, and what the review has without git: the
+ * rows the report printed above it, and the `.bak` an overwrite keeps wherever
+ * git cannot vouch for the previous bytes (`../../merge/safeWrite.ts`), each
+ * named by that overwrite's own warning.
+ */
+export const NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE =
+  "next: review without git, stamity check to verify — git was not started here: this folder, or a " +
+  "folder above it, has the layout of a bare repository, so do not run git in it or in any folder " +
+  "under it, this one included. To review, read the files listed above, and compare a file with " +
+  "the .bak a warning above names for it.";
+
+/**
  * The one stderr warning line for a dirty working tree, or `null` when there
  * is nothing to warn about: a clean tree needs no warning, and an unavailable
  * git (`available: false`) cannot be warned about — unknown is not dirty.
@@ -100,12 +116,16 @@ export function dirtyTreeWarning(dirty: WorkingTreeStatus): string | null {
  * the review next-step only when a live run actually changed files — an
  * all-unchanged or empty-corpus run has nothing to review, and a dry run wrote
  * nothing (the report's own honesty lines cover both; this layer never
- * duplicates them).
+ * duplicates them). The step is {@link NEXT_AFTER_WRITE_LINE} everywhere but at
+ * a folder the look before git refused, where it is
+ * {@link NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}.
  */
 export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): string[] {
   const lines: string[] = [];
   if (plan.manifestMigrated) lines.push(`manifest schema migrated to ${plan.manifest.version}`);
-  if (!report.dryRun && report.created + report.updated > 0) lines.push(NEXT_AFTER_WRITE_LINE);
+  if (!report.dryRun && report.created + report.updated > 0) {
+    lines.push(plan.dirty.reason === "bare-layout" ? NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE : NEXT_AFTER_WRITE_LINE);
+  }
   // Last line, because it is the one the exit code is about. A partial run
   // prints its successes above; without this the operator would read a report
   // full of written files and an exit 1 with nothing connecting them.

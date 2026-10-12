@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE,
   NEXT_AFTER_WRITE_LINE,
   dirtyTreeWarning,
   syncClosingLines,
@@ -260,6 +261,56 @@ describe("sync — dirty working tree", () => {
 
     expect(result.code).toBe(0);
     expect(result.stderr).not.toContain("working tree");
+  });
+});
+
+// Run 2026-10-11_release-1-14-0, review/58. Before the engine starts git it looks at the setup
+// root and the folders above it, and a folder there with the layout of a bare repository is not
+// handed to git (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`). A sync that wrote files
+// there still closed on "next: git diff to review": plain git, typed in the folder the engine had
+// just kept from git, opens that folder and takes its configuration. The fixture is the shape the
+// look's own cases seed: an empty `HEAD` beside `objects` and `refs`, with no `.git`. No git
+// opens it, and none is started.
+describe("sync — a folder the look before git refused", () => {
+  const SHAPE = { "HEAD": "", "objects/keep": "", "refs/keep": "" };
+
+  async function seedShaped(handle: TempDirHandle, sub: string): Promise<string> {
+    const root = await seedRepo(handle, sub);
+    await handle.seedFiles(Object.fromEntries(Object.entries(SHAPE).map(([name, body]) => [`${sub}/${name}`, body])));
+    return root;
+  }
+
+  it("closes on a review step that names no git command, and says why", async () => {
+    const handle = tempDir();
+    const root = await seedShaped(handle, "repo");
+    plannerOutputs.value = [managedOutput(GUIDE_PATH, "guide body")];
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("synced: 1 created, 0 updated, 0 unchanged, 0 skipped");
+    expect(result.stdout).toContain(`${NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE}\n`);
+    expect(result.stdout).not.toContain(NEXT_AFTER_WRITE_LINE);
+    expect(result.stdout).not.toContain("git diff");
+    // Unknown is still not dirty: no warning on stderr either.
+    expect(result.stderr).not.toContain("working tree");
+  });
+
+  it("keeps the --json document's keys, and its dirty block's, as they are outside such a folder", async () => {
+    const handle = tempDir();
+    const shapedRoot = await seedShaped(handle, "shaped");
+    const plainRoot = await seedRepo(handle, "plain");
+    plannerOutputs.value = [managedOutput(GUIDE_PATH, "guide body")];
+
+    const shaped = await runSync(shapedRoot, ["--json"]);
+    const plain = await runSync(plainRoot, ["--json"]);
+
+    expect(shaped.code).toBe(0);
+    const shapedDoc = parseSingleDoc(shaped.stdout);
+    const plainDoc = parseSingleDoc(plain.stdout);
+    expect(Object.keys(shapedDoc).toSorted()).toEqual(Object.keys(plainDoc).toSorted());
+    expect(shapedDoc["dirty"]).toEqual({ available: false, dirty: false, changedCount: 0 });
+    expect(shapedDoc["dirty"]).toEqual(plainDoc["dirty"]);
   });
 });
 
@@ -621,5 +672,38 @@ describe("syncClosingLines", () => {
     expect(syncClosingLines(planFixture(), reportFixture({ unchanged: 5 }))).toEqual([]);
     // Dry run: nothing was written, whatever the plan tallies say.
     expect(syncClosingLines(planFixture(), reportFixture({ created: 1, dryRun: true }))).toEqual([]);
+  });
+
+  // review/58: where the working-tree read says the look before git kept the folder from git, the
+  // review step names no git command and says how to review without one. Everywhere else, a git
+  // that did not answer for another cause included, the step is the line it was.
+  it("names no git command in the review next-step where the folder was kept from git", () => {
+    const unavailable = { available: false, dirty: false, changedCount: 0 } as const;
+    const kept = planFixture({ dirty: { ...unavailable, reason: "bare-layout" } });
+
+    expect(syncClosingLines(kept, reportFixture({ created: 1 }))).toEqual([NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE]);
+    expect(syncClosingLines(kept, reportFixture({ updated: 2 }))).toEqual([NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE]);
+    // The same two silences as everywhere: nothing written, nothing to review.
+    expect(syncClosingLines(kept, reportFixture({ unchanged: 5 }))).toEqual([]);
+    expect(syncClosingLines(kept, reportFixture({ created: 1, dryRun: true }))).toEqual([]);
+
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toMatch(/^next: /);
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toContain("stamity check to verify");
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toContain("git was not started here");
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toContain(
+      "this folder, or a folder above it, has the layout of a bare repository",
+    );
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toContain("do not run git in it or in any folder under it, this one included");
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toContain("read the files listed above");
+    expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE).toContain(".bak");
+    for (const call of ["git diff", "git status", "git log", "git rev-parse", "git init"]) {
+      expect(NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE, `the step names ${call}`).not.toContain(call);
+    }
+
+    // A git that did not answer for any other cause keeps the line byte for byte.
+    expect(syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 1 }))).toEqual([
+      NEXT_AFTER_WRITE_LINE,
+    ]);
+    expect(NEXT_AFTER_WRITE_LINE).toBe("next: git diff to review, stamity check to verify");
   });
 });

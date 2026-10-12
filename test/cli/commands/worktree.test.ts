@@ -168,6 +168,74 @@ describe.skipIf(!gitAvailable)("worktree dispatch", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("is not inside a git repository");
+    // The next step outside a repository is the one it was (fix/21 moves it only where the
+    // lane's look before git refused the folder, below).
+    expect(result.stderr).toContain("Run the command from inside a clone, or create one with `git init`.");
+  });
+});
+
+// Run 2026-10-11_release-1-14-0, fix/21, review/59 and review/44. Before the lane starts git it
+// looks at the folder and the folders above it, and a folder there with the layout of a bare
+// repository is not handed to git (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`). Every
+// verb then said the folder "is not inside a git repository" and to "create one with `git init`",
+// the real cause on the `why` line alone: inside a real checkout that nests a repository in the
+// folder the lane had just kept from git. The fixture is the shape the look's own cases seed, an
+// empty `HEAD` beside empty `objects` and `refs` with no `.git`, so no git opens it and none is
+// started: these cases need no git on the host.
+describe("worktree at a folder the look before git refused", () => {
+  async function seedShaped(): Promise<{ shaped: string; below: string }> {
+    const shaped = join(getTemp().dir, "shaped");
+    const below = join(shaped, "packages", "app");
+    await mkdir(below, { recursive: true });
+    await writeFile(join(shaped, "HEAD"), "", "utf8");
+    await mkdir(join(shaped, "objects"));
+    await mkdir(join(shaped, "refs"));
+    return { shaped, below };
+  }
+
+  const VERBS = [
+    { verb: "the bare read", args: [] },
+    { verb: "list", args: ["list"] },
+    { verb: "setup", args: ["setup", "feat", "-y"] },
+    { verb: "cleanup", args: ["cleanup", "--all", "-y"] },
+  ] as const;
+
+  it.each(
+    VERBS.flatMap((row) => [
+      { ...row, where: "in the folder with the layout" as const },
+      { ...row, where: "two folders under it" as const },
+    ]),
+  )("refuses $verb $where with that cause, and names no git command", async ({ args, where }) => {
+    const { shaped, below } = await seedShaped();
+    const cwd = where === "in the folder with the layout" ? shaped : below;
+
+    const result = await runWorktree(cwd, args);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(`git was not started in ${cwd}`);
+    expect(result.stderr).toContain("this folder, or a folder above it, has the layout of a bare repository");
+    expect(result.stderr).toContain("do not run git in it or in any folder under it, this one included");
+    expect(result.stderr).not.toContain("is not inside a git repository");
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse"]) {
+      expect(result.stderr, `the refusal names ${call}`).not.toContain(call);
+    }
+  });
+
+  it("keeps the error document's code and keys under --json", async () => {
+    const { shaped } = await seedShaped();
+    const plain = join(getTemp().dir, "plain");
+    await mkdir(plain);
+
+    const refused = singleDoc(await runWorktree(shaped, ["list", "--json"]));
+    const outside = singleDoc(await runWorktree(plain, ["list", "--json"]));
+
+    const error = refused["error"] as Record<string, string>;
+    expect(refused["ok"]).toBe(false);
+    expect(error["code"]).toBe("VALIDATION_ERROR");
+    expect(Object.keys(refused).toSorted()).toEqual(Object.keys(outside).toSorted());
+    expect(Object.keys(error).toSorted()).toEqual(Object.keys(outside["error"] as Record<string, string>).toSorted());
+    expect(error["message"]).toContain("git was not started in");
+    expect(`${error["message"] ?? ""} ${error["why"] ?? ""} ${error["next"] ?? ""}`).not.toContain("git init");
   });
 });
 

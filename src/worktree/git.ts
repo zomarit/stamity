@@ -56,6 +56,13 @@ export interface GitOutcome {
   readonly status: number;
   readonly stdout: string;
   readonly stderr: string;
+  /**
+   * Present, and `true`, on the one outcome no git gave: {@link runGit}'s look
+   * kept the folder from git, so none was started. A caller reads this, never
+   * the stderr text, to name that cause: git's own refusals are translated by
+   * locale.
+   */
+  readonly keptFromGit?: true;
 }
 
 /** The injectable seam. Every subprocess in this lane goes through one of these. */
@@ -92,15 +99,16 @@ export const GIT_FETCH_TIMEOUT_MS = 60_000;
  * A git older than 2.38 ignores the first option, so the lane looks before it
  * starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would meet a
  * folder shaped like a bare repository, no git is started and the outcome is
- * the one git's own refusal gives, status 128 with the reason on stderr. The
- * look is handed the environment git inherits, since the lane keeps it: with
+ * the one git's own refusal gives, status 128 with the reason on stderr, and
+ * marked `keptFromGit` so the verbs can say git was not started. The look is
+ * handed the environment git inherits, since the lane keeps it: with
  * `GIT_DIR` there git runs no discovery, the folder it runs in cannot answer,
  * and no look is taken for that call.
  */
 export const runGit: WorktreeGitRunner = (invocation) =>
   new Promise<GitOutcome>((settle) => {
     if (gitDiscoveryMeetsBareShape(invocation.cwd, process.env)) {
-      settle({ status: 128, stdout: "", stderr: `${bareShapeRefusal(invocation.cwd)}\n` });
+      settle({ status: 128, stdout: "", stderr: `${bareShapeRefusal(invocation.cwd)}\n`, keptFromGit: true });
       return;
     }
     const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...invocation.args];

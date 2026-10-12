@@ -678,6 +678,38 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     expect(doc["reason"]).not.toContain("no git binary");
   });
 
+  // Run 2026-10-11_release-1-14-0, review/60 and review/44. Before the runner starts git it looks
+  // at the folder and the folders above it, and a folder there with the layout of a bare
+  // repository is not handed to git (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`). The
+  // reason then said "no git work tree was found here (git rev-parse --show-prefix failed, exit
+  // 128)": a git call that never ran, with a status git never gave, named to a session that may
+  // re-run it by hand where plain git opens the folder. The fixture is the shape the look's own
+  // cases seed: an empty `HEAD` beside `objects` and `refs`, with no `.git`. No git opens it.
+  it("says git was not started, and names no git call as failed, where the look before git refused the folder", async () => {
+    await getRoot().seedFiles({ "shaped/HEAD": "", "shaped/objects/keep": "", "shaped/refs/keep": "", "shaped/docs/a.md": "x\n" });
+    const plain = getRoot().path("plain");
+    await mkdir(plain);
+    const shaped = getRoot().path("shaped");
+
+    const refused = await classifyIn(shaped, []);
+    const outside = await classifyIn(plain, []);
+
+    expect(refused.code).toBe(0);
+    expect(refused.doc["class"]).toBe("product");
+    expect(refused.doc["base"]).toBeNull();
+    expect(refused.doc["reason"]).toBe(
+      "the change could not be read (git was not started here: this folder, or a folder above it, has the layout of " +
+        "a bare repository, so the engine did not hand it to git, and plain git run here or in any folder under " +
+        "that one would open it), so the class is product",
+    );
+    for (const text of ["rev-parse", "failed", "exit 128", "no git work tree"]) {
+      expect(refused.doc["reason"], `the reason says ${text}`).not.toContain(text);
+    }
+    // The document's shape is the one a folder with no repository gets: only the reason's words differ.
+    expect(Object.keys(refused.doc).toSorted()).toEqual(Object.keys(outside.doc).toSorted());
+    expect(outside.doc["reason"]).toContain("no git work tree was found here (git rev-parse --show-prefix failed, exit 128)");
+  });
+
   it("never reads a committed folder shaped like a bare repository, nor runs its fsmonitor", async () => {
     const root = getRoot().path("planted");
     await mkdir(root);
@@ -2277,6 +2309,27 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(unresolved.code).toBe(1);
       expect(unresolved.doc).toMatchObject({ ok: false, base: null, scope: "since-base" });
       expect(unresolved.doc["reason"]).toContain("the base no-such-ref does not resolve to a commit here");
+    });
+
+    // review/60: at a folder the look before git refused, the scan still exits 1 with the same
+    // document; its reason says git was not started and names no git call as failed.
+    it("exits 1 saying git was not started, with the same document, where the look before git refused the folder", async () => {
+      await getRoot().seedFiles({ "shaped/HEAD": "", "shaped/objects/keep": "", "shaped/refs/keep": "" });
+      const plain = getRoot().path("plain");
+      await mkdir(plain, { recursive: true });
+
+      const refused = await gateIn(getRoot().path("shaped"), ["scan", "--json"]);
+      const outside = await gateIn(plain, ["scan", "--json"]);
+
+      expect(refused.code).toBe(1);
+      expect(refused.doc).toMatchObject({ ok: false, base: null, scope: "uncommitted" });
+      expect(refused.doc["reason"]).toBe(
+        "git was not started here: this folder, or a folder above it, has the layout of a bare repository, so the " +
+          "engine did not hand it to git, and plain git run here or in any folder under that one would open it",
+      );
+      expect(Object.keys(refused.doc).toSorted()).toEqual(Object.keys(outside.doc).toSorted());
+      expect(refused.stderr).toContain("scan failed: git was not started here");
+      expect(refused.stderr).not.toContain("rev-parse");
     });
 
     it("reads only the uncommitted change with no --base, and the committed work since the base with one", async () => {

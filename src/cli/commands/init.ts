@@ -30,7 +30,7 @@ import {
   writeWorkspaceManifest,
 } from "../../workspace/manifest.ts";
 import { WORKSPACE_MANIFEST_FILE } from "../../workspace/model.ts";
-import { readHistoryFacts, readWorkingTreeStatus } from "../engine/gitStatus.ts";
+import { readHistoryFacts, readWorkingTreeStatus, type WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { bannerBlock } from "../kit/banner.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -313,9 +313,28 @@ async function askProceedWithoutGit(gate: PromptGate, promptIo: PromptIo): Promi
  * runs first, so it cannot say less than the row they read one command later.
  * What the two verbs lose is worded on git or the repository being absent, as
  * in that row, because the probe also fails on a git that was only slow.
+ *
+ * Where the look the engine takes before it starts git kept this folder from
+ * git (`reason`, the status's own), the note is that row's other text instead:
+ * it states that cause, says where to look by name, and names no `git init`
+ * and no other git command (fix/20). Inside a real checkout `git init` nests a
+ * repository in the folder the engine had just kept from git, and any git that
+ * looks for a repository there opens the folder with the layout.
  */
-function noGitNote(dryRun: boolean): string {
+function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"]): string {
   const tense = dryRun ? "would be written" : "were written";
+  if (reason === "bare-layout") {
+    return (
+      `git was not started here, so the files that ${tense} have no revert path the engine could ` +
+      `check: this folder, or a folder above it, has the layout of a bare repository (HEAD beside ` +
+      `objects and refs, or beside commondir), met before any .git that git stops at, so the engine ` +
+      `did not hand it to git. Look at the entries of this folder and of each folder above it by ` +
+      `name to find that folder, and do not run git in it or in any folder under it, this one ` +
+      `included. Two verbs need git: worktree refuses without it, and gate reads every change from ` +
+      `it, so here gate scan exits 1 and /st-quick and /st-work list \`secret scan: not run\` under ` +
+      `\`Not done:\`.`
+    );
+  }
   return (
     `no git repository: git did not answer in this directory, so the files that ${tense} have ` +
     `no revert path — \`git init\` here first if you want one. Two verbs need git: worktree ` +
@@ -1025,11 +1044,28 @@ export const initCommand: CommandModule = {
     // and an abort here leaves the directory exactly as it was found.
     if (!git.available && !alreadyInitialised && !(await askProceedWithoutGit(gate, ctx.promptIo))) {
       closePrompts(ctx.promptIo);
+      // Where the engine's look kept this folder from git, the refusal states
+      // that cause and names no git command, as the note does ({@link noGitNote}).
+      // The code and the message are the same on both branches.
       throw new CliFailure({
         code: "VALIDATION_ERROR",
         message: "init cancelled — nothing was written",
-        why: "git does not answer in this directory, so the write would have no revert path",
-        next: "run `git init` here and re-run `stamity init`, or re-run with -y to accept a setup you cannot git-revert",
+        ...(git.reason === "bare-layout"
+          ? {
+              why:
+                "git was not started in this directory: it, or a folder above it, has the layout of a bare " +
+                "repository, so the engine did not hand it to git and the write would have no revert path it could check",
+              next:
+                "look at the entries of this folder and of each folder above it by name to find the one with " +
+                "that layout (HEAD beside objects and refs, or beside commondir), and do not run git in that " +
+                "folder or in any folder under it, this one included; move it off that path, or run from a " +
+                "checkout that does not keep it there, and re-run `stamity init`, or re-run with -y to accept " +
+                "a setup whose revert path the engine could not check",
+            }
+          : {
+              why: "git does not answer in this directory, so the write would have no revert path",
+              next: "run `git init` here and re-run `stamity init`, or re-run with -y to accept a setup you cannot git-revert",
+            }),
       });
     }
 
@@ -1109,7 +1145,7 @@ export const initCommand: CommandModule = {
     // FIRST, and on every non-git run whether or not anyone was asked: the
     // disclosure is about what this run can and cannot be undone by, which the
     // operator needs before reading anything else the panel says.
-    if (!git.available) notes.push(noGitNote(ctx.dryRun));
+    if (!git.available) notes.push(noGitNote(ctx.dryRun, git.reason));
     // Printed for BOTH modes, never only for the one a flag asked for: the
     // state that most needs saying out loud is a machine run that took `skip`
     // because nobody was there to consent to `full`.

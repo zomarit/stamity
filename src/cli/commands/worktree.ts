@@ -117,11 +117,34 @@ interface Lane {
  * materializes. The admissibility pass (does git track or ignore each row?) is
  * deliberately NOT run here; it belongs to `setup`, and the reason is in
  * {@link runSetup}.
+ *
+ * The first call is also where the lane's look before git answers
+ * (`../../worktree/git.ts::runGit`): where this folder, or a folder above it,
+ * has the layout of a bare repository, no git was started and the outcome is
+ * marked. The refusal then states that cause and names no `git init` and no
+ * other git command (fix/21): inside a real checkout `git init` nests a
+ * repository in the folder the lane had just kept from git. The code is the one
+ * every other refusal here carries.
  */
 async function resolveLane(ctx: CliContext): Promise<Lane> {
   const run = runGit;
   const cwd = ctx.app.runtime.cwd;
   const outcome = await run({ args: ["rev-parse", "--show-toplevel"], cwd });
+  if (outcome.keptFromGit === true) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message:
+        `git was not started in ${cwd}: this folder, or a folder above it, has the layout of a bare ` +
+        `repository, and every worktree verb acts on a repository git opens.`,
+      why:
+        "That layout is HEAD beside objects and refs, or beside commondir, met before any .git that git " +
+        "stops at. The engine looks for it before it starts git, and did not hand this folder to git.",
+      next:
+        "Look at the entries of this folder and of each folder above it by name to find that folder, and " +
+        "do not run git in it or in any folder under it, this one included. Move it off that path, or run " +
+        "the command from a checkout that does not keep it there.",
+    });
+  }
   if (outcome.status !== 0) {
     throw new CliFailure({
       code: "VALIDATION_ERROR",

@@ -70,8 +70,14 @@ export function readWorkingTreeStatus(cwd: string, runner: GitRunner = execGitCh
   }
 }
 
-/** True for the error {@link gitCheckRunner} throws when its look keeps a folder from git: no git was started. */
-function keptFromGit(error: unknown): boolean {
+/**
+ * True for the error {@link gitCheckRunner} throws when its look keeps a folder
+ * from git: no git was started. Exported for a caller that runs the runner
+ * itself and words the failure (`gate`, `../commands/gate.ts`), so it names
+ * this cause and no git call as failed. The mark is read, never git's message:
+ * git's own refusal of such a folder is a text translated by locale.
+ */
+export function keptFromGit(error: unknown): boolean {
   return error instanceof Error && (error as { keptFromGit?: unknown }).keptFromGit === true;
 }
 
@@ -143,7 +149,8 @@ export interface GitCheckRunnerOptions {
  * it starts git (`gitDiscoveryMeetsBareShape`): where git's discovery would
  * meet a folder shaped like a bare repository, no git is started and the call
  * throws as it does when git refuses the folder, exit status 128 included. That
- * error alone is marked `keptFromGit`, which {@link readWorkingTreeStatus} reads.
+ * error alone is marked `keptFromGit`, which {@link readWorkingTreeStatus} and
+ * {@link keptFromGit}'s other callers read.
  *
  * Exported so every other git read of the CLI runs the same construction:
  * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's

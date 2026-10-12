@@ -231,16 +231,23 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
  * inside the probe's bound (`readWorkingTreeStatus`). `gate` waits longer on git
  * (`./gate.ts`) and `worktree` bounds only its fetch (`../../worktree/git.ts`),
  * so what they lose is stated for an absent git or a missing repository only,
- * and the row says how to tell the causes apart.
+ * and the row says how to tell the causes apart: by `git --version`, which
+ * looks for no repository, and by a `.git` entry found by name. It names no
+ * git command that looks for one (review/61). This text also prints where git
+ * itself refused a folder the engine's look passed, a leftover `.git` git
+ * cannot open beside or below a folder with the layout of a bare repository,
+ * and the read cannot tell that from the other causes: git's refusal is a
+ * message translated by locale, and it is not read. Plain git typed there
+ * opens that folder, so no row sends anyone to type it.
  *
  * A fourth cause has words of its own: the look the engine takes before it
  * starts git kept this folder from git, because it or a folder above it has the
- * layout of a bare repository (the status's `reason`). The way to tell the
- * other three apart is a plain `git status`, and plain git is what must not be
- * run in such a folder, so there the row names the cause, says where to look
- * by name, and gives no such hint. Both verbs take the same look, so what they
- * lose is stated outright. The folder is named as "this folder", since no row
- * prints a machine's layout.
+ * layout of a bare repository (the status's `reason`). There the row names the
+ * cause, says where to look by name, and says not to run git in that folder or
+ * in any folder under it, the one the operator stands in included: git started
+ * anywhere under it finds it as the look did (review/57). Both verbs take the
+ * same look, so what they lose is stated outright. The folder is named as
+ * "this folder", since no row prints a machine's layout.
  */
 function checkGit(rootDir: string): DoctorCheck {
   const id = "git-available";
@@ -253,7 +260,8 @@ function checkGit(rootDir: string): DoctorCheck {
         "git was not started here — this folder, or a folder above it, has the layout of a bare " +
         "repository (HEAD beside objects and refs, or beside commondir), met before any .git that " +
         "git stops at, so the engine did not hand it to git. Look at the entries of this folder " +
-        "and of each folder above it by name to find that folder, and do not run git in it. " +
+        "and of each folder above it by name to find that folder, and do not run git in it or in " +
+        "any folder under it, this one included. " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
         "so here gate scan exits 1 and /st-quick and /st-work list " +
         "`secret scan: not run` under `Not done:`. " +
@@ -266,7 +274,9 @@ function checkGit(rootDir: string): DoctorCheck {
       status: "warn",
       detail:
         "git did not answer here — no binary on PATH, this directory is not a repository, or git " +
-        "was only slow to answer this check (git status here tells which). " +
+        "was only slow to answer this check. To tell which with no git command that looks for a " +
+        "repository: `git --version` shows whether a binary is there, and a .git entry in this " +
+        "folder or in a folder above it, found by name, shows whether a repository is. " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
         "so with no git or no repository gate scan exits 1 and /st-quick and /st-work list " +
         "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +

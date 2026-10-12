@@ -1214,6 +1214,84 @@ describe("init — the no-git note", () => {
     expect(note).toContain("so with no git or no repository gate scan exits 1");
     expect(note).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
   });
+
+  // Run 2026-10-11_release-1-14-0, fix/20, review/59 and review/44. Before the engine starts git
+  // it looks at the folder and the folders above it, and a folder there with the layout of a bare
+  // repository is not handed to git (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`). Init
+  // read that as no repository and said "`git init` here first": inside a real checkout that nests
+  // a repository, and it hides the cause. The fixture is the shape the look's own cases seed: an
+  // empty `HEAD` beside empty `objects` and `refs`, with no `.git`. No git opens it, none is started.
+  async function makeShapedRepo(): Promise<string> {
+    const root = await makeRepo();
+    await writeFile(join(root, "HEAD"), "", "utf8");
+    await mkdir(join(root, "objects"));
+    await mkdir(join(root, "refs"));
+    return root;
+  }
+
+  it.each([
+    { name: "a real run", argv: ["-y"], tense: "were written" },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y"], tense: "would be written" },
+  ])("states the cause and names no git command where the look before git refused the folder, on $name", async ({ argv, tense }) => {
+    const root = await makeShapedRepo();
+
+    const result = await runInit(root, argv);
+
+    expect(result.code).toBe(0);
+    const lines = result.stdout.split("\n").map((line) => line.trimStart());
+    expect(lines.filter((line) => line.startsWith("no git repository:"))).toEqual([]);
+    const notes = lines.filter((line) => line.startsWith("git was not started here"));
+    expect(notes).toHaveLength(1);
+    const note = notes[0] ?? "";
+    // Revert path first, as in the other note.
+    expect(note).toContain(`git was not started here, so the files that ${tense} have no revert path the engine could check`);
+    expect(note).toContain("this folder, or a folder above it, has the layout of a bare repository");
+    expect(note).toContain("Look at the entries of this folder and of each folder above it by name");
+    expect(note).toContain("do not run git in it or in any folder under it, this one included");
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse"]) {
+      expect(note, `the note names ${call}`).not.toContain(call);
+    }
+    // What follows from git not answering stays, in `check`'s words for such a folder.
+    expect(note).toContain("Two verbs need git");
+    expect(note).toContain("worktree refuses without it");
+    expect(note).toContain("gate reads every change from it");
+    expect(note).toContain("so here gate scan exits 1");
+    expect(note).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+  });
+
+  it("refuses a declined question there with that cause, and names no git command", async () => {
+    const root = await makeShapedRepo();
+
+    // Enter keeps the tools default; `n` declines the write.
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "n"] });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("init cancelled — nothing was written");
+    expect(result.stderr).toContain(
+      "git was not started in this directory: it, or a folder above it, has the layout of a bare repository",
+    );
+    expect(result.stderr).toContain("do not run git in that folder or in any folder under it, this one included");
+    expect(result.stderr).toContain("re-run with -y");
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse"]) {
+      expect(result.stderr, `the refusal names ${call}`).not.toContain(call);
+    }
+    expect(await readManifest(root)).toBeNull();
+  });
+
+  // Everywhere else the refusal is the text it was: a folder with no repository and no such layout.
+  it("keeps the declined question's refusal as it was where there is simply no repository", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "n"] });
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("init cancelled — nothing was written");
+    expect(result.stderr).toContain("git does not answer in this directory, so the write would have no revert path");
+    expect(result.stderr).toContain(
+      "run `git init` here and re-run `stamity init`, or re-run with -y to accept a setup you cannot git-revert",
+    );
+    expect(await readManifest(root)).toBeNull();
+  });
 });
 
 // ── Hooks-planner findings ─────────────────────────────────────────

@@ -4,6 +4,8 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  gitCheckRunner,
+  keptFromGit,
   parsePorcelainStatus,
   parseShortlogContributors,
   readHistoryFacts,
@@ -144,6 +146,28 @@ describe("readWorkingTreeStatus (default runner, a folder the look refuses)", ()
     expect(readWorkingTreeStatus(shaped)).toEqual({ ...UNAVAILABLE, reason: "bare-layout" });
     expect(readWorkingTreeStatus(below)).toEqual({ ...UNAVAILABLE, reason: "bare-layout" });
     expect(readHistoryFacts(shaped)).toBeNull();
+  });
+
+  // review/60: `gate` runs this runner with its own bounds and words the failure itself, so it
+  // reads the mark off the error. Only the runner's own refusal carries it; an error with git's
+  // refusal status alone does not, and git's message is never read (it is translated by locale).
+  it("marks the runner's own refusal for a caller that words the failure, and no other error", async () => {
+    const shaped = getRoot().path("shaped");
+    await mkdir(join(shaped, "objects"), { recursive: true });
+    await mkdir(join(shaped, "refs"));
+    await writeFile(join(shaped, "HEAD"), "", "utf8");
+    let refusal: unknown;
+    try {
+      gitCheckRunner()(["rev-parse", "--show-prefix"], shaped);
+    } catch (error) {
+      refusal = error;
+    }
+
+    expect(keptFromGit(refusal)).toBe(true);
+    expect((refusal as { status?: unknown }).status).toBe(128);
+    expect(keptFromGit(Object.assign(new Error("git failed"), { status: 128 }))).toBe(false);
+    expect(keptFromGit({ keptFromGit: true })).toBe(false);
+    expect(keptFromGit(undefined)).toBe(false);
   });
 });
 

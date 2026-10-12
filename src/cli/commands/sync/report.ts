@@ -390,8 +390,9 @@ export function syncJsonPayload(plan: SyncPlan, report: SyncApplyReport): Record
       classes: [...row.classes],
     })),
     // The three facts by name, not the status whole: why git did not answer
-    // (`WorkingTreeStatus.reason`) is told by `check`'s `git-available` row, and
-    // a field this payload never carried does not arrive here unannounced.
+    // (`WorkingTreeStatus.reason`) is told by `check`'s `git-available` row and,
+    // in human mode, by this verb's closing step (`../sync.ts`), and a field
+    // this payload never carried does not arrive here unannounced.
     dirty: {
       available: plan.dirty.available,
       dirty: plan.dirty.dirty,

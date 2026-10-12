@@ -1210,6 +1210,19 @@ describe("check — advisory warnings", () => {
     expect(git.detail).toContain("where git was only slow, both verbs may still run");
     // The sentence the row already carried stays: what `sync` loses without git.
     expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
+    // review/61: the row said "git status here tells which". This text also prints where git itself
+    // refused a folder the engine's look passed (a leftover `.git` git cannot open beside or below a
+    // folder with the layout of a bare repository), and plain git typed there opens that folder. So
+    // the row tells the causes apart by two steps that look for no repository, and names no other
+    // git command.
+    expect(git.detail).not.toContain("tells which");
+    expect(git.detail).toContain("`git --version` shows whether a binary is there");
+    expect(git.detail).toContain(
+      "a .git entry in this folder or in a folder above it, found by name, shows whether a repository is",
+    );
+    for (const call of ["git status", "git diff", "git log", "git rev-parse", "git init"]) {
+      expect(git.detail, `the row names ${call}`).not.toContain(call);
+    }
   });
 
   it("says the folder was kept from git, with no hint to run git there, where the look before git refused it", async () => {
@@ -1235,7 +1248,11 @@ describe("check — advisory warnings", () => {
     expect(git.detail).toContain("git was not started here");
     expect(git.detail).toContain("this folder, or a folder above it, has the layout of a bare repository");
     expect(git.detail).toContain("Look at the entries of this folder and of each folder above it by name");
-    expect(git.detail).toContain("do not run git in it");
+    // review/57 and review/56: the row said "do not run git in it", the folder with the layout.
+    // Git started in any folder under that one finds it as the engine's look does (the look refuses
+    // a start folder two levels below it, `test/cli/engine/gitStatus.test.ts`), so the row covers
+    // those folders too, the one the operator stands in included.
+    expect(git.detail).toContain("do not run git in it or in any folder under it, this one included");
     // No hint to run git there, and none of the causes that are not this one.
     expect(git.detail).not.toContain("git status");
     expect(git.detail).not.toContain("tells which");
