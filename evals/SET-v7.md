@@ -2685,6 +2685,20 @@ criterion grades the reworded lines, so no `## Expected` block moves in these tw
 incremental rule the twelve re-measure, because their case-file bytes moved. The dated citations
 above stay as they were.
 
+**One Brief re-quoted and no range moved, 2026-10-12 (run 2026-10-12_board-writes, unit
+b4-eval-cases, after the QA walk's label fix).** `/st-board` rewords two passages in place, line
+for line. Its labels paragraph after fill step 6 (lines 96-98) now says an item files with the labels
+the repository already has, and a label it lacks is never created, never withholds the item, and
+stays a proposal in the report; no case's range or quote holds those lines. Under "Writes the board
+never makes", lines 276-278 now name "creating a label (the item still files, without it)" where
+they named "a label the repository does not already have". `board-write-back-four-channels` re-quotes
+those three lines by script, byte-identical to the landed file, and its range (248-305) holds. B6
+and B7 keep their meaning under the new wording: B6 refuses creating or proposing `needs-design`,
+which the repository already has, and B7 refuses a label created under any name, the write the
+reworded line names. No criterion moves, so its `## Expected` block, its B / A at 7 / 2,
+`EXPECTED_MOVES` and every roster count hold. Under the incremental rule the case re-measures,
+because its case-file bytes moved. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

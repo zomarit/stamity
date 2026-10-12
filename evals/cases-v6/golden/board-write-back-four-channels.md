@@ -43,9 +43,9 @@ write, outside this set.
 ### Writes the board never makes
 
 Deleting an item, any edit to a completed item, a write to any repository or board other than the
-linked one (on a Projects board, to another repository's item), a label the repository does not
-already have, and a `status:*` label where the board has a status field. Such a request stops and
-returns `BLOCKED_DEPENDENCY` rather than improvising one, for that item alone, and travels as a
+linked one (on a Projects board, to another repository's item), creating a label (the item still
+files, without it), and a `status:*` label where the board has a status field. Such a request stops
+and returns `BLOCKED_DEPENDENCY` rather than improvising one, for that item alone, and travels as a
 proposal in the report, decided before any write; other writes are reported apart, the run status
 carrying the blocked action. A reopen under `--move` is the status-transition write, not an edit.
 
