@@ -893,8 +893,22 @@ describe("the pack claims no board capability the write-back contract withholds"
   /** Hyphen-guarded, so the frame's `<epic-label>` slot token is not a label write. */
   const LABEL_NOUN = /(?<![-\w])labels?\b/i;
   const CREATION_VERB = /\bcreat\w*/gi;
+  /**
+   * TEST CHANGE, justified (2026-10-12, REQ-BOARD-010): the creation half of the
+   * probe matched only `CREATION_VERB` (`creat*`). The pack's verb for putting an
+   * item on a board is now "files", so "files"/"filed"/"filing" is read too. Two
+   * exemptions keep the sentences that are true: `/st-board` named just before the
+   * verb (the board files, the pack does not), and an object negated right after it
+   * ("files no board item"). `NEGATION` gains "nobody", which leads the frame's
+   * "work nobody has filed yet"; its list was no, none, not, never, nothing,
+   * neither, nor, outside and without.
+   */
+  const FILING_VERB = /\bfil(?:es|ed|ing)\b/gi;
+  const FILING_SUBJECT = /\/st-board\b/;
+  const FILING_SUBJECT_WINDOW = 50;
+  const NEGATED_OBJECT = /^\s+(?:no|nothing|none)\b/i;
   const LABEL_VERB = /\b(?:carr|appl|writ|add|attach|stamp)\w*/gi;
-  const NEGATION = /\b(?:no|none|not|never|nothing|neither|nor|outside|without)\b/i;
+  const NEGATION = /\b(?:no|nobody|none|not|never|nothing|neither|nor|outside|without)\b/i;
   const NEGATION_WINDOW = 60;
   const CREATION_OBJECT_WINDOW = 80;
   const LABEL_OBJECT_WINDOW = 45;
@@ -918,18 +932,34 @@ describe("the pack claims no board capability the write-back contract withholds"
 
   function boardClaims(text: string): string[] {
     const hits: string[] = [];
-    const probe = (verbs: RegExp, object: RegExp, reach: number, kind: string): void => {
+    const probe = (
+      verbs: RegExp,
+      object: RegExp,
+      reach: number,
+      kind: string,
+      exempt?: (block: string, start: number, end: number) => boolean,
+    ): void => {
       for (const block of claimBlocks(text)) {
         for (const match of block.matchAll(verbs)) {
           const start = match.index;
           const end = start + match[0].length;
           if (!object.test(block.slice(Math.max(0, start - reach), end + reach))) continue;
           if (NEGATION.test(block.slice(Math.max(0, start - NEGATION_WINDOW), start))) continue;
+          if (exempt?.(block, start, end) === true) continue;
           hits.push(`${kind}: ${JSON.stringify(block.slice(Math.max(0, start - 40), end + 60))}`);
         }
       }
     };
     probe(CREATION_VERB, BOARD_NOUN, CREATION_OBJECT_WINDOW, "board-item creation");
+    probe(
+      FILING_VERB,
+      BOARD_NOUN,
+      CREATION_OBJECT_WINDOW,
+      "board-item filing",
+      (block, start, end) =>
+        FILING_SUBJECT.test(block.slice(Math.max(0, start - FILING_SUBJECT_WINDOW), start)) ||
+        NEGATED_OBJECT.test(block.slice(end)),
+    );
     probe(LABEL_VERB, LABEL_NOUN, LABEL_OBJECT_WINDOW, "label write");
     return hits;
   }
@@ -994,6 +1024,61 @@ describe("the pack claims no board capability the write-back contract withholds"
         "`/st-board fill --source <report>`",
       );
     }
+  });
+
+  it("the pack's two writes go out only through the board contract's preview, default stop", async () => {
+    // The contract gates every write on one numbered preview whose default is 4
+    // (`stop`). The pack's progress comment and its `--move` transition are writes
+    // like any other, so the frame and the command both say they wait for it.
+    const board = (await coreFiles).find((file) => file.relPath === "commands/st-board.md");
+    expect(board, "core corpus has no commands/st-board.md to bind against").toBeDefined();
+    if (board === undefined) return;
+    const frame = flow((await packFile(RULE_PATH)).parsed.body);
+    const audit = flow((await packFile("commands/st-product-audit.md")).parsed.body);
+
+    expect(flow(section(board.parsed.body, "Write-back contract"))).toMatch(
+      /Default if no response: 4 \(`stop`\)/,
+    );
+    expect(frame).toMatch(/Neither goes out until the board contract's preview has listed it/i);
+    expect(frame).toMatch(/one numbered preview before the first write, default 4 \(`stop`\)/i);
+    expect(audit).toMatch(/Both wait for the board contract's preview/i);
+    expect(audit).toMatch(/its default is 4 \(`stop`\), which writes neither/i);
+  });
+
+  it("the epic-to-sub-issue links and the dependency order stay proposals in fill's report", async () => {
+    // The board's five writes have none that links one item to another, so `fill`
+    // files the items and leaves the links and the order for a person.
+    const audit = flow((await packFile("commands/st-product-audit.md")).parsed.body);
+
+    expect(audit).toMatch(
+      /the epic-to-sub-issue links and the dependency order stay proposals in `fill`'s report/i,
+    );
+    expect(audit).toMatch(/the board's write set has no write that links items/i);
+  });
+
+  it("the frame's obsolete_when and description are not the retired text", async () => {
+    // REQ-BOARD-010 criterion 3: a revert of the frame's head to the old contract's
+    // condition, or of its description to the old split, goes red here.
+    const frame = await packFile(RULE_PATH);
+    const obsoleteWhen = frontmatterField(frame.parsed, "obsolete_when");
+
+    expect(typeof obsoleteWhen).toBe("string");
+    expect(obsoleteWhen).not.toBe(
+      "the board write-back contract opens an item-creation channel a pack command can call",
+    );
+    expect(String(obsoleteWhen)).not.toMatch(/item-creation channel/i);
+    expect(description(frame)).not.toMatch(/proposal-versus-write-back split/i);
+  });
+
+  it("the frame's obsolete_when names a condition the board's contract does not meet", async () => {
+    // The contract files items, but only in a `fill` run; nothing lets this pack's
+    // own preview file its epic, so the frame stays live until that holds.
+    const obsoleteWhen = String(
+      frontmatterField((await packFile(RULE_PATH)).parsed, "obsolete_when"),
+    );
+
+    expect(obsoleteWhen).toMatch(/the pack's own board preview also files its epic/i);
+    expect(obsoleteWhen).toMatch(/a separate \/st-board fill run adds nothing/i);
   });
 
   it("no pack file states the retired no-creation claims of the old contract", async () => {
@@ -1062,6 +1147,18 @@ describe("the pack claims no board capability the write-back contract withholds"
     ].join("\n\n");
 
     expect(boardClaims(after)).toEqual([]);
+  });
+
+  it("fixture: the probe flags a pack that says it files an item, and clears the board's filing", () => {
+    const claim = "This command files the epic and each sub-issue on the linked board.";
+    expect(boardClaims(claim).join(" | ")).toMatch(/board-item filing: [^|]*files the epic/);
+
+    const cleared = [
+      "This command files no board item and writes no label.",
+      "Its epic leaves as a proposal, and `/st-board fill --source <report>` files it through that run's preview.",
+      "The set is proposed, never filed by this command.",
+    ].join("\n\n");
+    expect(boardClaims(cleared)).toEqual([]);
   });
 });
 

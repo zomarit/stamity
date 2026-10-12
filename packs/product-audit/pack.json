@@ -4,8 +4,8 @@
   "description": "Point-in-time whole-product assessment — proposes an epic set and writes a report; assesses, never modifies.",
   "integrity": {
     "commands/st-benchmark.md": "a4ab1696117ffcb0e5f004d79fbb8a0090e5f29d4fdedca44f6f04d465623882",
-    "commands/st-product-audit.md": "8f22fd5450d5faab1561d35305f7849f5445370edbdce377cd20a5f7ffdf48b2",
-    "rules/stamity-epic-audit-frame.md": "341ce030e6d163ea7767e86100482553c36dd7b06d5de32ce998268764642492",
+    "commands/st-product-audit.md": "349cd7919482dd3e445cfab13d3cfe7cd47002f80cccac839966331284811e8c",
+    "rules/stamity-epic-audit-frame.md": "c9808ac8f483619146601a75d6cb2215a36b1a9aacdf76805aa86e4e03a243a6",
     "skills/st-perf-audit/SKILL.md": "57e8a6392af3e7563a0eaae975719cf0d4b1efde26c19329c5c60ae97dbb8980"
   },
   "permissions": {

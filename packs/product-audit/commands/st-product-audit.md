@@ -49,6 +49,10 @@ Scope is the whole product by default. A named subset (`axis=health
 modules=api,worker`) narrows the per-module set; the cross-cutting assessments
 stay in, because they are what a per-module pass cannot see.
 
+`--move` (`/st-product-audit axis=health --move`) is `/st-board`'s own flag,
+passed through unchanged: on a linked board it turns on the status-transition
+write, and without it every item's status stays where it is.
+
 ## Evidence — the verify seam
 
 Findings rest on the artifacts the `st-verify` skill writes, one per axis
@@ -157,8 +161,10 @@ cross-cutting assessment. Module sub-issues carry no dependencies; cross-cutting
 sub-issues depend on the module set, and the dependency section names them. It
 stays a proposal in every repo, linked board or not: this command files no board
 item and writes no label; `/st-board fill --source <report>` files it through
-that run's preview. The bodies and the dependency order are authored here for a
-person to apply.
+that run's preview, though the epic-to-sub-issue links and the dependency order
+stay proposals in `fill`'s report: the board's write set has no write that links
+items. The bodies and the dependency order are authored here for a person to
+apply.
 
 > Epic scaffold: `stamity-epic-audit-frame` → Epic and sub-issue shape, then
 > Board write-back. Slot: epic-kind = `product audit (<axis>)`; epic-label =
@@ -166,7 +172,9 @@ person to apply.
 
 **Board linked.** The run additionally speaks through `/st-board`'s writes: one
 progress comment per run on an item the board already has, and a status
-transition only under `--move` where the phase map covers it.
+transition only under `--move` where the phase map covers it. Both wait for the
+board contract's preview, shown once before the first write; its default is 4
+(`stop`), which writes neither.
 
 **No board linked.** That is a repo state, not an error, and it never blocks an
 assessment — the report is unchanged and the proposal rides in it. Linking a

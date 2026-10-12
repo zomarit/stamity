@@ -5,7 +5,7 @@ description: Carries the assessment-epic scaffold the pack's commands share — 
 tags: [board, review]
 load: on-demand
 scope: agent-requested
-obsolete_when: a pack command can hand its proposal to /st-board's preview in the same run, so a separate fill run adds nothing
+obsolete_when: the pack's own board preview also files its epic and sub-issues, so a separate /st-board fill run adds nothing
 ---
 
 # Epic-Audit Frame
@@ -63,10 +63,10 @@ from memory once it exists on a board.
 ## Board write-back
 
 The board primitive lives in `/st-board`, which files, edits and moves items on
-a linked board through its own preview. This pack calls none of that: its epic
-and sub-issues leave as a proposal, and `/st-board fill --source <report>` is
-the run that files them. This block wraps the board's contract; it is not a
-second definition of it.
+a linked board through its own preview. This pack never files through it: its
+epic and sub-issues leave as a proposal, and `/st-board fill --source <report>`
+is the run that files them. Its only writes are the two in rule 2. This block
+wraps the board's contract; it is not a second definition of it.
 
 1. **The epic and its sub-issues leave as a proposal.** The report holds the
    authored bodies and the dependency order, ready for a person to apply.
@@ -75,7 +75,9 @@ second definition of it.
 2. **What is written is written on an item the board already has.** One
    progress comment per run, naming the findings that land on that item, and a
    status transition only when the run was given `--move` and the phase map
-   covers it.
+   covers it. Neither goes out until the board contract's preview has listed
+   it: one numbered preview before the first write, default 4 (`stop`), and a
+   `stop` or no answer keeps both in the report as proposals.
 3. **A write the board's contract does not make stops.** It returns
    `BLOCKED_DEPENDENCY` naming the write it wanted, and the intent travels in
    the proposal instead.
