@@ -327,11 +327,12 @@ where git would read a bare repository.
   every hook the engine writes is, is now started as the interpreter the runner itself runs under,
   and no lookup by name takes place. The runner on disk changes with this version's first `sync`,
   the one the upgrade above runs; there is nothing to set. A hook whose launcher is another program,
-  `bun`, `deno`, `python3` or `ruby`, is still started by its bare name, and the client still starts
-  the runner itself with a bare `node`, by its own rules: on Windows, before opening one of those
-  clients in a checkout of work you have not read, look at the repository root, and for a hook a
-  plugin carries at the folder you open the client in, for a program file under the name of `node`
-  or of a launcher a hook names. `SECURITY.md` names both in the row on how git is started.
+  `bun`, `deno`, `python3` or `ruby`, or `node` spelled another way, `node.exe` for one, which only
+  your own hooks or a pack's can carry, is still started by its bare name, and the client still
+  starts the runner itself with a bare `node`, by its own rules: on Windows, before opening one of
+  those clients in a checkout of work you have not read, look at the repository root, and for a
+  hook a plugin carries at the folder you open the client in, for a program file under the name of
+  `node` or of a launcher a hook names. `SECURITY.md` names both in the row on how git is started.
 
 ### Added
 
