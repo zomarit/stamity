@@ -79,7 +79,9 @@ export interface InitPanelInput {
    * Why git did not answer, where the probe knows (`readWorkingTreeStatus().reason`):
    * `"bare-layout"` where the look the engine takes before it starts git kept
    * this folder from git. Absent everywhere else. Read by the security
-   * disclosure beside {@link InitPanelInput.gitAvailable}.
+   * disclosure beside {@link InitPanelInput.gitAvailable}, by the migration's
+   * uninstall line ({@link migrationLines}) and by the next steps
+   * ({@link refusedFolderSteps}).
    */
   gitReason?: WorkingTreeStatus["reason"];
   /**
@@ -476,6 +478,38 @@ export function nextStepsAfterRun(tool: Tool, report: InitApplyReport, rootDir: 
 }
 
 /**
+ * The step that comes ahead of every other where the look the engine takes
+ * before it starts git kept this folder from git (`readWorkingTreeStatus().reason`,
+ * `"bare-layout"`), and nothing everywhere else (review/71).
+ *
+ * The steps above send the operator into a client and a flow in this folder,
+ * and the last thing on screen is the first thing done. A client's own tools,
+ * a flow's session and its sub-agents start git of their own, with neither
+ * option the engine passes and no look, so there that git reads the folder the
+ * engine had just kept from git. The step says to move the folder first, in the
+ * words of init's note and its refusal (`../init.ts::noGitNote`), states the
+ * cause, since `--json` prints no note beside it, and names no git command.
+ * The usual steps follow it unchanged.
+ *
+ * Shared by the panel, which puts it at the head of each client's list, and
+ * init's `--json` document, which carries it once, ahead of every client's
+ * steps: `nextSteps` stays the flat list of strings it was.
+ */
+export function refusedFolderSteps(gitReason: WorkingTreeStatus["reason"]): string[] {
+  if (gitReason !== "bare-layout") return [];
+  return [
+    "before you start a client or a flow here, move the folder that has the layout of a bare " +
+      "repository off this path, or work from a checkout that does not keep it there: git was not " +
+      "started here, because this folder, or a folder above it, has that layout (HEAD beside objects " +
+      "and refs, or beside commondir). Look at the entries of this folder and of each folder above it " +
+      "by name to find that folder, and do not run git in it or in any folder under it, this one " +
+      "included. A client's own tools, a flow's session and its sub-agents start git of their own, " +
+      "and only the git the engine itself starts is set to refuse such a folder. The steps after " +
+      "this one are for when that is done",
+  ];
+}
+
+/**
  * What the guided migration moved, and what it left — one line per claim.
  *
  * The tally is split because `deleted` and `stripped` are different outcomes
@@ -485,7 +519,11 @@ export function nextStepsAfterRun(tool: Tool, report: InitApplyReport, rootDir: 
  * outcome that destroys a path never named it — so every deleted path is listed
  * here, on this surface and on the dry-run preview alike.
  */
-export function migrationLines(carry: CarryReport, residue?: MigrationResidue): string[] {
+export function migrationLines(
+  carry: CarryReport,
+  residue?: MigrationResidue,
+  gitReason?: WorkingTreeStatus["reason"],
+): string[] {
   const deleted = carry.strips.filter((row) => row.action === "deleted").map((row) => row.path);
   const stripped = carry.strips.filter((row) => row.action === "stripped").length;
   const verb = carry.dryRun ? "would be " : "";
@@ -506,7 +544,7 @@ export function migrationLines(carry: CarryReport, residue?: MigrationResidue): 
       `  deleted (held nothing but the old generated block): ${deleted.join(", ")}`,
     );
   }
-  lines.push(...residueLines(residue, carry));
+  lines.push(...residueLines(residue, carry, gitReason));
   return lines;
 }
 
@@ -545,9 +583,26 @@ export function migrationLines(carry: CarryReport, residue?: MigrationResidue): 
  * Still no predecessor verbs, for the reason above: the preview mode and the
  * end-of-run offer are named as behaviours to look for, conditionally, never as
  * a flag or a subcommand this run did not observe.
+ *
+ * One clause has a second text. Where the look the engine takes before it
+ * starts git kept this folder from git (`gitReason`, the status's own), "commit
+ * this repo" is plain git started in that folder, under a note that says to run
+ * none there. The clause then names a copy made with no git command, and the
+ * cause in the note's words (review/73). Every other word of these lines, and
+ * the clause itself everywhere else, is what it was.
  */
-function residueLines(residue: MigrationResidue | undefined, carry: CarryReport): string[] {
+function residueLines(
+  residue: MigrationResidue | undefined,
+  carry: CarryReport,
+  gitReason: WorkingTreeStatus["reason"],
+): string[] {
   if (residue === undefined || residue.paths.length === 0) return [];
+  const keepProse =
+    gitReason === "bare-layout"
+      ? `copy the files that hold it somewhere outside this folder before you run it, and use no ` +
+        `git command for that: git was not started here, because this folder, or a folder above ` +
+        `it, has the layout of a bare repository. `
+      : "commit this repo before you run it. ";
   const lines = [
     `  left in place: ${residue.paths.length} predecessor path(s) — ${residue.paths.join(", ")}. ` +
       `The migration carries learnings and credentials and strips old managed blocks; it removes ` +
@@ -561,8 +616,7 @@ function residueLines(residue: MigrationResidue | undefined, carry: CarryReport)
       `setup's generated files with it. Run it in its own preview mode first, if it has one, and ` +
       `read the list. Generated files come back afterwards: \`${packageCommand("check")}\` names each ` +
       `one and \`${packageCommand("sync")}\` writes it back from the corpus. Your own prose outside a ` +
-      `managed block does not come back — nothing can regenerate it — so commit this repo before ` +
-      `you run it. ` +
+      `managed block does not come back — nothing can regenerate it — so ${keepProse}` +
       `And if it finishes by offering to reinstall the old setup, decline.`,
   ];
   if (residue.unownedSettingsPath !== undefined) {
@@ -821,7 +875,7 @@ export function renderInitPanel(input: InitPanelInput): string {
   const pinLine = gatePinLine(decisions);
   if (pinLine !== null) lines.push(`  ${pinLine}`);
   if (carry !== null) {
-    for (const line of migrationLines(carry, input.residue)) lines.push(`  ${line}`);
+    for (const line of migrationLines(carry, input.residue, input.gitReason)) lines.push(`  ${line}`);
   }
   // Only the entries this run appended: a .gitignore that already covered them
   // was not edited, and there is nothing to disclose.
@@ -851,7 +905,11 @@ export function renderInitPanel(input: InitPanelInput): string {
         ? `${palette.bold(`next steps (${tool}):`)}`
         : palette.bold("next steps:");
     lines.push(heading);
-    const steps = nextStepsAfterRun(tool, report, decisions.repoInfo.rootDir);
+    // At a folder the engine kept from git, each client's list opens with moving that folder.
+    const steps = [
+      ...refusedFolderSteps(input.gitReason),
+      ...nextStepsAfterRun(tool, report, decisions.repoInfo.rootDir),
+    ];
     for (const [index, step] of steps.entries()) {
       lines.push(`  ${index + 1}. ${step}`);
     }

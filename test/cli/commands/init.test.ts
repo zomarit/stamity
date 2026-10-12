@@ -1385,6 +1385,123 @@ describe("init — the no-git note", () => {
     expect(countConfirmations(result.stdout)).toBe(1);
     expect(await readManifest(root)).not.toBeNull();
   });
+
+  // Run 2026-10-11_release-1-14-0, review/71, review/72 and review/73. Three more texts at such a
+  // folder led into git the engine does not start. The ready panel ended on "open a terminal in
+  // this repo and type: claude" and `/st-onboard`, and `--json` carried the same steps. The note
+  // said what the flows list and not that a flow started there runs git of its own. And after a
+  // guided migration the uninstall line said to commit. A client's own tools, a flow's session and
+  // its sub-agents start git with no look and neither option, so each text now says so in its place.
+  const REFUSED_FOLDER_STEP =
+    "before you start a client or a flow here, move the folder that has the layout of a bare " +
+    "repository off this path, or work from a checkout that does not keep it there: git was not " +
+    "started here, because this folder, or a folder above it, has that layout (HEAD beside objects " +
+    "and refs, or beside commondir). Look at the entries of this folder and of each folder above it " +
+    "by name to find that folder, and do not run git in it or in any folder under it, this one " +
+    "included. A client's own tools, a flow's session and its sub-agents start git of their own, " +
+    "and only the git the engine itself starts is set to refuse such a folder. The steps after " +
+    "this one are for when that is done";
+  const REFUSED_NOTE =
+    "git was not started here, so the files that were written have no revert path the engine could " +
+    "check: this folder, or a folder above it, has the layout of a bare repository (HEAD beside " +
+    "objects and refs, or beside commondir), met before any .git that git stops at, so the engine " +
+    "did not hand it to git. Look at the entries of this folder and of each folder above it by " +
+    "name to find that folder, and do not run git in it or in any folder under it, this one " +
+    "included. Two verbs need git: worktree refuses without it, and gate reads every change from " +
+    "it, so here gate scan exits 1 and /st-quick and /st-work list `secret scan: not run` under " +
+    "`Not done:`. Neither flow stops at this cause, and the git a flow's session and its sub-agents " +
+    "start is not set to refuse such a folder as the engine's is, so start no flow here until that " +
+    "folder is moved off this path.";
+  const PLAIN_NOTE =
+    "no git repository: git did not answer in this directory, so the files that were written have " +
+    "no revert path — `git init` here first if you want one. Two verbs need git: worktree " +
+    "refuses without it, and gate reads every change from it, so with no git or no repository " +
+    "gate scan exits 1 and /st-quick and /st-work list `secret scan: not run` under `Not done:`.";
+
+  /** The numbered rows the panel prints last, without their numbers. */
+  function panelSteps(stdout: string): string[] {
+    const lines = stdout.trimEnd().split("\n");
+    const heading = lines.findLastIndex((line) => line.startsWith("next steps"));
+    return lines.slice(heading + 1).map((line) => line.replace(/^ {2}\d+\. /, ""));
+  }
+
+  it("opens the ready panel's next steps with moving the folder there, and the usual steps follow", async () => {
+    const shaped = await makeShapedRepo();
+    const plain = await makeRepo("plain");
+
+    const refused = await runInit(shaped, ["-y"]);
+    const usual = await runInit(plain, ["-y"]);
+
+    expect(refused.code).toBe(0);
+    expect(usual.code).toBe(0);
+    const usualSteps = panelSteps(usual.stdout);
+    expect(usualSteps.at(-1)).toContain("/st-onboard");
+    expect(usual.stdout).not.toContain("before you start a client or a flow here");
+    // The step first, then the steps a folder with no repository gets, byte for byte.
+    expect(panelSteps(refused.stdout)).toEqual([REFUSED_FOLDER_STEP, ...usualSteps]);
+    expect(refused.stdout).toContain(`\n  1. ${REFUSED_FOLDER_STEP}\n`);
+    for (const call of GIT_CALLS) {
+      expect(refused.stdout, `the run names ${call}`).not.toContain(call);
+    }
+  });
+
+  it("opens `--json`'s nextSteps with the same step there, and moves no key of the document", async () => {
+    const shaped = await makeShapedRepo();
+    const plain = await makeRepo("plain");
+
+    const refused = parseSingleDoc((await runInit(shaped, ["--json", "--tools", "claude,codex"])).stdout);
+    const usual = parseSingleDoc((await runInit(plain, ["--json", "--tools", "claude,codex"])).stdout);
+
+    const usualSteps = usual["nextSteps"] as string[];
+    expect(usualSteps).not.toContain(REFUSED_FOLDER_STEP);
+    expect(usualSteps.some((step) => step.includes("st-onboard"))).toBe(true);
+    // Once, ahead of every client's steps, which are the ones a folder with no repository gets.
+    expect(refused["nextSteps"]).toEqual([REFUSED_FOLDER_STEP, ...usualSteps]);
+    // The wire shape: the same keys at every level the document names, and the same verdict.
+    expect(Object.keys(refused)).toEqual(Object.keys(usual));
+    for (const key of ["decisions", "report"]) {
+      expect(Object.keys(refused[key] as object), key).toEqual(Object.keys(usual[key] as object));
+    }
+    expect(refused["ok"]).toBe(true);
+    expect(refused["carry"]).toBeNull();
+  });
+
+  it("says in the note there to start no flow until the folder is moved, and keeps the other note as it was", async () => {
+    const shaped = await makeShapedRepo();
+    const plain = await makeRepo("plain");
+
+    const refused = await runInit(shaped, ["-y"]);
+    const usual = await runInit(plain, ["-y"]);
+
+    expect(refused.stdout.split("\n")).toContain(REFUSED_NOTE);
+    expect(usual.stdout.split("\n")).toContain(PLAIN_NOTE);
+    expect(usual.stdout).not.toContain("start no flow here");
+  });
+
+  it.each([
+    { name: "a real run", argv: ["-y", "--migrate", "full"] },
+    { name: "the dry-run preview", argv: ["--dry-run", "-y", "--migrate", "full"] },
+  ])("names no commit and no git command on the migration's uninstall line there, on $name", async ({ argv }) => {
+    const root = await seedPredecessorRepo({ markedClaudeFile: true });
+    await writeFile(join(root, "HEAD"), "", "utf8");
+    await mkdir(join(root, "objects"));
+    await mkdir(join(root, "refs"));
+
+    const result = await runInit(root, argv);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("eyes open on that uninstall");
+    expect(result.stdout).toContain(
+      "nothing can regenerate it — so copy the files that hold it somewhere outside this folder before " +
+        "you run it, and use no git command for that: git was not started here, because this folder, or " +
+        "a folder above it, has the layout of a bare repository. And if it finishes by offering to " +
+        "reinstall the old setup, decline.",
+    );
+    expect(result.stdout).not.toContain("commit this repo");
+    for (const call of GIT_CALLS) {
+      expect(result.stdout, `the run names ${call}`).not.toContain(call);
+    }
+  });
 });
 
 // ── Hooks-planner findings ─────────────────────────────────────────

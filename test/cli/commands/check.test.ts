@@ -1223,6 +1223,17 @@ describe("check — advisory warnings", () => {
     for (const call of ["git status", "git diff", "git log", "git rev-parse", "git init"]) {
       expect(git.detail, `the row names ${call}`).not.toContain(call);
     }
+    // review/72 moved the other text of this row; this one is the text it was, compared whole.
+    expect(git.detail).toBe(
+      "git did not answer here — no binary on PATH, this directory is not a repository, or git " +
+        "was only slow to answer this check. To tell which with no git command that looks for a " +
+        "repository: `git --version` shows whether a binary is there, and a .git entry in this " +
+        "folder or in a folder above it, found by name, shows whether a repository is. " +
+        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "so with no git or no repository gate scan exits 1 and /st-quick and /st-work list " +
+        "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +
+        "sync's dirty-tree warning simply stays silent while git does not answer.",
+    );
   });
 
   it("says the folder was kept from git, with no hint to run git there, where the look before git refused it", async () => {
@@ -1264,6 +1275,49 @@ describe("check — advisory warnings", () => {
     expect(git.detail).toContain("gate scan exits 1");
     expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
     expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
+    // review/72: the row said what the flows list there, and not that a flow started there runs
+    // git of its own: a flow's session and its sub-agents start git the engine does not, with no
+    // look and neither option. The pages said to start no flow there; the row now says it too,
+    // beside what it says of the scan. The row is compared whole.
+    expect(git.detail).toBe(
+      "git was not started here — this folder, or a folder above it, has the layout of a bare " +
+        "repository (HEAD beside objects and refs, or beside commondir), met before any .git that " +
+        "git stops at, so the engine did not hand it to git. Look at the entries of this folder " +
+        "and of each folder above it by name to find that folder, and do not run git in it or in " +
+        "any folder under it, this one included. " +
+        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "so here gate scan exits 1 and /st-quick and /st-work list " +
+        "`secret scan: not run` under `Not done:`. " +
+        "Neither flow stops at this cause, and the git a flow's session and its sub-agents start " +
+        "is not set to refuse such a folder as the engine's is, so start no flow here until that " +
+        "folder is moved off this path. " +
+        "sync's dirty-tree warning simply stays silent while git does not answer.",
+    );
+  });
+
+  it("passes the git-available row, and warns of nothing, for a folder of that layout below the setup root", async () => {
+    // Run 2026-10-11_release-1-14-0, review/79. The look is taken from the folder a verb runs in
+    // and walks upward only, so a folder of the layout that sits below the setup root is met by no
+    // look: git answers at the root and the row passes, with no word of that folder. The pages say
+    // so, and this case holds them to it. The fixture is the shape above, one level down, in a
+    // repository git opens at the root (made as the `setup green` case below makes its own); no
+    // git is started in the folder with the layout.
+    const root = await seedRepo(getRepo());
+    await new Promise<void>((settle, reject) => {
+      execFile("git", ["init", "-q"], { cwd: root }, (error) => (error === null ? settle() : reject(error)));
+    });
+    const below = join(root, "vendor", "mirror");
+    await mkdir(join(below, "objects"), { recursive: true });
+    await mkdir(join(below, "refs"));
+    await writeFile(join(below, "HEAD"), "", "utf8");
+
+    const { code, doc } = await runJson(root);
+    const git = row(doc, "git-available");
+
+    expect(code).toBe(0);
+    expect(git.status).toBe("pass");
+    expect(git.detail).not.toContain("bare repository");
+    expect(git.detail).not.toContain("git was not started here");
   });
 });
 

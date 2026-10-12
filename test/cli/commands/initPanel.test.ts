@@ -10,8 +10,10 @@ import {
   emissionSummary,
   gitignoreLine,
   MAX_STACK_SUGGESTION_ROWS,
+  migrationLines,
   nextStepsAfterRun,
   nextStepsForTool,
+  refusedFolderSteps,
   renderInitPanel,
   type InitPanelInput,
 } from "../../../src/cli/commands/init/panel.ts";
@@ -523,6 +525,62 @@ describe("renderInitPanel — migration summary", () => {
     // behaviours to look for, conditionally — never as a flag or a subcommand
     // this run never observed.
     expect(output).not.toMatch(/--dry-run|--purge|--yes/);
+  });
+
+  // Run 2026-10-11_release-1-14-0, review/73. The same line said "commit this repo before you run
+  // it" where the look the engine takes before it starts git kept the folder from git (the
+  // status's `reason`), on the ready panel and in the dry-run preview, beside a note that says to
+  // run no git there. A commit made there is plain git started in that folder. There the line now
+  // names a copy made with no git command, and the cause. Both lines are compared whole: the
+  // first is the text it was, the second is new.
+  const UNINSTALL_LINE_HEAD =
+    "  eyes open on that uninstall: it finds what to remove by DIRECTORY rather than by name, and " +
+    "this setup writes into the same directories at the same paths — so it takes THIS setup's " +
+    "generated files with it. Run it in its own preview mode first, if it has one, and read the " +
+    `list. Generated files come back afterwards: \`${npxCommand("check")}\` names each one and ` +
+    `\`${npxCommand("sync")}\` writes it back from the corpus. Your own prose outside a managed ` +
+    "block does not come back — nothing can regenerate it — so ";
+  const UNINSTALL_LINE_TAIL = "And if it finishes by offering to reinstall the old setup, decline.";
+
+  function uninstallLine(gitReason?: "bare-layout"): string {
+    const lines = migrationLines(carryFixture(), { paths: ["/repo/.prior"] }, gitReason);
+    return lines.find((line) => line.trimStart().startsWith("eyes open on that uninstall")) ?? "";
+  }
+
+  it("keeps the uninstall line as it was everywhere the look before git refused nothing", () => {
+    expect(uninstallLine()).toBe(`${UNINSTALL_LINE_HEAD}commit this repo before you run it. ${UNINSTALL_LINE_TAIL}`);
+    // The panel hands the line on unchanged where git answers and where there is no repository.
+    for (const input of [panelInput(), panelInput({ gitAvailable: false })]) {
+      const output = renderInitPanel({ ...input, carry: carryFixture(), residue: { paths: ["/repo/.prior"] } });
+      expect(output).toContain("so commit this repo before you run it. And if it finishes");
+    }
+  });
+
+  it("names no commit and no git command on the uninstall line where the look before git refused the folder", () => {
+    const line = uninstallLine("bare-layout");
+
+    expect(line).toBe(
+      `${UNINSTALL_LINE_HEAD}copy the files that hold it somewhere outside this folder before you run it, ` +
+        "and use no git command for that: git was not started here, because this folder, or a folder " +
+        `above it, has the layout of a bare repository. ${UNINSTALL_LINE_TAIL}`,
+    );
+    expect(line).not.toContain("commit");
+    // The panel carries the cause from its input to the line; every other migration line is the one it was.
+    const refused = renderInitPanel(
+      panelInput({
+        carry: carryFixture(),
+        residue: { paths: ["/repo/.prior"] },
+        gitAvailable: false,
+        gitReason: "bare-layout",
+      }),
+    );
+    expect(refused).toContain(`  ${line}`);
+    expect(refused).not.toContain("commit this repo");
+    const others = (gitReason?: "bare-layout"): string[] =>
+      migrationLines(carryFixture(), { paths: ["/repo/.prior"] }, gitReason).filter(
+        (row) => !row.trimStart().startsWith("eyes open on that uninstall"),
+      );
+    expect(others("bare-layout")).toEqual(others());
   });
 
   it("names the settings document this run refused to claim, with the remedy", () => {
@@ -1076,6 +1134,71 @@ describe("renderInitPanel — next steps", () => {
     );
     expect(output).toContain("next steps (claude):");
     expect(output).toContain("next steps (codex):");
+  });
+
+  // Run 2026-10-11_release-1-14-0, review/71. Where the look the engine takes before it starts git
+  // kept the folder from git (the status's `reason`), the panel still ended on "open a terminal in
+  // this repo and type: claude" and `/st-onboard`. A client's own tools, a flow's session and its
+  // sub-agents start git the engine does not, with no look and neither option, so the last lines
+  // on screen led into the git the release's pages warn of. There each client's steps now open
+  // with moving the folder; the usual steps follow, word for word. The step is compared whole.
+  const REFUSED_FOLDER_STEP =
+    "before you start a client or a flow here, move the folder that has the layout of a bare " +
+    "repository off this path, or work from a checkout that does not keep it there: git was not " +
+    "started here, because this folder, or a folder above it, has that layout (HEAD beside objects " +
+    "and refs, or beside commondir). Look at the entries of this folder and of each folder above it " +
+    "by name to find that folder, and do not run git in it or in any folder under it, this one " +
+    "included. A client's own tools, a flow's session and its sub-agents start git of their own, " +
+    "and only the git the engine itself starts is set to refuse such a folder. The steps after " +
+    "this one are for when that is done";
+
+  /** The numbered rows under each `next steps` heading, heading first, as the panel printed them. */
+  function nextStepBlocks(output: string): string[][] {
+    const blocks: string[][] = [];
+    for (const line of output.trimEnd().split("\n")) {
+      if (line.startsWith("next steps")) blocks.push([line]);
+      else if (blocks.length > 0) blocks.at(-1)?.push(line);
+    }
+    return blocks;
+  }
+
+  function numbered(steps: readonly string[]): string[] {
+    return steps.map((step, index) => `  ${index + 1}. ${step}`);
+  }
+
+  it("opens every client's steps with moving the folder where the look before git refused it", () => {
+    expect(refusedFolderSteps("bare-layout")).toEqual([REFUSED_FOLDER_STEP]);
+    for (const call of ["git init", "git status", "git diff", "git log", "git rev-parse", "commit"]) {
+      expect(REFUSED_FOLDER_STEP, `the step names ${call}`).not.toContain(call);
+    }
+
+    const one = renderInitPanel(panelInput({ gitAvailable: false, gitReason: "bare-layout" }));
+    expect(nextStepBlocks(one)).toEqual([
+      ["next steps:", ...numbered([REFUSED_FOLDER_STEP, ...nextStepsForTool("claude")])],
+    ]);
+
+    const several = renderInitPanel(
+      panelInput({
+        decisions: decisionsFixture({ tools: ["claude", "codex"] }),
+        gitAvailable: false,
+        gitReason: "bare-layout",
+      }),
+    );
+    expect(nextStepBlocks(several)).toEqual([
+      ["next steps (claude):", ...numbered([REFUSED_FOLDER_STEP, ...nextStepsForTool("claude")])],
+      ["next steps (codex):", ...numbered([REFUSED_FOLDER_STEP, ...nextStepsForTool("codex")])],
+    ]);
+  });
+
+  it("keeps the steps as they were where git answers and where there is simply no repository", () => {
+    expect(refusedFolderSteps(undefined)).toEqual([]);
+    for (const input of [panelInput(), panelInput({ gitAvailable: true }), panelInput({ gitAvailable: false })]) {
+      const output = renderInitPanel(input);
+      expect(nextStepBlocks(output)).toEqual([["next steps:", ...numbered(nextStepsForTool("claude"))]]);
+      expect(output).not.toContain("before you start a client or a flow here");
+    }
+    // The steps one client gets from a run are untouched by the cause: the step rides ahead of them.
+    expect(nextStepsAfterRun("claude", reportFixture(), "/repo")).toEqual(nextStepsForTool("claude"));
   });
 
   it("emits no ANSI escapes through the identity palette", () => {

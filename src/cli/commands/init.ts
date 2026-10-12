@@ -57,6 +57,7 @@ import {
   gitignoreLine,
   migrationLines,
   nextStepsAfterRun,
+  refusedFolderSteps,
   renderInitPanel,
   type MigrationResidue,
 } from "./init/panel.ts";
@@ -334,7 +335,10 @@ async function askProceedWithoutGit(
  * it states that cause, says where to look by name, and names no `git init`
  * and no other git command (fix/20). Inside a real checkout `git init` nests a
  * repository in the folder the engine had just kept from git, and any git that
- * looks for a repository there opens the folder with the layout.
+ * looks for a repository there opens the folder with the layout. A flow's
+ * session and its sub-agents start such a git, and neither flow stops at this
+ * cause, so beside what the flows list the note says to start none there until
+ * the folder is moved, as that row does (review/72).
  */
 function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"]): string {
   const tense = dryRun ? "would be written" : "were written";
@@ -347,7 +351,9 @@ function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"]): string
       `name to find that folder, and do not run git in it or in any folder under it, this one ` +
       `included. Two verbs need git: worktree refuses without it, and gate reads every change from ` +
       `it, so here gate scan exits 1 and /st-quick and /st-work list \`secret scan: not run\` under ` +
-      `\`Not done:\`.`
+      `\`Not done:\`. Neither flow stops at this cause, and the git a flow's session and its ` +
+      `sub-agents start is not set to refuse such a folder as the engine's is, so start no flow ` +
+      `here until that folder is moved off this path.`
     );
   }
   return (
@@ -835,7 +841,7 @@ function renderDryRun(
     io.out(`  ${palette.yellow(`warning: ${warning}`)}\n`);
   }
   if (carry !== null) {
-    for (const line of migrationLines(carry, residue)) io.out(`  ${line}\n`);
+    for (const line of migrationLines(carry, residue, git.reason)) io.out(`  ${line}\n`);
   }
   for (const note of notes) io.out(`  ${note}\n`);
   io.out("\nnext:\n  1. apply it: stamity init\n");
@@ -1269,7 +1275,14 @@ export const initCommand: CommandModule = {
         },
         report,
         carry,
-        nextSteps: effective.tools.flatMap((tool) => nextStepsAfterRun(tool, report, rootDir)),
+        // Where the engine's look kept this folder from git, the steps open with
+        // moving that folder, once, ahead of every client's own (review/71): the
+        // panel's first step there, and the same string. The key and its shape,
+        // a flat list of strings, are what they were.
+        nextSteps: [
+          ...refusedFolderSteps(git.reason),
+          ...effective.tools.flatMap((tool) => nextStepsAfterRun(tool, report, rootDir)),
+        ],
       },
     };
   },
