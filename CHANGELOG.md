@@ -403,6 +403,17 @@ where git would read a bare repository.
   Where the charter's `CI provider` reads `unknown`, where the CLI or its `gate` verb cannot run,
   where the classify fails or names a failed read, or where the test command takes no file list,
   every gate runs.
+- **The test-runner reads the CI provider in its own text, and its red verdict writes no report.**
+  The emitted `test-runner` agent now maps a class's checks to gates, and on the final tree it
+  runs every gate for a `product` or stronger class. `sync` renders the detected CI provider into
+  that passage of each client's copy (in this repository, "This repository's CI provider is
+  github-actions"), so the rule that follows needs no read of the charter: where the provider
+  reads `unknown`, the final tree runs every gate whatever the class. A copy made without that
+  rendering, as the APM package's copy is, still holds the unresolved token; the rule names that
+  case too, so on such a copy the final tree runs every gate. The agent's return contract now
+  says that a `red` verdict writes nothing to the report path the dispatch names and is returned
+  in full, rows and excerpts. At 1.12.0 it said only that a red verdict is returned in full. A
+  `green` verdict with a report path named still writes its rows there and returns the digest.
 - **A lockfile-only bump is audited before the security lens reads it.** When a change's only
   security-sensitive paths are `package-lock.json` files that parse at lockfile version 2 or 3 on
   both sides, no `package.json` changed and no bumped package carries an install script,
