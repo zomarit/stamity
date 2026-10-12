@@ -11,6 +11,17 @@ Opened: 2026-10-11T19:26Z
 
 ## Morning list (kept current through the night; read this first)
 
+**State at 2026-10-12T09:40Z** (a fresh session continued the run at 08:33Z; the list under this paragraph is as it
+stood at 02:12Z). The maintainer's answers are in "The close's question", every one the recommended option. Since
+them: the extra round `f8` landed and its closure review approved (high; `review/71`, `review/72`, `review/73`,
+`fix/30` and `review/79` fixed); the spec delta was reviewed, amended, reviewed again and merged (`c2da882f`); one
+changelog sentence was fixed (`f9`, `8fb47c46`); the four reworded eval rows are confirmed and the secret scan's
+four hits are accepted as a false match, both on the maintainer's word. CI on #97 is green at `e62ec3f2`, every
+leg; the pull request is still a draft. The ledger holds 202 rows, none open. **Not done:** the QA sign-off with
+its three person rows (at and after the cut); the full suite on the final tree and the delta pass of the
+whole-branch review, which follow the last commit before the cut; the cut itself — the fast-forward, the tag and the
+publish — held for the maintainer; this record's close.
+
 Rewritten 2026-10-12T02:12Z. The code is final at `ca2677e3`; one commit after it, the re-made `g1` (`e7a2fd4d`),
 adds two test paths to the test-input map in `.stamity/change-classes.json`; the commit after that holds these
 records. All of it is reviewed, the final gates are green on that tree, and the ledger has no open row. Still ahead as
@@ -1592,6 +1603,194 @@ them.
   the fix; an `exit 1` row that counts passes reads as a pass, pre-existing and masked today. `review/74` and
   `review/75` closed `fixed`. The ledger: 192 rows — 123 fixed, 61 deferred, 8 rejected, none open. The inbox
   block of this run holds 61 rows.
+- 2026-10-12T02:13Z: **the records commit**, `383ae036`, the sixty-fifth commit since `751aaa5e` (first made as
+  `5c7121b9`, then amended once before any push for one wrong number in the Proof block). Screened again with a
+  wider set of phrasings, then the leak gate with the files in the lane: PASS. The committed record and ledger equal
+  the live copies byte for byte at that moment; everything below this line was written after it and goes into the
+  closing records commit.
+- 2026-10-12T02:14Z: **the narrow gates on `383ae036`: green** (the same test-runner; a third scratch folder). The
+  head differs from the tree the full gates ran on, `77f6dad4`, in three files and no other: the inbox (4 lines),
+  this run's ledger (7 rows) and this record; `git diff --quiet` over everything else exits 0, so the built CLI of
+  `77f6dad4` was used as it stood. The records, authoring, docs, census-guard, roster and runs suites: exit 0 (14
+  files, 940 cases, none skipped). The leak gate 0; hygiene against the base 0; `check` 0, drift clean; the ledger's
+  status line "0 open rows", no report without a row; the inbox 145 rows, none unparsed, lines 26, 33 and 131
+  skipped by the screen; `gate scan` exit 1 on the same four lines; the tag-time records check exit 0 (202 cases),
+  the local tag deleted at once, none before and none after.
+- 2026-10-12T02:15Z: before the push the orchestrator checked that no commit on the branch adds or removes the
+  sentence of `review/74` (`git log -S` over `751aaa5e..release-1-14-0` prints nothing), that neither old commit is
+  an ancestor of the branch, that no `v1.14*` tag exists locally or on the remote, and that `origin` is the public
+  repository with `main` still at `751aaa5e`. **Pushed**: `release-1-14-0` at `383ae036` (the branch only, no tag).
+  **Draft pull request #97** opened against `main`, "chore(release): 1.14.0", its body opening on "Draft, and held"
+  and closing on what is not done. CI started on `383ae036`: the PR checks (DCO sign-off and the title pass), the
+  docs site build, and the full matrix (`check` on lts, floor, `windows-1` and `windows-2`; the apm and plugin
+  routes); the lanes job is skipped, as it is for a change that is not records-only. Watched to its end.
+- 2026-10-12T02:26Z: **CI on #97 is green on its first attempt, every leg read to its end**, all on `383ae036`: the
+  CI run 38195051957 — `check` on floor (node 22.22.2), on lts (node 24), on `windows-1` and on `windows-2`, the
+  three apm routes (current 0.30.0, minimum 0.29.1, the regression witness 0.29.0), the plugin route, the
+  supply-chain and dependency advisories, `all-ci-checks`; the PR checks run 38195051839 — the DCO sign-off, the
+  conventional title, the dist size budget, `all-pr-checks`; the docs site run 38195051942 — the build (its deploy
+  job skipped, as on every pull request). Skipped by design: the lanes job and `prove-pr`. The pull request reads
+  mergeable and clean, and stays a **draft**: marking it ready starts the review bot's one pass, which belongs on
+  the final head, after the maintainer's answers. Nothing is merged, tagged or published; the session stops here
+  for the morning.
+
+### The close's question (asked through the question tool, 2026-10-12T07:46Z–08:00Z, attended)
+
+The state was re-read first: #97 still a draft at `383ae036`, checks green, `main` at `751aaa5e`, no `v1.14*` tag,
+the three alerts unchanged with no patch. Two calls, each option with its recommendation named; the maintainer's
+answers, verbatim:
+
+- The refused-folder messages hit the three-round review cap with one Warning open. Run one more fix round before
+  the tag? — **"One more round (Recommended)"**: `init`'s closing panel, the two neighbouring messages, the
+  library's default git runner, and one clause on the security page (`review/71`, `review/72`, `review/73`, `fix/30`,
+  `review/79`). The operator's word buys this round past the cap.
+- Run 45's PASS rests on four reworded expected rows in the eval set. Confirm them? — **"Confirm all four
+  (Recommended)"**.
+- The secret scan exits 1 on four lines of the eval exports that hold a starred-out value and no secret. How do you
+  want it settled? — **"Accept as false match (Recommended)"**. The rule's fix stays scheduled (`prove/1`).
+- The spec delta is written and verified on a side branch but no reviewer has read it. How should it land? —
+  **"Review, then merge (Recommended)"**.
+- How do you want to go through the 61 leftovers? — **"Accept all recommendations (Recommended)"**: the rows of the
+  extra round are fixed, the three spec rows follow the spec delta, the other waiting rows keep their recommended
+  place and stay tagged for the next attended close, the scheduled rows stay scheduled; nothing is dropped.
+- The cut itself is not called yet: the fast-forward, the tag and the publish are asked for when the final head is
+  green.
+
+`review/79` Minor, security, ledgered 08:01Z for the extra round: residual (4) on the security page is worded as
+tied to a refusal; the look walks only upward from where a verb runs, so a folder of the shape below the setup root
+meets no look and no warning.
+
+- 2026-10-12T08:02Z: dispatched together on those answers: `f8`, the extra round, in the main lane on `383ae036` (a
+  fresh fixer, Opus 5.5, `high`; `review/71`, `review/72`, `review/73`, `fix/30`, `review/79`; its verify list
+  holds the census guard this time), and the spec delta's review (reviewer, Opus 5.5, `high`, read-only, over
+  `de47d0c5..6be3d5e2`: every sentence against the code, every criterion against its case, twenty citations, the
+  form, and which passages the extra round will make stale).
+- 2026-10-12T08:33Z: **a fresh session continued the run.** The session that asked the close's question ended at
+  08:05Z, before either result was read; `f8` finished at 08:29Z and the spec delta's review at 08:19Z. The fresh
+  session read the state from disk (the branch, the lanes, the ledger, this record, the two reports) and from the
+  ended session only times, tool names and the maintainer's own prompts. Found as left: #97 a draft at `383ae036`,
+  checks green; `main` at `751aaa5e`; no `v1.14*` tag; the release branch three commits ahead of the pull request,
+  none pushed; the session's keep-awake process gone.
+- `f8` DONE (`reports/f4-fixer-r4.md`, a fixer on Opus 5.5, `high`): three commits on `383ae036`, signed off —
+  `fbcdc652` (`review/71`, `review/72`, `review/73`: at a refused folder `init`'s next steps open with moving the
+  folder, on the ready panel and in `init --json`; `check`'s row, `init`'s note and the migration's uninstall line
+  say to start no flow there), `e0cc89dd` (`fix/30`: one case holds the origin read's default runner as plain git,
+  and the function's comment says so), and a pages commit (`review/79`, `fix/30` by the page route the sign-off
+  names: `SECURITY.md`, `docs/security-mapping.md`, `docs/troubleshooting.md`, the 1.14.0 notes). No wire shape,
+  exit status or error code moved; `nextSteps` of `init --json` holds one string more, first, at a refused folder
+  only. Nine cases were red against the unchanged source. The role's own gates, each exit 0 and none of record:
+  build, `sync` and `check` (drift clean); 75 files, 3,289 cases, the census guard among them; lint, typecheck,
+  knip, the leak gate. Deferred by it: the code half of `fix/30` (the default becomes the pinned runner; a move
+  across waves). New: `fix/32` Minor, decision needed (`init --json` answers `ok: true` at a refused folder with
+  no field naming the cause; a field would move the wire shape). Nine notes, listed in the report.
+- The spec delta's review DONE (`reports/spec-reviewer-r1.md`, Opus 5.5, `high`, read-only): **approve,
+  confidence high**, five Minor, `review/80` to `review/84` (one sentence wider than the texts it covers; one on
+  who reads the mark; one criterion wider than its case; thirteen line citations moved by later commits; one
+  paragraph with no bound on `check`'s five named findings), eleven notes, and a list of the passages the extra
+  round makes stale.
+- 2026-10-12T08:40Z: both reports appended to the ledger (`review/80`–`review/84`, `fix/32`; 199 rows). The spec
+  lane rebased onto the release branch's head, clean, one commit. Dispatched together at 08:40Z, each attested
+  Opus 5.5, `high`: the closure review of `f8` (a reviewer, read-only over the three commits, the five ids handed
+  in, the pages and the commit messages read as text that becomes public), and the spec delta's amendments (a
+  spec-author in the spec lane: the five rows, the stale passages, every line citation re-pinned; it does not
+  commit and runs nothing).
+- 2026-10-12T08:51Z: the closure review DONE (`reports/f4-reviewer-r4.md`): **approve, confidence high**; all
+  five rows `fixed` (`fix/30` by the page route); no Critical, no Warning; two Minor, eleven notes. `review/85`: one
+  sentence in the unpushed pages commit's message read as if detail were left out, and nothing was. The commit was
+  re-made with that sentence removed and the tree unchanged, so the pages commit is **`e62ec3f2`** and the release
+  branch's head with it; `review/85` closed fixed by hand, with that evidence. `review/86`, pre-existing: the
+  changelog's Fixed entry on `check` and `init` ends by saying the README and the getting-started page say the
+  same, and neither covers a refused folder; open, taken with the next edit of the 1.14.0 notes.
+- The ledger after it, 201 rows: the review's closures block was refused whole, because four of its five ids were
+  `deferred` rows and only an open row takes a closure. Applied instead, each recorded here as the learning on
+  strict blocks asks: `review/79` (open, handed in, verdict `fixed`) closed by hand with a rationale citing the
+  report; `review/71`, `review/72`, `review/73` and `fix/30` left the inbox (four rows out of the 2026-10-12
+  block, whose opening lines say so) and carry a dated `retired` field naming the fixing commits. Seven rows are
+  open: `review/80`–`review/84` (with the spec-author), `review/86` and `fix/32`.
+- 2026-10-12T08:51Z: the learning of `fix/31` captured through `learn capture` in the release lane
+  (`a-new-test-file-runs-the-test-input-census-guard`, confidence high; every write gate passed; `reviewBy` and
+  `validatedAgainst` added to its head; the learnings suite exit 0, 3 files, 111 cases; `validate` exit 0). It
+  rides the closing records commit.
+- 2026-10-12T08:54Z–09:03Z: **the pre-push gates on `e62ec3f2`** (`reports/f8-test-runner-r1.md`; a test-runner,
+  no full suite, the four client variables unset). Build, `check` (16 checks, drift clean), lint (0 errors, the one
+  warning that predates the round), typecheck, knip and the leak gate (0 hits, 1,874 files): exit 0 each. The
+  scoped run of 58 files was **red once, on one case of 2,497**: `test/records/ledgers.test.ts`, "accounts for
+  every deferred row, by a dated retirement or an inbox row", naming `review/71`, `review/72`, `review/73` and
+  `fix/30`. The cause was the orchestrator's own and no commit's: the four rows had been taken out of the lane's
+  inbox, uncommitted, while the lane's ledger copy still held them without the `retired` fields the live ledger
+  carries. The edit was set aside as a patch outside the tree (it returns in the closing records commit, beside the
+  ledger that holds the retirements) and the same command run again: exit 0, 58 files, 2,497 cases. A model note:
+  this dispatch and the spec delta's verify run below named no model, so both test-runners ran on the agent
+  definition's own (Haiku 5.5) and not on Opus 5.5 as this run's rule says; what they report is exit codes and
+  counts, CI is the evidence of record for the pushed head, and every later dispatch names its model.
+- 2026-10-12T09:03Z: **`e62ec3f2` pushed to #97**, a fast-forward of three commits; the pull request stays a draft.
+  CI 38227443161, PR checks 38227443153, the docs site 38227443165, each watched to its end (below).
+- The spec delta's amendments DONE at 08:55Z (`reports/spec-spec-author-r1.md`, a spec-author on Opus 5.5,
+  `high`): `review/80` to `review/84` all fixed, none judged wrong; sixteen passages moved for the extra round;
+  thirteen line citations re-pinned, seventeen re-read and unchanged, six added; the two `init` test titles quoted
+  whole, and two more added; after the head was re-made, eight commit stamps moved to `e62ec3f2`, so no spec names
+  a commit the branch does not hold. A spec-author does not commit: the orchestrator staged the three files by
+  path and re-made the lane's one commit as **`113bfcbc`** on `e62ec3f2` (three files under `docs/specs/`, 377
+  lines added, 21 removed against the head). Verified at 09:00Z (`reports/spec-test-runner-r1.md`), each result as
+  expected: a clean tree; nothing outside `docs/specs` differs from `e62ec3f2`; no stale stamp; 92 criteria in
+  `worktree-lane.md`; 8 files, 243 cases and 13 files, 961 cases, exit 0 each; lint 0; the leak gate 0 hits; the
+  code-point scan clean; the four titles found. The closure review of the five rows was dispatched at 08:56Z (a
+  reviewer on Opus 5.5, `high`, read-only, over the amendments and the whole delta).
+- 2026-10-12T09:05Z: **the spec delta's closure review DONE** (`reports/spec-reviewer-r2.md`): **approve,
+  confidence high**; `review/80` to `review/84` all `fixed`, applied from its closures block with the five ids
+  handed in; every passage the first review listed as going stale is true of `e62ec3f2`; all thirteen re-pinned
+  and all six new citations land; no stale stamp; 92 criteria; no requirement id or status moved. No Critical, no
+  Warning. One Minor, pre-existing and untouched by the delta, `review/87`: the opening of
+  `docs/specs/worktree-lane.md` names an input kept outside the tree and says why; open, for the close's question.
+  Thirteen notes, one acted on: the commit message closed on "no criterion bullet moved" although the delta adds
+  nine criteria (four, four and one). The unpushed commit was re-made with that line corrected and the tree
+  unchanged: the spec delta is **`c2da882f`**, and the release branch was fast-forwarded to it locally at 09:07Z
+  (the maintainer's "Review, then merge"). It is not pushed yet: it goes up with the next records commit, after
+  CI on `e62ec3f2` has ended. The ledger: 202 rows, three open (`fix/32`, `review/86`, `review/87`).
+- 2026-10-12T09:15Z: **CI on #97 at `e62ec3f2`: green on its first attempt, every leg read to its end**
+  (09:03Z–09:15Z). CI 38227443161: `check` on floor (node 22.22.2), lts (node 24), `windows-1` and `windows-2`;
+  the three apm routes; the plugin route; the two advisory jobs; `all-ci-checks`. PR checks 38227443153: the DCO
+  sign-off, the title, the dist size budget, `all-pr-checks`. The docs site 38227443165: the build. Skipped by
+  their own conditions: `prove-pr` (a pull request is not a push to `main`), `lanes` (the change is product, so
+  the whole matrix ran) and the site's deploy. The pull request stays a draft.
+- 2026-10-12T09:29Z, asked through the question tool, attended; the maintainer's answer, verbatim: the three open
+  Minor rows — **"Accept all three (Recommended)"**. So: `review/86` is fixed now, as unit `f9` (a fixer on Opus
+  5.5, `high`, dispatched 09:32Z: the one closing sentence of the changelog's Fixed entry, scoped to what the two
+  pages say); `fix/32` is `deferred`, tagged `decision-waiting`, placed with the designed unit that already holds
+  the other refused-folder rows (the first change after 1.14.0 that touches `init` or `check` there; a field
+  naming the cause is a new key on `init --json`); `review/87` is `rejected` as by design (the paragraph is the
+  spec's own statement of where one of its inputs lives). The ledger: 202 rows, one open (`review/86`, with `f9`).
+- 2026-10-12T09:30Z: the maintainer left with the word to run unattended as long as possible. From here a mid-run
+  choice takes its declared default and goes on the list for their return; marking the pull request ready, the
+  fast-forward, the tag and the publish stay held for their word.
+- 2026-10-12T09:34Z: **`f9` DONE** (`reports/f9-fixer-r1.md`): one commit, `8fb47c46`, on `c2da882f`,
+  `CHANGELOG.md` only (four lines in, two out): the entry's close now says what the README and the getting-started
+  page do say of the two verbs without git, and names the troubleshooting page's `git-available` row for a folder
+  where git was not started. Its verify, each exit 0: 6 files, 179 cases (the changelog links, the docs pages, the
+  roster, the census guard, the records suites); lint; the leak gate, 0 hits in 1,874 files. Its closure review
+  (`reports/f9-reviewer-r1.md`, a reviewer on Opus 5.5, `high`, read-only), 09:38Z: **approve, confidence high**;
+  `review/86` `fixed`, applied from its closures block; every claim of the sentence holds against the three pages
+  at `8fb47c46`; the diff is that one sentence; no new finding; five notes.
+- 2026-10-12T09:38Z: **the ledger, 202 rows, none open**: 131 fixed, 62 deferred, 9 rejected. Seven of the 62
+  carry a dated `retired` field and have left the inbox: the four of the extra round, and `build/30`, `review/33`
+  and `spec/5`, answered by the merged spec delta (`c2da882f`). The other 55 each have their inbox row; the inbox's
+  2026-10-12 block holds 55 rows, the first fifteen tagged `decision-waiting`, `fix/32` among them with its own
+  trigger.
+- **Against the leftovers list below (L1 to L61, as asked in the morning):** L2, L4, L5 and L6 are fixed (`f8`);
+  L11, L12 and L13 are answered by the merged spec delta; every other line stands as the maintainer accepted it.
+  Raised since, all Minor: `review/80`–`review/84` and `review/85`, `review/86` fixed; `review/87` rejected as by
+  design; `fix/32` scheduled and waiting for a decision, on the maintainer's answer.
+- 2026-10-12T09:40Z: **the gates on these records, before their commit** (`reports/records-test-runner-r1.md`, a
+  test-runner on Opus 5.5 by name, `high`; the lane at `8fb47c46` with the inbox, this record, the ledger and the
+  new learning uncommitted; no full suite). Each exit 0: build; `check` (16 rows, drift clean, 21 learnings valid);
+  `validate` (0 errors, the one warning on an override skill's length); the scoped run, 18 files, 578 cases passed,
+  1 skipped (the records, learnings, QA and authoring suites, the leak-gate suite, the census guard, the changelog
+  links, the roster, the docs pages, the measurements page); lint (0 errors, the one old warning); knip; the leak
+  gate (0 hits, 1,874 files); hygiene against the base (1,873 tracked files, 14 additions checked). Not covered by
+  it: typecheck, the full suite with its floors, the Windows legs — CI's on the push. This entry and three
+  corrected time stamps were written after that run; nothing else moved. `gate classify` reads the pending change
+  as `product`, because no rule places a file under `.stamity/learnings/`, so its gates are the full ones: CI runs
+  them on the push, and the full suite runs alone on the final tree before the cut.
 - 2026-10-11T23:56Z: an early `gate scan --base 751aaa5e` on the lane at `3338ee97`: exit 1, 91 files scanned, none
   skipped or unscanned, **four hits**, all rule `inline-api-key-assignment`, all in the two eval exports:
   `evals/runs/2026-10-11-run-44/summary.json:40303` and `:103402` (commit `90681fec`),
