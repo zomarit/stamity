@@ -430,7 +430,7 @@ and rendered as RESULTS §6b by the driver of record.
 `addWorktree` (`src/worktree/git.ts:699-768`) retries `git worktree add` exactly once, after a short
 delay, when git exits 128 with stderr matching `failed to read .*commondir`. Named collisions stay
 `VALIDATION_ERROR` (`:736-761`), the rest `FS_ERROR` (`:762-767`); a learning lands via `stamity learn
-capture`. (Amended 2026-10-12: the citations of this paragraph were re-read at `c026ea4e`; they read
+capture`. (Amended 2026-10-12: the citations of this paragraph were re-read at `85db3729`; they read
 `src/worktree/git.ts:625-659`, `:640-657` and `:658`.)
 
 - GIVEN a stubbed runner failing that way once then exiting 0 WHEN `addWorktree` runs THEN it is
@@ -514,7 +514,7 @@ OWASP (agentic 2026, LLM 2025, web 2021), NSA/CISA and NIST AI RMF mappings — 
 read date, no URL, the hand-page link policy admitting only this repository's GitHub home (`:41-100`)
 — and the actor/vector/control/residual table with mapped ids, every control traced to `path:line`;
 `SECURITY.md:320-322` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
-(Amended 2026-10-12: the two citations into `SECURITY.md` were re-read at `c41d5789`; they read
+(Amended 2026-10-12: the two citations into `SECURITY.md` were re-read at `ebaac2f2`; they read
 `:260-261` and `SECURITY.md:214-216`.)
 
 - GIVEN the new page WHEN the docs suite runs THEN seven `###` surface headings stand (six engine

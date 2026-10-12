@@ -233,8 +233,8 @@ the fix round `fa07900d` for ledger row `fix/21`, and the round of
 `e0cc89dd` and `e62ec3f2` for ledger rows `fix/30` and `review/79`; cited
 at `e62ec3f2`, and its citations into `src/worktree/git.ts`,
 `src/merge/safeWrite.ts`, `src/cli/engine/gitStatus.ts` and
-`src/workspace/git.ts` at `c026ea4e`, and those into
-`src/cli/commands/worktree.ts` at `d01a9c62`; ships with 1.14.0). Every git
+`src/workspace/git.ts` at `85db3729`, and those into
+`src/cli/commands/worktree.ts` at `d53af1dd`; ships with 1.14.0). Every git
 call the three subcommands make goes through the lane's one seam, `runGit`
 (`src/worktree/git.ts:15-17`, `src/cli/commands/worktree.ts:141`), and that
 seam now starts git one way:
@@ -363,8 +363,8 @@ operator is standing in. `resolveLane` therefore takes
 `git rev-parse --git-common-dir` — one per clone, the same absolute path from
 every linked worktree — and reads the repo root back off it, falling back to the
 top level only for a layout whose common dir is not named `.git`
-(`src/cli/commands/worktree.ts:96-186` at `d01a9c62`,
-`src/worktree/git.ts:600-613` at `c026ea4e`; amended 2026-10-12, they read
+(`src/cli/commands/worktree.ts:96-186` at `d53af1dd`,
+`src/worktree/git.ts:600-613` at `85db3729`; amended 2026-10-12, they read
 `:100-136` and `:488-502`, and the first read `:95-161` at `e62ec3f2`). One
 lane, one farm, one policy file, whichever checkout the verb is invoked from.
 
@@ -575,7 +575,7 @@ converts this tree's name for the bytes into an INDEPENDENT copy of them"
 (`src/merge/safeWrite.ts:229-231`), and the rename "replaces the link with a
 regular file" rather than writing through it
 (`src/merge/atomicWrite.ts:960-966`). (Amended 2026-10-12: the citation into
-`src/merge/safeWrite.ts` was re-read at `c026ea4e`; it read `:205-215`.)
+`src/merge/safeWrite.ts` was re-read at `85db3729`; it read `:205-215`.)
 Disk space is the weaker consideration, and `symlink` remains one edit away for
 an operator who has weighed it.
 
@@ -850,7 +850,7 @@ rather than an inline regex (`src/worktree/git.ts:548-561`): a git release that
 reworded "couldn't find remote ref" would otherwise turn every missing branch
 into a transport failure, silently. (Amended 2026-10-12: the citations of
 these two paragraphs were re-read at `e62ec3f2`, and the two into
-`src/worktree/git.ts` again at `c026ea4e`; they read
+`src/worktree/git.ts` again at `85db3729`; they read
 `src/types/errors.ts:38-47`, `src/worktree/git.ts:458-483` and `:443-456`, and
 `src/cli/docs/cliReference.ts:113-135`.)
 
@@ -966,7 +966,7 @@ with the answer it would get for this invocation. **The dry-run entry table and
 the real run's entry table agree row for row and strategy for strategy**, which
 is the parity property the merge engine already holds itself to
 (`src/merge/safeWrite.ts:48-53`, `src/merge/safeWrite.ts:707-712`; amended
-2026-10-12, re-read at `c026ea4e`, they read `:43-48` and `:593-598`).
+2026-10-12, re-read at `85db3729`, they read `:43-48` and `:593-598`).
 
 **A dry run never prompts, on any stream.** "Touches nothing" includes the
 operator's attention: a preview that stops to ask about a branch it is not going
@@ -1662,7 +1662,7 @@ The suites that extend, and what each takes:
 
 Cited as `path:line` against the tree at the time of writing; line numbers drift
 and the surrounding symbol is the durable address. (Amended 2026-10-12: the two
-`src/merge/safeWrite.ts` rows were re-read at `c026ea4e`; they read
+`src/merge/safeWrite.ts` rows were re-read at `85db3729`; they read
 `43-48,593-598` and `186-250`.)
 
 | Pointer | Target | Why |

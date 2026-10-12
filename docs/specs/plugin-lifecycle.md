@@ -52,14 +52,14 @@ deltas of run `2026-10-11_release-1-14-0`, the 1.14.0 release run: the units `s1
 of them commits `fbcdc652`, `e0cc89dd` and `e62ec3f2` for the ledger rows `review/71` to `review/73`, `review/79` and
 `fix/30`, and the unit `f3-clean-refusal-names-the-pack-exception`. They answer that run's ledger rows `build/30` and
 `review/33`, are read against the release branch at `e62ec3f2`, and ship with 1.14.0. Three things under the same
-requirement are read one step later, at `c026ea4e`: the paragraph on how git is started, the sentences on the library's
+requirement are read one step later, at `85db3729`: the paragraph on how git is started, the sentences on the library's
 default runner and on `check`'s texts where git did not answer, and the criterion added for those texts. What `init`'s
-no-git note prints where git did not answer is read a step later again, at `d01a9c62`: its sentences in that paragraph,
+no-git note prints where git did not answer is read a step later again, at `d53af1dd`: its sentences in that paragraph,
 its clauses in those two criteria and its cases in the tests paragraph. The other texts printed in that state, `init`'s
 question, security line, declined-question refusal and uninstall line, `sync`'s closing step and `gate`'s reason for
-its first read, are read at `0971f18a`, in the same paragraph, criteria and tests paragraph. The paragraph headed
+its first read, are read at `db6ac4a8`, in the same paragraph, criteria and tests paragraph. The paragraph headed
 "Amended 2026-10-12" under REQ-PLUGIN-005, on how the emitted hook runner starts a `node` launcher, is read at
-`bf880dd8` and ships with 1.14.0.
+`1b492297` and ships with 1.14.0.
 
 ## Intent
 
@@ -273,7 +273,7 @@ to. The codex hook configuration's own `description`
 now derives its scripts directory from the context, so it no longer tells a plugin-root reader that
 the scripts live under `.stamity/generated/hooks/codex/`.
 
-Amended 2026-10-12 (read at `bf880dd8`). The emitted runner starts a row whose launcher is the word `node` as
+Amended 2026-10-12 (read at `1b492297`). The emitted runner starts a row whose launcher is the word `node` as
 `process.execPath`, the interpreter the runner itself runs under, so no lookup by name takes place; a row naming any
 other launcher, `node.exe` and a path to node included, is started by the name the row gives (`buildPortableHookRunner`,
 `src/hooks/portableRunner.ts`). The working folder, `shell: false`, the timeout and the buffer are unchanged.
@@ -1896,7 +1896,7 @@ that default. The module sits below the shared runner and cannot import it, as t
 `SECURITY.md`'s row states the same boundary, and a default that is the pinned runner is deferred (ledger row
 `fix/30`).
 
-Amended 2026-10-12 (the same run; read against `c026ea4e`). Every place that starts git starts it by an absolute path,
+Amended 2026-10-12 (the same run; read against `85db3729`). Every place that starts git starts it by an absolute path,
 never by its bare name: the shared runner, the tracked-and-clean check, the `worktree` verbs' one start of git and the
 library's default runner (`gitCheckRunner`, `src/cli/engine/gitStatus.ts`; `runGitCheck`, `src/merge/safeWrite.ts`;
 `runGit`, `src/worktree/git.ts`; `execGit`, `src/workspace/git.ts`). Each asks `gitProgramFor`
@@ -1959,7 +1959,7 @@ engine itself found and names no git command, `git status`, `git --version`, `gi
 `git rev-parse` included: a git typed at a prompt is found by the shell's rules and not by the engine's walk, so it
 answers for a program the engine may never start. `check`'s `git-available` row and `init` ask the walk instead
 (`gitProgramFor`, called from `checkGit` and once by the `init` command, which hands the answer to its question, its
-note, its refusal and its panel; the note as read at `d01a9c62`, the rest of this passage at `0971f18a`). The row and
+note, its refusal and its panel; the note as read at `d53af1dd`, the rest of this passage at `db6ac4a8`). The row and
 `init`'s no-git note are two texts each. Where the walk found no git, each says the engine found no git to start, says
 that git is taken only from a `PATH` entry that is a full path to a folder other than this one, and states outright
 what `worktree` and `gate scan` lose. Where it found one, each says so, which leaves a missing repository and a git too
