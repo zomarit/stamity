@@ -50,11 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository drives no write, and no file contents reach a write. It does not test the
   linked-repository target, the permission check before a link writes, or marker matching.
   `SECURITY.md` describes them under "Network and data handling".
-- **`/st-work`'s close writes the deferral inbox through the engine.** The close no longer edits
-  `.stamity/inbox.md` with the client's file tools, so a whole-file read before an edit no longer
-  brings a withheld row's text into the session; it pipes rows to `stamity ledger inbox-write`,
-  which screens them and refuses the whole call on a hit. The other inbox edits still use the
-  file tools: `/st-board fill`'s removal and `/st-plan`'s follow-up append among them, a residual
+- **`/st-work`'s close writes the deferral inbox through the engine.** Wherever a CLI form runs,
+  the close no longer edits `.stamity/inbox.md` with the client's file tools, so a whole-file read
+  before an edit no longer brings a withheld row's text into the session; it pipes rows to
+  `stamity ledger inbox-write`, which screens them and refuses the whole call on a hit. Where no
+  CLI form runs or the installed copy has no `inbox-write`, the close appends with the file tools
+  and records `inbox: by hand (no CLI)`. The other inbox edits still use the file tools:
+  `/st-board fill`'s removal and `/st-plan`'s follow-up append among them, a residual
   `SECURITY.md` names.
 
 ### Added
@@ -81,9 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stamity ledger inbox-write --run <run> [--stdin] [--remove <ref>,…] [--dry-run] [--json]` takes
   rows on stdin and removes bullets by their `Ref:` values, all or nothing: every row passes the
   inbox screen, carries a `Ref:` no other row in the call carries, and, where that `Ref:` names a
-  ledger row, names a deferred one not yet retired. It writes under the inbox's lock by atomic
-  rename inside `.stamity/`, creates an absent inbox with its schedule heading, and prints lines
-  and `Ref:` values, never a row's text.
+  ledger row, names a deferred one not yet retired. A row whose `Ref:` a bullet already carries is
+  `already-filed` only when that bullet has the same severity, location, description and source;
+  otherwise the call is refused, naming the bullet's line. A call that brings no row and no removal
+  is refused too. It writes under the inbox's lock by atomic rename inside `.stamity/`, creates an
+  absent inbox with its schedule heading, and prints lines and `Ref:` values, never a row's text.
 
 ### Changed
 
