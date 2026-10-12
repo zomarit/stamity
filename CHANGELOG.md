@@ -329,11 +329,11 @@ where git would read a bare repository.
   the one the upgrade above runs; there is nothing to set. A hook whose launcher is another program,
   `bun`, `deno`, `python3` or `ruby`, or `node` spelled another way, `node.exe` for one, which only
   your own hooks or a pack's can carry, is still started by its bare name, and the client still
-  starts the runner itself with a bare `node`, by its own rules: on Windows, before opening any
-  client the setup writes for in a checkout of work you have not read, look at the repository
-  root, and for a hook a plugin carries at the folder you open the client in, for a program file
-  under the name of `node` or of a launcher a hook names. `SECURITY.md` names both in the row on
-  how git is started.
+  starts the runner itself with a bare `node`, by its own rules. In a checkout of work you have
+  not read, start any client the setup writes for under a `PATH` that names no folder of the
+  checkout, and on Windows, before opening it, also look at the repository root, and for a hook a
+  plugin carries at the folder you open the client in, for a program file under the name of `node`
+  or of a launcher a hook names. `SECURITY.md` names both in the row on how git is started.
 
 ### Added
 
