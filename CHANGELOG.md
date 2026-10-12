@@ -145,12 +145,15 @@ where git would read a bare repository.
   above it has the layout of a bare repository, and it names no git command to run. `sync` prints no
   dirty-tree warning, and keeps a `.bak` where it rewrites the charter, as the first item says of a
   git check that fails. Where it wrote files, its closing step names no `git diff` there: it says
-  why, and to review from the files it listed and the `.bak` a warning names. `gate scan` exits 1
+  why, and to review from the files it listed and the `.bak` a warning names. Where that list was
+  cut short, the step says so, and that the manifest's ledger names every managed file but not
+  which of them changed. `gate scan` exits 1
   and `gate classify`, reading the change from git, answers `product`, each saying that git was not
   started and naming no git call as failed, so `/st-quick` and `/st-work` run every gate and list
   `secret scan: not run` under `Not done:`. `init` treats the folder as it does one with no
-  repository: at a terminal it asks before it writes, and it prints a no-git note. There the note,
-  and the refusal when you decline the question, state this cause and name no `git init`. `init` and
+  repository: at a terminal it asks before it writes, and it prints a no-git note. There the
+  question, the note, the security line of the ready panel and of the dry-run preview, and the
+  refusal when you decline the question, state this cause and name no `git init`. `init` and
   `plugin setup` seed no maturity tier from the history and record no hosting platform, and
   `config detect` reads none and leaves the recorded one. `handoff prepare` records no git ref and
   says so, and `handoff resume` cannot measure drift. Every `worktree` verb refuses with
@@ -403,17 +406,20 @@ where git would read a bare repository.
   Where the charter's `CI provider` reads `unknown`, where the CLI or its `gate` verb cannot run,
   where the classify fails or names a failed read, or where the test command takes no file list,
   every gate runs.
-- **The test-runner reads the CI provider in its own text, and its red verdict writes no report.**
-  The emitted `test-runner` agent now maps a class's checks to gates, and on the final tree it
-  runs every gate for a `product` or stronger class. `sync` renders the detected CI provider into
-  that passage of each client's copy (in this repository, "This repository's CI provider is
-  github-actions"), so the rule that follows needs no read of the charter: where the provider
-  reads `unknown`, the final tree runs every gate whatever the class. A copy made without that
-  rendering, as the APM package's copy is, still holds the unresolved token; the rule names that
-  case too, so on such a copy the final tree runs every gate. The agent's return contract now
-  says that a `red` verdict writes nothing to the report path the dispatch names and is returned
-  in full, rows and excerpts. At 1.12.0 it said only that a red verdict is returned in full. A
-  `green` verdict with a report path named still writes its rows there and returns the digest.
+- **A synced test-runner carries the CI provider in its own text, and a red verdict writes no
+  report.** The emitted `test-runner` agent now maps a class's checks to gates, and on the final
+  tree it runs every gate for a `product` or stronger class. `sync` renders the detected CI provider
+  into that passage of each client's copy (in this repository, "This repository's CI provider is
+  github-actions"), so on a synced copy the rule that follows needs no read of the charter: where
+  the provider reads `unknown`, the final tree runs every gate whatever the class. The APM package's
+  copy is made without that rendering and still holds the unresolved token; the rule names that case
+  too, so on that copy the final tree runs every gate. A plugin's copy holds neither the provider
+  nor the token: the plugin build writes "the CI provider named under Repo facts in AGENTS.md" in
+  the token's place. There the agent reads that line of `AGENTS.md`, and the final tree runs every
+  gate whatever the class where the line reads `unknown`. The agent's return contract now says that
+  a `red` verdict writes nothing to the report path the dispatch names and is returned in full, rows
+  and excerpts. At 1.12.0 it said only that a red verdict is returned in full. A `green` verdict
+  with a report path named still writes its rows there and returns the digest.
 - **A lockfile-only bump is audited before the security lens reads it.** When a change's only
   security-sensitive paths are `package-lock.json` files that parse at lockfile version 2 or 3 on
   both sides, no `package.json` changed and no bumped package carries an install script,
