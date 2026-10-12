@@ -586,8 +586,10 @@ where git would read a bare repository.
   binary, and a `.git` entry found by name for the repository. Where the engine did not start git
   because the folder or one above it has the layout of a bare repository, the row says that instead,
   names no git command to run, and says to start no flow there until the folder is moved, as the
-  note does. The row stays a warning and no exit code moves. The README,
-  `docs/getting-started.md` and the troubleshooting page's `git-available` row say the same.
+  note does. The row stays a warning and no exit code moves. The README and
+  `docs/getting-started.md` say the same of the two verbs and of what each does without git; the
+  troubleshooting page's `git-available` row covers all of it, and is the one to read for a folder
+  where git was not started.
 
 ## [1.12.0] - 2026-10-08
 
