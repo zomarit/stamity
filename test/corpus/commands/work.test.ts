@@ -1670,6 +1670,32 @@ describe("/st-work — Prove", () => {
     expect(frame).toContain("A row it withholds, skips or cannot parse is listed as it prints, the person's to read");
   });
 
+  // Added 2026-10-12 (REQ-FLOW-078, criterion 5): the close's appends, removals and re-dates go
+  // through one engine verb, which screens and parses every row and prints no row text, so the
+  // close never opens the inbox with the file tools — on a client whose edit tool reads a file
+  // first, that open read the withheld rows' text too. A decided row the verb cannot address
+  // (no unique `Ref:`) is listed, not edited by hand.
+  it("writes the inbox at the close only through `ledger inbox-write` (REQ-FLOW-078)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    const verb =
+      "Inbox appends, removals and re-dates at the close run `stamity ledger inbox-write --run <run id>`: rows on `--stdin`, a bullet a line; leaving bullets as `--remove <Ref>,…`; a re-date in one call.";
+    expect(proof).toContain(verb);
+    expect(proof).toContain(
+      "It adds an absent heading, screens each row and prints only line numbers and `Ref:` values; a refusal is a finding, never a hand edit.",
+    );
+    expect(proof).toContain(
+      "A decided row with no unique `Ref:` stays, on `Not done:` as `decided, not applied (no unique Ref:): line <n>`.",
+    );
+    const never = "The close never opens the inbox with file tools.";
+    expect(proof).toContain(never);
+    // After the rows the close decides and the row no answer reached, before the optional fields.
+    const at = proof.indexOf(verb);
+    expect(at).toBeGreaterThan(proof.indexOf("A row no answer reached stays as it is."));
+    expect(proof.indexOf(never)).toBeLessThan(proof.indexOf("Beside `retired`, two more optional fields"));
+    // The flags it names are the verb's own; the code side is `test/runs/ledgerInboxWrite.test.ts`.
+    expect(proof).not.toMatch(/inbox-write[^.]*--(?!run\b|stdin\b|remove\b)[a-z]/);
+  });
+
   it("closes with a next step derived from the run's own state", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
 

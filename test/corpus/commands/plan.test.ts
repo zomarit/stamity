@@ -361,6 +361,26 @@ describe("/st-plan — intent routing", () => {
     expect(routing).toMatch(phrase("return findings and write nothing"));
     expect(gate).toMatch(phrase("run by the same writer that drafted it"));
   });
+
+  // Added 2026-10-12 (REQ-FLOW-079, criterion 2): the shared intake read `.stamity/inbox.md`
+  // whole, so a row the screen withholds reached the session as text. It now reads the rows that
+  // overlap the scope through the `ledger` verb's screened query, and the whole file only when the
+  // CLI or the query is absent, the fallback `/st-work`'s Frame states.
+  it("reads the deferral inbox at intake through the screened query, with the absent-CLI fallback (REQ-FLOW-079)", () => {
+    const routing = flat(sectionOf(plan.parsed.body, "## Intent routing"));
+    const item = /4\. (.*?) 5\. History for the touched paths/.exec(routing)?.[1] ?? "";
+
+    expect(item).toContain(
+      "`stamity ledger inbox --plan <this plan> --paths <the scope's files>` lists the deferral-inbox rows overlapping the scope: fold them in, or leave them with a one-line reason.",
+    );
+    expect(item).toContain("A row it withholds, skips or cannot parse is listed as it prints, never opened;");
+    expect(item).toContain(
+      "only an absent CLI or query sends this read to the whole file, said so, and any other failure is a finding.",
+    );
+    expect(item).not.toContain(INBOX);
+    // The shorthand is defined in this file, so the call runs as `npx --no stamity ledger inbox`.
+    expect(plan.raw).toContain("**Running the CLI.** Every `stamity <verb>` call in this file runs as");
+  });
 });
 
 describe("/st-plan — intent sections", () => {
@@ -773,8 +793,13 @@ describe("/st-plan — side effects", () => {
     // the pin ended on the next sentence's first words, "A follow-up's trigger is", and that
     // sentence now opens "A day is written `by: <YYYY-MM-DD>`;" (pinned whole in the next test).
     // Only those closing words move; every word of the bullet before them is held as it was.
+    // TEST CHANGE, justified (2026-10-12, REQ-FLOW-079; the inbox row naming the heading clause as
+    // `/st-board`'s alone): the pin read "below the inbox's `## Rows under the schedule rule`
+    // heading: `<severity> …". The bullet now says who adds that heading where it is absent, in
+    // the words `/st-board`'s row grammar uses, so a plan appending to an inbox without it does not
+    // write rows that do not parse. Every other word is held; the clause sits before the colon.
     expect(effects).toContain(
-      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path in \`Ref:\`, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading: \`<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>\`, or \`· when: <trigger>\` in the date's place, with \`· files: <path>, …\` when the location is \`—\`. A day is written \`by: <YYYY-MM-DD>\`;`,
+      `- **Deferral-inbox append.** Follow-ups this plan deliberately left out append to \`${INBOX}\`, one row each, citing the plan path in \`Ref:\`, each row carrying \`by:\` or \`when:\`, and \`files:\` when its location is \`—\`, below the inbox's \`${SCHEDULE_RULE_HEADING}\` heading, which a writer adds at the end of the file where it is absent: \`<severity> · <file:line or —> · <description> · source: /st-plan · Ref: docs/plans/<file>.md · by: <YYYY-MM-DD>\`, or \`· when: <trigger>\` in the date's place, with \`· files: <path>, …\` when the location is \`—\`. A day is written \`by: <YYYY-MM-DD>\`;`,
     );
     expect(effects).toContain(
       "belongs in the plan's Drop list with its revisit trigger. That inbox is the rendezvous `/st-board fill` triages",

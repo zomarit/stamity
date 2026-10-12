@@ -110,9 +110,14 @@ describe("run records are written with the file tools", () => {
     // The plan cell's wording named the verb as `stamity ledger`; the body points at the
     // Ledger writes bullet instead, because the CLI-calls definition must precede the first
     // `stamity ledger` call (test/corpus/commands/work.test.ts, REQ-FLOW-002).
+    // TEST CHANGE, justified (2026-10-12, REQ-FLOW-025): the pin read "create and extend
+    // `record.md`, `plan.md`, reports and the inbox with the client's file write and edit tools".
+    // The close now writes the inbox only through `ledger inbox-write` (REQ-FLOW-078), so the
+    // file tools' list drops the inbox; every other word of the sentence is held.
     expect(frame).toContain(
-      "Records are files: create and extend `record.md`, `plan.md`, reports and the inbox with the client's file write and edit tools — never a shell redirect, a heredoc or `cat >` — and move ledger rows only through the `ledger` verb under Ledger writes.",
+      "Records are files: create and extend `record.md`, `plan.md` and reports with the client's file write and edit tools — never a shell redirect, a heredoc or `cat >` — and move ledger rows only through the `ledger` verb under Ledger writes.",
     );
+    expect(frame).not.toContain("reports and the inbox");
   });
 
   it("says the dispatched report path is written with the file write tool", async () => {

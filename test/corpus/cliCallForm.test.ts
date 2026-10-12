@@ -91,6 +91,14 @@ const CALL_SITES: readonly CallSite[] = [
     fallback:
       "When neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed read, no unit's class can be read, so every unit carries the `threat` row.",
   },
+  {
+    // Added 2026-10-12 (REQ-FLOW-079): `fill` step 1 reads the deferral inbox through the `ledger`
+    // verb's `inbox` query; with neither form, or no such query, it reads the file whole and says so.
+    relPath: "commands/st-board.md",
+    label: RUNNING_CLI_LABEL,
+    fallback:
+      "When neither form runs, or the installed copy has no `ledger inbox` query, `fill` reads the inbox file whole and says so in its report; any other failure of the query is a finding, never a whole-file read.",
+  },
 ];
 
 /** The one column whose cells may keep the defined `stamity <verb>` shorthand. */

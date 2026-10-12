@@ -1344,8 +1344,8 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(leftovers).toContain(
       "A withheld row prints its line, severity and location and `withheld by the screen (<pattern id>); read it by hand`, with no summary; a skipped one prints `skipped: <line> (<pattern id>)`.",
     );
-    // The floor is named for the flows that keep it and for no other: `fill`
-    // collects the inbox file itself (its step 1), and `/st-plan` reads it too.
+    // The floor is named for the flows that keep it and for no other: Frame, `fill` (its step 1)
+    // and `/st-plan` read through the query, and the close writes through the verb.
     // TEST CHANGE, justified (2026-10-10, the whole-branch review's fix round, part B; `review/97`,
     // signed off): the pin read "`/st-work`'s Frame and close never open the inbox for such a
     // row". What changed about the contract: the close appends and removes bullets with the
@@ -1353,12 +1353,21 @@ describe("st-board — sources, signals, and the inbox", () => {
     // inbox whole there, so the sentence promised for the close what that client cannot keep. The
     // floor is now claimed for Frame alone, and the close's sentence says what holds: the read
     // happens, and a withheld or skipped row's text is data it never acts on or repeats.
+    // TEST CHANGE, justified (2026-10-12, REQ-FLOW-078, REQ-FLOW-079): the two pins read
+    // "`/st-work`'s Frame never opens the inbox for such a row; `fill` and `/st-plan` still read
+    // the file whole." and "Where the client's edit tool reads a file before it writes, the
+    // close's write to the inbox reads it whole: …". What changed about the contract: `fill` and
+    // `/st-plan` now read the inbox through the screened query, and the close writes it through
+    // `ledger inbox-write`, which never hands the file to an edit tool. The read-before-edit caveat
+    // stays only for the writes `fill` and `/st-plan` still make with the file tools.
     expect(leftovers).toContain(
-      "`/st-work`'s Frame never opens the inbox for such a row; `fill` and `/st-plan` still read the file whole.",
+      "`/st-work`'s Frame never opens the inbox for such a row, and neither do `fill` and `/st-plan`, which read it through the same query;",
     );
     const closeRead =
-      "Where the client's edit tool reads a file before it writes, the close's write to the inbox reads it whole: the text of a withheld or skipped row is data the close never acts on or repeats, and the row is still listed as it printed, with no disposition.";
+      "the close writes the inbox through the `ledger` verb's `inbox-write`, so its write never reads the file whole. Where the two still edit it with the file tools, a withheld or skipped row's text is data they never act on or repeat.";
     expect(leftovers).toContain(closeRead);
+    expect(leftovers).not.toContain("still read the file whole");
+    expect(leftovers).not.toContain("reads it whole");
     expect(leftovers).not.toContain("Frame and close never open the inbox");
     expect(leftovers).not.toContain("No agent opens the inbox");
     // `review/90`: the third line the query prints for a row it does not show has a reader too.
@@ -1366,7 +1375,7 @@ describe("st-board — sources, signals, and the inbox", () => {
     const unparsed =
       "An `unparsed: <line>: <message>` line is listed as it prints too, the person's to fix as a skipped row is.";
     expect(leftovers).toContain(unparsed);
-    // In order: what each line prints, the unparsed line, the Frame floor, the close's read.
+    // In order: what each line prints, the unparsed line, the Frame floor, the close's write.
     const order = [
       "a skipped one prints `skipped: <line> (<pattern id>)`.",
       unparsed,
@@ -1643,6 +1652,26 @@ describe("st-board — edge cases", () => {
     expect(fill).toMatch(/no linked source and an empty inbox, fall back to chat intake/);
     expect(fill).toMatch(/Nothing is invented/);
     expect(fill).toMatch(/no backlog file is created, no todo file is written/);
+  });
+
+  // Added 2026-10-12 (REQ-FLOW-079, criterion 1): `fill` read `.stamity/inbox.md` whole, so a row
+  // the screen withholds reached the session as text. It now reads through the `ledger` verb's
+  // screened query, unfiltered, and reads the file only when the CLI or the query is absent. The
+  // shorthand runs as `npx --no stamity ledger inbox` because the Running-the-CLI paragraph,
+  // whose fallback `test/corpus/cliCallForm.test.ts` pins, stands before the body's first call.
+  it("reads the inbox in fill through the screened query, under the CLI paragraph (REQ-FLOW-079)", async () => {
+    const body = (await board()).parsed.body;
+    const fill = flat(section(section(body, "Modes"), "fill — intake to items", "###"));
+    const collect = /1\. \*\*Collect sources\.\*\*(.*?) 2\. \*\*Scan before creating/.exec(fill)?.[1] ?? "";
+    expect(collect).toContain("then the deferral inbox through `stamity ledger inbox`, no filter");
+    expect(collect).toContain("a row it withholds, skips or cannot parse is listed as it prints and never opened");
+    expect(collect).toContain("only an absent CLI or query sends `fill` to the whole file, said so");
+    // The definition precedes every backticked call, and the fill heading.
+    const running = body.indexOf("**Running the CLI.** ");
+    expect(running).toBeGreaterThan(-1);
+    expect(body.search(/`stamity [a-z]/)).toBeGreaterThan(running);
+    expect(body.indexOf("### fill — intake to items")).toBeGreaterThan(running);
+    expect(flat(body)).not.toContain("still read the file whole");
   });
 
   it("defers one side of a collision instead of assigning overlapping writes in parallel", async () => {

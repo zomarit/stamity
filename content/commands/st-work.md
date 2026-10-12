@@ -30,7 +30,7 @@ spawns: [researcher, implementer, reviewer, fixer, test-runner, spec-author, sec
    `/st-board`'s `## Deferral inbox` section owns the reader census.
 5. **Run record head.** Open `.stamity/runs/<run-id>/record.md` (`<run-id>` is `<UTC date>_<slug>`)
    with the head lines and the `reports/` folder the Proof block names. Records are files: create
-   and extend `record.md`, `plan.md`, reports and the inbox with the client's file write and edit
+   and extend `record.md`, `plan.md` and reports with the client's file write and edit
    tools — never a shell redirect, a heredoc or `cat >` — and move ledger rows only through the
    `ledger` verb under Ledger writes.
 
@@ -388,6 +388,12 @@ line naming its disposition. A row the query withholds or skips is listed as it 
 to read, and never decided: the close offers no disposition for it and applies none, and it stays in
 the inbox until the person edits it or hands over its `Ref:` with an instruction. A row no answer
 reached stays as it is.
+
+Inbox appends, removals and re-dates at the close run `stamity ledger inbox-write --run <run id>`:
+rows on `--stdin`, a bullet a line; leaving bullets as `--remove <Ref>,…`; a re-date in one call. It
+adds an absent heading, screens each row and prints only line numbers and `Ref:` values; a refusal
+is a finding, never a hand edit. A decided row with no unique `Ref:` stays, on `Not done:` as
+`decided, not applied (no unique Ref:): line <n>`. The close never opens the inbox with file tools.
 
 Beside `retired`, two more optional fields ride a row appended from a report: `report`, the
 repo-relative path of the report it came from, and `decision_needed`, present only as `true` when
