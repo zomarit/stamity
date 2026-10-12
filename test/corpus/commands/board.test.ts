@@ -328,7 +328,10 @@ describe("st-board — write-back contract", () => {
     expect(never).toMatch(/a write to any repository or board other than the linked one/);
     // On a Projects board, another repository's item counts as another repository.
     expect(never).toMatch(/on a Projects board, to another repository's item/);
-    expect(never).toMatch(/a label the repository does not already have/);
+    // TEST CHANGE, justified (2026-10-12, REQ-BOARD-004): this asserted "a label
+    // the repository does not already have", which read as withholding the whole
+    // item. Creating the label is the write never made; the item still files.
+    expect(never).toMatch(/creating a label \(the item still files, without it\)/);
     expect(never).toMatch(/a `status:\*` label where the board has a status field/);
     // `test/packs/product-audit.test.ts` reads this phrase with nothing between
     // the closing backtick and "rather".
@@ -373,6 +376,19 @@ describe("st-board — write-back contract", () => {
     expect(verdict).toMatch(/added to the linked project when one is linked/);
     expect(verdict).toMatch(/the acceptance criteria, a `Ref:` when the item names a spec, and the filed-item marker/);
     expect(verdict).toMatch(/An unready item, or a row the preview did not apply, stays a\s+proposal in the run report/);
+  });
+
+  it("files an item with the labels the repository has and proposes a missing one (REQ-BOARD-001)", async () => {
+    const fill = flat(
+      section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"),
+    );
+
+    // Criterion 5: an item proposing a label the repository lacks still files
+    // with the labels that exist; only the missing label stays a proposal.
+    expect(fill).toMatch(/an item files with the labels the repository already has/);
+    expect(fill).toMatch(
+      /a label it lacks is never created, never withholds the item, and stays a proposal in the report/,
+    );
   });
 
   it("opens with one write target, one repository and the write check, stated once (REQ-BOARD-001, REQ-BOARD-007)", async () => {
