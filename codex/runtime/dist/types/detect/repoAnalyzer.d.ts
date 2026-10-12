@@ -1,0 +1,15 @@
+import type { PackageEntry, RepoInfo } from "../types/detect.ts";
+import type { DetectedSummary } from "../types/detect.ts";
+export declare const LANGUAGE_INDICATORS: Record<string, string[]>;
+export declare const DETECTABLE_LANGUAGES: readonly string[];
+export declare function analyzeRepo(rootDir: string): Promise<RepoInfo>;
+export declare function isGreenfield(info: Pick<RepoInfo, "languages" | "existingTools">): boolean;
+export declare function detectLanguages(rootDir: string): Promise<string[]>;
+export declare function detectMonorepoPackages(rootDir: string): Promise<PackageEntry[]>;
+export declare function detectLinters(rootDir: string): Promise<string[]>;
+export declare function detectTestFrameworks(rootDir: string): Promise<string[]>;
+export declare function detectCIProviders(rootDir: string): Promise<string[]>;
+export declare function detectDockerfile(rootDir: string): Promise<boolean>;
+export declare function detectDataArtifacts(rootDir: string): Promise<boolean>;
+export declare function formatRepoSummary(info: RepoInfo): string;
+export declare function summarizeDetection(info: RepoInfo): DetectedSummary;

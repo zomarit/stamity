@@ -1,0 +1,10 @@
+export declare const FUNCTIONAL_TOOL_CATEGORIES: readonly ["read", "edit", "execute", "network", "spawn", "planning"];
+export declare const RESERVED_TOOL_CATEGORIES: readonly ["git", "board"];
+export type ReservedToolCategory = (typeof RESERVED_TOOL_CATEGORIES)[number];
+export declare const ALL_TOOL_CATEGORIES: readonly ["read", "edit", "execute", "network", "spawn", "planning", "git", "board"];
+export type ToolCategory = (typeof ALL_TOOL_CATEGORIES)[number];
+export declare function isToolCategory(value: unknown): value is ToolCategory;
+export declare function isReservedToolCategory(value: unknown): value is ReservedToolCategory;
+export type ToolCategoryMap = Readonly<Record<string, ToolCategory>>;
+export type CategoryToolNames = Partial<Readonly<Record<ToolCategory, readonly string[]>>>;
+export declare function buildToolCategoryMap(names: CategoryToolNames): ToolCategoryMap;
