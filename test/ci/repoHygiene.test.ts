@@ -248,11 +248,21 @@ describe("repository hygiene over the Git index", () => {
   // composes with it. Both summaries are pinned, and each one's same-directory neighbour is still
   // refused; only the expected list, its message and the title moved, and the retired summaries'
   // refusals are unchanged.
-  it("exempts exactly the run 44 and run 45 summaries and refuses their neighbours and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-12, after run 45): the window holds a third entry. The emitted
+  // hook runner changed after run 45's candidate, so the cross-client goldens moved, and run 46
+  // composed with run 45: no case re-measured, all 141 carried, calibration afresh, PASS. Run 46's
+  // exported summary is 5356924 bytes, over the budget, and the next increment in the same
+  // configuration reads it from the retention commit. Run 44's and run 45's summaries stay, because
+  // run 46 composes with run 45 and run 45 with run 44. All three are pinned, and each one's
+  // same-directory neighbour is still refused; only the expected list, its message and the title
+  // moved, and the retired summaries' refusals are unchanged.
+  it("exempts exactly the run 44, run 45 and run 46 summaries and refuses their neighbours and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.14.0 window's run 44 and run 45 summaries").toEqual([
+    expect(exempt, "the size-exception map's paths are not the 1.14.0 window's run 44, run 45 and run 46 summaries").toEqual([
       "evals/runs/2026-10-11-run-44/summary.json",
       "evals/runs/2026-10-11-run-45/summary.json",
+      "evals/runs/2026-10-12-run-46/summary.json",
     ]);
 
     const root = fixture();
