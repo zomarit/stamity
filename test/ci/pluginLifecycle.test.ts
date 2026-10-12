@@ -212,8 +212,9 @@ const WALK_MS = 600_000;
  * One Cursor discovery run, the only call in this file that reaches a model. Measured base: one run
  * took 56.59s (`/usr/bin/time -p`, 2026-09-20); 4x for a loaded worker. The spawn is killed 20 s
  * earlier than this, at 220 s, so the walk's status check still reads its transcript. That kill is a
- * limit load can reach: inbox row 183 records a discovery killed at 220 s under a one-minute load
- * of 17–35 on the maintainer's machine. The walk is armed only there and never runs on CI.
+ * limit load can reach: the ledger row 2026-10-10_next-tier/prove/3 records a discovery killed at
+ * 220 s under a one-minute load of 17–35 on the maintainer's machine. The walk is armed only there
+ * and never runs on CI.
  */
 const CURSOR_PROMPT_MS = 240_000;
 /**
@@ -224,9 +225,10 @@ const CURSOR_PROMPT_MS = 240_000;
  * discovery per state, one-minute load 2.4–8.0, agent 2026.10.01; 244.6–268 s inside a full suite.
  *
  * The margin is the worst case a passing path allows, not a multiple of that base: every state may
- * retry, and each discovery may run to its spawn kill at CURSOR_PROMPT_MS − 20 s. A vitest timeout
- * under that would cut off a walk that is still passing, or fail a slow one before the discovery's
- * own kill printed the transcript the walk's status check quotes. The measured max, rounded up to
+ * retry, and each discovery may run to its spawn kill at CURSOR_PROMPT_MS − 20 s. The walk is
+ * synchronous (every client call is spawnSync, which blocks the event loop, as the header says of
+ * the build), so no vitest timer can stop it midway; the bound exists so a walk that passes on that
+ * worst path is never reported as timed out after it finishes. The measured max, rounded up to
  * 10 s, then covers the steps around the discoveries. The log does not time those steps apart, and
  * the measured walk includes three discoveries, so this term over-counts them.
  *
@@ -1835,8 +1837,8 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
       ]);
     },
     // TEST CHANGE, justified (2026-10-12, REQ-PLUGIN-021): timeout only, was WALK_MS (600 s), which
-    // sits below the 1,320 s of discoveries a passing path with every retry may spend, so vitest could
-    // fail the walk before a discovery's own kill printed its transcript. CURSOR_WALK_MS says why.
+    // sits below the 1,320 s of discoveries a passing path with every retry may spend, so a walk that
+    // passed on that path would be reported as timed out after it finished. CURSOR_WALK_MS says why.
     CURSOR_WALK_MS,
   );
 });
