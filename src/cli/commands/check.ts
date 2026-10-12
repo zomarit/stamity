@@ -24,6 +24,7 @@ import {
 } from "../../pack/projection.ts";
 import { receiptRelPath } from "../../pack/receipt.ts";
 import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
+import { gitProgramFor } from "../../shared/programPath.ts";
 import {
   describePackIntegrityFinding,
   packReinstallSteps,
@@ -227,18 +228,29 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
  * Git availability. A repository without git is legal — only `worktree` and
  * `gate` need it — so absence is a warn that says what is lost, never a failure.
  *
- * The same warn covers a third cause: a git that is there and did not answer
- * inside the probe's bound (`readWorkingTreeStatus`). `gate` waits longer on git
- * (`./gate.ts`) and `worktree` bounds only its fetch (`../../worktree/git.ts`),
- * so what they lose is stated for an absent git or a missing repository only,
- * and the row says how to tell the causes apart: by `git --version`, which
- * looks for no repository, and by a `.git` entry found by name. It names no
- * git command that looks for one (review/61). This text also prints where git
- * itself refused a folder the engine's look passed, a leftover `.git` git
- * cannot open beside or below a folder with the layout of a bare repository,
- * and the read cannot tell that from the other causes: git's refusal is a
- * message translated by locale, and it is not read. Plain git typed there
- * opens that folder, so no row sends anyone to type it.
+ * An absent git has words of its own. The engine takes git only from a `PATH`
+ * entry that is a full path to a folder other than the one git runs in
+ * (`../../shared/programPath.ts::gitProgramFor`), and it knows whether that
+ * walk found one. Where it found none the row says so, says which entries it
+ * takes git from, and states what the two verbs lose outright. That is the
+ * cause whether no git is installed or the only git is behind an entry the
+ * walk skips, which a git typed at a prompt would still find.
+ *
+ * Where a git was found and did not answer, the same warn covers two causes:
+ * no repository, and a git that did not answer inside the probe's bound
+ * (`readWorkingTreeStatus`). `gate` waits longer on git (`./gate.ts`) and
+ * `worktree` bounds only its fetch (`../../worktree/git.ts`), so what they
+ * lose is stated for a missing repository only, and the row says how to tell
+ * the two apart: by a `.git` entry found by name. It names no git command
+ * that looks for a repository (review/61), and no other git command either: a
+ * git typed at a prompt is found by the shell's rules, not by the engine's
+ * walk, so it answers for a program the engine may never start, and the row
+ * says what the engine found where it once said to type `git --version`. This
+ * text also prints where git itself refused a folder the engine's look passed,
+ * a leftover `.git` git cannot open beside or below a folder with the layout
+ * of a bare repository, and the read cannot tell that from the other causes:
+ * git's refusal is a message translated by locale, and it is not read. Plain
+ * git typed there opens that folder, so no row sends anyone to type it.
  *
  * A fourth cause has words of its own: the look the engine takes before it
  * starts git kept this folder from git, because it or a folder above it has the
@@ -275,17 +287,33 @@ function checkGit(rootDir: string): DoctorCheck {
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     };
   }
+  // The read's own environment is the process's, less git's variables, so the
+  // `PATH` walked here is the one the read walked, and the answer is the same.
+  if (!status.available && gitProgramFor(rootDir, process.env) === null) {
+    return {
+      id,
+      status: "warn",
+      detail:
+        "git did not answer here — the engine found no git to start. It takes git only from a PATH " +
+        "entry that is a full path to a folder other than this one, and no such entry holds a git " +
+        "binary: install git, or put the folder that holds it on PATH by its full path. " +
+        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "so here gate scan exits 1 and /st-quick and /st-work list " +
+        "`secret scan: not run` under `Not done:`. " +
+        "sync's dirty-tree warning simply stays silent while git does not answer.",
+    };
+  }
   if (!status.available) {
     return {
       id,
       status: "warn",
       detail:
-        "git did not answer here — no binary on PATH, this directory is not a repository, or git " +
-        "was only slow to answer this check. To tell which with no git command that looks for a " +
-        "repository: `git --version` shows whether a binary is there, and a .git entry in this " +
-        "folder or in a folder above it, found by name, shows whether a repository is. " +
+        "git did not answer here — the engine found a git binary on PATH, so this directory is not a " +
+        "repository, or git was only slow to answer this check. To tell which with no git " +
+        "command: a .git entry in this folder or in a folder above it, found by name, shows " +
+        "whether a repository is. " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
-        "so with no git or no repository gate scan exits 1 and /st-quick and /st-work list " +
+        "so with no repository gate scan exits 1 and /st-quick and /st-work list " +
         "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     };

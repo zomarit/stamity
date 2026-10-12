@@ -1205,7 +1205,10 @@ describe("check — advisory warnings", () => {
     expect(git.detail).toContain("or git was only slow to answer this check");
     expect(git.detail).toContain("Two verbs need git");
     expect(git.detail).toContain("worktree refuses without it");
-    expect(git.detail).toContain("so with no git or no repository gate scan exits 1");
+    // TEST CHANGE, justified: the clause read "so with no git or no repository gate scan exits 1".
+    // On this text the engine has found a git binary, so the loss is conditional on the
+    // repository alone; a git the engine did not find has the row's third text, the next case's.
+    expect(git.detail).toContain("so with no repository gate scan exits 1");
     expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
     expect(git.detail).toContain("where git was only slow, both verbs may still run");
     // The sentence the row already carried stays: what `sync` loses without git.
@@ -1213,27 +1216,94 @@ describe("check — advisory warnings", () => {
     // review/61: the row said "git status here tells which". This text also prints where git itself
     // refused a folder the engine's look passed (a leftover `.git` git cannot open beside or below a
     // folder with the layout of a bare repository), and plain git typed there opens that folder. So
-    // the row tells the causes apart by two steps that look for no repository, and names no other
-    // git command.
+    // the row tells the causes apart by a step that looks for no repository, and names no git
+    // command.
     expect(git.detail).not.toContain("tells which");
-    expect(git.detail).toContain("`git --version` shows whether a binary is there");
+    // TEST CHANGE, justified: the row said "`git --version` shows whether a binary is there", and
+    // this case held it to that sentence. A git typed at a prompt is found by the shell's rules,
+    // which are not the engine's: the engine takes git only from a `PATH` entry that is a full
+    // path to a folder other than this one (`src/shared/programPath.ts`), so the typed command
+    // can answer for a program the engine never starts. The row now says what the engine itself
+    // found, and names no git command at all. The fixture is a folder with no repository on a
+    // host that has git on `PATH`, so this is the text for a git that was found.
+    expect(git.detail).not.toContain("git --version");
+    expect(git.detail).toContain("the engine found a git binary on PATH");
+    expect(git.detail).not.toContain("no binary on PATH");
     expect(git.detail).toContain(
       "a .git entry in this folder or in a folder above it, found by name, shows whether a repository is",
     );
-    for (const call of ["git status", "git diff", "git log", "git rev-parse", "git init"]) {
+    for (const call of ["git status", "git diff", "git log", "git rev-parse", "git init", "git --"]) {
       expect(git.detail, `the row names ${call}`).not.toContain(call);
     }
-    // review/72 moved the other text of this row; this one is the text it was, compared whole.
+    // review/72 moved the other text of this row; this one is compared whole.
     expect(git.detail).toBe(
-      "git did not answer here — no binary on PATH, this directory is not a repository, or git " +
-        "was only slow to answer this check. To tell which with no git command that looks for a " +
-        "repository: `git --version` shows whether a binary is there, and a .git entry in this " +
-        "folder or in a folder above it, found by name, shows whether a repository is. " +
+      "git did not answer here — the engine found a git binary on PATH, so this directory is not a " +
+        "repository, or git was only slow to answer this check. To tell which with no git " +
+        "command: a .git entry in this folder or in a folder above it, found by name, shows " +
+        "whether a repository is. " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
-        "so with no git or no repository gate scan exits 1 and /st-quick and /st-work list " +
+        "so with no repository gate scan exits 1 and /st-quick and /st-work list " +
         "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     );
+  });
+
+  it("says the engine found no git to start, and names no other cause, where no PATH entry it takes git from holds one", async () => {
+    // The row had one text for three causes, "no binary on PATH" among them, and sent the reader
+    // to `git --version` to tell them apart. The engine takes git only from a `PATH` entry that is
+    // a full path to a folder other than the one git runs in (`resolveProgramOnPath`,
+    // `src/shared/programPath.ts`). Where git is reachable through no such entry, the typed
+    // command can still find a binary, and the row then pointed at a missing repository or a
+    // slow git, neither of which was the cause. The engine knows whether it found a git to
+    // start, so the row says so, in words of its own, and names no command to type.
+    //
+    // Two `PATH` values, each read by the row from the process environment, as the read itself
+    // reads it: an empty one, and one whose only entry is the setup root, which holds files
+    // of git's program names (`git` for POSIX, `git.exe` for Windows). The engine skips an entry
+    // that is the folder git runs in, so neither file is started; their bodies never run.
+    //
+    // A Copilot-only setup, so the run's exit code does not hang on another row: on Windows the
+    // `claude-hook-shell` row reads the same `PATH` to find Git Bash, and fails a Claude setup
+    // where Git sits in no default install location.
+    const root = await seedRepo(getRepo(), { tools: ["copilot"] });
+    await writeFile(join(root, "git"), "#!/bin/sh\nexit 1\n", "utf8");
+    await chmod(join(root, "git"), 0o755);
+    await writeFile(join(root, "git.exe"), "not a program\n", "utf8");
+
+    // One run at a time: the row reads the process's own `PATH`, which the two runs set in turn.
+    const runWith = async (path: string): Promise<{ path: string; code: number; git: DoctorCheck }> => {
+      vi.stubEnv("PATH", path);
+      try {
+        const { code, doc } = await runJson(root);
+        return { path, code, git: row(doc, "git-available") };
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    };
+    const empty = await runWith("");
+    const ownFolder = await runWith(root);
+
+    for (const { path, code, git } of [empty, ownFolder]) {
+      expect(code, `PATH=${path}`).toBe(0);
+      expect(git.status, `PATH=${path}`).toBe("warn");
+      expect(git.detail, `PATH=${path}`).toContain("the engine found no git to start");
+      // None of the causes that are not this one, and no command to type.
+      expect(git.detail, `PATH=${path}`).not.toContain("not a repository");
+      expect(git.detail, `PATH=${path}`).not.toContain("slow to answer");
+      expect(git.detail, `PATH=${path}`).not.toContain("git --version");
+      expect(git.detail, `PATH=${path}`).not.toContain(".git entry");
+      // With no git the two verbs' loss is stated outright, as on the row's text for a folder
+      // kept from git.
+      expect(git.detail, `PATH=${path}`).toBe(
+        "git did not answer here — the engine found no git to start. It takes git only from a PATH " +
+          "entry that is a full path to a folder other than this one, and no such entry holds a git " +
+          "binary: install git, or put the folder that holds it on PATH by its full path. " +
+          "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+          "so here gate scan exits 1 and /st-quick and /st-work list " +
+          "`secret scan: not run` under `Not done:`. " +
+          "sync's dirty-tree warning simply stays silent while git does not answer.",
+      );
+    }
   });
 
   it("says the folder was kept from git, with no hint to run git there, where the look before git refused it", async () => {
