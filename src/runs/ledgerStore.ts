@@ -1217,6 +1217,43 @@ async function ledgerProblems(
 }
 
 /**
+ * The ledgers one inbox write's `Ref:` values name — its rows' and its
+ * removals' — that it locks (S25): each as its file and its run folder, sorted
+ * by the file's path, so two writes take them in one order. A run whose
+ * folders are not all real directories down from the repository root is left
+ * out: {@link heldLedger} reads no rows there, or refuses the ledger, and a
+ * lock would make a folder or follow a link.
+ */
+async function referencedLedgers(
+  rootDir: string,
+  rows: readonly string[],
+  remove: readonly string[],
+): Promise<{ readonly path: string; readonly dir: string }[]> {
+  const handed = parseInbox([SCHEDULE_RULE_HEADING, ...rows.map((row) => (/[\r\n]/.test(row) ? "" : row))].join("\n")).rows;
+  const runIds = new Set<string>();
+  for (const ref of [...handed.flatMap((row) => (row.ref === null ? [] : [row.ref])), ...remove]) {
+    const runId = LEDGER_REF.exec(ref)?.[1] ?? "";
+    if (isRunId(runId)) runIds.add(runId);
+  }
+  const ledgers: { path: string; dir: string }[] = [];
+  for (const runId of runIds) {
+    let walked = rootDir;
+    let real = true;
+    for (const segment of [...RUNS_SEGMENTS, runId]) {
+      walked = join(walked, segment);
+      // eslint-disable-next-line no-await-in-loop -- top-down on purpose: a link at any folder leaves the run out
+      const stats = await lstatOrNull(walked);
+      if (stats === null || stats.isSymbolicLink() || !stats.isDirectory()) {
+        real = false;
+        break;
+      }
+    }
+    if (real) ledgers.push({ path: join(walked, LEDGER_FILE), dir: walked });
+  }
+  return ledgers.toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
  * The deferral inbox's one engine write (`stamity ledger inbox-write`,
  * REQ-FLOW-078): append the rows handed in, remove the bullets the removal
  * `Ref:` values name, both in one locked, atomic write, and create an absent
@@ -1232,6 +1269,15 @@ async function ledgerProblems(
  * path that does not exist yet, and `atomicWriteFileUnlocked` lands the text
  * by temp-and-rename, so a planted link at the name is replaced, never
  * written through.
+ *
+ * After the inbox's lock, the write takes the lock of each ledger a `Ref:`
+ * names ({@link referencedLedgers}), in path order, and holds them until the
+ * inbox has landed (S25): the ledger cross-check reads each referenced row
+ * under its ledger's lock, so a concurrent `ledger close` cannot move it
+ * between that check and the write. Nothing takes the inbox's lock while
+ * holding a ledger's, so the order forms no cycle. A ledger lock that cannot
+ * be taken refuses the call, naming no path, since the run came from a
+ * `Ref:`.
  *
  * All or nothing: the ledger cross-check ({@link ledgerProblems}) and the
  * edit's own problems are gathered, and any one refuses the call with all of
@@ -1259,7 +1305,23 @@ export async function writeInbox(req: {
   const inboxPath = join(req.rootDir, ...INBOX_PATH.split("/"));
   await req.read();
   const release = req.dryRun ? null : await acquireWriteLock(inboxPath, stateDir);
+  const ledgerReleases: (() => Promise<void>)[] = [];
   try {
+    if (!req.dryRun) {
+      for (const ledger of await referencedLedgers(req.rootDir, req.rows, req.remove)) {
+        try {
+          // eslint-disable-next-line no-await-in-loop -- one at a time, in path order, so two writes never cross
+          ledgerReleases.push(await acquireWriteLock(ledger.path, ledger.dir));
+        } catch (cause) {
+          throw new EngineError("ledger inbox-write refused: the lock on a ledger a `Ref:` names could not be taken, so nothing was written", {
+            code: "VALIDATION_ERROR",
+            why: "the write reads each referenced ledger row under that ledger's lock, so a concurrent close cannot move it before the inbox lands",
+            next: "re-run the write once the other ledger write has finished; if it is refused again, check the run folders' lock names for a planted link",
+            cause,
+          });
+        }
+      }
+    }
     const text = await req.read();
     const problems = await ledgerProblems(req.rootDir, req.rows, req.remove);
     const edit = editInboxText(text, { rows: req.rows, remove: req.remove, runId: req.runId, today: req.today });
@@ -1282,6 +1344,8 @@ export async function writeInbox(req: {
     if (!req.dryRun && changed) await atomicWriteFileUnlocked(inboxPath, edit.text, { boundaryDir: stateDir });
     return { inbox: INBOX_PATH, outcomes: edit.outcomes };
   } finally {
+    // eslint-disable-next-line no-await-in-loop -- released in the reverse of the order taken
+    for (const releaseLedger of ledgerReleases.toReversed()) await releaseLedger();
     await release?.();
   }
 }

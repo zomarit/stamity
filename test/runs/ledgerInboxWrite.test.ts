@@ -6,6 +6,8 @@ import { COMMANDS } from "../../src/cli.ts";
 import { INBOX_BULLET_MAX_CHARS, INBOX_JOINED_MAX_CHARS, inboxScreenWindows } from "../../src/cli/commands/ledger.ts";
 import { runCli } from "../../src/cli/kit/program.ts";
 import { INBOX_PATH, parseInbox, SCHEDULE_RULE_HEADING, type InboxEditProblem } from "../../src/runs/inboxStore.ts";
+import type * as AtomicWrite from "../../src/merge/atomicWrite.ts";
+import { closeRow } from "../../src/runs/ledgerStore.ts";
 import type * as LedgerStore from "../../src/runs/ledgerStore.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -15,6 +17,31 @@ import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * a stand-in can carry one. Null passes every call through to the real store.
  */
 const storeRefusal = vi.hoisted(() => ({ problems: null as readonly InboxEditProblem[] | null }));
+
+/**
+ * A step a case runs inside the inbox write, after its ledger cross-check and
+ * before the inbox lands (S25): the store's own writer is reached through its
+ * module, and the step runs once, at the write of the inbox, and is then
+ * cleared. Null passes every write through.
+ */
+const inboxRace = vi.hoisted(() => ({ step: null as (() => Promise<void>) | null }));
+
+vi.mock("../../src/merge/atomicWrite.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof AtomicWrite>();
+  return {
+    ...actual,
+    atomicWriteFileUnlocked: async (
+      ...args: Parameters<typeof actual.atomicWriteFileUnlocked>
+    ): ReturnType<typeof actual.atomicWriteFileUnlocked> => {
+      const step = inboxRace.step;
+      if (step !== null && args[0].endsWith("inbox.md")) {
+        inboxRace.step = null;
+        await step();
+      }
+      return await actual.atomicWriteFileUnlocked(...args);
+    },
+  };
+});
 
 vi.mock("../../src/runs/ledgerStore.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof LedgerStore>();
@@ -236,6 +263,50 @@ describe("stamity ledger inbox-write — appends (REQ-FLOW-078 criteria 1 and 4)
     expect((await readText(dir, INBOX_PATH)).split("\n").filter((line) => line.includes(ref(1)))).toHaveLength(1);
   });
 
+  // S25, pr/2: a close racing the write between its ledger cross-check and the inbox landing waits for
+  // the write, since the write holds the referenced ledger's lock from before that check until it lands.
+  it("holds a referenced ledger's lock from its re-read to the inbox landing, so a concurrent close waits for the write", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    let close: Promise<unknown> | null = null;
+    let during = "";
+    inboxRace.step = async (): Promise<void> => {
+      close = closeRow({ rootDir: dir.dir, runId: RUN, ledgerId: "review/1", state: "fixed", rationale: "fixed elsewhere", dryRun: false });
+      during = await Promise.race([
+        close.then(() => "closed"),
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve("waiting"), 300);
+        }),
+      ]);
+    };
+
+    const result = await write(dir, ["--stdin"], [bullet(1)]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`appended 5 ${ref(1)}\n`);
+    expect(close, "the write never reached the inbox landing").not.toBeNull();
+    expect(during).toBe("waiting");
+    await close;
+    expect(await readText(dir, ledgerOf(RUN))).toContain('"state":"fixed"');
+  });
+
+  it.skipIf(WINDOWS)("refuses the call, writing nothing, when a referenced ledger's lock cannot be taken", async () => {
+    const dir = tempDir();
+    const before = `${SCHEDULE_RULE_HEADING}\n`;
+    await seed(dir, { [INBOX_PATH]: before, [ledgerOf(OTHER_RUN)]: `${ledgerRow(4, {}, OTHER_RUN)}\n`, "elsewhere/keep.txt": "" });
+    // A link standing at the lock's name: the lock is refused at once rather than waited on.
+    await symlink(dir.path("elsewhere"), dir.path(".stamity", "runs", OTHER_RUN, "ledger.jsonl.lock"));
+
+    const result = await write(dir, ["--stdin"], [bullet(4, "by: 2026-11-01", ref(4, OTHER_RUN))]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("the lock on a ledger a `Ref:` names could not be taken");
+    expect(result.stderr).not.toContain(OTHER_RUN);
+    expectNoRowText(result);
+    expect(await readText(dir, INBOX_PATH)).toBe(before);
+  });
+
   it("admits a ledger Ref: naming a deferred row of another run's ledger", async () => {
     const dir = tempDir();
     await seed(dir, {
@@ -283,6 +354,14 @@ describe("stamity ledger inbox-write — refusals write nothing (REQ-FLOW-078 cr
 
     expect(result.stderr).toContain("stdin:1: carries no `Ref:`");
     expectNoRowText(result);
+  });
+
+  // S26, pr/3: `--remove` splits its list on commas, so a row whose `Ref:` held one could never be removed.
+  it("refuses a row whose Ref: holds a comma, naming its stdin line and not the Ref:", async () => {
+    const result = await refused([bullet(1), bullet(2, "by: 2026-11-01", "docs/plans/quiet,v2.md#u1")]);
+
+    expect(result.stderr).toContain("stdin:2: carries a `Ref:` holding a comma");
+    expectNoRowText(result, "v2.md");
   });
 
   it("refuses two stdin bullets carrying one Ref:", async () => {

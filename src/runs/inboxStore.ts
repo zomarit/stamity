@@ -491,7 +491,9 @@ function bare(line: string): string {
  *
  * A row handed in is one `- ` bullet on one line, parses under the schedule
  * rule as if written below {@link SCHEDULE_RULE_HEADING} (so it carries `by:`
- * or `when:`), and carries a `Ref:` no other row handed in carries. A removal
+ * or `when:`), and carries a `Ref:` that holds no comma (`--remove` lists its
+ * `Ref:` values comma-separated, so such a row could never be removed; S26) and
+ * that no other row handed in carries. A removal
  * `Ref:` matches exactly one bullet of the inbox. The inbox carries the
  * heading at most once.
  *
@@ -549,6 +551,15 @@ export function editInboxText(
     const at = row.line - 1;
     if (row.ref === null) {
       problems.push({ where: "row", line: at, message: "carries no `Ref:`; a row is written only with the `Ref:` a later write finds it by" });
+      continue;
+    }
+    if (row.ref.includes(",")) {
+      // S26: `--remove` takes a comma-separated list, so a `Ref:` holding a comma could never be removed.
+      problems.push({
+        where: "row",
+        line: at,
+        message: "carries a `Ref:` holding a comma, which `--remove`'s comma-separated list could never name; a written `Ref:` holds none",
+      });
       continue;
     }
     const first = handedRefs.get(row.ref);
