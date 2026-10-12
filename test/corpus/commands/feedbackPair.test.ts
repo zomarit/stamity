@@ -1035,6 +1035,11 @@ describe("pr-resolve — collection and evaluation", () => {
     // the old wording is now pinned absent rather than dropped unseen.
     expect(preflight).toMatch(/the invocation is the consent/i);
     expect(preflight).toMatch(/outside `\/st-board`'s write set/i);
+    // REQ-BOARD-009 criterion 1: the negatives below catch only the retired phrases, so a
+    // board gate reworded in new terms would pass them; this pins the positive clause itself.
+    expect(preflight).toMatch(
+      /replies post whether or not a board is linked\. No board link or setup record switches them off/i,
+    );
     expect(preflight).not.toMatch(/enabled at setup/i);
     expect(preflight).not.toMatch(/fourth write-back channel/i);
     // Edge case: zero open threads writes nothing — no inbox row, no commit, no reply.
