@@ -141,23 +141,28 @@ where git would read a bare repository.
   The look goes by the names of the entries alone, so a folder that only looks like one counts.
   This meets a setup root inside a real bare repository, and a checkout that keeps such a folder
   at the setup root or between it and the checkout's own `.git`. There, on any git version,
-  `check`'s `git-available` row warns that git was not started here, because this folder or a
-  folder above it has the layout of a bare repository, and it names no git command to run.
-  `sync` prints no dirty-tree warning, and keeps a `.bak`
-  where it rewrites the charter, as the first item says of a git check that fails. `gate scan`
-  exits 1 and `gate classify`, reading the change from git, answers `product`, so `/st-quick` and
-  `/st-work` run every gate and list `secret scan: not run` under `Not done:`. `init` treats the
-  folder as it does one with no repository: at a terminal it asks before it writes, and it prints
-  its no-git note. `init` and `plugin setup` seed no maturity tier from the history and record no
-  hosting platform, and `config detect` reads none and leaves the recorded one. `handoff prepare`
-  records no git ref and says so, and `handoff resume` cannot measure drift. Every `worktree`
-  verb refuses with `VALIDATION_ERROR`. Where the row warns for this reason, look at the entries of
-  this folder and of each folder above it by name to find the one with that layout, and do not run
-  git in it: only the engine's own git calls are pinned. Move the folder off that path, or run the
-  verbs from a checkout that does not keep it there. One more change comes with the same hardening:
-  every verb but the `worktree` ones now drops the caller's `GIT_*` variables when it reads git,
-  `handoff` included. An inherited `GIT_DIR` no longer points them at another repository, and a
-  setup whose repository is named only by `GIT_DIR` reads as having none.
+  `check`'s `git-available` row warns that git was not started here, because this folder or a folder
+  above it has the layout of a bare repository, and it names no git command to run. `sync` prints no
+  dirty-tree warning, and keeps a `.bak` where it rewrites the charter, as the first item says of a
+  git check that fails. Where it wrote files, its closing step names no `git diff` there: it says
+  why, and to review from the files it listed and the `.bak` a warning names. `gate scan` exits 1
+  and `gate classify`, reading the change from git, answers `product`, each saying that git was not
+  started and naming no git call as failed, so `/st-quick` and `/st-work` run every gate and list
+  `secret scan: not run` under `Not done:`. `init` treats the folder as it does one with no
+  repository: at a terminal it asks before it writes, and it prints a no-git note. There the note,
+  and the refusal when you decline the question, state this cause and name no `git init`. `init` and
+  `plugin setup` seed no maturity tier from the history and record no hosting platform, and
+  `config detect` reads none and leaves the recorded one. `handoff prepare` records no git ref and
+  says so, and `handoff resume` cannot measure drift. Every `worktree` verb refuses with
+  `VALIDATION_ERROR`, stating this cause and naming no `git init`. Where the row warns for this
+  reason, look at the entries of this folder and of each folder above it by name to find the one
+  with that layout, and do not run git in it or in any folder under it, the one you stand in
+  included: git started anywhere under it finds it as the engine did, and only the engine's own git
+  calls are pinned. Move the folder off that path, or run the verbs from a checkout that does not
+  keep it there. One more change comes with the same hardening: every verb but the `worktree` ones
+  now drops the caller's `GIT_*` variables when it reads git, `handoff` included. An inherited
+  `GIT_DIR` no longer points them at another repository, and a setup whose repository is named only
+  by `GIT_DIR` reads as having none.
 
 1.13.0 was skipped on purpose: no release carries that number, and 1.14.0 follows 1.12.0.
 
@@ -534,13 +539,13 @@ where git would read a bare repository.
   `check`'s `git-available` row and the note `init` prints there both said nothing in stamity
   requires git. Two verbs do, and both texts now name them: `worktree` refuses without it, and
   `gate` reads every change from it, so with no git or no repository `gate scan` exits 1 and
-  `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The row also says
-  that git may only have been slow to answer the check, that `git status` in the folder tells
-  which, and that both verbs may still run in that case; where the engine did not start git
-  because the folder or one above it has the layout of a bare repository, the row says that
-  instead and names no git command to run. The row stays a warning and no exit
-  code moves. The README, `docs/getting-started.md` and the troubleshooting page's
-  `git-available` row say the same.
+  `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The row also says that
+  git may only have been slow to answer the check, and that both verbs may still run in that case.
+  It tells the causes apart with no git command that looks for a repository: `git --version` for the
+  binary, and a `.git` entry found by name for the repository. Where the engine did not start git
+  because the folder or one above it has the layout of a bare repository, the row says that instead
+  and names no git command to run. The row stays a warning and no exit code moves. The README,
+  `docs/getting-started.md` and the troubleshooting page's `git-available` row say the same.
 
 ## [1.12.0] - 2026-10-08
 
