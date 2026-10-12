@@ -20,7 +20,10 @@ vi.mock("../../src/runs/ledgerStore.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof LedgerStore>();
   return {
     ...actual,
-    writeInbox: async (req: Parameters<typeof actual.writeInbox>[0]): Promise<LedgerStore.InboxWriteResult> => {
+    // Typed through `actual`: a `LedgerStore.<member>` type here makes knip count only this
+    // alias's members and drop `src/composition/root.ts`'s whole-namespace use, so the
+    // engine's exports read unused.
+    writeInbox: async (req: Parameters<typeof actual.writeInbox>[0]): ReturnType<typeof actual.writeInbox> => {
       if (storeRefusal.problems === null) return await actual.writeInbox(req);
       throw new actual.InboxWriteRefused(storeRefusal.problems);
     },
