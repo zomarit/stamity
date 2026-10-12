@@ -55,7 +55,9 @@ of them commits `fbcdc652`, `e0cc89dd` and `e62ec3f2` for the ledger rows `revie
 requirement are read one step later, at `c026ea4e`: the paragraph on how git is started, the sentences on the library's
 default runner and on `check`'s texts where git did not answer, and the criterion added for those texts. What `init`'s
 no-git note prints where git did not answer is read a step later again, at `d01a9c62`: its sentences in that paragraph,
-its clauses in those two criteria and its cases in the tests paragraph.
+its clauses in those two criteria and its cases in the tests paragraph. The other texts printed in that state, `init`'s
+question, security line, declined-question refusal and uninstall line, `sync`'s closing step and `gate`'s reason for
+its first read, are read at `0971f18a`, in the same paragraph, criteria and tests paragraph.
 
 ## Intent
 
@@ -1931,7 +1933,7 @@ off the path, or to work from a checkout that does not keep it there, before a c
 the ready panel puts at the head of each client's list and `init --json` carries once, first in `nextSteps`, the usual
 steps following it unchanged (`refusedFolderSteps`, `src/cli/commands/init/panel.ts`); after a guided migration that
 leaves paths of the previous setup behind, the clause of the uninstall line that says to copy the files holding the
-operator's own prose out of the folder with no git command, where everywhere else it says to commit, on the ready
+operator's own prose out of the folder with no git command, where it says to commit wherever git answers, on the ready
 panel and in the dry-run preview (`residueLines`, the same file); and `gate`'s reason, which names no git call as
 failed and no exit status, inside the sentence REQ-FLOW-065 gives a change that could not be read
 (`describeGitFailure`, `src/cli/commands/gate.ts`). Two things at such a folder do not turn on the mark. The
@@ -1939,17 +1941,29 @@ overwrite's `.bak` warning is the one printed whenever git could not confirm the
 other causes and no git command: the check's own git call rejects there with no mark (`runGitCheck` and
 `isTrackedAndClean`, `src/merge/safeWrite.ts`). And `init --json` prints no note, its stdout being the one document,
 and that document carries no field naming the cause: the step is its one sign of it (`src/cli/kit/program.ts`; ledger
-rows `fix/9`, deferred, and `fix/32`). Everywhere else each of those texts is the one it was and the step is absent,
-but for what `check`'s `git-available` row and `init`'s no-git note print where git did not answer and the look
-refused nothing. Each is two texts now, and none of the four names a git command, `git status`, `git --version` and
-`git init` included: a git typed at a prompt is found by the shell's rules and not by the engine's walk, so it answers
-for a program the engine may never start. The row and the note ask the walk instead (`gitProgramFor`, called from
-`checkGit` and from `noGitNote`; the note as read at `d01a9c62`). Where it found no git, each says the engine found no
-git to start, says that git is taken only from a `PATH` entry that is a full path to a folder other than this one, and
-states outright what `worktree` and `gate scan` lose. Where it found one, each says so, which leaves a missing
-repository and a git too slow for the check: the row tells those two apart by a `.git` entry found by name, and the
-note words what the two verbs lose on the repository alone. `init`'s question, its security line and its refusal when
-the question is declined are the texts they were. No
+rows `fix/9`, deferred, and `fix/32`). Everywhere else the step is absent. Where git answers, each of those texts is
+the one it was. Where git did not answer and the look refused nothing, every text these verbs print goes by what the
+engine itself found and names no git command, `git status`, `git --version`, `git init`, `git diff` and
+`git rev-parse` included: a git typed at a prompt is found by the shell's rules and not by the engine's walk, so it
+answers for a program the engine may never start. `check`'s `git-available` row and `init` ask the walk instead
+(`gitProgramFor`, called from `checkGit` and once by the `init` command, which hands the answer to its question, its
+note, its refusal and its panel; the note as read at `d01a9c62`, the rest of this passage at `0971f18a`). The row and
+`init`'s no-git note are two texts each. Where the walk found no git, each says the engine found no git to start, says
+that git is taken only from a `PATH` entry that is a full path to a folder other than this one, and states outright
+what `worktree` and `gate scan` lose. Where it found one, each says so, which leaves a missing repository and a git too
+slow for the check: the row tells those two apart by a `.git` entry found by name, and the note words what the two
+verbs lose on the repository alone. `init`'s other texts follow the note. Its question has a third text, for a walk
+that found no git, and is the one it was where the walk found one. The security line of its ready panel and of its
+dry-run preview has a text for each answer of the walk, and neither says the rule takes effect on a `git init`. Its
+refusal when the question is declined has a text for each as well: the next step tells a repository by a `.git` entry
+found by name, or says to install git or to put its folder on `PATH` by its full path. And after a guided migration
+the uninstall line names the copy wherever git did not answer, whatever the walk found (`askProceedWithoutGit`,
+`noGitNote` and the refusal, `src/cli/commands/init.ts`; `gitignoreLine` and `residueLines`,
+`src/cli/commands/init/panel.ts`). `sync`'s closing step after a write has a third text there too: it names no
+`git diff`, gives no cause of its own and points at `check`'s row, and it carries the same added words where the list
+was cut short (`NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE`, `src/cli/commands/sync.ts`). `gate`'s reason names its first
+read in words where that read fails or runs long, with git's own exit status and no git call; a read that fails
+later, in a work tree git opened for the engine, keeps its step (`describeGitFailure`). No
 key, type, exit status or error code moved: `check` exits as before, `gate classify` gives `product` at exit 0 and
 `gate scan` exits 1, `init`'s refusal keeps `VALIDATION_ERROR` and its message, the document of `init --json` has the
 keys it has in a plain folder, with `nextSteps` the flat list of strings it was and one string more, first, at such a
@@ -2043,16 +2057,20 @@ covers a folder below the setup root as it covers one the look refuses; the engi
   to commit, and no text of the run names one of those five git commands; WHEN `gate classify` or `gate scan` runs
   there THEN classify gives `product` at exit 0 and scan exits 1, each reason saying git was not started and naming
   no git call as failed, with the keys a folder with no repository gets; GIVEN a folder with no repository and no
-  such layout, on a host with git on `PATH`, THEN each of those texts is the one it was but for `init`'s note, the
-  step is absent, and `check`'s row and `init`'s note say the engine found a git binary on `PATH` and name no git
-  command, `git --version` and `git init` included;
+  such layout, on a host with git on `PATH`, THEN the step is absent, `check`'s row, `init`'s note and `init`'s
+  security line say the engine found a git binary, `init`'s question is the one it was, a declined question's next
+  step tells a repository by a `.git` entry found by name, the uninstall line after a full migration names a copy,
+  a `sync` that wrote files closes on a step that says to review without git and points at `check`'s row, `gate`'s
+  reason says no git work tree was found, with git's exit status, and none of those texts names a git command,
+  `git --version`, `git init`, `git diff` and `git rev-parse` included; GIVEN the same `sync` in a repository THEN
+  its closing step is the one it was;
   GIVEN a folder of that layout below a setup root that git opens WHEN `check` runs at the root THEN the row passes
   and says nothing of that folder; GIVEN a real bare repository with an origin of its own, on git's own default for
   `safe.bareRepository`, THEN the library's origin read returns that origin with no runner passed, and nothing
   through the shared runner (added 2026-10-12, `review/44`; the clauses on flows, the step and the uninstall line
   follow `review/71` to `review/73`, the folder below the root `review/79`, and the library's read `fix/30`; the
   clause on `check`'s row where there is simply no repository was amended the same day with the next criterion,
-  and `init`'s note joined it there).
+  `init`'s note joined it there, and the other texts of that clause the round after).
 - GIVEN a folder with no repository and no such layout WHEN `check` runs under a `PATH` with no entry the engine
   takes git from, first an empty one and then one whose only entry is the setup root, which holds files of git's
   program names, THEN each run exits 0 and its `git-available` row is a `warn` that says the engine found no git to
@@ -2061,7 +2079,12 @@ covers a folder below the setup root as it covers one the look refuses; the engi
   repository, no slow git, no `.git` entry and no git command; WHEN `init` runs under each of those two, live or as
   a dry run, THEN it exits 0 and its one no-git note says the files have no revert path because the engine found no
   git to start, says the same of the `PATH` entries git is taken from and of `gate scan` and the flows, and names no
-  missing repository, no slow git and no git command (added 2026-10-12; the clause on `init` the same day).
+  missing repository, no slow git and no git command; WHEN `init` runs under an empty `PATH`, live or as a dry run,
+  THEN its security line says the engine found no git to start and names no missing repository, and no text of the
+  run names a git command; WHEN it runs there at a terminal THEN its question asks on that cause, Enter writes, and a
+  declined question exits 1 with nothing written, its next step saying to install git or to put its folder on
+  `PATH`; WHEN `sync` writes under an empty `PATH` THEN it closes on the step it closes on in a folder with no
+  repository (added 2026-10-12; the clauses on `init` and `sync` the same day).
 - GIVEN a Claude setup with `ops` added and synced and one of the pack's installed files edited WHEN
   `clean --pack ops -y` or `clean --dry-run` runs THEN each exits 1 with `CLEAN_ERROR` naming that file's client copy,
   its next step holds the `sync` step it always gave and then the exception, naming `clean --pack ops` or `clean -y`
@@ -2091,7 +2114,10 @@ holds the row to naming no git command, "says the engine found no git to start, 
 PATH entry it takes git from holds one", both red before the row asked the walk, and "passes the git-available row,
 and warns of nothing, for a folder of that layout below the setup root"); `test/cli/commands/sync.test.ts` (the describe "sync — a folder the look before git refused", and in
 "syncClosingLines" the cases "names no git command in the review next-step where the folder was kept from git" and
-"says the list was cut short where the report folded rows at such a folder, and nowhere else");
+"says the list was cut short where the report folded rows, at such a folder and wherever else git did not answer";
+and, for a folder git did not answer in for another cause, the describe "sync — where git did not answer" and the
+case "names no git command in the review next-step wherever else git did not answer", red before the step had a
+text for that state);
 `test/cli/commands/syncEngine.test.ts` ("carries the three working-tree facts and nothing more, whatever the
 status says of why git did not answer"); `test/cli/commands/init.test.ts` ("says the engine found no git to start, and
 names no git command, where no PATH entry it takes git from holds one, on $name" and the whole-note comparison of
@@ -2102,16 +2128,24 @@ $name", "asks the question on that cause there, and Enter still takes the defaul
 panel's next steps with moving the folder there, and the usual steps follow", "opens `--json`'s nextSteps with the
 same step there, and moves no key of the document", "says in the note there to start no flow until the folder is
 moved, and keeps the other note as it was" and "names no commit and no git command on the migration's uninstall line
-there, on $name", with the control cases "keeps the declined question's refusal as it was where there is simply no
-repository", "keeps the security line as it was where there is simply no repository, on $name" and "keeps the
-question as it was where there is simply no repository"); `test/cli/commands/initPanel.test.ts` ("states the cause
+there, on $name", with the control case "keeps the question as it was where there is simply no repository", and, for
+the other texts where git did not answer, "names no git command in the declined question's refusal where there is
+simply no repository", "says on the security line that the engine found a git binary, and no text of the run names a
+git command, where there is simply no repository, on $name", "says on the security line that the engine found no git
+to start, and no text of the run names a git command, on $name", "asks the question on the engine having found no
+git, and Enter still takes the default and writes" and "refuses a declined question on the engine having found no
+git, and names no git command", each red before `init` handed the walk's answer to those texts);
+`test/cli/commands/initPanel.test.ts` ("states the cause
 and names no git command where the look before git refused the folder", "carries that cause from the panel's input
 to its security line", "opens every client's steps with moving the folder where the look before git refused it",
 "keeps the steps as they were where git answers and where there is simply no repository", "names no commit and no
-git command on the uninstall line where the look before git refused the folder" and "keeps the uninstall line as it
-was everywhere the look before git refused nothing"); and `test/cli/commands/gate.test.ts` ("says git was not
-started, and names no git call as failed, where the look before git refused the folder" and "exits 1 saying git was
-not started, with the same document, where the look before git refused the folder").
+git command on the uninstall line where the look before git refused the folder", "keeps the uninstall line as it
+was where git answers", "names a copy and no commit on the uninstall line wherever else git did not answer", "says
+the engine found a git binary, and names no git command, where git did not answer" and "says the engine found no git
+to start, and names no missing repository, where its walk found none"); and `test/cli/commands/gate.test.ts` ("says
+git was not started, and names no git call as failed, where the look before git refused the folder", "exits 1 saying
+git was not started, with the same document, where the look before git refused the folder" and "names no git command
+in the reason where there is simply no repository, for classify and for scan").
 
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `d1a2-clean-pack-copies`, with lane D's fixer rounds 1
 and 2). `clean --pack <id>` also removes the copies `sync` projected from that pack into the clients' folders, while the
