@@ -391,6 +391,19 @@ describe("st-board — write-back contract", () => {
     );
   });
 
+  it("reads the repository's labels before a New item or a label edit and sends only those (REQ-BOARD-001)", async () => {
+    const fill = flat(
+      section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"),
+    );
+
+    // An issue write passed an unknown label creates it server-side on the MCP
+    // channel, so "never created" holds only if the run checks the list first.
+    expect(fill).toMatch(/Before a New item or a label edit the run reads the linked repository's labels/);
+    expect(fill).toMatch(/`gh label list -R <owner>\/<repo> --limit <above the count> --json name`/);
+    expect(fill).toMatch(/or the MCP server's label listing/);
+    expect(fill).toMatch(/passes only labels on that list; a label not on it is never sent/);
+  });
+
   it("opens with one write target, one repository and the write check, stated once (REQ-BOARD-001, REQ-BOARD-007)", async () => {
     const writeBack = section((await board()).parsed.body, "Write-back contract");
     const opening = flat(writeBack.slice(0, writeBack.indexOf("\n1. ")));

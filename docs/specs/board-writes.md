@@ -68,7 +68,9 @@ logs, environment values or credentials (`:268-270`).
   not already have", so QA row R2(c) saw an item proposing `priority:high` withheld whole as `BLOCKED_DEPENDENCY`
   (`qa/1`). The fix follows plan 015's Decision 3: the item files with the labels the repository has, and the missing
   label stays a proposal (`content/commands/st-board.md:96-98` at `0b3f8bd3`; pinned at
-  `test/corpus/commands/board.test.ts:381-392` there).
+  `test/corpus/commands/board.test.ts:381-392` there); before a New item or a label edit the run reads the linked
+  repository's labels and passes only those on the list, since an issue write sent an unknown label can create it
+  (`content/commands/st-board.md:96-98`; pinned at `test/corpus/commands/board.test.ts:394-405`).
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`; QA row R2.
 
 1. GIVEN `### setup — wiring` WHEN read THEN it has no step that chooses or enables write channels, the body nowhere

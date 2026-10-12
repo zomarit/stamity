@@ -68,12 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `R1`…`Rn`, and asks one question — `1 apply` · `2 apply <rows>` · `3 skip <rows>` · `4 stop`
   — whose default is `4` (`stop`): no answer writes nothing and keeps every row as a proposal. A
   write the preview did not list is not made, and a write the board never makes (a deletion, an
-  edit to a completed item, a label the repository lacks, another repository or board) stops
-  with `BLOCKED_DEPENDENCY` and travels as a proposal. A filed item carries a marker, so a retry
-  updates it instead of filing it twice. For chat intake the marker holds within one run only,
-  so a chat retry in a new run can file the item again. Setup no longer opens write channels one
-  by one: it records the one repository a Projects board writes to, and its post-merge advisory
-  names what GitHub does to an item by itself. A Projects board needs the `project` token scope
+  edit to a completed item, another repository or board) stops with `BLOCKED_DEPENDENCY` and
+  travels as a proposal. An item files with the labels the repository has: the run reads the
+  repository's labels first, and a missing label is never created and stays a proposal, the item
+  filed without it. A filed item carries a marker, so a retry updates it instead of filing it
+  twice. For chat intake the marker holds within one run only, so a chat retry in a new run can
+  file the item again. Setup no longer opens write channels one by one: it records the one
+  repository a Projects board writes to, and its post-merge advisory names what GitHub does to
+  an item by itself. A Projects board needs the `project` token scope
   (`gh auth refresh -s project`).
 - **`--move` lets `/st-board` change where an item stands.** Status stays put by default. With
   `--move`, forward transitions apply as the run reaches them, and a backward transition, a close
