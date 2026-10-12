@@ -372,7 +372,7 @@ export interface AppendResult {
  * keeps for the screens and no screen reads before the row is written.
  * `tagged` says the second strip removed something.
  */
-function committedText(text: string): { readonly text: string; readonly tagged: boolean } {
+export function committedText(text: string): { readonly text: string; readonly tagged: boolean } {
   const printable = printableText(text);
   const stripped = printable.replace(UNICODE_TAG_CHARS, "");
   return { text: stripped, tagged: stripped !== printable };
@@ -1027,6 +1027,36 @@ export class InboxWriteRefused extends EngineError {
   }
 }
 
+/**
+ * One bullet of the block an inbox write lands its rows in, as the file reads
+ * after the edit: its 1-based line, its text without the line end, and, for a
+ * row this write appends, that row's `Ref:` (null for a bullet already there).
+ */
+export interface InboxLandingBullet {
+  readonly line: number;
+  readonly text: string;
+  readonly appended: string | null;
+}
+
+/**
+ * The bullets of the block the appended rows land in, as `text` reads after
+ * the edit: from the nearest line above the first appended row that is
+ * neither a bullet nor blank (the block's head, or the heading) to the end of
+ * the file. Empty when nothing is appended.
+ */
+function landingBlock(text: string, outcomes: readonly InboxEditOutcome[]): InboxLandingBullet[] {
+  const appended = new Map(outcomes.flatMap((outcome) => (outcome.kind === "appended" ? [[outcome.line, outcome.ref] as const] : [])));
+  if (appended.size === 0) return [];
+  const lines = text.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  let start = Math.min(...appended.keys()) - 1;
+  while (start > 0 && (lines[start - 1]?.startsWith("- ") === true || lines[start - 1]?.trim() === "")) start -= 1;
+  return lines.slice(start).flatMap((line, offset) => {
+    if (!line.startsWith("- ")) return [];
+    const at = start + offset + 1;
+    return [{ line: at, text: line, appended: appended.get(at) ?? null }];
+  });
+}
+
 export interface InboxWriteResult {
   /** The inbox's repo-relative POSIX path. */
   readonly inbox: string;
@@ -1175,9 +1205,13 @@ async function ledgerProblems(
  *
  * All or nothing: the ledger cross-check ({@link ledgerProblems}) and the
  * edit's own problems are gathered, and any one refuses the call with all of
- * them ({@link InboxWriteRefused}). A text over `maxBytes` is refused, so the
- * query can still read what the write leaves. A dry run reads and answers as
- * a write would, takes no lock, and writes nothing.
+ * them ({@link InboxWriteRefused}). `screen` is the caller's screen of the
+ * block the rows land in, read as the edited text holds it ({@link
+ * landingBlock}), under the lock, so the bullets already in that block are
+ * read beside the new ones; any problem it returns refuses the call too. A
+ * text over `maxBytes` is refused, so the query can still read what the write
+ * leaves. A dry run reads and answers as a write would, takes no lock, and
+ * writes nothing.
  */
 export async function writeInbox(req: {
   readonly rootDir: string;
@@ -1188,6 +1222,7 @@ export async function writeInbox(req: {
   readonly maxBytes: number;
   readonly dryRun: boolean;
   readonly read: () => Promise<string | null>;
+  readonly screen?: (block: readonly InboxLandingBullet[]) => readonly InboxEditProblem[];
 }): Promise<InboxWriteResult> {
   if (!isRunId(req.runId)) throw refuseRunId(req.runId);
   const stateDir = join(req.rootDir, RUNS_SEGMENTS[0]);
@@ -1200,6 +1235,8 @@ export async function writeInbox(req: {
     const edit = editInboxText(text, { rows: req.rows, remove: req.remove, runId: req.runId, today: req.today });
     if ("problems" in edit) problems.push(...edit.problems);
     if (problems.length > 0 || "problems" in edit) throw new InboxWriteRefused(problems);
+    const screened = req.screen?.(landingBlock(edit.text, edit.outcomes)) ?? [];
+    if (screened.length > 0) throw new InboxWriteRefused(screened);
     const bytes = Buffer.byteLength(edit.text, "utf8");
     if (bytes > req.maxBytes) {
       throw new EngineError(

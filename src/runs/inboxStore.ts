@@ -629,6 +629,8 @@ export function editInboxText(
       let at = kept.length;
       while (at > 0 && bare(kept[at - 1] ?? "").trim() === "") at -= 1;
       const tail = kept.splice(at);
+      // A block whose rows have all left keeps the blank line under its head, and the file still ends on a row.
+      if (bare(kept[at - 1] ?? "") === head) kept.push(tail.shift() ?? cr);
       for (const { row, bullet } of landing) {
         appended.push({ kind: "appended", line: kept.push(`${bullet}${cr}`), ref: row.ref, severity: row.severity });
       }

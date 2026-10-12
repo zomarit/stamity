@@ -776,4 +776,30 @@ describe("editInboxText (w1-inbox-write, REQ-FLOW-078)", () => {
     expect(result).toMatchObject({ problems: [{ where: "row", line: 3 }] });
     expect(JSON.stringify(result)).toContain("row 1 carries");
   });
+
+  // review/12: a block of today whose rows have all left keeps the blank line under its head.
+  it("keeps the blank line under the head when a same-day re-date empties the block, and ends the file on the row", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1), ""].join("\n");
+    const redated = bullet(1, "by: 2026-12-24");
+
+    expect(edited(edit(before, [redated], [ref(1)]))).toBe([SCHEDULE_RULE_HEADING, "", HEAD, "", redated, ""].join("\n"));
+    const emptied = edited(edit(before, [], [ref(1)]));
+    expect(edited(edit(emptied, [bullet(2)]))).toBe([SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(2), ""].join("\n"));
+  });
+
+  // review/13: a file saved with no final line end, LF and CRLF.
+  it("gives a last line written with no line end the file's own before rows follow it", () => {
+    const lf = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1)].join("\n");
+    const crlf = [SCHEDULE_RULE_HEADING, "", HEAD, "", bullet(1)].join("\r\n");
+
+    expect(edited(edit(lf, [bullet(2)]))).toBe(`${lf}\n${bullet(2)}\n`);
+    expect(edited(edit(crlf, [bullet(2)]))).toBe(`${crlf}\r\n${bullet(2)}\r\n`);
+  });
+
+  it("keeps no final line end when a removal leaves the last line, and ends on one when the last line leaves", () => {
+    const before = [SCHEDULE_RULE_HEADING, "", bullet(1), bullet(2)].join("\n");
+
+    expect(edited(edit(before, [], [ref(1)]))).toBe([SCHEDULE_RULE_HEADING, "", bullet(2)].join("\n"));
+    expect(edited(edit(before, [], [ref(2)]))).toBe(`${[SCHEDULE_RULE_HEADING, "", bullet(1)].join("\n")}\n`);
+  });
 });

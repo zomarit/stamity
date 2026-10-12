@@ -1,12 +1,31 @@
 import { linkSync } from "node:fs";
 import { mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { PassThrough, Writable } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
-import { INBOX_BULLET_MAX_CHARS } from "../../src/cli/commands/ledger.ts";
+import { INBOX_BULLET_MAX_CHARS, INBOX_JOINED_MAX_CHARS, inboxScreenWindows } from "../../src/cli/commands/ledger.ts";
 import { runCli } from "../../src/cli/kit/program.ts";
-import { INBOX_PATH, parseInbox, SCHEDULE_RULE_HEADING } from "../../src/runs/inboxStore.ts";
+import { INBOX_PATH, parseInbox, SCHEDULE_RULE_HEADING, type InboxEditProblem } from "../../src/runs/inboxStore.ts";
+import type * as LedgerStore from "../../src/runs/ledgerStore.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
+
+/**
+ * A store refusal a case hands in place of the store's own, to reach the CLI's
+ * screen over store messages: no store message quotes row text today, so only
+ * a stand-in can carry one. Null passes every call through to the real store.
+ */
+const storeRefusal = vi.hoisted(() => ({ problems: null as readonly InboxEditProblem[] | null }));
+
+vi.mock("../../src/runs/ledgerStore.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof LedgerStore>();
+  return {
+    ...actual,
+    writeInbox: async (req: Parameters<typeof actual.writeInbox>[0]): Promise<LedgerStore.InboxWriteResult> => {
+      if (storeRefusal.problems === null) return await actual.writeInbox(req);
+      throw new actual.InboxWriteRefused(storeRefusal.problems);
+    },
+  };
+});
 
 /**
  * `stamity ledger inbox-write` (w1-inbox-write, REQ-FLOW-078): the deferral
@@ -23,6 +42,11 @@ import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
 const tempDir = useTempDir("stamity-ledger-inbox-write");
 const WINDOWS = process.platform === "win32";
+
+// A case that switches the lock off with `vi.stubEnv` leaves it off for every later case unless reset.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const RUN = "2026-10-12_demo";
 const OTHER_RUN = "2026-10-01_older";
@@ -62,6 +86,10 @@ const HEADER_FIELD_HIT = ["#".repeat(2), " instr", "uctions: ", "quiet words"].j
 /** The two halves of a markdown image link, each clean alone; joined by the line break between two bullets they hit. */
 const IMAGE_OPEN = ["!", "[quiet"].join("");
 const IMAGE_CLOSE = ["](", "ht", "tps://collector.example/q"].join("");
+/** `exfiltrate`'s one word, built from fragments. */
+const EXFIL_WORD = ["ex", "filtr", "ate"].join("");
+/** A word the `tool-call-injection` row matches only once an opening parenthesis follows it. */
+const CALL_WORD = ["func", "tion_c", "all"].join("");
 
 async function seed(dir: TempDirHandle, files: Record<string, string>): Promise<void> {
   await mkdir(dir.path(".stamity", "runs", RUN), { recursive: true });
@@ -101,6 +129,27 @@ async function write(
     },
     promptIo: { input, output: new Writable({ write: (_chunk, _encoding, callback) => callback() }) },
     terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: false },
+    clock: { now: () => NOW },
+  });
+  return { code, stdout: stdout.join(""), stderr: stderr.join("") };
+}
+
+/** `ledger inbox` through the funnel, unfiltered unless `args` filter it. */
+async function query(dir: TempDirHandle, args: readonly string[] = []): Promise<{ code: number; stdout: string; stderr: string }> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const code = await runCli(["ledger", "inbox", ...args], COMMANDS, {
+    cwd: dir.dir,
+    env: {},
+    io: {
+      out: (text) => {
+        stdout.push(text);
+      },
+      err: (text) => {
+        stderr.push(text);
+      },
+    },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: true },
     clock: { now: () => NOW },
   });
   return { code, stdout: stdout.join(""), stderr: stderr.join("") };
@@ -495,5 +544,280 @@ describe("stamity ledger inbox-write — the run's forms", () => {
       "warning: cross-process locking is off (STAMITY_LOCK=0); concurrent inbox writes are not serialized",
     );
     expect(result.stdout).toBe(`appended 5 ${ref(1)}\n`);
+  });
+});
+
+// Fix round r1 of w1-inbox-write: each case below names the ledger row it answers.
+describe("stamity ledger inbox-write — the output screens fire (review/4)", () => {
+  it("prints a removal Ref: the screen hits as (withheld), in the human line and the document", async () => {
+    const dir = tempDir();
+    const hitRef = `docs/${EXFIL_WORD}.md`;
+    const before = `${SCHEDULE_RULE_HEADING}\n\n${bullet(7, "by: 2026-11-01", hitRef)}\n`;
+    await seed(dir, { [INBOX_PATH]: before, [ledgerOf(RUN)]: "" });
+
+    const human = await write(dir, ["--remove", hitRef, "--dry-run"]);
+    const json = await write(dir, ["--remove", hitRef, "--json"]);
+
+    expect(human.code, human.stderr).toBe(0);
+    expect(human.stdout.split("\n")[0]).toBe("removed 3 (withheld)");
+    expect(JSON.parse(json.stdout)).toMatchObject({ removed: [{ line: 3, ref: null }] });
+    for (const result of [human, json]) {
+      expect(result.stdout).not.toContain(EXFIL_WORD);
+      expect(result.stderr).not.toContain(EXFIL_WORD);
+    }
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n\n`);
+  });
+
+  it("screens each store message before it prints, a row's and a removal's", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    storeRefusal.problems = [
+      { where: "row", line: 1, message: `a message quoting ${NEVER_HIT}` },
+      { where: "remove", line: 1, message: `a message quoting ${NEVER_HIT}` },
+    ];
+    try {
+      const result = await write(dir, ["--stdin", "--remove", "docs/x.md"], ["", bullet(1)]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("stdin:2: refused by the screen (never-verify)");
+      expect(result.stderr).toContain("--remove:1: refused by the screen (never-verify)");
+      expectNoRowText(result, "view the", "a message quoting");
+    } finally {
+      storeRefusal.problems = null;
+    }
+  });
+
+  it("screens the parse message of a bullet no screen hits, and lists only the pattern id", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    // The backtick keeps the bullet clear of the screen; the `files:` message quotes the entry with it stripped.
+    const split = ["ex", "`", "filtrate"].join("");
+
+    const result = await write(dir, ["--stdin"], [bullet(1, `by: 2026-11-01 · files: ${split} quiet`)]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("stdin:1: refused by the screen (exfiltrate)");
+    expect(result.stderr).not.toContain("holds a space");
+    expectNoRowText(result, split);
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n`);
+  });
+});
+
+describe("stamity ledger inbox-write — usage and the refusal document (review/5, review/9, build/2)", () => {
+  it.each([",", " , ,"])("refuses --remove %j, which names no Ref:", async (given) => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n` });
+
+    const result = await write(dir, ["--remove", given]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("ledger inbox-write --remove names no Ref:");
+    expect(result.stdout).toBe("");
+  });
+
+  it("says so on stderr when stdin holds no rows and nothing is removed, and writes nothing", async () => {
+    const dir = tempDir();
+    await seed(dir, { [ledgerOf(RUN)]: "" });
+
+    const result = await write(dir, ["--stdin"], ["", "  "]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("ledger inbox-write: no rows on stdin and nothing to remove; nothing written");
+    await expect(stat(dir.path(INBOX_PATH))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("places a --remove and an inbox problem by their own src in the --json refusal, and a stdin one by none", async () => {
+    const dir = tempDir();
+    await seed(dir, {
+      [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n\n${bullet(1)}\n${SCHEDULE_RULE_HEADING}\n`,
+      [ledgerOf(RUN)]: `${ledgerRow(1)}\n`,
+    });
+
+    const store = await write(dir, ["--remove", ref(9), "--json"]);
+    const stdin = await write(dir, ["--stdin", "--json"], ["- Minor · src/a.ts:2 · quiet · source: /st-work · by: 2026-11-01"]);
+
+    expect(store.code).toBe(1);
+    expect(JSON.parse(store.stdout)).toMatchObject({
+      problems: [
+        { src: INBOX_PATH, line: 4, message: expect.stringContaining("appears at lines 1 and 4") },
+        { src: "--remove", line: 1, message: "matches no bullet in the inbox" },
+      ],
+    });
+    expect(stdin.code).toBe(1);
+    const problems = (JSON.parse(stdin.stdout) as { problems: Record<string, unknown>[] }).problems;
+    expect(problems).toEqual([{ line: 1, message: expect.stringContaining("carries no `Ref:`") }]);
+  });
+
+  it.each([
+    ["a blank entry", (first: string, missing: string) => `,${first},${missing}`],
+    ["a repeated entry", (first: string, missing: string) => `${first},${first},${missing}`],
+  ])("numbers a --remove problem by the entry as typed, past %s", async (_label, typed) => {
+    const dir = tempDir();
+    const before = `${SCHEDULE_RULE_HEADING}\n\n${bullet(1)}\n`;
+    await seed(dir, { [INBOX_PATH]: before, [ledgerOf(RUN)]: `${ledgerRow(1, { state: "fixed" })}\n` });
+
+    const result = await write(dir, ["--remove", typed(ref(1), ref(9))]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("--remove:3: matches no bullet in the inbox");
+    expect(await readText(dir, INBOX_PATH)).toBe(before);
+  });
+
+  it("refuses a stdin over the input ceiling without pointing at --report, a flag inbox-write refuses", async () => {
+    const dir = tempDir();
+    await seed(dir, { [ledgerOf(RUN)]: "" });
+
+    const result = await write(dir, ["--stdin"], [bullet(1, `by: 2026-11-01 · rationale: ${"q".repeat(250_001)}`)]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("over the 250000 byte input ceiling");
+    expect(result.stderr).not.toContain("--report");
+    expect(result.stderr).not.toContain("findings block");
+  });
+});
+
+describe("stamity ledger inbox-write — what lands reads as the query will print it (review/17, review/8, review/6)", () => {
+  it.each([
+    ["its description", `- Minor · src/a.ts:1 · see the ${CALL_WORD} · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`],
+    ["its tag", `- Minor · src/a.ts:1 · quiet · source: /st-work · Ref: ${ref(1)} · ${CALL_WORD} · by: 2026-11-01`],
+  ])("refuses a row whose printed line the query's suffix completes after %s", async (_label, given) => {
+    const dir = tempDir();
+    const before = `${SCHEDULE_RULE_HEADING}\n`;
+    await seed(dir, { [INBOX_PATH]: before, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+
+    const result = await write(dir, ["--stdin"], [given]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("stdin:1: refused by the screen (tool-call-injection) in the line the inbox query would print for it");
+    expectNoRowText(result, CALL_WORD);
+    expect(await readText(dir, INBOX_PATH)).toBe(before);
+  });
+
+  it("refuses a row that completes a screen row with the bullets already in the run's block of today (S15)", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: `${ledgerRow(1)}\n${ledgerRow(2)}\n` });
+
+    const first = await write(dir, ["--stdin"], [`- Minor · src/a.ts:1 · ${IMAGE_OPEN} · source: /st-work · Ref: ${ref(1)} · by: 2026-11-01`]);
+    expect(first.code, first.stderr).toBe(0);
+    const after = await readText(dir, INBOX_PATH);
+
+    const second = await write(dir, ["--stdin"], [`- Minor · src/a.ts:2 · ${IMAGE_CLOSE} · source: /st-work · Ref: ${ref(2)} · by: 2026-11-01`]);
+    const dry = await write(dir, ["--stdin", "--dry-run"], [`- Minor · src/a.ts:2 · ${IMAGE_CLOSE} · source: /st-work · Ref: ${ref(2)} · by: 2026-11-01`]);
+
+    for (const result of [second, dry]) {
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(
+        "stdin:1: refused by the screen (image-url-exfiltration) read with the bullets already in the run's block of today",
+      );
+      expectNoRowText(result, "collector");
+    }
+    expect(await readText(dir, INBOX_PATH)).toBe(after);
+  });
+
+  it("lands a row of the longest length in a CRLF inbox, and the query reads it rather than skipping it as over-length", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\r\n`, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    const stem = bullet(1, "by: 2026-11-01 · rationale: ");
+    const longest = `${stem}${"q".repeat(INBOX_BULLET_MAX_CHARS - stem.length)}`;
+    expect(longest).toHaveLength(INBOX_BULLET_MAX_CHARS);
+
+    const written = await write(dir, ["--stdin"], [longest]);
+    const read = await query(dir);
+
+    expect(written.code, written.stderr).toBe(0);
+    expect((await readText(dir, INBOX_PATH)).split("\n")).toContain(`${longest}\r`);
+    expect(read.code, read.stderr).toBe(0);
+    expect(read.stdout).not.toContain("over-length");
+    expect(read.stdout.split("\n")[0]).toBe("inbox: 1 rows · 1 matched · 0 unmatched · 0 unparsed · 0 skipped");
+  });
+});
+
+describe("stamity ledger inbox-write — invisible and control characters are stripped and reported (review/20)", () => {
+  it.each([
+    ["a C0 control", 0x07],
+    ["a C1 control", 0x9b],
+    ["a bidi control", 0x202e],
+    ["a zero-width mark", 0x200b],
+    ["a tag character", 0xe0041],
+    ["a line separator", 0x2028],
+    ["a paragraph separator", 0x2029],
+  ])("strips %s before the screen and the write, naming the stdin line", async (_label, codePoint) => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: `${ledgerRow(1)}\n` });
+    const marked = bullet(1).replace("quiet finding", `quiet${String.fromCodePoint(codePoint)} finding`);
+
+    const result = await write(dir, ["--stdin"], ["", marked]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toContain("warning: stdin:2: control, bidi, zero-width or tag characters were stripped");
+    expect(result.stdout).toBe(`appended 5 ${ref(1)}\n`);
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n\n${HEAD}\n\n${bullet(1)}\n`);
+    expectNoRowText(result);
+  });
+});
+
+describe("stamity ledger inbox-write — the joined screen reads bounded windows (review/19, review/10)", () => {
+  /** The joined text of the bullets a window holds, by their lengths and the line break between each two. */
+  const joinedLength = (lengths: readonly number[], [from, to]: readonly [number, number]): number =>
+    lengths.slice(from, to + 1).reduce((sum, length) => sum + length, 0) + (to - from);
+
+  it("holds every window to the cap and every two adjacent bullets in one window, for long bullets", () => {
+    const lengths = Array.from({ length: 61 }, () => INBOX_BULLET_MAX_CHARS);
+
+    const windows = inboxScreenWindows(lengths);
+
+    expect(windows.length).toBeLessThanOrEqual(lengths.length - 1);
+    for (const window of windows) expect(joinedLength(lengths, window)).toBeLessThanOrEqual(INBOX_JOINED_MAX_CHARS);
+    for (let index = 0; index + 1 < lengths.length; index += 1) {
+      expect(windows.some(([from, to]) => from <= index && index + 1 <= to)).toBe(true);
+    }
+  });
+
+  it("holds every run of short bullets up to one bullet's cap in one window, and reads the stdin a bounded number of times", () => {
+    const lengths = Array.from({ length: 2500 }, (_, index) => 60 + (index % 50));
+    const total = joinedLength(lengths, [0, lengths.length - 1]);
+
+    const windows = inboxScreenWindows(lengths);
+
+    for (const window of windows) expect(joinedLength(lengths, window)).toBeLessThanOrEqual(INBOX_JOINED_MAX_CHARS);
+    const read = windows.reduce((sum, window) => sum + joinedLength(lengths, window), 0);
+    expect(read).toBeLessThanOrEqual(3 * total);
+    for (let from = 0; from < lengths.length; from += 1) {
+      let to = from;
+      while (to + 1 < lengths.length && joinedLength(lengths, [from, to + 1]) <= INBOX_BULLET_MAX_CHARS) to += 1;
+      expect(windows.some(([start, end]) => start <= from && to <= end)).toBe(true);
+    }
+  });
+
+  it("still names the stdin lines of a hit split over the last two bullets of a long stdin", async () => {
+    const dir = tempDir();
+    const before = `${SCHEDULE_RULE_HEADING}\n`;
+    await seed(dir, { [INBOX_PATH]: before, [ledgerOf(RUN)]: "" });
+    const clean = Array.from({ length: 120 }, (_, index) => bullet(index + 1, `by: 2026-11-01 · rationale: ${"q".repeat(900)}`));
+
+    const result = await write(dir, ["--stdin"], [
+      ...clean,
+      `- Minor · src/a.ts:2 · ${IMAGE_OPEN} · source: /st-work · Ref: ${ref(200)} · by: 2026-11-01`,
+      `- Minor · src/a.ts:3 · ${IMAGE_CLOSE} · source: /st-work · Ref: ${ref(201)} · by: 2026-11-01`,
+    ]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("stdin:121: refused by the screen (image-url-exfiltration) across stdin lines 121–122");
+    expectNoRowText(result, "collector");
+  });
+});
+
+describe("stamity ledger inbox-write — another run's ledger is read no-follow at every folder (review/11)", () => {
+  it.skipIf(WINDOWS)("refuses a Ref: into another run whose folder is a symbolic link", async () => {
+    const dir = tempDir();
+    await seed(dir, { [INBOX_PATH]: `${SCHEDULE_RULE_HEADING}\n`, [ledgerOf(RUN)]: "", "elsewhere/ledger.jsonl": `${ledgerRow(4, {}, OTHER_RUN)}\n` });
+    await symlink(dir.path("elsewhere"), dir.path(".stamity", "runs", OTHER_RUN));
+
+    const result = await write(dir, ["--stdin"], [bullet(4, "by: 2026-11-01", ref(4, OTHER_RUN))]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("stdin:1: the ledger its `Ref:` names is reached through a folder that is a symbolic link");
+    expect(await readText(dir, INBOX_PATH)).toBe(`${SCHEDULE_RULE_HEADING}\n`);
   });
 });

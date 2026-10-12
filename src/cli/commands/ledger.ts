@@ -12,7 +12,7 @@ import {
 import { STATE_DIR } from "../../types/markers.ts";
 import type { BlockProblem } from "../../runs/blocks.ts";
 import type { InboxEditOutcome, InboxEditProblem, InboxProblem, InboxRow, MatchedBy } from "../../runs/inboxStore.ts";
-import type { AppendResult, CloseChange, CloseResult } from "../../runs/ledgerStore.ts";
+import type { AppendResult, CloseChange, CloseResult, InboxLandingBullet } from "../../runs/ledgerStore.ts";
 import type { ResumeCard } from "../../runs/resumeCard.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
@@ -246,9 +246,27 @@ async function requireStateDir(rootDir: string, purpose = "to write a ledger row
   }
 }
 
+/** What a refusal at the stdin ceiling tells the caller: why the block is bounded, and what to pipe instead. */
+interface CeilingAdvice {
+  readonly why: string;
+  readonly next: string;
+}
+
+/** The ceiling's advice to `append` and `close`, which read a findings or closures block. */
+const BLOCK_CEILING: CeilingAdvice = {
+  why: "a findings block is one line per finding; a report is read by path, not piped",
+  next: "pipe the stamity-findings block alone, or name the report with --report",
+};
+
+/** The ceiling's advice to `inbox-write`, which takes rows alone and no `--report`. */
+const INBOX_ROWS_CEILING: CeilingAdvice = {
+  why: "inbox-write takes rows alone, one `- ` bullet per line",
+  next: "pipe the rows over several calls, each under the ceiling",
+};
+
 /** Read a stream to EOF under the engine's user-content ceiling, so an unbounded
  *  pipe is refused before it is buffered whole. */
-async function readAll(input: NodeJS.ReadableStream, maxBytes: number): Promise<string> {
+async function readAll(input: NodeJS.ReadableStream, maxBytes: number, advice: CeilingAdvice = BLOCK_CEILING): Promise<string> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of input) {
@@ -259,8 +277,8 @@ async function readAll(input: NodeJS.ReadableStream, maxBytes: number): Promise<
         code: "VALIDATION_ERROR",
         // `total` is what was read when the ceiling tripped: the pipe is not drained further.
         message: `the block piped on stdin is at least ${total} bytes, over the ${maxBytes} byte input ceiling`,
-        why: "a findings block is one line per finding; a report is read by path, not piped",
-        next: "pipe the stamity-findings block alone, or name the report with --report",
+        why: advice.why,
+        next: advice.next,
       });
     }
     chunks.push(buffer);
@@ -1159,7 +1177,9 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   const bulletScreen = new Map<number, string>();
   inboxText.split("\n").forEach((raw, index) => {
     if (!raw.startsWith("- ")) return;
-    bulletScreen.set(index + 1, raw.length > INBOX_BULLET_MAX_CHARS ? INBOX_OVER_LENGTH : screenInboxLine(raw));
+    // A CRLF file's `\r` is its line end, not the bullet's: the writer measures a row without it.
+    const length = raw.endsWith("\r") ? raw.length - 1 : raw.length;
+    bulletScreen.set(index + 1, length > INBOX_BULLET_MAX_CHARS ? INBOX_OVER_LENGTH : screenInboxLine(raw));
   });
 
   const parsed = inboxStore.parseInbox(inboxText);
@@ -1295,20 +1315,96 @@ function joinedHitSpan(texts: readonly string[]): { first: number; last: number 
   return start < last && hits(start, last) ? { first: start, last } : { first: 0, last: texts.length - 1 };
 }
 
+/**
+ * The longest text the joined screen reads at once: two bullets of
+ * {@link INBOX_BULLET_MAX_CHARS} and the line break between them. The joined
+ * screen reads windows of adjacent bullets, never the whole block, so the
+ * rows whose cost grows with the square of a line's length (see
+ * {@link INBOX_BULLET_MAX_CHARS}) cost at most four bullets' worth per window.
+ */
+export const INBOX_JOINED_MAX_CHARS = 2 * INBOX_BULLET_MAX_CHARS + 1;
+
+/**
+ * The windows the joined screen reads, each the first and last index of the
+ * adjacent bullets it holds, from the bullets' lengths: each holds as many
+ * bullets as fit in {@link INBOX_JOINED_MAX_CHARS} joined by line breaks, and
+ * at least two, and the next starts at the first of its bullets whose joined
+ * rest is at most {@link INBOX_BULLET_MAX_CHARS}, so it overlaps the one
+ * before by at least one bullet. Every two adjacent bullets, and every run of
+ * bullets whose joined text is at most {@link INBOX_BULLET_MAX_CHARS}, lie in
+ * one window, and the windows read each character about twice; none when
+ * there are fewer than two bullets.
+ */
+export function inboxScreenWindows(lengths: readonly number[]): [number, number][] {
+  const windows: [number, number][] = [];
+  if (lengths.length < 2) return windows;
+  const before = [0];
+  for (const length of lengths) before.push((before[before.length - 1] ?? 0) + length);
+  const joined = (from: number, to: number): number => (before[to + 1] ?? 0) - (before[from] ?? 0) + (to - from);
+  const lastIndex = lengths.length - 1;
+  let start = 0;
+  let end = 1;
+  for (;;) {
+    end = Math.max(end, start + 1);
+    while (end < lastIndex && joined(start, end + 1) <= INBOX_JOINED_MAX_CHARS) end += 1;
+    windows.push([start, end]);
+    if (end === lastIndex) return windows;
+    let next = start + 1;
+    while (next < end && joined(next, end) > INBOX_BULLET_MAX_CHARS) next += 1;
+    start = next;
+  }
+}
+
+/**
+ * The first hit of the screen over adjacent bullets joined by the line break
+ * rows print with, read window by window ({@link inboxScreenWindows}), with
+ * the first and last bullet its match spans ({@link joinedHitSpan}); null
+ * when every window passes. `reads` picks the windows read; every one when
+ * absent.
+ */
+function joinedHit(
+  texts: readonly string[],
+  reads: (first: number, last: number) => boolean = () => true,
+): { pattern: string; first: number; last: number } | null {
+  for (const [first, last] of inboxScreenWindows(texts.map((bullet) => bullet.length))) {
+    if (!reads(first, last)) continue;
+    const window = texts.slice(first, last + 1);
+    const pattern = screenInboxLine(window.join("\n"));
+    if (pattern === "") continue;
+    const span = joinedHitSpan(window);
+    return { pattern, first: first + span.first, last: first + span.last };
+  }
+  return null;
+}
+
 /** A screen hit's problem text: the pattern id alone, never the text it matched. */
 function screenProblem(pattern: string): string {
   return `refused by the screen (${pattern})`;
 }
 
+/** What {@link checkInboxRows} found: the bullets as they are written, each row by its `Ref:` with its position among them, the problems, and the stdin lines a strip changed. */
+interface CheckedRows {
+  readonly bullets: readonly StdinBullet[];
+  readonly rows: ReadonlyMap<string, { readonly row: InboxRow; readonly position: number }>;
+  readonly problems: BlockProblem[];
+  readonly stripped: readonly number[];
+}
+
 /**
  * The rows piped to `inbox-write`, checked as the query would read them once
- * written, before anything is read from the inbox: every non-blank line a `- `
- * bullet of at most {@link INBOX_BULLET_MAX_CHARS}; each bullet, and the
- * bullets joined by the line break rows print with, through
- * {@link screenInboxLine}; the bullets parsed below {@link SCHEDULE_RULE_HEADING}
- * (so each carries `by:` or `when:`); each parsed row through
- * {@link screenInboxRow}, the field screen `runInbox` withholds a row by; and
- * each row carrying a `Ref:` no other stdin bullet carries.
+ * written, before anything is read from the inbox. Each line is first
+ * stripped of the characters the ledger writer strips from what it commits
+ * (`ledgerStore.committedText`: control, bidi, zero-width and tag
+ * characters, U+2028 and U+2029, a tab made a space), and the stdin lines a
+ * strip changed are listed, so the row is rewritten at its source; what is
+ * screened and written is the stripped text. Then: every non-blank line a
+ * `- ` bullet of at most {@link INBOX_BULLET_MAX_CHARS}; each bullet, and the
+ * bullets joined by the line break rows print with, window by window
+ * ({@link joinedHit}), through {@link screenInboxLine}; the bullets parsed
+ * below {@link SCHEDULE_RULE_HEADING} (so each carries `by:` or `when:`); each
+ * parsed row through {@link screenInboxRow}, the field screen `runInbox`
+ * withholds a row by; and each row carrying a `Ref:` no other stdin bullet
+ * carries.
  *
  * A bullet any screen hits is refused by its stdin line and pattern id alone,
  * and its parse message is withheld, as the query drops it; every other parse
@@ -1316,13 +1412,17 @@ function screenProblem(pattern: string): string {
  * Every problem is placed by its stdin line; the joined text's hit by the
  * first bullet it spans, naming the last.
  */
-function checkInboxRows(
-  inboxStore: CliContext["engine"]["runs"]["inboxStore"],
-  input: string,
-): { bullets: StdinBullet[]; problems: BlockProblem[] } {
+function checkInboxRows(runs: CliContext["engine"]["runs"], input: string): CheckedRows {
+  const { inboxStore, ledgerStore } = runs;
   const problems: BlockProblem[] = [];
   const bullets: StdinBullet[] = [];
-  const lines = input.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  const stripped: number[] = [];
+  const lines = input.split("\n").map((raw, index) => {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    const committed = ledgerStore.committedText(line).text;
+    if (committed !== line) stripped.push(index + 1);
+    return committed;
+  });
   lines.forEach((line, index) => {
     if (line.trim() === "") return;
     if (line.startsWith("- ")) bullets.push({ line: index + 1, text: line });
@@ -1343,15 +1443,13 @@ function checkInboxRows(
           : screenProblem(pattern),
     });
   }
-  if (hit.size === 0 && bullets.length > 1) {
-    const texts = bullets.map((bullet) => bullet.text);
-    const pattern = screenInboxLine(texts.join("\n"));
-    if (pattern !== "") {
-      const span = joinedHitSpan(texts);
-      const first = bullets[span.first]?.line ?? 0;
-      const last = bullets[span.last]?.line ?? 0;
-      for (const bullet of bullets.slice(span.first, span.last + 1)) hit.add(bullet.line);
-      problems.push({ line: first, message: `${screenProblem(pattern)} across stdin lines ${first}–${last}` });
+  if (hit.size === 0) {
+    const joined = joinedHit(bullets.map((bullet) => bullet.text));
+    if (joined !== null) {
+      const first = bullets[joined.first]?.line ?? 0;
+      const last = bullets[joined.last]?.line ?? 0;
+      for (const bullet of bullets.slice(joined.first, joined.last + 1)) hit.add(bullet.line);
+      problems.push({ line: first, message: `${screenProblem(joined.pattern)} across stdin lines ${first}–${last}` });
     }
   }
 
@@ -1363,23 +1461,108 @@ function checkInboxRows(
     const pattern = screenInboxLine(problem.message);
     problems.push({ line, message: pattern === "" ? problem.message : screenProblem(pattern) });
   }
-  const refs = new Map<string, number>();
+  const positions = new Map(bullets.map((bullet, index) => [bullet.line, index + 1]));
+  const rows = new Map<string, { row: InboxRow; position: number }>();
   for (const row of parsed.rows) {
     const line = row.line - 1;
     if (hit.has(line)) continue;
     const pattern = screenInboxRow(row);
+    const first = row.ref === null ? undefined : rows.get(row.ref);
     if (pattern !== "") {
       problems.push({ line, message: screenProblem(pattern) });
     } else if (row.ref === null) {
       problems.push({ line, message: "carries no `Ref:`; a row is written only with the `Ref:` a later write finds it by" });
-    } else if (refs.has(row.ref)) {
-      problems.push({ line, message: `carries the \`Ref:\` stdin line ${refs.get(row.ref) ?? 0} carries; one row per \`Ref:\`` });
+    } else if (first !== undefined) {
+      problems.push({ line, message: `carries the \`Ref:\` stdin line ${first.row.line - 1} carries; one row per \`Ref:\`` });
     } else {
-      refs.set(row.ref, line);
+      rows.set(row.ref, { row, position: positions.get(line) ?? 0 });
     }
   }
   problems.sort((a, b) => a.line - b.line);
-  return { bullets, problems };
+  return { bullets, rows, problems, stripped };
+}
+
+/** Every suffix the query can print a matched row's line with: the landing screen reads the line under each. */
+const PRINTED_SUFFIXES: readonly MatchedBy[] = ["path", "ref", "plan", "area", "due", "always", "all"];
+
+/**
+ * The screen of the block an inbox write lands its rows in, as the file reads
+ * after the edit, which `ledgerStore.writeInbox` runs under the lock (S15).
+ * Each appended row's line is read first as the query prints it
+ * ({@link inboxRowLine}), at the line it lands on, under each of
+ * {@link PRINTED_SUFFIXES}: the query's suffix can complete a screen row
+ * after fields that each pass alone, and the query would then print only the
+ * row's skip line. Then the block's bullets are read joined, window by
+ * window ({@link joinedHit}), each window holding an appended row: a row that
+ * completes a screen row with a bullet already in the run's block of today is
+ * refused as a split inside one call is. The bullets already in the block are
+ * read back from the first appended row while they fit in one window; one
+ * that hits alone, or runs past the length the query screens, is left out, as
+ * the query leaves it out of the lines it prints. When no bullet already in
+ * the block is read and every stdin bullet landed, {@link checkInboxRows}'s
+ * joined screen has read these rows, and the joined reading is skipped.
+ *
+ * Each problem is placed at the appended row's position among the rows handed
+ * in, and is the engine's own words: `own` collects each, so the caller does
+ * not screen it again.
+ */
+function screenLanding(
+  block: readonly InboxLandingBullet[],
+  checked: CheckedRows,
+  own: Set<InboxEditProblem>,
+): InboxEditProblem[] {
+  const problems: InboxEditProblem[] = [];
+  const refuse = (position: number, message: string): void => {
+    const problem: InboxEditProblem = { where: "row", line: position, message };
+    own.add(problem);
+    problems.push(problem);
+  };
+  const handedOf = (bullet: InboxLandingBullet | undefined): { row: InboxRow; position: number } | undefined =>
+    bullet?.appended === null || bullet?.appended === undefined ? undefined : checked.rows.get(bullet.appended);
+
+  for (const bullet of block) {
+    const handed = handedOf(bullet);
+    if (handed === undefined) continue;
+    const landed: InboxRow = { ...handed.row, line: bullet.line };
+    for (const matchedBy of PRINTED_SUFFIXES) {
+      const pattern = screenInboxPrinted(inboxRowLine(landed, matchedBy, null), "");
+      if (pattern === "") continue;
+      refuse(handed.position, `${screenProblem(pattern)} in the line the inbox query would print for it`);
+      break;
+    }
+  }
+  if (problems.length > 0) return problems;
+
+  const firstAppended = block.findIndex((bullet) => bullet.appended !== null);
+  if (firstAppended === -1) return problems;
+  const readsAlone = (bullet: InboxLandingBullet): boolean =>
+    bullet.appended !== null || (bullet.text.length <= INBOX_BULLET_MAX_CHARS && screenInboxLine(bullet.text) === "");
+  const held: InboxLandingBullet[] = [];
+  let reach = 0;
+  for (let index = firstAppended - 1; index >= 0 && reach <= INBOX_JOINED_MAX_CHARS; index -= 1) {
+    const bullet = block[index];
+    if (bullet === undefined || !readsAlone(bullet)) continue;
+    held.push(bullet);
+    reach += bullet.text.length + 1;
+  }
+  const landing = block.slice(firstAppended).filter(readsAlone);
+  if (held.length === 0 && landing.length === checked.bullets.length) return problems;
+  const read = [...held.toReversed(), ...landing];
+  const joined = joinedHit(
+    read.map((bullet) => bullet.text),
+    (first, last) => read.slice(first, last + 1).some((bullet) => bullet.appended !== null),
+  );
+  if (joined === null) return problems;
+  const span = read.slice(joined.first, joined.last + 1);
+  const placed = handedOf(read.slice(joined.first).find((bullet) => bullet.appended !== null));
+  if (span.every((bullet) => bullet.appended !== null)) {
+    const first = checked.bullets[(handedOf(span[0])?.position ?? 0) - 1]?.line ?? 0;
+    const last = checked.bullets[(handedOf(span[span.length - 1])?.position ?? 0) - 1]?.line ?? 0;
+    refuse(placed?.position ?? 0, `${screenProblem(joined.pattern)} across stdin lines ${first}–${last}`);
+  } else {
+    refuse(placed?.position ?? 0, `${screenProblem(joined.pattern)} read with the bullets already in the run's block of today`);
+  }
+  return problems;
 }
 
 /** An outcome's `Ref:` as it prints: sanitised, or `(withheld)` where it hits the screen (a removal's comes from the command line, unscreened). */
@@ -1406,9 +1589,10 @@ function outcomeLine(outcome: InboxEditOutcome): string {
  * problem refuses the call with every problem listed and nothing read from
  * the inbox. The store then reads the inbox no-follow, through
  * {@link readInbox} in the writer's voice, cross-checks every `Ref:` against
- * the ledger it names, and lands the edit (`ledgerStore.writeInbox`); any
+ * the ledger it names, screens the block the rows land in as it will read
+ * ({@link screenLanding}), and lands the edit (`ledgerStore.writeInbox`); any
  * problem there refuses the whole call too. Each problem is placed by its
- * stdin line, its `--remove` entry or its inbox line, and every message
+ * stdin line, its `--remove` entry as typed or its inbox line, and every message
  * printed has passed the screen, so no refusal prints a row's text or a
  * pattern's match. Stdout carries one line per outcome, each naming a line
  * and a `Ref:` and nothing of a row's text; a dry run reads and answers as a
@@ -1440,9 +1624,14 @@ async function runInboxWrite(ctx: CliContext, opts: Record<string, unknown>): Pr
 
   const input =
     fromStdin && !ctx.terminal.stdinIsTTY
-      ? await readAll(ctx.promptIo.input, ctx.engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH)
+      ? await readAll(ctx.promptIo.input, ctx.engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH, INBOX_ROWS_CEILING)
       : "";
-  const checked = checkInboxRows(inboxStore, input);
+  const checked = checkInboxRows(ctx.engine.runs, input);
+  for (const line of checked.stripped) {
+    ctx.io.err(
+      `warning: ${STDIN_SOURCE}:${line}: control, bidi, zero-width or tag characters were stripped before the screen and the write; rewrite the row at its source\n`,
+    );
+  }
   const refusal = (why: string): FailureDoc => ({
     code: "VALIDATION_ERROR",
     message: "ledger inbox-write refused the call",
@@ -1459,6 +1648,11 @@ async function runInboxWrite(ctx: CliContext, opts: Record<string, unknown>): Pr
     warnIfUnlocked(ctx, "inbox writes");
   }
 
+  // The store numbers a removal among the entries `handedIds` kept; the caller typed blanks and repeats too.
+  const typed = (removeFlag ?? "").split(",").map((item) => item.trim());
+  const typedEntry = (position: number): number => typed.indexOf(remove[position - 1] ?? "") + 1;
+  // The landing screen's problems are the engine's own words, listed as they are.
+  const own = new Set<InboxEditProblem>();
   let outcomes: readonly InboxEditOutcome[] = [];
   if (rows.length > 0 || remove.length > 0) {
     try {
@@ -1472,15 +1666,17 @@ async function runInboxWrite(ctx: CliContext, opts: Record<string, unknown>): Pr
         dryRun: ctx.dryRun,
         read: async () =>
           await readInbox(rootDir, inboxStore.INBOX_PATH, ctx.engine.merge.atomicWrite.isSharedRegularFile, WRITE_VOICE),
+        screen: (block) => screenLanding(block, checked, own),
       });
       outcomes = result.outcomes;
     } catch (error) {
       if (!(error instanceof ledgerStore.InboxWriteRefused)) throw error;
       const placed = error.problems.map((problem: InboxEditProblem) => {
-        const pattern = screenInboxLine(problem.message);
+        const pattern = own.has(problem) ? "" : screenInboxLine(problem.message);
         const message = pattern === "" ? problem.message : screenProblem(pattern);
         if (problem.where === "row") return { line: checked.bullets[problem.line - 1]?.line ?? 0, message };
-        return { src: problem.where === "remove" ? "--remove" : inboxStore.INBOX_PATH, line: problem.line, message };
+        if (problem.where === "remove") return { src: "--remove", line: typedEntry(problem.line), message };
+        return { src: inboxStore.INBOX_PATH, line: problem.line, message };
       });
       return refuseWithProblems(ctx, refusal("a row or a removal cannot apply, so nothing was written"), STDIN_SOURCE, placed);
     }
