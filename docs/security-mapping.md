@@ -324,13 +324,14 @@ Every gap named in a row above, collected so the list reads without the tables.
 14. **Beside git, only the hook runner's start of `node` is covered.** The hook runner the
     engine emits for Codex, Copilot and Cursor starts a `node` launcher, which every hook the
     engine writes names, by its own interpreter's absolute path, and any other launcher by a
-    bare name in the repository root, which on Windows is the lookup the row closes for git
-    (read, not run). Three other starts are found by a bare name. The hook lines and MCP
-    launchers the engine writes are started by the client, by the client's rules, which were not
-    checked. Git that the operator's shell, a client's tools or a flow's session start is found
-    by their rules, and what git itself starts, a hook, a helper or a transport program, by
-    git's. Against each, SECURITY.md names what an operator looks at before running in a
-    checkout of work they have not read. Known residuals in 1.14.0.
+    bare name in the repository root, or in the session's folder for a hook a plugin carries,
+    which on Windows is the lookup the row closes for git (read, not run). Three other starts
+    are found by a bare name. The hook lines and MCP launchers the engine writes are started by
+    the client, by the client's rules, which were not checked. Git that the operator's shell, a
+    client's tools or a flow's session start is found by their rules, and what git itself
+    starts, a hook, a helper or a transport program, by git's. Against each, SECURITY.md names
+    what an operator looks at before running in a checkout of work they have not read. Known
+    residuals in 1.14.0.
 
 ## What is not applicable, and why
 

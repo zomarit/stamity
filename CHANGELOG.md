@@ -283,34 +283,39 @@ where git would read a bare repository.
   `worktree` verbs refuse; the last item under "Upgrading from 1.12.0" says what that looks like.
 - **Git is started by an absolute path found on `PATH`, so a file of git's name in the folder it
   runs in is not started in its place.** Every release from 1.0.0 to 1.12.0 started git by its bare
-  name and left the lookup to the runtime, in the folder the verb runs in: the setup root, for
-  `workspace sync` each member's folder, and for the `worktree` verbs the folder they are started
-  in. On Windows the runtime looks for a program named that way in that folder first, before any
-  `PATH` entry (read from the runtime's source, not from a run). So on Windows a file named
-  `git.exe`, or the same name ending in `.com`, in that folder was started in git's place, with your
-  rights, by every verb that reads git, the ones the item above lists. Such a file can be committed,
-  so it can arrive on a branch someone else wrote, and `check` is the verb a workflow runs on a pull
-  request. macOS and Linux do not look in that folder for a bare name; they were affected only where
-  your own `PATH` names that folder: by an empty entry, by a relative one such as `.`, or by an
-  entry that is its full path. Each of the four places that start git now resolves it once per
+  name and left the lookup to the runtime, in the folder the verb runs in: the folder it is started
+  in, as a rule the setup root; for `workspace sync` each member's folder; and for the `worktree`
+  verbs also the repository's main checkout and each of its worktrees. On Windows the runtime looks
+  for a program named that way in that folder first, before any `PATH` entry (read from the
+  runtime's source, not from a run). So on Windows a file named `git.exe`, or the same name ending
+  in `.com`, in that folder was started in git's place, with your rights, by every verb that reads
+  git, the ones the item above lists. Such a file can be committed, so it can arrive on a branch
+  someone else wrote, and `check` is the verb a workflow runs on a pull request. macOS and Linux do
+  not look in that folder for a bare name; they were affected only where your own `PATH` names that
+  folder or a folder under it: by an empty entry, by a relative one such as `.` or `bin`, or by a
+  full path to one of them. Each of the four places that start git now resolves it once per
   folder and `PATH`, to an absolute path, and starts that path: the verbs' pinned runner, the
   tracked-and-clean check before an overwrite, the `worktree` verbs' runner, and the library's
   origin read called with no runner. The walk takes only a `PATH` entry that is a full path, skips
   an empty entry, a relative one and an entry that is the folder git runs in, and on Windows tries
   git's name with `.com` added, then with `.exe`. Git found on `PATH` is the git that ran before.
   There is nothing to set: upgrade. If you ran an older release in a checkout of work you had not
-  read, on Windows, or on macOS or Linux with a `PATH` that named the folder, look in each folder
-  git ran in: the setup root, each member's folder if you ran `workspace sync`, and the folder you
-  started a `worktree` verb in. On Windows look for a file of either name, on macOS and Linux for
-  one named `git`. Look on the branches you had checked out then as well, since such a file leaves
-  the folder when you switch away from its branch. If one is there, treat it as a program that ran
-  with your rights. One thing can change for you: where your only git sits behind an entry the walk
-  skips, the verbs now answer as on a machine with no git, and `check`'s `git-available` row,
-  `init`'s note and the `worktree` verbs' refusal say the engine found no git to start and which
-  entries it takes git from; put git's folder on `PATH` by its full path. This covers the folder
-  git runs in and nothing wider. The walk takes the `PATH` the engine is started with as given, so
-  an entry that is a full path to some other folder is searched as it stands, a folder inside the
-  checkout included; `SECURITY.md` carries the row and its residual.
+  read, on Windows, or on macOS or Linux with a `PATH` that named the folder or one under it, look
+  in each folder git ran in: the folder you started a verb in, as a rule the setup root; each
+  member's folder if you ran `workspace sync`; and, if you ran a `worktree` verb, the repository's
+  main checkout and each of its worktrees. Look as well in each folder under those that your `PATH`
+  named. On Windows look for a file of either name, on macOS and Linux for one named `git`. Look on
+  the branches you had checked out then as well, since such a file leaves the folder when you
+  switch away from its branch. If one is there, treat it as a program that ran with your rights.
+  One thing can change for you: where your only git sits behind an entry the walk skips, the verbs
+  now answer as on a machine with no git, and `check`'s `git-available` row, `init`'s note and the
+  `worktree` verbs' refusal say the engine found no git to start and which entries it takes git
+  from; put git's folder on `PATH` by its full path. This covers the folder git runs in and nothing
+  wider. The walk takes the `PATH` the engine is started with as given, so an entry that is a full
+  path to some other folder is searched as it stands, a folder inside the checkout included. Run
+  through `npx` or `npm exec`, the call form the setup prints, the engine is started with the
+  project's `node_modules/.bin`, and that of each folder above it, ahead of your own `PATH`.
+  `SECURITY.md` carries the row and its residuals, each with what to look at.
 - **The hook runner for Codex, Copilot and Cursor starts a `node` hook by the absolute path of its
   own interpreter.** From 1.7.0 to 1.12.0 the runner the setup emits, `stamity-portable-hook.mjs`
   under `.stamity/generated/hooks/`, started each hook's launcher by its bare name, in the
@@ -318,15 +323,15 @@ where git would read a bare repository.
   looks for that name in the folder first (read from the runtime's source, not from a run), so a
   file there named `node.exe`, or the same name ending in `.com`, was started in the launcher's
   place when a hook ran, with your rights; macOS and Linux were affected only where your `PATH`
-  names that folder, as for git above. A hook whose launcher is `node`, which every hook the engine
-  writes is, is now started as the interpreter the runner itself runs under, and no lookup by name
-  takes place. The runner on disk changes with this version's first `sync`, the one the upgrade
-  above runs; there is nothing to set. A hook whose launcher is another program, `bun`, `deno`,
-  `python3` or `ruby`, is still started by its bare name, and the client still starts the runner
-  itself with a bare `node`, by its own rules: on Windows, before opening one of those clients in a
-  checkout of work you have not read, look at the repository root for a program file under the name
-  of `node` or of a launcher a hook names. `SECURITY.md` names both in the row on how git is
-  started.
+  names that folder or a folder under it, as for git above. A hook whose launcher is `node`, which
+  every hook the engine writes is, is now started as the interpreter the runner itself runs under,
+  and no lookup by name takes place. The runner on disk changes with this version's first `sync`,
+  the one the upgrade above runs; there is nothing to set. A hook whose launcher is another program,
+  `bun`, `deno`, `python3` or `ruby`, is still started by its bare name, and the client still starts
+  the runner itself with a bare `node`, by its own rules: on Windows, before opening one of those
+  clients in a checkout of work you have not read, look at the repository root, and for a hook a
+  plugin carries at the folder you open the client in, for a program file under the name of `node`
+  or of a launcher a hook names. `SECURITY.md` names both in the row on how git is started.
 
 ### Added
 
