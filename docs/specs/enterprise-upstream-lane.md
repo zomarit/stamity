@@ -16,9 +16,9 @@ can act on. This spec designs that lane. It ships as one plain-Node script,
 configuration file, and the acceptance suite that proves the lifecycle over temporary
 repositories.
 
-Every claim about existing behaviour below carries a `path:line` citation taken from the
-tree at `a42b45d` (the 1.3.0 head) at the time of writing. Citations are code spans rather
-than links: they address lines, which no link form can resolve.
+Every claim about existing behaviour below carries a `path:line` citation taken from the tree at `a42b45d` (the 1.3.0 head) at the time of writing.
+The amendments dated 2026-10-13 to REQ-UPSTREAM-002 and REQ-UPSTREAM-014 (run `2026-10-13_lean-repository`, plan 014 file 1, units `f2-lane-release-tags-only`
+and `f1-import-recipe`) cite the tree at `7327f435`. Citations are code spans rather than links: they address lines, which no link form can resolve.
 
 ## Intent
 

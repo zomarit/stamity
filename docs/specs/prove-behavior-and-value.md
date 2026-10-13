@@ -42,7 +42,10 @@ The amendment dated 2026-10-11 to REQ-PROVE-020 was written at the 1.14.0 cut in
 REQ-PROVE-020 comes from the spec delta of the same run's fix for its ledger rows `review/52`, `build/34` and
 `review/53` (commits `11225842` and `6dfce5e1`); it cites the generator, its suite and the note beside run 45 as the
 release branch holds them at `e62ec3f2`, and ships with 1.14.0. The amendment dated 2026-10-12 to REQ-PROVE-020,
-on run 46, comes from the same run; it cites the run files at `60f2e889` and ships with 1.14.0.
+on run 46, comes from the same run; it cites the run files at `60f2e889` and ships with 1.14.0. The amendment dated
+2026-10-13 to REQ-PROVE-009 comes from run `2026-10-13_lean-repository` (plan 014 file 1), unit
+`f4-retire-superseded-eval-inputs`; it cites the tree at `7327f435`, as does the checklist citation in REQ-PROVE-020's
+first paragraph, repointed in the same run.
 
 ## Intent
 
@@ -560,7 +563,7 @@ denominator, numerator, exclusions by run id (a record reading in progress among
 reported per run and never scored (`src/cli/docs/measurements.ts:258`, `:485-607`). `docs/measurements.md`
 (absent at `949bde9`) renders from the committed snapshot `evals/measurements/merge-ready-<date>.json` —
 5 of 7 at the first — refreshed per release by `node scripts/merge-ready-rate.mjs --write`
-(`.github/release-controls-checklist.md:228-233`), beside a committed npm-download snapshot labelled a
+(`.github/release-controls-checklist.md:322-328`), beside a committed npm-download snapshot labelled a
 reach proxy; it enters roster, sidebar, `llms.txt` and the README map (`src/cli/docs/llmsIndex.ts:263-271`,
 `website/sidebars.ts:57`, `llms.txt:40`, `test/docsPages.test.ts:539-542`),
 and doctrine and getting-started link the run of record and the first-run proof lanes without touching

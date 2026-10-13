@@ -46,7 +46,7 @@ git checkout 6dfa5ffe -- evals/SET-v1.md evals/SET-v2.md evals/SET-v3.md evals/S
   evals/coverage-exemptions-v5.md evals/cases evals/cases-v2 evals/cases-v3
 ```
 
-The retained documents that name one of them (`rubric-v4.md`, `MODEL-PROFILES-v2.md`,
+The retained documents that name one of them (`rubric-v4.md`…`rubric-v7.md`, `MODEL-PROFILES-v2.md`,
 `SET-v7.md`) read it at the tag.
 
 ## What v7 changes
