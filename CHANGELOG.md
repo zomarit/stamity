@@ -125,13 +125,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A Cursor, Copilot or Codex hook that exits without reading its input keeps its own decision.**
   The hook runner hands the payload to the hook on its standard input. When the hook exited, or
-  closed its input, before reading all of it, writing the rest failed with `EPIPE`, and the runner
-  reported `Hook process failed (EPIPE)` whatever the hook had decided: it exited 1, and on a Codex
-  pre-tool-use row that runs an authored hook it exited 2, its own blocking exit, so Codex blocked
-  the call. Above the pipe buffer (64 KiB on Linux and macOS) this happened every time; below it,
-  only when the hook exited first, which made it intermittent. The runner now takes the hook's own
-  exit status and output as the result, as for any other hook. A hook that could not start, or
-  that timed out, is reported as before.
+  closed its input, before reading all of it, writing the rest failed with `EPIPE` (`EOF` on
+  Windows), and the runner reported `Hook process failed` whatever the hook had decided: it exited
+  1, and on a Codex pre-tool-use row that runs an authored hook it exited 2, its own blocking exit,
+  so Codex blocked the call. Above the pipe buffer (64 KiB on Linux and macOS) this happened every
+  time; below it, only when the hook exited first, which made it intermittent. When the hook
+  exited with a status of its own, the runner now takes that status and the hook's output as the
+  result, as for any other hook. A hook killed by a signal is still a failed hook, and a hook that
+  could not start, or that timed out, is reported as before.
 
 ## [1.14.0] - 2026-10-12
 

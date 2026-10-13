@@ -455,6 +455,16 @@ describe("portable native hook boundary", () => {
     expect(result.stderr).not.toContain("Hook process failed");
     expect(result.status, result.stderr).toBe(0);
   });
+
+  // A hook killed by a signal leaves the same pipe error but exits with no status, so it decided nothing: the runner
+  // keeps its own failed-hook exit, 1, or 2 on the Codex pre-tool-use row this fixture builds.
+  // POSIX only: Windows has no signals, so a child there cannot be killed by one.
+  it.skipIf(process.platform === "win32").each(["cursor", "copilot", "codex"] as const)("%s still fails a hook killed by a signal before it read its whole input", async (tool) => {
+    const f = await fixture(tool, 'process.kill(process.pid, "SIGKILL");');
+    const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
+    expect(result.stderr).toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe({ cursor: 1, copilot: 1, codex: 2 }[tool]);
+  });
 });
 
 describe("plugin-rooted rows", () => {
