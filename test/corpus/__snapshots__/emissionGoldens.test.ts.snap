@@ -5967,7 +5967,12 @@ function main() {
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
   if (child.stderr) process.stderr.write(child.stderr);
-  if (child.error) {
+  // A hook may exit, or close its input, without reading the whole payload.
+  // Above the pipe buffer the payload write then fails with EPIPE every time,
+  // below it only when the child exits first; either way the child ran, and
+  // its own status and output are still its decision. A kill on timeout is
+  // reported as ETIMEDOUT ahead of a pipe error, so it is handled below.
+  if (child.error && child.error.code !== "EPIPE") {
     // Copilot hook timeouts always fail open, so the runner reports and yields
     // rather than manufacturing a denial the client would not have made.
     // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
@@ -6219,7 +6224,12 @@ function main() {
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
   if (child.stderr) process.stderr.write(child.stderr);
-  if (child.error) {
+  // A hook may exit, or close its input, without reading the whole payload.
+  // Above the pipe buffer the payload write then fails with EPIPE every time,
+  // below it only when the child exits first; either way the child ran, and
+  // its own status and output are still its decision. A kill on timeout is
+  // reported as ETIMEDOUT ahead of a pipe error, so it is handled below.
+  if (child.error && child.error.code !== "EPIPE") {
     // Copilot hook timeouts always fail open, so the runner reports and yields
     // rather than manufacturing a denial the client would not have made.
     // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
@@ -6471,7 +6481,12 @@ function main() {
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
   if (child.stderr) process.stderr.write(child.stderr);
-  if (child.error) {
+  // A hook may exit, or close its input, without reading the whole payload.
+  // Above the pipe buffer the payload write then fails with EPIPE every time,
+  // below it only when the child exits first; either way the child ran, and
+  // its own status and output are still its decision. A kill on timeout is
+  // reported as ETIMEDOUT ahead of a pipe error, so it is handled below.
+  if (child.error && child.error.code !== "EPIPE") {
     // Copilot hook timeouts always fail open, so the runner reports and yields
     // rather than manufacturing a denial the client would not have made.
     // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)

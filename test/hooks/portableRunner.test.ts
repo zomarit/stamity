@@ -412,6 +412,25 @@ describe("portable native hook boundary", () => {
     expect(command).toContain("process.cwd()");
     expect(command).not.toContain("touch should-not-exist");
   });
+
+  // A hook may exit without reading its input; above the pipe buffer the payload write then fails with EPIPE, and the
+  // child's own status is still the decision (CI's flake of "still starts any other launcher…" was its small-payload form).
+  it.each(["cursor", "copilot"] as const)("%s yields the child's own status when the child exits without reading its whole input", async (tool) => {
+    const f = await fixture(tool, 'process.stderr.write("child-ran-without-reading\\n"); process.exit(0);');
+    const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
+    expect(result.stderr).toContain("child-ran-without-reading");
+    expect(result.stderr).not.toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  // The same unread input, with a hook that fails: the runner passes on the child's own status, 3, not its own 1.
+  it.each(["cursor", "copilot"] as const)("%s passes on the child's own failing status when the child exits without reading its whole input", async (tool) => {
+    const f = await fixture(tool, 'process.stderr.write("child-ran-without-reading\\n"); process.exit(3);');
+    const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
+    expect(result.stderr).toContain("child-ran-without-reading");
+    expect(result.stderr).not.toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe(3);
+  });
 });
 
 describe("plugin-rooted rows", () => {

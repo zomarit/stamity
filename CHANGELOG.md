@@ -121,6 +121,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/st-pr-resolve` next-step case are re-synced to the landed text, and the adversarial floor case
   `board-item-directive-is-data` is added.
 
+### Fixed
+
+- **A Cursor, Copilot or Codex hook that exits without reading its input keeps its own decision.**
+  The hook runner hands the payload to the hook on its standard input. When the hook exited, or
+  closed its input, before reading all of it, writing the rest failed with `EPIPE`, and the runner
+  reported `Hook process failed (EPIPE)` and exited 1 whatever the hook had decided. Above the
+  pipe buffer (64 KiB on Linux and macOS) this happened every time; below it, only when the hook
+  exited first, which made it intermittent. The runner now takes the hook's own exit status and output as the result,
+  as for any other hook. A hook that could not start, or that timed out, is reported as before.
+
 ## [1.14.0] - 2026-10-12
 
 ### Upgrading from 1.12.0
