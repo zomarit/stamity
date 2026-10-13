@@ -29,6 +29,8 @@ import {
   parsePorcelainStatus,
   parseReleaseTag,
   redactUrl,
+  releaseTagGlob,
+  releaseTagRefspec,
   renderReport,
   selectReleases,
   // @ts-expect-error — the lane is a plain .mjs script with no type declarations, and it stays
@@ -78,6 +80,7 @@ import {
   waitFor,
   waitForExit,
   writeFiles,
+  type ForkFixture,
   type LaneDocument,
   type LaneResult,
   type UpstreamFixture,
@@ -232,6 +235,27 @@ describe("release selection", () => {
     expect(compareReleases(parseReleaseTag("v1.0.0-alpha"), parseReleaseTag("v1.0.0-alpha.1"))).toBeLessThan(0);
     expect(compareReleases(parseReleaseTag("v1.0.0-alpha.beta"), parseReleaseTag("v1.0.0-beta"))).toBeLessThan(0);
     expect(compareReleases(parseReleaseTag("v1.0.0"), parseReleaseTag("v1.0.0"))).toBe(0);
+  });
+
+  // f2-lane-release-tags-only (REQ-UPSTREAM-002): the fetch is cut from the pattern the way
+  // parseReleaseTag cuts it, so the lane fetches exactly the tags the pattern can select.
+  it("cuts the pattern into the glob the fetch uses: the prefix before the first *, the suffix after the last", () => {
+    expect(releaseTagGlob("v*")).toEqual({ prefix: "v", suffix: "", exact: false });
+    expect(releaseTagGlob("v*-acme")).toEqual({ prefix: "v", suffix: "-acme", exact: false });
+    expect(releaseTagGlob("v*-*-final")).toEqual({ prefix: "v", suffix: "-final", exact: false });
+    expect(releaseTagGlob("*")).toEqual({ prefix: "", suffix: "", exact: false });
+    expect(releaseTagGlob("v1.2.0")).toEqual({ prefix: "v1.2.0", suffix: "", exact: true });
+  });
+
+  it("builds the tag refspec into the lane's namespace from that glob, or the exact tag", () => {
+    expect(releaseTagRefspec("v*")).toBe("+refs/tags/v*:refs/stamity-upstream/tags/v*");
+    expect(releaseTagRefspec("v*-*-final")).toBe("+refs/tags/v*-final:refs/stamity-upstream/tags/v*-final");
+    expect(releaseTagRefspec("*")).toBe("+refs/tags/*:refs/stamity-upstream/tags/*");
+    expect(releaseTagRefspec("v1.2.0")).toBe("+refs/tags/v1.2.0:refs/stamity-upstream/tags/v1.2.0");
+    // The refspec's set and parseReleaseTag's agree on a multi-* pattern: a tag the one-* glob
+    // admits parses, and a tag outside it does not.
+    expect(parseReleaseTag("v1.2.0-x-final", "v*-*-final")).not.toBeNull();
+    expect(parseReleaseTag("plugins/v1.2.0", "v*")).toBeNull();
   });
 });
 
@@ -1764,8 +1788,15 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       const dots = runLane(fork, ["continue", "--release", "../x"]);
       expect(dots.code).toBe(2);
       expect(dots.doc.messages[0]).toContain('release "../x" is refused: it contains an empty, "." or ".." path segment');
+      // TEST CHANGE, justified: f2-lane-release-tags-only (REQ-UPSTREAM-002) makes the lane fetch
+      // only the tags `releases.pattern` can select, so under the default `v*` the planted `-evil`
+      // tag is never fetched and never listed. This run reads a configuration with the pattern
+      // `*`, whose refspec is `refs/tags/*`, so the hostile tag still reaches the namespace and the
+      // shape refusal still has something to report; the fixture's tags parse under `*` too.
+      const everyTag = join(fork.dir, "..", "every-tag.json");
+      writeFileSync(everyTag, `${JSON.stringify({ ...fork.config, releases: { pattern: "*" } }, null, 2)}\n`);
       git(upstream, ["update-ref", "refs/tags/-evil", upstream.tags["v1.1.0"]!]);
-      const hostile = runLane(fork, ["status"]);
+      const hostile = runLane(fork, ["status", "--config", everyTag]);
       git(upstream, ["update-ref", "-d", "refs/tags/-evil"]);
       expectOutcome(hostile, "update-available");
       expect(hostile.doc.messages).toContain('tag "-evil" was ignored: it starts with "-", which a command would read as an option');
@@ -1780,6 +1811,136 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     },
     CASE_TIMEOUT_MS,
   );
+
+  // REQ-UPSTREAM-002 (f2-lane-release-tags-only): the lane fetches only the tags its pattern can
+  // select, sweeps the rest of its namespace online, and refuses a pattern git cannot fetch.
+  describe("the release-tag fetch", () => {
+    const namespaceTags = (fork: ForkFixture): string[] =>
+      git(fork, ["for-each-ref", "--format=%(refname)", "refs/stamity-upstream/tags/"])
+        .stdout.split("\n")
+        .filter((line) => line !== "")
+        .map((line) => line.slice("refs/stamity-upstream/tags/".length));
+
+    /** Plants upstream tags for one case and removes them after, so the shared fixture's tag map stays as pinned. */
+    function withUpstreamTags<T>(names: readonly string[], run: () => T): T {
+      for (const name of names) git(upstream, ["update-ref", `refs/tags/${name}`, upstream.tags["v1.1.0"]!]);
+      try {
+        return run();
+      } finally {
+        for (const name of names) git(upstream, ["update-ref", "-d", `refs/tags/${name}`]);
+      }
+    }
+
+    it(
+      "fetches the v* tags and no plugins/ or off-pattern tag under the default pattern",
+      () => {
+        const fork = createFork(upstream, forkDir());
+        const status = withUpstreamTags(["plugins/v1.1.0"], () => runLane(fork, ["status"]));
+        expectOutcome(status, "update-available");
+        expect(namespaceTags(fork)).toEqual(["v1.0.0", "v1.1.0", "v1.1.1", "v1.2.0", "v1.3.0", PRERELEASE_TAG]);
+        expect(git(fork, ["rev-parse", "--verify", "--quiet", "refs/stamity-upstream/tags/plugins/v1.1.0"], { allowFailure: true }).status).not.toBe(0);
+        expect(git(fork, ["rev-parse", "--verify", "--quiet", `refs/stamity-upstream/tags/${OFF_PATTERN_TAG}`], { allowFailure: true }).status).not.toBe(0);
+        expect(status.doc.target?.tag).toBe("v1.3.0");
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "sweeps an earlier run's off-pattern ref online, keeps it offline, and leaves the fork's own tags alone",
+      () => {
+        const fork = createFork(upstream, forkDir());
+        expectOutcome(runLane(fork, ["status"]), "update-available");
+        // What a run before this change left behind: every upstream tag, the plugin snapshots among them.
+        git(fork, ["update-ref", "refs/stamity-upstream/tags/plugins/v1.0.0", upstream.tags["v1.0.0"]!]);
+        git(fork, ["update-ref", `refs/stamity-upstream/tags/${OFF_PATTERN_TAG}`, upstream.tags[OFF_PATTERN_TAG]!]);
+        // The fork's own tags: a release name pointing elsewhere, and a plugins/ name.
+        git(fork, ["tag", "v1.1.0", fork.head]);
+        git(fork, ["tag", "plugins/v1.0.0", fork.head]);
+
+        expectOutcome(runLane(fork, ["status", "--offline"]), "update-available");
+        expect(namespaceTags(fork)).toContain("plugins/v1.0.0");
+        expect(namespaceTags(fork)).toContain(OFF_PATTERN_TAG);
+
+        expectOutcome(runLane(fork, ["status"]), "update-available");
+        expect(namespaceTags(fork)).toEqual(["v1.0.0", "v1.1.0", "v1.1.1", "v1.2.0", "v1.3.0", PRERELEASE_TAG]);
+        const swept = git(fork, ["for-each-ref", "refs/stamity-upstream/"]).stdout;
+        expectOutcome(runLane(fork, ["status"]), "update-available");
+        expect(git(fork, ["for-each-ref", "refs/stamity-upstream/"]).stdout).toBe(swept);
+
+        expect(git(fork, ["for-each-ref", "--format=%(refname)", "refs/tags/"]).stdout.trim().split("\n")).toEqual([
+          "refs/tags/plugins/v1.0.0",
+          "refs/tags/v1.1.0",
+        ]);
+        expect(git(fork, ["rev-parse", "refs/tags/v1.1.0^{commit}"]).stdout.trim()).toBe(fork.head);
+        expect(git(fork, ["rev-parse", "refs/tags/plugins/v1.0.0^{commit}"]).stdout.trim()).toBe(fork.head);
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "fetches exactly the tags a custom glob matches",
+      () => {
+        const fork = createFork(upstream, forkDir(), { config: { releases: { pattern: "v*-acme" } } });
+        const status = withUpstreamTags(["v1.1.0-acme", "v1.2.0-acme", "acme-v1.2.0"], () => runLane(fork, ["status"]));
+        expect(namespaceTags(fork)).toEqual(["v1.1.0-acme", "v1.2.0-acme"]);
+        expect(status.doc.target?.tag).toBe("v1.2.0-acme");
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "fetches an exact pattern only when upstream has the tag, and reports no release tag otherwise",
+      () => {
+        const present = createFork(upstream, forkDir(), { config: { releases: { pattern: "v1.2.0" } } });
+        const found = runLane(present, ["status"]);
+        expectOutcome(found, "update-available");
+        expect(namespaceTags(present)).toEqual(["v1.2.0"]);
+        expect(found.doc.target?.tag).toBe("v1.2.0");
+
+        const absent = createFork(upstream, forkDir(), { config: { releases: { pattern: "v9.9.9" } } });
+        // The copy an earlier fetch left of a tag upstream has since deleted: --prune removed it
+        // when the lane fetched every tag, and the sweep removes it now that nothing is fetched.
+        git(absent, ["update-ref", "refs/stamity-upstream/tags/v9.9.9", upstream.tags["v1.2.0"]!]);
+        const missing = runLane(absent, ["status"]);
+        expect(missing.code).toBe(2);
+        expect(missing.doc.messages.join("\n")).toContain('no release tag matching "v9.9.9" was fetched from upstream');
+        expect(namespaceTags(absent)).toEqual([]);
+
+        const unreachable = createFork(upstream, forkDir(), {
+          config: { upstream: join(scratch.dir, "no-such-upstream"), releases: { pattern: "v1.2.0" } },
+        });
+        const refused = runLane(unreachable, ["status"]);
+        expect(refused.code).toBe(2);
+        expect(refused.doc.messages.join("\n")).toMatch(/fetch from upstream \(.*\) failed/);
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "refuses a pattern git cannot use as a refspec at load, with exit 2 and no fetch",
+      () => {
+        const fork = createFork(upstream, forkDir(), { config: { releases: { pattern: "v?*" } } });
+        const refused = runLane(fork, ["status"]);
+        expect(refused.code).toBe(2);
+        expect(refused.doc.outcome).toBe("error");
+        expect(refused.doc.messages[0]).toContain('releases.pattern "v?*" is not a tag pattern git accepts');
+        expect(refused.doc.messages[0]).toContain("refs/tags/v?*");
+        expect(git(fork, ["for-each-ref", "refs/stamity-upstream/"]).stdout).toBe("");
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "names an explicit --release the pattern cannot select as off-pattern, not as unfetched",
+      () => {
+        const fork = createFork(upstream, forkDir());
+        const result = withUpstreamTags(["plugins/v1.1.0"], () => runLane(fork, ["status", "--release", "plugins/v1.1.0"]));
+        expect(result.code).toBe(2);
+        expect(result.doc.messages.join("\n")).toContain('release "plugins/v1.1.0" is not a release tag under the pattern "v*"');
+      },
+      CASE_TIMEOUT_MS,
+    );
+  });
 
   // W2: regeneration output outside generatedPaths is a refusal, not a silent omission.
   it(

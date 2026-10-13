@@ -361,21 +361,44 @@ const VERSION_SHAPE =
   /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
 /**
+ * The one cut of a release pattern (REQ-UPSTREAM-002): the text before the first `*` and the text
+ * after the last. A middle `*` is not a second wildcard; its span becomes part of the version core,
+ * so `v*-*-final` selects the tags `v*-final` covers. A pattern with no `*` is `exact`, its whole
+ * text the prefix. `parseReleaseTag` selects with this cut and the fetch's refspec is built from
+ * it, so the lane fetches exactly the tags the pattern can select.
+ */
+export function releaseTagGlob(pattern) {
+  const first = pattern.indexOf('*')
+  if (first === -1) return { prefix: pattern, suffix: '', exact: true }
+  return { prefix: pattern.slice(0, first), suffix: pattern.slice(pattern.lastIndexOf('*') + 1), exact: false }
+}
+
+/** The tag name the cut's glob stands for: `<prefix>*<suffix>`, or the exact pattern. */
+function releaseTagGlobText(glob) {
+  return glob.exact ? glob.prefix : `${glob.prefix}*${glob.suffix}`
+}
+
+/** True when `tag` matches the cut — a `*` matches any text, `/` included, as a refspec's does. */
+function matchesReleaseGlob(tag, glob) {
+  if (glob.exact) return tag === glob.prefix
+  return tag.length >= glob.prefix.length + glob.suffix.length && tag.startsWith(glob.prefix) && tag.endsWith(glob.suffix)
+}
+
+/** The forced refspec that fetches the pattern's tags, and no other, into the lane's namespace. */
+export function releaseTagRefspec(pattern) {
+  const name = releaseTagGlobText(releaseTagGlob(pattern))
+  return `+refs/tags/${name}:${REF_NAMESPACE}/tags/${name}`
+}
+
+/**
  * Parses one tag name against the release pattern. The version is what the pattern's wildcard
  * span covers — for `v*` everything after the `v` — and it must be a semantic version; a tag
  * that does not match the pattern or does not parse is not a release (null).
  */
 export function parseReleaseTag(tag, pattern = 'v*') {
-  let core = tag
-  const first = pattern.indexOf('*')
-  if (first !== -1) {
-    const prefix = pattern.slice(0, first)
-    const suffix = pattern.slice(pattern.lastIndexOf('*') + 1)
-    if (tag.length < prefix.length + suffix.length || !tag.startsWith(prefix) || !tag.endsWith(suffix)) return null
-    core = tag.slice(prefix.length, tag.length - suffix.length)
-  } else if (tag !== pattern) {
-    return null
-  }
+  const glob = releaseTagGlob(pattern)
+  if (!matchesReleaseGlob(tag, glob)) return null
+  const core = glob.exact ? tag : tag.slice(glob.prefix.length, tag.length - glob.suffix.length)
   const match = VERSION_SHAPE.exec(core)
   if (match === null) return null
   const [, major, minor, patch, prerelease] = match
@@ -855,8 +878,8 @@ function describeError(error) {
 
 function createGit() {
   const env = { ...process.env, LC_ALL: 'C' }
-  return function git(args, { cwd = process.cwd(), check = true } = {}) {
-    const result = spawnSync('git', args, { cwd, env, encoding: 'utf8', maxBuffer: MAX_BUFFER, windowsHide: true })
+  return function git(args, { cwd = process.cwd(), check = true, input } = {}) {
+    const result = spawnSync('git', args, { cwd, env, input, encoding: 'utf8', maxBuffer: MAX_BUFFER, windowsHide: true })
     if (result.error !== undefined) {
       if (result.error.code === 'ENOENT') {
         throw new LaneError(`git was not found on PATH — install git ${GIT_FLOOR.join('.')} or newer`)
@@ -955,7 +978,17 @@ function loadConfig(context) {
       { outcome: 'not-a-fork' },
     )
   }
-  return parseConfig(readFileSync(path, 'utf8'), path)
+  const config = parseConfig(readFileSync(path, 'utf8'), path)
+  // The pattern becomes a fetch refspec, so git decides what it may contain (`?`, `[`, `\`, `~`,
+  // `^`, `:`, whitespace, `..`, `@{`, control characters, a `.lock` component), not a hand-kept list.
+  const ref = `refs/tags/${releaseTagGlobText(releaseTagGlob(config.releases.pattern))}`
+  if (context.git(['check-ref-format', '--refspec-pattern', ref], { cwd: context.root, check: false }).status !== 0) {
+    throw configError(
+      path,
+      `releases.pattern ${JSON.stringify(config.releases.pattern)} is not a tag pattern git accepts (git check-ref-format refused ${ref})`,
+    )
+  }
+  return config
 }
 
 function resolveTarget(context, config) {
@@ -1010,13 +1043,18 @@ function ensureRemote(context, config) {
   return { url: existing, created: false }
 }
 
+/**
+ * Fetches the tags `releases.pattern` can select and the default branch into the lane's namespace
+ * (REQ-UPSTREAM-002), then sweeps the namespace of every tag ref the pattern does not cover — the
+ * refs an earlier run, which fetched every upstream tag, left there (`--prune` only removes refs
+ * inside its own refspec). An exact pattern is looked up with `ls-remote` first, so a tag missing
+ * upstream reports "no release tag matching" rather than a failed fetch.
+ */
 function fetchUpstream(context, config) {
   const { git, root } = context
+  const glob = releaseTagGlob(config.releases.pattern)
   log(`fetching release tags from ${config.remote} (${redactUrl(config.upstream)})`)
-  const tags = git(
-    ['fetch', '--no-tags', '--prune', '--quiet', config.remote, `+refs/tags/*:${REF_NAMESPACE}/tags/*`],
-    { cwd: root, check: false },
-  )
+  const tags = fetchReleaseTags(context, config, glob)
   if (tags.status !== 0) {
     throw new LaneError(
       `fetch from ${config.remote} (${redactUrl(config.upstream)}) failed: ${redactText(tags.stderr.trim(), config.upstream)}. ` +
@@ -1024,6 +1062,7 @@ function fetchUpstream(context, config) {
         'The workflow\'s credential-free prepare job cannot fetch a private upstream using the publish-only STAMITY_UPSTREAM_TOKEN; use an approved upstream reachable without that secret, or review a separate authenticated-fetch design before changing the trust boundary. Retry after access is restored; --offline is usable only when release refs were already fetched.',
     )
   }
+  sweepReleaseTags(context, tags.absent === true ? null : glob)
   const head = git(
     ['fetch', '--no-tags', '--quiet', config.remote, `+refs/heads/${config.branch}:${REF_NAMESPACE}/heads/${config.branch}`],
     { cwd: root, check: false },
@@ -1031,6 +1070,31 @@ function fetchUpstream(context, config) {
   return head.status === 0
     ? []
     : [`upstream has no branch ${JSON.stringify(config.branch)} (${redactText(head.stderr.trim(), config.upstream)}); the release tags were fetched, the default-branch comparison is unavailable`]
+}
+
+/**
+ * The tag fetch. An exact pattern whose tag `ls-remote` does not find upstream fetches nothing and
+ * succeeds with `absent`, so the sweep removes the copy an earlier fetch left, as `--prune` would.
+ */
+function fetchReleaseTags(context, config, glob) {
+  const { git, root } = context
+  if (glob.exact) {
+    const lookup = git(['ls-remote', '--exit-code', '--tags', config.remote, `refs/tags/${glob.prefix}`], { cwd: root, check: false })
+    if (lookup.status === 2) return { status: 0, stderr: '', absent: true }
+    if (lookup.status !== 0) return lookup
+  }
+  return git(['fetch', '--no-tags', '--prune', '--quiet', config.remote, releaseTagRefspec(config.releases.pattern)], { cwd: root, check: false })
+}
+
+/** Deletes, in one `update-ref --stdin` transaction, every namespace tag ref outside the pattern's glob (all of them for `null`). */
+function sweepReleaseTags(context, glob) {
+  const { git, root } = context
+  const prefix = `${REF_NAMESPACE}/tags/`
+  const outside = git(['for-each-ref', '--format=%(refname)', prefix], { cwd: root })
+    .stdout.split('\n')
+    .filter((refname) => refname !== '' && (glob === null || !matchesReleaseGlob(refname.slice(prefix.length), glob)))
+  if (outside.length === 0) return
+  git(['update-ref', '--stdin'], { cwd: root, input: outside.map((refname) => `delete ${refname}\n`).join('') })
 }
 
 function listUpstreamTags(context) {
@@ -1213,13 +1277,15 @@ function selectTarget(context, config, releases, allTags) {
   const explicit = context.options.release
   if (explicit !== undefined) {
     assertTagShape(context, explicit)
-    const fetched = allTags.find((entry) => entry.tag === explicit)
-    if (fetched === undefined) {
-      throw new LaneError(`release ${JSON.stringify(explicit)} is not among the tags fetched from ${config.remote}`)
-    }
+    // The pattern first: the lane fetches only the tags the pattern can select, so a tag outside
+    // it is never among the fetched ones, and "not a release tag under the pattern" is the reason.
     const parsed = parseReleaseTag(explicit, config.releases.pattern)
     if (parsed === null) {
       throw new LaneError(`release ${JSON.stringify(explicit)} is not a release tag under the pattern ${JSON.stringify(config.releases.pattern)}`)
+    }
+    const fetched = allTags.find((entry) => entry.tag === explicit)
+    if (fetched === undefined) {
+      throw new LaneError(`release ${JSON.stringify(explicit)} is not among the tags fetched from ${config.remote}`)
     }
     return { ...parsed, commit: fetched.commit, date: fetched.date }
   }

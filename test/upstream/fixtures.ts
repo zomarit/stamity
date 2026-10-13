@@ -556,13 +556,42 @@ export function createFork(upstream: UpstreamFixture, parent: string, options: F
   return { ...repo, upstream, head, config };
 }
 
-/** A repository with the upstream's v1.0.0 tree and none of its history. */
+/**
+ * A repository with the upstream's v1.0.0 tree and none of its history.
+ *
+ * Built in a fresh directory and never from a clone (the 2026-10-08 fold of
+ * `2026-09-23_orchestrator-context/build/368`): one CI run of the unrelated-history case read
+ * `update-available` where `ancestry-missing` was under test, its re-run passed, and no cause was
+ * found. The earlier fixture cloned the upstream and deleted `.git`, so its independence rested on
+ * that removal; this one never holds the upstream's objects. The tree is exported through a scratch
+ * index — `read-tree --reset -u` into this directory, no shell and no archive tool — and the
+ * preconditions the case rests on are asserted here, so a recurrence either names the broken one or
+ * shows the fixture whole and points at the lane.
+ */
 export function createUnrelatedFork(upstream: UpstreamFixture, parent: string): ForkFixture {
-  const fork = createFork(upstream, parent, { name: "unrelated" });
-  rmSync(join(fork.dir, ".git"), { recursive: true, force: true });
+  const dir = join(parent, "unrelated");
+  mkdirSync(dir, { recursive: true });
+  const fork: Repo = { dir, env: isolatedEnv(parent) };
+  const exportIndex = join(parent, "unrelated-export.index");
+  git(upstream, ["--work-tree", dir, "read-tree", "--reset", "-u", "v1.0.0"], { env: { GIT_INDEX_FILE: exportIndex } });
+  rmSync(exportIndex, { force: true });
   git(fork, ["-c", "init.defaultBranch=main", "init", "--quiet"]);
+
+  const config = baseConfig(upstream);
+  writeFiles(dir, { ".stamity/upstream.json": `${JSON.stringify(config, null, 2)}\n` });
   const head = commitAll(fork, "imported without history");
-  return { ...fork, head };
+
+  const broken: string[] = [];
+  if (git(fork, ["rev-list", "--count", "HEAD"]).stdout.trim() !== "1") broken.push("HEAD is not a single commit");
+  if (git(fork, ["rev-list", "--max-parents=0", "HEAD"]).stdout.trim() !== head) broken.push("HEAD is not a root commit");
+  const releaseCommit = upstream.tags["v1.0.0"]!;
+  if (git(fork, ["cat-file", "-e", `${releaseCommit}^{commit}`], { allowFailure: true }).status === 0) {
+    broken.push(`the upstream's v1.0.0 commit ${releaseCommit} is present`);
+  }
+  const refs = git(fork, ["for-each-ref", "--format=%(refname)"]).stdout.trim();
+  if (refs !== "refs/heads/main") broken.push(`the refs are not refs/heads/main alone (${refs.split("\n").join(", ")})`);
+  if (broken.length > 0) throw new Error(`createUnrelatedFork built a fork that shares history: ${broken.join("; ")}`);
+  return { ...fork, upstream, head, config };
 }
 
 // ---------------------------------------------------------------------------------------------

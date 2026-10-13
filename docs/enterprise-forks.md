@@ -293,7 +293,7 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
 | `remote` | `upstream` | The remote name. The lane creates it with that URL when it is absent. A remote of that name with a *different* URL refuses the run and names both URLs, rather than being repointed. |
 | `branch` | `main` | Your integration branch. Releases are merged into it, and ancestry is read from it. |
 | `releases` | — | An object holding the two keys below. |
-| `releases.pattern` | `v*` | Which upstream tags count as releases. |
+| `releases.pattern` | `v*` | Which upstream tags count as releases — and the only tags the lane fetches. |
 | `releases.prerelease` | `false` | Whether a tag carrying a prerelease suffix may be selected. |
 | `gates` | empty | `[{ "name": ..., "run": ... }]`, run in order in the update worktree. An empty list is reported in words: *no gates configured — a clean merge proves nothing about behaviour*. |
 | `regenerate` | empty | Commands that rebuild the generated tree, run in order before the gates. |
