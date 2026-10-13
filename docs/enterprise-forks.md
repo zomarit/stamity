@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-13 against the private import recipe, which copies upstream main alone, and the mirror-era sentences it qualifies. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -65,10 +65,10 @@ merge base exists. It relies on nothing in the GitHub fork network.
 in that clone.
 
 **A private copy.** A private copy of a public repository cannot be a fork, because a fork's
-visibility is tied to its network. The private case is a bare clone mirror-pushed into a new, empty
-repository. Follow the four steps below in order.
+visibility is tied to its network. The private case is a single-branch import of upstream `main`,
+pushed into a new, empty repository. Follow the four steps below in order.
 
-The mirror route gives up every fork feature. There is no "Sync fork", no merge-upstream endpoint,
+The import route gives up every fork feature. There is no "Sync fork", no merge-upstream endpoint,
 no pull request back to upstream, and `gh repo sync` refuses with "repository is not fork". None of
 that matters to the lane, which is git-native. Two platform facts hold on both routes. Upstream
 `release` and `push` events never reach another repository, so a fork learns about a release by
@@ -96,7 +96,8 @@ step.
 
 Set the destination to your own approved equivalent of the example below. Keep credentials out of
 variables that name repositories and out of git URLs. Disable Actions **before importing any
-refs**: historical tags can carry older workflows that lack the current publication guards.
+refs**: a pushed ref can start the workflows it carries before you have reviewed them, and an older
+commit's workflows can lack the current publication guards.
 
 ```sh
 set -euo pipefail
@@ -106,8 +107,8 @@ test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
 test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .fork)" = false
 gh api --method PUT "repos/$STAMITY_DOWNSTREAM/actions/permissions" -F enabled=false
 STAMITY_PRIVATE_URL="$(gh repo view "$STAMITY_DOWNSTREAM" --json url --jq .url)"
-git clone --bare https://github.com/zomarit/stamity stamity-import.git
-git -C stamity-import.git push --mirror "$STAMITY_PRIVATE_URL.git"
+git clone --bare --single-branch --branch main --no-tags https://github.com/zomarit/stamity stamity-import.git
+git -C stamity-import.git push "$STAMITY_PRIVATE_URL.git" 'refs/heads/main:refs/heads/main'
 git clone "$STAMITY_PRIVATE_URL.git" stamity-private
 cd stamity-private
 git remote add upstream https://github.com/zomarit/stamity
@@ -116,16 +117,21 @@ STAMITY_BASELINE_TAG='v1.8.0'
 git merge-base --is-ancestor "$STAMITY_BASELINE_TAG" HEAD
 ```
 
-The last command checks the baseline this example imported. Set `STAMITY_BASELINE_TAG` to the
-exact upstream tag or SHA your organisation approved, not to whatever the newest release happens
-to be. The value above is an example and it ages: a check against a tag your import predates
-fails, and that failure is the point of the command. Confirm `origin` points to the private
-destination before every initial push. The duplication follows GitHub's own bare-clone procedure,
-linked from [the enterprise downstream plan](plans/005-enterprise-downstream-support.md); it
-imports branches and tags without the pull-request refs GitHub rejects on push. Keep the bare
-import as a backup until the downstream and consumer checks pass. Do not repeat `push --mirror`
-after customization. It would replace your downstream refs. Every later update comes through the
-upstream lane instead.
+The last command checks the baseline this example imported. It runs in this working clone, where
+`git fetch upstream` brought upstream's tags; the import itself pushed none. Set
+`STAMITY_BASELINE_TAG` to the exact upstream tag or SHA your organisation approved, not to whatever
+the newest release happens to be. The value above is an example and it ages: a check against a tag
+your import predates fails, and that failure is the point of the command. Confirm `origin` points
+to the private destination before every initial push. The import narrows GitHub's own bare-clone
+procedure, linked from [the enterprise downstream plan](plans/005-enterprise-downstream-support.md):
+it copies `main` alone, no other branch and no tag, so `plugin-dist`, `plugins/v*`, the `v*`
+release tags and the evidence-archive, replay and retirement tags stay upstream, and the push
+deletes nothing at the destination. Keep the bare import as a backup until the downstream and
+consumer checks pass. Every later update comes through the upstream lane instead. This working
+clone holds upstream's tags, so push the private copy's own release tags by name
+(`git push origin <tag>`), never with `--tags`. A copy imported with the earlier `--mirror` recipe
+keeps `plugin-dist`, `plugins/v*` and upstream's other tags until its owner deletes them, and
+nothing in the lane reads them.
 
 ### Set the private package's identity
 
@@ -762,10 +768,11 @@ generation.
 ### Cut a private release
 
 Use your existing private APM and Renovate engine's release convention. Choose a tag that is
-distinct from the imported upstream tags and that your version policy accepts. `v1.5.0-acme.1`, for
-example, is a prerelease and needs a consumer policy that allows prereleases. Update the package
-version, regenerate, run the full gates, review and commit on the integration branch, and only then
-tag.
+distinct from upstream's release tags, which the lane reads in its own namespace and a copy
+imported with the earlier `--mirror` recipe holds as its own, and that your version policy
+accepts. `v1.5.0-acme.1`, for example, is a prerelease and needs a consumer policy that allows
+prereleases. Update the package version, regenerate, run the full gates, review and commit on the
+integration branch, and only then tag.
 
 Your update engine also has to order those tags correctly. Native Renovate APM updates use a
 coerced version policy by default, which can treat `.1` and `.2` prerelease tags as the same
@@ -1022,9 +1029,10 @@ one in place of `publish`:
 - **`dry-run-summary`** holds no permission. It writes what a real run would have published into
   the run summary.
 
-A fork that imported this repository's history also imported its `v*` tags. A push of one of
-those runs the workflow, and the name proof refuses it, because that commit carries the canonical
-package name.
+A fork can still hold this repository's `v*` tags: a public fork, a private copy imported with
+the earlier `--mirror` recipe, or one whose working clone pushed the tags `git fetch upstream`
+brought. A push of one of those runs the workflow, and the name proof refuses it, because that
+commit carries the canonical package name.
 
 ### Run it again safely
 

@@ -138,7 +138,8 @@
         "test/content/invariantsVersion.test.ts",
         "test/corpus/invariants.test.ts",
         "test/docsPages.test.ts",
-        "test/emit/capabilityMatrix.test.ts"
+        "test/emit/capabilityMatrix.test.ts",
+        "test/upstream/importRecipe.test.ts"
       ]
     },
     {

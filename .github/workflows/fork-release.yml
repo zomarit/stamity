@@ -204,8 +204,9 @@ jobs:
       #   the identity, on every run: the package is not the canonical one, is not private, and
       #     names the armed registry in publishConfig.registry — and on GitHub Packages, its scope
       #     is this repository's owner.
-      # A fork that imported the canonical history also imported its `v*` tags, and a push of one
-      # of them lands here: its commit carries the canonical name, so it fails the identity proof.
+      # A fork can still hold the canonical `v*` tags (a public fork, or a copy imported with the
+      # earlier mirror recipe), and a push of one of them lands here: its commit carries the
+      # canonical name, so it fails the identity proof.
       # A rehearsal skips the ref proofs, because it publishes nothing and has to stay runnable
       # from a branch, and says which ones it skipped.
       - name: Prove the fork release

@@ -666,8 +666,17 @@ const RELEASE_CUT_DATE = "2026-10-12";
  * with it), so the commit form has no members and the assertion's else branch requires this
  * constant to equal RELEASE_CUT_DATE. Their `Re-attested 2026-10-08` clauses are not carried: each
  * page now says it was verified at the cut, and the cut is the later pass.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-13, from 2026-10-12, by plan 014 file 1, unit
+ * f1-import-recipe (REQ-UPSTREAM-014). The private import in `docs/enterprise-forks.md` now copies
+ * upstream `main` alone, so that page was re-read for the recipe and the mirror-era sentences it
+ * qualifies and moved onto the commit form naming the 1.14.0 cut c3d81529 plus `Re-attested
+ * 2026-10-13`; `CONTRIBUTING.md` joins it in the same pull request (unit
+ * f4-retire-superseded-eval-inputs). A page re-read today can honestly carry only today's date,
+ * which the 2026-10-12 pin refused as later than the pass it ships in. Every other page keeps its
+ * cut date.
  */
-const REATTESTATION_DATE = "2026-10-12";
+const REATTESTATION_DATE = "2026-10-13";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
