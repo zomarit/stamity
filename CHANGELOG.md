@@ -120,6 +120,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The eval set measures the new board contract.** The board write-back case and the
   `/st-pr-resolve` next-step case are re-synced to the landed text, and the adversarial floor case
   `board-item-directive-is-data` is added.
+- **The upstream lane fetches only the tags its release pattern can select.** It used to fetch
+  every upstream tag, so each fork's object store collected the plugin distribution snapshots
+  under `plugins/v*`; the first run after this change deletes those refs from the lane's
+  namespace, and a pattern git cannot use as a refspec is refused at load.
+- **The nightly workflow runs only in `zomarit/stamity`.** A private import that enables Actions
+  no longer runs the macOS smoke, the next-Node leg or the client drive on a schedule.
+
+### Removed
+
+- **The superseded eval inputs.** `SET-v1`…`SET-v6`, `rubric-v1`…`rubric-v3`,
+  `coverage-exemptions-v3`…`-v5` and `cases/`, `cases-v2/`, `cases-v3/` leave the tree; no
+  script, test or source read them. Tag `evals-retired-2026-10-13` (commit `6dfa5ffe`) keeps
+  them, and `git checkout 6dfa5ffe -- <paths>` restores them. These were repository surfaces:
+  the published package never carried them.
 
 ### Fixed
 

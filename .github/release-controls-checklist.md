@@ -221,9 +221,10 @@ release alone. The corpus
 is model-executed prose, so a version cut that moved a trigger with no run behind it ships
 behaviour nobody measured — no artifact, no tag, and a release without one is blocked by this
 checklist rather than by anyone's memory. (Added 2026-09-01, with the set; repointed to
-`SET-v3.md` on 2026-09-02, and to `SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10,
-and to `SET-v7.md` on 2026-09-15; incremental runs declared 2026-09-15; made change-aware on
-2026-10-08, before which every release re-ran the set.)
+`SET-v3.md` on 2026-09-02, and to `SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10 —
+those three read at tag `evals-retired-2026-10-13` since 2026-10-13 — and to `SET-v7.md` on
+2026-09-15; incremental runs declared 2026-09-15; made change-aware on 2026-10-08, before which
+every release re-ran the set.)
 
 Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
 Claude profile remains the default. It moved in place at 1.10.0: the scenario model from

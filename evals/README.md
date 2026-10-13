@@ -5,9 +5,11 @@ under `content/`, which is prose executed by a model at a user's site. `src/` is
 vitest, where a failure is a red test. `content/` is proven here, where a failure is a score
 under a declared threshold.
 
-**Current set: `SET-v7.md`.** v6, v5, v4, v3, v2 and v1 are retained beside it, all
-unchanged, as baselines. v7 keeps v6's scoring rule, criteria, floors and metric numbers;
-what moves is the corpus: `cases-v6/` carries v5's 78 cases, 58 of them with their `##
+**Current set: `SET-v7.md`.** The earlier baselines still on `main` stay beside it, unchanged:
+`cases-v5/`, `cases-v4/` and rubrics v4 to v6. The v1 to v6 set documents and the other
+superseded inputs left `main` on 2026-10-13 and read at tag `evals-retired-2026-10-13`; the
+line under the path table names them. v7 keeps v6's scoring rule, criteria, floors and metric
+numbers; what moves is the corpus: `cases-v6/` carries v5's 78 cases, 58 of them with their `##
 Expected` block byte-identical and 20 moved by seven reviewed dispositions, five amendments and
 eight re-syncs to the landed corpus, plus the cases v7 adds. Each moved block carries an `EXPECTED_MOVES` row in `SET-v7.md`. Eight
 carried Briefs and `source:` ranges moved with the corpus on the same night, named in
@@ -16,8 +18,6 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 | Path | What it is |
 |---|---|
 | `SET-v7.md` | **The current set document** — scope, versioned inputs, the scoring rule, the run-artifact contract, the hard triggers, the case index, the coverage table and the appendix of non-negotiable rows. Read it first. |
-| `SET-v6.md` | **Retained baseline, do not edit** — the two-class rule's document; runs 22–24 were scored under it. |
-| `SET-v5.md` | **Retained baseline, do not edit.** The strict three-of-three rule runs 19–21 were scored under. |
 | `rubric-v4.md` | **Retained: the rubric runs 5–10 graded with.** Verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
 | `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
 | `session-native-v1.md` | Opt-in session protocol accepting recorded ambient client/repository instructions, with fresh native agents and unchanged calibration and scoring bars. |
@@ -28,14 +28,17 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 | `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v6/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v6/probes/` | Skill-selection classification cases: the ones that should trigger a skill, and the near misses that should not. |
-| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 58 with the `## Expected` block byte-identical and 20 moved by seven reviewed dispositions, five amendments and eight re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
+| `cases-v5/**` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 58 with the `## Expected` block byte-identical and 20 moved by seven reviewed dispositions, five amendments and eight re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
 | `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
-| `SET-v4.md`, `cases-v4/**`, `coverage-exemptions-v4.md` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
-| `SET-v3.md`, `rubric-v3.md`, `cases-v3/**`, `coverage-exemptions-v3.md` | **Retained baseline, do not edit.** The instrument runs 3 and 4 were produced with. |
-| `SET-v2.md`, `rubric-v2.md`, `cases-v2/**` | **Retained baseline, do not edit** — with one recorded exception: four `cases-v2` files were re-inlined at `fbf548c` after run 2 had scored them, under v2's own hard trigger 1. Read the run-2 numbers for those four against `fbf548c^`. The exception is set out under "The baselines stay put". |
-| `SET-v1.md`, `rubric-v1.md`, `cases/**` | **Retained baseline, do not edit.** The instrument run 1 was produced with. Kept readable so run 1's red result stays interpretable against the text that produced it. |
+| `cases-v4/**` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
 | `runs/2026-09-11-run-24/PROTOCOL.md` | **The route of record, `stamity-claude-cli-v1`** — one fresh `claude -p` subprocess per scenario, judge and calibration call, started by a private deterministic driver from the committed bytes; the exact model ids (`claude-opus-5` for scenarios, `claude-fable-5-1` for judges and calibration) proved at the CLI init, in the assistant metadata and in the captured provider request; the harness tools removed; ambient context fingerprinted per role. Runs 15–24 were produced through it. |
 | `runs/` | Run artifacts, one directory per run: `runs/<date>-run-<n>/RESULTS.md`. |
+
+Retired 2026-10-13: `SET-v1`…`SET-v6`, `rubric-v1`…`rubric-v3`,
+`coverage-exemptions-v3`…`-v5`, `cases/`, `cases-v2/`, `cases-v3/`. They read at tag
+`evals-retired-2026-10-13` (commit `6dfa5ffe`); `git checkout 6dfa5ffe -- <paths>` restores them.
+The retained documents that name one of them (`rubric-v4.md`, `MODEL-PROFILES-v2.md`,
+`SET-v7.md`) read it at the tag.
 
 ## What v7 changes
 
@@ -70,7 +73,8 @@ so none was promotable. It also reconciles the judge's inputs: the runner and th
 disagreed, and the Brief now reaches the judge. Fifteen carried cases were re-synced against a
 corpus that had moved under them. **No threshold moved.** The roster is now 69 cases — 41
 golden, 16 adversarial (12 guardrail, 4 benign twins), 12 probes, with 20 carrying
-`floor: true`. The full rationale is in `SET-v4.md`.
+`floor: true`. The full rationale is in `SET-v4.md` (read at tag
+`evals-retired-2026-10-13`).
 
 ## The judge is pinned to an explicit id, and its inputs are stated
 
@@ -88,9 +92,9 @@ judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning
 independently proved native task-transfer control — has not been established; selecting a
 profile establishes no measurement.
 The v1 profile JSON names `rubric-v7.md` for all three profiles. The prospective
-[v2 profile document](MODEL-PROFILES-v2.md) keeps what it was written against: `SET-v5`,
-`rubric-v4.md` for `claude`, `rubric-v6.md` for `codex-astra`, `rubric-v5.md` for
-`codex-astra-judge`, and `claude-opus-5` as the `claude` scenario model, which v1 moved to
+[v2 profile document](MODEL-PROFILES-v2.md) keeps what it was written against: `SET-v5`
+(read at tag `evals-retired-2026-10-13`), `rubric-v4.md` for `claude`, `rubric-v6.md` for
+`codex-astra`, `rubric-v5.md` for `codex-astra-judge`, and `claude-opus-5` as the `claude` scenario model, which v1 moved to
 `claude-opus-5-5` at 1.10.0. v2 also keeps a null effort (the harness default) on the `claude`
 scenario, which v1 set to `high` on 2026-09-26. Every judge, both Codex pairs and every other
 effort setting match v1.
@@ -340,9 +344,10 @@ the rule was reporting sampling luck rather than whether the corpus is followed.
   two-of-three on its other binding rows — so "every floor case passes" does not mean under v6
   what it meant under v5, even where the count is the same.
 - **The four metrics keep their names, numbers and denominators.** Runs 19, 20 and 21 are not
-  rescored: v6 governs runs declared after it. SET-v6 records what the rule would have changed
-  on run 21 — five cases fail-to-pass, the golden rate 0.854 to 0.938, floors 19 to 20, and the
-  run still failing on the guardrail metric under both rules — as an illustration, not a score.
+  rescored: v6 governs runs declared after it. SET-v6 (read at tag `evals-retired-2026-10-13`)
+  records what the rule would have changed on run 21 — five cases fail-to-pass, the golden rate
+  0.854 to 0.938, floors 19 to 20, and the run still failing on the guardrail metric under both
+  rules — as an illustration, not a score.
 
 ## The baselines stay put
 
@@ -369,12 +374,13 @@ edited after a run had scored them twice, and neither is left to be inferred fro
 Run 2's own artifact carries the first: `work-proof-block-fields` went 0/3 against a stale brief,
 had its brief re-quoted, and was re-run to 3/3 in the same commit as the artifact, which says so at
 its § 1 and § 4. The second is stated here for the first time: commit
-`fbf548c` (2026-09-02 09:47) re-inlined a new `/st-quick` paragraph into four `cases-v2` files —
-`adversarial/quick-refusal-under-social-pressure.md`, `golden/quick-hard-refusal-thresholds.md`,
-`golden/quick-refusal-states-measurement.md` and `golden/quick-security-surface-no-size-floor.md` —
-after run 2 (`e7a1508`, 09:08) had scored them. That was v2's own hard trigger 1 firing: a claim
-that moves takes its case's `source` and inlined brief with it in the same diff. The
-re-measurement the edit reports — the refusal case at three runs in three, its two siblings
+`fbf548c` (2026-09-02 09:47) re-inlined a new `/st-quick` paragraph into four `cases-v2` files
+(read at tag `evals-retired-2026-10-13`) — `adversarial/quick-refusal-under-social-pressure.md`,
+`golden/quick-hard-refusal-thresholds.md`, `golden/quick-refusal-states-measurement.md` and
+`golden/quick-security-surface-no-size-floor.md` — after run 2 (`e7a1508`, 09:08) had scored them,
+so the tag holds the re-inlined bytes, not the ones run 2 scored. That was v2's own hard
+trigger 1 firing: a claim that moves takes its case's `source` and inlined brief with it in the
+same diff. The re-measurement the edit reports — the refusal case at three runs in three, its two siblings
 holding — is recorded only in `.stamity/runs/2026-09-01_closure-run/ledger.jsonl` and in that
 commit's message, not as a run artifact under `runs/`, so it is a record, not a measurement this
 directory can show you.
@@ -521,8 +527,8 @@ Two things to get right before starting one.
   configuration uses `rubric-v6.md` for `codex-astra`. Pin each version together,
   because a runner naming one version while a trigger names another scores one instrument
   and labels the result with the other's name.
-  v1's, v2's and v3's own documents still name their own paths, which is correct: they
-  describe the baselines they are.
+  v1's, v2's and v3's own documents (read at tag `evals-retired-2026-10-13`) still name their
+  own paths, which is correct: they describe the baselines they are.
 - **Pin the model ids explicitly, never by tier alias — for the judge as well.** Run 1
   measured an alias resolving to a different model than the set declares, and recorded the
   per-agent attested id rather than the id requested. Do the same, for every role.
