@@ -26,6 +26,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job runs only in the canonical repository: a private import that enables Actions keeps
+# this file but runs none of it. GitHub has no workflow-level `if`, so each job carries the guard.
+# It has no privacy clause, unlike the publication guards in release.yml: GitHub lists the
+# `schedule` webhook payload as "Not applicable", so a privacy read could skip the canonical
+# nightly too. scripts/fork-identity.mjs rewrites no workflow, so a renamed fork stays skipped.
 jobs:
   # macOS is where a maintainer develops and where no merge-blocking leg runs. Demoted from the
   # per-commit matrix rather than dropped: the failure mode it catches (a case-insensitive
@@ -33,6 +38,7 @@ jobs:
   # it on every push is the wrong trade.
   macos-smoke:
     name: macos smoke (node 24)
+    if: github.repository == 'zomarit/stamity'
     runs-on: macos-latest
     timeout-minutes: 25
     permissions:
@@ -69,6 +75,7 @@ jobs:
   # happened to run last — which is exactly why it does not gate a merge.
   node-next:
     name: node next (26)
+    if: github.repository == 'zomarit/stamity'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -110,6 +117,7 @@ jobs:
   # here. Driving is still not SCORING: the eval harness named in ci.yml's lane map is absent.
   headless-lane:
     name: headless lane (scratch-repo dogfood; invocation legs behind per-client secrets)
+    if: github.repository == 'zomarit/stamity'
     runs-on: ubuntu-latest
     # 45, raised from the 25 this job carried while its second half printed a warning. The added
     # work is a distribution build measured at ~20 s on 2026-09-20 (`time node

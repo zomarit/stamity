@@ -206,7 +206,11 @@ describe("the identity the CLI and CI suites assert against", () => {
       // The canonical repository guard the workflows carry, and the Actions context fed to
       // it. A committed file's text a rename does not touch; the fork guide leaves workflow
       // customization, and the tests that pin it, to the fork.
-      "test/ci/workflow.test.ts": { route: 13, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
+      // TEST CHANGE (plan 014 file 1, unit f3-nightly-canonical-guard): was `route: 13`. The
+      // nightly guard's case adds three literals: the guard string the three jobs must carry,
+      // and the canonical repository in two context rows it is evaluated against. Committed
+      // workflow text again, so a renamed fork passes the case unedited.
+      "test/ci/workflow.test.ts": { route: 16, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
       "test/ci/packSigningRehearsal.test.ts": { route: 4, why: "the rehearsal workflow's repository guard and its Actions environment fixture" },
       // ADDED by plan 010, unit e1-fork-release-workflow: the fork release workflow refuses the
       // canonical repository and the canonical package name, and its suite runs those guards

@@ -1716,6 +1716,41 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
   });
 });
 
+/**
+ * ADDED by plan 014 file 1, unit f3-nightly-canonical-guard — a private import that enables
+ * Actions must not run the nightly on a schedule. GitHub has no workflow-level `if`, so each job
+ * carries the guard. Unlike the publication guards above it has no privacy clause: GitHub lists
+ * the `schedule` webhook payload as "Not applicable", so a privacy read could stop the
+ * canonical nightly itself. The rows with no visibility prove the guard does not depend on it.
+ */
+describe("nightly.yml — the canonical repository guard", () => {
+  const NIGHTLY_GUARD = "github.repository == 'zomarit/stamity'";
+
+  for (const jobId of Object.keys(nightly.workflow.jobs)) {
+    it(`${jobId} runs only in the canonical repository, on a schedule or on demand`, () => {
+      const condition = jobOf(nightly, jobId).if ?? "";
+      expect(condition, "each nightly job carries exactly the guard").toBe(NIGHTLY_GUARD);
+      for (const event_name of ["schedule", "workflow_dispatch"]) {
+        for (const [repository, privateValue, allowed] of [
+          ["zomarit/stamity", false, true],
+          ["zomarit/stamity", null, true],
+          ["acme/stamity-private", true, false],
+          ["acme/stamity-private", false, false],
+        ] as const) {
+          expect(
+            evaluateWorkflowExpression(condition, repositoryContext({ github: { event_name } }, repository, privateValue)),
+            `${event_name} in ${repository} private=${String(privateValue)}`,
+          ).toBe(allowed);
+        }
+        expect(
+          evaluateWorkflowExpression(condition, { github: { event_name } }),
+          `${event_name} with no repository in the context`,
+        ).toBe(false);
+      }
+    });
+  }
+});
+
 
 /**
  * ADDED by plan 008 file 3, unit V1w — the plugin-route steps whose BEHAVIOUR is a decision.
