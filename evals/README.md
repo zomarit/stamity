@@ -36,7 +36,16 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 
 Retired 2026-10-13: `SET-v1`…`SET-v6`, `rubric-v1`…`rubric-v3`,
 `coverage-exemptions-v3`…`-v5`, `cases/`, `cases-v2/`, `cases-v3/`. They read at tag
-`evals-retired-2026-10-13` (commit `6dfa5ffe`); `git checkout 6dfa5ffe -- <paths>` restores them.
+`evals-retired-2026-10-13` (commit `6dfa5ffe`), and this command, typed from the repository
+root, restores them:
+
+```sh
+git checkout 6dfa5ffe -- evals/SET-v1.md evals/SET-v2.md evals/SET-v3.md evals/SET-v4.md \
+  evals/SET-v5.md evals/SET-v6.md evals/rubric-v1.md evals/rubric-v2.md evals/rubric-v3.md \
+  evals/coverage-exemptions-v3.md evals/coverage-exemptions-v4.md \
+  evals/coverage-exemptions-v5.md evals/cases evals/cases-v2 evals/cases-v3
+```
+
 The retained documents that name one of them (`rubric-v4.md`, `MODEL-PROFILES-v2.md`,
 `SET-v7.md`) read it at the tag.
 
@@ -374,11 +383,11 @@ edited after a run had scored them twice, and neither is left to be inferred fro
 Run 2's own artifact carries the first: `work-proof-block-fields` went 0/3 against a stale brief,
 had its brief re-quoted, and was re-run to 3/3 in the same commit as the artifact, which says so at
 its § 1 and § 4. The second is stated here for the first time: commit
-`fbf548c` (2026-09-02 09:47) re-inlined a new `/st-quick` paragraph into four `cases-v2` files
+`5692f741` (2026-09-02 09:47) re-inlined a new `/st-quick` paragraph into four `cases-v2` files
 (read at tag `evals-retired-2026-10-13`) — `adversarial/quick-refusal-under-social-pressure.md`,
 `golden/quick-hard-refusal-thresholds.md`, `golden/quick-refusal-states-measurement.md` and
-`golden/quick-security-surface-no-size-floor.md` — after run 2 (`e7a1508`, 09:08) had scored them,
-so the tag holds the re-inlined bytes, not the ones run 2 scored. That was v2's own hard
+`golden/quick-security-surface-no-size-floor.md` — after run 2 (`98318f66`, 09:08) had scored
+them, so the tag holds the re-inlined bytes, not the ones run 2 scored. That was v2's own hard
 trigger 1 firing: a claim that moves takes its case's `source` and inlined brief with it in the
 same diff. The re-measurement the edit reports — the refusal case at three runs in three, its two siblings
 holding — is recorded only in `.stamity/runs/2026-09-01_closure-run/ledger.jsonl` and in that
