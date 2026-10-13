@@ -129,9 +129,11 @@ release tags and the evidence-archive, replay and retirement tags stay upstream,
 deletes nothing at the destination. Keep the bare import as a backup until the downstream and
 consumer checks pass. Every later update comes through the upstream lane instead. This working
 clone holds upstream's tags, so push the private copy's own release tags by name
-(`git push origin <tag>`), never with `--tags`. A copy imported with the earlier `--mirror` recipe
-keeps `plugin-dist`, `plugins/v*` and upstream's other tags until its owner deletes them, and
-nothing in the lane reads them.
+(`git push origin <tag>`), never with `--tags`. Push from it without `--follow-tags` and with
+`push.followTags` unset, too: either makes a plain branch push carry upstream's annotated `v*` tags
+along, because they point at commits the pushed branch contains. A copy imported with the earlier
+`--mirror` recipe keeps `plugin-dist`, `plugins/v*` and upstream's other tags until its owner
+deletes them, and nothing in the lane reads them.
 
 ### Set the private package's identity
 

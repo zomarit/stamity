@@ -1075,13 +1075,21 @@ function fetchUpstream(context, config) {
 /**
  * The tag fetch. An exact pattern whose tag `ls-remote` does not find upstream fetches nothing and
  * succeeds with `absent`, so the sweep removes the copy an earlier fetch left, as `--prune` would.
+ * `ls-remote` matches its pattern against a ref name's tail, so the tag counts as found only when
+ * an output line names `refs/tags/<pattern>` whole, or its peeled `^{}` line.
  */
 function fetchReleaseTags(context, config, glob) {
   const { git, root } = context
   if (glob.exact) {
-    const lookup = git(['ls-remote', '--exit-code', '--tags', config.remote, `refs/tags/${glob.prefix}`], { cwd: root, check: false })
+    const ref = `refs/tags/${glob.prefix}`
+    const lookup = git(['ls-remote', '--exit-code', '--tags', config.remote, ref], { cwd: root, check: false })
     if (lookup.status === 2) return { status: 0, stderr: '', absent: true }
     if (lookup.status !== 0) return lookup
+    const named = lookup.stdout.split('\n').some((line) => {
+      const name = line.slice(line.indexOf('\t') + 1)
+      return name === ref || name === `${ref}^{}`
+    })
+    if (!named) return { status: 0, stderr: '', absent: true }
   }
   return git(['fetch', '--no-tags', '--prune', '--quiet', config.remote, releaseTagRefspec(config.releases.pattern)], { cwd: root, check: false })
 }

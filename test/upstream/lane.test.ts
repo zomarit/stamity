@@ -1917,6 +1917,39 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     );
 
     it(
+      "counts an exact tag as present only when upstream names it whole, not when another tag ends with it",
+      () => {
+        const fork = createFork(upstream, forkDir(), { config: { releases: { pattern: "v9.9.9" } } });
+        git(fork, ["update-ref", "refs/stamity-upstream/tags/v9.9.9", upstream.tags["v1.2.0"]!]);
+        // `ls-remote` matches its pattern against a ref name's tail, so this tag answers a lookup of
+        // refs/tags/v9.9.9 although refs/tags/v9.9.9 itself is absent upstream.
+        const missing = withUpstreamTags(["x/refs/tags/v9.9.9"], () => runLane(fork, ["status"]));
+        expect(missing.code).toBe(2);
+        expect(missing.doc.messages.join("\n")).toContain('no release tag matching "v9.9.9" was fetched from upstream');
+        expect(missing.doc.messages.join("\n")).not.toMatch(/fetch from upstream \(.*\) failed/);
+        expect(namespaceTags(fork)).toEqual([]);
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "loads a pattern with several *, and fetches and selects exactly the tags its cut admits",
+      () => {
+        const pattern = "v*-*-final";
+        const admitted = ["v1.1.0-final", "v1.2.0-x-final"];
+        const outside = ["v1.2.0-x-acme", "release-1.2.0-final"];
+        for (const tag of admitted) expect(parseReleaseTag(tag, pattern)).not.toBeNull();
+        for (const tag of outside) expect(parseReleaseTag(tag, pattern)).toBeNull();
+        const fork = createFork(upstream, forkDir(), { config: { releases: { pattern } } });
+        const status = withUpstreamTags([...admitted, ...outside], () => runLane(fork, ["status"]));
+        expectOutcome(status, "update-available");
+        expect(namespaceTags(fork)).toEqual(admitted);
+        expect(status.doc.target?.tag).toBe("v1.1.0-final");
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
       "refuses a pattern git cannot use as a refspec at load, with exit 2 and no fetch",
       () => {
         const fork = createFork(upstream, forkDir(), { config: { releases: { pattern: "v?*" } } });
