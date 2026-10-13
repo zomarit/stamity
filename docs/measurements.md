@@ -6,19 +6,19 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-10-11 — the newest
+What this repository can prove about its own output, as of 2026-10-12 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-12.json`](../evals/measurements/merge-ready-2026-10-12.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-13.json`](../evals/measurements/merge-ready-2026-10-13.json), the frozen
 measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
 (the release checklist's record-currency line); the snapshot named above is the input, and a
 run record written after it is not on this page until the next refresh.
 
 ## Verified merge-ready rate
 
-**7 of 17 runs** (0.412).
+**7 of 19 runs** (0.368).
 
 The rule: verified merge-ready = the final gate table all pass, the last review verdict an approval at or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with no open row; merge evidence is reported per run, never a clause; self-declared wording never counts.
 
@@ -66,6 +66,8 @@ is the first clause each one missed.
 | `2026-10-07_release-1-12-0` | the last review verdict is not an approval | released version 1.12.0 in CHANGELOG |
 | `2026-10-07_security-fixes` | the approval states no confidence to compare to the gate | none in committed artifacts |
 | `2026-10-10_next-tier` | the approval states no confidence to compare to the gate | none in committed artifacts |
+| `2026-10-11_release-1-14-0` | the last review verdict is not an approval | released version 1.14.0 in CHANGELOG |
+| `2026-10-12_board-writes` | the last review verdict is not an approval | none in committed artifacts |
 
 ### Excluded, with the evidence each one lacks
 
@@ -109,11 +111,10 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-10-08_maintainer-tooling` — gates in prose only — no gate row carries a pass or fail
 - `2026-10-08_product-core` — gates in prose only — no gate row carries a pass or fail
 - `2026-10-11_debug-claude-plugin-walk` — no proof block
-- `2026-10-11_release-1-14-0` — run in progress
 
 ### What the number is limited by, stated rather than tuned away
 
-37 run directories are outside the measure and every one of them is named
+36 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
