@@ -299,12 +299,43 @@ the version→hash pair is the only pinned literal, and `GOVERNANCE.md:71` state
 
 ### REQ-PROVE-009 — Eval set v7 with cases-v6
 
-`evals/cases-v6/**` and `evals/SET-v7.md` are the current set; SET-v6, `cases-v5` and earlier stay
-retained and unchanged (`evals/README.md:8`, `:28-30`). The four thresholds and SET-v6's scoring rule
-carry over verbatim (`evals/SET-v6.md:82-87`); every gate under `test/evals/` reads the new constants.
+The superseded eval inputs were deleted on 2026-10-13; every path below under `evals/SET-v1.md`…`SET-v6.md`,
+`evals/rubric-v1.md`…`rubric-v3.md`, `evals/coverage-exemptions-v3.md`…`-v5.md`, `evals/cases/`, `evals/cases-v2/` or
+`evals/cases-v3/` reads at tag `evals-retired-2026-10-13`.
+
+`evals/cases-v6/**` and `evals/SET-v7.md` are the current set. `cases-v4/`, `cases-v5/`, `rubric-v4.md`…`rubric-v7.md`
+and the model profiles stay on `main`, unchanged. The superseded inputs no code reads — `SET-v1.md`…`SET-v6.md`,
+`rubric-v1.md`…`rubric-v3.md`, `coverage-exemptions-v3.md`…`-v5.md`, `cases/`, `cases-v2/` and `cases-v3/` — leave the
+tree behind the annotated tag `evals-retired-2026-10-13`, placed on the `main` commit `6dfa5ffe`, which still carries
+them; they are read at that tag, and `git checkout 6dfa5ffe -- <path>…` restores them. The four thresholds and SET-v6's
+scoring rule carry over verbatim (`evals/SET-v6.md:82-87`, read at the tag); every gate under `test/evals/` reads the
+new constants; no rubric core and no `SET-v7.md` byte moves. (Amended 2026-10-13, plan 014 file 1, unit
+`f4-retire-superseded-eval-inputs`; its first sentence read "`evals/cases-v6/**` and `evals/SET-v7.md` are the current
+set; SET-v6, `cases-v5` and earlier stay retained and unchanged", citing the README's prose line and a row range that
+had come to point at the `cases-v6` rows; the thresholds and gates sentence is unchanged but for the tag note and the
+closing clause.)
+
+- **Evidence** (cited at `7327f435`): `evals/README.md:8-11` names the baselines that stay on `main` and the tag; the
+  rubric and model-profile rows that stay are `:21-27`, the `cases-v5/**` row `:31` and the `cases-v4/**` row `:33`;
+  the retirement line, with the tag, its commit and the restore command, is `:37-47`, and `:49-50` names the retained
+  documents that read a retired file at the tag. The checklist's repointing parenthetical carries the tag note
+  (`.github/release-controls-checklist.md:223-227`), and the CHANGELOG's `### Removed` bullet names the tag and its
+  commit (`CHANGELOG.md:130-144`). The precedent is the replay's retirement, `CHANGELOG.md:1238-1242` and
+  `docs/specs/orchestrator-context.md:634-641`.
+- **Proof:** the full gate and `test/evals/rubricCoreHash.test.ts`; docs (`evals/README.md`, the CHANGELOG).
 
 - GIVEN the repository WHEN the eval gates run THEN they resolve `SET-v7.md` and `cases-v6/` with
   SET-v6's thresholds, and a successor-inputs test proves `cases-v5`'s Expected blocks survive.
+- GIVEN tag `evals-retired-2026-10-13` THEN `git cat-file -t` reads `tag`, `git ls-tree -r --name-only` at it lists
+  every retired path (145), and its commit is an ancestor of `main`.
+- GIVEN `git diff --name-status 6dfa5ffe HEAD -- evals` THEN every retired path reads `D` and the only other changed
+  path is `evals/README.md`.
+- GIVEN `evals/SET-v7.md` and the rubric files THEN `git diff 6dfa5ffe HEAD` over them is empty and
+  `rubricCoreHash.test.ts` passes.
+- GIVEN the tree after the deletion WHEN `npm run lint && npm run typecheck && npm test` runs THEN it exits 0 — the
+  proof that nothing reads a retired path.
+- GIVEN `evals/README.md` THEN the retirement line names the tag and its commit, and no relative link targets a path
+  the tree lacks.
 
 Prove-phase amendment (2026-09-15, after run 27 and a maintainer decision): `evals/SET-v7.md` also
 declares how a later candidate is measured within one configuration — a release's first complete run is
@@ -1043,7 +1074,9 @@ configuration; on the public route it names the harness id.
 - Track B's with/without benchmark: scheduled with its own trigger, not this package's.
 - Telemetry. The measurement report reads committed records and a published download snapshot.
 - A hosted or always-on judge. Eval runs stay the manual harness on the route of record.
-- Editing retained eval baselines: SET-v1…v6 and `cases/`…`cases-v5` stay byte-identical (`…:28-30`).
+- Editing retained eval baselines. `cases-v4/`, `cases-v5/` and `rubric-v4.md`…`rubric-v7.md` stay byte-identical on
+  `main`; SET-v1…v6, rubric-v1…v3, coverage-exemptions-v3…v5, `cases/`, `cases-v2/` and `cases-v3/` stay
+  byte-identical at tag `evals-retired-2026-10-13`, which is their record. Removing them from `main` does not edit them.
 
 ## Evidence
 

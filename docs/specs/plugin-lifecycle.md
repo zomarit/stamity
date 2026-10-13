@@ -1073,6 +1073,26 @@ mapped to the variable its client honours as measured from the binaries, with on
 secret, `--invoke` scoped to the armed clients, and a 45-minute ceiling derived from the measured
 distribution build.
 
+Amended 2026-10-13 (plan 014 file 1, unit `f3-nightly-canonical-guard`). Nightly's `headless-lane` job, which carries
+the invocation legs, runs only where `github.repository == 'zomarit/stamity'`; in any other repository the job is
+skipped before its first step, so a fork holding all four secrets drives no leg. "Nightly's drive step carries the
+invocation legs behind four secrets" (`:1071-1072`) therefore holds in the canonical repository only. The
+credential-free half in `ci.yml`'s `plugin-route` job is unchanged. `macos-smoke` and `node-next` carry the same guard;
+no requirement covers those two jobs.
+
+- **Evidence**, cited by job and step name as this requirement's workflow citations are: in
+  `.github/workflows/nightly.yml`, the jobs `macos-smoke`, `node-next` and `headless-lane` each carry the job-level
+  `if: github.repository == 'zomarit/stamity'`, and the four client drive steps, `Headless target-tool drive (claude)`,
+  `(cursor)`, `(copilot)` and `(codex)`, run inside `headless-lane`, so they are skipped with it. The guard has no
+  privacy clause; the comment above the file's `jobs:` key gives the reason.
+- **Proof:** `test/ci/workflow.test.ts`, the describe "nightly.yml — the canonical repository guard", one case per job,
+  "<job> runs only in the canonical repository, on a schedule or on demand".
+
+- GIVEN `nightly.yml` THEN `macos-smoke`, `node-next` and `headless-lane` each carry exactly
+  `if: github.repository == 'zomarit/stamity'`.
+- GIVEN that guard evaluated with `github.repository` = `acme/stamity-private` THEN it reads false; with
+  `zomarit/stamity` THEN true.
+
 Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md`, unit `sw06-records-only-ci-lane`, ledger
 `build/82`): "merge-blocking through `all-ci-checks`" holds on every change that is not records-only. A push or pull
 request whose every changed path is a record — under `.stamity/runs/`, `.stamity/handoffs/` or `docs/plans/`, or

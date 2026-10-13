@@ -178,14 +178,87 @@ clean skip for the workflow).
 
 ### REQ-UPSTREAM-002 — Fetching into a namespace of its own
 
-`status`, `preview` and `integrate` fetch the upstream's release tags and its default
-branch into refs the fork's own tags cannot collide with:
+`status`, `preview` and `integrate` fetch the upstream's default branch and only the tags
+`releases.pattern` can select, into refs the fork's own tags cannot collide with:
 `refs/stamity-upstream/tags/<tag>` (annotated tags peeled to their commits when compared)
 and `refs/stamity-upstream/heads/<branch>`. The fork's own `v*` tags — a fork may cut its
 own releases under the same names — stay untouched, and a run never creates or moves a tag
 in `refs/tags/`. The remote named in the config is created with the configured URL if
 absent, and a run refuses (exit 2) when a remote of that name exists with a different URL,
 naming both, rather than silently repointing it.
+
+- **The tag refspec** is cut from the pattern the way `parseReleaseTag` cuts it — the prefix
+  before the first `*`, the suffix after the last — giving
+  `+refs/tags/<prefix>*<suffix>:refs/stamity-upstream/tags/<prefix>*<suffix>`. A middle `*` is
+  no second wildcard: its span is part of the version core, so `v*-*-final` fetches the tags
+  `v*-final` covers. A pattern with no `*` gives an exact refspec, fetched only when
+  `git ls-remote --tags` finds the tag upstream.
+- **The sweep.** After an online fetch, every ref under `refs/stamity-upstream/tags/` whose name
+  does not match `<prefix>*<suffix>` is deleted, in one `git update-ref --stdin` transaction,
+  which clears the `plugins/v*` refs that earlier runs fetched (`--prune` alone never removes a
+  ref outside its own refspec). An exact tag counts as present upstream only when a
+  `git ls-remote` line names `refs/tags/<pattern>` whole, or its peeled `^{}` line, because
+  `ls-remote` matches its pattern against a ref name's tail. When it is absent, nothing is
+  fetched, the run reports "no release tag matching" as before, and the sweep deletes the stale
+  copy of that exact tag an earlier fetch left, as `--prune` did while the lane fetched every
+  tag. `--offline` fetches nothing and sweeps nothing.
+- **Refused patterns.** The load check runs on the cut form: a `releases.pattern` for which
+  `git check-ref-format --refspec-pattern refs/tags/<prefix>*<suffix>` (an exact pattern:
+  `refs/tags/<pattern>`) fails is a config error at load (exit 2), naming `releases.pattern`,
+  and no `git fetch` runs. A pattern with several `*`, such as `v*-*-final`, is checked as its
+  one-`*` cut and accepted.
+
+(Amended 2026-10-13, plan 014 file 1, unit `f2-lane-release-tags-only`; it read "fetch the
+upstream's release tags and its default branch".)
+
+- **Evidence** (cited at `7327f435`): the cut is `releaseTagGlob` (`scripts/upstream.mjs:370-374`),
+  which `parseReleaseTag` selects with (`:398-401`) and the refspec is built from
+  (`releaseTagRefspec`, `:388-391`, into `REF_NAMESPACE`, `:180`). The load check runs
+  `git check-ref-format --refspec-pattern` on `refs/tags/` plus the cut form and throws a config
+  error naming `releases.pattern` (`:981-990`); config errors exit 2
+  (`docs/specs/enterprise-upstream-lane.md:166-167`). The fetch is `fetchUpstream` (`:1053-1073`);
+  its tag half, `fetchReleaseTags` (`:1081-1095`), looks an exact pattern up with
+  `git ls-remote --exit-code --tags` (`:1085`), counts the tag found only on a whole-name or peeled
+  line (`:1088-1091`), returns `absent` otherwise (`:1086`, `:1092`), and fetches the refspec under
+  `--prune` (`:1094`). The sweep is `sweepReleaseTags` (`:1098-1106`), called after a successful
+  fetch with the glob, or with none for an absent exact tag (`:1065`). "no release tag matching"
+  is `:1302`. The canonical repository cuts `plugins/v<version>` tags (`package.json:50`,
+  `stamity.distribution.tagPattern`).
+- **Proof:** `test/upstream/lane.test.ts`, the describe "the release-tag fetch" (`:1817`), and in
+  the describe "release selection" the cases "cuts the pattern into the glob the fetch uses: the
+  prefix before the first *, the suffix after the last" and "builds the tag refspec into the
+  lane's namespace from that glob, or the exact tag"; the guide's `releases.pattern` row
+  (`docs/enterprise-forks.md:298`).
+
+#### Acceptance
+
+- GIVEN an upstream with `v1.0.0`, `v1.1.0` and `plugins/v1.1.0` and the default pattern WHEN
+  `status` runs THEN `git for-each-ref refs/stamity-upstream/tags/` lists `v1.0.0` and `v1.1.0`
+  and no `plugins/` ref (`test`: "fetches the v* tags and no plugins/ or off-pattern tag under the
+  default pattern").
+- GIVEN a fork holding `refs/stamity-upstream/tags/plugins/v1.0.0` from an earlier run WHEN
+  `status` runs online THEN that ref is gone; a second run leaves the `for-each-ref` output
+  byte-identical; WHEN `status --offline` runs instead THEN the ref is still there (`test`: "sweeps
+  an earlier run's off-pattern ref online, keeps it offline, and leaves the fork's own tags
+  alone").
+- GIVEN `releases.pattern: "v*-acme"` THEN the fetched refs are exactly the upstream tags matching
+  that glob. GIVEN `"v1.2.0"` with that tag upstream THEN only that tag is fetched; without it THEN
+  the run reports "no release tag matching" as before, and an earlier run's copy of that tag is
+  gone (`test`: "fetches exactly the tags a custom glob matches", "fetches an exact pattern only
+  when upstream has the tag, and reports no release tag otherwise").
+- GIVEN an exact pattern whose tag upstream lacks, and an upstream tag whose name only ends with
+  `refs/tags/<pattern>` WHEN `status` runs THEN it reports "no release tag matching", not a fetch
+  failure, and the namespace holds no tag ref (`test`: "counts an exact tag as present only when
+  upstream names it whole, not when another tag ends with it").
+- GIVEN `releases.pattern: "v*-*-final"` WHEN `status` runs THEN the config loads, and the fetched
+  and selected tags are exactly those its cut `v*-final` admits (`test`: "loads a pattern with
+  several *, and fetches and selects exactly the tags its cut admits").
+- GIVEN a pattern whose cut form `git check-ref-format --refspec-pattern` refuses (for example
+  `v?*`) WHEN any verb loads the config THEN it exits 2 naming `releases.pattern`, and no
+  `git fetch` runs (`test`: "refuses a pattern git cannot use as a refspec at load, with exit 2 and
+  no fetch").
+- GIVEN a fork-owned `refs/tags/v1.1.0` that points elsewhere WHEN any verb runs THEN that ref is
+  unchanged (`test`: the sweep case above).
 
 ### REQ-UPSTREAM-003 — Derived state: integrated release, target release, divergence
 
@@ -465,13 +538,43 @@ a GitHub fork, a plain clone pushed to a private repository under another organi
 GitLab or self-hosted mirror. It relies on nothing in the fork network. The guide states
 the platform facts the lane cannot change — a private copy of a public repository cannot
 be a GitHub fork at all (a fork's visibility is tied to its network), so the private case
-is a mirror clone pushed to a new repository with its history and none of the fork
-features (`Sync fork`, the merge-upstream endpoint, pull requests to upstream, `gh repo
-sync`); `gh repo sync` is fast-forward-only and its `--force` is a hard reset; scheduled
+is a single-branch bare clone of upstream `main`, pushed to a new repository as
+`refs/heads/main` alone, with that history and none of the fork features (`Sync fork`, the
+merge-upstream endpoint, pull requests to upstream, `gh repo sync`). The import uses no
+`--mirror` and pushes no tag, so it creates no other branch or tag in the destination —
+`plugin-dist`, `plugins/v*`, the `v*` release tags, `evidence-archive-*`, `replay-frozen-*` and
+`evals-retired-*` stay upstream — and deletes no destination ref. (Amended 2026-10-13, plan 014
+file 1, unit `f1-import-recipe`; it read "a mirror clone pushed to a new repository with its
+history".) `gh repo sync` is fast-forward-only and its `--force` is a hard reset; scheduled
 workflows are disabled by default in a fork and stop after sixty idle days in a public
 repository; upstream release and push events never reach another repository — each
 verified against the platform documentation and the `gh` source on 2026-09-09 and recorded
 in the plan's research section.
+
+- **Evidence** (cited at `7327f435`): the guide's import block clones with
+  `git clone --bare --single-branch --branch main --no-tags` and pushes
+  `'refs/heads/main:refs/heads/main'` (`docs/enterprise-forks.md:110-111`). Its prose says the
+  baseline check runs in the working clone, where `git fetch upstream` brought upstream's tags,
+  the import having pushed none (`:120-121`); that the import copies `main` alone and deletes
+  nothing at the destination (`:125-129`); that the private copy's own release tags are pushed by
+  name, never with `--tags` (`:130-134`); and that a copy imported with the earlier `--mirror`
+  recipe keeps its extra refs (`:134-136`).
+- **Proof:** `test/upstream/importRecipe.test.ts`, which takes the block's two git commands from
+  the page and runs them against fixture repositories over `file://`, so the destination's refs
+  are what the printed recipe produces.
+
+#### Acceptance
+
+- GIVEN the guide's import block THEN it clones bare, single-branch at `main`, with no tags,
+  pushes exactly `refs/heads/main:refs/heads/main`, and contains no `--mirror` and no
+  `refs/tags/` (`test`: "clones bare, single-branch at main and without tags, and pushes main
+  alone").
+- GIVEN a fixture upstream carrying `main`, `plugin-dist`, `v1.0.0`, `plugins/v1.0.0` and an
+  annotated `replay-frozen-x`, and an empty destination, WHEN the block's two git commands run
+  THEN the destination's refs are exactly `refs/heads/main` (`test`: "leaves the destination
+  holding refs/heads/main alone, at upstream main").
+- GIVEN a destination already holding `refs/heads/feature` WHEN the push runs THEN `feature`
+  survives (`test`: "keeps a branch the destination already holds").
 
 ### REQ-UPSTREAM-015 — A repository that never runs the lane is byte-identical
 
