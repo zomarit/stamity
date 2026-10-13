@@ -415,7 +415,7 @@ describe("portable native hook boundary", () => {
 
   // A hook may exit without reading its input; above the pipe buffer the payload write then fails with EPIPE, and the
   // child's own status is still the decision (CI's flake of "still starts any other launcher…" was its small-payload form).
-  it.each(["cursor", "copilot"] as const)("%s yields the child's own status when the child exits without reading its whole input", async (tool) => {
+  it.each(["cursor", "copilot", "codex"] as const)("%s yields the child's own status when the child exits without reading its whole input", async (tool) => {
     const f = await fixture(tool, 'process.stderr.write("child-ran-without-reading\\n"); process.exit(0);');
     const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
     expect(result.stderr).toContain("child-ran-without-reading");
@@ -424,12 +424,36 @@ describe("portable native hook boundary", () => {
   });
 
   // The same unread input, with a hook that fails: the runner passes on the child's own status, 3, not its own 1.
-  it.each(["cursor", "copilot"] as const)("%s passes on the child's own failing status when the child exits without reading its whole input", async (tool) => {
+  it.each(["cursor", "copilot", "codex"] as const)("%s passes on the child's own failing status when the child exits without reading its whole input", async (tool) => {
     const f = await fixture(tool, 'process.stderr.write("child-ran-without-reading\\n"); process.exit(3);');
     const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
     expect(result.stderr).toContain("child-ran-without-reading");
     expect(result.stderr).not.toContain("Hook process failed");
     expect(result.status, result.stderr).toBe(3);
+  });
+
+  // The same unread input, with a hook that decides: its stdout still reaches the client as that client's own deny.
+  it.each(["cursor", "copilot", "codex"] as const)("%s still takes the decision a child writes when the child exits without reading its whole input", async (tool) => {
+    const deny = { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "Policy refuses this call" } };
+    const f = await fixture(tool, output(deny));
+    const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
+    expect(result.stderr).not.toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      cursor: { permission: "deny", user_message: "Policy refuses this call" },
+      copilot: { permissionDecision: "deny", permissionDecisionReason: "Policy refuses this call" },
+      codex: deny,
+    }[tool]);
+  });
+
+  // A Copilot timeout while the hook leaves its input unread carries both a timeout and a pipe error; the timeout is the
+  // one reported, so the runner still yields as for any other Copilot timeout.
+  it("keeps a Copilot timeout fail-open when the timed-out child never read its whole input", async () => {
+    const f = await fixture("copilot", "setTimeout(() => {}, 3000);", { timeoutMs: 300 });
+    const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
+    expect(result.stderr).toContain("timeout: Copilot proceeds through its normal permission flow");
+    expect(result.stderr).not.toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe(0);
   });
 });
 
