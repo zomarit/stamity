@@ -33,7 +33,8 @@
         "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
-        "test/records"
+        "test/records",
+        "test/runs/ledgerGates.test.ts"
       ]
     },
     {
@@ -44,8 +45,7 @@
         "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
         "test/docsPages.test.ts",
-        "test/records",
-        "test/runs/inboxStore.test.ts"
+        "test/records"
       ]
     },
     {
@@ -74,6 +74,7 @@
       "glob": "docs/specs/**",
       "tests": [
         "test/authoring/specPlanCoverage.test.ts",
+        "test/authoring/specStatusRules.test.ts",
         "test/ci/docsRoster.test.ts",
         "test/ci/leakGate.test.ts",
         "test/ci/testInputsGuard.test.ts",

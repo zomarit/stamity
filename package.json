@@ -55,6 +55,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint && eslint .",
     "test": "vitest run",
+    "test:records": "vitest run --config vitest.records.config.ts",
     "knip": "knip",
     "gate": "node scripts/leak-gate.mjs",
     "upstream": "node scripts/upstream.mjs",

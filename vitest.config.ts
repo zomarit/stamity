@@ -87,6 +87,13 @@ export class WindowsFixtureSequencer extends BaseSequencer {
   }
 }
 
+/**
+ * The records suite (REQ-PROVE-025): the cases that read the committed records run under
+ * `vitest.records.config.ts` (`npm run test:records`), behind a check that the records are on disk,
+ * so `npm test` runs none of them and reads no record.
+ */
+const RECORDS_SUITE = "test/records/**";
+
 // 2026-10-08: the Windows parallel group's per-case budget. Quiet Windows runs `init -y` in
 // test/cli/surface.e2e.test.ts in 2.8-7.6 s; CI run 37840621578 (attempts 1-2, windows-1) ran it
 // past the 20 s default on a starved runner. 120 s covers 10x the slowest quiet run with margin.
@@ -128,7 +135,7 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
         test: {
           name: "parallel",
           include: ["test/**/*.test.ts"],
-          exclude: [...configDefaults.exclude, ...heavy],
+          exclude: [...configDefaults.exclude, ...heavy, RECORDS_SUITE],
           testTimeout: WINDOWS_PARALLEL_TEST_TIMEOUT_MS,
           sequence: { groupOrder: 0 },
         },
@@ -149,6 +156,7 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
+    exclude: [...configDefaults.exclude, RECORDS_SUITE],
     ...fixtureScheduling(process.platform),
     ...privateTempRoot(
       fileURLToPath(new URL("./test/support/globalSetup.ts", import.meta.url)),

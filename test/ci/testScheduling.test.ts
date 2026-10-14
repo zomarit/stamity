@@ -20,8 +20,21 @@ import setup, {
   tempVolumeWarning,
 } from "../support/globalSetup.ts";
 import { lazyCleanup } from "../support/lazyCleanup.ts";
+import { assertRecordsPresent } from "../support/recordsPresent.ts";
+import recordsConfig from "../../vitest.records.config.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
+/** Every `*.test.ts` file under `test/`, POSIX-spelled, from disk rather than from any config. */
+async function testFilesOnDisk(): Promise<string[]> {
+  return (await readdir(new URL("../../test/", import.meta.url), { recursive: true }))
+    .filter((file) => file.endsWith(".test.ts"))
+    .map((file) => `test/${file.replaceAll("\\", "/")}`);
+}
+
+/** A file of the records suite, which `npm run test:records` runs and `npm test` does not. */
+const isRecordsFile = (file: string): boolean => file.startsWith("test/records/");
+
 const HEAVY = [
   "test/ci/pluginLifecycle.test.ts",
   "test/cli/commands/syncMcpOwnership.test.ts",
@@ -48,9 +61,11 @@ describe("Windows fixture scheduling", () => {
     try {
       const specs = await runner.globTestSpecifications();
       const discovered = specs.map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
-      const files = (await readdir(new URL("../../test/", import.meta.url), { recursive: true }))
-        .filter((file) => file.endsWith(".test.ts"))
-        .map((file) => `test/${file.replaceAll("\\", "/")}`);
+      // TEST CHANGE, justified (2026-10-14, unit r1-records-suite, REQ-PROVE-025): the records suite
+      // moved to its own config, `vitest.records.config.ts`, so the default suite's expected file set
+      // leaves out `test/records/**`; every other file is still discovered exactly once, and the
+      // records files are held to the records config below.
+      const files = (await testFilesOnDisk()).filter((file) => !isRecordsFile(file));
       expect(discovered.toSorted()).toEqual(files.toSorted());
       expect(new Set(discovered).size).toBe(discovered.length);
 
@@ -122,9 +137,10 @@ describe("Windows fixture scheduling", () => {
       }
     };
     const [first, second] = await Promise.all([shardFiles(1), shardFiles(2)]);
-    const files = (await readdir(new URL("../../test/", import.meta.url), { recursive: true }))
-      .filter((file) => file.endsWith(".test.ts"))
-      .map((file) => `test/${file.replaceAll("\\", "/")}`);
+    // TEST CHANGE, justified (2026-10-14, unit r1-records-suite, REQ-PROVE-025): the records suite
+    // runs under `vitest.records.config.ts`, not on a Windows shard, so the expected set leaves out
+    // `test/records/**`; the two shards still cover every other file exactly once.
+    const files = (await testFilesOnDisk()).filter((file) => !isRecordsFile(file));
     expect([...first, ...second].toSorted()).toEqual(files.toSorted());
     expect(first.filter((file) => second.includes(file))).toEqual([]);
     expect(new Set(first).size).toBe(first.length);
@@ -162,6 +178,95 @@ describe("Windows fixture scheduling", () => {
     expect(config.test?.projects).toEqual(fixtureScheduling(process.platform).projects);
     expect(config.test?.testTimeout).toBe(20_000);
     expect(config.test?.hookTimeout).toBe(20_000);
+  });
+});
+
+// ADDED 2026-10-14 (unit r1-records-suite, REQ-PROVE-025): the suite that reads the committed
+// records runs apart from `npm test`, under its own config and behind a check that the records are
+// on disk, so a checkout without them fails loudly instead of passing a gate over nothing.
+describe("the records suite", () => {
+  it("runs exactly the test/records files, after the records check and in the private temp root", async () => {
+    const runner = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT },
+      { test: { ...recordsConfig.test } },
+    );
+    try {
+      const specs = await runner.globTestSpecifications();
+      const discovered = specs.map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
+      const records = (await testFilesOnDisk()).filter(isRecordsFile);
+      expect(records.length, "no file under test/records/").toBeGreaterThan(1);
+      expect(discovered.toSorted()).toEqual(records.toSorted());
+      expect(new Set(discovered).size).toBe(discovered.length);
+      // The records check runs first, so an absent record stops the run before a temp root exists.
+      expect([recordsConfig.test?.globalSetup].flat()).toEqual([
+        "test/support/recordsPresent.ts",
+        "test/support/globalSetup.ts",
+      ]);
+      expect(recordsConfig.test?.env?.["TMPDIR"]).toBe(config.test?.env?.["TMPDIR"]);
+      // The leak-gate budget (`GATE_RUN_TIMEOUT_MS`, test/support/leakGateRun.ts).
+      expect(runner.config.testTimeout).toBe(180_000);
+    } finally {
+      await runner.close();
+    }
+  });
+
+  describe("its records check", () => {
+    const scratch = realpathSync(mkdtempSync(join(tmpdir(), "records-present-")));
+    afterAll(() => lazyCleanup(scratch));
+    let cases = 0;
+    /** A checkout holding the named record locations, each with one entry, under a fresh folder. */
+    const checkout = (locations: readonly ("ledger" | "plan" | "eval-run" | "measurement")[]): string => {
+      cases += 1;
+      const root = join(scratch, `c${cases}`);
+      const file = (segments: readonly string[]): void => {
+        mkdirSync(join(root, ...segments.slice(0, -1)), { recursive: true });
+        writeFileSync(join(root, ...segments), "x\n");
+      };
+      mkdirSync(root);
+      if (locations.includes("ledger")) file([".stamity", "runs", "2026-10-14_demo", "ledger.jsonl"]);
+      if (locations.includes("plan")) file(["docs", "plans", "001-demo.md"]);
+      if (locations.includes("eval-run")) mkdirSync(join(root, "evals", "runs", "2026-10-14-run-1"), { recursive: true });
+      if (locations.includes("measurement")) file(["evals", "measurements", "merge-ready-2026-10-14.json"]);
+      return root;
+    };
+
+    it("passes a checkout that carries all four record locations", () => {
+      expect(() => assertRecordsPresent(checkout(["ledger", "plan", "eval-run", "measurement"]))).not.toThrow();
+    });
+
+    it("fails a checkout without the records, naming the restore and the setup", () => {
+      expect(() => assertRecordsPresent(checkout([]))).toThrow(
+        "The records are not in this checkout. Run `node scripts/records.mjs restore` " +
+          "(a fresh clone: `node scripts/records.mjs setup`), then `npm run test:records`.",
+      );
+    });
+
+    it("names each location that is missing, and only those", () => {
+      const missing = (root: string): string => {
+        try {
+          assertRecordsPresent(root);
+          return "";
+        } catch (error) {
+          return (error as Error).message;
+        }
+      };
+      const noLedger = missing(checkout(["plan", "eval-run", "measurement"]));
+      expect(noLedger).toContain("a run ledger");
+      expect(noLedger).not.toContain("a plan");
+      const noEvals = missing(checkout(["ledger", "plan"]));
+      expect(noEvals).toContain("an eval run folder");
+      expect(noEvals).toContain("a merge-ready measurement");
+      expect(noEvals).not.toContain("a run ledger");
+      // A run folder with no ledger, an eval folder off the naming, and a file where the folder
+      // should be are not records.
+      const offShape = checkout(["plan", "measurement"]);
+      mkdirSync(join(offShape, ".stamity", "runs", "2026-10-14_empty"), { recursive: true });
+      mkdirSync(join(offShape, "evals", "runs", "2026-10-14-scratch"), { recursive: true });
+      writeFileSync(join(offShape, "evals", "runs", "2026-10-14-run-2"), "x\n");
+      const named = missing(offShape);
+      expect(named).toContain("a run ledger");
+      expect(named).toContain("an eval run folder");
+    });
   });
 });
 

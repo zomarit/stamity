@@ -1,12 +1,8 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseDisposition } from "../../src/runs/disposition.ts";
 import {
   ALWAYS_SHOW_TAGS,
   editInboxText,
-  INBOX_PATH,
   locationPaths,
   matchInbox,
   parseInbox,
@@ -20,12 +16,9 @@ import {
  * rule's section, and the query `stamity ledger inbox` answers.
  *
  * Pure functions over strings, so the cases feed them hand-built rows; no
- * fixture copies a real inbox row. The one read of this repository's own inbox
- * holds the committed file to the parser, as the records gate does.
+ * fixture copies a real inbox row. The read of this repository's own inbox is
+ * the records suite's (`test/records/inbox.test.ts`, `npm run test:records`).
  */
-
-/** Repo root, resolved from this file rather than from the process cwd. */
-const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 
 /**
  * Tracked paths the cases name, built at run time: written as literals they would make this file a
@@ -64,24 +57,6 @@ function answer(rows: readonly InboxRow[], query: Parameters<typeof matchInbox>[
 }
 
 describe("parseInbox", () => {
-  it("parses this repository's inbox with no problem, one row per bullet", () => {
-    expect(INBOX_PATH).toBe(".stamity/inbox.md");
-    const text = readFileSync(resolve(REPO_ROOT, ".stamity/inbox.md"), "utf8");
-    const bullets = text.split("\n").filter((line) => line.startsWith("- ")).length;
-
-    const parsed = parseInbox(text);
-
-    expect(bullets).toBeGreaterThan(0);
-    expect(parsed.problems).toEqual([]);
-    expect(parsed.rows).toHaveLength(bullets);
-    // The schedule rule's heading (D28) is there once, so a close has a section to append under,
-    // and every row below it is read as one the rule binds.
-    const lines = text.split("\n");
-    const heading = lines.indexOf(SCHEDULE_RULE_HEADING);
-    expect(lines.filter((line) => line === SCHEDULE_RULE_HEADING)).toHaveLength(1);
-    for (const parsedRow of parsed.rows) expect(parsedRow.belowRule).toBe(parsedRow.line > heading + 1);
-  });
-
   it("reads every field of a full row, and the line it sits on", () => {
     const text = [
       "# Deferral inbox",
