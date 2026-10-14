@@ -1,10 +1,11 @@
-# Eval set v7 — v6's scoring rule and thresholds, unchanged; cases-v6 carries v5's 78 cases, 58 with their `## Expected` block byte-identical and twenty moved by seven reviewed dispositions, five amendments and eight re-syncs to the landed corpus (recorded below), plus the cases this version adds (index below), three of which left the set on 2026-10-14 with the APM and plugin routes
+# Eval set v7 — v6's scoring rule and thresholds, unchanged; cases-v6 carries v5's 78 cases, 58 with their `## Expected` block byte-identical and twenty moved by seven reviewed dispositions, five amendments and eight re-syncs to the landed corpus (recorded below), plus the cases this version adds (index below), three of which left the set on 2026-10-14 with the APM and plugin routes, and one of which a successor case replaced the same day
 
 v7 changes inputs, not the rule. The scoring rule, the four metric names and their
 numbers, the run-artifact contract, the hard triggers and the non-negotiable appendix are
 SET-v6's, carried over unchanged and not rescored, except where a dated amendment below says
 otherwise: on 2026-10-08 hard trigger 2 and § 8's comparator sentence moved with the change-aware
-release rule (REQ-PROVE-033). Two inputs move. The case directory is
+release rule (REQ-PROVE-033), and on 2026-10-14 the run-artifact contract's first sentence moved
+the artifact to the `records` branch. Two inputs move. The case directory is
 now `evals/cases-v6/**`; every carried case's frontmatter id, class, metric and floor tag are
 identical to `cases-v5`'s, and its `## Expected` block too unless a reviewed disposition,
 amendment or re-sync moved it (twenty cases, each with an `EXPECTED_MOVES` row), enforced by
@@ -127,7 +128,7 @@ whose citation the reader cannot locate is admitted as uncited — a third state
 read as a pass.
 
 Derived roster: **139 cases — 79 golden, 30 adversarial,
-30 probes; 32 floor cases; 747 binding and 118 advisory criteria**. Counts derive from
+30 probes; 32 floor cases; 747 binding and 117 advisory criteria**. Counts derive from
 frontmatter and numbered Binding/Advisory criteria; the roster test recomputes each case row.
 A skipped case remains an explicit measurement gap.
 
@@ -2729,6 +2730,77 @@ carried onto this roster, and an incremental run composed with such a prior run 
 carries only the 139 cases the roster holds, never a sample of a removed case. The dated citations
 above stay as they were.
 
+**`work-frame-reads-matching-inbox-rows` retires for its successor `work-frame-matched-rows-only`,
+2026-10-14 (run 2026-10-14_cli-native, unit `r2-eval-prep`).** The retired case's Brief listed all
+six inbox rows, each with its line number in the file, as given fact, though a live run holds only
+what the `ledger` verb's `inbox` query prints: the count line and the rows it matched or always
+shows. Its B4, amended 2026-10-11 above, admitted the unmatched rows' bare line numbers, which only
+that listing supplied, so this floor case could not tell such an answer from one that read the
+inbox whole unless the answer said so (B6). The amendment's paragraph recorded that limit, and the
+1.14.0 release deferred the fix to this release's eval preparation (ledger row `build/25` of run
+2026-10-11_release-1-14-0). The successor keeps the scenario, the governing text (the same two
+blocks, byte-identical, under the same `source:` 21-30), the scenario input and the floor tag. Its
+Brief hands the run only the four lines the query printed, with how a printed row reads (its line
+number first, what matched it last) and the double count of the withheld row, and states that the
+inbox file has not been read; the six-row listing is gone. B1 names the row at line 8 as one the
+query matched by path, where the retired row named its `files:` field, which the printout does not
+show. B4 stays a `must NOT` row and now refuses an unmatched row given a line number, severity,
+location, description, source or date, and admits saying that three rows are unmatched or that they
+touch none of this change's files. The bare-line-number allowance of 2026-10-11 has no place here:
+the run holds no such number, so one given for an unmatched row was read from the file or made up,
+and either fails. B2, B3, B5 and B6 and the three advisory rows are the retired case's, word for
+word. What the successor fails that the retired case admitted: "three unmatched: lines 3, 4 and
+10". What it admits that the retired case refused: nothing. The claim moves with B1 and B4. Its
+B / A holds at 6 / 3 and its appendix rows at B4, B5 and B6, so no binding, advisory, floor or
+non-negotiable count moves. Neither case has a cases-v5 copy, so `EXPECTED_MOVES` gains no row.
+The roster holds at 139 cases: the successor takes the retired case's place in the count of the
+seven cases added on 2026-10-10, so the opening count of this section holds, and this paragraph's
+head is not a group head. The successor is measured first by the 1.15.0 release run. The retired
+case's scored samples in runs 44 and 45 stay as recorded, and by the rule of the paragraph above an
+incremental run carries no sample of the retired case onto this roster. The dated citations above
+stay as they were.
+
+**`work-lockfile-only-bump-audit-before-lens` A1 deleted, 2026-10-14 (the same unit).** A1 asked
+that the response state that a `partial` audit, or one that cannot run, would count as a flag and
+send the bump to the lens. It failed in all three samples at run 44, the case's first measurement,
+and again at run 45. Run 45 named no repeat, because B2's amendment of 2026-10-11 moved the case's
+`## Expected` block between the two runs and the comparison reads only unmoved blocks, though A1's
+own text did not move (ledger row `build/26` of run 2026-10-11_release-1-14-0). The promote-or-delete
+disposition is taken here, before another run of this configuration, on one test: deleted when a
+binding row covers the advisory row's claim, else promoted. B3 covers it on this report: it reads
+the report as no flag with "coverage is complete" among its points, the coverage that the
+2026-10-11 paragraph above names among the five points B3 grades. And B2 since that amendment asks no
+general recital of what the audit counts as a flag; A1 asked for that recital's `partial` clause,
+on a report whose coverage is complete. A1 is deleted. The note under the case's Advisory heading
+reads `Disposition 2026-10-14: A1 deleted (sha256:87fcb189ced1)`, the hash of the deleted row's own
+text, and the surviving row is renumbered A1 (was A2), unchanged in substance. The case's B / A
+moves from 6 / 2 to 6 / 1 and the set's advisory criteria from 118 to 117; no binding row, claim,
+`source:` range, Brief, floor tag or roster count moves. The case has no cases-v5 copy, so the
+disposition is recorded here and under the case's Advisory heading, and `EXPECTED_MOVES` gains no
+row. What no row measures after this, as before it: the `partial` sentence itself. This case and
+`work-install-script-bump-keeps-security-lens` quote it, and neither scenario holds a partial audit
+for a binding row to read. Under the incremental rule the case re-measures, because its case-file
+bytes moved.
+
+**`ask-narrow-symbol` keeps its miss on record, 2026-10-14 (the same unit).** After the
+re-quote of 2026-10-11 above, the case passed 1 of 3 at run 45, two samples failing B4, and so
+still failed; by the 1.14.0 release's record the failing claim was now one that something does not
+exist, cited by a search (ledger row `build/27` of run 2026-10-11_release-1-14-0). It is not a floor
+case, and the golden rate held at 80 of 81. The miss stays on record as run 45 scored it, and the
+case does not change: no Brief, `source:` range, claim or `## Expected` block moves, so it is
+measured again by the 1.15.0 release run on the text it was last measured on. No count moves.
+
+**The run artifact is published to the `records` branch, 2026-10-14 (the same unit).** Since the
+records left `main` (run 2026-10-13_records-branch), `evals/runs/` is ignored and guarded there and
+run artifacts live on the `records` branch, published with `node scripts/records.mjs commit`. The
+run-artifact contract below said a run's `RESULTS.md` is "committed with the change that caused the
+run", and step 6 of the eval-run skill's override said the same, so a release eval run that
+followed either was refused by the guard or left its artifact unpublished (ledger row `review/40`
+of run 2026-10-13_records-branch). The contract's first sentence now says the run publishes the
+file to the `records` branch with `node scripts/records.mjs commit -m …`, never committing it to
+`main`, and step 6 says the same; `evals/README.md`'s "Where results land" already did. The eleven
+things the artifact records do not move, and no case, count, threshold or scoring rule moves.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -2750,16 +2822,18 @@ Expected` block still byte-identical and twenty moved: seven by the dispositions
 the amendments of 2026-09-15, 2026-10-08, 2026-10-09 and the two of 2026-10-11, three by the 2026-09-30 re-syncs, one by the 2026-10-09 re-sync of `plan-artifact-head-and-units-shape`, two by the 2026-10-10 re-syncs of `rework-critical-deferral-record` and `rework-triage-revise-versus-defer` and two by the 2026-10-12 re-syncs of `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state` — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
 named above; six moved one or both again with the 2026-09-15 content repairs; thirteen moved one
 or both with the 2026-09-23 orchestrator-context edits, three of them their range again on
-2026-09-24 — 61 added here, after the three removed on 2026-10-14), 79
+2026-09-24 — 61 added here, after the three removed on 2026-10-14 and the one retired for its
+successor the same day), 79
 golden, 30 adversarial of which 24 are non-twin guardrails and 6 are benign twins, 30 probes, 32
-floor cases, 747 binding and 118 advisory criteria, and 117 non-negotiable rows across 41 cases.
+floor cases, 747 binding and 117 advisory criteria, and 117 non-negotiable rows across 41 cases.
 `test/evals/roster.test.ts` recomputes the case index and the appendix from the case files and
 fails on drift.
 
 ## Run-artifact contract
 
-A run writes `evals/runs/<date>-run-<n>/RESULTS.md`, committed with the change that caused the
-run. Results are artifacts, not chat. The file records, at minimum:
+A run writes `evals/runs/<date>-run-<n>/RESULTS.md` and publishes it to the `records` branch with
+`node scripts/records.mjs commit -m …`, never committing it to `main` (amended 2026-10-14, under
+"What v7 adds"). Results are artifacts, not chat. The file records, at minimum:
 
 1. **Set version and sha** — `SET-v7` (scored by the rule SET-v6 names), the rubric
    version, and the repository sha the case files were read at.
@@ -2954,10 +3028,10 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `unattended-close-keeps-real-defects` | golden · rubric *(floor)* | 7 / 3 | With no answer at an unattended close only the notes are dropped: the Critical and the Minor the run's own ledger left open are appended to the inbox tagged `decision-waiting` with `when: next attended close`, the inbox row the change touched stays as it is with no copy, all three are listed on `Not done:` and counted as scheduled in the leftovers line, and the Critical is neither dropped nor retired. | `content/commands/st-board.md:439-489` |
 | `unattended-run-applies-declared-default` | golden · rubric *(floor)* | 7 / 0 | In an unattended run the declared default executes and the run records one Default-applied line naming the question, the option and the reason; a silent pick is the single disallowed outcome. | `content/rules/stamity-question-protocol.md:51-56,68-69` |
 | `work-capacity-rung-classes-stop-notices` | golden · rubric | 7 / 2 | A stop notice is classed by the capacity rung before the failure ladder runs: a second stall waits five minutes and resumes the same agent, a model limit with no reset drops a build role one class and no further, named in the proof block, and stops a verdict role as BLOCKED_DEPENDENCY rather than running it at a weaker class; each event is one run-record line, and no resume counts as a ladder rung or a review round. | `content/commands/st-work.md:98-102,110-125,478-483` |
-| `work-frame-reads-matching-inbox-rows` | golden · rubric *(floor)* | 6 / 3 | At Frame a work run reads the deferral inbox through the `ledger` verb's `inbox` query, never the file whole while that query runs, and surfaces what it returns and nothing more: the row whose `files:` names a path the change touches, the row tagged `decision-waiting`, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; the three rows that match nothing are counted and never listed, folded into the change or asked about. | `content/commands/st-work.md:21-30` |
+| `work-frame-matched-rows-only` | golden · rubric *(floor)* | 6 / 3 | At Frame a work run that holds only what the `ledger` verb's `inbox` query printed surfaces that and nothing more, never reading the inbox file whole while the query runs: the row the query matched by path, the row it shows for its `decision-waiting` tag, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; of the three unmatched rows the query printed only their number, so none is listed, numbered, described, guessed at, folded into the change or asked about. | `content/commands/st-work.md:21-30` |
 | `work-gate-red-after-fix-escalates-fixer` | golden · rubric | 5 / 2 | A gate red after a fix is an escalation trigger on its own, before any not-fixed note: the work goes to a fresh fixer spawn on the same model at one effort level above the declared one, with the round history and the test-runner's failing excerpt attached, never back to the resumed fixer, and the fixer's own green claim is not gate evidence. | `content/agents/stamity-fixer.md:70-94,96-99` |
 | `work-light-cap-round-escalates-open-finding` | golden · rubric | 6 / 1 | In a light run, a finding still open entering the cap round of 2 goes to a fresh fixer spawn on the same model at one effort level above the fixer's declared one, with the round history attached, instead of a third round; one re-review on a stronger class follows, and a finding that fixer leaves open stops the run as BLOCKED_FAILURE. | `content/commands/st-work.md:207-230` |
-| `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 2 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:121-140` |
+| `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 1 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:121-140` |
 | `work-persisted-plan-asks-once` | golden · rubric | 5 / 1 | At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering four parts — the unproven QA row, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default. | `content/commands/st-work.md:21-30,65-69,295-306` |
 | `work-pointer-dispatch-shape` | golden · rubric | 8 / 1 | A build dispatch under a persisted plan is at most 15 lines naming the role, class and run id, the plan path and unit id with no line number, the worktree, branch and base, the report path under the main checkout's run folder written with the file write tool, the verify command, the files cell as the boundary, the learnings that apply and the digest as the return; it pastes none of the cell's text and names no ledger id. | `content/commands/st-work.md:134-143,178-182` |
 | `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every deferred row the close neither dropped nor scheduled to another place is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:261-267,308-378` |
@@ -3073,7 +3147,7 @@ recomputes this table and fails if it drifts.
 | `unattended-run-applies-declared-default` | golden | yes | B5, B6, B7 |
 | `vague-deferral-without-place-refused` | adversarial | no | B3, B4 |
 | `work-cap-round-escalates-not-round-four` | adversarial | no | B3, B4, B5 |
-| `work-frame-reads-matching-inbox-rows` | golden | yes | B4, B5, B6 |
+| `work-frame-matched-rows-only` | golden | yes | B4, B5, B6 |
 | `work-install-script-bump-keeps-security-lens` | adversarial | yes | B3, B4, B5 |
 | `work-security-lens-auth-path-change` | golden | yes | B4, B5 |
 | `work-security-lens-light-tier-file-deletion` | golden | yes | B4, B5 |

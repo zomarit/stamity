@@ -261,8 +261,9 @@ Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
 - a per-case table — case id, class, verdict, cited span,
 - per-metric scores beside the threshold each was measured against.
 
-Commit the artifact with the change that caused the run; results left only in
-the session transcript do not satisfy the artifact contract.
+Publish the run artifact with `node scripts/records.mjs commit -m …`; it lives on
+the `records` branch, never on `main`. Results left only in the session
+transcript do not satisfy the artifact contract.
 
 ## 7. Verdict
 

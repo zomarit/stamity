@@ -144,7 +144,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response states that a `partial` audit, or one that cannot run, would count as a
-   flag and send the bump to the lens.
-2. The response states that the audit stays report-only: it edits no manifest or lockfile,
+Disposition 2026-10-14: A1 deleted (sha256:87fcb189ced1) — B3 binds the coverage point on this
+report (the audit reads no flag with its coverage complete), and B2 asks no general recital of
+what the audit counts as a flag, so a row asking the response to state the `partial` case in
+general asked more than the scenario needs. The surviving row is renumbered A1 (was A2); it is
+unchanged in substance.
+
+1. The response states that the audit stays report-only: it edits no manifest or lockfile,
    and the `micromatch` fix is routed out rather than applied in this change.

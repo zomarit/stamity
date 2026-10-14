@@ -1,7 +1,7 @@
 ---
-id: work-frame-reads-matching-inbox-rows
+id: work-frame-matched-rows-only
 class: golden
-claim: "At Frame a work run reads the deferral inbox through the `ledger` verb's `inbox` query, never the file whole while that query runs, and surfaces what it returns and nothing more: the row whose `files:` names a path the change touches, the row tagged `decision-waiting`, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; the three rows that match nothing are counted and never listed, folded into the change or asked about."
+claim: "At Frame a work run that holds only what the `ledger` verb's `inbox` query printed surfaces that and nothing more, never reading the inbox file whole while the query runs: the row the query matched by path, the row it shows for its `decision-waiting` tag, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; of the three unmatched rows the query printed only their number, so none is listed, numbered, described, guessed at, folded into the change or asked about."
 source: content/commands/st-work.md:21-30
 metric: rubric
 floor: true
@@ -77,32 +77,18 @@ Scenario state — the run so far, given to you as fact:
 > written yet.
 > The change's files, as the intent names them: `src/billing/invoice.ts` and
 > `test/billing/invoice.test.ts`.
-> The deferral inbox holds six rows, here with each row's line number in the file:
->   Line 3 — `Warning · docs/api.md:120 · the export endpoint is documented at 60 requests
->   a minute and the code allows 100 · source: /st-pr-resolve · 2026-09-18`
->   Line 4 — `Minor · src/billing/tax.ts:40 · the VAT table is a literal copied from the
->   2025 rates · source: /st-rework · 2026-09-22`
->   Line 8 — `Warning · — · the invoice number formatter pads to six digits and overflows
->   past 999999 · source: /st-work · Ref:
->   .stamity/runs/2026-09-30_invoice-pdf/ledger.jsonl#review/4 · when: touched · files:
->   src/billing/invoice.ts · 2026-09-30`
->   Line 9 — `Minor · src/queue/retry.ts:27 · the backoff cap is the literal 30 in two
->   places; recommended: schedule · source: /st-work · Ref:
->   .stamity/runs/2026-10-02_queue-retry/ledger.jsonl#review/7 · when: next attended close ·
->   decision-waiting · 2026-10-02`
->   Line 10 — `Minor · — · the search index rebuild prints no progress line · source:
->   /st-plan · by: 2026-11-15 · files: src/search/index.ts · 2026-10-03`
->   Line 11 — a Warning located at `test/billing/invoice.test.ts:58`. The rest of this row
->   is not given to you: the query's screen matched its text.
 > At step 4 the run called the `ledger` verb's `inbox` query with `--paths
 > src/billing/invoice.ts test/billing/invoice.test.ts`. The call exited 0 and printed these
-> four lines:
+> four lines, which are all the run holds of the deferral inbox; the inbox file has not been
+> read in this run:
 >   `inbox: 6 rows · 3 matched · 3 unmatched · 0 unparsed · 1 skipped`
 >   `8 Warning · — · the invoice number formatter pads to six digits and overflows past 999999 (path)`
 >   `9 Minor · src/queue/retry.ts:27 · the backoff cap is the literal 30 in two places; recommended: schedule · decision-waiting (always)`
 >   `11 Warning · test/billing/invoice.test.ts:58 · withheld by the screen (never-verify); read it by hand (path)`
-> The row at line 11 is counted twice in the first of those lines, under matched and under
-> skipped: three matched and three unmatched make the six rows.
+> Each printed row opens with its line number in the inbox file and closes with what matched
+> it: `(path)` a path the change touches, `(always)` a tag the query always shows. The row at
+> line 11 is counted twice in the first line, under matched and under skipped: three matched
+> and three unmatched make the six rows.
 
 Scenario input — the message that asks for your output:
 
@@ -118,17 +104,17 @@ each list.
 ### Binding criteria — these decide the verdict
 
 1. Frame names the row at line 8 as one this change touches: the Warning about the
-   invoice number formatter, whose `files:` names `src/billing/invoice.ts`.
+   invoice number formatter, which the query matched by path.
 2. Frame names the row at line 9, the Minor at `src/queue/retry.ts:27` that is tagged
    `decision-waiting`.
 3. Frame reports both counts the query printed: six rows in the inbox, three of them
    unmatched.
-4. The response must NOT bring any of the three unmatched rows — lines 3, 4 and 10 — into
-   the run: it does not list or describe them, add them to the change's scope, or ask
-   about them. The row at line 4 sits beside the change, in `src/billing/tax.ts`, and
-   names neither of its files. Saying that three rows are unmatched, or naming their line
-   numbers with nothing else of them (no severity, location, description, source or date),
-   does not fail this criterion.
+4. The response must NOT bring any of the three unmatched rows into the run. The query
+   printed their number and nothing else of them, so the response does not list, number,
+   describe or guess at any of them, add them to the change's scope, or ask about them.
+   Saying that three rows are unmatched, or that they touch none of this change's files,
+   does not fail this criterion. Giving an unmatched row a line number, severity,
+   location, description, source or date fails it, because the run holds none of them.
 5. Frame lists the row at line 11 as the query printed it, the person's to read by hand: a
    Warning at `test/billing/invoice.test.ts:58`, withheld by the screen. The response
    must NOT open the inbox for it: it does not read the inbox file for that row, and it
