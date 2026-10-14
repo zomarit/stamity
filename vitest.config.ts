@@ -172,10 +172,12 @@ export default defineConfig({
     ...fixtureScheduling(process.platform),
     ...tempRoot,
     // No test run reads the machine's client accounts (REQ-LADDER-006): `init`
-    // and `sync` start no client CLI to list its models while this is set, and
-    // the variable reaches every worker and every process a test spawns. A case
-    // that exercises the probe hands its command an environment without it and
-    // injects a lister.
+    // and `sync` start no client CLI to list its models while this is set. It
+    // reaches every worker's `process.env`, and so every in-process run that
+    // reads it and every child spawned with that env passed on. A child given
+    // an env built fresh does not get it: the CLI harness
+    // (test/support/cliHarness.ts) sets the switch in its own fixed env. A case
+    // that exercises the probe hands its command an env without it.
     env: { ...tempRoot.env, STAMITY_NO_CLIENT_PROBE: "1" },
     environment: "node",
     // Child-process cases shell out to the CLI entry; 20s is generous for a cold start

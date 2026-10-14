@@ -1801,8 +1801,8 @@ describe("workspace sync — each member's client model lists (REQ-LADDER-006)",
    * script is POSIX `sh`, and a Windows PATH would need a `.cmd` shim, which the
    * lister refuses to start without a shell.
    */
-  async function seedFakeCodex(temp: TempDirHandle): Promise<string> {
-    const bin = temp.path("bin");
+  async function seedFakeCodex(temp: TempDirHandle, folder: readonly string[] = ["bin"]): Promise<string> {
+    const bin = temp.path(...folder);
     await mkdir(bin, { recursive: true });
     const program = join(bin, "codex");
     await writeFile(
@@ -1832,6 +1832,21 @@ describe("workspace sync — each member's client model lists (REQ-LADDER-006)",
     expect((await readManifest(api))?.models?.listed).toEqual({
       codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" },
     });
+  });
+
+  // review/92: the tree the lister refuses programs from is the whole workspace, not the
+  // member being synced, so a folder another repository of the workspace can write into
+  // (the root's own `bin`, a sibling member) supplies no client program.
+  it.skipIf(WINDOWS)("starts no client program from a PATH folder inside the workspace but outside the member", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["codex"] });
+    const inWorkspace = await seedFakeCodex(temp, ["ws", "tools", "bin"]);
+
+    expect(await runSyncWith(root, { PATH: inWorkspace })).toBe(0);
+
+    expect((await readManifest(api))?.models).toBeUndefined();
   });
 
   it.skipIf(WINDOWS)("reads no member's list under STAMITY_NO_CLIENT_PROBE=1", async () => {

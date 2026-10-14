@@ -1076,9 +1076,12 @@ function createBridge(
     // in that member (REQ-LADDER-006): the same lister and off switch, laid
     // over its saved lists for the plan. The tools are the ones the plan will
     // read — the patched set once it is on disk, the member's own under
-    // `--dry-run`, where the plan reads the unpatched manifest.
+    // `--dry-run`, where the plan reads the unpatched manifest. The folder the
+    // lister refuses programs from is the WORKSPACE root, not the member: every
+    // repository of the workspace can place a file under it, so a `PATH` entry
+    // in the root's own tree or a sibling member supplies no client program.
     const plannedTools = fields.length > 0 && !ctx.dryRun ? { ...manifest, ...patch }.tools : manifest.tools;
-    const listedOverlay = await readClientModelLists(plannedTools, ctx.app.runtime.env, memberDir);
+    const listedOverlay = await readClientModelLists(plannedTools, ctx.app.runtime.env, rootDir);
     const plan = await planSync(memberDir, engineVersion, { listedOverlay });
     const applied = await applySync(memberDir, plan, {
       engineVersion,

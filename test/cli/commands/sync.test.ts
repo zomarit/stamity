@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, readFile } from "node:fs/promises";
+import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   NEXT_AFTER_WRITE_KEPT_FROM_GIT_LINE,
@@ -23,10 +23,11 @@ import { createManifest, manifestPath, readManifest, writeManifest } from "../..
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput, ContentSelection } from "../../../src/types/content.ts";
 import type { Tool } from "../../../src/types/core.ts";
-import { MANIFEST_VERSION, type ModelConfig } from "../../../src/types/manifest.ts";
+import { MANIFEST_FILE, MANIFEST_VERSION, type ModelConfig } from "../../../src/types/manifest.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { canonical, npxCommand, registryArgument } from "../../support/identity.ts";
+import { makeCliFixture } from "../../support/cliHarness.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
@@ -1088,5 +1089,44 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
     expect((await planSync(root, VERSION)).manifest.models?.listed).toEqual({
       codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
     });
+  });
+});
+
+/**
+ * review/90: the child-process harness builds its env fresh, so the test
+ * config's switch does not reach a spawned CLI on its own; the harness sets it
+ * beside `STAMITY_NO_UPDATE_CHECK`. Proved against a stand-in `codex` OUTSIDE
+ * the fixture's tree that leaves a marker when started: a harness `sync`
+ * selecting codex leaves none, and the same run with the switch removed does,
+ * which is what makes the first answer mean anything. POSIX only: a Windows
+ * PATH would need a `.cmd` shim, which the lister does not start.
+ */
+describe("sync — the child-process harness starts no client program", () => {
+  const programDir = useTempDir("stamity-sync-stand-in");
+
+  it.skipIf(process.platform === "win32")("leaves a stand-in codex on PATH unstarted unless the switch is removed", async () => {
+    const outside = programDir();
+    const marker = outside.path("started");
+    await outside.seedFiles({
+      "bin/codex": `#!/bin/sh\n: > '${marker}'\nprintf '%s' '{"models":[{"slug":"gpt-6-sol"}]}'\n`,
+    });
+    await chmod(outside.path("bin", "codex"), 0o755);
+    const manifest = createManifest({ tools: ["codex"], selection: emptySelection(), generatorVersion: VERSION, now: T0 });
+    const fixture = await makeCliFixture({ seed: { [`${STATE_DIR}/${MANIFEST_FILE}`]: `${JSON.stringify(manifest, null, 2)}\n` } });
+    try {
+      const path = `${outside.path("bin")}${delimiter}${process.env["PATH"] ?? ""}`;
+
+      const quiet = await fixture.run(["sync"], { env: { PATH: path } });
+
+      expect(quiet.code, quiet.stderr).toBe(0);
+      expect(existsSync(marker)).toBe(false);
+
+      const probed = await fixture.run(["sync"], { env: { PATH: path, STAMITY_NO_CLIENT_PROBE: undefined } });
+
+      expect(probed.code, probed.stderr).toBe(0);
+      expect(existsSync(marker)).toBe(true);
+    } finally {
+      await fixture.cleanup();
+    }
   });
 });

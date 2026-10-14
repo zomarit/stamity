@@ -1991,6 +1991,19 @@ describe("config — per-client model pins (REQ-LADDER-005)", () => {
     expect(selected.stdout).not.toContain("is not selected");
   });
 
+  // review/91: the notice says a pin is kept, so it is printed only while one is.
+  it("prints no kept-pin notice when `none` clears an unselected client's pin", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"], models: { pins: { standard: { codex: "gpt-6-sol" } } } });
+
+    const result = await run(handle, ["set", "model.standard.codex", "none"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("set model.standard.codex:");
+    expect(result.stdout).not.toContain("is not selected");
+    expect((await readManifest(handle.dir))?.models).toBeUndefined();
+  });
+
   it("refuses a blank or multi-line client pin by its own key, writing nothing", async () => {
     const handle = tempDir();
     await seedManifest(handle, { tools: ["cursor"] });

@@ -422,7 +422,7 @@ function applyClassPin(draft: SetupManifest, modelClass: ModelClass, key: keyof 
  * The registry row for one client's pin on one class — sixteen keys, one
  * shape, the {@link gateSpec} precedent. The row resolves what that client
  * would write whether or not it is selected, and `set` says once when it is
- * not: the pin is kept for the day the client is added.
+ * not and a pin is left: the pin is kept for the day the client is added.
  */
 function modelClientSpec(modelClass: ModelClass, tool: Tool): ConfigKeySpec {
   return {
@@ -431,8 +431,9 @@ function modelClientSpec(modelClass: ModelClass, tool: Tool): ConfigKeySpec {
     read: (manifest) => readClientPin(manifest, modelClass, tool),
     resolve: (manifest) => modelFor(manifest, modelClass, tool) ?? CLIENT_DEFAULT,
     apply: (draft, raw) => applyClassPin(draft, modelClass, tool, raw),
+    // Only while a pin is left: after a `none` clear there is nothing kept to speak of.
     notice: (manifest) =>
-      manifest.tools.includes(tool)
+      manifest.tools.includes(tool) || readClientPin(manifest, modelClass, tool) === null
         ? null
         : `note: ${tool} is not selected — the pin is kept and takes effect once ${tool} is added to tools`,
   };

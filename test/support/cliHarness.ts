@@ -33,7 +33,8 @@ import { makeTempDir } from "./tempDir.ts";
  *     seeder sets; test/cli/engine/gitStatus.test.ts spells the system half
  *     `GIT_CONFIG_SYSTEM=NO_GIT_CONFIG`, which is the same cut by the other of
  *     git's two documented switches.
- *   - defaults: NO_COLOR=1, STAMITY_NO_UPDATE_CHECK=1, TERM=dumb, LC_ALL=C —
+ *   - defaults: NO_COLOR=1, STAMITY_NO_UPDATE_CHECK=1, STAMITY_NO_CLIENT_PROBE=1,
+ *     TERM=dumb, LC_ALL=C —
  *     each overridable per run (an `undefined` override deletes the key).
  *   - CI and NO_UPDATE_NOTIFIER are never carried.
  *   - no network: nothing here reaches beyond the local filesystem and git.
@@ -110,6 +111,10 @@ export function buildChildEnv(
   env["LC_ALL"] = "C";
   env["NO_COLOR"] = "1";
   env["STAMITY_NO_UPDATE_CHECK"] = "1";
+  // No run reads the machine's client accounts: `init` and `sync` start no
+  // client CLI to list its models (REQ-LADDER-006). The test config's own
+  // setting does not reach here, since this env is built fresh.
+  env["STAMITY_NO_CLIENT_PROBE"] = "1";
   if (overrides !== undefined) {
     for (const [key, value] of Object.entries(overrides)) {
       if (value === undefined) delete env[key];
