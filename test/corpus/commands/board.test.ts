@@ -762,16 +762,34 @@ describe("st-board — platform reference table", () => {
     // not attach, and the permission read also answers 403 to an account without push access, as
     // a rate limit does, so a read-only collaborator was told to attach an attached repository.
     expect(cli).toContain(
-      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone is a failed write check naming missing push access, and one whose message names a rate limit is reported as a rate limit",
+      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone is a failed write check naming missing push access",
     );
     expect(cli).not.toContain("a 403 there is reported as");
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3 unit f4, review round 2, note N1 of
+    // `review/17`'s closure): the pin above ended "and one whose message names a rate limit is
+    // reported as a rate limit". What changed about the contract: a 403 on a repository read whose
+    // message names a rate limit matched both that and `not attached`, with no precedence; the
+    // rate limit now wins on either read.
+    expect(cli).toContain(
+      "and a 403 on any read whose message names a rate limit is reported as a rate limit, ahead of both readings",
+    );
     // review/16: the REST list returns open issues only, 30 to a page, pull requests included, so
     // `fill`'s marker match (open and closed) missed closed or later-page items.
     expect(cli).toContain(
       "a listing reads `gh api 'repos/<owner>/<repo>/issues?state=all&per_page=100' --paginate`, since the REST list returns open issues only, 30 to a page, with pull requests among them, and an entry carrying a `pull_request` key is left out",
     );
+    // review/32: the issue comments listing also returns 30 to a page, oldest first, so a progress
+    // replay on an item past 30 comments missed its own comment and posted a duplicate. The rule is
+    // the property, every REST listing paged, with the comment listing named.
+    expect(cli).toContain(
+      "every REST listing the run depends on (the issues, an issue's comments at `repos/<owner>/<repo>/issues/<n>/comments`, the labels and any other) passes `per_page=100` and `--paginate`, since a REST list returns 30 to a page and an issue's comments come oldest first, so a progress replay that read one page would miss its own newer comment and post a second",
+    );
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3 unit f4, review round 2, `review/32`):
+    // this pin read "`gh api repos/<owner>/<repo>/labels --paginate --jq '.[].name'`". What changed
+    // about the contract: every REST listing now passes `per_page=100` as well, and `fill`'s label
+    // read is one of them.
     expect(fill).toContain(
-      "in a REST-only session, `gh api repos/<owner>/<repo>/labels --paginate --jq '.[].name'`",
+      "in a REST-only session, `gh api 'repos/<owner>/<repo>/labels?per_page=100' --paginate --jq '.[].name'`",
     );
     expect(setup).toContain("In a REST-only session (the GitHub row) a Projects link is refused.");
   });
@@ -1516,8 +1534,14 @@ describe("st-board — sources, signals, and the inbox", () => {
   it("gives the stop answer the no-answer rule's row handling, with nothing fixed (REQ-FLOW-074)", async () => {
     const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
     const leftovers = inboxBullet(inbox, "Leftovers at a close");
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3 unit f4, review round 2, note N2 of
+    // `review/18`'s closure): this pin read "stand as already applied". What changed about the
+    // contract: nothing in the rule; a round-1 `fix now` whose fix round had not run when a later
+    // round answered stop sat between "already applied" and "fixes nothing", and the sentence now
+    // says that fix round still runs.
     const stop =
-      "Stop, at a run's close that asks this question, fixes nothing and otherwise handles rows as no answer does: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled, and nothing is fixed, merged or committed; answers given in an earlier round of the walk stand as already applied, and only the rows still undecided take this handling; another ask's own `stop`, as at a plan handoff, keeps its meaning.";
+      "Stop, at a run's close that asks this question, fixes nothing and otherwise handles rows as no answer does: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled, and nothing is fixed, merged or committed; answers given in an earlier round of the walk stand and are applied, a `fix now` among them still taking its one fix round, and only the rows still undecided take this handling; another ask's own `stop`, as at a plan handoff, keeps its meaning.";
+    expect(leftovers).not.toContain("stand as already applied");
     expect(leftovers).toContain(stop);
 
     // After the rule it borrows from, and before the block's closing floor.
