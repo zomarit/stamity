@@ -121,6 +121,22 @@ function charterFixture(
 }
 
 /**
+ * One numbered invariant of a charter body: its physical lines, and its text with the
+ * continuation indent flattened, so a reworded clause is read across a wrap.
+ */
+function invariantText(body: string, n: number): { lines: string[]; text: string } {
+  const all = body.split("\n");
+  const start = all.findIndex((line) => line.startsWith(`${n}. **`));
+  expect(start, `the charter carries no invariant ${n}`).toBeGreaterThanOrEqual(0);
+  const lines = [all[start] ?? ""];
+  for (const line of all.slice(start + 1)) {
+    if (!line.startsWith("   ")) break;
+    lines.push(line);
+  }
+  return { lines, text: lines.map((line) => line.trim()).join(" ") };
+}
+
+/**
  * The shipped charter's invariants, proven present. `null` is reserved for a
  * template that predates versioning; the SHIPPED one is versioned, so reading
  * it as null here is the regression rather than a case to handle.
@@ -232,8 +248,11 @@ describe("corpus charter", () => {
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p3a-charter-invariant-4): 1.1.0 ->
     // 1.2.0, amended 2026-09-27 -> 2026-10-09. Invariant 4 moved (S5): done means the gates the
     // change's class names exit 0, all of them if the class is unclear. Only the shipped values move.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f2-protocol-charter): 1.2.0 ->
+    // 1.3.0, amended 2026-10-09 -> 2026-10-14. Invariants 2 (rounds of one ask per turn) and 5 (the
+    // screened learnings read) moved; the version line keeps its width. Only the shipped values move.
     expect(rendered).toContain(
-      "## Invariants\nInvariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09\n",
+      "## Invariants\nInvariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14\n",
     );
   });
 
@@ -275,6 +294,66 @@ describe("corpus charter", () => {
     );
   });
 
+  // Added 2026-10-14 (plan 020 file 3, unit f2-protocol-charter; REQ-FLOW-080, REQ-FLOW-088): the
+  // walk asks in rounds, so invariant 2 says one ask per turn and what one ask is; a cloud with no
+  // session-start hook reads learnings through the same screen the hook applies, never unscreened.
+  it("holds invariant 2's rounds of one ask per turn, every clause on its three lines", async () => {
+    const { body } = await readCharterTemplate(CORPUS_ROOT);
+    const two = invariantText(body, 2);
+
+    expect(two.lines).toHaveLength(3);
+    expect(two.text).toContain("one ask per turn");
+    expect(two.text).toContain("one question-tool call bundling related questions");
+    expect(two.text).toContain("or one numbered list where a client has none");
+    expect(two.text).toContain("numbered options");
+    expect(two.text).toContain("a declared default-if-no-response");
+    expect(two.text).toContain("rounds until none is undecided");
+    expect(two.text).toContain("no second request in the same turn");
+    expect(two.text).toContain("sub-agents return `BLOCKED_AMBIGUITY`");
+    // The 1.2.0 wording asked exactly one question, which a walk in rounds contradicts.
+    expect(two.text).not.toMatch(/exactly one/);
+  });
+
+  it("holds invariant 5's screened read, every clause on its three lines", async () => {
+    const { body } = await readCharterTemplate(CORPUS_ROOT);
+    const five = invariantText(body, 5);
+
+    expect(five.lines).toHaveLength(3);
+    expect(five.text).toContain("Read `.stamity/learnings/` before project-specific work");
+    expect(five.text).toContain("only through the session-start banner");
+    expect(five.text).toContain(
+      "where no hook ran, `node .stamity/generated/hooks/*/stamity-session-start.mjs` with stdin from `/dev/null`",
+    );
+    expect(five.text).toContain("opening only the files it lists as loaded");
+    expect(five.text).toContain("repeating a recorded failure is a process defect");
+  });
+
+  it("rewraps invariant 6 onto two lines with its words unchanged", async () => {
+    const { body } = await readCharterTemplate(CORPUS_ROOT);
+    const six = invariantText(body, 6);
+
+    // The line invariant 6 gave up is the sixth line invariants 2 and 5 needed; its words are
+    // the 1.2.0 words, byte for byte once the wrap is flattened.
+    expect(six.lines).toHaveLength(2);
+    expect(six.text).toBe(
+      "6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API " +
+        "shapes, schemas, and events break across file boundaries. Census shared contracts before " +
+        "parallel edits touch them.",
+    );
+  });
+
+  it("keeps every template line at or under 117 characters", async () => {
+    const raw = await readFile(CHARTER_FILE, "utf8");
+    const lines = raw.split(/\r?\n/);
+    const over = lines
+      .map((line, index) => ({ line: index + 1, width: [...line].length }))
+      .filter((entry) => entry.width > 117);
+
+    expect(over).toEqual([]);
+    // Non-degenerate: the charter is wrapped wide, so the check reads real widths near the bound.
+    expect(Math.max(...lines.map((line) => [...line].length))).toBeGreaterThan(100);
+  });
+
   it("declares the three invariants keys, read typed off the frontmatter", async () => {
     const charter = await readCharterTemplate(CORPUS_ROOT);
     const invariants = shippedInvariants(charter);
@@ -284,10 +363,13 @@ describe("corpus charter", () => {
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p3a-charter-invariant-4): 1.1.0 ->
     // 1.2.0, amended 2026-09-27 -> 2026-10-09. Invariant 4 moved (invariants 1.2.0, S5); the
     // ratification date still does not move.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f2-protocol-charter): 1.2.0 ->
+    // 1.3.0, amended 2026-10-09 -> 2026-10-14. Invariants 2 and 5 moved (invariants 1.3.0); the
+    // ratification date still does not move.
     expect(invariants).toEqual({
-      version: "1.2.0",
+      version: "1.3.0",
       ratified: "2026-08-31",
-      amended: "2026-10-09",
+      amended: "2026-10-14",
     });
     // The typed read and the raw map agree — no second spelling of the keys.
     expect(charter.frontmatter["invariants_version"]).toBe(invariants.version);

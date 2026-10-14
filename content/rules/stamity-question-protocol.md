@@ -63,8 +63,8 @@ should be added?") spends the same turn and resolves nothing.
   default, in whatever words the asking flow uses. A question offering no
   numbered choice, or leaving the unanswered case unstated, is an authoring
   defect in the flow that emitted it, not a judgement call for the reader.
-- One question reaches the operator per turn. A second question in the same turn
-  means the first one was not the highest-leverage one.
+- One ask per turn: one question-tool call or one numbered list. A second ask in
+  the same turn means the first one was not the highest-leverage one.
 - A run that applied a default names it in its output. Without that line, a
   defaulted decision is indistinguishable from a decision nobody had to make.
 - A sub-agent result that met a trigger carries status `BLOCKED_AMBIGUITY` and a
@@ -72,3 +72,26 @@ should be added?") spends the same turn and resolves nothing.
 - An assumption taken in place of a question is written where the reviewer sees
   it. The one-line statement is the whole audit trail, so it names the reading
   taken and the reading dropped.
+
+## Close walk
+
+A run that ends with leftovers (open findings, deferred items, questions still
+undecided) walks them before it reports. No leftovers, no walk.
+
+- Each leftover is one question in the client's own question tool: Critical,
+  Warning and `decision-waiting` items first, the recommended option first, every
+  option with its one-line trade-off, and a declared default (item 6).
+- Related questions bundle into one call up to the tool's per-call limit; the
+  rest follow in further rounds, one ask per turn, until none is undecided.
+- The summary or proof block prints after the last answer, and nothing prints
+  after it. A summary printed while a leftover is still open is the defect.
+- With nobody to answer (item 8), each leftover takes its declared default and
+  the run writes its `Default applied:` line. A real defect is never defaulted
+  to dropped: it waits as `decision-waiting`. A question a headless client
+  skipped reads as no answer.
+
+<!-- STAMITY:PLATFORM-TOOL -->
+
+Where a client has no question tool, the walk is plain numbered text: one
+leftover per turn, its options numbered and its default named, then stop for
+the answer.

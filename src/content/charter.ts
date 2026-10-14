@@ -322,7 +322,15 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // gates line defers to invariant 4, +32 bytes on its one line, so no line count
 // moved. The same +35 lands in the charter-alone figure below and in
 // ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_363;
+// 5_363 -> 5_595 on 2026-10-14, plan 020 file 3, unit f2-protocol-charter
+// (invariants 1.3.0): invariant 2 allows rounds of one ask per turn and names
+// the numbered-list fallback, and invariant 5 names the screened read where no
+// hook ran, +232 bytes. Six lines carry the two where five did, and the sixth
+// is paid back by rewrapping invariant 6 at the file's widest line, same words,
+// so no line count moved (the version line and the amended date keep their
+// widths). The same +232 lands in the charter-alone figure below and in
+// ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_595;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -353,7 +361,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_363;
 // 5_328 -> 5_363 on 2026-10-09, the p3 fix round (review/111, review/122):
 // invariant 4 names `gate classify` and the gate list defers to it, the same
 // +35 as above.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_363;
+// 5_363 -> 5_595 on 2026-10-14, unit f2-protocol-charter: invariants 2 and 5
+// (invariants 1.3.0), the same +232 as above.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_595;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -385,7 +395,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_363;
 // bullet names `.stamity/change-classes.json` beside the manifest. The line
 // count holds at 407: the bullet's extra line is paid back by rewrapping Floor
 // item 5 of the same rule at the file's widest line, same words.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_504;
+// 25_504 -> 25_736 on 2026-10-14, unit f2-protocol-charter: the charter half of
+// the override carries invariants 2 and 5's +232 bytes (invariants 1.3.0).
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_736;
 
 /**
  * The composite always-on line count one client pays for a plan under a

@@ -54,6 +54,12 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // never narrows them. No release or tag carries the earlier 1.2.0 text (it landed in 51667e43 on
   // the same unreleased branch), so no repository ran it and this row moves instead of a 1.2.1.
   "1.2.0": "efbef8592774130142de7f98bc237a7fa8829ce257474649dab22cd5f30664fa",
+  // Appended 2026-10-14 (plan 020 file 3, unit f2-protocol-charter): invariant 2 allows rounds of
+  // one ask per turn (one question-tool call, or one numbered list where a client has none), and
+  // invariant 5 reads learnings only through the session-start screen, with the script run on
+  // stdin from `/dev/null` where no hook ran. Invariant 6 is rewrapped with its words unchanged,
+  // which pays for the sixth line. The 1.2.0 row above stays as the record.
+  "1.3.0": "8a51f3dd06363505950d343fc4b7a75f13441a04de9d9423936c3fcbd6ad483a",
 };
 
 /** The rendered version line, template form and emitted form alike. */

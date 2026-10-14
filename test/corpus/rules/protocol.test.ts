@@ -1,7 +1,14 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { planMdcCompanions } from "../../../src/content/mdcCompanions.ts";
 import { CONTENT_DENY_PATTERNS, scanForDeniedPatterns } from "../../../src/denyscan/denyScan.ts";
+import {
+  PLATFORM_TOOL_MARKER,
+  getAskUserToolEntry,
+  substituteCanonicalPlatformMarker,
+} from "../../../src/tools/translator.ts";
+import { TOOLS } from "../../../src/types/core.ts";
 import {
   assertDenyClean,
   assertLineCap,
@@ -253,7 +260,12 @@ describe("question-protocol — the five triggers and the ask shape", () => {
     const file = await load("rules/stamity-question-protocol.md");
     const text = flow(file);
 
-    expect(text).toMatch(/one question per turn/i);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f2-protocol-charter): the pin read
+    // "one question per turn". The close walk asks its leftovers in rounds, several related
+    // questions in one call of the client's question tool, so the unit a turn allows is one ask
+    // (one tool call or one numbered list), as charter invariant 2 now says. The Gates bullet
+    // carries the new words, reworded in place so no line an eval case quotes moves.
+    expect(text).toMatch(/one ask per turn/i);
     expect(text).toMatch(/two to four numbered options/i);
     expect(text).toMatch(/one-line trade-off/i);
     expect(text).toContain("Default if no response: <N>");
@@ -450,5 +462,83 @@ describe("ai-evals — measurement floor, vendor-neutral", () => {
       /if (?:this|your|the) (?:project|repo|repository) (?:has no|does not|contains no)/i,
     );
     expect(flow(file)).not.toMatch(/skip this rule|does not apply|ignore this section/i);
+  });
+});
+
+describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
+  const RELPATH = "rules/stamity-question-protocol.md";
+
+  it("places a Close walk section after Gates, as the body's last section", async () => {
+    const file = await load(RELPATH);
+    const body = file.parsed.body;
+    const headings = [...body.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
+
+    expect(headings).toEqual(["Floor", "Gates", "Close walk"]);
+    expect(body.indexOf("\n## Gates\n")).toBeLessThan(body.indexOf("\n## Close walk\n"));
+  });
+
+  it("walks every leftover through the question tool and prints the summary last", async () => {
+    const walk = flatten(section(await load(RELPATH), "Close walk"));
+
+    expect(walk).toMatch(/No leftovers, no walk\./);
+    expect(walk).toMatch(/Each leftover is one question in the client's own question tool/);
+    expect(walk).toMatch(/Critical, Warning and `decision-waiting` items first, the recommended option first/);
+    expect(walk).toMatch(/up to the tool's per-call limit/);
+    expect(walk).toMatch(/further rounds, one ask per turn, until none is undecided/);
+    expect(walk).toMatch(/The summary or proof block prints after the last answer, and nothing prints after it\./);
+    expect(walk).toMatch(/each leftover takes its declared default/);
+    expect(walk).toContain("Default applied:");
+    expect(walk).toMatch(/A real defect is never defaulted to dropped: it waits as `decision-waiting`\./);
+    expect(walk).toMatch(/A question a headless client skipped reads as no answer\./);
+  });
+
+  it("names no client and no tool, and renders each client's line through the marker", async () => {
+    const file = await load(RELPATH);
+    const walk = section(file, "Close walk");
+
+    // Invariant 17 holds the corpus to no client id; the native tool names are checked here too,
+    // because the marker is the one place a client's tool reaches this text.
+    const toolNames = TOOLS.map((tool) => getAskUserToolEntry(tool).toolName).filter(
+      (name): name is string => name !== null,
+    );
+    expect(toolNames.length).toBeGreaterThan(0);
+    for (const name of [...TOOLS, ...toolNames]) {
+      expect(walk.toLowerCase()).not.toContain(name.toLowerCase());
+    }
+
+    // The marker sits in the walk, once in the file, and the plain-text fallback follows it.
+    expect(file.parsed.body.split(PLATFORM_TOOL_MARKER)).toHaveLength(2);
+    const afterMarker = flatten(walk.slice(walk.indexOf(PLATFORM_TOOL_MARKER)));
+    expect(afterMarker).toMatch(/Where a client has no question tool, the walk is plain numbered text: one leftover per turn/);
+    expect(afterMarker).toMatch(/then stop for the answer\./);
+
+    for (const tool of TOOLS) {
+      const rendered = substituteCanonicalPlatformMarker(file.parsed.body, tool);
+      expect(rendered).not.toContain(PLATFORM_TOOL_MARKER);
+      expect(rendered).toContain(getAskUserToolEntry(tool).note);
+    }
+  });
+
+  it("keeps the line ranges the eval cases quote byte for byte", async () => {
+    // The question-protocol cases quote :22-25,38-46 (question-shape-and-default), :47-50,70-71
+    // (subagent-returns-blocked-ambiguity) and :51-56,68-69 (unattended-run-applies-declared-
+    // default). The walk is appended after Gates and the Gates bullet is reworded in place, so
+    // those ranges hold the bytes they held at 1.2.0; a move here moves those cases' ranges.
+    const lines = (await load(RELPATH)).raw.split("\n");
+    const ranges: ReadonlyArray<readonly [number, number, string]> = [
+      [22, 25, "1. **Ambiguous scope**"],
+      [38, 46, ""],
+      [47, 50, "7. **Sub-agents do not ask.**"],
+      [51, 56, "8. **A run with nobody to answer degrades; it does not guess.**"],
+      [68, 69, "- A run that applied a default names it in its output."],
+      [70, 71, "- A sub-agent result that met a trigger carries status"],
+    ];
+    for (const [first, , anchor] of ranges) {
+      expect(lines[first - 1]?.startsWith(anchor), `line ${first} no longer opens with "${anchor}"`).toBe(true);
+    }
+    const quoted = ranges.map(([first, last]) => lines.slice(first - 1, last).join("\n")).join("\n---\n");
+    expect(createHash("sha256").update(quoted).digest("hex")).toBe(
+      "54688c0a45a29c0b57c43f894b74af726f25bd1473763a62cf822e44173cf151",
+    );
   });
 });
