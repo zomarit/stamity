@@ -837,7 +837,11 @@ describe("/st-work — Prove", () => {
     expect(gates).toContain("test-runner");
     expect(gates).toContain("gate-by-gate");
     expect(gates).toContain("verbatim failing excerpts");
-    expect(gates).toContain("Bare pass/fail is not a result");
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close, fix round 1,
+    // `build/20` as signed off, option 1): this pinned "Bare pass/fail is not a result". The rule
+    // folded into the runner's sentence to pay for the refused-folder stop above the
+    // re-attachment cut; the meaning is the same.
+    expect(gates).toContain("commands and verbatim failing excerpts, never bare pass/fail.");
   });
 
   it("runs each gate once, reads its exit code from the tool, and never counts unknown as a pass", async () => {
@@ -904,8 +908,16 @@ describe("/st-work — Prove", () => {
     // TEST CHANGE, justified (2026-10-09, the p3 fix round, `review/121`): this pinned "as do a CLI
     // that cannot run and a scan naming a `reason`, …"; an installed copy that predates `gate` now
     // takes the same line.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close, fix round 1,
+    // `build/20` as signed off, option 1; REQ-PLUGIN-046): this pinned "… or has no `gate` verb and
+    // a scan naming a `reason`, both on the full gates". At a folder the engine keeps from git (a
+    // bare-repository layout at or above it), the scan's `reason` opens with "git was not started
+    // here", and read as a failed read the run went on to the full gates with the session's own
+    // git, which opens that layout. The stop sits here, in the text in force when the scan returns
+    // and above the re-attachment cut, rather than in the Specialist pass below it; the clause's
+    // other words tightened to pay for it.
     expect(gates).toContain(
-      "as do a CLI that cannot run or has no `gate` verb and a scan naming a `reason`, both on the full gates",
+      "as do a CLI that cannot run or lacks `gate` and a scan's `reason`, both on the full gates; one saying `git was not started here` stops the run.",
     );
     // Added 2026-10-09 (the p3 fix round, `review/119`): the maintainer's opening answer 2 puts
     // the CI condition in `/st-work`'s Gates text; it moved here from the test-runner body.
@@ -913,8 +925,11 @@ describe("/st-work — Prove", () => {
       "The narrower gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger change and on a schedule.",
     );
     // One review pass for a `review-once` class (`plan/48`).
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close, fix round 1,
+    // `build/20` as signed off, option 1): this pinned "…closure-reviewed once, and no further round
+    // runs"; the conjunction became a semicolon to pay for the refused-folder stop above the cut.
     expect(gates).toContain(
-      "A class naming `review-once` gets one review pass: a Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs",
+      "A class naming `review-once` gets one review pass: a Critical or Warning it raises is fixed and closure-reviewed once; no further round runs",
     );
     // The order is the pass's order: scan, classify, then the runner.
     expect(gates.indexOf(scan)).toBeLessThan(gates.indexOf(classify));
@@ -1145,18 +1160,22 @@ describe("/st-work — Prove", () => {
   // keeps from git (a bare-repository layout at or above it), `gate scan` and `gate classify` name
   // that refusal in their `reason`, which opens with the engine's words "git was not started here".
   // Read as a failed read, the run went on to the full gates and the lens with the session's own
-  // git, which opens that layout. That reason now stops the run. The sentence sits below the
-  // re-attachment cut, beside the failed-read rule it carves out: the Gates paragraph above the
-  // cut had no character to spare (the unit's edge case), so it moved here.
-  it("stops the run on a gate reason naming a refused folder (REQ-PLUGIN-046)", async () => {
+  // git, which opens that layout. That reason now stops the run.
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close, fix round 1,
+  // `build/20` as signed off, option 1): this read the stop in the Specialist pass, below the
+  // re-attachment cut, while Gates above it still sent a scan's `reason` to the full gates. Gates
+  // is the text in force when the scan returns and the part a resumed run keeps, so the stop moved
+  // there and the Specialist pass sentence went. Its words in Gates are pinned under Prove.
+  it("stops the run on a gate reason naming a refused folder, in Gates above the cut (REQ-PLUGIN-046)", async () => {
+    const raw = (await workFile).raw;
+    const gates = collapse(section(await body(), "### Gates"));
+    const stop = "one saying `git was not started here` stops the run.";
+    expect(gates).toContain(`a scan's \`reason\`, both on the full gates; ${stop}`);
+    expect(raw.indexOf("`git was not started here` stops the run")).toBeLessThan(raw.indexOf("\n### Specialist pass\n"));
+    // The Specialist pass no longer carries a copy of the rule.
     const pass = collapse(section(await body(), "### Specialist pass"));
-    const stop =
-      "Either `gate` verb's `reason` naming a refused folder (`git was not started here`) stops the run with that reason instead.";
-    expect(pass).toContain(stop);
-    // It follows the no-class sentence whose failed read it carves out.
-    expect(pass.indexOf(stop)).toBeGreaterThan(
-      pass.indexOf("or a `reason` naming a failed read, the lens runs at every tier"),
-    );
+    expect(pass).not.toContain("git was not started here");
+    expect(pass).toContain("or a `reason` naming a failed read, the lens runs at every tier");
   });
 
   it("lets topic words add a lens and never remove one (REQ-FLOW-065)", async () => {

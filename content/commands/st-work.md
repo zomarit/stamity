@@ -195,14 +195,14 @@ selected files in the build, its gates on the final tree, as `test-runner` maps 
 gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger
 change and on a schedule. With no base, the scan takes `HEAD` and the final tree runs
 `${STAMITY:VERIFY_GATE_ALL}` unclassified (`unclear`), as after a classify exiting 1; committed work then lists
-`secret scan: not run` under `Not done:`, as do a CLI that cannot run or has no `gate` verb and a
-scan naming a `reason`, both on the full gates. A class naming `review-once` gets one review pass: a
-Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs. The
-test-runner runs each gate once and reads the exit code from the tool (`unknown`, never a pass),
-returning gate-by-gate pass/fail/unknown, commands and verbatim failing excerpts. Bare pass/fail is
-not a result. A pass may cite this run's earlier result on a byte-identical tree (same HEAD, diff,
-untracked files); the final tree always gets a run of its own, and citing is never a lighter pass.
-Judgment-only passes run inline.
+`secret scan: not run` under `Not done:`, as do a CLI that cannot run or lacks `gate` and a scan's
+`reason`, both on the full gates; one saying `git was not started here` stops the run. A class
+naming `review-once` gets one review pass: a Critical or Warning it raises is fixed and
+closure-reviewed once; no further round runs. The test-runner runs each gate once and reads the
+exit code from the tool (`unknown`, never a pass), returning gate-by-gate pass/fail/unknown,
+commands and verbatim failing excerpts, never bare pass/fail. A pass may cite this run's earlier
+result on a byte-identical tree (same HEAD, diff, untracked files), never a lighter pass; the final
+tree always gets a run of its own. Judgment-only passes run inline.
 
 ### Review loop
 
@@ -245,15 +245,15 @@ Three review lenses run beside the loop: `security`, `design-quality`, `performa
 pulled in by a changed path or by the task's topic — the trigger roster is the single source of
 those patterns and each specialist body names its surfaces, so no row is copied here. Topic words
 may add a lens and never remove one. Deep runs the full pass; standard runs a lens on a trigger-path
-match. The `security` lens runs at every tier when `stamity gate classify` names the class `security-sensitive`, and
-on a trigger-path match; light runs no other lens. With no class from `gate classify` (no `Base:`, no CLI or `gate`
-verb) or a `reason` naming a failed read, the lens runs at every tier as for `security-sensitive`. Either `gate`
-verb's `reason` naming a refused folder (`git was not started here`) stops the run with that reason instead. The
-charter's universal floor holds at every tier, so a tier that skipped the security lens outright made that floor
-false. When the class's checks name `dependency-audit` (a bump of dependency lockfiles alone, no bumped package
-carrying an install script), the dependency audit runs first, and the lens only if the audit flags something, as
-that skill defines it; the lockfiles' own trigger-path match waits for that flag. A bump of a package with an
-install script, any other lockfile format, a parse failure, or an audit that cannot run keeps the lens.
+match. The `security` lens runs at every tier when `stamity gate classify` names the class
+`security-sensitive`, and on a trigger-path match; light runs no other lens. With no class from
+`gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason` naming a failed read, the lens
+runs at every tier as for `security-sensitive`. The charter's universal floor holds at every tier,
+so a tier that skipped the security lens outright made that floor false. When the class's checks
+name `dependency-audit` (a bump of dependency lockfiles alone, no bumped package carrying an
+install script), the dependency audit runs first, and the lens only if the audit flags something,
+as that skill defines it; the lockfiles' own trigger-path match waits for that flag. A bump of a
+package with an install script, any other lockfile format, a parse failure, or an audit that cannot run keeps the lens.
 
 - **Read-only.** A specialist returns findings and edits nothing. Repair is the
   fixer's, so no lens answers its own finding in the following round.
