@@ -46,10 +46,18 @@ async function placeScript(): Promise<string> {
   return getRepo().path(SCRIPT_PATH);
 }
 
+/** The cloud and CI markers the session start names a session by (REQ-FLOW-085). */
+const SESSION_MARKERS = ["CLAUDE_CODE_REMOTE", "COPILOT_AGENT_PROMPT", "CURSOR_AGENT_SOCKET", "CI", "GITHUB_ACTIONS"];
+
 /** Runs the script the way a client does: a fresh process, the payload on a piped stdin. */
-function start(file: string, input: string): RunResult {
+function start(file: string, input: string, markers: Record<string, string> = {}): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env["STAMITY_REPO_ROOT"];
+  // TEST CHANGE, justified: the session start now prints a session line when a
+  // cloud or CI marker is set (REQ-FLOW-085), and a CI runner sets `CI` itself.
+  // Cleared so each case controls the markers it runs under; `markers` adds them.
+  for (const name of SESSION_MARKERS) delete env[name];
+  Object.assign(env, markers);
   const result = spawnSync(process.execPath, [file], { cwd: getRepo().dir, input, env, encoding: "utf8" });
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
@@ -193,6 +201,32 @@ describe("the session-start resume card", () => {
     ]);
     // Pointers, never finding text.
     expect(result.stdout).not.toContain("breaks on empty input");
+  });
+
+  it("puts a cloud session's lines between the banner and the card, each after one blank line", async () => {
+    const script = await placeScript();
+    await seedDemo();
+    const markers = { CLAUDE_CODE_REMOTE: "true", CI: "true" };
+
+    const banner = start(script, STARTUP).stdout;
+    const session = start(script, STARTUP, markers).stdout;
+    const compact = start(script, COMPACT, markers);
+    expect(compact.code).toBe(0);
+
+    const sessionLines = [
+      "Session: a Claude Code cloud session.",
+      "- GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.",
+      "- The review-gate counter resets with the VM.",
+      "Also detected: a CI run.",
+    ];
+    expect(session).toBe(`${banner}\n${sessionLines.join("\n")}\n`);
+    // The card still follows the last blank line, so a reader that takes the
+    // card as "everything after the banner's start output" reads the same card.
+    expect(compact.stdout.startsWith(`${session.slice(0, -1)}\n\n`)).toBe(true);
+    const card = cardOf(compact.stdout);
+    expect(card).toHaveLength(6);
+    expect(card[0]).toMatch(/^stamity resume card — run 2026-09-23_demo \(as of /);
+    expect(card.slice(1)).toEqual(cardOf(start(script, COMPACT).stdout).slice(1));
   });
 
   it("appends the same card on a resume as after a compaction, and none on a clear", async () => {

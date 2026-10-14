@@ -142,6 +142,8 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // (generated layout; a plugin root renders 40,195 / 896). Measured 2026-09-30
   // around the learning index change (date order, review-due mark, index
   // bytes): 45,395 / 1,009 before, 46,716 / 1,038 after; the ceiling holds.
+  // Measured 2026-10-14 on a1a55379 around the cloud and CI session line
+  // (REQ-FLOW-085): 47,118 / 1,044 before, 48,780 / 1,068 after; the ceiling holds.
   [SESSION_START_FILE]: { bytes: 49_152, lines: 1_100 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 40,740 bytes / 891
   // lines (claude, generated layout, the default cap of 4; the cap of 10 adds
@@ -645,6 +647,46 @@ export interface SessionStartScriptOptions {
 }
 
 /**
+ * The cloud and CI sessions the session start names (REQ-FLOW-085), in priority
+ * order, each with what it does not enforce there. A marker counts when it is set
+ * to a value other than "", "false" and "0" (and to `equals` where given); its
+ * value is never printed, so a marker cannot carry text into the session. Cursor
+ * is a self-hosted worker only: a managed Cursor VM runs no session-start hook.
+ * Vendor facts per plan 020 file 2, read 2026-10-14.
+ */
+const CLOUD_SESSIONS: readonly {
+  name: string;
+  vars: readonly string[];
+  equals?: string;
+  lines: readonly string[];
+}[] = [
+  {
+    name: "a Claude Code cloud session",
+    vars: ["CLAUDE_CODE_REMOTE"],
+    equals: "true",
+    lines: [
+      "GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.",
+      "The review-gate counter resets with the VM.",
+    ],
+  },
+  {
+    name: "a Copilot cloud agent session",
+    vars: ["COPILOT_AGENT_PROMPT"],
+    lines: [
+      "A preToolUse hook that times out fails open.",
+      "An ask answer is read as deny.",
+      "Hooks run only from the default branch.",
+    ],
+  },
+  {
+    name: "a self-hosted Cursor worker",
+    vars: ["CURSOR_AGENT_SOCKET"],
+    lines: ["The MCP guard does not run.", "subagentStart is skipped in a first or read-only turn."],
+  },
+  { name: "a CI run", vars: ["CI", "GITHUB_ACTIONS"], lines: ["No person answers; declared defaults apply."] },
+];
+
+/**
  * The session-start context load: prints the learnings index and the
  * resumable handoffs for the repo the session opened in — and, on a start
  * whose payload says `source: "compact"` or `source: "resume"`, the resume
@@ -704,6 +746,7 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
       "After a compaction or a resume (a start whose stdin payload says source",
       '"compact" or "resume") it appends the resume card of the run in progress, or',
       "of a closed run dated within the last two days: counts and pointers, never finding text.",
+      "In a cloud or CI session it names the session and what is not enforced there.",
     ],
     [
       "Reads outside repo state: the wall clock, which decides whether a learning's",
@@ -711,7 +754,7 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
       "run is recent enough for the card, and the source field of the stdin payload,",
       "which decides whether the resume card is appended, after a compaction or a",
       "resume. Same repo, two different days or two different starts, two different",
-      "banners.",
+      "banners. The cloud and CI markers in the environment, by presence only.",
     ],
   )}
 
@@ -728,7 +771,10 @@ const MAX_FIELD_CHARS = ${MAX_LEARNING_SUMMARY_LENGTH};
 const REVIEW_WARNING_DAYS = ${REVIEW_WARNING_DAYS};
 const ORDERING_HEAD_BYTES = ${HEAD_BYTES};
 const RESUMABLE = ${json([...RESUMABLE_STATUSES])};
-const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
+const SESSIONS = [
+${CLOUD_SESSIONS.map((session) => `  ${json(session)},`).join("\n")}
+];
+const INVISIBLE =new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
 const SCREEN = [
 ${screen}
 ];
@@ -1070,6 +1116,20 @@ function fileName(doc) {
   return text(doc.name, "(unnamed file)");
 }
 
+/** The first cloud or CI session by priority, its lines, then the others by name. */
+function sessionLines(env) {
+  const [first, ...rest] = SESSIONS.filter((session) =>
+    session.vars.some((name) => {
+      const value = env[name];
+      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
+    }),
+  );
+  if (first === undefined) return [];
+  const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
+  if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
+  return out;
+}
+
 ${READ_STDIN}
 
 ${READ_FIELD}
@@ -1090,6 +1150,9 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
+// Before the card, so the card stays everything after the last blank line.
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);

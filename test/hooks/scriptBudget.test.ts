@@ -172,6 +172,18 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     ]);
   });
 
+  it("holds the session start, cloud detection included, to its fixed ceiling", () => {
+    // REQ-FLOW-085 grew the session start; it had to fit, not move the row. The
+    // literal pins the plan's fixed ceiling so a raise is a visible edit here too.
+    expect(HOOK_SCRIPT_BUDGETS["stamity-session-start.mjs"]).toEqual({ bytes: 49_152, lines: 1_100 });
+    const sessionStarts = renders.filter((script) => script.fileName === "stamity-session-start.mjs");
+    expect(sessionStarts).toHaveLength(TOOLS.length);
+    for (const script of sessionStarts) {
+      expect(script.content, script.tool).toContain("Session: ");
+      expect(budgetViolation(script), script.tool).toBeUndefined();
+    }
+  });
+
   it("counts CRLF and LF line endings alike", () => {
     const [first] = renders;
     if (first === undefined) throw new Error("no script was rendered");
