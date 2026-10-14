@@ -67,6 +67,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   naming the pattern id, in the text and the `--json` output alike. The windows are bounded, so a
   pattern spread over three or more lines that share no window still passes; `SECURITY.md` says
   where.
+- **The hook runner starts every launcher by an absolute path.** The runner the engine writes for
+  Codex, Copilot and Cursor started a `node` launcher by its own interpreter's path, but any other
+  launcher, `node.exe` included, by its bare name in the repository root, so on Windows a file of
+  that name with `.com` or `.exe` added, committed at the root, started in its place. Now `node`
+  and `node.exe` (any letter case on Windows) start as the runner's own interpreter, and any other
+  launcher by an absolute path from a `PATH` walk that never searches the folder the hook runs
+  in. A launcher the walk does not find starts nothing: the hook fails with the runner's fault
+  exit for that row, never an exit that lets a blocked call through. The next `sync` rewrites the
+  runner. This closes the second residual `SECURITY.md` named in 1.14.0 on how programs are
+  started (inbox rows `2026-10-11_release-1-14-0/close/5` and `close/9`).
+- **A folder git was not started in stops `/st-work` and `/st-quick`.** When `gate scan` or
+  `gate classify` says git was not started because a folder has the layout of a bare repository,
+  `/st-work` stops the run as `BLOCKED_DEPENDENCY`, quoting that reason, and `/st-quick` stops the
+  batch, runs no later step and no git command in that folder, the commit included, and gives the
+  reason under `Not done:`. Both used to read it as a scan that did not run and carry on with the
+  session's own git, which the engine's own guards against such a folder do not cover (inbox row
+  `2026-10-11_release-1-14-0/review/70`).
 
 ### Added
 
@@ -103,6 +120,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   again under them so a concurrent `ledger close` cannot move it before the write lands, by atomic
   rename inside `.stamity/`; a ledger lock it cannot take refuses the call. It creates an absent
   inbox with its schedule heading, and prints lines and `Ref:` values, never a row's text.
+- **Every client gets a model each class can run on, picked from the account's own list.** A pin
+  can now be set per client: `stamity config set model.<class>.<client> <id>` pins one client and
+  wins there over `model.<class>`, which pins every client, and `none` clears either. `init` and
+  `sync` read the installed client's own model list (Cursor's `agent models`, Codex's
+  `codex debug models`, the Copilot CLI's allowed values), save it in the manifest under
+  `models.listed`, and give each class the first model of a priority list Stamity ships that the
+  account lists. A pin the saved list does not hold is re-picked, since the client would refuse
+  it, and a client that does not answer keeps the list it saved last. With no client CLI, Copilot
+  and Codex take the shipped list's first model and Cursor writes none, so its sub-agent runs on
+  the session's model. Claude Code keeps its family aliases, and its `frontier` class now carries
+  `fable`. Copilot's agent files carry a `models` priority list and, where the shipped list gives
+  one, a `model` line; Codex's carry `model` beside `model_reasoning_effort`. Every client gets a
+  class-to-model map at `.stamity/generated/models/<client>.json`, and the touchpoints pass the
+  role's class model from it on each sub-agent call; a call refused with a list of models takes
+  the class's first listed fallback, else the closest, and says so in one line. Emission and
+  `check`'s drift gate never start a client, and `STAMITY_NO_CLIENT_PROBE=1` skips every list
+  read.
+- **Cursor's sub-agents run on the mapped model.** Cursor's agent files now carry `model:`, which
+  Cursor treats as a default rather than a hard limit, so a `preToolUse` hook on `Task`
+  (`stamity-model-pins.mjs`) also fills the class's model into a Stamity sub-agent call that names
+  none. It changes nothing else in the call and always allows it; Cursor's own automatic turns
+  are out of its reach. `[effort=…]` is no longer appended to a model whose id already carries
+  the effort.
+- **A `model-pins` row in `check`.** It warns, naming the client, the class and the model, for
+  each pinned or emitted model the client's list does not hold: the live list where the client's
+  CLI answers, else the saved one. With nothing to compare it passes and says `unverified`. It
+  never fails.
+- **Every touchpoint ends on a walk of its leftovers, the summary last.** All nine commands ask
+  each leftover through the client's own question tool, Critical, Warning and `decision-waiting`
+  items first and the recommended option first, in as many rounds as the tool's limits need, and
+  print their summary or proof block only after the last answer, with nothing after it. A client
+  with no question tool gets plain numbered text; a run nobody answers takes each declared
+  default and writes `Default applied:`, and a real defect waits as `decision-waiting`.
+  `/st-ask`'s walk records decisions only, and `/st-quick`'s offers to carry an item to `/st-work`
+  now or leave it on `Not done:`. The charter's invariants move to 1.3.0: invariant 2 asks once a
+  turn in rounds until nothing is undecided, and invariant 5 reads learnings only through the
+  session-start screen, running the committed session-start script where no hook ran and opening
+  only the files it lists as loaded. The question protocol names each client's question tool.
+- **QA proves every row it can before it asks a person.** Before the QA table, the test-runner
+  tries each unproven row, cheapest route first: a committed test, a CLI or script run, a `gh` or
+  API read, a headless client session, the repository's browser harness. A row it proves reads
+  `agent-run` with the command, exit code and output path; a row a route contradicts reads
+  `contradicted` with a redacted excerpt and counts as failing, so `Shippable` reads YES only
+  once none stands. Routes read through a sign-in already present and never write through one,
+  and run confined to a scratch folder. A row reaches the person only for taste or judgment, a
+  real account the run cannot hold, a step that cannot be undone, physical or OS-native use, or
+  legal or policy wording, and at most three do, the uncovered security-negative row first;
+  further rows are listed "over the cap, not asked". `/st-work`'s what-to-verify summary lists
+  only the person rows.
+- **Review and verify check module depth.** The reviewer's maintainability lens flags a new layer
+  whose interface is nearly as wide as what it hides, and counts a big file only when its
+  interface is wide too. `st-verify` gains the judgment check `maint-module-depth`, to which
+  `maint-size-outliers` defers a file with a narrow interface, and `/st-plan`'s `interfaces` cell
+  names the module interface a unit lands behind.
+- **The session start names a cloud or CI session.** When `CLAUDE_CODE_REMOTE=true`,
+  `COPILOT_AGENT_PROMPT`, `CURSOR_AGENT_SOCKET` (a self-hosted Cursor worker), `CI` or
+  `GITHUB_ACTIONS` is set, the session-start hook prints a line naming the session and the guards
+  not enforced there, such as a Copilot cloud `preToolUse` hook that times out failing open. It
+  prints no variable's value and makes no network call. The docs say which clouds run which
+  hooks, the capability matrix gains a dated cloud column, and the `npx` fix-it hint says it
+  needs the npm registry.
+- **`/st-pr-resolve` and `/st-board` work in a REST-only session.** Where the session start says
+  GraphQL is unavailable, or a `gh api graphql` call is refused, every GitHub call they make uses
+  a REST `gh api` form where one exists. A Projects board is refused there with "Projects boards
+  are unavailable in a REST-only session", a review thread's resolution state is reported
+  unknown, and `/st-pr-resolve` fetches a pull request's head by its number rather than by the
+  branch name its author chose.
+- **A CI leg that imitates a cloud machine.** This repository's CI runs every emitted hook command
+  in a Linux container with an empty home folder, from the root and from folders below it, with
+  `node` present and absent and under each cloud marker, and `all-ci-checks` requires it.
 
 ### Changed
 
@@ -132,19 +219,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `https://github.com/zomarit/stamity/tree/records`; history is unchanged. A fork's next integrate
   deletes upstream's records from its tree, and a fork that edited one of them keeps its copy by
   resolving the modify/delete conflict in favour of its own file.
+- **The manifest moves to generation 2.0.0, and an older engine refuses it.** This engine reads a
+  1.x manifest by migrating it, each `models.pins.<class>` value becoming `{ "all": "<id>" }`, and
+  `sync` writes it back as 2.0.0. Once it has, 1.14.0 and every earlier engine refuse the manifest
+  with their upgrade message, so going back to 1.14 means restoring `.stamity/manifest.json` from
+  git as well. A `plugin` block 1.14.0 left passes through unchanged.
+- **`ModelConfig.pins` holds a map per class.** For callers of the package's API, each
+  `ModelConfig.pins` value is now a `ClassPins` map (`all` and one optional key per client), not a
+  string, and `ModelConfig` gains `listed`, the saved model lists; `ClassPins` and `ListedModels`
+  are exported.
+- **Copilot's hooks file keys its events in camelCase.** `.github/hooks/stamity.json` now uses
+  `sessionStart`, `preToolUse`, `postToolUse` and the other camelCase names, with `bash` beside
+  `command` in every entry, the form GitHub's cloud agent reads. The next `sync` rewrites a 1.14
+  file and keeps a recoverable copy. On Copilot an authored hook now receives Claude's tool names
+  (`Bash`, `PowerShell`, `Read`, `Write`, `Edit`, `Grep`, `Glob`, `Agent`, `AskUserQuestion`) in
+  place of Copilot's own, and any other name unchanged; `apply_patch` keeps its own name, so a
+  path guard on Copilot names it too, which `init` and `sync` say once. An authored matcher is
+  translated into Copilot's names (`Bash|Edit` matches `bash`, `edit` and `str_replace_editor`),
+  and an alternative with no Copilot twin is kept as written and named once by `init` and `sync`.
+- **The Copilot setup workflow always installs Node.** `copilot-setup-steps.yml` always writes a
+  `setup-node` step, with the project's Node version, else `lts/*`, because the generated hooks
+  run on Node, and an install step only where the project shows Node. The default action refs move
+  to `actions/checkout@v6` and `actions/setup-node@v7`; a project's own pins still win.
 
 ### Removed
 
 - **The APM and plugin distribution routes.** The npm CLI is the one way to install stamity. This
-  is a removal in a minor release, made on purpose: neither route had a known user. What leaves:
+  is a removal in a minor release, made on purpose. What leaves:
   - **The APM route.** `apm.yml` and the `.apm/` tree leave `main`, so an unpinned
     `apm install zomarit/stamity` stops resolving at the merge, before any release. An install
     pinned to an earlier tag keeps working at that version and gets no update.
   - **The plugin route.** `plugin.json`, `.claude-plugin/`, `.cursor-plugin/` and
     `renovate/plugins.json` leave `main`, and no release builds, attaches or pushes a plugin
-    distribution again, so a marketplace added from the repository stops resolving too. The
-    `plugin-dist` branch and the `plugins/v*` tags stay where they are, as frozen history, so a
-    plugin install pinned to one keeps its version and gets no update.
+    distribution again, so a marketplace added from the repository stops resolving too. A GitHub
+    release now carries the npm tarball and its SBOM only: the plugin archives, their `.sha256`
+    files and `release.json`, the machine-readable release manifest every release from 1.9.0 to
+    1.14.0 attached, are gone from 1.15.0 on, so automation that fetches `release.json` from a
+    release finds none. The `plugin-dist` branch and the `plugins/v*` tags stay where they are, as
+    frozen history, so a plugin install pinned to one keeps its version and gets no update.
   - **The `stamity plugin` verb** (`plugin status` and `plugin setup`). It is now an unknown
     command, exit 2, and `--help` lists nine verbs.
   - **The `plugin-backed` install mode.** A manifest written by 1.14.0 that still holds a `plugin`
@@ -155,8 +267,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `plugin` key.
   - **`check --expect-mode`.** It is now an unknown option, exit 2; `--expect-version` and
     `--expect-tools` are unchanged.
-  - **The `plugin-runtime` doctor row**, so `check` prints one row fewer, and the JSON keys
-    `pluginOwned` (`sync --json`) and `pluginUninstall` (`clean --json`).
+  - **The `plugin-runtime` doctor row**, and the JSON keys `pluginOwned` (`sync --json`) and
+    `pluginUninstall` (`clean --json`). `check` still prints as many rows: the new `model-pins`
+    row (under Added) takes its place in the count.
   - **The exports** `INSTALL_MODES`, `INSTALL_MODE_DEFAULT`, `PLUGIN_OWNED_CLASSES`, `InstallMode`,
     `PluginClientRecord`, `PluginConfig`, `PluginOwnedClass` and `EngineRegistry.plugins`, and the
     capability matrix's `PLUGIN_CONTAINER_CLASSES`, `PluginContainerClass`, `PluginContainerFact`
@@ -199,6 +312,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exited with a status of its own, the runner now takes that status and the hook's output as the
   result, as for any other hook. A hook killed by a signal is still a failed hook, and a hook that
   could not start, or that timed out, is reported as before.
+- **Cursor and Copilot hooks run wherever the session starts.** Their hook commands found the
+  hook runner from the folder the session was started in, so a session started in a subfolder
+  could not find it and its hooks failed there. Each command now walks up to the project root
+  (Cursor's `CURSOR_PROJECT_DIR` first) before it runs, and a runner missing at the root exits 1
+  naming the `sync` call that restores it. The next `sync` rewrites a 1.14 hooks file in place;
+  Codex's hooks file is unchanged, so its recorded trust holds.
+- **`/st-rework` says what its deferred rows do on `stop`.** The rows it appended at routing
+  stand whichever way the handoff is answered: none is offered `fix now`, and none is appended
+  twice (inbox rows `2026-10-10_next-tier/build/31` and `review/52`).
+- **`st-qa` accepts the same proof everywhere.** Its person-row rule, its auto-prove table and its
+  first rule now all take a test's `file:line` or the prover's `agent-run`, so a row a command
+  run proved is no longer left for the person (inbox row `2026-10-10_next-tier/build/42`).
+- **The release restores the records the cut recorded.** A release used to restore the `records`
+  branch as it stood when its run started; the cut now writes `records: <sha>` into the tag's
+  message, and the release restores exactly that commit and refuses a tag whose line is missing
+  or is not 40 lower-case hexadecimal characters. The release checklist and the repair text
+  `scripts/records.mjs` prints name the branch as `refs/remotes/origin/records`, so a clone that
+  holds a tag called `origin/records` no longer reads the tag. These are repository surfaces: the
+  published package never carried them (inbox rows `2026-10-13_records-branch/close/1`, `pr/9`
+  and `pr/10`).
+- **The eval set's rows due before this release's eval run.** The floor case that handed its
+  scenario every inbox row's line number is succeeded by `work-frame-matched-rows-only`, whose
+  brief gives only what `stamity ledger inbox` prints; the lockfile-audit case's partial-audit
+  row becomes binding; the eval-run skill publishes a run's artifact to the `records` branch
+  instead of committing it with the change; and `evals/README.md` points at `EXPECTED_MOVES`
+  where it lives. These too are repository surfaces (inbox rows
+  `2026-10-11_release-1-14-0/build/25` and `build/26`, `2026-10-13_records-branch/review/40`,
+  `2026-10-10_next-tier/build/43`).
 
 ## [1.14.0] - 2026-10-12
 
