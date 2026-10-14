@@ -129,6 +129,9 @@ const BOARD_PATH = "commands/st-board.md";
 /** The qa skill: owner of the QA row states the checkpoint's pointer names. */
 const QA_SKILL_PATH = "skills/st-qa/SKILL.md";
 
+/** The question protocol: owner of the Close walk the close points at. */
+const PROTOCOL_PATH = "rules/stamity-question-protocol.md";
+
 /** The dependency audit skill: owner of what "the audit flags something" means in the Specialist pass. */
 const DEP_AUDIT_SKILL_PATH = "skills/st-dep-audit/SKILL.md";
 
@@ -441,6 +444,18 @@ describe("/st-work — body skeleton", () => {
 });
 
 describe("/st-work — Frame and Plan", () => {
+  // Added 2026-10-14 (plan 020 file 3, unit f3-work-close; REQ-LADDER-007): the model plan tells
+  // the orchestrator where a role's model comes from, the client's emitted map, so each spawn
+  // carries the class's model rather than the client's default. It stays in Frame, above the
+  // re-attachment cut, and paid for its words inside the step's own characters.
+  it("passes each role's class model from the client's map at Frame (REQ-LADDER-007)", async () => {
+    const raw = (await workFile).raw;
+    const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    const sentence = "pass each role's class model from the client's map at `.stamity/generated/models/`";
+    expect(frame).toContain(`3. **Model plan.** Emit role, class, count per phase, rough cost; ${sentence}.`);
+    expect(raw.indexOf("pass each role's class model")).toBeLessThan(raw.indexOf("\n### Specialist pass\n"));
+  });
+
   it("reads the deferral inbox at Frame and surfaces touched-file overlap", async () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
     expect(frame).toContain("deferral inbox");
@@ -1126,6 +1141,24 @@ describe("/st-work — Prove", () => {
     expect(pass).toContain("universal floor holds at every tier");
   });
 
+  // Added 2026-10-14 (plan 020 file 3, unit f3-work-close; REQ-PLUGIN-046): at a folder the engine
+  // keeps from git (a bare-repository layout at or above it), `gate scan` and `gate classify` name
+  // that refusal in their `reason`, which opens with the engine's words "git was not started here".
+  // Read as a failed read, the run went on to the full gates and the lens with the session's own
+  // git, which opens that layout. That reason now stops the run. The sentence sits below the
+  // re-attachment cut, beside the failed-read rule it carves out: the Gates paragraph above the
+  // cut had no character to spare (the unit's edge case), so it moved here.
+  it("stops the run on a gate reason naming a refused folder (REQ-PLUGIN-046)", async () => {
+    const pass = collapse(section(await body(), "### Specialist pass"));
+    const stop =
+      "Either `gate` verb's `reason` naming a refused folder (`git was not started here`) stops the run with that reason instead.";
+    expect(pass).toContain(stop);
+    // It follows the no-class sentence whose failed read it carves out.
+    expect(pass.indexOf(stop)).toBeGreaterThan(
+      pass.indexOf("or a `reason` naming a failed read, the lens runs at every tier"),
+    );
+  });
+
   it("lets topic words add a lens and never remove one (REQ-FLOW-065)", async () => {
     const pass = collapse(section(await body(), "### Specialist pass"));
     expect(pass).toContain("Topic words may add a lens and never remove one");
@@ -1307,18 +1340,45 @@ describe("/st-work — Prove", () => {
     expect(qaLine).toBeLessThan(proof.indexOf("decisions trace"));
   });
 
-  it("closes on one question that bundles the person's rows, the spec merge and the commit (REQ-FLOW-019)", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close; REQ-FLOW-080,
+  // REQ-FLOW-019): this case was "closes on one question that bundles the person's rows, the spec
+  // merge and the commit" and pinned the label "**The close asks once.**". What moved: the close no
+  // longer asks once; it walks what is left by the question protocol's Close walk, one question per
+  // item in rounds of the client's question tool, so the label names the walk and the paragraph
+  // points at the rule's one home. The three parts, the numbered options, the default and the
+  // empty-close sentence are held word for word; the old label is asserted gone.
+  it("closes on the protocol's walk over the person's rows, the spec merge and the commit (REQ-FLOW-019, REQ-FLOW-080)", async () => {
     const qa = collapse(section(await body(), "### QA checkpoint"));
-    expect(qa).toContain("**The close asks once.**");
+    expect(qa).toContain("**The close walk.**");
+    expect(qa).not.toContain("**The close asks once.**");
+    expect(qa).not.toContain("One question with numbered options covers");
+    expect(qa).toContain(
+      "What is left for the person is asked by the question protocol's Close walk, in rounds of numbered options:",
+    );
     expect(qa).toContain("numbered options");
-    // The three parts the one question covers.
+    // The pointer names a section the protocol carries.
+    const protocol = (await corpusFile(PROTOCOL_PATH)).parsed.body;
+    expect(protocol.split("\n")).toContain("## Close walk");
+    // The three parts the walk covers.
     expect(qa).toContain("the rows no evidence proved, the spec delta merge and the commit");
     // The declared default is the lowest-blast-radius one: nothing committed, merged or signed.
     expect(qa).toContain("`Default if no response: leave uncommitted`");
     expect(qa).toContain("those rows not signed and the delta unmerged");
     expect(qa).toContain("with none left, there is no ask");
     // It follows the row-states paragraph, whose rows it asks about.
-    expect(qa.indexOf("**The close asks once.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
+    expect(qa.indexOf("**The close walk.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
+  });
+
+  // Added 2026-10-14 (plan 020 file 3, unit f3-work-close; REQ-FLOW-080): the proof block is the
+  // run's last output. It prints once the walk's last answer is in, so no leftover is decided
+  // after the reader has the summary, and nothing prints after it.
+  it("prints the proof block after the close walk's last answer, and nothing after it (REQ-FLOW-080)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain(
+      "Every run ends with a proof block, printed after the close walk's last answer with nothing after it; machine- and human-readable, it doubles as an audit record:",
+    );
+    // The opening sentence, ahead of the field list it introduces.
+    expect(proof.indexOf("nothing after it")).toBeLessThan(proof.indexOf("- gate results —"));
   });
 
   // Added 2026-10-10 (plan 019 file 3, unit q10a-work-close; REQ-FLOW-074, REQ-FLOW-075, REQ-FLOW-019):
@@ -1326,7 +1386,10 @@ describe("/st-work — Prove", () => {
   // `/st-board`'s Leftovers at a close; this command carries a pointer of at most four lines that
   // names the query the close runs and the order it takes the rows in, and hands the unanswered
   // close to that rule.
-  it("joins the leftovers to the close's one question as a fourth part, by /st-board's rule (REQ-FLOW-074)", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close): the title read "joins
+  // the leftovers to the close's one question"; the close is now a walk, so the title says so. The
+  // pointer's pins below are unchanged but for the renamed label.
+  it("joins the leftovers to the close walk as a fourth part, by /st-board's rule (REQ-FLOW-074)", async () => {
     const raw = (await workFile).raw;
     const qa = collapse(section(await body(), "### QA checkpoint"));
     // TEST CHANGE, justified (2026-10-12, REQ-FLOW-078): the pin read the query as
@@ -1344,7 +1407,12 @@ describe("/st-work — Prove", () => {
     const at = qa.indexOf(pointer);
     expect(at).toBeGreaterThan(qa.indexOf("those rows not signed and the delta unmerged."));
     expect(at).toBeLessThan(qa.indexOf("A part with nothing to decide drops out; with none left, there is no ask."));
-    expect(qa.indexOf("**The close asks once.**")).toBeLessThan(at);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close; REQ-FLOW-080): this
+    // read the label "**The close asks once.**", renamed to the walk; with the old label gone its
+    // index is -1 and the order check would pass on nothing, so the label is found first.
+    const label = qa.indexOf("**The close walk.**");
+    expect(label).toBeGreaterThan(-1);
+    expect(label).toBeLessThan(at);
 
     // A pointer, not a second copy of the rule: at most four lines, each its own.
     const lines = raw.split("\n");
@@ -1774,11 +1842,17 @@ describe("/st-work — Prove", () => {
     expect(effects).toContain("spec-author");
   });
 
-  it("takes the spec merge's confirmation from the close's one question (REQ-FLOW-019)", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close; REQ-FLOW-019,
+  // REQ-FLOW-080): the case read "takes the spec merge's confirmation from the close's one question"
+  // and pinned "close's one question confirms it". What moved: the close walks its parts in rounds,
+  // so the merge's confirmation is the walk's answer on that part; the merge stays confirm-gated
+  // and asked once, inside the walk, and the old wording is asserted gone.
+  it("takes the spec merge's confirmation from the close walk (REQ-FLOW-019)", async () => {
     const effects = collapse(section(await body(), "### Side effects"));
-    // Still confirm-gated; the confirmation is the close question's answer, not a second ask.
+    // Still confirm-gated; the confirmation is the close walk's answer, not a second ask.
     expect(effects).toContain("auto-proposed, confirm-gated, append/merge-only");
-    expect(effects).toContain("close's one question confirms it");
+    expect(effects).toContain("merge once the close walk confirms it");
+    expect(effects).not.toContain("close's one question");
   });
 });
 
