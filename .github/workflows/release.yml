@@ -283,9 +283,14 @@ jobs:
       # The records live on the `records` branch, which the depth-0 checkout above already fetched
       # into refs/remotes/origin/records; the restore reads that ref and fetches nothing, for the
       # reason the resolve step gives (no credential survives the checkout). The records suite and
-      # the leak gate below then read them at their usual paths.
+      # the leak gate below then read them at their usual paths. The step prints the records commit
+      # it restored, so the run's log names the evidence this release was gated on; a ref that does
+      # not resolve fails the step.
       - name: Restore the records
-        run: node scripts/records.mjs restore --ref origin/records --no-fetch --force
+        run: |
+          node scripts/records.mjs restore --ref origin/records --no-fetch --force
+          records_commit=$(git rev-parse --verify 'origin/records^{commit}')
+          echo "Restored the records commit $records_commit (origin/records)"
 
       - name: Verify lockfile is in sync
         run: git diff --exit-code package-lock.json

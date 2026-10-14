@@ -3190,7 +3190,16 @@ describe("release.yml — the only publishing path", () => {
   it("restores the records after the install and runs the records suite after the tests, with no fetch", () => {
     expect(stepOf(gatesSteps, "Checkout").with?.["fetch-depth"]).toBe(0);
     const restore = stepOf(gatesSteps, "Restore the records");
-    expect(restore.run).toBe("node scripts/records.mjs restore --ref origin/records --no-fetch --force");
+    // TEST CHANGE, justified (run 2026-10-13_records-branch, ledger pr/4, the maintainer's decision "Log the sha
+    // now, pin at 1.15.0"): the step was one command; it now also prints the records commit it restored, so the
+    // run's log names the evidence a release was gated on. The restore command itself is unchanged.
+    expect(restore.run).toBe([
+      "node scripts/records.mjs restore --ref origin/records --no-fetch --force",
+      "records_commit=$(git rev-parse --verify 'origin/records^{commit}')",
+      "echo \"Restored the records commit $records_commit (origin/records)\"",
+      "",
+    ].join("\n"));
+    expect(restore.run, "a `${{ }}` value inside a run: is a template injection").not.toContain("${{");
     expect(runOf(gatesSteps, "Records suite")).toBe("npm run test:records");
     expect(indexOf(gatesSteps, "Restore the records")).toBe(indexOf(gatesSteps, "Install") + 1);
     expect(indexOf(gatesSteps, "Records suite")).toBe(indexOf(gatesSteps, "Test") + 1);

@@ -301,6 +301,52 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
   });
 
+  // A Windows disk keeps no executable bit (git there runs with core.fileMode off and chmod sets
+  // only the read-only flag), so a change of mode can be made, and these two cases run, only on a POSIX host.
+  it.skipIf(!POSIX)("counts a change of mode alone as a change on either side: against the other side's change it refuses, writing and deleting nothing", async () => {
+    const w = world();
+    const tool = `${RUN}/tool.sh`, ledger = `${ALPHA}/ledger.jsonl`;
+    const b = await w.machine("b");
+    w.write(b, PLAN, "# plan, from b\n");
+    chmodSync(join(b, tool), 0o644);
+    rmSync(join(b, ledger));
+    expect((await records.publish({ root: b, env: w.env, message: "b", allowDeletions: true, runGates: passing().run }) as Result).code).toBe(0);
+    const before = w.synced(w.clone);
+    // Here: a mode change against b's content change, a content change against b's mode change, and a mode change against b's deletion.
+    chmodSync(join(w.clone, PLAN), 0o755);
+    w.write(w.clone, tool, "#!/bin/sh\necho tool, from a\n");
+    chmodSync(join(w.clone, ledger), 0o755);
+    const refused: Result = await records.restore(w.opts);
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines).toEqual(expect.arrayContaining([PLAN, tool, ledger]));
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+    expect(statSync(join(w.clone, PLAN)).mode & 0o111).toBe(0o111);
+    expect(readFileSync(join(w.clone, tool), "utf8")).toBe("#!/bin/sh\necho tool, from a\n");
+    expect(statSync(join(w.clone, tool)).mode & 0o111).toBe(0o111);
+    expect(statSync(join(w.clone, ledger)).mode & 0o111).toBe(0o111);
+    expect(w.synced(w.clone)).toBe(before);
+  });
+
+  it.skipIf(!POSIX)("writes a mode changed only on the ref, and keeps a mode changed only here, which the next commit publishes", async () => {
+    const w = world();
+    const tool = `${RUN}/tool.sh`;
+    const b = await w.machine("b");
+    chmodSync(join(b, tool), 0o644);
+    expect((await records.publish({ root: b, env: w.env, message: "b", runGates: passing().run }) as Result).code).toBe(0);
+    chmodSync(join(w.clone, PLAN), 0o755);
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(statSync(join(w.clone, tool)).mode & 0o111).toBe(0);
+    expect(statSync(join(w.clone, PLAN)).mode & 0o111).toBe(0o111);
+    expect(restored.lines).toContain(`kept ${PLAN}: a local edit not yet published`);
+    expect(w.synced(w.clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+    const published: Result = await records.publish({ ...w.opts, message: "a", runGates: passing().run });
+    expect(published.code, published.lines.join("\n")).toBe(0);
+    expect(published.lines.filter((line) => /^[ADM] /.test(line))).toEqual([`M ${PLAN}`]);
+    expect(w.git(w.origin, "ls-tree", "records", PLAN)).toMatch(/^100755 /);
+    expect(w.git(w.origin, "ls-tree", "records", tool)).toMatch(/^100644 /);
+  });
+
   it("removes a record the other side deleted when this copy is the sync base's, and keeps an unpublished new file", async () => {
     const w = world();
     const b = await w.machine("b");
@@ -1000,6 +1046,23 @@ describe("the CLI", { timeout: 60_000 }, () => {
     const guarded = spawnSync(process.execPath, [SCRIPT, "guard"], { cwd: w.clone, env: w.env, encoding: "utf8" });
     expect(guarded.status, guarded.stderr).toBe(0);
     expect(guarded.stdout).toContain("no record path is tracked at HEAD");
+  });
+
+  it("never reads a flag as an option's value: commit -m --dry-run exits 2, pushes nothing and moves no ref", () => {
+    const w = world();
+    w.write(w.clone, PLAN, "# plan, revised\n");
+    const before = { clone: w.refs(w.clone), origin: w.refs(w.origin) };
+    const dry = spawnSync(process.execPath, [SCRIPT, "commit", "-m", "--dry-run"], { cwd: w.clone, env: w.env, encoding: "utf8" });
+    expect(dry.status, `${dry.stdout}${dry.stderr}`).toBe(2);
+    expect(dry.stderr).toContain("-m needs a value");
+    expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+    for (const [args, flag] of [
+      [["commit", "-m", "--allow-deletions"], "-m"], [["commit", "--dry-run", "-m", "--force"], "-m"],
+      [["restore", "--ref", "--no-fetch"], "--ref"], [["setup", "--ref", "--force"], "--ref"],
+      [["verify", "--base", "--ref", "x"], "--base"], [["init", "--base", "-m"], "--base"],
+    ] as const) expect((records.parseArgs([...args]) as { error?: string }).error, args.join(" ")).toContain(`${flag} needs a value`);
+    // A message that merely starts with a dash is no flag, and stays a message.
+    expect(records.parseArgs(["commit", "-m", "-x: a message", "--dry-run"])).toEqual({ verb: "commit", options: { message: "-x: a message", dryRun: true } });
   });
 });
 

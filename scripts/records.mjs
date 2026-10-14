@@ -11,7 +11,8 @@
 //                                           write the records of <ref> (origin/records) into the
 //                                           checkout, three ways against the sync base: a record
 //                                           changed only on <ref> is written, one changed only here
-//                                           is kept, one changed on both refuses the run; one
+//                                           is kept, one changed on both refuses the run (a change
+//                                           of mode alone, 100644 or 100755, is a change); one
 //                                           deleted on <ref> is deleted here only if unedited; a
 //                                           <ref> holding anything but records and the branch's
 //                                           own files, a name that is not portable, or two
@@ -36,7 +37,7 @@
 // other command sees it; no push is ever forced; `main`'s index is never written (the branch's
 // index is a separate GIT_INDEX_FILE, and a GIT_INDEX_FILE inherited from the caller is dropped);
 // no working-tree file is deleted but a record `restore` finds deleted on the ref whose copy here
-// is the sync base's byte for byte; and nothing is written through a symlink.
+// is the sync base's byte for byte and mode for mode; and nothing is written through a symlink.
 //
 // The module API is the six verbs, each `async (options) → { code, lines }` (`publish` is the
 // CLI's `commit`); `root` and `env` are accepted by every verb, and `publish` takes `runGates`, the
@@ -289,9 +290,16 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
   const rows = lsTree(ctx, oid)
   const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
   if (unsupported.length > 0) stop(1, [`refused: ${ref} holds entries restore does not write (only regular files under the record paths):`, ...unsupported])
-  // The last synced copy of each record: a local copy equal to it is stale, one that differs from it is an edit.
+  // The last synced copy of each record, mode and blob: a local copy equal to it is stale, one that
+  // differs from it, in either, is an edit. Windows keeps no executable bit, so there a copy's mode
+  // is the base's (else the ref's) and a change of mode is never local, as `commit` reads it there.
   const synced = ctx.commit(SYNC_BASE)
-  const was = synced === null ? null : new Map(lsTree(ctx, synced).map((row) => [row.path, row.oid]))
+  const was = synced === null ? null : new Map(lsTree(ctx, synced).map((row) => [row.path, row]))
+  const entry = (row) => `${row.mode} ${row.oid}`
+  const onDisk = (path, stat, mode) => entry({
+    mode: process.platform === 'win32' ? mode : (stat.mode & 0o100 ? '100755' : '100644'),
+    oid: ctx.git(['hash-object', `--path=${path}`, '--', path]).trim(),
+  })
   const symlinks = new Set(), blocked = new Set(), differs = [], updates = [], pending = [], writes = [], modes = []
   let unchanged = 0
   for (const row of rows) {
@@ -301,24 +309,22 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     if (stat === null) { writes.push(row); continue }
     if (stat.isSymbolicLink()) { symlinks.add(row.path); continue }
     if (!stat.isFile()) { blocked.add(row.path); continue }
-    const local = ctx.git(['hash-object', `--path=${row.path}`, '--', row.path]).trim()
-    if (local !== row.oid) {
-      if (was !== null && was.get(row.path) === local) updates.push({ row, stat }) // changed only on the ref
-      else if (was !== null && was.get(row.path) === row.oid) pending.push({ row, stat }) // changed only here
-      else differs.push({ row, stat }) // changed on both, or no sync base to tell
-      continue
-    }
-    if (process.platform !== 'win32' && ((stat.mode & 0o100) !== 0) !== (row.mode === '100755')) modes.push({ row, stat })
-    else unchanged++
+    const base = was?.get(row.path)
+    const local = onDisk(row.path, stat, base?.mode ?? row.mode)
+    if (local === entry(row)) unchanged++
+    else if (base !== undefined && entry(base) === local) updates.push({ row, stat }) // changed only on the ref
+    else if (base !== undefined && entry(base) === entry(row)) pending.push({ row, stat }) // changed only here
+    else if (base === undefined && local.endsWith(` ${row.oid}`)) modes.push({ row, stat }) // no base to tell: the ref's mode
+    else differs.push({ row, stat }) // changed on both, or no sync base to tell
   }
   // A record the sync base holds and the ref does not was deleted there since: this copy goes too
-  // only when it is the base's byte for byte, so no unpublished byte is lost, --force or not; an
+  // only when it is the base's byte for byte and mode for mode, so no unpublished change is lost, --force or not; an
   // edited copy is a conflict, and under --force is kept and named. A path the ref holds in another
   // case, or main's placeholder in any case, is never deleted: a disk that folds case resolves both
   // names to one file. A symlink is never hashed or followed.
   const onRef = new Set(rows.map((row) => row.path)), deletes = [], edited = [], renamed = []
   const onRefFolded = new Map(rows.map((row) => [folded(row.path), row.path]))
-  for (const [path, baseOid] of was ?? []) {
+  for (const [path, base] of was ?? []) {
     if (onRef.has(path) || !isRecordPath(path) || KEPT_FOLDED.has(folded(path))) continue
     const parent = blockedParent(ctx, path)
     if (parent !== null) { if (parent.why === 'symlink') symlinks.add(parent.path); continue }
@@ -327,7 +333,7 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     const spelled = onRefFolded.get(folded(path))
     if (stat.isSymbolicLink()) symlinks.add(path)
     else if (spelled !== undefined) renamed.push({ path, spelled })
-    else if (stat.isFile() && ctx.git(['hash-object', `--path=${path}`, '--', path]).trim() === baseOid) deletes.push(path)
+    else if (stat.isFile() && onDisk(path, stat, base.mode) === entry(base)) deletes.push(path)
     else edited.push(path)
   }
   if (symlinks.size > 0) stop(1, ['refused: a record or one of its folders is a symlink, and restore never writes through one:', ...[...symlinks].toSorted()])
@@ -618,6 +624,9 @@ const VERBS = {
   init: { run: init, flags: { '--base': 'base' }, required: ['--base'] },
 }
 
+/** Every verb's flags: never an option's value, so `commit -m --dry-run` is a missing message, never a publish. */
+const FLAGS = new Set(Object.values(VERBS).flatMap((spec) => Object.keys(spec.flags)))
+
 /** `{ verb, options }`, or `{ error }` for an unknown verb, an unknown flag or a missing value. */
 export function parseArgs(argv) {
   const [verb, ...rest] = argv
@@ -632,6 +641,7 @@ export function parseArgs(argv) {
     if (Array.isArray(target)) { options[target[0]] = target[1]; continue }
     const value = rest[++i]
     if (value === undefined || value === '') return { error: `${flag} needs a value` }
+    if (FLAGS.has(value)) return { error: `${flag} needs a value, and ${value} is a flag, not one` }
     options[target] = value
   }
   const missing = (spec.required ?? []).filter((flag) => !seen.has(flag))
