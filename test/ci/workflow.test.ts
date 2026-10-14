@@ -17,6 +17,8 @@ import { parse } from "yaml";
 // @ts-expect-error — the probe is a plain .mjs script with no type declarations, and stays that
 // way: it re-execs itself under a type-stripping flag, so it cannot be TypeScript itself.
 import { osvQueryBatch } from "../../scripts/advisory-check.mjs";
+// @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
+import { decide as classifyChange } from "../../scripts/ci/records-only.mjs";
 import { CURATED_MCP_SERVERS, pinnedPackageSpec } from "../../src/mcp/catalog.ts";
 import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowExpression.ts";
 
@@ -4372,11 +4374,87 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
       string,
       { paths?: readonly string[] }
     >;
-    for (const trigger of ["pull_request", "push"]) {
-      expect(on[trigger]?.paths, `${trigger} must be path-filtered`).toEqual(
-        // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every site and docs file.
-        expect.arrayContaining([["website", "**"].join("/"), ["docs", "**"].join("/"), "README.md"]),
-      );
+    // TEST CHANGE, justified (run 2026-10-13_records-branch, unit r5b-ci-folds, inbox row 105):
+    // the pull-request trigger no longer carries `website/**` and `docs/**`, because ci.yml builds
+    // the site for those on a pull request (the `lanes` job or the `check` job's LTS leg, under
+    // `site_build`) inside the required `all-ci-checks`; a second build here repeated it. The push
+    // trigger keeps every path, and the pull-request split is held against the classifier below.
+    expect(on["push"]?.paths, "push must be path-filtered").toEqual(
+      // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every site and docs file.
+      expect.arrayContaining([["website", "**"].join("/"), ["docs", "**"].join("/"), "README.md"]),
+    );
+  });
+
+  // ADDED (run 2026-10-13_records-branch, unit r5b-ci-folds, inbox row 105): a pull request that
+  // changes the website builds the site once, in ci.yml, where `all-ci-checks` blocks the merge on
+  // it; docs-site.yml's pull-request build keeps only the paths ci.yml's `site_build` never covers.
+  it("builds a pull request's site once: in ci.yml for the site's paths, here only for the rest", () => {
+    const on = (docsSite.workflow as unknown as Record<string, unknown>)["on"] as Record<
+      string,
+      { paths?: readonly string[] }
+    >;
+    const pushPaths = on["push"]?.paths ?? [];
+    const prPaths = on["pull_request"]?.paths ?? [];
+    // Built at run time, kept out of the test-input census like the globs above.
+    const specs = ["docs", "specs", "**"].join("/");
+    expect([...prPaths].toSorted()).toEqual([".github/workflows/docs-site.yml", "README.md", specs].toSorted());
+    // Every pull-request path is still under a push path; the push build is `main`'s own.
+    const covers = (glob: string, path: string) => glob === path || (glob.endsWith("/**") && path.startsWith(glob.slice(0, -2)));
+    for (const path of prPaths) expect(pushPaths.some((glob) => covers(glob, path)), path).toBe(true);
+
+    const base = "a".repeat(40);
+    const code = ["src", "cli.ts"].join("/");
+    const sample = (glob: string) => (glob.endsWith("/**") ? `${glob.slice(0, -2)}page.md` : glob);
+    // A map that gives every sampled path a suite, so a path alone takes the lanes side when it can.
+    const mapFor = (glob: string) => [{ glob, tests: [["test", "docsPages.test.ts"].join("/")] }];
+    const classifyPaths = classifyChange as (input: {
+      event: string;
+      base: string;
+      paths: readonly string[];
+      map: readonly { glob: string; tests: readonly string[] }[] | null;
+    }) => { full: boolean; lanes: readonly string[]; siteBuild: boolean };
+
+    // Each path the pull-request trigger keeps: ci.yml builds no site for it, alone or mixed.
+    const keptSamples = [specs, "README.md", ".github/workflows/docs-site.yml"].map(sample);
+    for (const path of keptSamples) {
+      for (const paths of [[path], [path, code]]) {
+        const answer = classifyPaths({ event: "pull_request", base, paths, map: mapFor(path) });
+        expect(answer.siteBuild, paths.join(" + ")).toBe(false);
+      }
+    }
+
+    // Each path it dropped: the classifier answers `site_build`, and ci.yml builds the site under
+    // `all-ci-checks` — on the lanes side for a docs- or website-only change, on the LTS leg mixed.
+    const dropped = pushPaths.filter((glob) => !prPaths.includes(glob));
+    expect(dropped.toSorted()).toEqual([["docs", "**"].join("/"), ["website", "**"].join("/")].toSorted());
+    const lanesJob = jobOf(ci, "lanes");
+    const checkJob = jobOf(ci, "check");
+    const lanesSite = conditionOf(stepsOf(ci, "lanes"), "Build the site");
+    const ltsSite = conditionOf(stepsOf(ci, "check"), "Build the site");
+    const lts = (checkJob.strategy?.matrix?.include ?? []).find((leg) => leg.label === "lts");
+    expect(lts, "the check job has an LTS leg").toBeDefined();
+    expect(jobOf(ci, "all-ci-checks").needs).toEqual(expect.arrayContaining(["lanes", "check"]));
+    for (const glob of dropped) {
+      const path = sample(glob);
+      const alone = classifyPaths({ event: "pull_request", base, paths: [path], map: mapFor(glob) });
+      expect(alone, path).toMatchObject({ full: false, lanes: ["website"], siteBuild: true });
+      const mixed = classifyPaths({ event: "pull_request", base, paths: [path, code], map: mapFor(glob) });
+      expect(mixed, `${path} + ${code}`).toMatchObject({ full: true, siteBuild: true });
+      for (const answer of [alone, mixed]) {
+        const context = {
+          github: { event_name: "pull_request" },
+          matrix: lts,
+          needs: {
+            changes: { result: "success", outputs: { full: String(answer.full), site_build: String(answer.siteBuild) } },
+            "prove-pr": { result: "skipped", outputs: {} },
+          },
+        };
+        const side = answer.full ? { job: checkJob, step: ltsSite } : { job: lanesJob, step: lanesSite };
+        const other = answer.full ? lanesJob : checkJob;
+        expect(evaluateWorkflowExpression(side.job.if ?? "false", context), `${path}: the side runs`).toBe(true);
+        expect(evaluateWorkflowExpression(other.if ?? "false", context), `${path}: the other side skips`).toBe(false);
+        expect(evaluateWorkflowExpression(side.step, context), `${path}: the side builds the site`).toBe(true);
+      }
     }
   });
 

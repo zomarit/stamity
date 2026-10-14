@@ -18,9 +18,12 @@
 // `ci.yml`'s own run is the trust boundary, not the app that reports it. Every job of every
 // workflow reports as the `github-actions` app, so a second workflow (a fork's pull request can
 // add one) can put a passing `all-ci-checks` check run beside a failing gate. Every
-// `all-ci-checks` check run on the head is read with its check suite, and one from any suite but
-// the gate run's is a second producer: not proven. The workflow run's conclusion is never read:
-// the advisory `supply-chain` lane can be red beside a green gate. Every list is paged.
+// `all-ci-checks` check run on the head is read with its check suite, and one from any suite that
+// no `ci.yml` pull-request run on the head holds is a second producer: not proven. A head can hold
+// more than one such run (a reopened pull request runs `ci.yml` again on the same head, in a new
+// check suite), and every one of their suites is `ci.yml`'s own; the newest run alone decides. The
+// workflow run's conclusion is never read: the advisory `supply-chain` lane can be red beside a
+// green gate. Every list is paged.
 //
 // It fails open to full CI and never red. A failed or stalled `gh` read, a missing field, an
 // answer that is not JSON, a list shorter than its own count, a missing token, sha or repository:
@@ -62,10 +65,13 @@ const isSuite = value => Number.isSafeInteger(value) && value > 0
  * The decision, with no I/O: `{ proven, reason }`.
  *
  * `heads` holds one row per pull-request head holding the pushed commit:
- * `{ headTree, gateSuite, gateJobs, checkSuites }`. `gateSuite` is the check suite of the newest
- * `ci.yml` pull-request run on that head (null when there is none), `gateJobs` the conclusions of
- * the `all-ci-checks` jobs in that run's latest attempt, and `checkSuites` the check suite of
- * every `all-ci-checks` check run on the head, whoever created it.
+ * `{ headTree, gateSuite, runSuites, gateJobs, checkSuites }`. `gateSuite` is the check suite of
+ * the newest `ci.yml` pull-request run on that head (null when there is none), `runSuites` the
+ * check suites of every `ci.yml` pull-request run on it, the newest included (absent reads as
+ * `[gateSuite]`), `gateJobs` the conclusions of the `all-ci-checks` jobs in the newest run's
+ * latest attempt, and `checkSuites` the check suite of every `all-ci-checks` check run on the
+ * head, whoever created it. A check run in an older run's suite is `ci.yml`'s own and proves
+ * nothing: only the newest run's jobs decide.
  */
 export function decide({ event, ref, tree, heads }) {
   if (event !== 'push') {
@@ -83,13 +89,16 @@ export function decide({ event, ref, tree, heads }) {
   }
   for (const row of rows) {
     const suites = Array.isArray(row.checkSuites) ? row.checkSuites : []
-    const foreign = suites.find(suite => !isSuite(row.gateSuite) || suite !== row.gateSuite)
+    // ci.yml's own suites on the head; with no newest run there are none, so every check run is foreign.
+    const runSuites = Array.isArray(row.runSuites) ? row.runSuites.filter(isSuite) : []
+    const own = isSuite(row.gateSuite) ? new Set([row.gateSuite, ...runSuites]) : new Set()
+    const foreign = suites.find(suite => !own.has(suite))
     if (foreign !== undefined) {
       return {
         proven: false,
         reason:
           `a second producer: an ${CHECK_NAME} check run on tree ${tree} sits in check suite ${foreign ?? 'none'}, ` +
-          `not in ${GATE_WORKFLOW}'s pull-request run (suite ${row.gateSuite ?? 'none'})`,
+          `not in any ${GATE_WORKFLOW} pull-request run on the head (suites ${[...own].join(', ') || 'none'})`,
       }
     }
   }
@@ -166,7 +175,7 @@ function readList(gh, endpoint, key, what) {
 /** One head's row for `decide`: its tree, and when the tree matches, its gate run and check suites. */
 function readHead(gh, repository, head, tree) {
   const headTree = treeOf(gh, repository, head)
-  if (headTree !== tree) return { headTree, gateSuite: null, gateJobs: [], checkSuites: [] }
+  if (headTree !== tree) return { headTree, gateSuite: null, runSuites: [], gateJobs: [], checkSuites: [] }
   const runs = readList(
     gh,
     `repos/${repository}/actions/workflows/ci.yml/runs?head_sha=${head}&event=pull_request`,
@@ -195,7 +204,13 @@ function readHead(gh, repository, head, tree) {
     if (run === null || typeof run !== 'object' || !('check_suite' in run)) throw new Error(`a check run of ${head} lacks its check suite`)
     return isSuite(run.check_suite?.id) ? run.check_suite.id : null
   })
-  return { headTree, gateSuite: gate === null ? null : gate.check_suite_id, gateJobs, checkSuites }
+  return {
+    headTree,
+    gateSuite: gate === null ? null : gate.check_suite_id,
+    runSuites: runs.map(run => run.check_suite_id),
+    gateJobs,
+    checkSuites,
+  }
 }
 
 /** The pushed tree and one row per pull-request head holding the pushed commit. */

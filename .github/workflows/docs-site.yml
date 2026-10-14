@@ -19,6 +19,17 @@
 # and so does a page that stops parsing. That is why it runs on `docs/` and `README.md` changes
 # and not only on `website/` ones.
 #
+# ONE PULL-REQUEST BUILD. On a pull request, `ci.yml` already builds the site for every
+# `website/**` and `docs/**` path outside `docs/specs/` (`scripts/ci/records-only.mjs` answers
+# `site_build`; the `lanes` job builds it for a lanes-only change, the `check` job's LTS leg for
+# a change mixed with code), and `all-ci-checks`, the required context, gates that build. A docs-
+# or website-only pull request's build therefore blocks the merge there, and a second build here
+# would only repeat it. So this file's pull-request trigger keeps just the paths a site build
+# reads that `site_build` never covers: `docs/specs/**` (off the routes, but a page's link into it
+# throws when the target goes missing), `README.md` (in no lane, linked from the pages) and this
+# file. `test/ci/workflow.test.ts` holds the split against the classifier. The push trigger keeps
+# every path: a proven push skips `ci.yml`'s matrix, so this is `main`'s own site build.
+#
 # Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
 # resolves to. Pins resolved 2026-08-26 with:
 #   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
@@ -31,8 +42,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'website/**'
-      - 'docs/**'
+      - 'docs/specs/**'
       - 'README.md'
       - '.github/workflows/docs-site.yml'
   push:

@@ -15,7 +15,8 @@ import { decide, GATE_WORKFLOW } from "../../scripts/ci/pr-proven.mjs";
  * that is not the one legal shape is asserted to read not proven. The legal shape is a push to
  * `main`, a 40-hex tree, and a pull-request head with that same tree whose newest `ci.yml`
  * pull-request run had exactly one `all-ci-checks` job in its latest attempt, concluded `success`,
- * with no `all-ci-checks` check run on that head from any other check suite.
+ * with no `all-ci-checks` check run on that head from a check suite no `ci.yml` pull-request run
+ * on that head holds (a reopened pull request's older run is `ci.yml`'s own; the newest decides).
  *
  * The trust boundary is `ci.yml`'s own run, not the app that reports it. Every job of every
  * workflow reports as the `github-actions` app, so a second workflow (a fork's pull request can
@@ -40,9 +41,13 @@ const MAIN = "refs/heads/main";
 const GATE_SUITE = 11;
 const DECOY_SUITE = 99;
 
+const OLDER_SUITE = 10;
+
 interface Head {
   readonly headTree: string;
   readonly gateSuite: number | null;
+  /** Every `ci.yml` pull-request run's check suite on the head; absent reads as `[gateSuite]`. */
+  readonly runSuites?: readonly (number | null)[];
   readonly gateJobs: readonly (string | null)[];
   readonly checkSuites: readonly (number | null)[];
 }
@@ -125,6 +130,34 @@ describe("decide — the pure rule", () => {
 
   it("does not let a passing head outvote a second producer on another head with the same tree", () => {
     expect(push([gated("success"), gated("success", TREE, [DECOY_SUITE])]).proven).toBe(false);
+  });
+
+  // Inbox row 104: a reopened pull request runs ci.yml again on the same head, so the head
+  // carries the older run's `all-ci-checks` check run in a second ci.yml check suite. That suite
+  // is ci.yml's own, not a second producer, and the newest run decides.
+  it("accepts every ci.yml pull-request run's check suite on the head, the newest run deciding", () => {
+    const twoRuns = (conclusion: string | null, extraSuites: readonly (number | null)[] = []): Head => ({
+      headTree: TREE,
+      gateSuite: GATE_SUITE,
+      runSuites: [OLDER_SUITE, GATE_SUITE],
+      gateJobs: [conclusion],
+      checkSuites: [OLDER_SUITE, GATE_SUITE, ...extraSuites],
+    });
+    const reopened = push([twoRuns("success")]);
+    expect(reopened.proven, reopened.reason).toBe(true);
+    // The newest run decides: a red newest run beside a green older one is not proven.
+    const newestRed = push([twoRuns("failure")]);
+    expect(newestRed.proven).toBe(false);
+    expect(newestRed.reason).not.toContain("second producer");
+    // A suite no ci.yml run on the head holds is still a second producer.
+    const decoy = push([twoRuns("success", [DECOY_SUITE])]);
+    expect(decoy.proven).toBe(false);
+    expect(decoy.reason).toContain("second producer");
+    expect(decoy.reason).toContain(String(DECOY_SUITE));
+    // Without the older run's suite in the accepted set, its check run is foreign, as before.
+    expect(push([{ ...twoRuns("success"), runSuites: [GATE_SUITE] }]).proven).toBe(false);
+    // An accepted suite never stands in for a missing newest run.
+    expect(push([{ ...twoRuns("success"), gateSuite: null }]).proven).toBe(false);
   });
 
   it("never reads proven on any event but a push, or on a ref other than main", () => {
@@ -359,6 +392,47 @@ describe.skipIf(!FAKE_RUNNABLE)("pr-proven.mjs — the CLI over a fake gh", () =
       expect(result.status, `${JSON.stringify(extra)}: ${result.stderr}`).toBe(0);
       expect(result.stdout, JSON.stringify(extra)).toBe("proven=false\n");
     }
+  });
+
+  it("proves a reopened pull request's head from its newest ci.yml run, beside the older run's suite (row 104)", () => {
+    // Two ci.yml pull-request runs on one head, each with its own check suite and its own
+    // `all-ci-checks` check run: the older one from before the pull request was closed, the
+    // newer one from its reopening.
+    const NEWER_RUN = 777;
+    const newerJobs = page(`repos/${REPOSITORY}/actions/runs/${NEWER_RUN}/jobs?filter=latest`);
+    const reopened = (newest: string, older: string) => {
+      const fake = fakeGh(older);
+      fake.answer(ENDPOINTS.runs, {
+        total_count: 2,
+        workflow_runs: [ciRun(NEWER_RUN, 12, "2026-10-08T11:00:00Z"), ciRun(RUN_ID, GATE_SUITE, "2026-10-08T10:00:00Z")],
+      });
+      fake.answer(newerJobs, { total_count: 1, jobs: [{ name: "all-ci-checks", conclusion: newest }] });
+      fake.answer(ENDPOINTS.checkRuns, { total_count: 2, check_runs: [checkRun(GATE_SUITE, older), checkRun(12, newest)] });
+      return fake;
+    };
+    const green = reopened("success", "success");
+    const proven = run(green, ["--sha", PUSHED]);
+    expect(proven.status, proven.stderr).toBe(0);
+    expect(proven.stdout, proven.stderr).toBe("proven=true\n");
+    // The newest run's jobs are the ones read; the older run's are never asked for.
+    expect(callsOf(green)).toContain(`api ${newerJobs}`);
+    expect(callsOf(green)).not.toContain(`api ${ENDPOINTS.jobs}`);
+
+    // The newest run decides, both ways.
+    const newestRed = run(reopened("failure", "success"), ["--sha", PUSHED]);
+    expect(newestRed.stdout, newestRed.stderr).toBe("proven=false\n");
+    const newestGreen = run(reopened("success", "failure"), ["--sha", PUSHED]);
+    expect(newestGreen.stdout, newestGreen.stderr).toBe("proven=true\n");
+
+    // A third suite that no ci.yml run on the head holds is a second producer still.
+    const decoy = reopened("success", "success");
+    decoy.answer(ENDPOINTS.checkRuns, {
+      total_count: 3,
+      check_runs: [checkRun(GATE_SUITE, "success"), checkRun(12, "success"), checkRun(DECOY_SUITE, "success")],
+    });
+    const second = run(decoy, ["--sha", PUSHED]);
+    expect(second.stdout).toBe("proven=false\n");
+    expect(second.stderr).toContain("second producer");
   });
 
   it("pages every list, so a decoy on a later page still reads not proven", () => {
