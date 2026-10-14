@@ -38,6 +38,7 @@ import {
   type CoOwnership,
   type ImportDecision,
   type LedgerEntry,
+  type ListedModels,
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
@@ -514,7 +515,20 @@ export async function planOutputEntries(
 export async function planSync(
   rootDir: string,
   engineVersion: string,
-  opts: { runner?: GitRunner; packageName?: string; npmChannel?: boolean; npmRegistry?: string } = {},
+  opts: {
+    runner?: GitRunner;
+    packageName?: string;
+    npmChannel?: boolean;
+    npmRegistry?: string;
+    /**
+     * Client model lists read fresh by the caller (`sync` reads them before
+     * it plans, REQ-LADDER-006), laid client by client over the saved
+     * `models.listed`; a client absent here keeps its saved list. The plan's
+     * manifest carries the result, so a live apply persists it and a dry run
+     * writes nothing. Planning itself never starts a client.
+     */
+    listedOverlay?: Partial<Record<Tool, ListedModels>>;
+  } = {},
 ): Promise<SyncPlan> {
   const manifest = await readManifest(rootDir);
   if (manifest === null) {
@@ -534,6 +548,12 @@ export async function planSync(
   const planningManifest = structuredClone(manifest);
   planningManifest.selection = fullCorpusSelection(index);
   planningManifest.detected = detected;
+  if (opts.listedOverlay !== undefined && Object.keys(opts.listedOverlay).length > 0) {
+    planningManifest.models = {
+      ...planningManifest.models,
+      listed: { ...planningManifest.models?.listed, ...structuredClone(opts.listedOverlay) },
+    };
+  }
 
   const planner = getEmissionPlanner();
   // `planWithWarnings`, not `plan`: sync prints a report, so it takes the view

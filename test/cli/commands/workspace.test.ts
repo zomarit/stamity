@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { access, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
@@ -1790,5 +1790,59 @@ describe("REQ-WS-011's persistence capstone — a plain sync inside a cascaded m
       (entry) => entry.adapter === "codex",
     );
     expect(codexLedgerAfter.length).toBe(codexLedgerBefore.length);
+  });
+});
+
+describe("workspace sync — each member's client model lists (REQ-LADDER-006)", () => {
+  /**
+   * A stand-in `codex` on a PATH folder that is a SIBLING of the workspace, never
+   * inside it: the lister refuses a program the repository could have placed.
+   * A real program run through the real lister, so no seam is substituted; the
+   * script is POSIX `sh`, and a Windows PATH would need a `.cmd` shim, which the
+   * lister refuses to start without a shell.
+   */
+  async function seedFakeCodex(temp: TempDirHandle): Promise<string> {
+    const bin = temp.path("bin");
+    await mkdir(bin, { recursive: true });
+    const program = join(bin, "codex");
+    await writeFile(
+      program,
+      `#!/bin/sh\nprintf '%s' '{"models":[{"slug":"gpt-6-sol"},{"slug":"gpt-6-luna"}]}'\n`,
+      "utf8",
+    );
+    await chmod(program, 0o755);
+    return bin;
+  }
+
+  /** `workspace sync` under an operator's environment: the fake client on PATH, the switch as given. */
+  async function runSyncWith(cwd: string, env: Record<string, string>): Promise<number> {
+    const io: CommandIo = { out: () => undefined, err: () => undefined };
+    return runCli(["workspace", "sync"], [workspaceCommand], { cwd, env: { NO_COLOR: "1", ...env }, io, clock: { now: () => T0 } });
+  }
+
+  it.skipIf(WINDOWS)("saves each member's own listing, as a plain sync in that member would", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const bin = await seedFakeCodex(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["codex"] });
+
+    expect(await runSyncWith(root, { PATH: bin })).toBe(0);
+
+    expect((await readManifest(api))?.models?.listed).toEqual({
+      codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" },
+    });
+  });
+
+  it.skipIf(WINDOWS)("reads no member's list under STAMITY_NO_CLIENT_PROBE=1", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const bin = await seedFakeCodex(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["codex"] });
+
+    expect(await runSyncWith(root, { PATH: bin, STAMITY_NO_CLIENT_PROBE: "1" })).toBe(0);
+
+    expect((await readManifest(api))?.models).toBeUndefined();
   });
 });

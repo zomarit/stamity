@@ -1188,6 +1188,9 @@ export const initCommand: CommandModule = {
       dryRun: ctx.dryRun,
       force,
       now,
+      // The run's own environment, as `sync` reads it: the model-list probe's
+      // off switch and the client lookup both answer to it (REQ-LADDER-006).
+      env: ctx.app.runtime.env,
     });
     const carry: CarryReport | null =
       migrating !== null

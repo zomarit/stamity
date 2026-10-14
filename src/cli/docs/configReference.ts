@@ -240,33 +240,36 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     "",
     // The model rows are the only ones whose KEY NAMES carry a concept the page
     // never defined: `frontier`, `advanced`, `standard` and `economy` are rungs,
-    // not model ids, and the top rung is addressable while mapping to nothing on
-    // any client. Its unset cell already says `(client default)` — the same
-    // string the three clients with no alias table publish — so without this
-    // paragraph the one row that is opt-in-only is indistinguishable from the
-    // three that merely have no alias yet. A broader operator-facing account of
-    // the ladder is a separate piece of work; this is the declaration only.
-    "The four `model.*` rows are classes, not model ids. Each names a rung, and each selected",
-    "client's own projection maps that rung to an id it accepts, so one setting travels across",
-    "clients instead of being restated per client. The top rung ships mapped nowhere: with",
-    "`model.frontier` unset, every supported client resolves it to that client's default, which is",
-    "what its cell above says. Nothing is broken by that — the deepest work simply runs on whatever",
-    "the client would have picked anyway — and pinning `model.frontier` to an id your client accepts",
-    "is how an operator opts into the rung.",
+    // not model ids. Since the pick (REQ-LADDER-006) every client but an unlisted
+    // Cursor resolves each rung to an id, and the unset cells show which; this
+    // paragraph says where those ids come from, which no cell can. The per-client
+    // keys (REQ-LADDER-005) exist because no single id is valid on every client.
+    "The `model.*` rows are classes, not model ids. Each names a rung, and each selected client",
+    "maps that rung to an id it accepts, so one setting travels across clients instead of being",
+    "restated per client. Claude Code maps every rung onto its own family aliases, the top rung onto",
+    "`fable`. Copilot, Codex and Cursor take the first model of a priority list Stamity ships that",
+    "the account's own model list holds: `init` and `sync` read that list from the client's CLI and",
+    "save it under `models.listed` in the manifest, and a client that does not answer keeps the list",
+    "it saved last; `STAMITY_NO_CLIENT_PROBE=1` in the environment skips every read. With no list",
+    "read, Copilot and Codex take the first model of the shipped list, which is what their cells",
+    "above show, and Cursor writes no model at all, so the sub-agent runs on the session's model,",
+    "because a model the account does not offer fails the call there.",
     "",
-    "For a Codex setup with access to GPT-6 Astra, pin its exact id to the classes you want:",
+    "`model.<class>` pins one id for every selected client; `model.<class>.<client>` pins one client",
+    "and wins over the class key there; `none` clears either one. A pin the account's saved list does",
+    "not hold is replaced by the class's first listed model, since the client would refuse it.",
+    "For a Codex setup with access to GPT-6 Astra, pin its exact id on Codex alone:",
     "",
     "```sh",
-    "stamity config set model.advanced gpt-6-astra",
-    "stamity config set model.frontier gpt-6-astra",
+    "stamity config set model.advanced.codex gpt-6-astra",
+    "stamity config set model.frontier.codex gpt-6-astra",
     "stamity sync",
     "```",
     "",
-    "The same id is accepted for `model.standard` and `model.economy`. Pins are global per class",
-    "across the selected clients: Stamity checks their shape, and each client must support the",
-    "model you name. Codex emits `model = \"gpt-6-astra\"`; effort remains the class's existing",
-    "level unless you set its `effort.*` key. A pin configures emitted agents; eval runners",
-    "configure their scenario and judge model pins separately.",
+    "Stamity checks a pin's shape, and each client must support the model you name. Codex emits",
+    "`model = \"gpt-6-astra\"`; effort remains the class's existing level unless you set its",
+    "`effort.*` key. A pin configures emitted agents; eval runners configure their scenario and",
+    "judge model pins separately.",
     "",
     // The `mcp.servers` hint calls its value set "curated" and, until the
     // reference page shipped, pointed at a list no page published: the ids lived

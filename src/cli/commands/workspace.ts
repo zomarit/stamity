@@ -10,6 +10,7 @@ import {
   selectMany,
   type PromptGate,
 } from "../kit/prompts.ts";
+import { readClientModelLists } from "./init/apply.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncPlan } from "./sync/engine.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError } from "../../types/errors.ts";
@@ -1071,7 +1072,14 @@ function createBridge(
       );
     }
 
-    const plan = await planSync(memberDir, engineVersion);
+    // The member's own clients' model lists, read as `stamity sync` reads them
+    // in that member (REQ-LADDER-006): the same lister and off switch, laid
+    // over its saved lists for the plan. The tools are the ones the plan will
+    // read — the patched set once it is on disk, the member's own under
+    // `--dry-run`, where the plan reads the unpatched manifest.
+    const plannedTools = fields.length > 0 && !ctx.dryRun ? { ...manifest, ...patch }.tools : manifest.tools;
+    const listedOverlay = await readClientModelLists(plannedTools, ctx.app.runtime.env, memberDir);
+    const plan = await planSync(memberDir, engineVersion, { listedOverlay });
     const applied = await applySync(memberDir, plan, {
       engineVersion,
       force: opts.force,

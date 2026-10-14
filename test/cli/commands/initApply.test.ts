@@ -12,7 +12,13 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyInit, type InitApplyOptions } from "../../../src/cli/commands/init/apply.ts";
+import {
+  MAX_LISTED_MODELS,
+  applyInit,
+  readClientModelLists,
+  type InitApplyOptions,
+  type ModelLister,
+} from "../../../src/cli/commands/init/apply.ts";
 import type { InitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import {
   planOutputEntries,
@@ -28,6 +34,7 @@ import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput } from "../../../src/types/content.ts";
 import type { PredecessorDefaults } from "../../../src/migration/carry.ts";
+import type { Tool } from "../../../src/types/core.ts";
 import type { RepoInfo } from "../../../src/types/detect.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -888,5 +895,91 @@ describe.skipIf(process.platform === "win32")("applyInit — linked MCP document
     };
     expect(Object.keys(merged.mcpServers).toSorted()).toEqual(["github", "mine"]);
     expect((await lstat(target)).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("applyInit — the client model lists (REQ-LADDER-006)", () => {
+  /**
+   * A lister answering from a table, recording each client it was asked about.
+   * Injected through the option the command leaves at its default: the real
+   * lister starts the account's own client CLI, which no test may read.
+   */
+  function tableLister(answers: Partial<Record<Tool, Awaited<ReturnType<ModelLister>>>>): {
+    lister: ModelLister;
+    asked: Tool[];
+  } {
+    const asked: Tool[] = [];
+    const lister: ModelLister = async (tool) => {
+      asked.push(tool);
+      return answers[tool] ?? { kind: "absent" };
+    };
+    return { lister, asked };
+  }
+
+  it("reads the selected non-Claude clients once each and persists what they listed", async () => {
+    const root = await makeRepo();
+    const { lister, asked } = tableLister({
+      cursor: { kind: "listed", ids: ["claude-opus-5-5-high", "gpt-5.6-sol-high"], source: "cursor-agent-models" },
+      codex: { kind: "timeout" },
+    });
+
+    await applyInit(
+      optionsFor(root, {
+        decisions: decisionsFor(root, { tools: ["claude", "cursor", "codex"], toolsSource: "flag" }),
+        env: {},
+        listModels: lister,
+      }),
+    );
+
+    expect(asked.toSorted()).toEqual(["codex", "cursor"]);
+    const manifest = await readManifest(root);
+    expect(manifest?.models?.listed).toEqual({
+      cursor: { ids: ["claude-opus-5-5-high", "gpt-5.6-sol-high"], source: "cursor-agent-models" },
+    });
+    expect(collectManifestErrors(manifest)).toEqual([]);
+  });
+
+  it("starts no lister and writes no list under STAMITY_NO_CLIENT_PROBE=1", async () => {
+    const root = await makeRepo();
+    const { lister, asked } = tableLister({
+      cursor: { kind: "listed", ids: ["claude-opus-5-5-high"], source: "cursor-agent-models" },
+    });
+
+    await applyInit(
+      optionsFor(root, {
+        decisions: decisionsFor(root, { tools: ["cursor"], toolsSource: "flag" }),
+        env: { STAMITY_NO_CLIENT_PROBE: "1" },
+        listModels: lister,
+      }),
+    );
+
+    expect(asked).toEqual([]);
+    expect((await readManifest(root))?.models).toBeUndefined();
+  });
+
+  it("caps a flooded listing and drops every id without a model id's shape", async () => {
+    const flood = Array.from({ length: 500 }, (_, index) => `model-${index}`);
+    const hostile = ["a\nb", "two words", "", "-leading-dash", "x".repeat(101), 'quote"d', "model-0"];
+    const { lister } = tableLister({
+      codex: { kind: "listed", ids: [...hostile, ...flood], source: "codex-debug-models" },
+      copilot: { kind: "listed", ids: ["bad id", "\u001b[31m"], source: "copilot-help-config" },
+    });
+
+    const listed = await readClientModelLists(["codex", "copilot"], {}, "/unused", lister);
+
+    expect(MAX_LISTED_MODELS).toBe(200);
+    expect(listed.codex?.ids).toEqual(flood.slice(0, MAX_LISTED_MODELS));
+    expect(listed.codex?.source).toBe("codex-debug-models");
+    // A listing with no id left is no answer: the client keeps what it saved.
+    expect(listed.copilot).toBeUndefined();
+  });
+
+  it("answers nothing for a client that times out, cannot be read or is absent", async () => {
+    const { lister } = tableLister({
+      cursor: { kind: "timeout" },
+      codex: { kind: "unreadable", message: "`codex debug models` exited with status 1" },
+    });
+
+    expect(await readClientModelLists(["cursor", "codex", "copilot"], {}, "/unused", lister)).toEqual({});
   });
 });

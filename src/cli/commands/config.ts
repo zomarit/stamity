@@ -35,6 +35,7 @@ import {
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
+  type ModelPickSource,
   type ModelPinMap,
 } from "../../roster/modelLadder.ts";
 import {
@@ -61,7 +62,9 @@ import { DETECTION_UNKNOWN } from "../../emit/substitution.ts";
 import type { DetectedSummary } from "../../types/detect.ts";
 import {
   RULE_DELIVERIES,
+  type ClassPins,
   type GatesConfig,
+  type ModelConfig,
   type RuleDelivery,
   type SetupManifest,
 } from "../../types/manifest.ts";
@@ -211,6 +214,12 @@ export interface ConfigKeySpec {
   readonly resolve: (manifest: SetupManifest) => string;
   /** Apply `raw` to a manifest copy. Schema-expressible defects are left to validation. */
   readonly apply: (draft: SetupManifest, raw: string, context: ConfigApplyContext) => void;
+  /**
+   * A line `set` prints once after an accepted change, or null: what the value
+   * does not do on this manifest although it was kept (a pin for a client the
+   * setup does not select). Read off the manifest the change produced.
+   */
+  readonly notice?: (manifest: SetupManifest) => string | null;
 }
 
 /** Comma-separated values, trimmed, blanks dropped, repeats collapsed, order kept. */
@@ -233,8 +242,9 @@ function renderList(values: readonly string[]): string {
 /**
  * What a model row prints when nothing resolves for it. Not a value: the
  * adapter omits the key entirely and the client applies its own default, so
- * printing a plausible alias here would name a model the emitted files do not
- * contain — the one thing the ladder's "never invent a value" rule forbids.
+ * printing a plausible id here would name a model the emitted files do not
+ * contain. Since the pick (REQ-LADDER-006) that is Cursor with no list read and
+ * no pin; every other client resolves an alias or a shipped candidate.
  */
 const CLIENT_DEFAULT = "(client default)";
 
@@ -260,8 +270,17 @@ function clampedMarker(emitted: string, requested: string): string {
 }
 
 const MODEL_HINT =
-  "a model id your client accepts — passed through verbatim, shape-checked only " +
-  "(non-empty, one line)";
+  "a model id your client accepts, or `none` to clear, for every selected client without a pin " +
+  "of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), and " +
+  "re-picked on a client whose saved model list lacks it";
+
+/** What a per-client pin row accepts; the client and class are named so the page's row reads alone. */
+function modelClientHint(modelClass: ModelClass, tool: Tool): string {
+  return (
+    `a model id ${tool} accepts, or \`none\` to clear — wins over \`model.${modelClass}\` on ${tool}; ` +
+    `shape-checked only (non-empty, one line)`
+  );
+}
 
 /** Clients that carry the effort axis at all, and any whose row documents dropping it. */
 const EFFORT_CARRIERS = TOOLS.filter(
@@ -309,6 +328,30 @@ function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null
 }
 
 /**
+ * What the pick reads for `tool`: the model list `init` or `sync` last read
+ * from that client's CLI and saved under `models.listed`, or none.
+ */
+function pickSourceFor(manifest: SetupManifest, tool: Tool): ModelPickSource {
+  const listed = manifest.models?.listed?.[tool]?.ids;
+  return listed === undefined ? {} : { listed };
+}
+
+/**
+ * The model value `tool` writes for `modelClass` on this manifest, or
+ * `undefined` where it writes none: its own pin, else the class's `all`, else
+ * its alias, else the pick over its saved list (REQ-LADDER-005, -006).
+ */
+function modelFor(manifest: SetupManifest, modelClass: ModelClass, tool: Tool): string | undefined {
+  return resolveModelValue(
+    modelClass,
+    tool,
+    pinsFor(manifest.models, tool),
+    manifest.models?.effort ?? {},
+    pickSourceFor(manifest, tool),
+  );
+}
+
+/**
  * What the selected clients will actually write for `modelClass` — the ladder's
  * own answer, per client, for exactly this manifest's pins and effort.
  *
@@ -319,11 +362,7 @@ function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null
  * will not contain.
  */
 function resolvePin(manifest: SetupManifest, modelClass: ModelClass): string {
-  const efforts = manifest.models?.effort ?? {};
-  const perTool = manifest.tools.map((tool) => ({
-    tool,
-    value: resolveModelValue(modelClass, tool, pinsFor(manifest.models, tool), efforts),
-  }));
+  const perTool = manifest.tools.map((tool) => ({ tool, value: modelFor(manifest, modelClass, tool) }));
   const distinct = new Set(perTool.map((entry) => entry.value));
   if (distinct.size === 0) return CLIENT_DEFAULT;
   if (distinct.size === 1) return perTool[0]?.value ?? CLIENT_DEFAULT;
@@ -331,7 +370,8 @@ function resolvePin(manifest: SetupManifest, modelClass: ModelClass): string {
 }
 
 /**
- * Write one pin into the draft.
+ * Write one class's every-client pin into the draft, or clear it with
+ * {@link NONE}.
  *
  * Ladder membership is the check the schema cannot express — the manifest
  * validates the class against the vocabulary in `types/core.ts`, while the
@@ -350,8 +390,52 @@ function applyPin(draft: SetupManifest, modelClass: ModelClass, raw: string): vo
     });
   }
   // The every-client key: a client's own pin, set beside it, still wins there.
-  const pins = { ...draft.models?.pins, [modelClass]: { ...draft.models?.pins?.[modelClass], all: raw } };
-  draft.models = { ...draft.models, pins };
+  applyClassPin(draft, modelClass, "all", raw);
+}
+
+/** One client's persisted pin for one class, or null when the operator set none. */
+function readClientPin(manifest: SetupManifest, modelClass: ModelClass, tool: Tool): string | null {
+  return manifest.models?.pins?.[modelClass]?.[tool] ?? null;
+}
+
+/**
+ * Set one key of a class's pin map — a client's, or `all` — or clear it with
+ * {@link NONE} (the gates' precedent), so the word is never stored as a model
+ * id. A map a clear empties is dropped, level by level, so a cleared pin
+ * leaves no `{}` behind for every later write to carry.
+ */
+function applyClassPin(draft: SetupManifest, modelClass: ModelClass, key: keyof ClassPins, raw: string): void {
+  const classPins: ClassPins = { ...draft.models?.pins?.[modelClass] };
+  if (raw === NONE) delete classPins[key];
+  else classPins[key] = raw;
+  const pins: Partial<Record<ModelClass, ClassPins>> = { ...draft.models?.pins };
+  if (Object.keys(classPins).length === 0) delete pins[modelClass];
+  else pins[modelClass] = classPins;
+  const models: ModelConfig = { ...draft.models };
+  if (Object.keys(pins).length === 0) delete models.pins;
+  else models.pins = pins;
+  if (Object.keys(models).length === 0) delete draft.models;
+  else draft.models = models;
+}
+
+/**
+ * The registry row for one client's pin on one class — sixteen keys, one
+ * shape, the {@link gateSpec} precedent. The row resolves what that client
+ * would write whether or not it is selected, and `set` says once when it is
+ * not: the pin is kept for the day the client is added.
+ */
+function modelClientSpec(modelClass: ModelClass, tool: Tool): ConfigKeySpec {
+  return {
+    key: `model.${modelClass}.${tool}`,
+    hint: modelClientHint(modelClass, tool),
+    read: (manifest) => readClientPin(manifest, modelClass, tool),
+    resolve: (manifest) => modelFor(manifest, modelClass, tool) ?? CLIENT_DEFAULT,
+    apply: (draft, raw) => applyClassPin(draft, modelClass, tool, raw),
+    notice: (manifest) =>
+      manifest.tools.includes(tool)
+        ? null
+        : `note: ${tool} is not selected — the pin is kept and takes effect once ${tool} is added to tools`,
+  };
 }
 
 /** The persisted effort for one class, or null when the operator set none. */
@@ -752,6 +836,24 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     resolve: (manifest) => resolvePin(manifest, "economy"),
     apply: (draft, raw) => applyPin(draft, "economy", raw),
   },
+  // One client's pin per class, built from one function as the gate rows are,
+  // each call written out so the key set still reads literally here.
+  modelClientSpec("frontier", "claude"),
+  modelClientSpec("frontier", "cursor"),
+  modelClientSpec("frontier", "copilot"),
+  modelClientSpec("frontier", "codex"),
+  modelClientSpec("advanced", "claude"),
+  modelClientSpec("advanced", "cursor"),
+  modelClientSpec("advanced", "copilot"),
+  modelClientSpec("advanced", "codex"),
+  modelClientSpec("standard", "claude"),
+  modelClientSpec("standard", "cursor"),
+  modelClientSpec("standard", "copilot"),
+  modelClientSpec("standard", "codex"),
+  modelClientSpec("economy", "claude"),
+  modelClientSpec("economy", "cursor"),
+  modelClientSpec("economy", "copilot"),
+  modelClientSpec("economy", "codex"),
   {
     key: "effort.frontier",
     hint: EFFORT_HINT,
@@ -1142,8 +1244,10 @@ async function applyKeyValue(
   }
 
   const diff = `${key}: ${before.value ?? before.resolved} ${ctx.palette.cyan("->")} ${after.resolved}`;
+  const notice = specFor(key).notice?.(next) ?? null;
   if (ctx.dryRun) {
     ctx.io.out(`would set ${diff}\n`);
+    if (notice !== null) ctx.io.out(`${notice}\n`);
     ctx.io.out(`${NEXT_DRY_RUN_LINE}\n`);
     return {
       exitCode: 0,
@@ -1153,6 +1257,7 @@ async function applyKeyValue(
 
   await ctx.engine.manifest.manifest.writeManifest(rootDir, next);
   ctx.io.out(`set ${diff}\n`);
+  if (notice !== null) ctx.io.out(`${notice}\n`);
   ctx.io.out(`${NEXT_SYNC_LINE}\n`);
   return {
     exitCode: 0,

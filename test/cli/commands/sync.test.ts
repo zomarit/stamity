@@ -11,7 +11,8 @@ import {
   syncClosingLines,
   syncCommand,
 } from "../../../src/cli/commands/sync.ts";
-import type { SyncApplyReport, SyncPlan } from "../../../src/cli/commands/sync/engine.ts";
+import { planSync, type SyncApplyReport, type SyncPlan } from "../../../src/cli/commands/sync/engine.ts";
+import type * as clientModelsModule from "../../../src/cli/engine/clientModels.ts";
 import type * as emissionModule from "../../../src/cli/engine/emission.ts";
 import {
   __resetContentRootCacheForTests,
@@ -21,7 +22,8 @@ import { VERSION } from "../../../src/index.ts";
 import { createManifest, manifestPath, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput, ContentSelection } from "../../../src/types/content.ts";
-import { MANIFEST_VERSION } from "../../../src/types/manifest.ts";
+import type { Tool } from "../../../src/types/core.ts";
+import { MANIFEST_VERSION, type ModelConfig } from "../../../src/types/manifest.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { canonical, npxCommand, registryArgument } from "../../support/identity.ts";
@@ -71,6 +73,30 @@ vi.mock("../../../src/cli/engine/emission.ts", async (importOriginal) => {
   };
 });
 
+/**
+ * The client lister, substituted: the real one starts the account's own client
+ * CLI (`cursor-agent models`, `codex debug models`, `copilot help config`),
+ * which no test may read and which a CI machine does not have. Each case sets
+ * what a client answers; a client with no answer is `absent`, as on a machine
+ * without its CLI, so every other case here runs as it did before the probe.
+ * The parsers and the process handling behind the real lister are covered by
+ * `test/cli/engine/clientModels.test.ts`.
+ */
+const listerAnswers = vi.hoisted(() => ({
+  value: {} as Partial<Record<string, clientModelsModule.ModelListOutcome>>,
+  asked: [] as string[],
+}));
+vi.mock("../../../src/cli/engine/clientModels.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof clientModelsModule>();
+  return {
+    ...actual,
+    listClientModels: async (tool: string): Promise<clientModelsModule.ModelListOutcome> => {
+      listerAnswers.asked.push(tool);
+      return listerAnswers.value[tool] ?? { kind: "absent" };
+    },
+  };
+});
+
 const tempDir = useTempDir("stamity-sync-cmd");
 
 const T0 = new Date("2026-01-01T00:00:00.000Z");
@@ -88,6 +114,8 @@ const HONESTY_LINE = "no generated outputs in this build yet";
 beforeEach(() => {
   plannerOutputs.value = [];
   plannerWarnings.value = [];
+  listerAnswers.value = {};
+  listerAnswers.asked = [];
 });
 
 afterEach(() => {
@@ -955,5 +983,110 @@ describe("syncClosingLines", () => {
     expect(
       syncClosingLines(planFixture({ dirty: unavailable }), reportFixture({ created: 12, updated: 7, wrote: twenty })),
     ).toEqual([NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE]);
+  });
+});
+
+describe("sync — the client model lists (REQ-LADDER-006)", () => {
+  const CURSOR_LIST: clientModelsModule.ModelListOutcome = {
+    kind: "listed",
+    ids: ["claude-opus-5-5-high", "claude-sonnet-5-5-medium"],
+    source: "cursor-agent-models",
+  };
+
+  /** A repo selecting `tools`, its manifest carrying `models` when given. */
+  async function seedClients(handle: TempDirHandle, tools: Tool[], models?: ModelConfig): Promise<string> {
+    __setContentRootForTests(handle.path("corpus"));
+    const root = handle.path("repo");
+    const manifest = createManifest({ tools, selection: emptySelection(), generatorVersion: VERSION, now: T0 });
+    await writeManifest(root, models === undefined ? manifest : { ...manifest, models }, { now: T0 });
+    return root;
+  }
+
+  /** The manifest's bytes without the one stamp every live run moves. */
+  async function manifestWithoutStamp(root: string): Promise<string> {
+    return (await readFile(manifestPath(root), "utf8")).replace(/"updatedAt": "[^"]*"/, '"updatedAt": "-"');
+  }
+
+  /** `sync` under an environment with no probe switch set, as an operator's shell has. */
+  function runSyncIn(root: string, env: Record<string, string>, argv: readonly string[] = []): ReturnType<typeof runInProcess> {
+    return runInProcess([syncCommand], ["sync", ...argv], { cwd: root, env });
+  }
+
+  it("persists what a selected client listed, and a second sync moves no byte", async () => {
+    const root = await seedClients(tempDir(), ["claude", "cursor"]);
+    listerAnswers.value = { cursor: CURSOR_LIST };
+
+    const first = await runSyncIn(root, {});
+
+    expect(first.code).toBe(0);
+    expect(listerAnswers.asked).toEqual(["cursor"]);
+    expect((await readManifest(root))?.models?.listed).toEqual({
+      cursor: { ids: ["claude-opus-5-5-high", "claude-sonnet-5-5-medium"], source: "cursor-agent-models" },
+    });
+    const after = await manifestWithoutStamp(root);
+
+    const second = await runSyncIn(root, {});
+
+    expect(second.code).toBe(0);
+    expect(await manifestWithoutStamp(root)).toBe(after);
+  });
+
+  it("keeps a client's saved list when it times out, beside a fresh list from another", async () => {
+    const saved = { ids: ["claude-opus-5-high"], source: "cursor-agent-models" } as const;
+    const root = await seedClients(tempDir(), ["cursor", "codex"], { listed: { cursor: { ...saved, ids: [...saved.ids] } } });
+    listerAnswers.value = {
+      cursor: { kind: "timeout" },
+      codex: { kind: "listed", ids: ["gpt-6-sol"], source: "codex-debug-models" },
+    };
+
+    expect((await runSyncIn(root, {})).code).toBe(0);
+
+    expect(listerAnswers.asked.toSorted()).toEqual(["codex", "cursor"]);
+    expect((await readManifest(root))?.models?.listed).toEqual({
+      cursor: { ids: ["claude-opus-5-high"], source: "cursor-agent-models" },
+      codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
+    });
+  });
+
+  it("starts no probe under STAMITY_NO_CLIENT_PROBE=1", async () => {
+    const root = await seedClients(tempDir(), ["cursor", "codex", "copilot"]);
+    listerAnswers.value = { cursor: CURSOR_LIST };
+
+    expect((await runSyncIn(root, { STAMITY_NO_CLIENT_PROBE: "1" })).code).toBe(0);
+
+    expect(listerAnswers.asked).toEqual([]);
+    expect((await readManifest(root))?.models).toBeUndefined();
+  });
+
+  it("reads the lists under --dry-run and writes nothing", async () => {
+    const root = await seedClients(tempDir(), ["cursor"]);
+    listerAnswers.value = { cursor: CURSOR_LIST };
+    const before = await readFile(manifestPath(root), "utf8");
+
+    const result = await runSyncIn(root, {}, ["--dry-run"]);
+
+    expect(result.code).toBe(0);
+    expect(listerAnswers.asked).toEqual(["cursor"]);
+    expect(await readFile(manifestPath(root), "utf8")).toBe(before);
+  });
+
+  it("plans from the saved lists with a fresh one laid over them, without starting a client", async () => {
+    const root = await seedClients(tempDir(), ["cursor", "codex"], {
+      listed: { codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" } },
+    });
+
+    const plan = await planSync(root, VERSION, {
+      listedOverlay: { cursor: { ids: ["claude-opus-5-5-high"], source: "cursor-agent-models" } },
+    });
+
+    expect(listerAnswers.asked).toEqual([]);
+    expect(plan.manifest.models?.listed).toEqual({
+      codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
+      cursor: { ids: ["claude-opus-5-5-high"], source: "cursor-agent-models" },
+    });
+    // Without an overlay the plan is the saved copy, untouched.
+    expect((await planSync(root, VERSION)).manifest.models?.listed).toEqual({
+      codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
+    });
   });
 });

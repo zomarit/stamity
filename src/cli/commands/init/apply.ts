@@ -41,10 +41,12 @@ import {
   type CoOwnership,
   type ImportDecision,
   type LedgerEntry,
+  type ListedModels,
   type McpConfig,
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
+import { listClientModels, type ModelListOutcome } from "../../engine/clientModels.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import { hasNpmChannel, packageName, registryOption } from "../../kit/packageName.ts";
 import {
@@ -117,6 +119,13 @@ export interface InitApplyOptions {
   dryRun: boolean;
   force: boolean;
   now?: Date;
+  /**
+   * The environment the client model lists are read under; the process's own
+   * by default. `STAMITY_NO_CLIENT_PROBE=1` in it skips every read.
+   */
+  env?: NodeJS.ProcessEnv;
+  /** Reads one client's model list; {@link listClientModels} by default. A test injects one. */
+  listModels?: ModelLister;
 }
 
 /** What an apply did — or, under `dryRun`, would do. */
@@ -162,6 +171,50 @@ export interface InitApplyReport {
   dryRun: boolean;
 }
 
+/** Reads one client's model list for this account; {@link listClientModels} is the production one. */
+export type ModelLister = (tool: Tool, env: NodeJS.ProcessEnv, cwd: string) => Promise<ModelListOutcome>;
+
+/** Ceiling on the ids one client's saved list keeps (REQ-LADDER-006's threat cell). */
+export const MAX_LISTED_MODELS = 200;
+
+/**
+ * The shape a saved id must have: the lister's own rule, held again here
+ * because whatever a lister answers is written into the manifest and may later
+ * be copied into an agent file. No line break, space or quote passes it, so a
+ * kept id is one the manifest validator accepts as a pin.
+ */
+const LISTED_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
+
+/**
+ * The model lists the selected clients' own CLIs give this account, read in
+ * parallel, one call per client; Claude Code has no list and is not asked.
+ * Shared by `init` and `sync`, which read the lists before they plan;
+ * emission and the drift gate only ever read the saved copy.
+ *
+ * Holds only the clients that answered with at least one well-shaped id, the
+ * first {@link MAX_LISTED_MODELS} of them in the order printed: a client that
+ * is absent, times out or prints no listing is left out, so the caller keeps
+ * the list it saved last. `STAMITY_NO_CLIENT_PROBE=1` in `env` answers `{}`
+ * with no lister called. Never throws past what the lister throws.
+ */
+export async function readClientModelLists(
+  tools: readonly Tool[],
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  lister: ModelLister = listClientModels,
+): Promise<Partial<Record<Tool, ListedModels>>> {
+  if (env["STAMITY_NO_CLIENT_PROBE"] === "1") return {};
+  const asked = [...new Set(tools)].filter((tool) => tool !== "claude");
+  const outcomes = await Promise.all(asked.map(async (tool) => ({ tool, outcome: await lister(tool, env, cwd) })));
+  const listed: Partial<Record<Tool, ListedModels>> = {};
+  for (const { tool, outcome } of outcomes) {
+    if (outcome.kind !== "listed") continue;
+    const ids = [...new Set(outcome.ids.filter((id) => LISTED_MODEL_ID.test(id)))].slice(0, MAX_LISTED_MODELS);
+    if (ids.length > 0) listed[tool] = { ids, source: outcome.source };
+  }
+  return listed;
+}
+
 /** State directories scaffolded by init, in creation order, repo-relative POSIX. */
 const STATE_DIRS: readonly string[] = [
   STATE_DIR,
@@ -201,6 +254,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     engineVersion,
     now,
   );
+
+  // Each selected client's own model list, read once before anything is
+  // planned (REQ-LADDER-006): the emission below picks every class's model
+  // from it, and every later plan reads the copy saved here.
+  const listed = await readClientModelLists(manifest.tools, opts.env ?? process.env, rootDir, opts.listModels);
+  if (Object.keys(listed).length > 0) manifest.models = { ...manifest.models, listed };
 
   // Installed packs survive a re-init, so their ledger rows must too. Seeded
   // BEFORE the emission plan below, because every consumer downstream reads the

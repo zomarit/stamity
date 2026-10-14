@@ -1911,3 +1911,169 @@ describe("config — the four gate keys", () => {
     expect(() => setConfigValue(manifest, "gates.test", "  ")).toThrow(CliFailure);
   });
 });
+
+describe("config — per-client model pins (REQ-LADDER-005)", () => {
+  it("addresses one key per class and client, each a literal row of the registry", () => {
+    for (const modelClass of MODEL_CLASSES) {
+      for (const tool of TOOLS) expect(CONFIG_KEYS).toContain(`model.${modelClass}.${tool}`);
+    }
+    expect(CONFIG_KEYS.filter((key) => /^model\.[a-z]+\.[a-z]+$/.test(key))).toHaveLength(16);
+  });
+
+  it("persists a client's pin under its own key and reads it back", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude", "cursor"] });
+
+    const set = await run(handle, ["set", "model.standard.cursor", "claude-sonnet-5-5-high"]);
+
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("set model.standard.cursor:");
+    expect(set.stdout).toContain("-> claude-sonnet-5-5-high");
+    expect((await readManifest(handle.dir))?.models?.pins?.standard).toEqual({ cursor: "claude-sonnet-5-5-high" });
+    const get = await run(handle, ["get", "model.standard.cursor"]);
+    expect(get.code).toBe(0);
+    expect(get.stdout).toContain("model.standard.cursor  claude-sonnet-5-5-high");
+    // The every-client key is untouched: claude still resolves its own alias.
+    expect((await run(handle, ["get", "model.standard"])).stdout).toContain("(default: claude=sonnet");
+  });
+
+  it("wins over the class's every-client pin on that client alone", () => {
+    const manifest = baseManifest({
+      tools: ["claude", "cursor"],
+      models: { pins: { standard: { all: "vendor-y", cursor: "claude-sonnet-5-5-high" } } },
+    });
+
+    // A Cursor id that names its effort variant carries no bracket group.
+    expect(getConfigValue(manifest, "model.standard.cursor").resolved).toBe("claude-sonnet-5-5-high");
+    expect(getConfigValue(manifest, "model.standard.claude").resolved).toBe("vendor-y");
+    expect(getConfigValue(manifest, "model.standard").resolved).toBe(
+      "claude=vendor-y, cursor=claude-sonnet-5-5-high",
+    );
+  });
+
+  it("clears a client's pin with `none`, leaving the class's other keys and dropping an emptied map", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, {
+      tools: ["cursor"],
+      models: { pins: { standard: { all: "vendor-y", cursor: "vendor-x" }, economy: { cursor: "vendor-z" } }, reviewCap: 6 },
+    });
+
+    expect((await run(handle, ["set", "model.standard.cursor", "none"])).code).toBe(0);
+    expect((await readManifest(handle.dir))?.models).toEqual({
+      pins: { standard: { all: "vendor-y" }, economy: { cursor: "vendor-z" } },
+      reviewCap: 6,
+    });
+
+    expect((await run(handle, ["set", "model.economy.cursor", "none"])).code).toBe(0);
+    expect((await readManifest(handle.dir))?.models).toEqual({ pins: { standard: { all: "vendor-y" } }, reviewCap: 6 });
+    expect((await run(handle, ["get", "model.economy.cursor"])).stdout).toContain("(default:");
+  });
+
+  it("drops the whole models block once its last pin is cleared, and treats an absent pin's clear as a no-op", () => {
+    const manifest = baseManifest({ tools: ["codex"], models: { pins: { advanced: { codex: "gpt-6-sol" } } } });
+
+    expect(setConfigValue(manifest, "model.advanced.codex", "none").models).toBeUndefined();
+    expect(setConfigValue(baseManifest(), "model.advanced.codex", "none")).toEqual(baseManifest());
+  });
+
+  it("accepts a pin for a client the setup does not select, and says once that it has no effect yet", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"] });
+
+    const result = await run(handle, ["set", "model.standard.codex", "gpt-6-sol"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.pins?.standard).toEqual({ codex: "gpt-6-sol" });
+    expect(result.stdout.match(/codex is not selected/g)).toHaveLength(1);
+    // A selected client's pin carries no such line.
+    const selected = await run(handle, ["set", "model.standard.claude", "sonnet"]);
+    expect(selected.code).toBe(0);
+    expect(selected.stdout).not.toContain("is not selected");
+  });
+
+  it("refuses a blank or multi-line client pin by its own key, writing nothing", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["cursor"] });
+    const before = await manifestBytes(handle);
+
+    const blank = await run(handle, ["set", "model.standard.cursor", "   "]);
+
+    expect(blank.code).toBe(1);
+    expect(blank.stderr).toContain("`models.pins.standard.cursor`");
+    expect(() => setConfigValue(baseManifest({ tools: ["cursor"] }), "model.standard.cursor", "a\nb")).toThrow(
+      CliFailure,
+    );
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("refuses a client outside the supported set as an unknown key", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const result = await run(handle, ["set", "model.standard.vim", "vendor-x"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('unknown config key "model.standard.vim"');
+  });
+
+  it("resolves an unpinned class through the account's persisted list, as the adapters project it", () => {
+    // Codex lists sol but not astra: the class's first shipped candidate the
+    // account holds wins, and with no list the shipped entry 0 does.
+    const listed = baseManifest({
+      tools: ["codex"],
+      models: { listed: { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } } },
+    });
+    expect(getConfigValue(listed, "model.advanced").resolved).toBe("gpt-6-sol");
+    expect(getConfigValue(listed, "model.advanced.codex").resolved).toBe("gpt-6-sol");
+    expect(getConfigValue(baseManifest({ tools: ["codex"] }), "model.advanced").resolved).toBe("gpt-6-astra");
+    // Cursor with no list resolves nothing: an unlisted id fails its spawn.
+    expect(getConfigValue(baseManifest({ tools: ["cursor"] }), "model.advanced.cursor").resolved).toBe(
+      "(client default)",
+    );
+  });
+
+  it("re-picks a pin only when a second account's saved list lacks it, and persists no pick", () => {
+    const onAccount = (ids: string[]): SetupManifest =>
+      baseManifest({
+        tools: ["codex"],
+        models: { pins: { advanced: { codex: "gpt-6-astra" } }, listed: { codex: { ids, source: "codex-debug-models" } } },
+      });
+
+    expect(getConfigValue(onAccount(["gpt-6-astra", "gpt-6-sol"]), "model.advanced.codex").resolved).toBe("gpt-6-astra");
+    const other = onAccount(["gpt-6-sol"]);
+    expect(getConfigValue(other, "model.advanced.codex").resolved).toBe("gpt-6-sol");
+    // The operator's pin is what stays stored; the pick is recomputed from it.
+    expect(getConfigValue(other, "model.advanced.codex").value).toBe("gpt-6-astra");
+  });
+});
+
+describe("config — `none` clears a model pin, never stores the word (build/49)", () => {
+  it("clears the class's every-client pin with `none`, keeping each client's own key", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, {
+      tools: ["claude", "cursor"],
+      models: { pins: { standard: { all: "vendor-y", cursor: "vendor-x" }, economy: { all: "vendor-z" } } },
+    });
+
+    const result = await run(handle, ["set", "model.standard", "none"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.pins).toEqual({
+      standard: { cursor: "vendor-x" },
+      economy: { all: "vendor-z" },
+    });
+    expect((await run(handle, ["get", "model.standard"])).stdout).toContain("(default:");
+
+    expect((await run(handle, ["set", "model.economy", "none"])).code).toBe(0);
+    expect((await readManifest(handle.dir))?.models).toEqual({ pins: { standard: { cursor: "vendor-x" } } });
+  });
+
+  it("stores no model named `none` through either key, on a manifest that pinned nothing", () => {
+    const manifest = baseManifest({ tools: ["codex"] });
+    for (const key of ["model.advanced", "model.advanced.codex"]) {
+      const next = setConfigValue(manifest, key, "none");
+      expect(next.models, key).toBeUndefined();
+      expect(JSON.stringify(next), key).not.toContain('"none"');
+    }
+  });
+});

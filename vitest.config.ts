@@ -159,16 +159,24 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
   };
 }
 
+const tempRoot = privateTempRoot(
+  fileURLToPath(new URL("./test/support/globalSetup.ts", import.meta.url)),
+  tmpdir(),
+  process.pid,
+);
+
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     exclude: [...configDefaults.exclude, RECORDS_SUITE],
     ...fixtureScheduling(process.platform),
-    ...privateTempRoot(
-      fileURLToPath(new URL("./test/support/globalSetup.ts", import.meta.url)),
-      tmpdir(),
-      process.pid,
-    ),
+    ...tempRoot,
+    // No test run reads the machine's client accounts (REQ-LADDER-006): `init`
+    // and `sync` start no client CLI to list its models while this is set, and
+    // the variable reaches every worker and every process a test spawns. A case
+    // that exercises the probe hands its command an environment without it and
+    // injects a lister.
+    env: { ...tempRoot.env, STAMITY_NO_CLIENT_PROBE: "1" },
     environment: "node",
     // Child-process cases shell out to the CLI entry; 20s is generous for a cold start
     // and still fails fast if a spawn hangs. On win32 the parallel project raises it (see

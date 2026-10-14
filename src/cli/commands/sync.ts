@@ -5,6 +5,7 @@ import { STATE_DIR } from "../../types/markers.ts";
 import { hasNpmChannel, npmRegistry, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
+import { readClientModelLists } from "./init/apply.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
 import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
 
@@ -202,6 +203,21 @@ export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): strin
   return lines;
 }
 
+/**
+ * The model lists the selected clients' own CLIs give this account, read
+ * before the plan (REQ-LADDER-006) and handed to it as an overlay on the saved
+ * `models.listed`: a live run persists it with the rest of the manifest, a dry
+ * run writes nothing, and a client that does not answer keeps its saved list.
+ * Read through the run's own environment, so `STAMITY_NO_CLIENT_PROBE=1`
+ * there skips every read. An uninitialised repository reads nothing here and
+ * gets the plan's own refusal.
+ */
+async function freshModelLists(ctx: CliContext, rootDir: string): ReturnType<typeof readClientModelLists> {
+  const manifest = await ctx.engine.manifest.manifest.readManifest(rootDir);
+  if (manifest === null) return {};
+  return readClientModelLists(manifest.tools, ctx.app.runtime.env, rootDir);
+}
+
 export const syncCommand: CommandModule = {
   name: "sync",
   summary: "regenerate every managed file from the manifest and bundled content",
@@ -220,7 +236,8 @@ export const syncCommand: CommandModule = {
     // Spinner around plan+apply (TTY human mode renders frames; piped mode
     // prints the text once as a plain line; JSON mode prints nothing).
     ctx.spinner.start(ctx.dryRun ? "previewing sync…" : "syncing…");
-    const plan = await planSync(rootDir, engineVersion);
+    const listedOverlay = await freshModelLists(ctx, rootDir);
+    const plan = await planSync(rootDir, engineVersion, { listedOverlay });
     const warning = dirtyTreeWarning(plan.dirty);
     if (warning !== null) ctx.io.err(`${warning}\n`);
     const report = await applySync(rootDir, plan, {

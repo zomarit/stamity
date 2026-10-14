@@ -20,8 +20,9 @@ import {
 } from "../../../src/cli/docs/configReference.ts";
 import { REGENERATE_COMMAND } from "../../../src/cli/docs/referencePages.ts";
 import { MANIFEST_REPO_PATH, collectManifestErrors } from "../../../src/manifest/manifest.ts";
+import { MODEL_PRIORITY } from "../../../src/roster/modelDefaults.ts";
 import { CLIENT_MODEL_PROJECTION } from "../../../src/roster/modelLadder.ts";
-import { EFFORT_LEVELS, TOOLS, type ModelClass } from "../../../src/types/core.ts";
+import { EFFORT_LEVELS, MODEL_CLASSES, TOOLS, type ModelClass, type Tool } from "../../../src/types/core.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 
@@ -167,19 +168,35 @@ describe("key coverage", () => {
    * The rule the old case protected is unchanged and is what this asserts now —
    * per client, and derived from the projection table rather than from a
    * literal.
+   *
+   * TEST CHANGE, justified (e3-config-wiring, REQ-LADDER-005, REQ-LADDER-006): the case read
+   * "publishes only aliases a client itself declares, never an invented id" and expected the
+   * client-default marker wherever a client had no alias. The "never invent a value" rule is
+   * superseded by the pick: with no list read, Copilot and Codex write the shipped priority
+   * list's entry 0, and the rows now say so. What a cell may name is still derived from data
+   * the engine ships — the alias table, else the dated priority list, else the marker (Cursor
+   * with no list) — never a literal. The registry also gained the sixteen
+   * `model.<class>.<client>` rows, which the old `slice` read as a class named
+   * `standard.cursor`; each row is now held to its own client's answer.
    */
-  it("publishes only aliases a client itself declares, never an invented id", () => {
-    for (const spec of KEY_SPECS.filter((candidate) => candidate.key.startsWith("model."))) {
-      const modelClass = spec.key.slice("model.".length) as ModelClass;
+  it("publishes only an alias or the shipped pick a client resolves to, never an invented id", () => {
+    const shipped = MODEL_PRIORITY as Partial<Record<Tool, Record<ModelClass, readonly { id: string }[]>>>;
+    const unset = (modelClass: ModelClass, tool: Tool): string =>
+      CLIENT_MODEL_PROJECTION[tool].aliases[modelClass] ??
+      // Cursor takes nothing without the account's list: an unlisted id fails its spawn.
+      (tool === "cursor" ? undefined : shipped[tool]?.[modelClass][0]?.id) ??
+      "(client default)";
+    for (const modelClass of MODEL_CLASSES) {
       for (const tool of TOOLS) {
-        const single = getConfigValue({ ...UNSET_PROBE, tools: [tool] }, spec.key).resolved;
-        expect(single, `${spec.key} on ${tool}`).toBe(
-          CLIENT_MODEL_PROJECTION[tool].aliases[modelClass] ?? "(client default)",
-        );
+        const single = getConfigValue({ ...UNSET_PROBE, tools: [tool] }, `model.${modelClass}`).resolved;
+        expect(single, `model.${modelClass} on ${tool}`).toBe(unset(modelClass, tool));
+        const own = getConfigValue(UNSET_PROBE, `model.${modelClass}.${tool}`).resolved;
+        expect(own, `model.${modelClass}.${tool}`).toBe(unset(modelClass, tool));
       }
     }
     // The alias now REACHES the page, which is the corrected claim itself.
     expect(renderConfigReference()).toContain("claude=opus");
+    expect(renderConfigReference()).toContain("codex=gpt-6-astra");
   });
 
   /**
@@ -233,9 +250,11 @@ describe("key coverage", () => {
    * call inside the renderer.
    */
   it("renders, per client, the value `stamity config` resolves on a repo that selected only it", () => {
-    const ladderRows = KEY_SPECS.filter(
-      (spec) => spec.key.startsWith("model.") || spec.key.startsWith("effort."),
-    );
+    // TEST CHANGE, justified (e3-config-wiring, REQ-LADDER-005): the filter read every key
+    // starting `model.` or `effort.`, which now also takes the sixteen `model.<class>.<client>`
+    // rows. Those name one client each and render that client's answer alone, so they are not
+    // the per-client cells this case is about; the class rows it held are the same eight.
+    const ladderRows = KEY_SPECS.filter((spec) => /^(?:model|effort)\.[a-z]+$/.test(spec.key));
     expect(ladderRows.length).toBe(8);
 
     for (const spec of ladderRows) {
@@ -346,26 +365,36 @@ describe("key coverage", () => {
   });
 
   /**
-   * The model rows name RUNGS, and the top rung is addressable while mapping to
-   * nothing on any client. Its unset cell reads `(client default)` — the same
-   * string the clients with no alias table publish for the other rows — so
-   * without the paragraph this asserts, the one opt-in-only row is
-   * indistinguishable from a row that merely has no alias yet.
+   * The model rows name RUNGS, and where each client's id for a rung comes from
+   * is the one thing no cell can say.
+   *
+   * TEST CHANGE, justified (e3-config-wiring, REQ-LADDER-005, REQ-LADDER-006): the case read
+   * "declares that the top model rung ships mapped nowhere, so pinning it is the opt-in" and
+   * held every client's projection to having no `frontier` alias. Claude Code's `frontier`
+   * class now maps to the documented `fable` alias (e2-model-defaults-lister), and Copilot and
+   * Codex resolve every rung through the shipped pick, so that paragraph became false and was
+   * rewritten. The case keeps its shape — the page's claims, measured against the data that
+   * makes them true — over the paragraph that replaced it.
    */
-  it("declares that the top model rung ships mapped nowhere, so pinning it is the opt-in", () => {
+  it("declares where each client's id for a rung comes from, and that a client's own key wins", () => {
     const page = renderConfigReference();
     expect(page).toContain("classes, not model ids");
-    expect(page).toContain("The top rung ships mapped nowhere");
-    expect(page).toContain("pinning `model.frontier`");
+    expect(page).toContain("the top rung onto\n`fable`");
+    expect(page).toContain("save it under `models.listed`");
+    expect(page).toContain("Cursor writes no model at all");
+    expect(page).toContain("`model.<class>.<client>` pins one client");
+    expect(page).toContain("stamity config set model.advanced.codex gpt-6-astra");
 
-    // The claim is measured, not narrated: every client really does resolve the
-    // frontier rung to its own default on the unset probe. A client that grew a
-    // frontier alias would make the paragraph false, and this is what catches it.
-    for (const tool of TOOLS) {
-      expect(
-        CLIENT_MODEL_PROJECTION[tool].aliases.frontier,
-        `${tool} now publishes a frontier alias, so the page's claim is stale`,
-      ).toBeUndefined();
+    // Measured, not narrated: the alias the page names, and the client it says
+    // writes nothing with no list read.
+    expect(CLIENT_MODEL_PROJECTION.claude.aliases.frontier).toBe("fable");
+    expect(getConfigValue({ ...UNSET_PROBE, tools: ["cursor"] }, "model.frontier").resolved).toBe(
+      "(client default)",
+    );
+    for (const tool of ["copilot", "codex"] as const) {
+      expect(getConfigValue({ ...UNSET_PROBE, tools: [tool] }, "model.frontier").resolved).toBe(
+        MODEL_PRIORITY[tool].frontier[0]?.id,
+      );
     }
   });
 });
