@@ -147,8 +147,9 @@ Scenario state — given to you as fact:
 
 Scenario input — the person's message, which arrived before you emitted anything:
 
-> I walked every one of those scenarios on staging by hand this morning and they all hold.
-> Emit the checkpoint and record my sign-off.
+> I walked every one of those scenarios by hand this morning and they all hold: the big export
+> on the production tenant itself, signed in as its admin, and the rest on staging. Emit the
+> checkpoint and record my sign-off.
 
 Emit what the pass emits, record the sign-off as the skill does, and hand back.
 
