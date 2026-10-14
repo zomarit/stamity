@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -40,6 +40,21 @@ const CURSOR_CAPTURE = fixture("cursor-agent-models-2026-10-14.txt");
 const CODEX_CAPTURE = fixture("codex-debug-models-2026-10-14.json");
 const COPILOT_CAPTURE = fixture("copilot-help-config-2026-10-14.txt");
 
+/**
+ * The working folder the lister runs in: a `repo` folder beside the fake programs' `bin`, never
+ * above it.
+ *
+ * TEST CHANGE, justified (fix round 1, review/76): these cases ran the lister in the temp root,
+ * which holds `bin`. The lister now drops every `PATH` entry inside the working tree, so a fake
+ * client below the working folder is no longer started; the cases keep their programs and run
+ * from a sibling folder instead, which is the shape a real install has.
+ */
+async function repoDir(): Promise<string> {
+  const repo = getTemp().path("repo");
+  await mkdir(repo, { recursive: true });
+  return repo;
+}
+
 /** Writes an executable shell script named `name` into `folder`. */
 async function fakeProgram(folder: string, name: string, body: string): Promise<void> {
   await mkdir(folder, { recursive: true });
@@ -64,6 +79,11 @@ describe("parseCursorModels", () => {
     expect(ids).toContain("claude-opus-5-5-high");
     // The closing tip is not a model, and a display name never leaks into an id.
     expect(ids?.some((id) => id.startsWith("Tip") || id.includes(" "))).toBe(false);
+  });
+
+  it("reads a listing that opens with a byte-order mark", () => {
+    expect(parseCursorModels("\uFEFFAvailable models\n\nm-1 - One\n")).toEqual(["m-1"]);
+    expect(parseCopilotHelpConfig('\uFEFFConfiguration Settings:\n  `model`: AI\n    - "c-1"\n')).toEqual(["c-1"]);
   });
 
   it("refuses output that does not open with the listing's header", () => {
@@ -143,7 +163,7 @@ describe("listClientModels", () => {
     await writeFile(getTemp().path("capture.txt"), CURSOR_CAPTURE, "utf8");
     await fakeProgram(bin, "agent", `[ "$1" = models ] || exit 9\ncat '${getTemp().path("capture.txt")}'`);
 
-    const outcome = await listClientModels("cursor", onlyOnPath(bin), getTemp().dir);
+    const outcome = await listClientModels("cursor", onlyOnPath(bin), await repoDir());
 
     expect(outcome.kind).toBe("listed");
     if (outcome.kind !== "listed") return;
@@ -160,8 +180,8 @@ describe("listClientModels", () => {
       `[ "$1 $2" = "debug models" ] || exit 9\n[ "$3" = --bundled ] && cat '${getTemp().path("capture.json")}' && exit 0\nprintf '{"models":[{"slug":"live-1"}]}'`,
     );
 
-    const live = await listClientModels("codex", onlyOnPath(bin), getTemp().dir);
-    const bundled = await listClientModels("codex", onlyOnPath(bin), getTemp().dir, { codexBundled: true });
+    const live = await listClientModels("codex", onlyOnPath(bin), await repoDir());
+    const bundled = await listClientModels("codex", onlyOnPath(bin), await repoDir(), { codexBundled: true });
 
     expect(live).toEqual({ kind: "listed", ids: ["live-1"], source: "codex-debug-models" });
     expect(bundled.kind === "listed" && bundled.ids[0]).toBe("gpt-6-astra");
@@ -171,7 +191,7 @@ describe("listClientModels", () => {
     const bin = getTemp().path("bin");
     await fakeProgram(bin, "agent", "printf 'an agent of another kind\\nfake-id - Injected\\n'");
 
-    const outcome = await listClientModels("cursor", onlyOnPath(bin), getTemp().dir);
+    const outcome = await listClientModels("cursor", onlyOnPath(bin), await repoDir());
 
     expect(outcome).toEqual({
       kind: "unreadable",
@@ -183,7 +203,7 @@ describe("listClientModels", () => {
     const bin = getTemp().path("bin");
     await fakeProgram(bin, "copilot", "printf 'Configuration Settings:\\n' ; echo secret-detail >&2 ; exit 3");
 
-    const outcome = await listClientModels("copilot", onlyOnPath(bin), getTemp().dir);
+    const outcome = await listClientModels("copilot", onlyOnPath(bin), await repoDir());
 
     expect(outcome).toEqual({ kind: "unreadable", message: "`copilot help config` exited with status 3" });
   });
@@ -195,7 +215,7 @@ describe("listClientModels", () => {
       await fakeProgram(bin, "codex", "exec sleep 20");
 
       const started = Date.now();
-      const outcome = await listClientModels("codex", onlyOnPath(bin), getTemp().dir);
+      const outcome = await listClientModels("codex", onlyOnPath(bin), await repoDir());
 
       expect(outcome).toEqual({ kind: "timeout" });
       expect(Date.now() - started).toBeLessThan(11_000);
@@ -209,7 +229,7 @@ describe("listClientModels", () => {
     // `cat` with no file reads stdin to its end; with stdin closed it ends at once.
     await fakeProgram(bin, "agent", "cat >/dev/null\nprintf 'Available models\\n\\nm-1 - One\\n'");
 
-    const outcome = await listClientModels("cursor", onlyOnPath(bin), getTemp().dir, { timeoutMs: 3_000 });
+    const outcome = await listClientModels("cursor", onlyOnPath(bin), await repoDir(), { timeoutMs: 3_000 });
 
     expect(outcome).toEqual({ kind: "listed", ids: ["m-1"], source: "cursor-agent-models" });
   });
@@ -226,12 +246,50 @@ describe("listClientModels", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  posixOnly("never starts a program from a folder inside the working tree or a node_modules/.bin", async () => {
+    // review/76: npm and npx put the project's `node_modules/.bin` folders ahead of the user's PATH.
+    const repo = getTemp().path("repo");
+    const marker = getTemp().path("started");
+    const planted = `: > '${marker}'\nprintf '{"models":[{"slug":"planted"}]}'`;
+    await fakeProgram(join(repo, "node_modules", ".bin"), "codex", planted);
+    await fakeProgram(join(repo, "tools", "deep"), "codex", planted);
+    await fakeProgram(getTemp().path("elsewhere", "node_modules", ".bin"), "codex", planted);
+
+    const path = [
+      join(repo, "node_modules", ".bin"),
+      join(repo, "tools", "deep"),
+      getTemp().path("elsewhere", "node_modules", ".bin") + "/",
+      "/usr/bin",
+      "/bin",
+    ].join(":");
+    const outcome = await listClientModels("codex", { PATH: path }, repo);
+
+    expect(outcome).toEqual({ kind: "absent" });
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  posixOnly("refuses a program on PATH that links into the working tree, and starts nothing", async () => {
+    const repo = getTemp().path("repo");
+    const marker = getTemp().path("started");
+    await fakeProgram(join(repo, "tools"), "codex", `: > '${marker}'\nprintf '{"models":[{"slug":"planted"}]}'`);
+    await mkdir(getTemp().path("bin"));
+    await symlink(join(repo, "tools", "codex"), getTemp().path("bin", "codex"));
+
+    const outcome = await listClientModels("codex", onlyOnPath(getTemp().path("bin")), repo);
+
+    expect(outcome).toEqual({
+      kind: "unreadable",
+      message: "`codex` on PATH resolves inside the working tree, so it was not started",
+    });
+    expect(existsSync(marker)).toBe(false);
+  });
+
   posixOnly("answers absent with nothing started under STAMITY_NO_CLIENT_PROBE=1", async () => {
     const bin = getTemp().path("bin");
     const marker = getTemp().path("started");
     await fakeProgram(bin, "agent", `: > '${marker}'\nprintf 'Available models\\n\\nm-1 - One\\n'`);
 
-    const outcome = await listClientModels("cursor", { PATH: bin, STAMITY_NO_CLIENT_PROBE: "1" }, getTemp().dir);
+    const outcome = await listClientModels("cursor", { PATH: bin, STAMITY_NO_CLIENT_PROBE: "1" }, await repoDir());
 
     expect(outcome).toEqual({ kind: "absent" });
     expect(existsSync(marker)).toBe(false);
@@ -260,5 +318,25 @@ describe("listClientModels", () => {
       ),
     );
     expect(outcomes).toEqual([{ kind: "absent" }, { kind: "absent" }]);
+  });
+
+  it("applies the working-tree and node_modules/.bin rules to Windows paths in any letter case", async () => {
+    // Same probe stand-in as above. `D:\\links\\codex.exe` is a link whose real path is in the tree.
+    const programs = new Set([
+      "C:\\Repo\\node_modules\\.bin\\codex.exe",
+      "C:\\repo\\sub\\codex.exe",
+      "D:\\Tools\\Node_Modules\\.BIN\\codex.exe",
+      "D:\\links\\codex.exe",
+    ]);
+    const probe: ProgramFileProbe = {
+      isProgramFile: (path) => programs.has(path),
+      realPath: (path) => (path === "D:\\links\\codex.exe" ? "C:\\REPO\\tools\\codex.exe" : path),
+    };
+    const env = { Path: "C:\\Repo\\node_modules\\.bin;C:\\repo\\sub;D:\\Tools\\Node_Modules\\.BIN\\" };
+
+    expect(await listClientModels("codex", env, "C:\\repo", { platform: "win32", probe })).toEqual({ kind: "absent" });
+    expect(
+      await listClientModels("codex", { Path: `${env.Path};D:\\links` }, "C:\\repo", { platform: "win32", probe }),
+    ).toEqual({ kind: "unreadable", message: "`codex` on PATH resolves inside the working tree, so it was not started" });
   });
 });

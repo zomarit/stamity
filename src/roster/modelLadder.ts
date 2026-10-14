@@ -82,8 +82,9 @@
  * class and per client, and a pin wins over the alias and the pick, with one
  * exception: where the account's list is known and does not hold the pin, the
  * class is re-picked from that list, because an id the account lacks fails the
- * call and outranks nothing. A pin with a bracket group is the operator's whole
- * model expression and is never re-picked. Whether an EFFORT setting reaches a
+ * call and outranks nothing. A pin with a bracket group is judged by its base
+ * id (before `[`): kept with its options while that id is listed, re-picked
+ * like any other pin when it is not. Whether an EFFORT setting reaches a
  * given client is read off {@link ClientModelProjection.effortCarrier} at the
  * call site that needs it; this module publishes no predicate for it. The one
  * surface that would ask — the config command's per-class effort rows —
@@ -498,18 +499,31 @@ export interface ModelPickSource {
 }
 
 /**
- * The words a model id may end on to say it already carries an effort level:
- * the union scale plus `none`, which Cursor lists as a variant of its own.
+ * An effort variant's tail: one level of the union scale or `none`, which
+ * Cursor lists as a variant of its own, optionally followed by Cursor's
+ * `-fast` modifier (`grok-4.7-low-fast`).
  */
-const EFFORT_SUFFIX = new RegExp(`[-_.](?:${[...EFFORT_LEVELS, "none"].join("|")})$`, "i");
+const EFFORT_VARIANT = `(?:${[...EFFORT_LEVELS, "none"].join("|")})(?:-fast)?`;
+
+/** An id that ends on an effort variant, so it already states its level. */
+const EFFORT_SUFFIX = new RegExp(`[-_.]${EFFORT_VARIANT}$`, "i");
+
+/** The tail after `<pin>-` that makes a listed id an effort variant of that pin. */
+const EFFORT_VARIANT_TAIL = new RegExp(`^${EFFORT_VARIANT}$`, "i");
 
 /**
  * Whether the account's list holds `pin`. A Cursor pin may name a model family
  * the list carries one id per effort variant of (`claude-opus-4-8` beside
- * `claude-opus-4-8-high`), which its CLI accepts, so a family match counts.
+ * `claude-opus-4-8-high`), which its CLI accepts, so a family match counts —
+ * but only through an exact variant of that pin (the pin, a hyphen, one effort
+ * word, optionally `-fast`), never through a longer id that merely starts with
+ * it: `claude-opus-5-5-high` is another model, not a variant of `claude-opus-5`.
  */
 function listHolds(listed: readonly string[], pin: string): boolean {
-  return listed.includes(pin) || listed.some((id) => id.startsWith(`${pin}-`) && EFFORT_SUFFIX.test(id));
+  return (
+    listed.includes(pin) ||
+    listed.some((id) => id.startsWith(`${pin}-`) && EFFORT_VARIANT_TAIL.test(id.slice(pin.length + 1)))
+  );
 }
 
 /**
@@ -532,7 +546,10 @@ function baseModelValue(
   const listed = pick?.listed;
   const pin = stated(pins[modelClass]);
   if (pin !== undefined) {
-    if (listed === undefined || pin.includes("[") || listHolds(listed, pin)) return pin;
+    // A bracketed pin is judged by its base id: the options ride on a model,
+    // and a model the account lacks fails the call whatever options it carries.
+    const base = pin.split("[")[0] ?? pin;
+    if (listed === undefined || listHolds(listed, base)) return pin;
     // An id the account lacks fails the call; a re-pick that finds nothing on
     // the list either keeps the operator's value rather than a shipped one.
     return pickModel(projection.tool, modelClass, effort, listed)?.id ?? pin;
@@ -619,9 +636,10 @@ function emittedEffort(
  * effort included if they wanted it. That verbatim rule is also how a class
  * declines the parameter on a model whose options do not include effort: pin
  * the documented empty-bracket form (`<id>[]`) and the ladder appends nothing.
- * And an id the account's list holds, or one ending on an effort word
- * (`claude-opus-5-5-high`), names its effort variant already, so a bracket
- * group would state the level twice.
+ * And an id the account's list holds, or one ending on an effort word with or
+ * without Cursor's `-fast` modifier (`claude-opus-5-5-high`,
+ * `grok-4.7-low-fast`), names its effort variant already, so a bracket group
+ * would state the level twice.
  */
 function withEffortParameter(
   projection: ClientModelProjection,

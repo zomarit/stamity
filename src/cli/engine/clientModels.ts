@@ -19,11 +19,17 @@ import type { ListedModels } from "../../types/manifest.ts";
  * test run or this repository's own `sync` never reads the machine's accounts
  * even where a caller forgot to check the switch first.
  *
- * Nothing a client prints is trusted until parsed. The program is found by a
- * `PATH` walk that never searches the working folder (`resolveProgramOnPath`),
- * so a file a repository commits under a client's name is not what starts; the
- * output must open with that client's own header or the outcome is
- * `unreadable`; and an id is kept only when it has the shape of a model id
+ * No program the repository can place is started, and nothing a client prints
+ * is trusted until parsed. The program is found by a `PATH` walk
+ * (`resolveProgramOnPath`) over the entries left once every entry inside the
+ * working folder's tree, and every entry named `node_modules/.bin` at any
+ * level, is dropped: npm and `npx` put the project's own `node_modules/.bin`
+ * folders ahead of the user's `PATH`, and a repository can commit one or have a
+ * dependency install a `bin` there. A program the walk still finds whose real
+ * path lies inside the working tree (a link from outside pointing in) is
+ * refused, never started. So a file a repository carries under a client's name
+ * is not what starts. The output must open with that client's own header or the
+ * outcome is `unreadable`, which limits what is kept, not what runs; and an id is kept only when it has the shape of a model id
  * (letters, digits and `._:/-`, at most 100 characters), which no line break,
  * space or quote passes, so a kept id is always a value `modelPinDefect` in the
  * manifest validator accepts. The child gets no stdin, no window and a bounded
@@ -72,7 +78,7 @@ function shapedIds(candidates: Iterable<string>): string[] {
 
 /** `text` without colour sequences, a byte-order mark or Windows line ends, split into lines. */
 function plainLines(text: string): string[] {
-  return text.replace(/^﻿/, "").replaceAll(ANSI_SEQUENCE, "").split(/\r?\n/);
+  return text.replace(/^\uFEFF/, "").replaceAll(ANSI_SEQUENCE, "").split(/\r?\n/);
 }
 
 /** The lines after a first non-blank line equal to `header`, or `null` when the output opens otherwise. */
@@ -179,18 +185,67 @@ export interface ListClientModelsOptions {
   readonly probe?: ProgramFileProbe;
 }
 
-/** The first of `programs` the walk finds, by name and absolute path, or `null`. */
+/** A `PATH` entry npm or `npx` adds for a project's installed binaries, at any level. */
+const NODE_MODULES_BIN = {
+  posix: /(?:^|\/)node_modules\/\.bin\/*$/,
+  win32: /(?:^|[\\/])node_modules[\\/]\.bin[\\/]*$/i,
+} as const;
+
+/** Whether real path `inner` is real path `root` or lies below it. */
+function isWithin(inner: string, root: string, windows: boolean): boolean {
+  const key = (path: string): string => {
+    const trimmed = path.replace(windows ? /[\\/]+$/ : /\/+$/, "");
+    return windows ? trimmed.replaceAll("/", "\\").toLowerCase() : trimmed;
+  };
+  const [child, parent] = [key(inner), key(root)];
+  return child === parent || child.startsWith(`${parent}${windows ? "\\" : "/"}`);
+}
+
+/**
+ * `path` without the entries a repository can fill: every `node_modules/.bin`
+ * folder, and every entry whose real path is the working folder or lies below
+ * it. `undefined` stays `undefined`; a working folder with no real path is
+ * answered by the walk itself, which then searches nothing.
+ */
+function trustedSearchPath(
+  path: string | undefined,
+  root: string | null,
+  windows: boolean,
+  probe: ProgramFileProbe,
+): string | undefined {
+  if (path === undefined) return undefined;
+  const delimiter = windows ? ";" : ":";
+  return path
+    .split(delimiter)
+    .filter((raw) => {
+      const entry = windows ? raw.replace(/^"(.*)"$/, "$1") : raw;
+      if (NODE_MODULES_BIN[windows ? "win32" : "posix"].test(entry)) return false;
+      const real = root === null || entry === "" ? null : probe.realPath(entry);
+      return real === null || !isWithin(real, root ?? "", windows);
+    })
+    .join(delimiter);
+}
+
+/** What the walk found for a client: a program to start, one refused, or nothing. */
+type FoundProgram = { kind: "found"; name: string; path: string } | { kind: "refused"; name: string } | null;
+
+/** The first of `programs` the walk finds outside the working tree, by name and absolute path. */
 function findProgram(
   programs: readonly string[],
   env: NodeJS.ProcessEnv,
   cwd: string,
   platform: NodeJS.Platform,
   probe: ProgramFileProbe,
-): { name: string; path: string } | null {
-  const path = searchPathOf(env, platform);
+): FoundProgram {
+  const windows = platform === "win32";
+  const root = probe.realPath(cwd);
+  const path = trustedSearchPath(searchPathOf(env, platform), root, windows, probe);
   for (const name of programs) {
     const found = resolveProgramOnPath(name, { platform, path, cwd, probe });
-    if (found !== null) return { name, path: found };
+    if (found === null) continue;
+    const real = probe.realPath(found);
+    if (root === null || real === null || isWithin(real, root, windows)) return { kind: "refused", name };
+    return { kind: "found", name, path: found };
   }
   return null;
 }
@@ -202,7 +257,8 @@ function findProgram(
  * (Claude Code), or when no `PATH` entry the walk accepts holds the program —
  * on Windows that includes an npm shim (`codex.cmd`), which is not started
  * without a shell, so the shipped fallback applies there. `timeout` when the
- * child outlives the ceiling and is killed. `unreadable` when it exits non-zero,
+ * child outlives the ceiling and is killed. `unreadable`, with nothing started,
+ * when the program found resolves into the working tree; and when it exits non-zero,
  * prints past the byte ceiling, or prints something that is not the client's
  * listing; the message names the call and never repeats the child's output.
  * Never throws.
@@ -218,6 +274,12 @@ export function listClientModels(
   const platform = options.platform ?? process.platform;
   const program = findProgram(lister.programs, env, cwd, platform, options.probe ?? fileSystemProbe);
   if (program === null) return Promise.resolve({ kind: "absent" });
+  if (program.kind === "refused") {
+    return Promise.resolve({
+      kind: "unreadable",
+      message: `\`${program.name}\` on PATH resolves inside the working tree, so it was not started`,
+    });
+  }
   const args = tool === "codex" && options.codexBundled === true ? [...lister.args, "--bundled"] : [...lister.args];
   const call = `${program.name} ${args.join(" ")}`;
 

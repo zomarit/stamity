@@ -588,17 +588,39 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
     expect(resolveModelValue("advanced", "codex", pins, {}, { listed: ["other"] })).toBe("gpt-retired");
   });
 
-  it("never re-picks a bracketed Cursor pin or one naming a listed model family", () => {
+  // TEST CHANGE, justified (fix round 1, review/79 and review/78): this case asserted a bracketed
+  // pin is never re-picked; by the sign-off a bracketed pin is judged by its base id like any pin,
+  // so it is kept while the base is listed and re-picked when it is not. The family rule now counts
+  // only an exact effort variant of the pin, so a longer id that merely starts with it does not.
+  it("judges a bracketed Cursor pin by its base id, and a family pin by its exact effort variants", () => {
     const listed = ["claude-opus-4-8-high", "claude-opus-5-5-high"];
     expect(
       resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-8[context=1m,effort=high]" }, {}, { listed }),
     ).toBe("claude-opus-4-8[context=1m,effort=high]");
+    expect(
+      resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-7[context=1m]" }, {}, { listed }),
+    ).toBe("claude-opus-5-5-high");
+    // A bracketed pin with nothing to re-pick to keeps the operator's whole expression.
+    expect(
+      resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-7[context=1m]" }, {}, { listed: ["other"] }),
+    ).toBe("claude-opus-4-7[context=1m]");
     expect(resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-8" }, {}, { listed })).toBe(
       "claude-opus-4-8[effort=high]",
     );
     expect(resolveModelValue("advanced", "cursor", { advanced: "vendor-x-1" }, {}, { listed })).toBe(
       "claude-opus-5-5-high",
     );
+  });
+
+  it("does not count a pin as listed through a longer id that merely starts with it", () => {
+    // `claude-opus-5-5-high` is the next generation, not an effort variant of `claude-opus-5`.
+    expect(
+      resolveModelValue("advanced", "cursor", { advanced: "claude-opus-5" }, {}, { listed: ["claude-opus-5-5-high"] }),
+    ).toBe("claude-opus-5-5-high");
+    // An exact variant, `-fast` included, still counts.
+    expect(
+      resolveModelValue("advanced", "cursor", { advanced: "grok-4.7" }, {}, { listed: ["grok-4.7-high-fast", "claude-opus-5-5-high"] }),
+    ).toBe("grok-4.7[effort=high]");
   });
 
   it("keeps the alias on Claude Code whatever the pick is given", () => {
@@ -620,7 +642,16 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
     expect(resolveModelValue("standard", "cursor", { standard: "gpt-x-1" }, {}, { listed: CURSOR_LIST })).toBe(
       "gpt-x-1",
     );
-    for (const pin of ["claude-opus-5-5-high", "gpt-5.6-sol-xhigh", "gpt-5.6-luna-none", "grok-4.7-LOW"]) {
+    // `-fast` variants too (review/80): the level is stated before Cursor's speed modifier.
+    for (const pin of [
+      "claude-opus-5-5-high",
+      "gpt-5.6-sol-xhigh",
+      "gpt-5.6-luna-none",
+      "grok-4.7-LOW",
+      "grok-4.7-low-fast",
+      "gpt-5.6-luna-none-fast",
+      "cursor-grok-4.6-high-fast",
+    ]) {
       expect(resolveModelValue("standard", "cursor", { standard: pin }), pin).toBe(pin);
     }
     // Any other id still carries the class's effort, as before.
@@ -628,6 +659,7 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
     expect(resolveModelValue("standard", "cursor", { standard: "model-highway" })).toBe(
       "model-highway[effort=medium]",
     );
+    expect(resolveModelValue("standard", "cursor", { standard: "model-fast" })).toBe("model-fast[effort=medium]");
   });
 });
 
