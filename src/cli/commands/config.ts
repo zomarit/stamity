@@ -31,6 +31,7 @@ import {
   MODEL_LADDER,
   isModelClass,
   nearestExpressibleEffort,
+  pinsFor,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
@@ -302,9 +303,9 @@ const EFFORT_HINT =
     : `, except a legacy level, which is accepted and written as the nearest level ` +
       `that client documents: ${EFFORT_LEGACY_CLAUSES.join("; ")}`);
 
-/** The persisted pin for one class, or null when the operator set none. */
+/** The persisted every-client pin for one class (`all`), or null when the operator set none. */
 function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null {
-  return manifest.models?.pins?.[modelClass] ?? null;
+  return manifest.models?.pins?.[modelClass]?.all ?? null;
 }
 
 /**
@@ -318,11 +319,10 @@ function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null
  * will not contain.
  */
 function resolvePin(manifest: SetupManifest, modelClass: ModelClass): string {
-  const pins = manifest.models?.pins ?? {};
   const efforts = manifest.models?.effort ?? {};
   const perTool = manifest.tools.map((tool) => ({
     tool,
-    value: resolveModelValue(modelClass, tool, pins, efforts),
+    value: resolveModelValue(modelClass, tool, pinsFor(manifest.models, tool), efforts),
   }));
   const distinct = new Set(perTool.map((entry) => entry.value));
   if (distinct.size === 0) return CLIENT_DEFAULT;
@@ -349,7 +349,9 @@ function applyPin(draft: SetupManifest, modelClass: ModelClass, raw: string): vo
       next: `pin one of: ${MODEL_CLASSES.join(", ")}`,
     });
   }
-  draft.models = { ...draft.models, pins: { ...draft.models?.pins, [modelClass]: raw } };
+  // The every-client key: a client's own pin, set beside it, still wins there.
+  const pins = { ...draft.models?.pins, [modelClass]: { ...draft.models?.pins?.[modelClass], all: raw } };
+  draft.models = { ...draft.models, pins };
 }
 
 /** The persisted effort for one class, or null when the operator set none. */
@@ -409,7 +411,6 @@ function expressesEffort(
  * model one.
  */
 function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string {
-  const pins = manifest.models?.pins ?? {};
   const efforts = manifest.models?.effort ?? {};
   // Effort is a property of the CLASS, not of a client, so the fallback is the
   // ladder row's own default rather than a per-client table.
@@ -427,7 +428,7 @@ function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string 
     ? (level as EffortLevel)
     : undefined;
   const perTool = manifest.tools.map((tool) => {
-    if (!expressesEffort(tool, modelClass, pins, efforts)) {
+    if (!expressesEffort(tool, modelClass, pinsFor(manifest.models, tool), efforts)) {
       return { tool, value: NOT_EXPRESSED };
     }
     const emitted = requested === undefined ? undefined : nearestExpressibleEffort(requested, tool);

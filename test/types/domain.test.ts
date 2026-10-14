@@ -207,8 +207,10 @@ describe("manifest constants", () => {
     expect(`${STATE_DIR}/${MANIFEST_FILE}`).toBe(".stamity/manifest.json");
   });
 
-  it("pins schema generation 1", () => {
-    expect(MANIFEST_VERSION).toBe("1.0.0");
+  // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): per-client pins moved the
+  // manifest to generation 2, with a migration step from 1.0.0; the pin moves with it.
+  it("pins schema generation 2", () => {
+    expect(MANIFEST_VERSION).toBe("2.0.0");
   });
 });
 

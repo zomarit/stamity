@@ -297,7 +297,9 @@ describe("config list", () => {
     const esc = String.fromCharCode(27);
     const bel = String.fromCharCode(7);
     const hostile = `vendor-x${esc}]0;pwned${bel}-1`;
-    await seedManifest(handle, { models: { pins: { standard: hostile } } });
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): a class's pin is a
+    // per-client map at manifest 2.0.0, so the hostile id is seeded under `all`; the sink is the same.
+    await seedManifest(handle, { models: { pins: { standard: { all: hostile } } } });
 
     const result = await run(handle, []);
 
@@ -438,7 +440,9 @@ describe("config — the bare picker", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("a model id your client accepts");
     expect(result.stdout).toContain("set model.standard:");
-    expect((await readManifest(handle.dir))?.models?.pins?.standard).toBe("vendor-x-1");
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): `model.<class>` writes
+    // the class's `all` key at manifest 2.0.0; the value persisted is the same.
+    expect((await readManifest(handle.dir))?.models?.pins?.standard).toEqual({ all: "vendor-x-1" });
   });
 
   it("writes nothing when the value prompt comes back empty", async () => {
@@ -853,7 +857,9 @@ describe("config — the model ladder's nine keys", () => {
     expect(set.stdout).toContain("set model.standard:");
     expect(set.stdout).toContain("-> vendor-x-1");
     expect(set.stdout).toContain("next: run stamity sync to apply");
-    expect((await readManifest(handle.dir))?.models?.pins?.standard).toBe("vendor-x-1");
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): `model.<class>` writes
+    // the class's `all` key at manifest 2.0.0; the value persisted is the same.
+    expect((await readManifest(handle.dir))?.models?.pins?.standard).toEqual({ all: "vendor-x-1" });
 
     const get = await run(handle, ["get", "model.standard"]);
     expect(get.code).toBe(0);
@@ -864,8 +870,10 @@ describe("config — the model ladder's nine keys", () => {
     const handle = tempDir();
     await seedManifest(handle, {
       tools: ["codex"],
+      // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): per-client pin maps
+      // at manifest 2.0.0, seeded and expected under `all`; the replace-one-pin claim is unchanged.
       models: {
-        pins: { [modelClass]: "previous-model" },
+        pins: { [modelClass]: { all: "previous-model" } },
         effort: { [modelClass]: "medium" },
         reviewCap: 6,
       },
@@ -878,7 +886,7 @@ describe("config — the model ladder's nine keys", () => {
 
     const manifest = await readManifest(handle.dir);
     expect(manifest?.models).toEqual({
-      pins: { [modelClass]: "gpt-6-astra" },
+      pins: { [modelClass]: { all: "gpt-6-astra" } },
       effort: { [modelClass]: "medium" },
       reviewCap: 6,
     });
@@ -928,7 +936,9 @@ describe("config — the model ladder's nine keys", () => {
     const result = await run(handle, ["set", "model.frontier", "vendor-x-9"]);
 
     expect(result.code).toBe(0);
-    expect((await readManifest(handle.dir))?.models?.pins?.frontier).toBe("vendor-x-9");
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): the pin is the class's
+    // `all` key at manifest 2.0.0; the value kept is the same.
+    expect((await readManifest(handle.dir))?.models?.pins?.frontier?.all).toBe("vendor-x-9");
     expect((await run(handle, ["get", "model.frontier"])).stdout).toContain("vendor-x-9");
   });
 
@@ -940,7 +950,9 @@ describe("config — the model ladder's nine keys", () => {
     const result = await run(handle, ["set", "model.standard", "   "]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("`models.pins.standard`");
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): the refused value now
+    // sits under the class's `all` key, and the error names that key; the refusal is unchanged.
+    expect(result.stderr).toContain("`models.pins.standard.all`");
     expect(await manifestBytes(handle)).toBe(before);
   });
 

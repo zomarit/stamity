@@ -20,15 +20,19 @@ import type { DetectedSummary } from "./detect.ts";
 /** Manifest filename inside the state dir. */
 export const MANIFEST_FILE = "manifest.json";
 
-/** Current manifest schema generation. */
-export const MANIFEST_VERSION = "1.0.0";
+/**
+ * Current manifest schema generation. Generation 2 (REQ-LADDER-005) turned
+ * each class's model pin from one string into a per-client map
+ * ({@link ClassPins}); a generation-1 file is migrated on read by
+ * `PER_CLIENT_PINS_STEP` in `../manifest/manifest.ts`, and an engine of
+ * generation 1 refuses a generation-2 file with its upgrade message.
+ */
+export const MANIFEST_VERSION = "2.0.0";
 
 /**
- * One step of the manifest migration runner. Generation 1 is greenfield —
- * the shipped migration set is empty — but the contract lives in the types
+ * One step of the manifest migration runner. The contract lives in the types
  * leaf so every manifest IO site shares one runner shape without importing
- * each other, and a future generation bump is a data change, not an API
- * change.
+ * each other, and a generation bump is a data change, not an API change.
  */
 export interface ManifestMigration {
   /** Schema version this step upgrades FROM; the runner chains steps by version. */
@@ -110,9 +114,10 @@ export interface LedgerEntry {
  * document itself, so this record and the engine's own paths are the whole
  * proof of what is the engine's.
  *
- * {@link MANIFEST_VERSION} does not move for it, on the {@link ModelConfig}
- * precedent: the field is additive and optional, a manifest without it parses
- * unchanged, and there is nothing for a migration step to do.
+ * {@link MANIFEST_VERSION} does not move for it: the field is additive and
+ * optional, a manifest without it parses unchanged, and there is nothing for a
+ * migration step to do. (The generation moves only for a change of shape, as
+ * per-client model pins moved it to 2.0.0.)
  */
 export interface CoOwnership {
   /**
@@ -166,25 +171,23 @@ export interface HooksConfig {
  * client; what a class means as a concrete id is the operator's call, and this
  * is where their answer lives.
  *
- * {@link MANIFEST_VERSION} does NOT move for this field. It is additive and
- * every member is optional, so a manifest written before it existed parses
- * unchanged, resolves every value from the ladder's own answer, and
- * round-trips without gaining a key. That is exactly the case a schema
- * generation bump exists to handle, and there is nothing here for a
- * {@link ManifestMigration} step to do — bumping the version would put every
- * existing repo through a runner with an empty transform.
+ * Every member is optional, so a manifest without the field resolves every
+ * value from the ladder's own answer. The one shape change it has had — a
+ * class's pin from one string to {@link ClassPins} — moved
+ * {@link MANIFEST_VERSION} to 2.0.0 with a migration step, because no single
+ * id is valid on every client (REQ-LADDER-005).
  */
 export interface ModelConfig {
   /**
-   * Operator-pinned concrete model id per class; absent classes fall back to
-   * the client's own alias for the class, and to nothing where it has none.
+   * Operator-pinned concrete model ids per class, per client (see
+   * {@link ClassPins}): a client's own key wins, else `all`; a class with
+   * neither falls back to the client's own alias for it, and to nothing where
+   * it has none.
    *
-   * Validated by SHAPE only — non-empty, single-line. This engine ships no
-   * vendor model catalogue, so checking an id against one would be a
-   * guarantee it cannot keep; the value is passed through verbatim to
-   * whichever clients express a model field.
+   * Validated by SHAPE only — non-empty, single-line. A pin is passed through
+   * verbatim to whichever clients express a model field.
    */
-  pins?: Partial<Record<ModelClass, string>>;
+  pins?: Partial<Record<ModelClass, ClassPins>>;
   /**
    * Operator-set reasoning effort per class, where the client expresses one.
    * Setting a class no selected client can express is legal and inert: the
@@ -197,6 +200,29 @@ export interface ModelConfig {
    * which is the one function every consumer clamps through.
    */
   reviewCap?: number;
+  /**
+   * The model ids each client's own CLI listed for this account when `init` or
+   * `sync` last read it (REQ-LADDER-006). Emission and the drift gate read this
+   * persisted copy and never spawn a client; a client that did not answer
+   * keeps its last list.
+   */
+  listed?: Partial<Record<Tool, ListedModels>>;
+}
+
+/**
+ * One class's model pins: a client's own key binds that client, and `all`
+ * binds every client without one (`stamity config set model.<class>` writes
+ * `all`, `model.<class>.<client>` the client's key). Keys outside `all` and the
+ * {@link Tool} set are refused by validation.
+ */
+export interface ClassPins extends Partial<Record<Tool, string>> {
+  all?: string;
+}
+
+/** A client's listed model ids, in the order its CLI printed them, and where they were read. */
+export interface ListedModels {
+  ids: string[];
+  source: "cursor-agent-models" | "codex-debug-models" | "copilot-help-config";
 }
 
 /**
@@ -314,10 +340,10 @@ export interface SetupManifest {
    * How selected rules are delivered (see {@link RuleDelivery}); absent reads
    * as {@link RULE_DELIVERY_DEFAULT}.
    *
-   * {@link MANIFEST_VERSION} does NOT move for this field, on the
-   * {@link ModelConfig} precedent: it is additive and optional, a manifest
-   * written before it existed parses unchanged and resolves to the default,
-   * and a migration step would have nothing to transform.
+   * {@link MANIFEST_VERSION} does NOT move for this field: it is additive and
+   * optional, a manifest written before it existed parses unchanged and
+   * resolves to the default, and a migration step would have nothing to
+   * transform.
    */
   ruleDelivery?: RuleDelivery;
   /** How generated agents talk to the human operator. */
@@ -347,9 +373,10 @@ export interface SetupManifest {
   plugin?: unknown;
   /**
    * Operator-pinned verification-gate commands (see {@link GatesConfig});
-   * absent members fall back to detection. Additive and optional on the
-   * {@link ModelConfig} precedent: a manifest written before the key existed
-   * parses unchanged, and a migration step would have nothing to transform.
+   * absent members fall back to detection. Additive and optional, so
+   * {@link MANIFEST_VERSION} does not move for it: a manifest written before
+   * the key existed parses unchanged, and a migration step would have nothing
+   * to transform.
    */
   gates?: GatesConfig;
   /**

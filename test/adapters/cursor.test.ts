@@ -33,12 +33,12 @@ import { createManifest } from "../../src/manifest/manifest.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
 import { RUNTIME_AGENT_IDS } from "../../src/roster/agentPolicies.ts";
-import type { EffortMap, ModelPinMap } from "../../src/roster/modelLadder.ts";
+import type { EffortMap } from "../../src/roster/modelLadder.ts";
 import { ADAPTER_ALLOWLIST_COVERAGE } from "../../src/tools/translator.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { CORPUS_ROOT } from "../corpus/harness.ts";
-import type { RuleDelivery } from "../../src/types/manifest.ts";
+import type { ModelConfig, RuleDelivery } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -211,8 +211,13 @@ interface CtxOptions {
   agents?: string[];
   commands?: string[];
   servers?: string[];
-  /** Operator model pins, as `stamity config` stores them. */
-  pins?: ModelPinMap;
+  /**
+   * Operator model pins, as `stamity config` stores them.
+   * TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): the manifest's pin shape, a
+   * per-client map per class at 2.0.0, where it was one string per class; the caller below
+   * passes the `all` key a 1.0.0 string migrates to, so it resolves the id it did.
+   */
+  pins?: ModelConfig["pins"];
   /**
    * Operator effort overrides per class — the other half of the same setting,
    * and on this client the half that only reaches a file through the model
@@ -691,7 +696,7 @@ describe("`.cursor/agents` definitions", () => {
     // forwards pins only, and that gap emits `[effort=high]` here. The manifest
     // read is the behaviour under test.
     const plan = await planFor(await seedCorpus(), {
-      pins: { advanced: "composer-2" },
+      pins: { advanced: { all: "composer-2" } },
       efforts: { advanced: "low" },
     });
 
@@ -700,6 +705,24 @@ describe("`.cursor/agents` definitions", () => {
         .split("\n")
         .filter((line) => line.startsWith("model:")),
     ).toEqual(["model: composer-2[effort=low]"]);
+  });
+
+  it("takes the class's cursor pin over its every-client pin, and ignores another client's (REQ-LADDER-005)", async () => {
+    const plan = await planFor(await seedCorpus(), {
+      agents: ["reviewer", "drifter"],
+      pins: {
+        advanced: { cursor: "composer-2", all: "every-client-y" },
+        standard: { claude: "claude-only-x", all: "every-client-z" },
+      },
+    });
+    const modelLines = (path: string): string[] =>
+      contentAt(plan, path)
+        .split("\n")
+        .filter((line) => line.startsWith("model:"));
+
+    // `reviewer` declares `advanced`, `drifter` `standard` in this corpus.
+    expect(modelLines(P.reviewer)).toEqual(["model: composer-2[effort=high]"]);
+    expect(modelLines(P.drifter)).toEqual(["model: every-client-z[effort=medium]"]);
   });
 
   it("drops readonly only for a grant that earns it, and keeps it for every unresolved shape", () => {

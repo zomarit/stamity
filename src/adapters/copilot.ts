@@ -44,6 +44,7 @@ import {
 } from "../roster/agentGrants.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  pinsFor,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
@@ -324,7 +325,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // The operator's pins, read once: every emitted model value on this client
     // comes from them, since the projection publishes no alias vocabulary to
     // fall back to (`../roster/modelLadder.ts`).
-    const pins = ctx.manifest.models?.pins ?? {};
+    const pins = pinsFor(ctx.manifest.models, TOOL);
     // The operator's effort overrides, read once beside them: a class with none
     // runs at the ladder's own default.
     const efforts = ctx.manifest.models?.effort ?? {};

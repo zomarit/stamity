@@ -8,6 +8,7 @@ import {
   effortDisclosures,
   isModelClass,
   nearestExpressibleEffort,
+  pinsFor,
   resolveEffortValue,
   resolveModelValue,
   type ClientModelProjection,
@@ -505,6 +506,50 @@ describe("resolveModelValue", () => {
   });
 });
 
+describe("pinsFor (REQ-LADDER-005)", () => {
+  it("projects a client's own key first, else the class's `all`", () => {
+    const models = {
+      pins: {
+        standard: { cursor: "X", all: "Y" },
+        advanced: { claude: "claude-only" },
+        economy: { all: "Z" },
+      },
+    };
+
+    expect(pinsFor(models, "cursor")).toEqual({ standard: "X", economy: "Z" });
+    expect(pinsFor(models, "claude")).toEqual({ standard: "Y", advanced: "claude-only", economy: "Z" });
+    for (const tool of ["copilot", "codex"] as const) {
+      expect(pinsFor(models, tool)).toEqual({ standard: "Y", economy: "Z" });
+    }
+  });
+
+  it("reaches the emitted value: cursor gets X, every other client Y", () => {
+    const models = { pins: { standard: { cursor: "X", all: "Y" } } };
+
+    expect(resolveModelValue("standard", "cursor", pinsFor(models, "cursor"))).toBe("X[effort=medium]");
+    for (const tool of ["claude", "copilot", "codex"] as const) {
+      expect(resolveModelValue("standard", tool, pinsFor(models, tool)), tool).toBe("Y");
+    }
+  });
+
+  it("is empty with no models, no pins, or only empty class maps", () => {
+    for (const tool of TOOLS) {
+      expect(pinsFor(undefined, tool)).toEqual({});
+      expect(pinsFor({}, tool)).toEqual({});
+      expect(pinsFor({ pins: { standard: {} } }, tool)).toEqual({});
+    }
+  });
+
+  it("drops a class off the ladder rather than carrying it into the resolver's map", () => {
+    // Persistence refuses one, so this only reaches a caller holding an object it built itself.
+    const models = { pins: { turbo: { all: "T" }, standard: { all: "Y" } } } as unknown as Parameters<
+      typeof pinsFor
+    >[0];
+
+    expect(pinsFor(models, "codex")).toEqual({ standard: "Y" });
+  });
+});
+
 describe("resolveEffortValue", () => {
   it("projects the ladder's own default on the clients that publish an effort key", () => {
     for (const tool of TOOLS) {
@@ -643,10 +688,13 @@ describe("the effort axis has no exported predicate", () => {
     // called export from an unused one, which is the only thing the case was
     // ever protecting. `nearestExpressibleEffort` is called by the config
     // command's refusal and its list row; `effortDisclosures` by the planner.
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): `pinsFor` joined the list; its
+    // callers are the four adapters and the config command, which the loop below still asserts.
     expect(exportedFunctions.toSorted()).toEqual([
       "effortDisclosures",
       "isModelClass",
       "nearestExpressibleEffort",
+      "pinsFor",
       "resolveEffortValue",
       "resolveModelValue",
     ]);
@@ -1073,6 +1121,8 @@ describe("kernel boundary", () => {
     expect(source).toContain('from "../types/core.ts"');
     // The manifest edge stays type-only: the disclosure reads a shape, never a
     // function from that module.
-    expect(source).toContain('import type { SetupManifest } from "../types/manifest.ts"');
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): `pinsFor` reads the
+    // manifest's `ModelConfig`, a second type off the same edge; the edge stays type-only.
+    expect(source).toContain('import type { ModelConfig, SetupManifest } from "../types/manifest.ts"');
   });
 });

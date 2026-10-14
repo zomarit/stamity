@@ -55,6 +55,7 @@ import {
 import { READ_ONLY_GIT_SUBCOMMANDS } from "../roster/agentPolicies.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  pinsFor,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
@@ -420,7 +421,7 @@ export const codexResiduePlanner: ResiduePlanner = {
     // efforts are per class, not per agent, so resolving them per file would
     // re-read the same two maps once per subagent.
     const models = {
-      ...(ctx.manifest.models?.pins === undefined ? {} : { pins: ctx.manifest.models.pins }),
+      ...(ctx.manifest.models?.pins === undefined ? {} : { pins: pinsFor(ctx.manifest.models, TOOL) }),
       ...(ctx.manifest.models?.effort === undefined ? {} : { efforts: ctx.manifest.models.effort }),
     };
 

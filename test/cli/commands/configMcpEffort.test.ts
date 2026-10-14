@@ -330,7 +330,9 @@ describe("config effort rows — only a level an emitted file would carry", () =
     const handle = tempDir();
     await seedManifest(handle, {
       tools: ["cursor"],
-      models: { pins: { standard: "vendor-x-1" } },
+      // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): a class's pin is a
+      // per-client map at manifest 2.0.0; the same id is seeded under `all`.
+      models: { pins: { standard: { all: "vendor-x-1" } } },
     });
 
     const result = await run(handle, []);
@@ -348,7 +350,9 @@ describe("config effort rows — only a level an emitted file would carry", () =
       // A pin carrying its own bracket group is emitted verbatim: options live
       // comma-separated inside ONE group, so the ladder appends nothing and
       // the config effort value reaches no file.
-      models: { pins: { standard: "vendor-x-1[effort=high]" }, effort: { standard: "low" } },
+      // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): the same pin, under
+      // the class's `all` key of the 2.0.0 per-client map.
+      models: { pins: { standard: { all: "vendor-x-1[effort=high]" } }, effort: { standard: "low" } },
     });
 
     const result = await run(handle, []);
@@ -414,7 +418,13 @@ describe("config effort rows — only a level an emitted file would carry", () =
     for (const tool of TOOLS) {
       for (const pins of pinStates) {
         for (const modelClass of MODEL_CLASSES) {
-          const manifest = baseManifest({ tools: [tool as Tool], models: { pins } });
+          // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): the manifest stores
+          // per-client pin maps at 2.0.0, so each state is persisted under `all`; the resolver below
+          // still reads the one-client map those `all` keys project to, so the sweep is unchanged.
+          const stored = Object.fromEntries(
+            Object.entries(pins).map(([cls, pin]) => [cls, { all: pin }]),
+          );
+          const manifest = baseManifest({ tools: [tool as Tool], models: { pins: stored } });
           const printed = getConfigValue(manifest, `effort.${modelClass}`).resolved;
           const emitted = [
             resolveModelValue(modelClass, tool, pins, {}),

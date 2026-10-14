@@ -138,7 +138,7 @@
  */
 
 import { EFFORT_LEVELS, effortRank, type EffortLevel, type ModelClass, type Tool } from "../types/core.ts";
-import type { SetupManifest } from "../types/manifest.ts";
+import type { ModelConfig, SetupManifest } from "../types/manifest.ts";
 
 // ── The ladder ───────────────────────────────────────────────────
 
@@ -275,15 +275,6 @@ export interface ClientModelProjection {
    */
   readonly effortTemplate: string | null;
   /**
-   * Whether the client's model field takes a concrete id. `true` on every
-   * supported client today, which is what makes the operator override
-   * expressible everywhere; it is stated per row rather than assumed globally
-   * because the day a client narrows to a closed vocabulary, `stamity config`
-   * has to warn on a pin instead of silently emitting an id that client will
-   * reject.
-   */
-  readonly acceptsConcreteIds: boolean;
-  /**
    * The client's own symbolic names for ladder classes. Empty where the client
    * documents none — see the module header on why empty means silence rather
    * than a fallback.
@@ -356,7 +347,6 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortCarrier: "key",
     effortKey: "effort",
     effortTemplate: null,
-    acceptsConcreteIds: true,
     // Three aliases, and `frontier` deliberately absent. The alias vocabulary
     // this client publishes is wider than these three, but nothing in it names
     // a size ABOVE the top one, so mapping the deep-review class onto any of
@@ -389,7 +379,6 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortCarrier: "model-suffix",
     effortKey: null,
     effortTemplate: `[effort=${EFFORT_PLACEHOLDER}]`,
-    acceptsConcreteIds: true,
     aliases: {},
     // The whole union, because this client rules on nothing: it parses the
     // bracket group and hands the value to the model. So no level is refused
@@ -417,7 +406,6 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortCarrier: "key",
     effortKey: "reasoning-effort",
     effortTemplate: null,
-    acceptsConcreteIds: true,
     aliases: {},
     // The CLI reference's documented `--reasoning-effort` values. `minimal` is
     // on the flag's own list and off the reference, so it is legacy as Codex's
@@ -448,7 +436,6 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortCarrier: "key",
     effortKey: "model_reasoning_effort",
     effortTemplate: null,
-    acceptsConcreteIds: true,
     aliases: {},
     // The config reference lists `low` through `ultra`, one rung above the
     // other key carrier's ceiling, and which of them a run gets depends on the
@@ -472,8 +459,26 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
 
 // ── Resolution ───────────────────────────────────────────────────
 
-/** Operator model pins by class, as `stamity config` stores them. */
+/**
+ * One client's model pins by class: the shape {@link resolveModelValue} reads,
+ * which {@link pinsFor} projects out of the per-client map the manifest stores.
+ */
 export type ModelPinMap = Readonly<Partial<Record<ModelClass, string>>>;
+
+/**
+ * The pins that bind `tool`, class by class: the client's own key, else the
+ * class's `all` (REQ-LADDER-005). A class with neither is absent, so
+ * {@link resolveModelValue} falls back to the client's alias as it did before
+ * pins were per client. Pure, and reads nothing but `models.pins`.
+ */
+export function pinsFor(models: ModelConfig | undefined, tool: Tool): ModelPinMap {
+  const pins: Partial<Record<ModelClass, string>> = {};
+  for (const [modelClass, classPins] of Object.entries(models?.pins ?? {})) {
+    const pin = classPins?.[tool] ?? classPins?.all;
+    if (pin !== undefined && isModelClass(modelClass)) pins[modelClass] = pin;
+  }
+  return pins;
+}
 
 /** Operator effort overrides by class, as `stamity config` stores them. */
 export type EffortMap = Readonly<Partial<Record<ModelClass, EffortLevel>>>;

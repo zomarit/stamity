@@ -45,6 +45,7 @@ import {
 import { RUNTIME_AGENT_IDS } from "../roster/agentPolicies.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  pinsFor,
   resolveModelValue,
   type EffortMap,
   type ModelPinMap,
@@ -427,7 +428,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
     // effort level has no standalone key here and rides inside the model value,
     // so reading pins without efforts would emit the ladder's default effort
     // over an operator setting `stamity config` already displays as binding.
-    const pins = ctx.manifest.models?.pins ?? {};
+    const pins = pinsFor(ctx.manifest.models, "cursor");
     const efforts = ctx.manifest.models?.effort ?? {};
     const spawnable: string[] = [...RUNTIME_AGENT_IDS];
 

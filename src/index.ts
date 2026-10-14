@@ -69,14 +69,17 @@ export {
 // `ImportDecision` and `ModelConfig` are reachable from `SetupManifest`
 // (`importChoice`, `models`), so a consumer that holds a manifest already holds
 // them; naming them makes that reachable surface addressable instead of
-// anonymous. `GatesConfig` ships the same way (`gates`).
+// anonymous. `GatesConfig` ships the same way (`gates`), and so do
+// `ClassPins` and `ListedModels` (`models.pins`, `models.listed`).
 export type {
+  ClassPins,
   GatesConfig,
   HooksConfig,
   ImportDecision,
   LearningsConfig,
   LedgerEntry,
   LedgerOwner,
+  ListedModels,
   ManifestMigration,
   McpConfig,
   ModelConfig,

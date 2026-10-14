@@ -5,6 +5,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   MANIFEST_MIGRATIONS,
+  PER_CLIENT_PINS_STEP,
   applyPreservedManifestFields,
   collectManifestErrors,
   communicationStyleDirective,
@@ -655,12 +656,24 @@ describe("collectManifestErrors", () => {
   });
 
   it("accepts a fully populated `models` block", () => {
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): a class's pin is a per-client
+    // map at manifest 2.0.0, and the block gained `listed`; "fully populated" now spans both,
+    // every client key and `all` included.
     const errors = collectManifestErrors({
       ...fullManifest(),
       models: {
-        pins: { frontier: "vendor-x-1", advanced: "vendor-x-1[effort=high]" },
+        pins: {
+          frontier: { all: "vendor-x-1" },
+          advanced: { all: "vendor-x-1[effort=high]", cursor: "composer-2", claude: "opus" },
+          standard: { copilot: "gpt-5.5", codex: "gpt-5.5-codex" },
+        },
         effort: { standard: "medium", economy: "low" },
         reviewCap: 6,
+        listed: {
+          cursor: { ids: ["composer-2", "claude-opus-5-5-high"], source: "cursor-agent-models" },
+          codex: { ids: ["gpt-5.5-codex"], source: "codex-debug-models" },
+          copilot: { ids: [], source: "copilot-help-config" },
+        },
       },
     });
 
@@ -680,25 +693,73 @@ describe("collectManifestErrors", () => {
   });
 
   it("validates a pin by shape only — empty, blank, multi-line and non-string are out", () => {
-    for (const pin of ["", "   ", "vendor\nx", "vendor\r\nx", 7, null]) {
-      const errors = collectManifestErrors({
-        ...fullManifest(),
-        models: { pins: { standard: pin } },
-      });
-      expect(errors, `pin ${JSON.stringify(pin)} must be refused`).toHaveLength(1);
-      expect(errors[0]).toContain("`models.pins.standard`");
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): the pin moved one level down,
+    // under a client key of the class's map, so the same six values are planted there — under
+    // `all` and under a client's own key — and the error names that key.
+    for (const key of ["all", "cursor"]) {
+      for (const pin of ["", "   ", "vendor\nx", "vendor\r\nx", 7, null]) {
+        const errors = collectManifestErrors({
+          ...fullManifest(),
+          models: { pins: { standard: { [key]: pin } } },
+        });
+        expect(errors, `pin ${JSON.stringify(pin)} under ${key} must be refused`).toHaveLength(1);
+        expect(errors[0]).toContain(`\`models.pins.standard.${key}\``);
+      }
     }
+  });
+
+  it("refuses a class pin that is not a per-client map, naming the shape wanted", () => {
+    // A bare string at 2.0.0 is a generation-1 pin in a file that claims generation 2:
+    // the migration only rewrites a file that declares 1.0.0.
+    for (const pins of ["vendor-x-1", 7, null, ["vendor-x-1"]]) {
+      const errors = collectManifestErrors({ ...fullManifest(), models: { pins: { standard: pins } } });
+      expect(errors, JSON.stringify(pins)).toHaveLength(1);
+      expect(errors[0]).toContain("`models.pins.standard`");
+      expect(errors[0]).toContain('{ "all": "<model id>" }');
+    }
+  });
+
+  it("refuses a pin keyed by a client the engine does not know (REQ-LADDER-005)", () => {
+    const errors = collectManifestErrors({
+      ...fullManifest(),
+      models: { pins: { standard: { vim: "Z", all: "Y" } } },
+    });
+
+    expect(errors).toEqual([
+      "`models.pins.standard.vim` names unknown client (known: all, claude, cursor, copilot, codex)",
+    ]);
   });
 
   it("passes an unverifiable vendor id through — shape is all this engine can check", () => {
     // The point of the shape-only rule: no catalogue exists to reject this
     // against, so refusing it would be a guarantee the engine cannot keep.
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): the pin sits under `all`
+    // of the class's per-client map at 2.0.0; the id and the assertion are unchanged.
     expect(
       collectManifestErrors({
         ...fullManifest(),
-        models: { pins: { frontier: "some-vendor/model-nobody-has-heard-of@2031" } },
+        models: { pins: { frontier: { all: "some-vendor/model-nobody-has-heard-of@2031" } } },
       }),
     ).toEqual([]);
+  });
+
+  it("names each defect of a persisted model list", () => {
+    const cases: [string, unknown, string][] = [
+      ["a list that is not an object", ["cursor"], "`models.listed` must be an object keyed by client"],
+      ["an unknown client", { vim: { ids: [], source: "cursor-agent-models" } }, "`models.listed.vim` names unknown tool"],
+      ["an entry that is not an object", { cursor: "composer-2" }, "`models.listed.cursor` must be an object"],
+      ["ids that are not an array", { cursor: { ids: "composer-2", source: "cursor-agent-models" } }, "`models.listed.cursor.ids` must be an array"],
+      ["an id with a line break", { cursor: { ids: ["ok", "x\ny"], source: "cursor-agent-models" } }, "`models.listed.cursor.ids[1]`"],
+      ["an empty id", { codex: { ids: [""], source: "codex-debug-models" } }, "`models.listed.codex.ids[0]`"],
+      ["a source nobody reads from", { cursor: { ids: [], source: "guess" } }, "`models.listed.cursor.source` must be one of"],
+      ["a stray key", { cursor: { ids: [], source: "cursor-agent-models", at: "now" } }, "unknown field `models.listed.cursor.at`"],
+    ];
+
+    for (const [label, listed, fragment] of cases) {
+      const errors = collectManifestErrors({ ...fullManifest(), models: { listed } });
+      expect(errors, `${label} must produce one error`).toHaveLength(1);
+      expect(errors[0], label).toContain(fragment);
+    }
   });
 
   it("refuses an effort level outside the seven the clients document between them", () => {
@@ -778,8 +839,81 @@ describe("collectManifestErrors", () => {
 });
 
 describe("migrateManifest", () => {
-  it("ships no steps at generation 1", () => {
-    expect(MANIFEST_MIGRATIONS).toEqual([]);
+  // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): generation 2 shipped the first
+  // step (per-client pins), so "no steps at generation 1" became the one step and its chain.
+  it("ships one step, generation 1 to the current generation", () => {
+    expect(MANIFEST_MIGRATIONS).toEqual([PER_CLIENT_PINS_STEP]);
+    expect(PER_CLIENT_PINS_STEP.fromVersion).toBe("1.0.0");
+    expect(MANIFEST_VERSION).toBe("2.0.0");
+  });
+
+  /** A file a 1.14 setup wrote: generation 1, string pins, the held plugin block. */
+  function generationOne(): Record<string, unknown> {
+    return {
+      ...(structuredClone(fullManifest()) as unknown as Record<string, unknown>),
+      version: "1.0.0",
+      models: {
+        pins: { standard: "Y", frontier: "vendor-x-1[effort=high]" },
+        effort: { standard: "low" },
+        reviewCap: 4,
+      },
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] } },
+        zeta: [3, { b: 1, a: 2 }],
+      },
+    };
+  }
+
+  it("turns each 1.0.0 string pin into { all }, moves the version, and holds everything else", () => {
+    const raw = generationOne();
+    const before = structuredClone(raw);
+
+    const migrated = migrateManifest(raw);
+
+    expect(migrated["version"]).toBe("2.0.0");
+    expect(migrated["models"]).toEqual({
+      pins: { standard: { all: "Y" }, frontier: { all: "vendor-x-1[effort=high]" } },
+      effort: { standard: "low" },
+      reviewCap: 4,
+    });
+    // The held 1.14 block is value-identical, key order inside it included.
+    expect(migrated["plugin"]).toEqual(before["plugin"]);
+    expect(JSON.stringify(migrated["plugin"])).toBe(JSON.stringify(before["plugin"]));
+    // Every field the step does not own is the input's.
+    expect({ ...migrated, version: before["version"], models: before["models"] }).toEqual(before);
+    // Pure: the caller's object is not touched.
+    expect(raw).toEqual(before);
+    expect(collectManifestErrors(migrated)).toEqual([]);
+  });
+
+  it("is idempotent: migrating twice equals migrating once, and the step is a fixed point on its output", () => {
+    const once = migrateManifest(generationOne());
+
+    expect(migrateManifest(once)).toEqual(once);
+    expect(PER_CLIENT_PINS_STEP.migrate(once)).toEqual(once);
+  });
+
+  it("migrates a 1.0.0 file with no models block, or no pins, by its version alone", () => {
+    const bare = generationOne();
+    delete bare["models"];
+    const effortOnly = { ...generationOne(), models: { effort: { advanced: "high" } } };
+
+    expect(migrateManifest(bare)).toEqual({ ...bare, version: "2.0.0" });
+    expect(migrateManifest(effortOnly)).toEqual({ ...effortOnly, version: "2.0.0" });
+  });
+
+  it("carries a 1.0.0 pin that is not a string as it stands, for validation to name", () => {
+    const raw = { ...generationOne(), models: { pins: { standard: 7, advanced: "X", economy: { all: "Z" } } } };
+
+    const migrated = migrateManifest(raw);
+
+    expect(migrated["models"]).toEqual({
+      pins: { standard: 7, advanced: { all: "X" }, economy: { all: "Z" } },
+    });
+    const errors = collectManifestErrors(migrated);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("`models.pins.standard` 7 must be an object keyed by client");
   });
 
   it("is identity on a current-generation document and never mutates the input", () => {
@@ -940,6 +1074,48 @@ describe("readManifest / writeManifest", () => {
 
     const error = await rejects(() => readManifest(root), "CONFIG_ERROR");
     expect(error.message).toContain("newer than the");
+  });
+
+  it("refuses the next generation, 3.0.0, with the clean upgrade message", async () => {
+    const root = getRoot().dir;
+    await seedManifest(root, JSON.stringify({ ...fullManifest(), version: "3.0.0" }));
+
+    const error = await rejects(() => readManifest(root), "CONFIG_ERROR");
+    expect(error.message).toContain("declares schema version 3.0.0, newer than the 2.0.0 this build reads");
+    expect(error.message).toContain("Upgrade to a release that understands schema 3.x");
+  });
+
+  it("reads a 1.0.0 file as 2.0.0 with per-client pins and the plugin block unchanged, and persists 2.0.0 (REQ-LADDER-005)", async () => {
+    const root = getRoot().dir;
+    const plugin = { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["agent"] } } };
+    await seedManifest(
+      root,
+      JSON.stringify({ ...fullManifest(), version: "1.0.0", models: { pins: { standard: "Y" } }, plugin }),
+    );
+
+    const read = await readManifest(root);
+
+    expect(read?.version).toBe("2.0.0");
+    expect(read?.models?.pins?.standard).toEqual({ all: "Y" });
+    expect(read?.plugin).toEqual(plugin);
+
+    // The write a `sync` makes of what it read: the file now declares the new generation.
+    await writeManifest(root, read as SetupManifest, { now: FIXED_NOW });
+    const persisted = JSON.parse(await readFile(manifestPath(root), "utf8")) as Record<string, unknown>;
+    expect(persisted["version"]).toBe("2.0.0");
+    expect(persisted["models"]).toEqual({ pins: { standard: { all: "Y" } } });
+    expect(persisted["plugin"]).toEqual(plugin);
+  });
+
+  it("names a 1.0.0 pin that is not a string on read, never dropping it", async () => {
+    const root = getRoot().dir;
+    await seedManifest(
+      root,
+      JSON.stringify({ ...fullManifest(), version: "1.0.0", models: { pins: { standard: ["Y"] } } }),
+    );
+
+    const error = await rejects(() => readManifest(root), "CONFIG_ERROR");
+    expect(error.message).toContain('`models.pins.standard` ["Y"] must be an object keyed by client');
   });
 
   it("maps a directory sitting on the manifest path to FS_ERROR", async () => {
@@ -1120,10 +1296,13 @@ describe("models — the operator's ladder overrides", () => {
     const root = getRoot().dir;
     const manifest: SetupManifest = {
       ...fullManifest(),
+      // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): the pins are per-client maps
+      // at 2.0.0, and the block gained `listed`; the round trip still covers every member.
       models: {
-        pins: { advanced: "vendor-x-1", economy: "vendor-x-mini" },
+        pins: { advanced: { all: "vendor-x-1", cursor: "composer-2" }, economy: { all: "vendor-x-mini" } },
         effort: { advanced: "high", economy: "low" },
         reviewCap: 7,
+        listed: { cursor: { ids: ["composer-2", "auto"], source: "cursor-agent-models" } },
       },
     };
 
@@ -1140,7 +1319,10 @@ describe("models — the operator's ladder overrides", () => {
     const bytes = await readFile(manifestPath(root), "utf8");
     const reread = await readManifest(root);
 
-    expect(MANIFEST_MIGRATIONS).toEqual([]);
+    // TEST CHANGE, justified (e1-pins-contract): the registry is no longer empty (generation 2
+    // shipped a step), so "no migration" is asserted as what it means for this file: the
+    // runner leaves a current-generation document as it is.
+    expect(migrateManifest(JSON.parse(bytes) as Record<string, unknown>)).toEqual(JSON.parse(bytes));
     expect(bytes).not.toContain("models");
     expect(reread).toEqual(manifest);
     expect(reread?.models).toBeUndefined();
@@ -1195,7 +1377,9 @@ describe("plugin and gates — the held install record", () => {
     const keys = Object.keys(JSON.parse(bytes) as Record<string, unknown>);
     expect(keys).not.toContain("plugin");
     expect(keys).not.toContain("gates");
-    expect(MANIFEST_MIGRATIONS).toEqual([]);
+    // TEST CHANGE, justified (e1-pins-contract): as above, the registry gained the generation-2
+    // step; "no migration" is the runner leaving this current-generation document as it is.
+    expect(migrateManifest(JSON.parse(bytes) as Record<string, unknown>)).toEqual(JSON.parse(bytes));
     expect(reread).toEqual(manifest);
     expect(reread?.plugin).toBeUndefined();
     expect(reread?.gates).toBeUndefined();

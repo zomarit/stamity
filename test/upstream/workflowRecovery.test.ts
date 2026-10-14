@@ -271,7 +271,10 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     mcp: { servers: ["context7"], protocolVersion: "2025-06-18" },
     learnings: { maxCount: 40 },
     hooks: { userHooksDir: ".stamity/hooks" },
-    models: { pins: { frontier: "opus-5" }, effort: { frontier: "high" }, reviewCap: 3 },
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005, build/34): a class's pin is a
+    // per-client map at manifest 2.0.0, so the same id sits under `all`; the recovery comparison
+    // still runs over a manifest carrying every optional top-level key.
+    models: { pins: { frontier: { all: "opus-5" } }, effort: { frontier: "high" }, reviewCap: 3 },
     // TEST CHANGE, justified: `SetupManifest` gained `plugin` and `gates` (REQ-PLUGIN-014,
     // additive and optional, MANIFEST_VERSION unchanged). This fixture is a TOTAL record by
     // construction, so the two keys are placed here the day they land — which is exactly the

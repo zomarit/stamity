@@ -756,8 +756,10 @@ describe("model allocation", () => {
 
   it("carries the operator's pins and efforts from the manifest through the planner", async () => {
     const contentRoot = await seedCorpus();
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): a class's pin is a per-client
+    // map at manifest 2.0.0; `all` is what a 1.0.0 string pin migrates to. Assertions unchanged.
     const models: ModelConfig = {
-      pins: { advanced: "gpt-fixture-pro" },
+      pins: { advanced: { all: "gpt-fixture-pro" } },
       effort: { advanced: "low" },
     };
     const ctx = ctxOf({ contentRoot, models });
@@ -767,6 +769,23 @@ describe("model allocation", () => {
 
     expect(reviewer).toContain('model = "gpt-fixture-pro"');
     expect(reviewer).toContain('model_reasoning_effort = "low"');
+  });
+
+  it("takes the class's codex pin over its every-client pin, and ignores another client's (REQ-LADDER-005)", async () => {
+    const contentRoot = await seedCorpus();
+    const read = async (models: ModelConfig): Promise<string> => {
+      const ctx = ctxOf({ contentRoot, models });
+      const rows = byPath((await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs);
+      return rows.get(`${CODEX_AGENTS_DIR}/stamity-reviewer.toml`)!.content;
+    };
+
+    const own = await read({ pins: { advanced: { codex: "gpt-codex-x", all: "every-client-y" } } });
+    expect(own).toContain('model = "gpt-codex-x"');
+    expect(own).not.toContain("every-client-y");
+
+    const other = await read({ pins: { advanced: { cursor: "cursor-only-x", all: "every-client-y" } } });
+    expect(other).toContain('model = "every-client-y"');
+    expect(other).not.toContain("cursor-only-x");
   });
 
   it("writes no agent at the legacy `minimal` across the shipped roster", async () => {

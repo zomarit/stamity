@@ -40,8 +40,8 @@ import {
   toCopilotToolsFrontmatter,
 } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
-import type { RuleDelivery } from "../../src/types/manifest.ts";
-import type { ModelClass, Tool } from "../../src/types/core.ts";
+import type { ModelConfig, RuleDelivery } from "../../src/types/manifest.ts";
+import type { Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { CONTENT_PREFIX } from "../../src/types/markers.ts";
@@ -137,7 +137,10 @@ interface CtxOptions {
   packages?: PackageEntry[];
   mcp?: { servers: string[] };
   languages?: string[];
-  pins?: Partial<Record<ModelClass, string>>;
+  // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): the manifest's pin shape, a
+  // per-client map per class at 2.0.0, where it was one string per class; every caller below
+  // passes the `all` key a 1.0.0 string migrates to, so each case resolves the id it did.
+  pins?: ModelConfig["pins"];
   efforts?: EffortMap;
   /** The manifest's held 1.14 `plugin` block; absent everywhere but the case proving it steers nothing. */
   plugin?: unknown;
@@ -508,7 +511,7 @@ describe("agents → .github/agents", () => {
   });
 
   it("opts every agent into the repository instructions, and no prompt file (REQ-FLOW-071)", async () => {
-    const plan = await planResidue({ pins: { advanced: "some-vendor/frontier-1" } });
+    const plan = await planResidue({ pins: { advanced: { all: "some-vendor/frontier-1" } } });
 
     const agents = plan.filter((row) => row.path.endsWith(".agent.md"));
     expect(agents).toHaveLength(CORPUS_AGENT_IDS.length);
@@ -899,8 +902,24 @@ describe("body substitution", () => {
 // ── Model pins and the absent effort axis ────────────────────────
 
 describe("model pinning", () => {
+  it("takes the class's copilot pin over its every-client pin, and ignores another client's (REQ-LADDER-005)", async () => {
+    const plan = await planResidue({
+      pins: {
+        advanced: { copilot: "copilot-only-x", all: "every-client-y" },
+        economy: { cursor: "cursor-only-x", all: "every-client-z" },
+      },
+    });
+
+    expect(
+      frontmatterValue(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content, "model"),
+    ).toBe('"copilot-only-x"');
+    expect(
+      frontmatterValue(rowAt(plan, ".github/agents/stamity-test-runner.agent.md").content, "model"),
+    ).toBe('"every-client-z"');
+  });
+
   it("emits the operator's pinned id for the class an agent declares", async () => {
-    const plan = await planResidue({ pins: { advanced: "some-vendor/frontier-1" } });
+    const plan = await planResidue({ pins: { advanced: { all: "some-vendor/frontier-1" } } });
 
     // `implementer` declares `advanced`; `test-runner` declares `economy`,
     // which this run leaves unpinned.
@@ -965,7 +984,7 @@ describe("model pinning", () => {
   // 2026-10-10), and the plan gate chose to emit it (REQ-LADDER-004), so the case now pins the
   // emission: the key, its level per class, its place, and the files that carry none.
   it("emits `reasoning-effort` at each class's default, after the model line, and on no prompt file", async () => {
-    const plan = await planResidue({ pins: { advanced: "some-vendor/frontier-1" } });
+    const plan = await planResidue({ pins: { advanced: { all: "some-vendor/frontier-1" } } });
 
     for (const id of CORPUS_AGENT_IDS) {
       const row = rowAt(plan, `.github/agents/stamity-${id}.agent.md`);

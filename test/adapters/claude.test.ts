@@ -927,8 +927,11 @@ describe("the work-scoped review gate", () => {
 
 describe("model and effort projection", () => {
   it("emits an operator pin verbatim, in place of the client's own alias", async () => {
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): a class's pin is a per-client
+    // map at manifest 2.0.0, and `all` is the key a 1.0.0 string pin migrates to; the
+    // assertions below are unchanged.
     const pinned = await planned({
-      models: { pins: { advanced: "claude-opus-5", frontier: "claude-fable-5" } },
+      models: { pins: { advanced: { all: "claude-opus-5" }, frontier: { all: "claude-fable-5" } } },
     });
 
     // The pin outranks the ladder on the class it names...
@@ -938,6 +941,32 @@ describe("model and effort projection", () => {
     expect(agentHead(pinned.rows, "stamity-reviewer")["model"]).toBe("claude-opus-5");
     // An unpinned class still resolves through the client's own alias.
     expect(agentHead(pinned.rows, "stamity-fixer")["model"]).toBe("sonnet");
+  });
+
+  it("takes a class's own claude pin over its every-client pin, and ignores another client's (REQ-LADDER-005)", async () => {
+    const pinned = await planned({
+      models: {
+        pins: {
+          advanced: { cursor: "cursor-only-x", all: "claude-opus-5" },
+          economy: { claude: "claude-haiku-5", all: "every-client-y" },
+        },
+      },
+    });
+
+    // A cursor key binds cursor alone: claude reads the `all` fallback.
+    expect(agentHead(pinned.rows, "stamity-implementer")["model"]).toBe("claude-opus-5");
+    // A claude key outranks `all` on its own class.
+    expect(agentHead(pinned.rows, "stamity-test-runner")["model"]).toBe("claude-haiku-5");
+    // An untouched class keeps the client's alias.
+    expect(agentHead(pinned.rows, "stamity-fixer")["model"]).toBe("sonnet");
+  });
+
+  it("quotes a per-client pin carrying a colon, so it cannot open a second frontmatter key", async () => {
+    const pinned = await planned({ models: { pins: { advanced: { claude: "vendor:model 3" } } } });
+    const content = byPath(pinned.rows).get(".claude/agents/stamity-implementer.md")?.content ?? "";
+
+    expect(content.split("\n")).toContain('model: "vendor:model 3"');
+    expect(agentHead(pinned.rows, "stamity-implementer")["model"]).toBe("vendor:model 3");
   });
 
   it("honours an operator effort override per class", async () => {

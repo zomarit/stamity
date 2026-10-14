@@ -142,6 +142,7 @@ import {
 } from "../roster/agentGrants.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  pinsFor,
   resolveEffortValue,
   resolveModelValue,
 } from "../roster/modelLadder.ts";
@@ -577,7 +578,7 @@ function modelFrontmatter(item: CatalogItem, ctx: EmissionContext): string[] {
   if (typeof modelClass !== "string") return [];
 
   const models = ctx.manifest.models;
-  const model = resolveModelValue(modelClass, TOOL, models?.pins);
+  const model = resolveModelValue(modelClass, TOOL, pinsFor(models, TOOL));
   const effort = resolveEffortValue(modelClass, TOOL, models?.effort);
   // Quoted through {@link yamlScalar}, like every other value this file writes
   // into frontmatter. Both are OPERATOR input: `stamity config set model.<class>`

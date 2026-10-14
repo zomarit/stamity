@@ -41,6 +41,7 @@ import {
   type ImportDecision,
   type LearningsConfig,
   type LedgerEntry,
+  type ListedModels,
   type ManifestMigration,
   type McpConfig,
   type RuleDelivery,
@@ -98,18 +99,47 @@ export const MANIFEST_REPO_PATH = `${STATE_DIR}/${MANIFEST_FILE}`;
 // ── Migration ──────────────────────────────────────────────────────────────
 
 /**
- * Manifest-schema migration steps, chained by `fromVersion`. Empty at
- * generation 1 — the schema is greenfield — but the runner ships before the
- * first migration does, so a future generation bump is a data change here
- * rather than a new pipeline at every read site.
+ * Generation 1 → 2 (REQ-LADDER-005): each class's pin, one string for every
+ * client, becomes `{ all: <that string> }`, the per-client map's fallback key,
+ * so every client resolves the id it resolved before.
+ *
+ * Only a STRING pin is rewritten. Any other value — a number, an array, an
+ * object already shaped for generation 2 — is carried as it stands, so
+ * validation names a malformed one instead of the step dropping it. Every
+ * other field is passed through untouched, the held `plugin` block of a 1.14
+ * setup included: the step builds new objects only along the `models.pins`
+ * path and shares the rest with its input, which `migrateManifest` has
+ * already deep-copied. Idempotent: a generation-2 shape passes through with
+ * nothing to rewrite.
  */
-export const MANIFEST_MIGRATIONS: readonly ManifestMigration[] = [];
+export const PER_CLIENT_PINS_STEP: ManifestMigration = {
+  fromVersion: "1.0.0",
+  migrate(raw: Record<string, unknown>): Record<string, unknown> {
+    const next: Record<string, unknown> = { ...raw, version: "2.0.0" };
+    const models = raw.models;
+    if (!isPlainObject(models) || !isPlainObject(models.pins)) return next;
+    const pins: Record<string, unknown> = {};
+    for (const [modelClass, pin] of Object.entries(models.pins)) {
+      pins[modelClass] = typeof pin === "string" ? { all: pin } : pin;
+    }
+    next.models = { ...models, pins };
+    return next;
+  },
+};
+
+/**
+ * Manifest-schema migration steps, chained by `fromVersion`: a manifest is
+ * walked from its declared generation to {@link MANIFEST_VERSION} on every
+ * read, so a generation bump is a data change here rather than a new pipeline
+ * at every read site.
+ */
+export const MANIFEST_MIGRATIONS: readonly ManifestMigration[] = [PER_CLIENT_PINS_STEP];
 
 /**
  * Run {@link MANIFEST_MIGRATIONS} over a deep copy of `raw`, walking `version`
  * forward until no step matches. Pure: the caller's object is never touched,
- * and running the result through again is a no-op — with an empty registry
- * that makes this exactly a clone.
+ * and running the result through again is a no-op, since no step starts from
+ * the generation the last one ends at.
  *
  * A step that fails to advance `version` would loop forever, so a version
  * visited twice ends the walk and leaves the shape to validation.
@@ -555,11 +585,8 @@ function collectModelsErrors(value: unknown, errors: string[]): void {
     if (!isPlainObject(value.pins)) {
       errors.push("`models.pins` must be an object keyed by model class");
     } else {
-      for (const [modelClass, pin] of modelClassEntries(value.pins, "models.pins", errors)) {
-        const defect = modelPinDefect(pin);
-        if (defect !== null) {
-          errors.push(`\`models.pins.${modelClass}\` ${JSON.stringify(pin)} ${defect}`);
-        }
+      for (const [modelClass, pins] of modelClassEntries(value.pins, "models.pins", errors)) {
+        collectClassPinsErrors(pins, `models.pins.${modelClass}`, errors);
       }
     }
   }
@@ -598,8 +625,85 @@ function collectModelsErrors(value: unknown, errors: string[]): void {
     }
   }
 
-  for (const key of unknownFields(value, ["pins", "effort", "reviewCap"])) {
+  if (value.listed !== undefined) collectListedErrors(value.listed, errors);
+
+  for (const key of unknownFields(value, ["pins", "effort", "reviewCap", "listed"])) {
     errors.push(`unknown field \`models.${key}\``);
+  }
+}
+
+/** The keys one class's pin map may carry: the fallback, then every client. */
+const CLASS_PIN_KEYS: readonly string[] = ["all", ...TOOLS];
+
+/**
+ * One class's per-client pin map ({@link ClassPins}): an object whose keys are
+ * `all` or a client, each a pin {@link modelPinDefect} accepts. A bare string
+ * is a generation-1 pin the migration step rewrites; reaching here means the
+ * file declared generation 2 while still carrying one, and the message says
+ * which shape is wanted.
+ */
+function collectClassPinsErrors(value: unknown, field: string, errors: string[]): void {
+  if (!isPlainObject(value)) {
+    errors.push(
+      `\`${field}\` ${JSON.stringify(value)} must be an object keyed by client ` +
+        `(${CLASS_PIN_KEYS.join(", ")}), as in { "all": "<model id>" }`,
+    );
+    return;
+  }
+  for (const [key, pin] of Object.entries(value)) {
+    if (!CLASS_PIN_KEYS.includes(key)) {
+      errors.push(`\`${field}.${key}\` names unknown client (known: ${CLASS_PIN_KEYS.join(", ")})`);
+      continue;
+    }
+    const defect = modelPinDefect(pin);
+    if (defect !== null) errors.push(`\`${field}.${key}\` ${JSON.stringify(pin)} ${defect}`);
+  }
+}
+
+/** Where a persisted model list may say it was read (`ListedModels.source`). */
+const LISTED_SOURCES: ReadonlySet<string> = new Set<ListedModels["source"]>([
+  "cursor-agent-models",
+  "codex-debug-models",
+  "copilot-help-config",
+]);
+
+/**
+ * The persisted per-client model lists ({@link ListedModels}). Shape only: each
+ * id must be a value a pin could be, since a later emission may copy one into
+ * an agent file exactly as it copies a pin.
+ */
+function collectListedErrors(value: unknown, errors: string[]): void {
+  if (!isPlainObject(value)) {
+    errors.push("`models.listed` must be an object keyed by client");
+    return;
+  }
+  for (const [tool, entry] of Object.entries(value)) {
+    const field = `models.listed.${tool}`;
+    if (!VALID_TOOLS.has(tool)) {
+      errors.push(`\`${field}\` names unknown tool (known: ${TOOLS.join(", ")})`);
+      continue;
+    }
+    if (!isPlainObject(entry)) {
+      errors.push(`\`${field}\` must be an object with \`ids\` and \`source\``);
+      continue;
+    }
+    if (!Array.isArray(entry.ids)) {
+      errors.push(`\`${field}.ids\` must be an array of model ids`);
+    } else {
+      entry.ids.forEach((id, index) => {
+        const defect = modelPinDefect(id);
+        if (defect !== null) errors.push(`\`${field}.ids[${index}]\` ${JSON.stringify(id)} ${defect}`);
+      });
+    }
+    if (typeof entry.source !== "string" || !LISTED_SOURCES.has(entry.source)) {
+      errors.push(
+        `\`${field}.source\` must be one of ${[...LISTED_SOURCES].join(" | ")} ` +
+          `(got ${JSON.stringify(entry.source)})`,
+      );
+    }
+    for (const key of unknownFields(entry, ["ids", "source"])) {
+      errors.push(`unknown field \`${field}.${key}\``);
+    }
   }
 }
 

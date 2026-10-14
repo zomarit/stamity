@@ -4,8 +4,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import * as publicApi from "../../src/index.ts";
 import type {
+  ClassPins,
   EmissionOwner,
   ImportDecision,
+  ListedModels,
   ModelConfig,
   EffortLevel,
   ImportMode,
@@ -294,14 +296,20 @@ describe("public entry", () => {
     // not have typechecked before they were named. The runtime half only proves
     // the values line up with the types.
     const owner: EmissionOwner = { adapter: "claude", artifactType: "infra", artifactId: "charter" };
-    const models: ModelConfig = { pins: { frontier: "vendor-x-1" } };
+    // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): a class's pin became the
+    // per-client `ClassPins` map at manifest 2.0.0, and the two new types reachable from
+    // `ModelConfig` (`pins`, `listed`) are named here as the six before them were.
+    const pins: ClassPins = { cursor: "vendor-x-2", all: "vendor-x-1" };
+    const listed: ListedModels = { ids: ["vendor-x-2"], source: "cursor-agent-models" };
+    const models: ModelConfig = { pins: { frontier: pins }, listed: { cursor: listed } };
     const mode: ImportMode = "supplement";
     const choice: ImportDecision = { path: "AGENTS.md", mode };
     const modelClass: ModelClass = "frontier";
     const effort: EffortLevel = "high";
 
     expect(owner.adapter).toBe("claude");
-    expect(models.pins?.frontier).toBe("vendor-x-1");
+    expect(models.pins?.frontier?.all).toBe("vendor-x-1");
+    expect(models.listed?.cursor?.ids).toEqual(["vendor-x-2"]);
     expect(choice.mode).toBe(mode);
     expect(publicApi.VALID_MODEL_CLASSES.has(modelClass)).toBe(true);
     expect(publicApi.VALID_EFFORT_LEVELS.has(effort)).toBe(true);
