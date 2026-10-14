@@ -76,7 +76,7 @@ export const fileSystemProbe: ProgramFileProbe = {
 };
 
 /** A `PATH` entry that names one folder whatever folder the child runs in: rooted, and on Windows on a named drive or share. */
-function isFullPath(entry: string, windows: boolean): boolean {
+export function isFullPath(entry: string, windows: boolean): boolean {
   if (!windows) return entry.startsWith("/");
   // `C:\tools` and `\\server\share`. Not `C:tools` (the drive's current
   // folder) and not `\tools` (the current drive): both follow the child.

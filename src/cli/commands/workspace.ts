@@ -1072,9 +1072,10 @@ function createBridge(
       );
     }
 
-    // The member's own clients' model lists, read as `stamity sync` reads them
-    // in that member (REQ-LADDER-006): the same lister and off switch, laid
-    // over its saved lists for the plan. The tools are the ones the plan will
+    // The member's own clients' model lists (REQ-LADDER-006): the lister and
+    // off switch `stamity sync` uses, laid over the member's saved lists for
+    // the plan. The lister starts each client in the user's home folder, not
+    // in the member or the workspace root. The tools are the ones the plan will
     // read — the patched set once it is on disk, the member's own under
     // `--dry-run`, where the plan reads the unpatched manifest. The folder the
     // lister refuses programs from is the WORKSPACE root, not the member: every

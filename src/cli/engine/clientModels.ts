@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import {
   fileSystemProbe,
+  isFullPath,
   resolveProgramOnPath,
   searchPathOf,
   type ProgramFileProbe,
@@ -218,29 +219,17 @@ function isWithin(inner: string, root: string, windows: boolean): boolean {
   return child === parent || child.startsWith(`${parent}${windows ? "\\" : "/"}`);
 }
 
-/** A disk on which every folder holds a program and every path is real as spelled, so the walk answers which entries it searches. */
-const EVERY_FOLDER: ProgramFileProbe = { isProgramFile: () => true, realPath: (path) => path };
-
-/**
- * Whether the walk searches `entry` at all, asked of the walk itself so the
- * child's `PATH` follows the walk's own rule: an entry that is not a full path
- * (an empty one, `.` or any other relative one) names whatever folder the child
- * runs in, and is skipped.
- */
-function walkSearches(entry: string, treeRoot: string, platform: NodeJS.Platform): boolean {
-  return resolveProgramOnPath("program", { platform, path: entry, cwd: treeRoot, probe: EVERY_FOLDER }) !== null;
-}
-
 /**
  * `path` without the entries a repository can fill: every entry the walk skips
- * for not being a full path, every `node_modules/.bin` folder, and every entry
- * whose real path is the working folder or lies below it. `undefined` stays
- * `undefined`; a working folder with no real path is answered by the walk
- * itself, which then searches nothing.
+ * for not being a full path (the walk's own `isFullPath`, so the child's `PATH`
+ * follows the walk's rule: an empty entry, `.` or any other relative one names
+ * whatever folder the child runs in), every `node_modules/.bin` folder, and
+ * every entry whose real path is the working folder or lies below it.
+ * `undefined` stays `undefined`; a working folder with no real path is answered
+ * by the walk itself, which then searches nothing.
  */
 function trustedSearchPath(
   path: string | undefined,
-  treeRoot: string,
   root: string | null,
   platform: NodeJS.Platform,
   probe: ProgramFileProbe,
@@ -251,8 +240,9 @@ function trustedSearchPath(
   return path
     .split(delimiter)
     .filter((raw) => {
-      if (!walkSearches(raw, treeRoot, platform)) return false;
+      // A quoted entry is legal on Windows, and the walk strips the pair before it judges one.
       const entry = windows ? raw.replace(/^"(.*)"$/, "$1") : raw;
+      if (!isFullPath(entry, windows)) return false;
       if (NODE_MODULES_BIN[windows ? "win32" : "posix"].test(entry)) return false;
       const real = root === null ? null : probe.realPath(entry);
       return real === null || !isWithin(real, root ?? "", windows);
@@ -332,7 +322,7 @@ function findProgram(
 ): FoundProgram {
   const windows = platform === "win32";
   const root = probe.realPath(treeRoot);
-  const path = trustedSearchPath(searchPathOf(env, platform), treeRoot, root, platform, probe);
+  const path = trustedSearchPath(searchPathOf(env, platform), root, platform, probe);
   for (const name of programs) {
     const found = resolveProgramOnPath(name, { platform, path, cwd: treeRoot, probe });
     if (found === null) continue;
