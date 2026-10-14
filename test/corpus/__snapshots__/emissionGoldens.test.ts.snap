@@ -650,6 +650,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
 // of a closed run dated within the last two days: counts and pointers, never finding text.
+// In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -658,7 +659,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // run is recent enough for the card, and the source field of the stdin payload,
 // which decides whether the resume card is appended, after a compaction or a
 // resume. Same repo, two different days or two different starts, two different
-// banners.
+// banners. The cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -674,6 +675,12 @@ const MAX_FIELD_CHARS = 200;
 const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
+const SESSIONS = [
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only from the default branch."]},
+  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":["The MCP guard does not run.","subagentStart is skipped in a first or read-only turn."]},
+  {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
+];
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const SCREEN = [
   { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\\\s*(?:system\\\\s+prompt|instructions|you\\\\s+are|role)\\\\s*:", "im") },
@@ -1124,6 +1131,20 @@ function skipLine(doc) {
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
   return text(doc.name, "(unnamed file)");
+}
+
+/** The first cloud or CI session by priority, its lines, then the others by name. */
+function sessionLines(env) {
+  const [first, ...rest] = SESSIONS.filter((session) =>
+    session.vars.some((name) => {
+      const value = env[name];
+      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
+    }),
+  );
+  if (first === undefined) return [];
+  const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
+  if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
+  return out;
 }
 
 function readPayload() {
@@ -1675,6 +1696,9 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
+// Before the card, so the card stays everything after the last blank line.
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);
@@ -2047,6 +2071,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
 // of a closed run dated within the last two days: counts and pointers, never finding text.
+// In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -2055,7 +2080,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // run is recent enough for the card, and the source field of the stdin payload,
 // which decides whether the resume card is appended, after a compaction or a
 // resume. Same repo, two different days or two different starts, two different
-// banners.
+// banners. The cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -2071,6 +2096,12 @@ const MAX_FIELD_CHARS = 200;
 const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
+const SESSIONS = [
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only from the default branch."]},
+  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":["The MCP guard does not run.","subagentStart is skipped in a first or read-only turn."]},
+  {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
+];
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const SCREEN = [
   { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\\\s*(?:system\\\\s+prompt|instructions|you\\\\s+are|role)\\\\s*:", "im") },
@@ -2521,6 +2552,20 @@ function skipLine(doc) {
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
   return text(doc.name, "(unnamed file)");
+}
+
+/** The first cloud or CI session by priority, its lines, then the others by name. */
+function sessionLines(env) {
+  const [first, ...rest] = SESSIONS.filter((session) =>
+    session.vars.some((name) => {
+      const value = env[name];
+      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
+    }),
+  );
+  if (first === undefined) return [];
+  const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
+  if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
+  return out;
 }
 
 function readPayload() {
@@ -3072,6 +3117,9 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
+// Before the card, so the card stays everything after the last blank line.
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);
@@ -3444,6 +3492,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
 // of a closed run dated within the last two days: counts and pointers, never finding text.
+// In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -3452,7 +3501,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // run is recent enough for the card, and the source field of the stdin payload,
 // which decides whether the resume card is appended, after a compaction or a
 // resume. Same repo, two different days or two different starts, two different
-// banners.
+// banners. The cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -3468,6 +3517,12 @@ const MAX_FIELD_CHARS = 200;
 const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
+const SESSIONS = [
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only from the default branch."]},
+  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":["The MCP guard does not run.","subagentStart is skipped in a first or read-only turn."]},
+  {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
+];
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const SCREEN = [
   { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\\\s*(?:system\\\\s+prompt|instructions|you\\\\s+are|role)\\\\s*:", "im") },
@@ -3918,6 +3973,20 @@ function skipLine(doc) {
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
   return text(doc.name, "(unnamed file)");
+}
+
+/** The first cloud or CI session by priority, its lines, then the others by name. */
+function sessionLines(env) {
+  const [first, ...rest] = SESSIONS.filter((session) =>
+    session.vars.some((name) => {
+      const value = env[name];
+      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
+    }),
+  );
+  if (first === undefined) return [];
+  const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
+  if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
+  return out;
 }
 
 function readPayload() {
@@ -4469,6 +4538,9 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
+// Before the card, so the card stays everything after the last blank line.
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);
@@ -4841,6 +4913,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
 // of a closed run dated within the last two days: counts and pointers, never finding text.
+// In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -4849,7 +4922,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // run is recent enough for the card, and the source field of the stdin payload,
 // which decides whether the resume card is appended, after a compaction or a
 // resume. Same repo, two different days or two different starts, two different
-// banners.
+// banners. The cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -4865,6 +4938,12 @@ const MAX_FIELD_CHARS = 200;
 const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
+const SESSIONS = [
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only from the default branch."]},
+  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":["The MCP guard does not run.","subagentStart is skipped in a first or read-only turn."]},
+  {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
+];
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const SCREEN = [
   { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\\\s*(?:system\\\\s+prompt|instructions|you\\\\s+are|role)\\\\s*:", "im") },
@@ -5315,6 +5394,20 @@ function skipLine(doc) {
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
   return text(doc.name, "(unnamed file)");
+}
+
+/** The first cloud or CI session by priority, its lines, then the others by name. */
+function sessionLines(env) {
+  const [first, ...rest] = SESSIONS.filter((session) =>
+    session.vars.some((name) => {
+      const value = env[name];
+      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
+    }),
+  );
+  if (first === undefined) return [];
+  const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
+  if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
+  return out;
 }
 
 function readPayload() {
@@ -5866,6 +5959,9 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
+// Before the card, so the card stays everything after the last blank line.
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);
@@ -6981,6 +7077,58 @@ the tool result. Before the first gate, \`false\` runs once as a calibration, no
 wrapper: if the tool shows its failing status, a later result showing no status exited \`0\`;
 otherwise a code the tool did not show is \`unknown\`, never a pass. A long command is
 waited on in the foreground under the tool's own timeout, never polled with \`sleep\`.
+
+## Row proving
+
+A dispatch that hands this role QA rows instead of a gate set runs it as the prover a QA checkpoint
+asks for before it asks a person. Its capabilities are the ones above: it edits nothing, and a route
+is whatever running a command reaches. The input is the unproven rows, each with its \`Steps\` and
+\`Expected\`. Each row is tried on the routes cheapest first, stopping at the first that runs:
+
+1. a committed test whose assertion covers the row, run by the \`test\` gate with that file selected;
+2. a CLI or script run of the row's steps;
+3. a \`gh\` or API read;
+4. a headless client session;
+5. the repository's browser harness, and the client's own browser tool only where the dispatching
+   client grants it.
+
+A route proves a row only when it ran, its exit code was read (Shell), and its output shows the
+row's \`Expected\`. A route that ran and showed anything else ends that row's ladder: the row is
+\`contradicted\` with that route's excerpt, or \`not proven\` where the exit code reads \`unknown\`, and
+no later route is tried for it. Only a route that cannot run falls through to the next. One line
+per row comes back:
+
+- \`agent-run · <command> · exit <n> · <output path>\`; on the committed-test route the line also
+  names the test source \`file:line\` whose assertion covers the row, a lead the caller may cite
+  under the qa skill's rule 1 beside the Prove phase's gate result. A prover line never proves a
+  security-negative row.
+- \`contradicted · <command> · exit <n> · <output path>\`: a route ran, its exit code was read, and its
+  output shows other than the row's \`Expected\`; the line carries that output's excerpt.
+- \`not proven: <reason>\`: no route runnable, or the route that ran left its exit code \`unknown\`.
+
+The output path is the file the route itself wrote, or else the report path the dispatch names,
+where the route's verbatim output sits under the row's number; that write is the Return contract's
+one redirect, and no route command is redirected. With no report path named, it reads \`inline\` and
+the output follows the row's line. Every route output this role saves or returns inline, passing or
+not, has a value shaped like a credential replaced with \`[redacted]\`, as the excerpt rules redact a
+failure excerpt, and the digest's \`security:\` line names each row whose output was redacted. A
+narrowed run here is evidence for its row only, never a gate result.
+
+Guards, which bind any runner of these routes:
+
+- A route may read with a sign-in already present and never writes through one: no push, post,
+  comment or account change.
+- A route needing a credential that is neither present nor handed over is not run, and a route
+  whose step cannot be undone is not run.
+- The headless-session route runs only in the client's read-only permission mode, and never on a
+  client that has none.
+- A row's own steps run in a scratch directory, with the user-level write locations (the home
+  directory and the config-directory variables a program reads) pointed into it. A step that cannot
+  be confined that way (an absolute path outside the scratch directory, a step that needs the real
+  home, a remote write) is a route that cannot run.
+
+A route a guard stops counts as one that cannot run: the row falls through to the next route, and
+with none left it is \`not proven\` naming the guard.
 "
 `;
 
@@ -7021,18 +7169,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -7082,8 +7230,8 @@ exports[`emission goldens — substitution > matches the committed goldens for t
    bullets. Ambiguity gate (question-protocol rule): ask ONLY when readings diverge materially in
    artifacts, cost, or risk; else proceed.
 2. **Derive intensity.** The tier, by the Dials signals; \`--effort\` wins.
-3. **Model plan + cost preview.** Before any spawn, emit the spawn plan — role, class (Dials
-   ladder), count per phase — with a cost order of magnitude.
+3. **Model plan.** Emit role, class, count per phase, rough cost; pass each role's class model
+   from the client's map at \`.stamity/generated/models/\`.
 4. **Deferral inbox.** Read and surface the deferral inbox rows whose paths overlap this change's
    files: the \`ledger\` verb's \`inbox\` query (\`--paths\`, \`--plan\`) returns them, the rows it always
    shows and its total and unmatched counts. From a bare intent, query again with the plan's files.
@@ -7252,23 +7400,23 @@ Every sub-agent returns a structured result, read without its transcript:
 ### Gates
 
 Each Prove pass first runs \`stamity gate scan --base <the run's base>\` (the record's \`Base:\` line):
-a hit stops it, naming path, line and rule, and the commit when the hit is in the branch's history,
-never the value, never cleared by rewriting the value and scanning again; a hit on a deliberate
+a hit stops it, naming path, line and rule, and the commit when it is in the branch's history,
+never the value, never cleared by rewriting the value and rescanning; a hit on a deliberate
 fixture is the person's to settle. A non-empty \`unscanned\` list puts
 \`secret scan: <n> files unscanned\` under \`Not done:\`, naming the paths.
 \`stamity gate classify --base <the run's base> --json\` names the class: its checks run on the
 selected files in the build, its gates on the final tree, as \`test-runner\` maps them. The narrower
-gates rest on one condition: the repository's CI runs the full matrix on every \`product\` or stronger
+gates rest on one condition: the repo's CI runs the full matrix on every \`product\` or stronger
 change and on a schedule. With no base, the scan takes \`HEAD\` and the final tree runs
 \`npx tsc --noEmit && npx eslint . && npx vitest run\` unclassified (\`unclear\`), as after a classify exiting 1; committed work then lists
-\`secret scan: not run\` under \`Not done:\`, as do a CLI that cannot run or has no \`gate\` verb and a
-scan naming a \`reason\`, both on the full gates. A class naming \`review-once\` gets one review pass: a
-Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs. The
-test-runner runs each gate once and reads the exit code from the tool (\`unknown\`, never a pass),
-returning gate-by-gate pass/fail/unknown, commands and verbatim failing excerpts. Bare pass/fail is
-not a result. A pass may cite this run's earlier result on a byte-identical tree (same HEAD, diff,
-untracked files); the final tree always gets a run of its own, and citing is never a lighter pass.
-Judgment-only passes run inline.
+\`secret scan: not run\` under \`Not done:\`, as do a CLI that cannot run or lacks \`gate\` and a scan's
+\`reason\`, both on the full gates; one saying \`git was not started here\` stops the run as
+BLOCKED_DEPENDENCY, quoting it. A class naming \`review-once\` gets one review pass: a Critical or
+Warning it raises is fixed and closure-reviewed once; no further round runs. The test-runner runs
+each gate once and reads the exit code from the tool (\`unknown\`, never a pass), giving per-gate
+pass/fail/unknown, commands and verbatim failing excerpts, never bare pass/fail. A pass may cite
+this run's result on a byte-identical tree (same HEAD, diff, untracked files), never a lighter
+pass; the final tree always gets a run of its own. Judgment-only passes run inline.
 
 ### Review loop
 
@@ -7313,13 +7461,13 @@ those patterns and each specialist body names its surfaces, so no row is copied 
 may add a lens and never remove one. Deep runs the full pass; standard runs a lens on a trigger-path
 match. The \`security\` lens runs at every tier when \`stamity gate classify\` names the class
 \`security-sensitive\`, and on a trigger-path match; light runs no other lens. With no class from
-\`gate classify\` (no \`Base:\`, no CLI or \`gate\` verb) or a \`reason\` naming a failed read, the lens runs at every
-tier as for \`security-sensitive\`. The charter's universal floor holds at every tier, so a tier that skipped
-the security lens outright made that floor false. When the class's checks name \`dependency-audit\` (a bump
-of dependency lockfiles alone, no bumped package carrying an install script), the dependency audit runs
-first, and the lens only if the audit flags something, as that skill defines it; the lockfiles' own
-trigger-path match waits for that flag. A bump of a package with an install script, any other lockfile
-format, a parse failure, or an audit that cannot run keeps the lens.
+\`gate classify\` (no \`Base:\`, no CLI or \`gate\` verb) or a \`reason\` naming a failed read, the lens
+runs at every tier as for \`security-sensitive\`. The charter's universal floor holds at every tier,
+so a tier that skipped the security lens outright made that floor false. When the class's checks
+name \`dependency-audit\` (a bump of dependency lockfiles alone, no bumped package carrying an
+install script), the dependency audit runs first, and the lens only if the audit flags something,
+as that skill defines it; the lockfiles' own trigger-path match waits for that flag. A bump of a
+package with an install script, any other lockfile format, a parse failure, or an audit that cannot run keeps the lens.
 
 - **Read-only.** A specialist returns findings and edits nothing. Repair is the
   fixer's, so no lens answers its own finding in the following round.
@@ -7341,8 +7489,8 @@ format, a parse failure, or an audit that cannot run keeps the lens.
 
 The mandatory closing checkpoint, human-facing, at every intensity:
 
-1. Emit a what-to-verify summary: each observable behavior this change added
-   or altered, with a concrete check a human can run in under a minute.
+1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for
+   the person, at most three with the security-negative row, each with a check a person can run in under a minute, a \`contradicted\` one with its excerpt.
 2. Invoke the qa skill by name for the guided pass, handing it the class and
    lenses \`gate classify\` named (\`unclear\` when none ran). The step belongs to
    the command already running, not to a trigger match: a request arriving
@@ -7361,28 +7509,28 @@ The checkpoint covers what automation cannot.
 **Row states.** The qa skill closes each row in its own row states, under
 its \`## Human sign-off\` rules.
 
-**The close asks once.** One question with numbered options covers what is
-left for the person: the rows no evidence proved, the spec delta merge and
-the commit. \`Default if no response: leave uncommitted\`, with those rows not
-signed and the delta unmerged.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk,
+in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
+the commit. \`Default if no response: leave uncommitted\`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by \`/st-board\`'s Leftovers at a close: before asking, the
 close runs \`stamity ledger inbox --due --paths <the changed paths> --json\` and takes every
 \`decision-waiting\` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
+together after the last round: fixes and schedules first, the commit or hand-off choice last.
 
 ### Proof block
 
-Every run ends with a proof block, machine- and human-readable, doubling as an
-audit record:
+Every run ends with a proof block, printed after the close walk's last answer with nothing after
+it; machine- and human-readable, it doubles as an audit record:
 
 - gate results — the change's class as \`gate classify\` named it (\`unclear\` when none ran)
   and the run's base commit, on the \`Gate results\` label line itself, then per gate: command,
   pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or \`effort: not settable\`
-- QA rows — per row: \`walked\`, \`auto-proven\` with its pointer, or
-  \`accepted-unwalked\` with its input hash; then the sign-off, or \`not signed\`
+- QA rows — the proven rows (\`auto-proven\`, \`agent-run\`) folded into one line with their pointers; each row not proven
+  or over the cap with its reason, each \`contradicted\` row with its excerpt; per person row \`walked\` or \`accepted-unwalked\` with its input hash; then the sign-off, or \`not signed\`
 - decisions trace — every gate decision, ASK outcome, and deferral with its
   rationale
 - artifacts touched — path + owning sub-agent
@@ -7483,7 +7631,7 @@ Run after gates pass; each lands in the run report:
 
 - **Spec delta merge.** The change's \`ADDED/MODIFIED/REMOVED\` spec deltas merge into \`docs/specs/\`
   truth — auto-proposed, confirm-gated, append/merge-only; the spec-author sub-agent applies the
-  merge once the close's one question confirms it, and a converged spec is a byte-stable no-op.
+  merge once the close walk confirms it, and a converged spec is a byte-stable no-op.
 - **Dependency-audit note.** Each new or bumped dependency gets a one-line note; the dep-audit skill
   owns its fields — advisories, licences, the path to a transitive package — so invoke it rather
   than derive them a second time.

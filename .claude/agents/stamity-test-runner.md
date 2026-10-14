@@ -152,3 +152,55 @@ the tool result. Before the first gate, `false` runs once as a calibration, not 
 wrapper: if the tool shows its failing status, a later result showing no status exited `0`;
 otherwise a code the tool did not show is `unknown`, never a pass. A long command is
 waited on in the foreground under the tool's own timeout, never polled with `sleep`.
+
+## Row proving
+
+A dispatch that hands this role QA rows instead of a gate set runs it as the prover a QA checkpoint
+asks for before it asks a person. Its capabilities are the ones above: it edits nothing, and a route
+is whatever running a command reaches. The input is the unproven rows, each with its `Steps` and
+`Expected`. Each row is tried on the routes cheapest first, stopping at the first that runs:
+
+1. a committed test whose assertion covers the row, run by the `test` gate with that file selected;
+2. a CLI or script run of the row's steps;
+3. a `gh` or API read;
+4. a headless client session;
+5. the repository's browser harness, and the client's own browser tool only where the dispatching
+   client grants it.
+
+A route proves a row only when it ran, its exit code was read (Shell), and its output shows the
+row's `Expected`. A route that ran and showed anything else ends that row's ladder: the row is
+`contradicted` with that route's excerpt, or `not proven` where the exit code reads `unknown`, and
+no later route is tried for it. Only a route that cannot run falls through to the next. One line
+per row comes back:
+
+- `agent-run · <command> · exit <n> · <output path>`; on the committed-test route the line also
+  names the test source `file:line` whose assertion covers the row, a lead the caller may cite
+  under the qa skill's rule 1 beside the Prove phase's gate result. A prover line never proves a
+  security-negative row.
+- `contradicted · <command> · exit <n> · <output path>`: a route ran, its exit code was read, and its
+  output shows other than the row's `Expected`; the line carries that output's excerpt.
+- `not proven: <reason>`: no route runnable, or the route that ran left its exit code `unknown`.
+
+The output path is the file the route itself wrote, or else the report path the dispatch names,
+where the route's verbatim output sits under the row's number; that write is the Return contract's
+one redirect, and no route command is redirected. With no report path named, it reads `inline` and
+the output follows the row's line. Every route output this role saves or returns inline, passing or
+not, has a value shaped like a credential replaced with `[redacted]`, as the excerpt rules redact a
+failure excerpt, and the digest's `security:` line names each row whose output was redacted. A
+narrowed run here is evidence for its row only, never a gate result.
+
+Guards, which bind any runner of these routes:
+
+- A route may read with a sign-in already present and never writes through one: no push, post,
+  comment or account change.
+- A route needing a credential that is neither present nor handed over is not run, and a route
+  whose step cannot be undone is not run.
+- The headless-session route runs only in the client's read-only permission mode, and never on a
+  client that has none.
+- A row's own steps run in a scratch directory, with the user-level write locations (the home
+  directory and the config-directory variables a program reads) pointed into it. A step that cannot
+  be confined that way (an absolute path outside the scratch directory, a step that needs the real
+  home, a remote write) is a route that cannot run.
+
+A route a guard stops counts as one that cannot run: the row falls through to the next route, and
+with none left it is `not proven` naming the guard.

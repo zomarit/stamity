@@ -1,8 +1,8 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "generatedBy": "1.14.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-12T22:29:08.465Z",
+  "updatedAt": "2026-10-14T21:28:12.529Z",
   "tools": [
     "claude"
   ],
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "09c8e72b27918d1b2d587b2b43ee56c7cebea3a3bea2a70f5d0919711a0154e7",
+      "contentHash": "0dd91bdec835ee8d8224794ec59c819c58de23004485b01b7a289b34c570d5d7",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
@@ -127,70 +127,70 @@
       "adapter": "claude",
       "artifactId": "test-runner",
       "artifactType": "agent",
-      "contentHash": "d23d0b5c2776864d45f2967510a74b5b0d5862325d0e98daeb83df9e30118759",
+      "contentHash": "75ba608cfe463a1e2b7e07a91d0465aa3d96493abdf94b36fbd8060ac51f4395",
       "path": ".claude/agents/stamity-test-runner.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-ask",
       "artifactType": "command",
-      "contentHash": "dcb4cdf93a8bb189bb2266b202935594ebed66feb112f197ab63328067548b9f",
+      "contentHash": "e3bdb3544b813ea7f59deb62ecbf329680d2fe119736ccbdbed4a8eb14e6f5a7",
       "path": ".claude/commands/st-ask.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "6dbd15445583f90ba0b633e4ee60ef99382cfa9453dd188a00fccdf359498f97",
+      "contentHash": "e68262910890b0a3d8a80207bf4b17c7b393abde3c1cb81092cade2320a7814e",
       "path": ".claude/commands/st-board.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "dad15b3d39d3033f2dfeec20b8fbb99e4c043cee531c21b2cd1cd5872088748a",
+      "contentHash": "5053aa99b1cf1b43eec9c6070048c90e49587561553d79ed3d2b382d9658a0fd",
       "path": ".claude/commands/st-debug.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "de6a2f067d1c71b91f61c59c7d59a15a7899128392e86296a1811bd3eb0d6b96",
+      "contentHash": "5fadf7c1d8de686fcf809bd3498a7a168fd2a47c54587cf28e5b643c8ab1a255",
       "path": ".claude/commands/st-plan.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "60e6af3b334e2c5d2eda9306fcba715b98985940ac1d1845bf22e9cbf8f5edc7",
+      "contentHash": "a7492d259e00a13ed253786e6039aaee26cf33bcc987f661326011c84fcddb19",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "197d06027e17de3088a036f2e18b4649a0004f955e59801a52d7b4a746a5c0f7",
+      "contentHash": "24fc825fd1cbcf9346d1770e43196f61ae297c1b790ae2ddf7e7b8051788fc00",
       "path": ".claude/commands/st-quick.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "8bf5a357232818ffdf10e44482c1d1bdc61ee5e220309782aa45feb9b4e56cfb",
+      "contentHash": "1f3f532fb3ffcd1028f9d2b12a3190e2dfab0f4104a19d5fe8ebcf47b7d6a508",
       "path": ".claude/commands/st-rework.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-spec",
       "artifactType": "command",
-      "contentHash": "66f8d9856322c1d2513ebd31ed156169548ca559f791eaf1424ba1970945da75",
+      "contentHash": "bec6dcb5822ec7fc5fb1bf7dfd95f4548b28f691701f1669458b47fda9983b81",
       "path": ".claude/commands/st-spec.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "627e795dfe8fa7eb18e6ff09eda67ede7f261e25c3380b21c3a82418f3c988e0",
+      "contentHash": "f20acf1a520bdd84f10abebf6844a63718d318b0edc29788f6cdd854b474c573",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -337,7 +337,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "e24e3f35b4bf2da77e4171ba3186c6218e420842db2552d3da0408a69d7afa21",
+      "contentHash": "5796da497f60e521b734f6233249721c0217a0587c2c7cdb834ea4a86e8223f9",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -386,7 +386,7 @@
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203",
+      "contentHash": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245",
       "path": ".claude/skills/st-qa/SKILL.md"
     },
     {
@@ -421,7 +421,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8",
+      "contentHash": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d",
       "path": ".claude/skills/st-verify/references/maintainability.md"
     },
     {
@@ -498,7 +498,7 @@
       "adapter": "claude",
       "artifactId": "question-protocol",
       "artifactType": "rule",
-      "contentHash": "95eb20c8c5081ca2bb958940cca0c59119d48dc260e423359bbf334aa1fa2421",
+      "contentHash": "3f6abe68a805b0a1de9705f50009463e959311813173c2e5557042652f6e0066",
       "path": ".claude/skills/stamity-question-protocol/SKILL.md"
     },
     {
@@ -533,14 +533,14 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614",
+      "contentHash": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "4c87dfa8d0f1aa9bc2a650bea2b7aadf216853d3bcb088748339672c7c3a5f2f",
+      "contentHash": "abe3c6bc43b38e94def706b6ed204737ac9592343c5500797eb90e1da8402ae7",
       "path": "AGENTS.md",
       "stampedVersion": "1.14.0"
     },
@@ -583,6 +583,7 @@
       "typecheck",
       "lint",
       "test",
+      "test:records",
       "knip",
       "gate",
       "upstream",

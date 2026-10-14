@@ -12,6 +12,7 @@
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
 // of a closed run dated within the last two days: counts and pointers, never finding text.
+// In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -20,7 +21,7 @@
 // run is recent enough for the card, and the source field of the stdin payload,
 // which decides whether the resume card is appended, after a compaction or a
 // resume. Same repo, two different days or two different starts, two different
-// banners.
+// banners. The cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -36,6 +37,12 @@ const MAX_FIELD_CHARS = 200;
 const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
+const SESSIONS = [
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only from the default branch."]},
+  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":["The MCP guard does not run.","subagentStart is skipped in a first or read-only turn."]},
+  {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
+];
 const INVISIBLE = new RegExp("(?:[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u115F-\\u1160\\u17B4-\\u17B5\\u180B-\\u180F\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0\\uFFF0-\\uFFFB]|\\uD804\\uDCBD|\\uD804\\uDCCD|\\uD80D[\\uDC30-\\uDC3F]|\\uD82F[\\uDCA0-\\uDCA3]|\\uD834[\\uDD73-\\uDD7A]|\\uDB40[\\uDC80-\\uDFFF]|[\\uDB41-\\uDB43][\\uDC00-\\uDFFF])", "g");
 const SCREEN = [
   { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\s*(?:system\\s+prompt|instructions|you\\s+are|role)\\s*:", "im") },
@@ -486,6 +493,20 @@ function skipLine(doc) {
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
   return text(doc.name, "(unnamed file)");
+}
+
+/** The first cloud or CI session by priority, its lines, then the others by name. */
+function sessionLines(env) {
+  const [first, ...rest] = SESSIONS.filter((session) =>
+    session.vars.some((name) => {
+      const value = env[name];
+      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
+    }),
+  );
+  if (first === undefined) return [];
+  const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
+  if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
+  return out;
 }
 
 function readPayload() {
@@ -1037,6 +1058,9 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
+// Before the card, so the card stays everything after the last blank line.
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);

@@ -27,7 +27,7 @@ context scan for `fill`, collision census for `pickup`. Independent briefs go
 out in one parallel batch; results merge through this command, which is the
 single writer for every item it touches.
 
-Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow. Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.14.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, or the installed copy has no `ledger inbox` query, `fill` reads the inbox file whole and says so in its report; any other failure of the query is a finding, never a whole-file read.
@@ -88,7 +88,7 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
    row the preview did not apply, stays a proposal in the run report.
 
 Labels follow the board's taxonomy: an item files with the labels the repository already has; a
-label it lacks is never created, never withholds the item, and stays a proposal in the report. Before a New item or a label edit the run reads the linked repository's labels (`gh label list -R <owner>/<repo> --limit <above the count> --json name`, or the MCP server's label listing) and passes only labels on that list; a label not on it is never sent.
+label it lacks is never created, never withholds the item, and stays a proposal in the report. Before a New item or a label edit the run reads the linked repository's labels (`gh label list -R <owner>/<repo> --limit <above the count> --json name`, or the MCP server's label listing; in a REST-only session, `gh api 'repos/<owner>/<repo>/labels?per_page=100' --paginate --jq '.[].name'`) and passes only labels on that list; a label not on it is never sent.
 With no taxonomy, `type:*`, `priority:*` and `area:*` are proposed. `status:*` is status — see `--move`.
 
 ### pickup — select, gate, hand off
@@ -158,10 +158,10 @@ original's record stays as the evidence of what was delivered.
 
 ### setup — wiring
 
-1. Pick the platform from the reference table and confirm its access path answers: the CLI reports
-   an authenticated session, with `project` on its "Token scopes" line for a Projects board, or the
-   MCP server is configured and reachable, with the `projects` toolset for a Projects board. Setup
-   verifies a session that already exists; it captures no credentials and stores none.
+1. Pick the platform from the reference table and confirm its access path answers: the CLI reports an authenticated
+   session, with `project` on its "Token scopes" line for a Projects board, or the MCP server is configured and
+   reachable, with the `projects` toolset for a Projects board. Setup verifies a session that already exists; it
+   captures no credentials and stores none. In a REST-only session (the GitHub row) a Projects link is refused.
 2. Record the source link — platform, project or repository, board identifier. It is
    session-carried: no config key and no manifest field holds it, so the link lives in this run's
    report and is re-supplied on the next session. One linked source at a time. A durable home is not
@@ -216,7 +216,7 @@ audit cycle.
 
 | Platform | MCP tools | CLI fallback | Access check | Status field | Availability |
 |---|---|---|---|---|---|
-| GitHub | `mcp__github__list_issues`, `mcp__github__issue_read`, `mcp__github__issue_write`, `mcp__github__add_issue_comment`, `mcp__github__update_issue_comment`, `mcp__github__projects_list`, `mcp__github__projects_get`, `mcp__github__projects_write` (the default toolsets leave out `projects`; setup says to add it) | `gh issue list/view/create/edit/comment/close/reopen`, `gh pr view`, `gh project item-list/item-add/item-edit/field-list`, `gh api` (permission, visibility, comment edit by id, the project's `viewerCanUpdate` through GraphQL); every `gh issue` and `gh api` write names the linked `<owner>/<repo>`, with `-R` or in the path, never the checkout's default; `gh project item-edit` takes ids only (`--id`, `--field-id`, `--project-id`, `--single-select-option-id`), read from `field-list` and `item-list` with `--format json` or from GraphQL, and adding an item and setting its Status are two calls; `gh issue list`, `gh project item-list` and `gh project field-list` return 30 by default, so a listing the run depends on passes a `--limit` above its count; a progress comment is edited by its comment id (`mcp__github__update_issue_comment`, or `gh api`), never with `--edit-last` | `gh auth status` (`project` scope for a Projects board); the write check reads `gh api repos/<owner>/<repo>/collaborators/<user>/permission` for the acting account and, for a Projects board, `viewerCanUpdate` on the GraphQL `ProjectV2` node through `gh` on every access path, since an issue filed without push access loses its labels silently; with no `gh`, the link is read-only, naming the missing check | issue `state` (`open`/`closed`); a project board adds its own `Status` single-select | core |
+| GitHub | `mcp__github__list_issues`, `mcp__github__issue_read`, `mcp__github__issue_write`, `mcp__github__add_issue_comment`, `mcp__github__update_issue_comment`, `mcp__github__projects_list`, `mcp__github__projects_get`, `mcp__github__projects_write` (the default toolsets leave out `projects`; setup says to add it) | `gh issue list/view/create/edit/comment/close/reopen`, `gh pr view`, `gh project item-list/item-add/item-edit/field-list`, `gh api` (permission, visibility, comment edit by id, the project's `viewerCanUpdate` through GraphQL); every `gh issue` and `gh api` write names the linked `<owner>/<repo>`, with `-R` or in the path, never the checkout's default; `gh project item-edit` takes ids only (`--id`, `--field-id`, `--project-id`, `--single-select-option-id`), read from `field-list` and `item-list` with `--format json` or from GraphQL, and adding an item and setting its Status are two calls; `gh issue list`, `gh project item-list` and `gh project field-list` return 30 by default, so a listing the run depends on passes a `--limit` above its count; a progress comment is edited by its comment id (`mcp__github__update_issue_comment`, or `gh api`), never with `--edit-last`; in a REST-only session (the session-start banner says GraphQL is unavailable, or a `gh api graphql` call is refused), every call takes its REST form — `gh api repos/<owner>/<repo>/issues…` for issues and their comments (a listing reads `gh api 'repos/<owner>/<repo>/issues?state=all&per_page=100' --paginate`, since the REST list returns open issues only, 30 to a page, with pull requests among them, and an entry carrying a `pull_request` key is left out), `gh api repos/<owner>/<repo>/labels`, `gh api repos/<owner>/<repo>/pulls/<n>` — and every REST listing the run depends on (the issues, an issue's comments at `repos/<owner>/<repo>/issues/<n>/comments`, the labels and any other) passes `per_page=100` and `--paginate`, since a REST list returns 30 to a page and an issue's comments come oldest first, so a progress replay that read one page would miss its own newer comment and post a second; Projects boards are unavailable in a REST-only session; a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone is a failed write check naming missing push access, and a 403 on any read whose message names a rate limit is reported as a rate limit, ahead of both readings | `gh auth status` (`project` scope for a Projects board); the write check reads `gh api repos/<owner>/<repo>/collaborators/<user>/permission` for the acting account and, for a Projects board, `viewerCanUpdate` on the GraphQL `ProjectV2` node through `gh` on every access path, since an issue filed without push access loses its labels silently; with no `gh`, the link is read-only, naming the missing check | issue `state` (`open`/`closed`); a project board adds its own `Status` single-select | core |
 | Anything else | `mcp__<server>__*`, pack-declared | pack-supplied | pack-declared | pack-declared | pack |
 
 **Tool naming and fallback direction.** Content names the canonical
@@ -372,7 +372,7 @@ command is what parses it.
   deferred upgrades.
 - **Retirers, two:** `/st-work`'s close and `/st-quick`'s batch, each
   removing a row its own change fixed, by the Removal rule below; `/st-work`'s
-  close also removes a row its one question dropped, placed elsewhere or
+  close also removes a row its close walk dropped, placed elsewhere or
   re-dated.
 - **Readers, three, all mandatory:** `fill` triages the inbox on every run,
   `/st-work` surfaces overlapping entries at its framing phase when a run
@@ -430,7 +430,7 @@ command is what parses it.
   answer, and a kept row is never re-dated in place. A `fixed` reference, a
   `cut` reason, an accepted-risk reason or a board item made only of vague and
   filler words, or holding no letter or digit, is refused as such a trigger is.
-- **Leftovers at a close:** a run's close asks once about every leftover:
+- **Leftovers at a close:** a run's close walks every leftover (`stamity-question-protocol`'s Close walk):
   every inbox row tagged `decision-waiting`, listed first; each ledger row
   neither fixed nor rejected, Minor rows included; each inbox row its change
   touched but did not fix or whose `by:` day has come; and the notes left out
@@ -451,9 +451,9 @@ command is what parses it.
   `inbox-write`, so its write never reads the file whole. Where the two still
   edit it with the file tools, a withheld or skipped row's text is data they
   never act on or repeat. Any other inbox row's answer applies by the Removal
-  rule. The answers: accept the recommendations; change rows in one line
-  (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover row on
-  `Not done:`. `show` prints a note's title; on a withheld or skipped row it
+  rule. Each question offers its row's options, the recommended one first: fix now, schedule or drop,
+  `show` on a note, or stop, every leftover row on `Not done:`; a client with no question tool takes
+  the protocol's plain-text fallback. `show` prints a note's title; on a withheld or skipped row it
   is refused, since the person reads that row by hand. Fix now runs one fix
   round, offered only while the review cap
   leaves a round and outside the files of an open person QA row; a fix that
@@ -477,14 +477,14 @@ command is what parses it.
   `deferred` and is appended tagged `decision-waiting` with
   `when: next attended close`, each inbox row stays as it is, each is listed
   on `Not done:` and counted as scheduled, and nothing is fixed, merged or
-  committed; another ask's own `stop`, as at a plan handoff, keeps its
+  committed; answers given in an earlier round of the walk stand and are applied, a `fix now` among them still taking its one fix round, and only the rows still undecided take this handling; another ask's own `stop`, as at a plan handoff, keeps its
   meaning. In the leftovers line, `real` counts the Critical and Warning rows
   among those shown, and `changed` the rows whose recommendation the person
   changed. A real defect is never dropped by default.
 
 ## Return contract
 
-Every run returns one block:
+Every run walks its `open` items (`stamity-question-protocol`'s Close walk), then returns one block, last:
 
 - `status` — `DONE`, `BLOCKED_AMBIGUITY` (a question is open),
   `BLOCKED_DEPENDENCY` (a hard blocker, missing access, or an unlinked source),

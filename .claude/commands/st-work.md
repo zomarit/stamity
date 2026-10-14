@@ -10,8 +10,8 @@ description: "Execute a change end to end: frame, research, plan, build with sub
    bullets. Ambiguity gate (question-protocol rule): ask ONLY when readings diverge materially in
    artifacts, cost, or risk; else proceed.
 2. **Derive intensity.** The tier, by the Dials signals; `--effort` wins.
-3. **Model plan + cost preview.** Before any spawn, emit the spawn plan — role, class (Dials
-   ladder), count per phase — with a cost order of magnitude.
+3. **Model plan.** Emit role, class, count per phase, rough cost; pass each role's class model
+   from the client's map at `.stamity/generated/models/`.
 4. **Deferral inbox.** Read and surface the deferral inbox rows whose paths overlap this change's
    files: the `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always
    shows and its total and unmatched counts. From a bare intent, query again with the plan's files.
@@ -180,23 +180,23 @@ Every sub-agent returns a structured result, read without its transcript:
 ### Gates
 
 Each Prove pass first runs `stamity gate scan --base <the run's base>` (the record's `Base:` line):
-a hit stops it, naming path, line and rule, and the commit when the hit is in the branch's history,
-never the value, never cleared by rewriting the value and scanning again; a hit on a deliberate
+a hit stops it, naming path, line and rule, and the commit when it is in the branch's history,
+never the value, never cleared by rewriting the value and rescanning; a hit on a deliberate
 fixture is the person's to settle. A non-empty `unscanned` list puts
 `secret scan: <n> files unscanned` under `Not done:`, naming the paths.
 `stamity gate classify --base <the run's base> --json` names the class: its checks run on the
 selected files in the build, its gates on the final tree, as `test-runner` maps them. The narrower
-gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger
+gates rest on one condition: the repo's CI runs the full matrix on every `product` or stronger
 change and on a schedule. With no base, the scan takes `HEAD` and the final tree runs
 `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage` unclassified (`unclear`), as after a classify exiting 1; committed work then lists
-`secret scan: not run` under `Not done:`, as do a CLI that cannot run or has no `gate` verb and a
-scan naming a `reason`, both on the full gates. A class naming `review-once` gets one review pass: a
-Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs. The
-test-runner runs each gate once and reads the exit code from the tool (`unknown`, never a pass),
-returning gate-by-gate pass/fail/unknown, commands and verbatim failing excerpts. Bare pass/fail is
-not a result. A pass may cite this run's earlier result on a byte-identical tree (same HEAD, diff,
-untracked files); the final tree always gets a run of its own, and citing is never a lighter pass.
-Judgment-only passes run inline.
+`secret scan: not run` under `Not done:`, as do a CLI that cannot run or lacks `gate` and a scan's
+`reason`, both on the full gates; one saying `git was not started here` stops the run as
+BLOCKED_DEPENDENCY, quoting it. A class naming `review-once` gets one review pass: a Critical or
+Warning it raises is fixed and closure-reviewed once; no further round runs. The test-runner runs
+each gate once and reads the exit code from the tool (`unknown`, never a pass), giving per-gate
+pass/fail/unknown, commands and verbatim failing excerpts, never bare pass/fail. A pass may cite
+this run's result on a byte-identical tree (same HEAD, diff, untracked files), never a lighter
+pass; the final tree always gets a run of its own. Judgment-only passes run inline.
 
 ### Review loop
 
@@ -241,13 +241,13 @@ those patterns and each specialist body names its surfaces, so no row is copied 
 may add a lens and never remove one. Deep runs the full pass; standard runs a lens on a trigger-path
 match. The `security` lens runs at every tier when `stamity gate classify` names the class
 `security-sensitive`, and on a trigger-path match; light runs no other lens. With no class from
-`gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason` naming a failed read, the lens runs at every
-tier as for `security-sensitive`. The charter's universal floor holds at every tier, so a tier that skipped
-the security lens outright made that floor false. When the class's checks name `dependency-audit` (a bump
-of dependency lockfiles alone, no bumped package carrying an install script), the dependency audit runs
-first, and the lens only if the audit flags something, as that skill defines it; the lockfiles' own
-trigger-path match waits for that flag. A bump of a package with an install script, any other lockfile
-format, a parse failure, or an audit that cannot run keeps the lens.
+`gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason` naming a failed read, the lens
+runs at every tier as for `security-sensitive`. The charter's universal floor holds at every tier,
+so a tier that skipped the security lens outright made that floor false. When the class's checks
+name `dependency-audit` (a bump of dependency lockfiles alone, no bumped package carrying an
+install script), the dependency audit runs first, and the lens only if the audit flags something,
+as that skill defines it; the lockfiles' own trigger-path match waits for that flag. A bump of a
+package with an install script, any other lockfile format, a parse failure, or an audit that cannot run keeps the lens.
 
 - **Read-only.** A specialist returns findings and edits nothing. Repair is the
   fixer's, so no lens answers its own finding in the following round.
@@ -269,8 +269,8 @@ format, a parse failure, or an audit that cannot run keeps the lens.
 
 The mandatory closing checkpoint, human-facing, at every intensity:
 
-1. Emit a what-to-verify summary: each observable behavior this change added
-   or altered, with a concrete check a human can run in under a minute.
+1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for
+   the person, at most three with the security-negative row, each with a check a person can run in under a minute, a `contradicted` one with its excerpt.
 2. Invoke the qa skill by name for the guided pass, handing it the class and
    lenses `gate classify` named (`unclear` when none ran). The step belongs to
    the command already running, not to a trigger match: a request arriving
@@ -289,28 +289,28 @@ The checkpoint covers what automation cannot.
 **Row states.** The qa skill closes each row in its own row states, under
 its `## Human sign-off` rules.
 
-**The close asks once.** One question with numbered options covers what is
-left for the person: the rows no evidence proved, the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not
-signed and the delta unmerged.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk,
+in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
+the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
 close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
 `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
+together after the last round: fixes and schedules first, the commit or hand-off choice last.
 
 ### Proof block
 
-Every run ends with a proof block, machine- and human-readable, doubling as an
-audit record:
+Every run ends with a proof block, printed after the close walk's last answer with nothing after
+it; machine- and human-readable, it doubles as an audit record:
 
 - gate results — the change's class as `gate classify` named it (`unclear` when none ran)
   and the run's base commit, on the `Gate results` label line itself, then per gate: command,
   pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
-- QA rows — per row: `walked`, `auto-proven` with its pointer, or
-  `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
+- QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
+  or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
 - decisions trace — every gate decision, ASK outcome, and deferral with its
   rationale
 - artifacts touched — path + owning sub-agent
@@ -411,7 +411,7 @@ Run after gates pass; each lands in the run report:
 
 - **Spec delta merge.** The change's `ADDED/MODIFIED/REMOVED` spec deltas merge into `docs/specs/`
   truth — auto-proposed, confirm-gated, append/merge-only; the spec-author sub-agent applies the
-  merge once the close's one question confirms it, and a converged spec is a byte-stable no-op.
+  merge once the close walk confirms it, and a converged spec is a byte-stable no-op.
 - **Dependency-audit note.** Each new or bumped dependency gets a one-line note; the dep-audit skill
   owns its fields — advisories, licences, the path to a transitive package — so invoke it rather
   than derive them a second time.

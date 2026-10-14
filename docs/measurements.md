@@ -205,8 +205,5 @@ What a first run on a clean machine is proved against, in
 - **Tarball smoke (publish shape)** packs the tarball, installs it into a throwaway project,
   runs the leak gate over the packed tree, then `init` and `check`. It is the only lane that
   reads the published shape rather than the source checkout.
-- **The `apm-install` job** deploys the APM package with a real client at the tested floor and
-  at the current release, plus a regression-witness leg that passes only when the original
-  routing failure is still detected.
 - **Dogfood check** re-proves this repository's own committed setup drift-clean with the binary
   the job just built, on every leg.

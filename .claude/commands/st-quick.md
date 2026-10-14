@@ -14,9 +14,9 @@ no issue or PR state, no phase state, and no persisted plan artifact; no researc
 review loop, no QA checkpoint. Those are absent by design, which is why the thresholds below
 are hard rather than advisory — the change that needs them has to go where they exist.
 
-Charter invariant 7 names one carve-out from delegated implementation, and this lane is it:
-Tier-1 edits apply inline. Verification does not. Gates run in the `test-runner` sub-agent,
-which is what keeps "the gates ran" a claim from somewhere other than the writer.
+Charter invariant 7 names one carve-out from delegated implementation, and this lane is it: Tier-1 edits apply inline. Verification does not. Gates run
+in the `test-runner` sub-agent, which is what keeps "the gates ran" a claim from somewhere other than the writer. Every sub-agent call passes `model` for
+the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 ## Trivial signals
 
@@ -155,7 +155,10 @@ The gate is three steps, in order, after the last item lands:
    `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A
    scan that names a `reason` did not read the whole change, and a hit beside it still stops the
    batch; with no hit, step 2 still runs, step 3 runs `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`, and the report
-   lists `secret scan: not run` under `Not done:`.
+   lists `secret scan: not run` under `Not done:`. A `reason` from either `gate` call that says git
+   was not started because a folder has the layout of a bare repository stops the batch there
+   instead: no later step runs, no git command runs in that folder, the commit included, and the
+   report gives that reason under `Not done:` with every applied item listed as ungated.
 2. **Classify.** `stamity gate classify --base HEAD --json` names the batch's class and its
    checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
    batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report
@@ -209,10 +212,15 @@ Never automatic; user-gated in session, with the batch state as the evidence tha
 | The item needs its cause found first | `/st-debug` | the symptom and the item that would have changed |
 | The item is really a question | `/st-ask` | the question, with the files already identified |
 
-The report closes on one recommended next step, derived from this batch's own state and not from
-the table above: a refused or deferred item makes carrying that list to `/st-work` the step; an
-item reported `saved` makes the `stamity sync` run that publishes it the step; a pre-existing
-failure left alone makes naming it the step. A batch with none of those says so in the line.
+Before the report, the batch walks each refused or deferred item and each pre-existing failure left
+alone by the `stamity-question-protocol` rule's Close walk, with two options: carry it to `/st-work`
+now, or leave it on `Not done:`.
+
+The report closes on one recommended next step, derived from this batch's own state and the walk's
+answers, not from the table above: an item or failure the walk carried makes the switch to `/st-work`
+with that list the step, and the switch follows the report, which still prints last; one it did not
+carry stays on `Not done:` and is not the step; an item reported `saved` makes the `stamity sync` run
+that publishes it the step. A batch with none of those says so in the line, naming any `Not done:` item.
 
 This lane appends no inbox row. What a batch cannot finish escalates to `/st-work` by the
 Escalation table above, and that run's close asks about what is left.

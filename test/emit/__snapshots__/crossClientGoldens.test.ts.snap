@@ -679,7 +679,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -689,18 +689,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -764,7 +764,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -774,18 +774,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -1144,7 +1144,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1154,18 +1154,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -1229,7 +1229,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1239,18 +1239,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -1293,13 +1293,13 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 exports[`emitted tree for all-four > matches the tree digest golden > all-four tree digest 1`] = `
 {
-  ".agents/skills/st-ask/SKILL.md": "dee2eebd5dbd8672101c70d3433b477bfb07778d9378a74369bcfe704d285121 8906 bytes",
+  ".agents/skills/st-ask/SKILL.md": "f0b003a68b1909226f82a63064187644d9a4ed498f4cb2f3a0d3d0ac98750680 9477 bytes",
   ".agents/skills/st-ask/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-board/SKILL.md": "7fe49722409149f659edcbfcd0ee010d17997a3bb3801f64f3054e64463ed4b4 36303 bytes",
+  ".agents/skills/st-board/SKILL.md": "9928b35c3f9b136f0b25a7436e60e38531db5b961e96aecaec14c32495704cdf 38373 bytes",
   ".agents/skills/st-board/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".agents/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
-  ".agents/skills/st-debug/SKILL.md": "3867acf1842be442db3621839b53ac40813bc06b84c8f0dda54c575357c7e5b4 16285 bytes",
+  ".agents/skills/st-debug/SKILL.md": "f7186a975bc262760cf702d76f05255fc271a646f0c839ebd0a096f4ae48a098 16931 bytes",
   ".agents/skills/st-debug/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
   ".agents/skills/st-dep-audit/agents/openai.yaml": "03b9f0b720a98145fda8584c40f0a54f56ae18c213ca7d42e9801dcac5c0abde 156 bytes",
@@ -1311,22 +1311,22 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
   ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
-  ".agents/skills/st-plan/SKILL.md": "600e61e2020fa5cb9df8c020fb5004a41ff0c2f9760019a3d9b1ee20554afbae 28436 bytes",
+  ".agents/skills/st-plan/SKILL.md": "ddf4d53ff91bc02fc1b13e727051316fafd101551a7b51a1292d2197d3407638 29317 bytes",
   ".agents/skills/st-plan/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-pr-resolve/SKILL.md": "04319df7f400f968e82f7f2dd2d8813162ce754dd1398dff960c83b41689f493 20959 bytes",
+  ".agents/skills/st-pr-resolve/SKILL.md": "d0c98bda57c71aeba567d1b5abc36050a56b13b3d1422e958da0100c632cffd3 24220 bytes",
   ".agents/skills/st-pr-resolve/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-qa/SKILL.md": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203 8425 bytes",
+  ".agents/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".agents/skills/st-quick/SKILL.md": "002cf00206636251d95f49a25d2100e22fdc85663b2b3eea5898853a38d45a8d 14281 bytes",
+  ".agents/skills/st-quick/SKILL.md": "6edf3eb5298b1d8b7f8bbef6dd317ee0c3b0ea6c3cf8c669c4fa6817a36a3088 15223 bytes",
   ".agents/skills/st-quick/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-rework/SKILL.md": "b598a8121d59c38299d219813397b2f66db2d8842dacff62810add113b507347 20773 bytes",
+  ".agents/skills/st-rework/SKILL.md": "3a11a777a32e8b4b72518882912d6ad600e1c676c4e5fda6da55e3a26d20e1cd 21445 bytes",
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-spec/SKILL.md": "ddbbe70b0541288bd7dabed92dce55f1024266b3a22dd6bc0a20fbfba63ba94f 17525 bytes",
+  ".agents/skills/st-spec/SKILL.md": "7737c1c69812d41cb22e2993d2f36190b7e2f8e5c2b54d66f1fc6d8f92276dc4 18830 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d 4361 bytes",
   ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
   ".agents/skills/st-verify/references/product-spec.md": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes",
   ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
@@ -1336,14 +1336,14 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
-  ".agents/skills/st-work/SKILL.md": "079eb12c8e7ccfde8c09ab7d44bc83e7b0f1c80ce28eb388eacbd2128cbf975b 35463 bytes",
+  ".agents/skills/st-work/SKILL.md": "0b2c8f7b45bd27d07e2fdec37785ee4df435d902f320743fdeaf99d7fcaadcff 36005 bytes",
   ".agents/skills/st-work/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "363b77130b2b94bcac9753a0827a47960d115bf8859f9db50d4d16c86339af0a 4453 bytes",
   ".agents/skills/stamity-api-versioning/SKILL.md": "8507a775bed6e7f74093ce36780d491d32cd8275260f20f028795ab6a2446b6d 5350 bytes",
   ".agents/skills/stamity-contract-census/SKILL.md": "c1a8da7803ccf7805f24066dce1c6f42719849d1a569901235bb15fc5e1dbe0c 4068 bytes",
   ".agents/skills/stamity-learnings-schema/SKILL.md": "b9248a64b6e9db928a182556b22e9ff5576f201db4739d14df7fceac103f73f7 2973 bytes",
   ".agents/skills/stamity-migrations/SKILL.md": "8d9a063921ac4fc23dfb0d06dd776e43c9177cc9556c1710501c84599cb51031 5116 bytes",
-  ".agents/skills/stamity-question-protocol/SKILL.md": "e6730fbad154d87626dc80dd8323937e4a13ac3cb07837dc14c9122f06afea23 4310 bytes",
+  ".agents/skills/stamity-question-protocol/SKILL.md": "cc31b2ad9c5292fc95da10bfdc8f042c8ca96dd41a98f81cf7951ee75a22689e 6386 bytes",
   ".agents/skills/stamity-resilience/SKILL.md": "f8e992ecde476af92d78512fef9707d6bcd9920f04520ff9c1fd27eb9afabb49 5312 bytes",
   ".agents/skills/stamity-testing/SKILL.md": "8fd553e97c1b8ea982bb5eed9006b70d2b77e315989d24cd2cb8e2aad33ec9ce 4515 bytes",
   ".agents/skills/stamity-ui-states/SKILL.md": "f153f44c19f24518dbd9eec7ebfbcb2723793ca96b88fd51afb7c93097d9bf62 4767 bytes",
@@ -1353,19 +1353,19 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/agents/stamity-implementer.md": "416fc88d4d9be312b984992fdf3d682201f489924f29cbd0c9cbb836f8d9ae03 10163 bytes",
   ".claude/agents/stamity-performance.md": "3211fe9fb4c5535a7c43e3e829cf9ea11a9f6c381e5bff98cdb053db00eb0294 14040 bytes",
   ".claude/agents/stamity-researcher.md": "ddd73f1c30b8f2c4010e7b6092553086a0c28e6a87589484ffe7896f4ae1ba23 8440 bytes",
-  ".claude/agents/stamity-reviewer.md": "09c8e72b27918d1b2d587b2b43ee56c7cebea3a3bea2a70f5d0919711a0154e7 15797 bytes",
+  ".claude/agents/stamity-reviewer.md": "0dd91bdec835ee8d8224794ec59c819c58de23004485b01b7a289b34c570d5d7 15906 bytes",
   ".claude/agents/stamity-security.md": "baf297774a6fac2c2b0cbe928dd80755c14187cc7556db69c1cb85e23866d0fd 13040 bytes",
   ".claude/agents/stamity-spec-author.md": "ce02ef8625403a9e493dadace62ce107e5b23290dd280a642991f4ec4e8235d7 12248 bytes",
-  ".claude/agents/stamity-test-runner.md": "f835792753c850fb93ef8888bdef2616a585bc1be2bea2ad837527827c02e52c 8648 bytes",
-  ".claude/commands/st-ask.md": "dcb4cdf93a8bb189bb2266b202935594ebed66feb112f197ab63328067548b9f 8862 bytes",
-  ".claude/commands/st-board.md": "fd4a4ebf44ca2317ac63f6e305c9900d266c801d5d4e73bf16a492e7dc0599fb 36257 bytes",
-  ".claude/commands/st-debug.md": "e4ea7810f16cf45a8c155d77a55f10aebbfcc4985fe2b88c89fff9f33ff7ca6c 16241 bytes",
-  ".claude/commands/st-plan.md": "aab2aab69c8ebde5d63904b64fab6a56f354017e7b9220ae7e3be60ac46fd1f1 28393 bytes",
-  ".claude/commands/st-pr-resolve.md": "85f882951797d5e8365d34c82d8762aea823d375ba560245aa74e88a3619ca9a 20908 bytes",
-  ".claude/commands/st-quick.md": "088f4d3332bf205c089054c8ae117e9310d11f38119a5f5e672d7b2683cee0d4 14237 bytes",
-  ".claude/commands/st-rework.md": "fc5fc0e0c00e8d0a1214713402376a81f49c246d2168bd97096b8d61f93ac113 20726 bytes",
-  ".claude/commands/st-spec.md": "9db1bfa5bb3e6da20e339c391f7a901a6519a4a2796fda120e30a7ca78bcf750 17480 bytes",
-  ".claude/commands/st-work.md": "39f8f8f30a66134c9a1620e62109f79fc090f1379c8637e060f18b0002e95e4f 35418 bytes",
+  ".claude/agents/stamity-test-runner.md": "36401d4ee6e79c390b43d082522bc73b0a0a95c3200c23d91120b3ffb6bbbc7f 11973 bytes",
+  ".claude/commands/st-ask.md": "e3bdb3544b813ea7f59deb62ecbf329680d2fe119736ccbdbed4a8eb14e6f5a7 9433 bytes",
+  ".claude/commands/st-board.md": "5f391bc95c0fa0922ac266e55d901720b6f83ed0f1d9224079f46990f1435be4 38327 bytes",
+  ".claude/commands/st-debug.md": "9339e785d8d44560a04ed36331e85bf2e13552fe77ee66b494f11d4ec90b16ae 16887 bytes",
+  ".claude/commands/st-plan.md": "8eba55bffc0e240b4cae3da3d64c0a03c2daadb4b6dda8e84d6237db2a222e2d 29274 bytes",
+  ".claude/commands/st-pr-resolve.md": "5dbc02c57d9d1b7092e901a866ef6fbe914f6850fe4076d1163a778cdefb71c7 24169 bytes",
+  ".claude/commands/st-quick.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
+  ".claude/commands/st-rework.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
+  ".claude/commands/st-spec.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
+  ".claude/commands/st-work.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
   ".claude/rules/stamity-api-versioning.md": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391 5080 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
   ".claude/rules/stamity-injection-screening.md": "b2e787a49c12892c04a16ba0f7b2124d97d5c1aa9c76afc053ea2b25d7e553bc 7760 bytes",
@@ -1389,12 +1389,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
   ".claude/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
-  ".claude/skills/st-qa/SKILL.md": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203 8425 bytes",
+  ".claude/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
   ".claude/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".claude/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".claude/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".claude/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".claude/skills/st-verify/references/maintainability.md": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d 4361 bytes",
   ".claude/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
   ".claude/skills/st-verify/references/product-spec.md": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes",
   ".claude/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
@@ -1405,17 +1405,17 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
   ".claude/skills/stamity-ai-evals/SKILL.md": "363b77130b2b94bcac9753a0827a47960d115bf8859f9db50d4d16c86339af0a 4453 bytes",
-  ".claude/skills/stamity-question-protocol/SKILL.md": "e6730fbad154d87626dc80dd8323937e4a13ac3cb07837dc14c9122f06afea23 4310 bytes",
+  ".claude/skills/stamity-question-protocol/SKILL.md": "cc31b2ad9c5292fc95da10bfdc8f042c8ca96dd41a98f81cf7951ee75a22689e 6386 bytes",
   ".codex/agents/stamity-creator.toml": "b4696a752d25b0f46292d7c1673cec9dab3ed602cdccd3b4d090e47c1cabf9a2 14611 bytes",
   ".codex/agents/stamity-design-quality.toml": "5714f3d90667cc9e6bd1031a49fdb8439480cebb9ea2488f9d090653e0c54ae0 12770 bytes",
   ".codex/agents/stamity-fixer.toml": "83b7667af6e359268c77471161227de1cfcee46698481f557f0b1bbfc83a3b06 11320 bytes",
   ".codex/agents/stamity-implementer.toml": "1ea4080c15384615525b662fa6e58d5ae175c5cafe7830c81eb3eb1f640e80be 10787 bytes",
   ".codex/agents/stamity-performance.toml": "da8811a16ce9fcaf4c26b210bf2d4e38316d4bda367282fc7a6794325a50caf8 14744 bytes",
   ".codex/agents/stamity-researcher.toml": "10a96c8f7d565a6d5b249925e9da79d03f8807bf883f207d3dd64b0fff475828 9049 bytes",
-  ".codex/agents/stamity-reviewer.toml": "de447ac09c3b520bfe2b36a6edfcf166de719d7e6a390e19242c68ac6d372b48 16500 bytes",
+  ".codex/agents/stamity-reviewer.toml": "e7033032507211bc635d1baaaf391a6bdd62735633163ec53e1b1a32392b3a17 16609 bytes",
   ".codex/agents/stamity-security.toml": "662ebb89e42d325c28ecaa4cd9120ca8b843f786a8d1d960a4790f8669d918fc 13743 bytes",
   ".codex/agents/stamity-spec-author.toml": "18301283ac47ea3891d4b7b4c88a4d1226ed0b3837e6e9822a7261c38d0ec8ed 12973 bytes",
-  ".codex/agents/stamity-test-runner.toml": "d29d3afec340e03e58e58a070ab34313f37579fffe64fe86066bc2d531b0716c 9272 bytes",
+  ".codex/agents/stamity-test-runner.toml": "d7762b27fa16b2a7d11903e7a43313f57c9aaa9516046fccd529bcafaca402e9 12597 bytes",
   ".codex/config.toml": "f52750a2e71d25d0a5a870124136e44ed0639f96aeab3a3390b2f21b3a5408cb 3072 bytes",
   ".codex/hooks.json": "d928729cf95e643258b688adcb2565e12dfe6825de0f77e83a20cca20b4d3293 8753 bytes",
   ".cursor/agents/stamity-creator.md": "90965555162a44819fd86df5e48245471aede3610e1d37cc88e1f705be9e67d3 13887 bytes",
@@ -1424,10 +1424,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-implementer.md": "987df3f2d5a84db6528e8e3ca7e4bbbf79fee7ae9d4756397ed204acd5adaa8f 10030 bytes",
   ".cursor/agents/stamity-performance.md": "5e0a889afdb1bd63a9298938ae288125fe7674b8032a34a102b28a2b8b9ad7c4 13950 bytes",
   ".cursor/agents/stamity-researcher.md": "3cbfe45b2977f1b58eee5c776e940bfdf65ed81d41a4b66b6dd0470256200dbd 8343 bytes",
-  ".cursor/agents/stamity-reviewer.md": "340f0c36f63b070e8d97c51134ab9c1a1f4cad98ccad14388f75ff4ac512e10d 15714 bytes",
+  ".cursor/agents/stamity-reviewer.md": "33c84d8e6ebb8ef99f9bd1fbfc43a5bba3bef2b3b622a3a8383e820f65847d00 15823 bytes",
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
-  ".cursor/agents/stamity-test-runner.md": "c958ba1b86ebe819d78a2748f71c59c88a82465658877cc5ea737ee94ee91462 8542 bytes",
+  ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
   ".cursor/hooks.json": "8d32fc5e6e9d6935a18866be216b40092a32042320556910bdc247c9ef220e03 1521 bytes",
   ".cursor/hooks/stamity-mcp-guard.mjs": "ff6ede2e8ee71868f15447783aadd980e0b4ea1b53a1d0ca76f18578b356935e 7645 bytes",
   ".cursor/hooks/stamity-subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
@@ -1438,7 +1438,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/rules/stamity-injection-screening.mdc": "846521a2e7804e5c2ec897b2853873ebd8dd522c29f47d84280f843d9335d5e4 7775 bytes",
   ".cursor/rules/stamity-learnings-schema.mdc": "f28d98e76d473b4a4eb43b10873d6f7c81e72e0ca93e2a0f5709c24bce67edab 2658 bytes",
   ".cursor/rules/stamity-migrations.mdc": "c717d57d0d70a45e178138832e65d51537a0dd8b0e84bbf4bd0cfcf0b574f0ed 4824 bytes",
-  ".cursor/rules/stamity-question-protocol.mdc": "9ae263fc86e6269e23da4c81cc1f6a6dfc1f8eb1fe1adf4093beae2838bb90d1 4013 bytes",
+  ".cursor/rules/stamity-question-protocol.mdc": "f4044657f92492a1f8d33df356aa072803c0607fa299a142f9810b4815c6c3eb 5309 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
@@ -1450,10 +1450,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/agents/stamity-implementer.agent.md": "fa6bdbe8d225a1258ad3844caa1ffe517aed18a4a8cb7c58d2e277f421d108dc 10183 bytes",
   ".github/agents/stamity-performance.agent.md": "3e1aa08fbfa0a4997623e9a7eb4467dd1a9ab39d9554a7f40077b8e9fe42a8ad 14071 bytes",
   ".github/agents/stamity-researcher.agent.md": "152341d3b770c156dcbc53b02e1ed84b8ba03fb49af430ff4f92b705484bde6e 8470 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "cb0b2c0f13b942bb0af5b51e90ef45d712581aafdc898c9e642cd539e54fabf9 15830 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "0cf06073e46c0b33707bce07ca7dac2d2b275749f692c23b9c5efc9a60538249 15939 bytes",
   ".github/agents/stamity-security.agent.md": "bf085ca84b4664a1ea7766bd03009ba5e3a65b26f130031ca20fd882591a9adc 13073 bytes",
   ".github/agents/stamity-spec-author.agent.md": "5c60d74d20769005ba16187611c2d1541f140ba9f99a206842d38dda8e893e26 12269 bytes",
-  ".github/agents/stamity-test-runner.agent.md": "df129ec71c072e2bdd79ede382fbed32df29063b6c42a135de4e87e18b0b363f 8686 bytes",
+  ".github/agents/stamity-test-runner.agent.md": "1f5cc042b58d1d824a55b5bf441bb369cf8a82904628e2aa3e70a84b33a63e08 12011 bytes",
   ".github/hooks/stamity.json": "45ed74707011b3ae56bb1316ead61c42e7b10db36a3b6cbf7af8580d63680b16 1417 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
@@ -1465,15 +1465,15 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/instructions/stamity-security-patterns.instructions.md": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2e47ffb0bc4190eb744a27f557d349d52443f66d90f8b01f78a5d2b996d83b86 4237 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "3edf8f6ed10d97b55a0d9e2022040e67485aa6f1eac79936ebb8b3722e2b5cfa 4497 bytes",
-  ".github/prompts/st-ask.prompt.md": "dcb4cdf93a8bb189bb2266b202935594ebed66feb112f197ab63328067548b9f 8862 bytes",
-  ".github/prompts/st-board.prompt.md": "fd4a4ebf44ca2317ac63f6e305c9900d266c801d5d4e73bf16a492e7dc0599fb 36257 bytes",
-  ".github/prompts/st-debug.prompt.md": "e4ea7810f16cf45a8c155d77a55f10aebbfcc4985fe2b88c89fff9f33ff7ca6c 16241 bytes",
-  ".github/prompts/st-plan.prompt.md": "aab2aab69c8ebde5d63904b64fab6a56f354017e7b9220ae7e3be60ac46fd1f1 28393 bytes",
-  ".github/prompts/st-pr-resolve.prompt.md": "85f882951797d5e8365d34c82d8762aea823d375ba560245aa74e88a3619ca9a 20908 bytes",
-  ".github/prompts/st-quick.prompt.md": "088f4d3332bf205c089054c8ae117e9310d11f38119a5f5e672d7b2683cee0d4 14237 bytes",
-  ".github/prompts/st-rework.prompt.md": "fc5fc0e0c00e8d0a1214713402376a81f49c246d2168bd97096b8d61f93ac113 20726 bytes",
-  ".github/prompts/st-spec.prompt.md": "9db1bfa5bb3e6da20e339c391f7a901a6519a4a2796fda120e30a7ca78bcf750 17480 bytes",
-  ".github/prompts/st-work.prompt.md": "39f8f8f30a66134c9a1620e62109f79fc090f1379c8637e060f18b0002e95e4f 35418 bytes",
+  ".github/prompts/st-ask.prompt.md": "e3bdb3544b813ea7f59deb62ecbf329680d2fe119736ccbdbed4a8eb14e6f5a7 9433 bytes",
+  ".github/prompts/st-board.prompt.md": "5f391bc95c0fa0922ac266e55d901720b6f83ed0f1d9224079f46990f1435be4 38327 bytes",
+  ".github/prompts/st-debug.prompt.md": "9339e785d8d44560a04ed36331e85bf2e13552fe77ee66b494f11d4ec90b16ae 16887 bytes",
+  ".github/prompts/st-plan.prompt.md": "8eba55bffc0e240b4cae3da3d64c0a03c2daadb4b6dda8e84d6237db2a222e2d 29274 bytes",
+  ".github/prompts/st-pr-resolve.prompt.md": "5dbc02c57d9d1b7092e901a866ef6fbe914f6850fe4076d1163a778cdefb71c7 24169 bytes",
+  ".github/prompts/st-quick.prompt.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
+  ".github/prompts/st-rework.prompt.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
+  ".github/prompts/st-spec.prompt.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
+  ".github/prompts/st-work.prompt.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "deb31212a939b4204646d43bbec9557e5c02514f4b5266889477f781c83cc033 880 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
@@ -1482,35 +1482,35 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60 20833 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7 40761 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "4b357fe254fb50c5fd94a75442efe6a04a63b089cb8040d8afdaa5a16e53cec5 18237 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "43935c8d232e03b599e53fe77ccd63b1d967c0beb9022bc0976ce5ab47b61594 18239 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "31a325b5f60b6f134c5d014e83c224d08b1a929c2ecc595e6d17797a17fa7260 18238 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "5298e8c09b9447a9c1c41a7dfd85fa1aeff5595145bae32247c3879b1af9b92b 80774 bytes",
+  ".stamity/manifest.json": "ae3b6e89fdf045469c917757c5cff88b36064a4d0070f79b0eb79c356facd56b 80774 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
-  "AGENTS.override.md": "a9b002d4c33756a7fb86bacb18301d58834a0cf8e9f2d6f81c021396af8b0dd2 25504 bytes",
+  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "AGENTS.override.md": "eca44193582b28c038ae4cea7603b3dd543a430160065599354fd5c0273cea6d 25751 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "packages/alpha/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "packages/beta/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1644,7 +1644,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1654,18 +1654,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -1718,19 +1718,19 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/agents/stamity-implementer.md": "416fc88d4d9be312b984992fdf3d682201f489924f29cbd0c9cbb836f8d9ae03 10163 bytes",
   ".claude/agents/stamity-performance.md": "3211fe9fb4c5535a7c43e3e829cf9ea11a9f6c381e5bff98cdb053db00eb0294 14040 bytes",
   ".claude/agents/stamity-researcher.md": "ddd73f1c30b8f2c4010e7b6092553086a0c28e6a87589484ffe7896f4ae1ba23 8440 bytes",
-  ".claude/agents/stamity-reviewer.md": "09c8e72b27918d1b2d587b2b43ee56c7cebea3a3bea2a70f5d0919711a0154e7 15797 bytes",
+  ".claude/agents/stamity-reviewer.md": "0dd91bdec835ee8d8224794ec59c819c58de23004485b01b7a289b34c570d5d7 15906 bytes",
   ".claude/agents/stamity-security.md": "baf297774a6fac2c2b0cbe928dd80755c14187cc7556db69c1cb85e23866d0fd 13040 bytes",
   ".claude/agents/stamity-spec-author.md": "ce02ef8625403a9e493dadace62ce107e5b23290dd280a642991f4ec4e8235d7 12248 bytes",
-  ".claude/agents/stamity-test-runner.md": "f835792753c850fb93ef8888bdef2616a585bc1be2bea2ad837527827c02e52c 8648 bytes",
-  ".claude/commands/st-ask.md": "dcb4cdf93a8bb189bb2266b202935594ebed66feb112f197ab63328067548b9f 8862 bytes",
-  ".claude/commands/st-board.md": "fd4a4ebf44ca2317ac63f6e305c9900d266c801d5d4e73bf16a492e7dc0599fb 36257 bytes",
-  ".claude/commands/st-debug.md": "e4ea7810f16cf45a8c155d77a55f10aebbfcc4985fe2b88c89fff9f33ff7ca6c 16241 bytes",
-  ".claude/commands/st-plan.md": "aab2aab69c8ebde5d63904b64fab6a56f354017e7b9220ae7e3be60ac46fd1f1 28393 bytes",
-  ".claude/commands/st-pr-resolve.md": "85f882951797d5e8365d34c82d8762aea823d375ba560245aa74e88a3619ca9a 20908 bytes",
-  ".claude/commands/st-quick.md": "088f4d3332bf205c089054c8ae117e9310d11f38119a5f5e672d7b2683cee0d4 14237 bytes",
-  ".claude/commands/st-rework.md": "fc5fc0e0c00e8d0a1214713402376a81f49c246d2168bd97096b8d61f93ac113 20726 bytes",
-  ".claude/commands/st-spec.md": "9db1bfa5bb3e6da20e339c391f7a901a6519a4a2796fda120e30a7ca78bcf750 17480 bytes",
-  ".claude/commands/st-work.md": "39f8f8f30a66134c9a1620e62109f79fc090f1379c8637e060f18b0002e95e4f 35418 bytes",
+  ".claude/agents/stamity-test-runner.md": "36401d4ee6e79c390b43d082522bc73b0a0a95c3200c23d91120b3ffb6bbbc7f 11973 bytes",
+  ".claude/commands/st-ask.md": "e3bdb3544b813ea7f59deb62ecbf329680d2fe119736ccbdbed4a8eb14e6f5a7 9433 bytes",
+  ".claude/commands/st-board.md": "5f391bc95c0fa0922ac266e55d901720b6f83ed0f1d9224079f46990f1435be4 38327 bytes",
+  ".claude/commands/st-debug.md": "9339e785d8d44560a04ed36331e85bf2e13552fe77ee66b494f11d4ec90b16ae 16887 bytes",
+  ".claude/commands/st-plan.md": "8eba55bffc0e240b4cae3da3d64c0a03c2daadb4b6dda8e84d6237db2a222e2d 29274 bytes",
+  ".claude/commands/st-pr-resolve.md": "5dbc02c57d9d1b7092e901a866ef6fbe914f6850fe4076d1163a778cdefb71c7 24169 bytes",
+  ".claude/commands/st-quick.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
+  ".claude/commands/st-rework.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
+  ".claude/commands/st-spec.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
+  ".claude/commands/st-work.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
   ".claude/rules/stamity-api-versioning.md": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391 5080 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
   ".claude/rules/stamity-injection-screening.md": "b2e787a49c12892c04a16ba0f7b2124d97d5c1aa9c76afc053ea2b25d7e553bc 7760 bytes",
@@ -1754,12 +1754,12 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
   ".claude/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
-  ".claude/skills/st-qa/SKILL.md": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203 8425 bytes",
+  ".claude/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
   ".claude/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".claude/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".claude/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".claude/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".claude/skills/st-verify/references/maintainability.md": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d 4361 bytes",
   ".claude/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
   ".claude/skills/st-verify/references/product-spec.md": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes",
   ".claude/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
@@ -1770,7 +1770,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
   ".claude/skills/stamity-ai-evals/SKILL.md": "803c4a405842094e687a311c73b7754089cdd50496b0427080cd59a63fc17968 4423 bytes",
-  ".claude/skills/stamity-question-protocol/SKILL.md": "95eb20c8c5081ca2bb958940cca0c59119d48dc260e423359bbf334aa1fa2421 4280 bytes",
+  ".claude/skills/stamity-question-protocol/SKILL.md": "3f6abe68a805b0a1de9705f50009463e959311813173c2e5557042652f6e0066 6356 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
@@ -1778,13 +1778,13 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60 20833 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7 40761 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "61f8190259db26ef8afe4aa71954b155ee7b5cbd30a92bb0bbe8b7190de54867 19286 bytes",
-  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  ".stamity/manifest.json": "0715927690c833c0f2847d4b515af6f4a5ec5ea8d92195d402adb059e71f6ff3 19286 bytes",
+  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1917,7 +1917,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -1927,18 +1927,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -2002,7 +2002,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2012,18 +2012,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -2378,7 +2378,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2388,18 +2388,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -2463,7 +2463,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2473,18 +2473,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -2527,13 +2527,13 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 exports[`emitted tree for codex > matches the tree digest golden > codex tree digest 1`] = `
 {
-  ".agents/skills/st-ask/SKILL.md": "dee2eebd5dbd8672101c70d3433b477bfb07778d9378a74369bcfe704d285121 8906 bytes",
+  ".agents/skills/st-ask/SKILL.md": "f0b003a68b1909226f82a63064187644d9a4ed498f4cb2f3a0d3d0ac98750680 9477 bytes",
   ".agents/skills/st-ask/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-board/SKILL.md": "7fe49722409149f659edcbfcd0ee010d17997a3bb3801f64f3054e64463ed4b4 36303 bytes",
+  ".agents/skills/st-board/SKILL.md": "9928b35c3f9b136f0b25a7436e60e38531db5b961e96aecaec14c32495704cdf 38373 bytes",
   ".agents/skills/st-board/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".agents/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
-  ".agents/skills/st-debug/SKILL.md": "3867acf1842be442db3621839b53ac40813bc06b84c8f0dda54c575357c7e5b4 16285 bytes",
+  ".agents/skills/st-debug/SKILL.md": "f7186a975bc262760cf702d76f05255fc271a646f0c839ebd0a096f4ae48a098 16931 bytes",
   ".agents/skills/st-debug/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
   ".agents/skills/st-dep-audit/agents/openai.yaml": "03b9f0b720a98145fda8584c40f0a54f56ae18c213ca7d42e9801dcac5c0abde 156 bytes",
@@ -2545,22 +2545,22 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
   ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
-  ".agents/skills/st-plan/SKILL.md": "600e61e2020fa5cb9df8c020fb5004a41ff0c2f9760019a3d9b1ee20554afbae 28436 bytes",
+  ".agents/skills/st-plan/SKILL.md": "ddf4d53ff91bc02fc1b13e727051316fafd101551a7b51a1292d2197d3407638 29317 bytes",
   ".agents/skills/st-plan/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-pr-resolve/SKILL.md": "04319df7f400f968e82f7f2dd2d8813162ce754dd1398dff960c83b41689f493 20959 bytes",
+  ".agents/skills/st-pr-resolve/SKILL.md": "d0c98bda57c71aeba567d1b5abc36050a56b13b3d1422e958da0100c632cffd3 24220 bytes",
   ".agents/skills/st-pr-resolve/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-qa/SKILL.md": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203 8425 bytes",
+  ".agents/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".agents/skills/st-quick/SKILL.md": "002cf00206636251d95f49a25d2100e22fdc85663b2b3eea5898853a38d45a8d 14281 bytes",
+  ".agents/skills/st-quick/SKILL.md": "6edf3eb5298b1d8b7f8bbef6dd317ee0c3b0ea6c3cf8c669c4fa6817a36a3088 15223 bytes",
   ".agents/skills/st-quick/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-rework/SKILL.md": "b598a8121d59c38299d219813397b2f66db2d8842dacff62810add113b507347 20773 bytes",
+  ".agents/skills/st-rework/SKILL.md": "3a11a777a32e8b4b72518882912d6ad600e1c676c4e5fda6da55e3a26d20e1cd 21445 bytes",
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-spec/SKILL.md": "ddbbe70b0541288bd7dabed92dce55f1024266b3a22dd6bc0a20fbfba63ba94f 17525 bytes",
+  ".agents/skills/st-spec/SKILL.md": "7737c1c69812d41cb22e2993d2f36190b7e2f8e5c2b54d66f1fc6d8f92276dc4 18830 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d 4361 bytes",
   ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
   ".agents/skills/st-verify/references/product-spec.md": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes",
   ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
@@ -2570,14 +2570,14 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
-  ".agents/skills/st-work/SKILL.md": "079eb12c8e7ccfde8c09ab7d44bc83e7b0f1c80ce28eb388eacbd2128cbf975b 35463 bytes",
+  ".agents/skills/st-work/SKILL.md": "0b2c8f7b45bd27d07e2fdec37785ee4df435d902f320743fdeaf99d7fcaadcff 36005 bytes",
   ".agents/skills/st-work/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "61ef9ffd3b0bd66c5c3e96772d2e48dad450f0d8365b1c1fab7987eb24f1818a 4422 bytes",
   ".agents/skills/stamity-api-versioning/SKILL.md": "8507a775bed6e7f74093ce36780d491d32cd8275260f20f028795ab6a2446b6d 5350 bytes",
   ".agents/skills/stamity-contract-census/SKILL.md": "c1a8da7803ccf7805f24066dce1c6f42719849d1a569901235bb15fc5e1dbe0c 4068 bytes",
   ".agents/skills/stamity-learnings-schema/SKILL.md": "b9248a64b6e9db928a182556b22e9ff5576f201db4739d14df7fceac103f73f7 2973 bytes",
   ".agents/skills/stamity-migrations/SKILL.md": "8d9a063921ac4fc23dfb0d06dd776e43c9177cc9556c1710501c84599cb51031 5116 bytes",
-  ".agents/skills/stamity-question-protocol/SKILL.md": "c9a284377970f0c3aae03f18c53b99e9ad107f1fe6f0da29b1fd47b565b881fa 4279 bytes",
+  ".agents/skills/stamity-question-protocol/SKILL.md": "c97fcbd708782434a5d8ea501ef062bc7d4fe1dad2c38ea4bb402d54c0587fd3 6355 bytes",
   ".agents/skills/stamity-resilience/SKILL.md": "f8e992ecde476af92d78512fef9707d6bcd9920f04520ff9c1fd27eb9afabb49 5312 bytes",
   ".agents/skills/stamity-testing/SKILL.md": "8fd553e97c1b8ea982bb5eed9006b70d2b77e315989d24cd2cb8e2aad33ec9ce 4515 bytes",
   ".agents/skills/stamity-ui-states/SKILL.md": "f153f44c19f24518dbd9eec7ebfbcb2723793ca96b88fd51afb7c93097d9bf62 4767 bytes",
@@ -2587,10 +2587,10 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-implementer.toml": "1ea4080c15384615525b662fa6e58d5ae175c5cafe7830c81eb3eb1f640e80be 10787 bytes",
   ".codex/agents/stamity-performance.toml": "da8811a16ce9fcaf4c26b210bf2d4e38316d4bda367282fc7a6794325a50caf8 14744 bytes",
   ".codex/agents/stamity-researcher.toml": "10a96c8f7d565a6d5b249925e9da79d03f8807bf883f207d3dd64b0fff475828 9049 bytes",
-  ".codex/agents/stamity-reviewer.toml": "de447ac09c3b520bfe2b36a6edfcf166de719d7e6a390e19242c68ac6d372b48 16500 bytes",
+  ".codex/agents/stamity-reviewer.toml": "e7033032507211bc635d1baaaf391a6bdd62735633163ec53e1b1a32392b3a17 16609 bytes",
   ".codex/agents/stamity-security.toml": "662ebb89e42d325c28ecaa4cd9120ca8b843f786a8d1d960a4790f8669d918fc 13743 bytes",
   ".codex/agents/stamity-spec-author.toml": "18301283ac47ea3891d4b7b4c88a4d1226ed0b3837e6e9822a7261c38d0ec8ed 12973 bytes",
-  ".codex/agents/stamity-test-runner.toml": "d29d3afec340e03e58e58a070ab34313f37579fffe64fe86066bc2d531b0716c 9272 bytes",
+  ".codex/agents/stamity-test-runner.toml": "d7762b27fa16b2a7d11903e7a43313f57c9aaa9516046fccd529bcafaca402e9 12597 bytes",
   ".codex/config.toml": "f52750a2e71d25d0a5a870124136e44ed0639f96aeab3a3390b2f21b3a5408cb 3072 bytes",
   ".codex/hooks.json": "d928729cf95e643258b688adcb2565e12dfe6825de0f77e83a20cca20b4d3293 8753 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
@@ -2599,20 +2599,20 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "4b357fe254fb50c5fd94a75442efe6a04a63b089cb8040d8afdaa5a16e53cec5 18237 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "be12cba979ac07dd4f9eab0e08686c0e814463058091cef39ea258502d30302d 21208 bytes",
-  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
-  "AGENTS.override.md": "a9b002d4c33756a7fb86bacb18301d58834a0cf8e9f2d6f81c021396af8b0dd2 25504 bytes",
+  ".stamity/manifest.json": "60a4fd015bea49d0c1508ac2026e8320748403cfb119f7f6538093be20f2fe6b 21208 bytes",
+  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "AGENTS.override.md": "eca44193582b28c038ae4cea7603b3dd543a430160065599354fd5c0273cea6d 25751 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "packages/alpha/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "packages/beta/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2752,7 +2752,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -2762,18 +2762,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -2828,12 +2828,12 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
   ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
-  ".agents/skills/st-qa/SKILL.md": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203 8425 bytes",
+  ".agents/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d 4361 bytes",
   ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
   ".agents/skills/st-verify/references/product-spec.md": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes",
   ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
@@ -2844,17 +2844,17 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "a32464ef1140e8ef067d2247cd8edc2e4a7c326fb31d866ddb85f61123f11b96 4424 bytes",
-  ".agents/skills/stamity-question-protocol/SKILL.md": "41e0acafb3a8cc0bb8e92976aedaf0049531f1e91a8855377d9061498ab81fcc 4281 bytes",
+  ".agents/skills/stamity-question-protocol/SKILL.md": "ba4d9d29bc5b9379efc302344d6053d89cf08cc466159460f6f27fa4e1b9c8cd 6357 bytes",
   ".github/agents/stamity-creator.agent.md": "1ce9d08655dccd923468b3e4f8c1a4658a0958b51309d2809b62ea88df229af7 14027 bytes",
   ".github/agents/stamity-design-quality.agent.md": "79e60cd90df62650ae7e4afe6f15b678062f611318d4393ad2c88c92bb9b9130 12094 bytes",
   ".github/agents/stamity-fixer.agent.md": "23095bc67e956a1d7194490ebbcabd9c69b0ddfc9d675066c8ae7301965c806b 10722 bytes",
   ".github/agents/stamity-implementer.agent.md": "fa6bdbe8d225a1258ad3844caa1ffe517aed18a4a8cb7c58d2e277f421d108dc 10183 bytes",
   ".github/agents/stamity-performance.agent.md": "3e1aa08fbfa0a4997623e9a7eb4467dd1a9ab39d9554a7f40077b8e9fe42a8ad 14071 bytes",
   ".github/agents/stamity-researcher.agent.md": "152341d3b770c156dcbc53b02e1ed84b8ba03fb49af430ff4f92b705484bde6e 8470 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "cb0b2c0f13b942bb0af5b51e90ef45d712581aafdc898c9e642cd539e54fabf9 15830 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "0cf06073e46c0b33707bce07ca7dac2d2b275749f692c23b9c5efc9a60538249 15939 bytes",
   ".github/agents/stamity-security.agent.md": "bf085ca84b4664a1ea7766bd03009ba5e3a65b26f130031ca20fd882591a9adc 13073 bytes",
   ".github/agents/stamity-spec-author.agent.md": "5c60d74d20769005ba16187611c2d1541f140ba9f99a206842d38dda8e893e26 12269 bytes",
-  ".github/agents/stamity-test-runner.agent.md": "df129ec71c072e2bdd79ede382fbed32df29063b6c42a135de4e87e18b0b363f 8686 bytes",
+  ".github/agents/stamity-test-runner.agent.md": "1f5cc042b58d1d824a55b5bf441bb369cf8a82904628e2aa3e70a84b33a63e08 12011 bytes",
   ".github/hooks/stamity.json": "45ed74707011b3ae56bb1316ead61c42e7b10db36a3b6cbf7af8580d63680b16 1417 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
@@ -2866,15 +2866,15 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/instructions/stamity-security-patterns.instructions.md": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2e47ffb0bc4190eb744a27f557d349d52443f66d90f8b01f78a5d2b996d83b86 4237 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "3edf8f6ed10d97b55a0d9e2022040e67485aa6f1eac79936ebb8b3722e2b5cfa 4497 bytes",
-  ".github/prompts/st-ask.prompt.md": "dcb4cdf93a8bb189bb2266b202935594ebed66feb112f197ab63328067548b9f 8862 bytes",
-  ".github/prompts/st-board.prompt.md": "fd4a4ebf44ca2317ac63f6e305c9900d266c801d5d4e73bf16a492e7dc0599fb 36257 bytes",
-  ".github/prompts/st-debug.prompt.md": "e4ea7810f16cf45a8c155d77a55f10aebbfcc4985fe2b88c89fff9f33ff7ca6c 16241 bytes",
-  ".github/prompts/st-plan.prompt.md": "aab2aab69c8ebde5d63904b64fab6a56f354017e7b9220ae7e3be60ac46fd1f1 28393 bytes",
-  ".github/prompts/st-pr-resolve.prompt.md": "85f882951797d5e8365d34c82d8762aea823d375ba560245aa74e88a3619ca9a 20908 bytes",
-  ".github/prompts/st-quick.prompt.md": "088f4d3332bf205c089054c8ae117e9310d11f38119a5f5e672d7b2683cee0d4 14237 bytes",
-  ".github/prompts/st-rework.prompt.md": "fc5fc0e0c00e8d0a1214713402376a81f49c246d2168bd97096b8d61f93ac113 20726 bytes",
-  ".github/prompts/st-spec.prompt.md": "9db1bfa5bb3e6da20e339c391f7a901a6519a4a2796fda120e30a7ca78bcf750 17480 bytes",
-  ".github/prompts/st-work.prompt.md": "39f8f8f30a66134c9a1620e62109f79fc090f1379c8637e060f18b0002e95e4f 35418 bytes",
+  ".github/prompts/st-ask.prompt.md": "e3bdb3544b813ea7f59deb62ecbf329680d2fe119736ccbdbed4a8eb14e6f5a7 9433 bytes",
+  ".github/prompts/st-board.prompt.md": "5f391bc95c0fa0922ac266e55d901720b6f83ed0f1d9224079f46990f1435be4 38327 bytes",
+  ".github/prompts/st-debug.prompt.md": "9339e785d8d44560a04ed36331e85bf2e13552fe77ee66b494f11d4ec90b16ae 16887 bytes",
+  ".github/prompts/st-plan.prompt.md": "8eba55bffc0e240b4cae3da3d64c0a03c2daadb4b6dda8e84d6237db2a222e2d 29274 bytes",
+  ".github/prompts/st-pr-resolve.prompt.md": "5dbc02c57d9d1b7092e901a866ef6fbe914f6850fe4076d1163a778cdefb71c7 24169 bytes",
+  ".github/prompts/st-quick.prompt.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
+  ".github/prompts/st-rework.prompt.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
+  ".github/prompts/st-spec.prompt.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
+  ".github/prompts/st-work.prompt.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "deb31212a939b4204646d43bbec9557e5c02514f4b5266889477f781c83cc033 880 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
@@ -2882,15 +2882,15 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "43935c8d232e03b599e53fe77ccd63b1d967c0beb9022bc0976ce5ab47b61594 18239 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a3ffb0beb1b89790ff9287e5b323dfff1bb73c345a211b6dbfa4d90505ede408 19055 bytes",
+  ".stamity/manifest.json": "52ec602a12655e77991fae616656a7533597dc9b920e50a4786dd69cc087033e 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3295,7 +3295,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -3305,18 +3305,18 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
-   exactly one, with numbered options and a declared default-if-no-response. Make no second request
-   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
-5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
-   repeating a recorded failure is a process defect.
-6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
-   shared API shapes, schemas, and events break across file boundaries. Census
-   shared contracts before parallel edits touch them.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
+   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
+   break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
    orchestrator editing product files inline is a protocol violation, and so is handing the operator
    the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
@@ -3359,13 +3359,13 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 exports[`emitted tree for cursor > matches the tree digest golden > cursor tree digest 1`] = `
 {
-  ".agents/skills/st-ask/SKILL.md": "dee2eebd5dbd8672101c70d3433b477bfb07778d9378a74369bcfe704d285121 8906 bytes",
+  ".agents/skills/st-ask/SKILL.md": "f0b003a68b1909226f82a63064187644d9a4ed498f4cb2f3a0d3d0ac98750680 9477 bytes",
   ".agents/skills/st-ask/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-board/SKILL.md": "7fe49722409149f659edcbfcd0ee010d17997a3bb3801f64f3054e64463ed4b4 36303 bytes",
+  ".agents/skills/st-board/SKILL.md": "9928b35c3f9b136f0b25a7436e60e38531db5b961e96aecaec14c32495704cdf 38373 bytes",
   ".agents/skills/st-board/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".agents/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
-  ".agents/skills/st-debug/SKILL.md": "3867acf1842be442db3621839b53ac40813bc06b84c8f0dda54c575357c7e5b4 16285 bytes",
+  ".agents/skills/st-debug/SKILL.md": "f7186a975bc262760cf702d76f05255fc271a646f0c839ebd0a096f4ae48a098 16931 bytes",
   ".agents/skills/st-debug/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
   ".agents/skills/st-dep-audit/agents/openai.yaml": "03b9f0b720a98145fda8584c40f0a54f56ae18c213ca7d42e9801dcac5c0abde 156 bytes",
@@ -3377,22 +3377,22 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
   ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
-  ".agents/skills/st-plan/SKILL.md": "600e61e2020fa5cb9df8c020fb5004a41ff0c2f9760019a3d9b1ee20554afbae 28436 bytes",
+  ".agents/skills/st-plan/SKILL.md": "ddf4d53ff91bc02fc1b13e727051316fafd101551a7b51a1292d2197d3407638 29317 bytes",
   ".agents/skills/st-plan/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-pr-resolve/SKILL.md": "04319df7f400f968e82f7f2dd2d8813162ce754dd1398dff960c83b41689f493 20959 bytes",
+  ".agents/skills/st-pr-resolve/SKILL.md": "d0c98bda57c71aeba567d1b5abc36050a56b13b3d1422e958da0100c632cffd3 24220 bytes",
   ".agents/skills/st-pr-resolve/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-qa/SKILL.md": "7a018926f6bb2b0f9e35ac28d1b40ebd02aaba75246cdb3bb487023b6bc01203 8425 bytes",
+  ".agents/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".agents/skills/st-quick/SKILL.md": "002cf00206636251d95f49a25d2100e22fdc85663b2b3eea5898853a38d45a8d 14281 bytes",
+  ".agents/skills/st-quick/SKILL.md": "6edf3eb5298b1d8b7f8bbef6dd317ee0c3b0ea6c3cf8c669c4fa6817a36a3088 15223 bytes",
   ".agents/skills/st-quick/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-rework/SKILL.md": "b598a8121d59c38299d219813397b2f66db2d8842dacff62810add113b507347 20773 bytes",
+  ".agents/skills/st-rework/SKILL.md": "3a11a777a32e8b4b72518882912d6ad600e1c676c4e5fda6da55e3a26d20e1cd 21445 bytes",
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-spec/SKILL.md": "ddbbe70b0541288bd7dabed92dce55f1024266b3a22dd6bc0a20fbfba63ba94f 17525 bytes",
+  ".agents/skills/st-spec/SKILL.md": "7737c1c69812d41cb22e2993d2f36190b7e2f8e5c2b54d66f1fc6d8f92276dc4 18830 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "ab762163c51730a01ac03d7c4a9f86e491ba6d56589ef6a0ca9b4e4804e1c22d 4361 bytes",
   ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
   ".agents/skills/st-verify/references/product-spec.md": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes",
   ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
@@ -3402,7 +3402,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
-  ".agents/skills/st-work/SKILL.md": "079eb12c8e7ccfde8c09ab7d44bc83e7b0f1c80ce28eb388eacbd2128cbf975b 35463 bytes",
+  ".agents/skills/st-work/SKILL.md": "0b2c8f7b45bd27d07e2fdec37785ee4df435d902f320743fdeaf99d7fcaadcff 36005 bytes",
   ".agents/skills/st-work/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".cursor/agents/stamity-creator.md": "90965555162a44819fd86df5e48245471aede3610e1d37cc88e1f705be9e67d3 13887 bytes",
   ".cursor/agents/stamity-design-quality.md": "291a2e555222f71cac92033322580ac2a5d5af510a67ba3e7b47f261eb47f413 11972 bytes",
@@ -3410,10 +3410,10 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-implementer.md": "987df3f2d5a84db6528e8e3ca7e4bbbf79fee7ae9d4756397ed204acd5adaa8f 10030 bytes",
   ".cursor/agents/stamity-performance.md": "5e0a889afdb1bd63a9298938ae288125fe7674b8032a34a102b28a2b8b9ad7c4 13950 bytes",
   ".cursor/agents/stamity-researcher.md": "3cbfe45b2977f1b58eee5c776e940bfdf65ed81d41a4b66b6dd0470256200dbd 8343 bytes",
-  ".cursor/agents/stamity-reviewer.md": "340f0c36f63b070e8d97c51134ab9c1a1f4cad98ccad14388f75ff4ac512e10d 15714 bytes",
+  ".cursor/agents/stamity-reviewer.md": "33c84d8e6ebb8ef99f9bd1fbfc43a5bba3bef2b3b622a3a8383e820f65847d00 15823 bytes",
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
-  ".cursor/agents/stamity-test-runner.md": "c958ba1b86ebe819d78a2748f71c59c88a82465658877cc5ea737ee94ee91462 8542 bytes",
+  ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
   ".cursor/hooks.json": "8d32fc5e6e9d6935a18866be216b40092a32042320556910bdc247c9ef220e03 1521 bytes",
   ".cursor/hooks/stamity-mcp-guard.mjs": "ff6ede2e8ee71868f15447783aadd980e0b4ea1b53a1d0ca76f18578b356935e 7645 bytes",
   ".cursor/hooks/stamity-subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
@@ -3424,7 +3424,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/rules/stamity-injection-screening.mdc": "846521a2e7804e5c2ec897b2853873ebd8dd522c29f47d84280f843d9335d5e4 7775 bytes",
   ".cursor/rules/stamity-learnings-schema.mdc": "f28d98e76d473b4a4eb43b10873d6f7c81e72e0ca93e2a0f5709c24bce67edab 2658 bytes",
   ".cursor/rules/stamity-migrations.mdc": "c717d57d0d70a45e178138832e65d51537a0dd8b0e84bbf4bd0cfcf0b574f0ed 4824 bytes",
-  ".cursor/rules/stamity-question-protocol.mdc": "9ae263fc86e6269e23da4c81cc1f6a6dfc1f8eb1fe1adf4093beae2838bb90d1 4013 bytes",
+  ".cursor/rules/stamity-question-protocol.mdc": "f4044657f92492a1f8d33df356aa072803c0607fa299a142f9810b4815c6c3eb 5309 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
@@ -3436,13 +3436,13 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "31a325b5f60b6f134c5d014e83c224d08b1a929c2ecc595e6d17797a17fa7260 18238 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614 47118 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6bc1756030b51c5e81c0fbc9c691b2ae6b086b7234f0f6dcd8189a4f216a4376 21863 bytes",
-  "AGENTS.md": "4096140fbafcaec3fefc2ea0cbafe9688ebb9f17134b9413b31b24f34f2dc9a4 5363 bytes",
+  ".stamity/manifest.json": "ceeef3dbe756d198f673b35aac8cb6b447881fae5181259b941e6a2f057120ac 21863 bytes",
+  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

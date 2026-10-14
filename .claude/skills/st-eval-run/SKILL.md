@@ -133,9 +133,9 @@ configuration before scoring; a different profile's calibration never transfers.
 Three independent fresh samples per case file under `evals/cases-v6/**`.
 Queue independent calls together up to the recorded capacity; the stateless runner
 allows 1–16 concurrent calls, default 4. A queue slot is a resource limit, never
-shared model context. A release measures the full 142-case roster (426 scenarios).
+shared model context. A release measures the full 139-case roster (417 scenarios).
 The session-native protocol uses two concurrent fresh children and five calibration
-judges before the 852 scenario/scoring-judge calls.
+judges before the 834 scenario/scoring-judge calls.
 
 Each scenario task contains exactly what the case seals and no more.
 
@@ -264,8 +264,9 @@ Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
 - a per-case table — case id, class, verdict, cited span,
 - per-metric scores beside the threshold each was measured against.
 
-Commit the artifact with the change that caused the run; results left only in
-the session transcript do not satisfy the artifact contract.
+Publish the run artifact with `node scripts/records.mjs commit -m …`; it lives on
+the `records` branch, never on `main`. Results left only in the session
+transcript do not satisfy the artifact contract.
 
 ## 7. Verdict
 
@@ -289,9 +290,8 @@ A clean run reports the artifact path and one line per metric.
 - A release runs the full set — a baseline run, or an incremental run composed
   with one under the incremental rule of `evals/SET-v7.md` ("Which releases run
   the set — amended 2026-10-08") — when its diff since the run of record touches
-  `content/**` or another file a case's `source:` names
-  (`scripts/plugins/setupCommand.mjs`); the emitted client files (the
-  cross-client goldens); the eval set's files (`evals/SET-v7.md`,
+  `content/**` or another file a case's `source:` names; the emitted client
+  files (the cross-client goldens); the eval set's files (`evals/SET-v7.md`,
   `evals/README.md`, `evals/coverage-exemptions-v6.md`, the selected rubric
   `evals/rubric-v7.md`, the model profiles `evals/model-profiles-v1.json` and
   `evals/MODEL-PROFILES-v1.md`); the case sets old and new (`evals/cases-v6/**`,

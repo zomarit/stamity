@@ -61,8 +61,9 @@ rows, and the verdict go into the mode-chosen line. `--state=greenfield` or
 Bounded interview: **one** clarification round, at most five questions, each
 with numbered options and a declared default. Anything still open after that
 round ships as a `[NEEDS CLARIFICATION]` marker in the spec — it does not buy a
-second round. The output is the PRD core: intent, personas, requirements with
-acceptance criteria, risk list, test plan.
+second round. The one exception is the close walk under Return contract, which
+asks about each marker still open before the close prints. The output is the PRD
+core: intent, personas, requirements with acceptance criteria, risk list, test plan.
 
 The spec format below closes at seven sections, so every one of those outputs
 is named a home rather than assumed one, and the two records that are decisions
@@ -79,7 +80,7 @@ rather than requirements land outside the spec file:
 
 An empty repo with no code and no answers still produces a spec: one
 requirement per stated intent, everything else marked. The interview stops at
-the round boundary, not when the questions run out.
+the round boundary, not when the questions run out; only the close walk asks again.
 
 ### Brownfield posture
 
@@ -268,8 +269,8 @@ applies no edit, and this command writes nothing in that mode.
 Fan out researchers when the questions are independent — one per module or
 surface — and merge through a single writer: `spec-author` owns every file
 under `docs/specs/`. Two authors on one spec file is a protocol violation.
-Sub-agents do not question the operator: an ambiguity comes back as
-`BLOCKED_AMBIGUITY` naming the readings, and this command asks.
+Sub-agents do not question the operator: an ambiguity comes back as `BLOCKED_AMBIGUITY` naming the readings, and this command asks. Every sub-agent call
+passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 ## Return contract
 
@@ -283,13 +284,26 @@ Every run closes with:
 - Manifest delta: rows added, changed, retired — or `none`.
 - Open markers: every `[NEEDS CLARIFICATION]` in the touched files — or `none`.
 - Not done: each gap the run left open — or `none`.
-- Next step — derived from this run's own state, never a fixed menu: an open
-  `[NEEDS CLARIFICATION]` marker makes resolving it the step, since a marked
-  spec is not handed to `/st-work`; an unconfirmed T2 or T3 proposal makes that
-  confirmation the step; a census gap makes the criterion it named the step. A
+- Next step — derived from this run's own state and the walk's answers, never a
+  fixed menu: an open `[NEEDS CLARIFICATION]` marker makes resolving it the
+  step, since a marked spec is not handed to `/st-work`; an unconfirmed T2 or T3
+  proposal makes that confirmation the step; a census gap makes the criterion it
+  named the step. An item the walk scheduled or dropped is not the step. A
   run that closed with none of those says so in the same line. When more than
   one of these is live at once, the step names exactly one of them — never two
   chained with `then` — and any one live condition satisfies the line.
+
+That close prints after the run has walked each open `[NEEDS CLARIFICATION]`
+marker, each unconfirmed T2 or T3 proposal and each census gap by the
+`stamity-question-protocol` rule's Close walk, and nothing prints after it;
+`check` records each answer and writes nothing. A marker's question declares
+"leave it marked" as its default, and only an answer the person gives replaces a
+marker. In `create`, `extract` and `sync` the answers are written before the
+close prints: `spec-author` replaces each answered marker with its answer in the
+requirement and records the question, the answer and the date in an ADR stub
+under `docs/adr/`, as the interview's resolved clarifications are; a confirmed
+proposal merges as its tier says; a marker left undecided or defaulted stays in
+the spec and is listed under Open markers.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:
