@@ -1651,7 +1651,7 @@ and `all-ci-checks` requires it (`.github/workflows/ci.yml:460-502`).
   the root, `sub/` and `sub/deeper/`, with `node` present and absent (`PATH=/usr/bin:/bin`), under no marker and each of
   the four session markers. From below the root every command matches the root's exit code and output; with no `node`
   Claude Code's `PreToolUse` exits 2 with "stamity: the pre-tool-use guard could not run", and every other command exits
-  as not found (127 under `sh`, 9009 under `cmd`) with empty stdout, Copilot's `preToolUse` and Cursor's
+  as not found (127 under `sh`, 1 under `cmd /c`) with empty stdout, Copilot's `preToolUse` and Cursor's
   `subagentStart` failing closed as documented; with an empty `HOME` Cursor's MCP guard denies with
   `NO_MCP_SERVERS_CONFIGURED`; each marker's `Session:` line appears (REQ-FLOW-085), and no marker's value is printed.
 
@@ -1663,10 +1663,12 @@ and `all-ci-checks` requires it (`.github/workflows/ci.yml:460-502`).
   hold (`test/cloud/containerLeg.test.ts`). Seen red when Copilot's commands were swapped for cwd-relative ones.
 
 As built, where the delta differed: the delta named `node`-less exits only for Claude's `PreToolUse`, Copilot's
-`preToolUse` and Cursor's `subagentStart`; the suite holds every command, and names the Windows code (9009). The
-container run and the Windows `cmd` path had not run before the pull request's CI (`build/69`, open until that CI shows
-them green). Nothing refreshes the pinned digest, so the job keeps the 2026-10-14 image's toolchain until
-someone re-reads it (`review/115`, open). This is ordinary testing, not a run in any vendor's cloud.
+`preToolUse` and Cursor's `subagentStart`; the suite holds every command, and names the Windows code: the delta's
+9009 is the `%ERRORLEVEL%` inside a `cmd` session, while the `cmd /c` process exits 1, as the first Windows run showed
+(`review/130`), so the suite asserts 1 and that none of the starter's own messages ran. The container run and the
+Windows `cmd` path had not run before the pull request's CI (`build/69`, open until that CI shows them green). Nothing
+refreshes the pinned digest, so the job keeps the 2026-10-14 image's toolchain until someone re-reads it
+(`review/115`, open). This is ordinary testing, not a run in any vendor's cloud.
 
 **Expand/contract:** an added required job; the ruleset requires `all-ci-checks` alone, so no required context goes
 missing. Rollback is a revert of the job with its aggregator assertions.

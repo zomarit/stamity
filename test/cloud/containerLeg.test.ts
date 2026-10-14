@@ -26,8 +26,27 @@ import { ensureDistBuilt } from "../support/distBuild.ts";
 
 const WINDOWS = process.platform === "win32";
 
-/** The exit code a shell gives a command it cannot find: POSIX `sh` 127, `cmd` 9009. */
-const NOT_FOUND = WINDOWS ? 9009 : 127;
+/**
+ * The exit code a shell's process gives a command it cannot find: POSIX `sh` 127, and `cmd /d /s
+ * /c` 1. Inside a `cmd` session the failed line sets `%ERRORLEVEL%` to 9009, but the `cmd`
+ * process exits 1, as Node's own suite records for `exec("does-not-exist")` on Windows
+ * (nodejs/node test/parallel/test-child-process-exec-error.js) and CI run 38654389979 showed.
+ */
+const NOT_FOUND = WINDOWS ? 1 : 127;
+
+/**
+ * A run in which `node` was not found: the shell's not-found exit, nothing on stdout, and on
+ * Windows, where 1 is also the starter's own failure exit, none of the starter's messages, so the
+ * 1 is `cmd`'s and the message it wrote names the command (in whatever language `cmd` speaks).
+ */
+function expectNodeNotFound(result: CliRunResult, label: string): void {
+  expect(result.code, `${label}: ${result.stderr}`).toBe(NOT_FOUND);
+  expect(result.stdout, label).toBe("");
+  if (WINDOWS) {
+    expect(result.stderr, label).not.toContain("Stamity hook");
+    expect(result.stderr, label).toMatch(/\bnode\b/i);
+  }
+}
 
 type Client = "claude" | "cursor" | "copilot" | "codex";
 
@@ -384,15 +403,13 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
   it("fails closed with no node: Copilot's preToolUse and Cursor's subagentStart exit as not found", () => {
     for (const marker of MARKERS) {
       for (const folder of FOLDERS) {
-        for (const { index } of [...rowsRunning("copilot", "stamity-pre-tool-use-guard"), ...rowsRunning("cursor", "stamity-subagent-guard")]) {
-          expect(resultOf("absent", marker.id, folder, index).code).toBe(NOT_FOUND);
+        for (const { index, row } of [...rowsRunning("copilot", "stamity-pre-tool-use-guard"), ...rowsRunning("cursor", "stamity-subagent-guard")]) {
+          expectNodeNotFound(resultOf("absent", marker.id, folder, index), `${row.client} ${row.event} ${row.script}`);
         }
         // Every other command but Claude Code's PreToolUse ends the same way: nothing ran, nothing allowed.
         for (const [index, row] of rows.entries()) {
           if (row.client === "claude" && row.script === "stamity-pre-tool-use-guard") continue;
-          const result = resultOf("absent", marker.id, folder, index);
-          expect(result.code, `${row.client} ${row.event} ${row.script}`).toBe(NOT_FOUND);
-          expect(result.stdout, `${row.client} ${row.event} ${row.script}`).toBe("");
+          expectNodeNotFound(resultOf("absent", marker.id, folder, index), `${row.client} ${row.event} ${row.script}`);
         }
       }
     }
