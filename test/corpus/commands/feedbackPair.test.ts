@@ -1135,8 +1135,13 @@ describe("pr-resolve — collection and evaluation", () => {
       "`gh pr checkout <n>` becomes these steps, in this order, `<n>` checked to be digits only. First one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.base.repo.full_name, .head.repo.full_name, .head.ref, .head.sha]'`; the round's proof block names the base repository's full name it returned.",
     );
     expect(preflight).toContain('Only then `git fetch origin "pull/<n>/head"`.');
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 5; ledger row
+    // `2026-10-14_cli-native/review/58`, signed off): the checkout read FETCH_HEAD a second
+    // time after the sha check, so a fetch between the two checked out an unverified commit.
+    // What changed about the contract: the checkout names the verified sha. Nothing is
+    // relaxed: the sentence is pinned whole, FETCH_HEAD in a checkout is asserted absent below.
     expect(preflight).toContain(
-      "Only then `git checkout -B \"pr-resolve-<n>\" FETCH_HEAD`, which moves a branch an earlier round left to the head just fetched.",
+      "Only then `git checkout -B \"pr-resolve-<n>\" \"<sha>\"`, with `<sha>` the head sha just verified, never `FETCH_HEAD` read a second time, which another fetch may have rewritten; it moves a branch an earlier round left to that head.",
     );
     // It sits in the batch that runs before the first fetch, where the checkout happens.
     expect(preflight.indexOf("In a REST-only session")).toBeLessThan(
@@ -1165,7 +1170,11 @@ describe("pr-resolve — collection and evaluation", () => {
     // which failed when an earlier round left that branch checked out or behind a force-push.
     // The checkout resets the branch to what was fetched, and a failed fetch stops the round.
     expect(rest).toContain('`git fetch origin "pull/<n>/head"`');
-    expect(rest).toContain('`git checkout -B "pr-resolve-<n>" FETCH_HEAD`');
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 5; ledger row
+    // `2026-10-14_cli-native/review/58`): the checkout takes the sha the check verified, and
+    // no checkout reads FETCH_HEAD, which a concurrent fetch can rewrite after the check.
+    expect(rest).toContain('`git checkout -B "pr-resolve-<n>" "<sha>"`');
+    expect(rest).not.toMatch(/git checkout[^`]*FETCH_HEAD/);
     expect(rest).toContain("A failed fetch stops the round with its error, before any checkout.");
     expect(rest).not.toContain("pull/<n>/head:pr-resolve-<n>");
     expect(rest).toContain("`<n>` checked to be digits only");
@@ -1210,7 +1219,7 @@ describe("pr-resolve — collection and evaluation", () => {
       "A head repository other than",
       '`git fetch origin "pull/<n>/head"`',
       "`git rev-parse FETCH_HEAD`",
-      '`git checkout -B "pr-resolve-<n>" FETCH_HEAD`',
+      '`git checkout -B "pr-resolve-<n>" "<sha>"`',
       '`git push origin "HEAD:refs/heads/<ref>"`',
       "After the push, a fresh read",
     ].map((step) => rest.indexOf(step));

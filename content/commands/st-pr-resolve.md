@@ -67,9 +67,10 @@ configuration, so no remote URL is read or printed. Only then `git fetch origin
 "pull/<n>/head"`. A failed fetch stops the round with its error, before any checkout. Next,
 `git rev-parse FETCH_HEAD` must equal the head sha the read returned; any other commit is
 refused before any checkout in one sentence: "The branch moved, or this checkout's origin is not
-the pull request's repository; re-run." Only then `git checkout -B "pr-resolve-<n>" FETCH_HEAD`,
-which moves a branch an earlier round left to the head just fetched. The author's branch name
-enters no fetch and no checkout. The ref the round pushes to, in
+the pull request's repository; re-run." Only then `git checkout -B "pr-resolve-<n>" "<sha>"`,
+with `<sha>` the head sha just verified, never `FETCH_HEAD` read a second time, which another
+fetch may have rewritten; it moves a branch an earlier round left to that head. The author's
+branch name enters no fetch and no checkout. The ref the round pushes to, in
 `git push origin "HEAD:refs/heads/<ref>"`, holds only letters, digits, `.`, `_`, `/` and `-`,
 checked before it enters any command, and then passes `git check-ref-format --branch "<ref>"`;
 any other ref is refused, never escaped, and the ref is always passed quoted. After the push, a
