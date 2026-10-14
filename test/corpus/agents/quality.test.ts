@@ -466,6 +466,51 @@ describe("test-runner — independence and status mapping", () => {
   });
 });
 
+// Added 2026-10-14 (plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-081): the QA prover is
+// this role in a row-proving mode, not a new role, so the roster, the spawns and the model class stay.
+// The section fixes the route order (cheapest first), the two output forms the qa skill reads, and
+// that the mode edits nothing: the capabilities pinned above are the ones it runs with.
+describe("test-runner — row proving", () => {
+  it("tries the routes cheapest first and returns agent-run or not proven per row", async () => {
+    const file = await load("agents/stamity-test-runner.md");
+    const proving = section(file, "Row proving").replace(/\s+/g, " ");
+
+    // The five routes, in order, the client's own browser tool only where granted.
+    const routes = [
+      "a committed test whose assertion covers the row",
+      "a CLI or script run of the row's steps",
+      "a `gh` or API read",
+      "a headless client session",
+      "the repository's browser harness",
+    ];
+    const at = routes.map((route) => proving.indexOf(route));
+    for (const [index, position] of at.entries()) {
+      expect(position, `route missing: ${routes[index]}`).toBeGreaterThan(-1);
+    }
+    expect(at.toSorted((a, b) => a - b)).toEqual(at);
+    expect(proving).toContain("the client's own browser tool only where the dispatching client grants it");
+    expect(proving).toContain("cheapest first");
+
+    // The two output forms, word for word as the qa skill reads them.
+    expect(proving).toContain("`agent-run · <command> · exit <n> · <output path>`");
+    expect(proving).toContain("`not proven: <reason>`");
+    // A route proves a row only on a read exit code and the row's Expected in its output.
+    expect(proving).toContain("its exit code was read (Shell), and its output shows the row's `Expected`");
+    // The committed-test route names the assertion, the one form a security-negative row accepts.
+    expect(proving).toContain("the test source `file:line` whose assertion covers the row");
+  });
+
+  it("edits nothing, runs no step that cannot be undone, and keeps the role's capabilities", async () => {
+    const file = await load("agents/stamity-test-runner.md");
+    const proving = section(file, "Row proving").replace(/\s+/g, " ");
+
+    expect(proving).toContain("Its capabilities are the ones above: it edits nothing");
+    expect(proving).toContain("a route whose step cannot be undone is not run");
+    expect(proving).toContain("no route command is redirected");
+    expect(frontmatterField(file.parsed, "capabilities")).toEqual(["read", "execute"]);
+  });
+});
+
 describe("spec-author — modes", () => {
   it("carries all four modes as rows, one mode per invocation", async () => {
     const file = await load("agents/stamity-spec-author.md");

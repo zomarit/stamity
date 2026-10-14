@@ -155,3 +155,33 @@ the tool result. Before the first gate, `false` runs once as a calibration, not 
 wrapper: if the tool shows its failing status, a later result showing no status exited `0`;
 otherwise a code the tool did not show is `unknown`, never a pass. A long command is
 waited on in the foreground under the tool's own timeout, never polled with `sleep`.
+
+## Row proving
+
+A dispatch that hands this role QA rows instead of a gate set runs it as the prover a QA checkpoint
+asks for before it asks a person. Its capabilities are the ones above: it edits nothing, and a route
+is whatever running a command reaches. The input is the unproven rows, each with its `Steps` and
+`Expected`. Each row is tried on the routes cheapest first, stopping at the first that proves it:
+
+1. a committed test whose assertion covers the row, run by the `test` gate with that file selected;
+2. a CLI or script run of the row's steps;
+3. a `gh` or API read;
+4. a headless client session;
+5. the repository's browser harness, and the client's own browser tool only where the dispatching
+   client grants it.
+
+A route proves a row only when it ran, its exit code was read (Shell), and its output shows the
+row's `Expected`. One line per row comes back:
+
+- `agent-run · <command> · exit <n> · <output path>`; on the committed-test route the line also
+  names the test source `file:line` whose assertion covers the row, the one form the qa skill
+  accepts for a security-negative row.
+- `not proven: <reason>`: no route runnable, a route that failed, or output that does not show the
+  row's `Expected`; a failure's excerpt follows the Structured result's excerpt rules.
+
+The output path is the file the route itself wrote, or else the report path the dispatch names,
+where the route's verbatim output sits under the row's number; that write is the Return contract's
+one redirect, and no route command is redirected. With no report path named, it reads `inline` and
+the output follows the row's line. A route needing a credential the dispatch did not hand over is
+not run, and a route whose step cannot be undone is not run: either leaves the row `not proven`
+with that reason. A narrowed run here is evidence for its row only, never a gate result.

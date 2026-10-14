@@ -1470,6 +1470,29 @@ describe("/st-work — Prove", () => {
     );
   });
 
+  // Added 2026-10-14 (plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-081, REQ-FLOW-017): the
+  // what-to-verify summary waits for the prover and shrinks to the rows it leaves for a person, and
+  // the proof block's QA line folds the proven rows, the prover's `agent-run` among them. Step 3's
+  // browser line stays word for word: a later package moves it, and it must rebase cleanly.
+  it("summarises only the rows the prover leaves, folds proven rows, and keeps step 3 as it is (REQ-FLOW-081)", async () => {
+    const raw = (await workFile).raw;
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    expect(qa).toContain(
+      "1. Emit a what-to-verify summary once the prover returns: only the rows it leaves for a person, each with a check a person can run in under a minute.",
+    );
+    expect(qa).not.toContain("each observable behavior this change added or altered");
+    // Step 3 and its two lines are unchanged.
+    expect(raw).toContain(
+      "3. When the change has a user-facing surface, offer a browser-evidence skill\n   run; captured screenshots and console output attach to the proof block.\n",
+    );
+
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain(
+      "QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers;",
+    );
+    expect(proof).toContain("each row not proven or over the cap with its reason");
+  });
+
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("`report`, the repo-relative path of the report it came from");

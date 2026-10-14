@@ -703,20 +703,45 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/Sort by `Risk` descending/i);
   });
 
-  it("keeps a person row for three kinds only, and skips the walk by class unless a page renders (REQ-FLOW-069)", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-069,
+  // REQ-FLOW-081): this case was "keeps a person row for three kinds only" and pinned the three kinds,
+  // "the run's test-runner executes its check before this table is built" and "A row whose check is
+  // missing, cannot run or fails stays on the human path under that pass's rule 2." What moved: five
+  // person categories replace the three kinds; the prover (the test-runner in its row-proving mode,
+  // which this skill asks its caller to dispatch, since a skill cannot spawn) tries every unproven
+  // row first; a row outside the five that no route proves goes on `Not done:`, never to the person;
+  // and at most three rows reach the person. The old sentences are asserted gone; the class clause
+  // and the placement pins are held word for word.
+  it("keeps a person row for five categories only, proves first, caps at three, and skips the walk by class unless a page renders (REQ-FLOW-069, REQ-FLOW-081)", async () => {
     const text = flow(await load("skills/st-qa/SKILL.md"));
 
-    // The three kinds a person adds something to; every other row is the test-runner's.
-    expect(text).toContain("**A row needs a person for one of three kinds only:**");
-    expect(text).toContain("a rendered surface a person must look at");
-    expect(text).toContain("a live third-party client or account");
+    // The five categories a person adds something to; every other row is the prover's.
+    expect(text).toContain("**A row needs a person for one of five categories only:**");
+    expect(text).toContain("taste or judgment");
+    expect(text).toContain("a real account the run cannot hold");
     expect(text).toContain("a step that cannot be undone");
+    expect(text).toContain("physical or OS-native use");
+    expect(text).toContain("legal or policy wording");
+    expect(text).not.toContain("**A row needs a person for one of three kinds only:**");
+    expect(text).not.toContain("a live third-party client or account");
     expect(text).toContain("Every other row is auto-proven");
-    expect(text).toContain("the run's test-runner executes its check before this table is built");
-    // A row no check proves is not auto-proven: it stays a person's, as rule 2 already says.
+    // The skill cannot spawn, so its caller dispatches the prover, before the table.
     expect(text).toContain(
+      "this skill cannot spawn, so it tells its caller to dispatch the test-runner in its row-proving mode",
+    );
+    expect(text).toContain("a caller that cannot dispatch runs the cheapest routes itself and says so");
+    expect(text).not.toContain("the run's test-runner executes its check before this table is built");
+    // A row outside the five that no route proves is a gap the run reports, not a person's row.
+    expect(text).toContain(
+      'A row outside the five that no route proves goes on the run\'s `Not done:` as "not proven: <reason>", never to the person; one inside them is the person\'s.',
+    );
+    expect(text).not.toContain(
       "A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2.",
     );
+    // The cap: three, most important first; the rest proven or listed with a reason.
+    expect(text).toContain("At most three rows reach the person, most important first;");
+    expect(text).toContain('"over the cap, not asked: <reason>"');
+    expect(text).toContain("blocks nothing by itself");
     // The class the caller passes skips the walk, unless a rendered page changed.
     expect(text).toContain("`docs`, `records` or `tests`");
     expect(text).toContain('"no walk-through required — <class> only", with no sign-off block and no ask');
@@ -729,7 +754,7 @@ describe("qa — the human checkpoint", () => {
     // The diff-shape escape it replaces is gone: a docs page renders, so it is no longer walk-free.
     expect(text).not.toContain("no walk-through required — documentation only");
     // Placed after the trigger table and before the column contract, as one rule with it.
-    const kinds = text.indexOf("**A row needs a person for one of three kinds only:**");
+    const kinds = text.indexOf("**A row needs a person for one of five categories only:**");
     expect(kinds).toBeGreaterThan(text.indexOf("breakpoints or themes"));
     expect(text.indexOf("With no class passed")).toBeGreaterThan(kinds);
     expect(text.indexOf("Seven columns, every one filled")).toBeGreaterThan(
@@ -748,13 +773,20 @@ describe("qa — the human checkpoint", () => {
     const exception =
       "The exception is the negative row a security-adjacent path derives: it is auto-proven only where a committed test's assertion covers it (that pass's rule 1: the test source `file:line` beside the runner's command and outcome); a check run once for the row is not proof for it, and with no such test it stays on the human path.";
     expect(text).toContain(exception);
+    // Added 2026-10-14 (plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-081): the prover's
+    // record is a check run once for the row, so it never stands in for the committed assertion.
+    expect(text).toContain("An `agent-run` never proves that row.");
+    expect(text.indexOf("An `agent-run` never proves that row.")).toBeGreaterThan(text.indexOf(exception));
 
     // Inside the person-row rule: after the sentence that keeps an unproven row a person's, and
     // before the class clause.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-081):
+    // the anchor was "A row whose check is missing, cannot run or fails stays on the human path under
+    // that pass's rule 2.", which this unit removes (an unproven row outside the five categories now
+    // goes on `Not done:`). The exception still follows the person-row rule's last sentence, the cap,
+    // and still precedes the class clause; the exception's own words are pinned unchanged above.
     const at = text.indexOf(exception);
-    expect(at).toBeGreaterThan(
-      text.indexOf("A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2."),
-    );
+    expect(at).toBeGreaterThan(text.indexOf("At most three rows reach the person, most important first;"));
     expect(at).toBeLessThan(text.indexOf("A change whose class (`gate classify`'s, which the caller passes)"));
     // The row it names is the one the trigger table derives, in the table's own words...
     expect(text).toContain("a security-adjacent path changed (auth, permissions, input validation, secret handling)");
@@ -811,7 +843,49 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/browser-evidence capture/i);
     expect(text).toMatch(/"The suite is green" is not proof of a particular scenario/i);
     expect(text).toMatch(/Missing evidence is never scored as a pass/i);
-    expect(text).toMatch(/Auto-proven rows move to an appendix with their pointers/i);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-017):
+    // the pin read "Auto-proven rows move to an appendix with their pointers". What moved: proven
+    // rows, the prover's `agent-run` rows among them, fold into one line with their pointers, so
+    // the table the person reads stays short; the old appendix wording is asserted gone.
+    expect(text).toContain("Proven rows, `auto-proven` and `agent-run`, fold into one line with their pointers.");
+    expect(text).not.toMatch(/Auto-proven rows move to an appendix/i);
+  });
+
+  // Added 2026-10-14 (plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-017, REQ-FLOW-018,
+  // REQ-FLOW-081; inbox fold `2026-10-10_next-tier/build/42`): the prover's record is a proof state
+  // of its own, and the Auto-prove table and rule 1 accept the same evidence, so a row the prover
+  // proved is never turned away by the pass that reads it.
+  it("accepts the prover's `agent-run` as a proof state, in the table and in rule 1 alike", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+    const autoProve = text.slice(text.indexOf("## Auto-prove pass"), text.indexOf("## Human sign-off"));
+
+    // The Proof column names the state with its three fields.
+    expect(text).toContain("`agent-run` with its command, exit code and output path");
+    // The table row and rule 1 name the same two forms of evidence.
+    expect(autoProve).toContain(
+      "| an `agent-run` the prover recorded — command, exit code, output path | the row it was run for, except a security-negative row |",
+    );
+    expect(autoProve).toContain(
+      "with the runner's command and outcome beside it — or from the prover's `agent-run`: the two forms the table accepts.",
+    );
+    // Rule 2 sends an unproven row by category, never scoring it a pass.
+    expect(autoProve).toContain(
+      "an unproven row is the person's when it is in one of the five categories, and otherwise goes on `Not done:`",
+    );
+    // "All rows auto-proven" covers the prover's rows.
+    expect(text).toContain('When every row auto-proved, `agent-run` rows included, the checkpoint closes on its pointers with no ask and records "all N rows auto-proven".');
+    // An unattended run still proves before it records its person rows unsigned.
+    expect(text).toContain("and an unattended run proves the same way");
+    expect(text).toContain("An unattended run asks nothing and records `Shippable: not signed`.");
+  });
+
+  // Added 2026-10-14 (plan 020 file 3, unit f7-prove-before-asking): the browser-evidence seam stays
+  // as it is in this package (a later one moves it), so the bundle row is pinned word for word.
+  it("keeps the browser bundle row of the Auto-prove table unchanged", async () => {
+    const raw = (await load("skills/st-qa/SKILL.md")).parsed.body;
+    expect(raw).toContain(
+      "| a browser-evidence capture at `.stamity/evidence/browser-<sha>.json` — spec run, screenshot, console output | UI rows |",
+    );
   });
 
   // TEST CHANGE, justified (2026-09-30): the checkpoint no longer asks when every row
@@ -883,13 +957,21 @@ describe("qa — the human checkpoint", () => {
     expect(text).toContain("proof block");
   });
 
-  it("asks nothing itself inside a work run: its open rows ride the close question (REQ-FLOW-019)", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f7-prove-before-asking; REQ-FLOW-019,
+  // REQ-FLOW-080): the title read "ride the close question" and the pin "...ride the run's one close
+  // question." What moved: `/st-work`'s close no longer asks once; it walks what is left by the
+  // question protocol's Close walk (unit f3), so the person's rows ride that walk. The old wording is
+  // asserted gone; that the skill asks nothing itself is held.
+  it("asks nothing itself inside a work run: its open rows ride the close walk (REQ-FLOW-019)", async () => {
     const text = flow(await load("skills/st-qa/SKILL.md"));
     const handback = text.slice(text.indexOf("## Handback"));
 
     expect(handback).toContain(
-      "Inside a work run the skill asks nothing itself: the rows left for a person ride the run's one close question.",
+      "Inside a work run the skill asks nothing itself: the rows left for a person ride the run's close walk.",
     );
+    expect(handback).not.toContain("one close question");
+    // The rows the prover left unproven or over the cap travel back with their reasons.
+    expect(handback).toContain("the rows not proven or over the cap, each with its reason");
   });
 });
 
