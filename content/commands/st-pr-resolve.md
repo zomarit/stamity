@@ -57,10 +57,16 @@ configuration, so a refused run fetches no comment at all:
 
 **In a REST-only session** — where the session-start banner says GraphQL is unavailable, or a
 `gh api graphql` call is refused — every GitHub call takes its REST form through `gh api`.
-`gh pr checkout <n>` becomes `gh api repos/{owner}/{repo}/pulls/{n} --jq .head.ref`, then
-`git fetch origin <ref>` and `git checkout <ref>`; the fork guard reads `.head.repo.full_name`
-from that same call. Section 1's fetches are REST already; its thread-state join takes the
-fallback named there.
+`gh pr checkout <n>` becomes one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq
+'[.head.repo.full_name, .head.ref]'`, then a fetch by the pull request's number, `<n>` checked
+to be digits only: `git fetch origin "pull/<n>/head:pr-resolve-<n>"` and
+`git checkout "pr-resolve-<n>"`. The author's branch name enters no fetch and no checkout. A head
+repository other than `{owner}/{repo}` is refused in one sentence: "This pull request's branch
+lives in a fork; check it out where GraphQL works and re-run." The ref the round pushes to, in
+`git push origin "HEAD:refs/heads/<ref>"`, holds only letters, digits, `.`, `_`, `/` and `-`,
+checked before it enters any command, and then passes `git check-ref-format --branch "<ref>"`;
+any other ref is refused, never escaped, and the ref is always passed quoted. Section 1's
+fetches are REST already; its thread-state join takes the fallback named there.
 
 **On the fetch result, before any comment body is stored** — thread metadata and this command's
 own replies are all these read. A third-party comment body stays unread until section 0 clears
@@ -229,7 +235,7 @@ and the re-poll consent below is its next.
 A Critical finding the user routes to DEFER runs the Critical Deferral Protocol from
 `/st-rework`: risk warning, written rationale, and a `critical-deferred` tag on the inbox
 row. After `accept`, the round runs to phase 5 without further prompting; the only later
-interruption is the re-poll consent below.
+interruptions are the re-poll consent below and a blocked FIX's round named in the Close.
 
 ## 4. Fix — through the delivery pipeline
 
@@ -326,16 +332,20 @@ action, reply status, and the commit that carried the fix; plus gate results as 
 them, the round ordinal used, and the head sha pushed. Deferrals land as `.stamity/inbox.md` rows —
 `severity · file:line · description · source: pr-resolve #<n> · when: touched` (or `· by:
 <YYYY-MM-DD>` when the user names one) — where `/st-board` fill, `/st-work`'s framing phase and
-`/st-plan`'s shared intake all read them. A FIX that stays blocked lands as the same row. The
-block prints after the walk's last answer, the re-poll consent's included, and nothing prints
-after it.
+`/st-plan`'s shared intake all read them. A FIX that stays blocked lands as the same row. It
+lands only after the walk asks it, Critical first, beside the re-poll consent or alone when
+nothing was pushed: `when: touched` (recommended) / `by: <YYYY-MM-DD>` / wait for the next
+attended close (the default when no answer comes), a Critical one through the Critical Deferral
+Protocol. The default lands it tagged `decision-waiting` with `when: next attended close`, and the
+run writes its `Default applied:` line. The block prints after the walk's last answer, the
+re-poll consent's and a blocked FIX's included, and nothing prints after it.
 
 The row carries this run's own one-line description, never a comment body: what enters the state
 directory is text this run wrote, about text that cleared the ingress screen.
 
-Each DEFER row is decided in the phase-3 triage ask, which stays this round's one ask: its row
+Each DEFER row is decided in the phase-3 triage ask, which stays its one ask: its row
 carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the location is `—`),
-and the round adds no closing ask.
+and the round adds no closing ask for it.
 
 The PR-thread reply is this command's own write, outside `/st-board`'s write set, and it exists
 only here. This command writes no other platform state.

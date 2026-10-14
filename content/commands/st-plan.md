@@ -415,7 +415,9 @@ Before this block, the run walks its leftovers through the question-protocol rul
 each open question still carried, then each follow-up's schedule fields (`by:` or `when:`, and
 `files:` when its location is `—`), the recommended schedule first and the Drop list among the
 options. Each answer lands in the artifact before a follow-up row appends; the block prints after
-the last answer, and nothing prints after it.
+the last answer, and nothing prints after it. An answer that changes a unit re-runs the plan-lint
+gate and the structural coverage pass over the changed artifact before the block, which reports
+that pass.
 
 Close the run with:
 

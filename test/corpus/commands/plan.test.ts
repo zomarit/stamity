@@ -1009,6 +1009,11 @@ describe("/st-plan — return contract", () => {
     expect(returns).toContain(
       "Each answer lands in the artifact before a follow-up row appends; the block prints after the last answer, and nothing prints after it.",
     );
+    // Ledger row `2026-10-14_cli-native/review/22`: plan-lint runs over the drafted artifact
+    // before it is written, so an answer that reshapes a unit after that would ship unlinted.
+    expect(returns).toContain(
+      "An answer that changes a unit re-runs the plan-lint gate and the structural coverage pass over the changed artifact before the block, which reports that pass.",
+    );
     // The walk precedes the block's rows, and the block still ends on its follow-ups row.
     expect(returns.indexOf("Close walk")).toBeLessThan(returns.indexOf("Close the run with:"));
     expect(returns.trimEnd().endsWith("the Drop list appends nothing.")).toBe(true);

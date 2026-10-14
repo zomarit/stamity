@@ -937,6 +937,11 @@ describe("rework — validation and handoff", () => {
     expect(handoff).toContain("the plan path, the inbox rows added, and one recommended next step, derived from this run's own state");
     expect(handoff).not.toContain("Close also on one recommended next step");
     expect(handoff.trimEnd().endsWith("None of those, and the line says so.")).toBe(true);
+    // Ledger row `2026-10-14_cli-native/review/23`: Meta-feedback's issue-body confirmation is an
+    // ask too, so it rides the handoff's one round rather than landing after the proof block.
+    expect(clause(artifact(REWORK).parsed.body, "## Meta-feedback")).toContain(
+      "A drafted issue body's confirmation is asked inside the handoff's walk round, bundled into that one call, so no ask follows the proof block.",
+    );
   });
 
   // Added 2026-10-14 (REQ-LADDER-007, plan 020 file 3 unit f6): the spawns named no model.
@@ -1100,8 +1105,15 @@ describe("pr-resolve — collection and evaluation", () => {
     );
     // No client name and no client-specific variable in model-facing text.
     expect(preflight).not.toMatch(/claude|CODE_REMOTE/i);
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 1; ledger rows
+    // `2026-10-14_cli-native/review/19` and `review/20`, signed off): the pinned sentence fetched
+    // and checked out the API's `.head.ref`, a name the pull request's author chooses, unquoted
+    // and from origin. What changed about the contract: the head is fetched by the pull request's
+    // number into a local name this command chooses, and the read returns the head repository
+    // and ref together. Nothing is relaxed: the new form is pinned whole, and the case below
+    // pins the fork refusal and the ref allowlist.
     expect(preflight).toContain(
-      "`gh pr checkout <n>` becomes `gh api repos/{owner}/{repo}/pulls/{n} --jq .head.ref`, then `git fetch origin <ref>` and `git checkout <ref>`;",
+      "`gh pr checkout <n>` becomes one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.head.repo.full_name, .head.ref]'`, then a fetch by the pull request's number, `<n>` checked to be digits only: `git fetch origin \"pull/<n>/head:pr-resolve-<n>\"` and `git checkout \"pr-resolve-<n>\"`.",
     );
     // It sits in the batch that runs before the first fetch, where the checkout happens.
     expect(preflight.indexOf("In a REST-only session")).toBeLessThan(
@@ -1110,6 +1122,33 @@ describe("pr-resolve — collection and evaluation", () => {
     // The thread-state fallback: unknown, and answered only on this run's own signature.
     expect(collect).toContain(
       "In a REST-only session (see Pre-flight), resolution state is reported `unknown`, and a thread counts answered, as a resolved one does, when its newest comment carries this command's signature line posted by the account this run replies as.",
+    );
+  });
+
+  // Added 2026-10-14 (f6-touchpoints-b fix round 1; ledger rows `2026-10-14_cli-native/review/19`
+  // and `review/20`): the REST checkout spliced the author's branch name into `git fetch` and
+  // `git checkout` unvalidated, and fetched it from origin, where a fork's branch is missing or a
+  // same-named base branch stands in for it.
+  it("fetches a REST-only head by number, refuses a fork head, and refuses a ref outside the allowlist", () => {
+    const preflight = clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
+    const rest = preflight.slice(
+      preflight.indexOf("In a REST-only session"),
+      preflight.indexOf("On the fetch result, before any comment body is stored"),
+    );
+
+    // The fetch names the pull request's number, never the author's branch name.
+    expect(rest).toContain('`git fetch origin "pull/<n>/head:pr-resolve-<n>"`');
+    expect(rest).toContain("`<n>` checked to be digits only");
+    expect(rest).toContain("The author's branch name enters no fetch and no checkout.");
+    expect(rest).not.toMatch(/git fetch origin <ref>|git checkout <ref>/);
+    // A fork head is refused here in one plain sentence.
+    expect(rest).toContain(
+      "A head repository other than `{owner}/{repo}` is refused in one sentence: \"This pull request's branch lives in a fork; check it out where GraphQL works and re-run.\"",
+    );
+    // The ref a push names: an allowlist checked first, then git's own check, quoted throughout.
+    expect(rest).toContain('`git push origin "HEAD:refs/heads/<ref>"`');
+    expect(rest).toContain(
+      "holds only letters, digits, `.`, `_`, `/` and `-`, checked before it enters any command, and then passes `git check-ref-format --branch \"<ref>\"`; any other ref is refused, never escaped, and the ref is always passed quoted.",
     );
   });
 
@@ -1299,10 +1338,16 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     // A round has one ask, and it is the triage table's: a second question at the close would
     // put the same DEFER rows to the person twice. So the Close says where each row was
     // decided and that it asks nothing more.
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 1; ledger row
+    // `2026-10-14_cli-native/review/21`, signed off): the pinned sentence said the triage ask
+    // "stays this round's one ask" and "the round adds no closing ask". What changed about the
+    // contract: a FIX that stays blocked is now asked as a round of the walk before its row lands,
+    // so the round has a later ask; the DEFER row still has exactly one, the triage ask. Nothing
+    // is relaxed: the DEFER row's one ask is still pinned whole.
     expect(close).toContain(
-      "Each DEFER row is decided in the phase-3 triage ask, which stays this round's one ask: " +
+      "Each DEFER row is decided in the phase-3 triage ask, which stays its one ask: " +
         "its row carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the " +
-        "location is `—`), and the round adds no closing ask.",
+        "location is `—`), and the round adds no closing ask for it.",
     );
     // It follows the row paragraph and precedes the reply paragraph: the sentence is
     // about the row the two paragraphs above it describe.
@@ -1316,10 +1361,15 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(close.indexOf("adds no closing ask")).toBeLessThan(replyParagraph);
 
     // The triage section's own promise still holds beside it: after `accept` the only later
-    // interruption is the re-poll consent, which is a consent to fetch and not a closing ask.
+    // interruptions are the re-poll consent and a blocked FIX's round, neither about a DEFER row.
+    // TEST CHANGE, justified (2026-10-14, ledger row `2026-10-14_cli-native/review/21`, signed
+    // off): the pin read "the only later interruption is the re-poll consent below"; the blocked
+    // FIX's walk round is the second, named here so the promise stays exhaustive.
     const triage = clause(body, "## 3. Triage ask");
     expect(triage).toContain("Then one ask closes triage");
-    expect(triage).toContain("the only later interruption is the re-poll consent below");
+    expect(triage).toContain(
+      "the only later interruptions are the re-poll consent below and a blocked FIX's round named in the Close.",
+    );
 
     // The schedule fields are board's, named there: read its grammar rather than a literal.
     const grammar = clause(artifact(BOARD).parsed.body, "## Deferral inbox");
@@ -1371,8 +1421,22 @@ describe("pr-resolve — triage, fixes, and replies", () => {
       "That ask is the first round of the question-protocol rule's Close walk, and the re-poll consent below is its next.",
     );
     expect(poll).toContain("Ask once, as the walk's next round: `poll / done (default)`.");
+    // TEST CHANGE, justified (2026-10-14, ledger row `2026-10-14_cli-native/review/21`, signed
+    // off): the pin read "the re-poll consent's included"; a blocked FIX's round is now a walk
+    // round too, and the block still prints after every answer. Nothing is relaxed.
     expect(close).toContain(
-      "The block prints after the walk's last answer, the re-poll consent's included, and nothing prints after it.",
+      "The block prints after the walk's last answer, the re-poll consent's and a blocked FIX's included, and nothing prints after it.",
+    );
+    // A blocked FIX is a leftover the walk asks before its row lands; with nobody to answer it
+    // waits as `decision-waiting` rather than being scheduled silently.
+    expect(close).toContain(
+      "It lands only after the walk asks it, Critical first, beside the re-poll consent or alone when nothing was pushed: `when: touched` (recommended) / `by: <YYYY-MM-DD>` / wait for the next attended close (the default when no answer comes), a Critical one through the Critical Deferral Protocol.",
+    );
+    expect(close).toContain(
+      "The default lands it tagged `decision-waiting` with `when: next attended close`, and the run writes its `Default applied:` line.",
+    );
+    expect(close.indexOf("A FIX that stays blocked lands as the same row.")).toBeLessThan(
+      close.indexOf("It lands only after the walk asks it"),
     );
     // The block's paragraph opens the Close, and the next step stays its last field.
     expect(close.indexOf("nothing prints after it")).toBeLessThan(close.indexOf("never a comment body"));

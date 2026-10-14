@@ -298,7 +298,8 @@ Feedback about how the agent behaved — not about the branch's code — leaves 
 Every destination in that table is a persistence path, so every row clears the persistence
 guard above — a learning record, an inbox row, and a drafted issue body alike. The guard is
 stated once, at the top level, because meta-feedback is one of its three write paths and not its
-home.
+home. A drafted issue body's confirmation is asked inside the handoff's walk round, bundled into
+that one call, so no ask follows the proof block.
 
 ## Routing rule
 
