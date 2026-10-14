@@ -676,6 +676,18 @@ describe("/st-plan — plan artifact shape", () => {
     );
   });
 
+  // Added 2026-10-14 (REQ-FLOW-083, plan 020 file 3 unit f6): the `interfaces` cell named
+  // signatures and shapes but not the module seam a unit lands behind, so a plan could hand the
+  // implementer a unit with no stated depth boundary. The clause joins the cell in place.
+  it("names the module interface a unit lands behind in its `interfaces` cell (REQ-FLOW-083)", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+    const row = shape.split("\n").find((line) => line.startsWith("| `interfaces` |")) ?? "";
+
+    expect(row).toBe(
+      "| `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline, and the module interface the unit lands behind |",
+    );
+  });
+
   it("carries the requirement id per unit, with the same honest fallback the implementer states", () => {
     const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
 
@@ -980,6 +992,36 @@ describe("/st-plan — return contract", () => {
     expect(returns).toMatch(phrase("derived from this run's own state rather than a"));
     expect(returns).toMatch(phrase("open questions still carried make resolving them"));
     expect(returns).toMatch(phrase("One action, named, with the state that chose it"));
+  });
+
+  // Added 2026-10-14 (REQ-FLOW-080, plan 020 file 3 unit f6): the block printed with open
+  // questions and unscheduled follow-ups still undecided, and no rule made it wait. The walk is
+  // the question protocol's; this file names its own leftovers and points there.
+  it("walks its leftovers through the protocol's Close walk before the block prints (REQ-FLOW-080)", async () => {
+    const returns = flat(sectionOf(plan.parsed.body, "## Return contract"));
+    const protocol = await readFile(join(CORPUS_ROOT, "rules/stamity-question-protocol.md"), "utf8");
+
+    // The pointer resolves: the protocol carries the section it names.
+    expect(protocol).toMatch(/^## Close walk$/m);
+    expect(returns).toContain(
+      "Before this block, the run walks its leftovers through the question-protocol rule's Close walk: each open question still carried, then each follow-up's schedule fields (`by:` or `when:`, and `files:` when its location is `—`), the recommended schedule first and the Drop list among the options.",
+    );
+    expect(returns).toContain(
+      "Each answer lands in the artifact before a follow-up row appends; the block prints after the last answer, and nothing prints after it.",
+    );
+    // The walk precedes the block's rows, and the block still ends on its follow-ups row.
+    expect(returns.indexOf("Close walk")).toBeLessThan(returns.indexOf("Close the run with:"));
+    expect(returns.trimEnd().endsWith("the Drop list appends nothing.")).toBe(true);
+  });
+
+  // Added 2026-10-14 (REQ-LADDER-007, plan 020 file 3 unit f6): the command spawns two roles and
+  // named no model for either, so every spawn ran on the client's default whatever the class.
+  it("passes each spawn the class's model from the client's map, with the refusal fallback (REQ-LADDER-007)", () => {
+    const routing = flat(sectionOf(plan.parsed.body, "## Intent routing"));
+
+    expect(routing).toContain(
+      "Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.",
+    );
   });
 
   it("passes /st-board no flag that board does not define", async () => {

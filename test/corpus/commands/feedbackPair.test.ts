@@ -915,6 +915,37 @@ describe("rework — validation and handoff", () => {
     expect(handoff).toMatch(/DEFER rows alone/);
   });
 
+  // Added 2026-10-14 (REQ-FLOW-080, plan 020 file 3 unit f6; the inbox rows `build/31` and
+  // `review/52` of run 2026-10-10_next-tier folded in): the handoff ask stood outside any walk,
+  // the next step printed after the proof block, and nothing said what `stop` does to the DEFER
+  // rows phase 4 had already appended.
+  it("makes the handoff ask the walk's one round, and folds the next step into the proof block (REQ-FLOW-080)", async () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+    const protocol = await readFile(join(CORPUS_ROOT, "rules/stamity-question-protocol.md"), "utf8");
+
+    expect(protocol).toMatch(/^## Close walk$/m);
+    expect(handoff).toContain(
+      "and this handoff asks no leftovers question. That ask is the one round of the question-protocol rule's Close walk.",
+    );
+    expect(handoff).toContain(
+      "On `stop`, the plan and the inbox rows are the run's output. The DEFER rows phase 4 appended stand either way: the walk offers none of them `fix now`, and none is appended twice.",
+    );
+    expect(handoff).toContain(
+      "Close with this run's proof block, printed after the handoff's answer with nothing of this run after it (on `execute now`, `/st-work` starts after it):",
+    );
+    // The next step is the block's last field, not a paragraph printed after it.
+    expect(handoff).toContain("the plan path, the inbox rows added, and one recommended next step, derived from this run's own state");
+    expect(handoff).not.toContain("Close also on one recommended next step");
+    expect(handoff.trimEnd().endsWith("None of those, and the line says so.")).toBe(true);
+  });
+
+  // Added 2026-10-14 (REQ-LADDER-007, plan 020 file 3 unit f6): the spawns named no model.
+  it.each([REWORK, PR_RESOLVE])("%s passes each spawn the class's model from the client's map (REQ-LADDER-007)", (relPath) => {
+    expect(artifact(relPath).parsed.body.replace(/\s+/g, " ")).toContain(
+      "Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.",
+    );
+  });
+
   it("states the three-way routing rule once", () => {
     const rule = clause(artifact(REWORK).parsed.body, "## Routing rule");
 
@@ -1053,6 +1084,33 @@ describe("pr-resolve — collection and evaluation", () => {
     expect(preflight).toMatch(/4th is refused/i);
     // Resolved threads are answered threads; re-opening them is noise.
     expect(preflight).toMatch(/resolved threads/i);
+  });
+
+  // Added 2026-10-14 (REQ-FLOW-087, plan 020 file 3 unit f6): a session with no GraphQL refuses
+  // `gh pr` and the `reviewThreads` query, so the checkout and the thread-state join both failed
+  // there. The condition is one the agent can observe, and names no client (invariant 17); the
+  // Pre-flight names the REST forms, and section 1 names the thread-state fallback.
+  it("takes the REST forms in a REST-only session, named by what the agent observes (REQ-FLOW-087)", () => {
+    const body = artifact(PR_RESOLVE).parsed.body;
+    const preflight = clause(body, "## Pre-flight");
+    const collect = clause(body, "## 1. Collect");
+
+    expect(preflight).toContain(
+      "**In a REST-only session** — where the session-start banner says GraphQL is unavailable, or a `gh api graphql` call is refused — every GitHub call takes its REST form through `gh api`.",
+    );
+    // No client name and no client-specific variable in model-facing text.
+    expect(preflight).not.toMatch(/claude|CODE_REMOTE/i);
+    expect(preflight).toContain(
+      "`gh pr checkout <n>` becomes `gh api repos/{owner}/{repo}/pulls/{n} --jq .head.ref`, then `git fetch origin <ref>` and `git checkout <ref>`;",
+    );
+    // It sits in the batch that runs before the first fetch, where the checkout happens.
+    expect(preflight.indexOf("In a REST-only session")).toBeLessThan(
+      preflight.indexOf("On the fetch result, before any comment body is stored"),
+    );
+    // The thread-state fallback: unknown, and answered only on this run's own signature.
+    expect(collect).toContain(
+      "In a REST-only session (see Pre-flight), resolution state is reported `unknown`, and a thread counts answered, as a resolved one does, when its newest comment carries this command's signature line posted by the account this run replies as.",
+    );
   });
 
   it("evaluates bot comments under the same rigor as human ones", () => {
@@ -1298,6 +1356,27 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(reply?.[1]).toBe(
       `\`Attempted, blocked by <reason>; recorded in the run's proof block and tracked in ${INBOX}.\``,
     );
+  });
+
+  // Added 2026-10-14 (REQ-FLOW-080, plan 020 file 3 unit f6): the triage ask and the re-poll
+  // consent were two asks with no rule tying the proof block to the last answer, and the re-poll
+  // declared no default for a run with nobody to answer.
+  it("makes the triage ask and the re-poll consent rounds of the walk, the block last (REQ-FLOW-080)", () => {
+    const body = artifact(PR_RESOLVE).parsed.body;
+    const triage = clause(body, "## 3. Triage ask");
+    const poll = clause(body, "## Re-poll");
+    const close = clause(body, "## Close");
+
+    expect(triage).toContain(
+      "That ask is the first round of the question-protocol rule's Close walk, and the re-poll consent below is its next.",
+    );
+    expect(poll).toContain("Ask once, as the walk's next round: `poll / done (default)`.");
+    expect(close).toContain(
+      "The block prints after the walk's last answer, the re-poll consent's included, and nothing prints after it.",
+    );
+    // The block's paragraph opens the Close, and the next step stays its last field.
+    expect(close.indexOf("nothing prints after it")).toBeLessThan(close.indexOf("never a comment body"));
+    expect(close.trimEnd().endsWith("says so in the line.")).toBe(true);
   });
 
   it("closes on a next step derived from the run's own state", () => {

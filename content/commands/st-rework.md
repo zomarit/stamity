@@ -216,7 +216,7 @@ in for it, records a decision nobody made.
 Every REVISE finding is checked against current code before it can enter the plan. Spawn one
 `researcher` per file-disjoint cluster; they run in parallel and write nothing.
 
-Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow. Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 Each finding returns one of `confirmed` · `not reproducible` · `mislocated` (with the corrected
 `file:line`), its evidence as `file:line` at current HEAD, and a confidence with its basis —
@@ -264,22 +264,25 @@ detects and consumes it under its freshness guard. Then ask once, execute-now de
 `execute now (default) / show the plan first / stop`. Each DEFER row was decided at phase 4's
 routing table, in its one batched correction: its row carries `/st-board`'s schedule fields
 (`by:` or `when:`, and `files:` when the location is `—`), and this handoff asks no leftovers
-question. On `execute now`, continue into `/st-work` in this session with the persisted plan as
-its input. On `stop`, the plan and the inbox rows are the run's output.
+question. That ask is the one round of the question-protocol rule's Close walk. On `execute now`,
+continue into `/st-work` in this session with the persisted plan as its input. On `stop`, the plan
+and the inbox rows are the run's output. The DEFER rows phase 4 appended stand either way: the walk
+offers none of them `fix now`, and none is appended twice.
 
 A plan carrying a `[NEEDS CLARIFICATION]` marker has no execute-now default. The ask becomes
 `show the plan first (default) / resolve marker n / stop`, and the handoff stays blocked until
 the last marker clears — which is what makes the low-confidence marking of phase 5 a gate.
 
-Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
-by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
-plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
-(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan path, and the inbox rows added.
-
-Close also on one recommended next step, derived from this run's own state and not from a fixed
-menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
-blocks handoff; a plan persisted on `stop` makes running it through `/st-work` the step; DEFER
-rows alone make board triage of the inbox the step. None of those, and the line says so.
+Close with this run's proof block, printed after the handoff's answer with nothing of this run
+after it (on `execute now`, `/st-work` starts after it): baseline source (proof record, or
+`no proof record`), findings by severity plus the notes count, REVISE/DEFER counts, validation
+verdicts with confidence, plan-lint per check as
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan
+path, the inbox rows added, and one recommended next step, derived from this run's own state and
+not from a fixed menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since
+it is what blocks handoff; a plan persisted on `stop` makes running it through `/st-work` the step;
+DEFER rows alone make board triage of the inbox the step. None of those, and the line says so.
 
 ## Meta-feedback
 
