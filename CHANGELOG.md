@@ -122,21 +122,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inbox with its schedule heading, and prints lines and `Ref:` values, never a row's text.
 - **Every client gets a model each class can run on, picked from the account's own list.** A pin
   can now be set per client: `stamity config set model.<class>.<client> <id>` pins one client and
-  wins there over `model.<class>`, which pins every client, and `none` clears either. `init` and
-  `sync` read the installed client's own model list (Cursor's `agent models`, Codex's
-  `codex debug models`, the Copilot CLI's allowed values), save it in the manifest under
-  `models.listed`, and give each class the first model of a priority list Stamity ships that the
-  account lists. A pin the saved list does not hold is re-picked, since the client would refuse
-  it, and a client that does not answer keeps the list it saved last. With no client CLI, Copilot
-  and Codex take the shipped list's first model and Cursor writes none, so its sub-agent runs on
-  the session's model. Claude Code keeps its family aliases, and its `frontier` class now carries
-  `fable`. Copilot's agent files carry a `models` priority list and, where the shipped list gives
-  one, a `model` line; Codex's carry `model` beside `model_reasoning_effort`. Every client gets a
-  class-to-model map at `.stamity/generated/models/<client>.json`, and the touchpoints pass the
-  role's class model from it on each sub-agent call; a call refused with a list of models takes
-  the class's first listed fallback, else the closest, and says so in one line. Emission and
-  `check`'s drift gate never start a client, and `STAMITY_NO_CLIENT_PROBE=1` skips every list
-  read.
+  wins there over `model.<class>`, which pins every client, and `none` clears either. `init`,
+  `sync` and `workspace sync` read the installed client's own model list (Cursor's
+  `agent models`, Codex's `codex debug models`, the Copilot CLI's allowed values), save it in the
+  manifest under `models.listed`, and give each class the first model of a priority list Stamity
+  ships that the account lists. A list that holds none of a class's candidates gives that class
+  no model key, so its sub-agent runs on the session's model, and a client that does not answer
+  keeps the list it saved last. Only where no list was ever read do Copilot and Codex take the
+  shipped list's first model; Cursor then writes none. Claude Code keeps its family aliases, and
+  its `frontier` class now carries `fable`. Copilot's agent files carry a `models` list of the
+  class's model ids in priority order and, where the shipped list gives one, a `model` line in
+  display form, whose reading by any client is unverified; Codex's carry `model` whenever the
+  class resolves, beside `model_reasoning_effort`. Every client gets a class-to-model map at
+  `.stamity/generated/models/<client>.json`, and the touchpoints pass the role's class model from
+  it on each sub-agent call; a call refused with a list of models takes the class's first listed
+  fallback, else the closest, and says so in one line. Emission and `check`'s drift comparison
+  read only the saved list and never start a client; `check`'s `model-pins` row is the one part
+  of `check` that does. `STAMITY_NO_CLIENT_PROBE=1` skips every list read, and `SECURITY.md` says
+  how the client's CLI is started.
 - **Cursor's sub-agents run on the mapped model.** Cursor's agent files now carry `model:`, which
   Cursor treats as a default rather than a hard limit, so a `preToolUse` hook on `Task`
   (`stamity-model-pins.mjs`) also fills the class's model into a Stamity sub-agent call that names
@@ -189,7 +192,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   branch name its author chose.
 - **A CI leg that imitates a cloud machine.** This repository's CI runs every emitted hook command
   in a Linux container with an empty home folder, from the root and from folders below it, with
-  `node` present and absent and under each cloud marker, and `all-ci-checks` requires it.
+  `node` present and absent and under each cloud marker, and `all-ci-checks` requires it on every
+  full run. Its container image is pinned by digest, and its token can only read the repository.
 
 ### Changed
 
@@ -228,6 +232,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ModelConfig.pins` value is now a `ClassPins` map (`all` and one optional key per client), not a
   string, and `ModelConfig` gains `listed`, the saved model lists; `ClassPins` and `ListedModels`
   are exported.
+- **A pin the account cannot use is no longer written as it stands.** On Cursor, Codex and
+  Copilot a pin that the account's saved model list does not hold is replaced by the class's pick
+  from that list, since the client would refuse it, and kept only when the list holds none of the
+  class's candidates either; with no saved list the pin is written as before. A Copilot pin typed
+  in display form, such as `Name (copilot)`, which 1.14 wrote into the agent file's `model:` line,
+  is no longer written at all: `init` and `sync` warn once naming the class, and the class takes
+  the pick from the account's list. Set the model id instead, with
+  `stamity config set model.<class>.copilot <id>`.
 - **Copilot's hooks file keys its events in camelCase.** `.github/hooks/stamity.json` now uses
   `sessionStart`, `preToolUse`, `postToolUse` and the other camelCase names, with `bash` beside
   `command` in every entry, the form GitHub's cloud agent reads. The next `sync` rewrites a 1.14
