@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Set a fork's identity in one command: the package.json identity fields, the two Renovate
-// presets that carry the identity as data, and the regenerated plugin and APM surfaces.
+// Set a fork's identity in one command: the package.json identity fields and the Renovate preset
+// that carries the package name as data.
 //
 // Usage: node scripts/fork-identity.mjs --repository <url> [--scope <npm-scope>]
 //                                        [--registry <https-url>] [--check] [--help]
@@ -11,12 +11,11 @@
 //        --registry    make this a CLI-publishing fork: `private` is removed and
 //                      `publishConfig.registry` names this https registry. Without it the
 //                      fork is private (`private: true`, no `publishConfig`), which is what
-//                      an APM-only or plugin-only fork wants.
-//        --check       write nothing; exit 1 when a file differs from its target or a
-//                      generator's own --check fails.
+//                      a fork that does not publish its CLI to a registry wants.
+//        --check       write nothing; exit 1 when a file differs from its target.
 //
-// Exit codes: 0 applied or already current, 1 invalid identity, dirty target, generator
-// failure or drift under --check, 2 bad arguments
+// Exit codes: 0 applied or already current, 1 invalid identity, dirty target or drift under
+// --check, 2 bad arguments
 //
 // WHAT IT REPLACES. The copy-paste identity block of `docs/enterprise-forks.md` ("Set the
 // private package's identity"). That block rewrote the presets with a plain `replaceAll`,
@@ -25,16 +24,17 @@
 // with JSON.parse and exactly that quoted JSON string is replaced, once, so a rerun meets a
 // file already at its target and leaves it alone.
 //
-// WHAT IT DOES NOT DO. No history import, no workflow switching and no lockfile edit: the guide
-// keeps `npm install --package-lock-only` after this script, so the script stays offline.
+// WHAT IT DOES NOT DO. No history import, no workflow switching, no lockfile edit and no
+// generator run: the guide keeps `npm install --package-lock-only` after this script, so the
+// script stays offline. Since 1.15.0 it leaves `renovate/plugins.json` alone: the plugin route
+// that preset served is deleted, and a fork still holding the file keeps it as it is.
 // It lives in `scripts/`, outside the `src/` boundary map, and imports nothing from `src/`.
 //
 // ORDER. Every target is computed and validated before anything is written: the candidate
-// manifest goes through the same `resolveDistributionIdentity` both generators run, so an
-// identity the generators would refuse is refused here first. Then a file that would change
-// and has uncommitted edits stops the run before any write, because overwriting it would
-// discard work nobody reviewed. Then the writes, one temporary file and one rename each.
-// Then the two generators, from this checkout, so the committed surfaces follow the manifest.
+// manifest goes through `resolveDistributionIdentity`, so an identity the distribution scripts
+// would refuse is refused here first. Then a file that would change and has uncommitted edits
+// stops the run before any write, because overwriting it would discard work nobody reviewed.
+// Then the writes, one temporary file and one rename each.
 
 import { spawnSync } from 'node:child_process'
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url'
 
 import { resolveDistributionIdentity } from './distribution-identity.mjs'
 import { isMain } from './native-typescript.mjs'
-import { REGISTRY_URL } from './plugins/tokens.mjs'
+import { REGISTRY_URL } from './registry-url.mjs'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..')
 
@@ -51,15 +51,13 @@ const USAGE = `Usage: node scripts/fork-identity.mjs --repository <url> [--scope
   --repository  https://github.com/<owner>/<repo> (a git+ prefix and a .git suffix are accepted)
   --scope       the npm scope without the @; defaults to the owner lowercased
   --registry    publish the CLI to this https registry instead of keeping the fork private
-  --check       write nothing; exit 1 on drift or a generator's failed --check`
+  --check       write nothing; exit 1 on drift`
 
 /** npm's scope rule, as the plan states it: lowercase, and no leading dot or underscore. */
 const SCOPE = /^[a-z0-9-~][a-z0-9-._~]*$/
 
 /** The package.json identity keys (contract C1), in the order a changed-keys list names them. */
 const IDENTITY_KEYS = ['name', 'repository', 'homepage', 'bugs', 'stamity.publisher', 'private', 'publishConfig']
-
-const GENERATORS = ['generate-plugin-manifests.mjs', 'generate-apm-package.mjs']
 
 class Refusal extends Error {}
 
@@ -120,7 +118,7 @@ function parseRepository(value) {
 
 /**
  * The registry rule every pinned CLI call applies (`REGISTRY_URL` in `src/shared/cliCall.ts`, read
- * here through its restatement in `scripts/plugins/tokens.mjs`): plain https, a host, an optional
+ * here through its restatement in `scripts/registry-url.mjs`): plain https, a host, an optional
  * port and path, and no userinfo, query, fragment, `%` escape, space or shell character. The value
  * becomes `publishConfig.registry`, which every call the fork prints names for its scope, and the
  * CLI renders `npx --no` for a registry outside the rule (REQ-PLUGIN-048). Refusing it here tells
@@ -183,7 +181,7 @@ function readJson(relPath) {
 }
 
 /**
- * One preset's target, keeping the file's hand formatting: the current value is found by
+ * The preset's target, keeping the file's hand formatting: the current value is found by
  * parsing, and exactly its quoted JSON spelling is replaced once. The result is parsed again and
  * must equal the original with only that value changed, so a first occurrence that turned out to
  * be some other key's value is refused rather than written. `label` is the key a report names.
@@ -225,15 +223,7 @@ function plan(options) {
         (key) => JSON.stringify(identityValue(manifest.value, key)) !== JSON.stringify(identityValue(pkg, key)),
       ),
     },
-    // The repository the tag manager watches.
-    retargetPreset('renovate/plugins.json', {
-      locate: (value) => value?.customManagers?.[0],
-      key: 'depNameTemplate',
-      label: 'depNameTemplate',
-      target: `${options.owner}/${options.repo}`,
-    }),
-    // The npm package it pins: the first entry of the array, located one level down so the
-    // same in-place rewrite serves both presets.
+    // The npm package the preset pins: the first entry of the array, located one level down.
     retargetPreset('renovate/companion.json', {
       locate: (value) => value?.packageRules?.[0]?.matchPackageNames,
       key: 0,
@@ -272,29 +262,6 @@ function write(relPath, text) {
   replaceFile(join(ROOT, relPath), text)
 }
 
-function runGenerators(check) {
-  for (const script of GENERATORS) {
-    // Captured and re-emitted rather than inherited: this process's own lines go through
-    // node's stream, which is asynchronous on a Windows pipe, so an inherited child could
-    // print ahead of the file lines it follows.
-    const result = spawnSync(process.execPath, [join(ROOT, 'scripts', script), ...(check ? ['--check'] : [])], {
-      cwd: ROOT,
-      encoding: 'utf8',
-    })
-    process.stdout.write(result.stdout ?? '')
-    process.stderr.write(result.stderr ?? '')
-    if (result.status !== 0) {
-      console.error(
-        check
-          ? `fork-identity: ${script} --check failed.`
-          : `fork-identity: ${script} failed; rerun node scripts/fork-identity.mjs once the generator's error is fixed.`,
-      )
-      return false
-    }
-  }
-  return true
-}
-
 function main(args) {
   const parsed = parseArgs(args)
   if (parsed.help) {
@@ -320,8 +287,7 @@ function main(args) {
     for (const file of files) {
       console.log(file.text === file.bytes ? `unchanged ${file.relPath}` : `drift ${file.relPath} (${describe(file)})`)
     }
-    const generated = runGenerators(true)
-    if (changing.length > 0 || !generated) return 1
+    if (changing.length > 0) return 1
   } else {
     const refused = changing.filter((file) => dirty(file.relPath))
     if (refused.length > 0) {
@@ -338,7 +304,6 @@ function main(args) {
         console.log(`updated ${file.relPath} (${describe(file)})`)
       }
     }
-    if (!runGenerators(false)) return 1
   }
   console.log(`identity: @${scope}/stamity published by ${owner}`)
   return 0

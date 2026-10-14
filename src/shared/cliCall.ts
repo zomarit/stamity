@@ -94,8 +94,8 @@ export interface CliCallOptions {
  * characters. No userinfo, query, fragment, `%`,
  * `$`, quote, backtick, space or `^`: the value enters sh, cmd, PowerShell,
  * JavaScript strings and JSON, so refusing beats escaping it for four dialects.
- * Restated in `scripts/plugins/tokens.mjs`, held equal by
- * `test/ci/pluginModules.test.ts`.
+ * Restated in `scripts/registry-url.mjs`, held equal by
+ * `test/ci/forkIdentityScript.test.ts`.
  */
 export const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
 

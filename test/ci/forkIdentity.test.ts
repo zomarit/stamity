@@ -1,20 +1,10 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { canonical, canonicalOnly } from "../support/identity.ts";
-import { downstreamCheckout } from "./downstreamFixture.ts";
 
 /**
  * The renamed private downstream, proved rather than promised.
@@ -22,25 +12,27 @@ import { downstreamCheckout } from "./downstreamFixture.ts";
  * `docs/enterprise-forks.md` tells a downstream to rename the package to its own scope,
  * set `stamity.publisher`, repoint `repository.url`, set `private: true` and then run
  * this repository's own gate. The audit (FORK-3) found that gate red on a fork through
- * no fault of the fork's, and the regenerated marketplace advertising an npm package the
- * fork never publishes. Both are behaviours of the renamed tree, so both are checked
- * against a renamed tree here.
+ * no fault of the fork's, a behaviour of the renamed tree, so it is checked against a
+ * renamed tree here.
  *
  * Two groups:
  *
- *   the marketplace source   fast, always on. The generator runs twice over one
- *                            downstream checkout — once private, once not — so the two
- *                            source forms are proven against each other rather than one
- *                            of them being asserted alone.
+ *   the spelling census      always on, and the cheapest: the CLI and CI suites are read as
+ *                            text and held to deriving the name, the owner and the
+ *                            owner/repository route rather than spelling them. It is the one
+ *                            group that reads the suites on every CI run (no workflow sets
+ *                            the inherited gate's opt-in), so it is the one that has to catch
+ *                            a new canonical literal.
  *   the inherited gate       opt-in. A whole second checkout running a second vitest over
- *                            the nineteen identity-sensitive suites; the reason it is not
- *                            on by default is on the group itself.
+ *                            the fifteen identity-sensitive suites; the reason it is not on
+ *                            by default is on the group itself. It only confirms what the
+ *                            census lets through.
  *
- * A third group comes first, because it is the cheapest: the CLI and CI suites are read as
- * text and held to deriving the name, the owner and the owner/repository route rather than
- * spelling them. Of the three it is the only one that reads the suites on every CI run (no
- * workflow sets the inherited gate's opt-in), so it is the one that has to catch a new
- * canonical literal; the opt-in witness only confirms what it lets through.
+ * TEST CHANGE, justified (plan 020 d1, REQ-PLUGIN-028): a third group, "a private fork's
+ * regenerated marketplace", ran `scripts/generate-plugin-manifests.mjs` over a renamed tree and
+ * read the plugin catalog's source. The plugin route and that generator are deleted in 1.15.0,
+ * and `scripts/fork-identity.mjs` no longer regenerates any plugin surface, so the group went with
+ * them; no fork-identity behaviour it proved is left.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -60,27 +52,6 @@ function workspace(prefix: string): string {
   return dir;
 }
 
-/**
- * The `package.json` half of the identity `scripts/fork-identity.mjs` sets, applied by hand to one
- * manifest. The always-on group below keeps this hand copy because it flips `private` both ways on
- * one tree in under a second; the opt-in group runs the script itself, which is the route
- * `docs/enterprise-forks.md` prints.
- */
-function renameToPrivateFork(root: string, options: { private: boolean }): void {
-  const path = join(root, "package.json");
-  const pkg = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  const url = `https://github.com/${FORK_OWNER}/${FORK_REPO}`;
-  pkg["name"] = `@${FORK_OWNER}/stamity`;
-  pkg["stamity"] = { ...((pkg["stamity"] ?? {}) as Record<string, unknown>), publisher: FORK_OWNER };
-  pkg["repository"] = { type: "git", url: `git+${url}.git` };
-  pkg["homepage"] = url;
-  pkg["bugs"] = { url: `${url}/issues` };
-  delete pkg["publishConfig"];
-  if (options.private) pkg["private"] = true;
-  else delete pkg["private"];
-  writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
-}
-
 /** Every `.ts` file under one directory, as repository-relative POSIX paths. */
 function walk(dir: string): string[] {
   const found: string[] = [];
@@ -90,13 +61,6 @@ function walk(dir: string): string[] {
   }
   return found.toSorted();
 }
-
-const marketplaceEntry = (root: string): Record<string, unknown> => {
-  const catalog = JSON.parse(
-    readFileSync(join(root, ".claude-plugin/marketplace.json"), "utf8"),
-  ) as { plugins: Record<string, unknown>[] };
-  return catalog.plugins[0] as Record<string, unknown>;
-};
 
 /**
  * The canonical identity's four spellings, each a value a renamed fork derives differently:
@@ -268,58 +232,13 @@ describe("the identity the CLI and CI suites assert against", () => {
   );
 });
 
-describe("a private fork's regenerated marketplace", () => {
-  it("names a git source it can serve, and an npm source only when it publishes one", () => {
-    const root = workspace("stamity-fork-marketplace-");
-    downstreamCheckout(root);
-    const generate = (): void => {
-      execFileSync(process.execPath, [join(root, "scripts/generate-plugin-manifests.mjs")], {
-        cwd: root,
-        encoding: "utf-8",
-      });
-    };
-
-    renameToPrivateFork(root, { private: true });
-    generate();
-    const entry = marketplaceEntry(root);
-
-    expect(entry["source"]).toEqual({ source: "github", repo: `${FORK_OWNER}/${FORK_REPO}` });
-    // `private: true` makes `npm publish` refuse, so the package name must not appear as
-    // a fetch channel anywhere in the catalog — not in this entry, and not in a second
-    // source a later field could grow.
-    expect(readFileSync(join(root, ".claude-plugin/marketplace.json"), "utf8")).not.toContain(
-      '"source": "npm"',
-    );
-    // A github source resolves component paths against the repository checkout, where
-    // `dist/` does not exist at all: it is built, and `.gitignore`d. Non-degenerate: the
-    // corpus fixture carries several agents, and every one is checkout-rooted.
-    const agents = entry["agents"] as string[];
-    expect(agents.length).toBeGreaterThan(1);
-    for (const path of agents) expect(path, "an agent path").toMatch(/^\.\/content\//);
-    expect(entry["skills"]).toMatch(/^\.\/content\//);
-
-    // The control, on the same tree: drop `private` and the published channel comes back,
-    // tarball prefix and all. Without it, "github when private" could be "github always".
-    renameToPrivateFork(root, { private: false });
-    generate();
-    const published = marketplaceEntry(root);
-
-    expect(published["source"]).toEqual({
-      source: "npm",
-      package: `@${FORK_OWNER}/stamity`,
-      version: (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string }).version,
-    });
-    expect(published["skills"]).toMatch(/^\.\/dist\/content\//);
-  });
-});
-
 /**
  * The whole identity-sensitive gate, inside a renamed private copy of this checkout.
  *
  * OPT-IN (`STAMITY_FORK_SUITE=1`). Not for its wall time — measured at about 25 seconds on
  * a warm POSIX machine, 2026-09-19, and 165 seconds for both fork classes over the longer list,
  * 2026-10-07 — but for what it does to get there: it copies the whole
- * working tree and starts a second vitest inside the first, over twenty-four suites (once per
+ * working tree and starts a second vitest inside the first, over fifteen suites (once per
  * fork class since REQ-PLUGIN-048: a private fork and a `--registry` fork). A nested
  * runner is charged differently by the coverage leg and by the Windows leg, and neither is
  * a cost the default gate should carry for a property the group above already proves in
@@ -329,17 +248,18 @@ describe("a private fork's regenerated marketplace", () => {
  */
 const FORK_SUITE = process.env["STAMITY_FORK_SUITE"] === "1";
 
-/** The suites the audit's renamed-copy run found identity-sensitive, every one of them. */
+/**
+ * The suites the audit's renamed-copy run found identity-sensitive, every one of them.
+ *
+ * TEST CHANGE, justified (plan 020 d1, REQ-PLUGIN-028): nine suites left the list, the two APM
+ * suites, the plugin distribution, manifest and package suites and the release manifest's. Each
+ * proved a plugin or APM surface the script regenerated in the renamed copy; it regenerates none
+ * since 1.15.0, so in that copy those suites would compare the canonical surfaces against the
+ * fork's name and fail for a reason the fork does not own. Their files are deleted with the routes.
+ */
 const IDENTITY_SUITES = [
-  "test/ci/apmDownstream.test.ts",
-  "test/ci/apmPackage.test.ts",
   "test/ci/changelogLinks.test.ts",
   "test/ci/distributionIdentity.test.ts",
-  "test/ci/pluginDistribution.test.ts",
-  "test/ci/pluginManifests.test.ts",
-  "test/ci/pluginPackages.claude.test.ts",
-  "test/ci/pluginPackages.registryless.test.ts",
-  "test/ci/releaseManifest.test.ts",
   "test/cli/binMap.test.ts",
   "test/cli/commands/add.test.ts",
   "test/cli/commands/check.test.ts",
@@ -352,10 +272,9 @@ const IDENTITY_SUITES = [
   "test/cli/surface.e2e.test.ts",
   // TEST CHANGE, justified: REQ-PLUGIN-048 (fix rounds 2-3 of u0-registry-bound-calls). Measured
   // red on a renamed fork, registry-less and `--registry` alike, before those rounds, and outside
-  // this list, so the witness never saw them: two plugin-root oracles, the shared-charter drift
-  // case, the upgrade remedy's prefix strip and the kit's checkout-derived remedies.
-  "test/ci/pluginPackages.copilot.test.ts",
-  "test/ci/pluginPackages.cursor.test.ts",
+  // this list, so the witness never saw them: the shared-charter drift case, the upgrade remedy's
+  // prefix strip and the kit's checkout-derived remedies (the two plugin-root oracles of that round
+  // left with the plugin route, plan 020 d1).
   "test/emit/sharedCharterIdentity.test.ts",
   "test/pack/upgradeRemedy.test.ts",
   "test/cli/kit/packageName.test.ts",
@@ -397,15 +316,17 @@ describe.skipIf(!FORK_SUITE)(
       symlinkSync(join(REPO_ROOT, "node_modules"), join(root, "node_modules"), "junction");
 
       // The guide's identity step, run as the guide prints it: `scripts/fork-identity.mjs`
-      // renames the manifest, moves both Renovate presets and regenerates the plugin and APM
-      // manifests. TEST CHANGE, justified (plan 010, unit docs-guides): this group applied its own
-      // copies of those edits (a hand rename, a preset `replaceAll` and the two generators), so it
-      // proved the tree the guide USED to describe. It now proves the command the guide prints.
+      // renames the manifest and moves the companion Renovate preset. TEST CHANGE, justified
+      // (plan 010, unit docs-guides): this group applied its own copies of those edits (a hand
+      // rename, a preset `replaceAll` and the two generators), so it proved the tree the guide USED
+      // to describe. It now proves the command the guide prints. TEST CHANGE, justified (plan 020
+      // d1, REQ-PLUGIN-028): `renovate/plugins.json` left the targets, because the script no
+      // longer rewrites it and runs no generator.
       // The script refuses to rewrite a file with uncommitted edits and reads that from
-      // `git status`, so the copy becomes a repository with the three target files committed,
+      // `git status`, so the copy becomes a repository with the target files committed,
       // the state a fork is in right after its import; identity and signing are forced on the
       // command line so the machine's own git configuration cannot change the run.
-      const targets = ["package.json", "renovate/plugins.json", "renovate/companion.json"];
+      const targets = ["package.json", "renovate/companion.json"];
       for (const args of [
         ["init", "--quiet"],
         ["add", "--", ...targets],
