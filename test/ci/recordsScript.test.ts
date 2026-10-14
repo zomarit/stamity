@@ -36,11 +36,19 @@ const SIGMA_PLAN = `docs/plans/${String.fromCodePoint(0x3c3)}.md`;
 const SIGMA_SHOWN = "docs/plans/<U+03C3>.md";
 const DEL_PLAN = `docs/plans/a${String.fromCodePoint(0x7f)}.md`;
 const DEL_SHOWN = "docs/plans/a<U+007F>.md";
+/**
+ * Record names in printable ASCII that are still not portable: on Windows a `:` names a stream of
+ * another file, a device name opens the device, a trailing dot is stripped, and `*` is a glob to git.
+ */
+const UNPORTABLE = [
+  "docs/plans/x:y.md", "docs/plans/001-alpha.md::$DATA", "docs/plans/nul.md", "docs/plans/CON", "docs/plans/aux/a.md",
+  "docs/plans/Lpt9.log.md", "docs/plans/a*.md", "docs/plans/b.", "docs/plans/old./c.md",
+];
 /** The plain-git repair a refusal names for a pair the records branch already holds, `<folder>` and `<old-spelling>` to fill. */
 const REPAIR = [
   "git fetch origin records",
   "git worktree add --detach <folder> origin/records",
-  "git -C <folder> rm -r --cached --quiet -- <old-spelling>",
+  "git -C <folder> --literal-pathspecs rm -r --cached -- <old-spelling>",
   "git -C <folder> commit -q -m \"records: drop the old spelling\"",
   "git -C <folder> push origin HEAD:refs/heads/records",
   "git worktree remove --force <folder>",
@@ -429,12 +437,33 @@ describe("restore", { timeout: 60_000 }, () => {
         // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
         const result: Result = await records.restore({ ...w.opts, ref: crafted, fetch: false, force });
         expect(result.code, `${shown} ${String(force)}: ${result.lines.join("\n")}`).toBe(1);
-        expect(result.lines.some((line) => line.includes("outside printable ASCII") && line.includes("nothing was written"))).toBe(true);
+        expect(result.lines.some((line) => line.includes("not portable") && line.includes("nothing was written"))).toBe(true);
         expect(result.lines).toContain(shown);
         expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
         expect(readdirSync(join(w.clone, "docs/plans"))).toEqual(["001-alpha.md"]);
         expect(w.synced(w.clone)).toBe(before);
       }
+    }
+  });
+
+  // Git for Windows refuses these names in an index and on disk, so only a POSIX host can build the commit that carries them.
+  it.skipIf(!POSIX)("refuses, before any write, a records commit holding a printable name that is not portable, naming each, forced or not", async () => {
+    const w = world();
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const before = w.synced(w.clone);
+    const crafted = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, upstream\n")},${PLAN}`);
+      for (const odd of UNPORTABLE) indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "odd\n")},${odd}`);
+    });
+    for (const force of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
+      const result: Result = await records.restore({ ...w.opts, ref: crafted, fetch: false, force });
+      expect(result.code, `${String(force)}: ${result.lines.join("\n")}`).toBe(1);
+      expect(result.lines.some((line) => line.includes("not portable") && line.includes("Windows device name") && line.includes("nothing was written"))).toBe(true);
+      for (const odd of UNPORTABLE) expect(result.lines, odd).toContain(odd);
+      expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+      expect(readdirSync(join(w.clone, "docs/plans"))).toEqual(["001-alpha.md"]);
+      expect(w.synced(w.clone)).toBe(before);
     }
   });
 
@@ -682,10 +711,29 @@ describe("commit", { timeout: 60_000 }, () => {
     const gates = passing();
     const refused: Result = await records.publish({ ...w.opts, message: "m", runGates: gates.run });
     expect(refused.code, refused.lines.join("\n")).toBe(1);
-    expect(refused.lines.some((line) => line.includes("outside printable ASCII") && line.includes("nothing was pushed"))).toBe(true);
+    expect(refused.lines.some((line) => line.includes("not portable") && line.includes("nothing was pushed"))).toBe(true);
     expect(refused.lines).toContain(SIGMA_SHOWN);
     expect(gates.calls).toHaveLength(0);
     expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+  });
+
+  // A Windows disk cannot hold these names as files of their own, so only a POSIX host can list them.
+  it.skipIf(!POSIX)("refuses a record name in printable ASCII that is not portable, naming each, and pushes nothing", async () => {
+    const w = world();
+    for (const odd of UNPORTABLE) w.write(w.clone, odd, "odd\n");
+    w.write(w.clone, PLAN, "# plan, revised\n");
+    const before = { clone: w.refs(w.clone), origin: w.refs(w.origin) };
+    const gates = passing();
+    for (const dryRun of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- each publish reads the checkout the previous one left
+      const refused: Result = await records.publish({ ...w.opts, message: "m", dryRun, runGates: gates.run });
+      expect(refused.code, `${String(dryRun)}: ${refused.lines.join("\n")}`).toBe(1);
+      expect(refused.lines.some((line) => line.includes("not portable") && line.includes("nothing was pushed"))).toBe(true);
+      for (const odd of UNPORTABLE) expect(refused.lines, odd).toContain(odd);
+    }
+    expect(gates.calls).toHaveLength(0);
+    expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+    expect(w.tree("records").filter((path) => path.startsWith("docs/plans/"))).toEqual([PLAN]);
   });
 
   it("refuses a case variant of the placeholder main keeps, naming it, and pushes nothing", async () => {
@@ -882,6 +930,35 @@ describe("verify, guard and init", { timeout: 60_000 }, () => {
     expect(local.refs(local.clone)).not.toContain("refs/heads/records");
     expect(local.refs(local.origin)).not.toContain("refs/heads/records");
   });
+
+  // Git for Windows refuses these names in an index, so only a POSIX host can build the base that carries them.
+  it.skipIf(!POSIX)("init refuses a record name in printable ASCII that is not portable at the base, naming each, and creates no branch", async () => {
+    const local = world({ init: false });
+    const odd = local.craft(local.clone, local.base, (indexed) => {
+      for (const name of UNPORTABLE) indexed("update-index", "--add", "--cacheinfo", `100644,${local.blob(local.clone, "odd\n")},${name}`);
+    });
+    const refused: Result = await records.init({ ...local.opts, base: odd });
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines[0]).toContain("not portable");
+    for (const name of UNPORTABLE) expect(refused.lines, name).toContain(`100644 ${name}`);
+    expect(local.refs(local.clone)).not.toContain("refs/heads/records");
+    expect(local.refs(local.origin)).not.toContain("refs/heads/records");
+  });
+
+  it("init refuses a base whose records hold a folder or a file in two spellings, naming each pair, and creates no branch", async () => {
+    const local = world({ init: false });
+    const paired = local.craft(local.clone, local.base, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${local.blob(local.clone, "b\n")},${ALPHA_UP}/b.md`);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${local.blob(local.clone, "# plan, the other spelling\n")},docs/plans/001-Alpha.md`);
+    });
+    const refused: Result = await records.init({ ...local.opts, base: paired });
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines.some((line) => line.includes("equal under case folding") && line.includes("nothing was created"))).toBe(true);
+    expect(refused.lines).toEqual(expect.arrayContaining([`${ALPHA_UP} and ${ALPHA}`, `docs/plans/001-Alpha.md and ${PLAN}`]));
+    expect(refused.lines.some((line) => line.includes("with plain git"))).toBe(false);
+    expect(local.refs(local.clone)).not.toContain("refs/heads/records");
+    expect(local.refs(local.origin)).not.toContain("refs/heads/records");
+  });
 });
 
 describe("the CLI", { timeout: 60_000 }, () => {
@@ -944,7 +1021,8 @@ describe("the branch templates", () => {
     const readme = template(README);
     for (const text of ["node scripts/records.mjs setup", "node scripts/records.mjs commit -m", "never forced",
       "cannot be deleted", "Status: in progress", "deleted on the branch", "publishes it again", "nothing but records", "differ only in case", "`commit` refuses to build one",
-      "printable ASCII", "files or folders", "`git rm -r --cached`", "`git push origin HEAD:refs/heads/records`"])
+      "letters, digits, `.`, `_` and `-`", "Windows device name", "files or folders", "`git --literal-pathspecs rm -r --cached`",
+      "`git push origin HEAD:refs/heads/records`"])
       expect(readme).toContain(text);
   });
 });

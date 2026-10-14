@@ -13,7 +13,7 @@
 //                                           is kept, one changed on both refuses the run; one
 //                                           deleted on <ref> is deleted here only if unedited; a
 //                                           <ref> holding anything but records and the branch's
-//                                           own files, a path outside printable ASCII, or two
+//                                           own files, a name that is not portable, or two
 //                                           files or folders equal under case folding, is
 //                                           refused before any write
 //   commit -m <message> [--dry-run] [--allow-deletions]
@@ -71,12 +71,21 @@ const TEMPLATES = [
 const BRANCH_FILES = new Set(TEMPLATES.map(([, destination]) => destination))
 /**
  * A path as a disk that folds case and normalizes names (macOS, Windows) resolves it: exact for the
- * printable-ASCII names a records tree may hold, the only ones where every such disk folds alike.
+ * portable names a records tree may hold, which are ASCII, where every such disk folds alike.
  */
 const folded = (path) => path.normalize('NFC').toLowerCase()
-/** A character outside printable ASCII (space to tilde), which disks that fold case fold in their own ways. */
+/**
+ * A name every disk writes as itself, as one file: ASCII letters, digits, `.`, `_` and `-` only (no
+ * `:`, which Windows reads as a stream of another file, and no glob character), never ending in `.`,
+ * which Windows strips, and never a Windows device name, with or without an extension.
+ */
+const PORTABLE_NAME = /^[A-Za-z0-9._-]+$/u
+const DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu
+const PORTABLE_RULE = 'every file and folder name only ASCII letters, digits, `.`, `_` and `-`, not ending in `.`, ' +
+  'and not a Windows device name (CON, PRN, AUX, NUL, COM1-COM9, LPT1-LPT9, in any case, with or without an extension)'
+const portable = (path) => path.split('/').every((name) => PORTABLE_NAME.test(name) && !name.endsWith('.') && !DEVICE_NAME.test(name))
+/** A character outside printable ASCII (space to tilde), shown by code point in a refusal. */
 const UNPRINTABLE = /[^ -~]/gu
-const printable = (path) => path.match(UNPRINTABLE) === null
 /** A path with each character outside printable ASCII shown as its code point, so a refusal names it visibly. */
 const shown = (path) => path.replace(UNPRINTABLE, (char) => `<U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}>`)
 const KEPT_FOLDED = new Set(KEEP_ON_MAIN.map(folded))
@@ -235,7 +244,7 @@ const REPAIR = [
   ...[
     'git fetch origin records',
     'git worktree add --detach <folder> origin/records',
-    'git -C <folder> rm -r --cached --quiet -- <old-spelling>',
+    'git -C <folder> --literal-pathspecs rm -r --cached -- <old-spelling>',
     'git -C <folder> commit -q -m "records: drop the old spelling"',
     'git -C <folder> push origin HEAD:refs/heads/records',
     'git worktree remove --force <folder>',
@@ -245,7 +254,7 @@ const REPAIR = [
 
 /**
  * A records tree holds the records and the files `init` writes, nothing else (main's placeholder in
- * any case included), every path in printable ASCII, and no two names, files or folders, equal
+ * any case included), every name portable, and no two names, files or folders, equal
  * under case folding, which a disk that folds case writes as one. `restore` refuses a ref, and
  * `commit` the tree it built, that breaks a rule; `holds` and `outcome` word the refusal for the
  * verb, `fix` says how to drop an old spelling, and `onBranch` says whether the records branch
@@ -254,11 +263,11 @@ const REPAIR = [
 function refuseUnsafeTree(ctx, oid, { holds, outcome, fix, onBranch }) {
   const paths = treePaths(ctx, oid)
   const stray = paths.filter((path) => !BRANCH_FILES.has(path) && (!isRecordPath(path) || KEPT_FOLDED.has(folded(path))))
-  const unprintable = paths.filter((path) => !printable(path)).map(shown)
+  const unportable = paths.filter((path) => !portable(path)).map(shown)
   const pairs = casePairs(paths)
   const lines = [
     ...(stray.length === 0 ? [] : [`refused: ${holds} paths that are neither records nor the branch's own files (${[...BRANCH_FILES].join(', ')}); ${outcome}:`, ...stray]),
-    ...(unprintable.length === 0 ? [] : [`refused: ${holds} paths with a character outside printable ASCII, which disks that fold case fold in their own ways; ${outcome}:`, ...unprintable]),
+    ...(unportable.length === 0 ? [] : [`refused: ${holds} paths whose names are not portable (${PORTABLE_RULE}), which another disk writes as another file or not at all; ${outcome}:`, ...unportable]),
     ...(pairs.length === 0 ? [] : [`refused: ${holds} names, files or folders, equal under case folding, which a disk that folds case writes as one; ${outcome}. ${fix}:`, ...pairs]),
     ...(pairs.length > 0 && onBranch() ? REPAIR : []),
   ]
@@ -553,9 +562,14 @@ export async function init({ base, ...options } = {}) {
     if (existing.length > 0) stop(1, [`refused: the records branch already exists (${existing.join(', ')}); init runs once`])
     const source = requireCommit(ctx, base)
     const rows = lsTree(ctx, source)
-    const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode) || !printable(row.path))
+    const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode) || !portable(row.path))
       .map((row) => `${row.mode} ${shown(row.path)}`)
-    if (unsupported.length > 0) stop(1, ['refused: only regular files under the record paths, named in printable ASCII, are imported:', ...unsupported])
+    // The import is the one way a sync base could hold a pair, which every later restore and commit refuses.
+    const pairs = casePairs([...rows.map((row) => row.path), ...BRANCH_FILES])
+    if (unsupported.length > 0 || pairs.length > 0) stop(1, [
+      ...(unsupported.length === 0 ? [] : [`refused: ${source} holds entries that are not regular files under the record paths, or whose names are not portable (${PORTABLE_RULE}), and init imports neither; nothing was created:`, ...unsupported]),
+      ...(pairs.length === 0 ? [] : [`refused: ${source} holds record names, files or folders, equal under case folding, which a disk that folds case writes as one; nothing was created. Drop the old spelling of each on main, then run init again:`, ...pairs]),
+    ])
     const index = join(ctx.git(['rev-parse', '--absolute-git-dir']).trim(), 'records-init.index')
     rmSync(index, { force: true })
     let tree
