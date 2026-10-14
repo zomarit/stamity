@@ -2723,9 +2723,13 @@ describe("four-tool union", () => {
     // TEST CHANGE: all four now have native hook configs; three encode the
     // original argv to keep it out of shell syntax. Assert the complete row
     // and native timeout/matcher fields rather than searching encoded text.
-    for (const [path, event, timeoutKey] of [
-      [CURSOR_HOOKS_CONFIG_PATH, "preToolUse", "timeout"],
-      [COPILOT_HOOKS_PATH, "PreToolUse", "timeoutSec"],
+    // TEST CHANGE, justified: Copilot's hooks file keys events in camelCase
+    // (`preToolUse`, since bcb1d9ce) and translates matchers into its runtime
+    // tool names (`Bash` → `bash`, since d8418e05); Cursor keeps `Bash`. The
+    // encoded registration still round-trips to GOLDEN_USER_HOOK unchanged.
+    for (const [path, event, timeoutKey, nativeMatcher] of [
+      [CURSOR_HOOKS_CONFIG_PATH, "preToolUse", "timeout", GOLDEN_USER_HOOK.matcher],
+      [COPILOT_HOOKS_PATH, "preToolUse", "timeoutSec", "bash"],
     ] as const) {
       const hooks = readJson(tree, path)["hooks"] as Record<string, { command: string; matcher?: string; timeout?: number; timeoutSec?: number }[]>;
       const user = (hooks[event] ?? []).filter(
@@ -2733,7 +2737,7 @@ describe("four-tool union", () => {
       );
       expect(user, path).toHaveLength(1);
       expect(readPortableRegistration(user[0]?.command ?? ""), path).toEqual(GOLDEN_USER_HOOK);
-      expect(user[0]?.matcher, path).toBe(GOLDEN_USER_HOOK.matcher);
+      expect(user[0]?.matcher, path).toBe(nativeMatcher);
       expect(user[0]?.[timeoutKey], path).toBe(5);
     }
     const codex = readJson(tree, CODEX_HOOKS_FILE)["hooks"] as Record<string, { matcher?: string; hooks: { command: string; timeout?: number }[] }[]>;
