@@ -310,6 +310,72 @@ describe("listClientModels", () => {
     expect(outcome).toEqual({ kind: "listed", ids: ["path-trimmed", "kept-1"], source: "cursor-agent-models" });
   });
 
+  // review/82: the walk skips an empty, `.` or other relative entry as naming the folder the child
+  // runs in, and the child's PATH must drop it too. The interpreter is planted both in the working
+  // folder and in the folder the child is started in, so the case fails wherever the child runs.
+  for (const shape of [":<bin>:/usr/bin:/bin", "<bin>::/usr/bin", ".:<bin>:/usr/bin:/bin", "tools:<bin>:/usr/bin:/bin"]) {
+    posixOnly(`gives the child no PATH entry that names a folder by where it runs (PATH "${shape}")`, async () => {
+      const repo = await repoDir();
+      const home = getTemp().path("home");
+      const marker = getTemp().path("started");
+      await Promise.all(
+        [repo, join(repo, "tools"), home, join(home, "tools")].map((folder) =>
+          fakeProgram(folder, "stamity-fake-interp", `: > '${marker}'\nexit 0`),
+        ),
+      );
+      await mkdir(getTemp().path("bin"));
+      await writeFile(getTemp().path("bin", "codex"), "#!/usr/bin/env stamity-fake-interp\n", "utf8");
+      await chmod(getTemp().path("bin", "codex"), 0o755);
+
+      const outcome = await listClientModels("codex", { PATH: shape.replace("<bin>", getTemp().path("bin")) }, repo, {
+        home,
+      });
+
+      expect(existsSync(marker)).toBe(false);
+      // `env` finds no interpreter of that name on the trimmed PATH, so the stub fails to start.
+      expect(outcome.kind).toBe("unreadable");
+    });
+  }
+
+  posixOnly("starts the child in the home folder, so it reads no setting of the working tree by a relative name", async () => {
+    // e3's security W-1: a client CLI reads project-scoped settings from the folder it runs in.
+    const repo = await repoDir();
+    const home = getTemp().path("home");
+    await mkdir(home);
+    await writeFile(join(repo, ".stamity-fake-setting"), "planted\n", "utf8");
+    const bin = getTemp().path("bin");
+    // The stub reports, as two model ids, the folder it runs in and whether it found the planted setting.
+    await fakeProgram(
+      bin,
+      "agent",
+      `[ "$(pwd -P)" = '${home}' ] && w=cwd-home || w=cwd-other\n[ -e .stamity-fake-setting ] && s=setting-read || s=setting-unseen\nprintf 'Available models\\n\\n%s - W\\n%s - S\\n' "$w" "$s"`,
+    );
+
+    const outcome = await listClientModels("cursor", onlyOnPath(bin), repo, { home });
+
+    expect(outcome).toEqual({ kind: "listed", ids: ["cwd-home", "setting-unseen"], source: "cursor-agent-models" });
+  });
+
+  posixOnly("starts nothing when the home folder lies inside the working tree or cannot be read", async () => {
+    const repo = await repoDir();
+    const marker = getTemp().path("started");
+    await fakeProgram(getTemp().path("bin"), "codex", `: > '${marker}'\nprintf '{"models":[{"slug":"m-1"}]}'`);
+    await mkdir(join(repo, "home"));
+
+    const outcomes = await Promise.all(
+      [repo, join(repo, "home"), getTemp().path("missing")].map((home) =>
+        listClientModels("codex", onlyOnPath(getTemp().path("bin")), repo, { home }),
+      ),
+    );
+
+    const refused = {
+      kind: "unreadable",
+      message: "no home folder outside the working tree to start `codex` in, so it was not started",
+    };
+    expect(outcomes).toEqual([refused, refused, refused]);
+    expect(existsSync(marker)).toBe(false);
+  });
+
   posixOnly("refuses a program on PATH that links into the working tree, and starts nothing", async () => {
     const repo = getTemp().path("repo");
     const marker = getTemp().path("started");

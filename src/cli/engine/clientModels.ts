@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { homedir } from "node:os";
 import {
   fileSystemProbe,
   resolveProgramOnPath,
@@ -21,15 +22,23 @@ import type { ListedModels } from "../../types/manifest.ts";
  *
  * No program the repository can place is started, and nothing a client prints
  * is trusted until parsed. The program is found by a `PATH` walk
- * (`resolveProgramOnPath`) over the entries left once every entry inside the
- * working folder's tree, and every entry named `node_modules/.bin` at any
- * level, is dropped: npm and `npx` put the project's own `node_modules/.bin`
- * folders ahead of the user's `PATH`, and a repository can commit one or have a
- * dependency install a `bin` there. A program the walk still finds whose real
- * path lies inside the working tree (a link from outside pointing in) is
- * refused, never started. The child is given that trimmed `PATH` too, so a
- * launcher that finds its interpreter by name (`#!/usr/bin/env node`) cannot
- * reach one the repository placed. So a file a repository carries under a
+ * (`resolveProgramOnPath`) over the entries left once every entry the walk
+ * itself skips (an empty one, `.` or any other relative one), every entry
+ * inside the working folder's tree, and every entry named `node_modules/.bin`
+ * at any level, is dropped: npm and `npx` put the project's own
+ * `node_modules/.bin` folders ahead of the user's `PATH`, and a repository can
+ * commit one or have a dependency install a `bin` there. A program the walk
+ * still finds whose real path lies inside the working tree (a link from outside
+ * pointing in) is refused, never started. The child is given that trimmed
+ * `PATH` too, so a launcher that finds its interpreter by name
+ * (`#!/usr/bin/env node`) cannot reach one the repository placed. And the child
+ * is started in the user's home folder, never in the working tree, so a
+ * project-scoped setting the repository carries is not what the client reads;
+ * a home whose real path lies inside the working tree is refused, and nothing
+ * starts. Home, not the temp folder: each client keeps its account and its
+ * user settings under home already, so a setting found there is the
+ * operator's own, while on Linux the temp folder is shared with every local
+ * account. So a file a repository carries under a
  * client's name, or under an interpreter's, is not what starts. The output must open with that client's own header or the
  * outcome is `unreadable`, which limits what is kept, not what runs; and an id is kept only when it has the shape of a model id
  * (letters, digits and `._:/-`, at most 100 characters), which no line break,
@@ -185,6 +194,12 @@ export interface ListClientModelsOptions {
   readonly platform?: NodeJS.Platform;
   /** The file-system reads the `PATH` walk makes. */
   readonly probe?: ProgramFileProbe;
+  /**
+   * The user's home folder, where the child is started; `os.homedir()` by
+   * default. Refused, with nothing started, when its real path lies inside the
+   * working tree.
+   */
+  readonly home?: string;
 }
 
 /** A `PATH` entry npm or `npx` adds for a project's installed binaries, at any level. */
@@ -203,38 +218,72 @@ function isWithin(inner: string, root: string, windows: boolean): boolean {
   return child === parent || child.startsWith(`${parent}${windows ? "\\" : "/"}`);
 }
 
+/** A disk on which every folder holds a program and every path is real as spelled, so the walk answers which entries it searches. */
+const EVERY_FOLDER: ProgramFileProbe = { isProgramFile: () => true, realPath: (path) => path };
+
 /**
- * `path` without the entries a repository can fill: every `node_modules/.bin`
- * folder, and every entry whose real path is the working folder or lies below
- * it. `undefined` stays `undefined`; a working folder with no real path is
- * answered by the walk itself, which then searches nothing.
+ * Whether the walk searches `entry` at all, asked of the walk itself so the
+ * child's `PATH` follows the walk's own rule: an entry that is not a full path
+ * (an empty one, `.` or any other relative one) names whatever folder the child
+ * runs in, and is skipped.
+ */
+function walkSearches(entry: string, treeRoot: string, platform: NodeJS.Platform): boolean {
+  return resolveProgramOnPath("program", { platform, path: entry, cwd: treeRoot, probe: EVERY_FOLDER }) !== null;
+}
+
+/**
+ * `path` without the entries a repository can fill: every entry the walk skips
+ * for not being a full path, every `node_modules/.bin` folder, and every entry
+ * whose real path is the working folder or lies below it. `undefined` stays
+ * `undefined`; a working folder with no real path is answered by the walk
+ * itself, which then searches nothing.
  */
 function trustedSearchPath(
   path: string | undefined,
+  treeRoot: string,
   root: string | null,
-  windows: boolean,
+  platform: NodeJS.Platform,
   probe: ProgramFileProbe,
 ): string | undefined {
   if (path === undefined) return undefined;
+  const windows = platform === "win32";
   const delimiter = windows ? ";" : ":";
   return path
     .split(delimiter)
     .filter((raw) => {
+      if (!walkSearches(raw, treeRoot, platform)) return false;
       const entry = windows ? raw.replace(/^"(.*)"$/, "$1") : raw;
       if (NODE_MODULES_BIN[windows ? "win32" : "posix"].test(entry)) return false;
-      const real = root === null || entry === "" ? null : probe.realPath(entry);
+      const real = root === null ? null : probe.realPath(entry);
       return real === null || !isWithin(real, root ?? "", windows);
     })
     .join(delimiter);
 }
 
 /**
+ * The real path of the folder the child is started in: `home`, or the user's
+ * home when none is given, so long as it lies outside the working tree; `null`
+ * when it lies inside, or names nothing that can be read.
+ */
+function homeOutside(home: string | undefined, root: string, windows: boolean, probe: ProgramFileProbe): string | null {
+  let folder: string;
+  try {
+    folder = home ?? homedir();
+  } catch {
+    return null;
+  }
+  const real = folder === "" ? null : probe.realPath(folder);
+  return real === null || isWithin(real, root, windows) ? null : real;
+}
+
+/**
  * What the walk found for a client: a program to start, with the trimmed search
- * path its child is given; one refused; or nothing.
+ * path its child is given and the folder it is started in; one refused, with
+ * the reason; or nothing.
  */
 type FoundProgram =
-  | { kind: "found"; name: string; path: string; searchPath: string | undefined }
-  | { kind: "refused"; name: string }
+  | { kind: "found"; name: string; path: string; searchPath: string | undefined; folder: string }
+  | { kind: "refused"; message: string }
   | null;
 
 /**
@@ -268,23 +317,34 @@ function childEnv(
   return { ...env, [searchPathKey(env, platform)]: searchPath };
 }
 
-/** The first of `programs` the walk finds outside the working tree, by name and absolute path. */
+/**
+ * The first of `programs` the walk finds outside the tree under `treeRoot`, by
+ * name and absolute path, with the folder its child is started in. The walk is
+ * given `treeRoot` as the folder it never searches.
+ */
 function findProgram(
   programs: readonly string[],
   env: NodeJS.ProcessEnv,
-  cwd: string,
+  treeRoot: string,
   platform: NodeJS.Platform,
   probe: ProgramFileProbe,
+  home: string | undefined,
 ): FoundProgram {
   const windows = platform === "win32";
-  const root = probe.realPath(cwd);
-  const path = trustedSearchPath(searchPathOf(env, platform), root, windows, probe);
+  const root = probe.realPath(treeRoot);
+  const path = trustedSearchPath(searchPathOf(env, platform), treeRoot, root, platform, probe);
   for (const name of programs) {
-    const found = resolveProgramOnPath(name, { platform, path, cwd, probe });
+    const found = resolveProgramOnPath(name, { platform, path, cwd: treeRoot, probe });
     if (found === null) continue;
     const real = probe.realPath(found);
-    if (root === null || real === null || isWithin(real, root, windows)) return { kind: "refused", name };
-    return { kind: "found", name, path: found, searchPath: path };
+    if (root === null || real === null || isWithin(real, root, windows)) {
+      return { kind: "refused", message: `\`${name}\` on PATH resolves inside the working tree, so it was not started` };
+    }
+    const folder = homeOutside(home, root, windows, probe);
+    if (folder === null) {
+      return { kind: "refused", message: `no home folder outside the working tree to start \`${name}\` in, so it was not started` };
+    }
+    return { kind: "found", name, path: found, searchPath: path, folder };
   }
   return null;
 }
@@ -297,28 +357,30 @@ function findProgram(
  * on Windows that includes an npm shim (`codex.cmd`), which is not started
  * without a shell, so the shipped fallback applies there. `timeout` when the
  * child outlives the ceiling and is killed. `unreadable`, with nothing started,
- * when the program found resolves into the working tree; and when it exits non-zero,
+ * when the program found resolves into the working tree or no home folder
+ * outside that tree holds the child; and when it exits non-zero,
  * prints past the byte ceiling, or prints something that is not the client's
  * listing; the message names the call and never repeats the child's output.
  * Never throws.
+ *
+ * `treeRoot` is the root of the working tree the lister keeps out: no `PATH`
+ * entry in that tree is searched or handed to the child, and no program whose
+ * real path lies in it is started. It is not where the child runs: the lister
+ * chooses that folder itself, the user's home (`options.home`), so long as
+ * home lies outside the tree.
  */
 export function listClientModels(
   tool: Tool,
   env: NodeJS.ProcessEnv,
-  cwd: string,
+  treeRoot: string,
   options: ListClientModelsOptions = {},
 ): Promise<ModelListOutcome> {
   const lister = LISTERS[tool];
   if (lister === undefined || env["STAMITY_NO_CLIENT_PROBE"] === "1") return Promise.resolve({ kind: "absent" });
   const platform = options.platform ?? process.platform;
-  const program = findProgram(lister.programs, env, cwd, platform, options.probe ?? fileSystemProbe);
+  const program = findProgram(lister.programs, env, treeRoot, platform, options.probe ?? fileSystemProbe, options.home);
   if (program === null) return Promise.resolve({ kind: "absent" });
-  if (program.kind === "refused") {
-    return Promise.resolve({
-      kind: "unreadable",
-      message: `\`${program.name}\` on PATH resolves inside the working tree, so it was not started`,
-    });
-  }
+  if (program.kind === "refused") return Promise.resolve({ kind: "unreadable", message: program.message });
   const args = tool === "codex" && options.codexBundled === true ? [...lister.args, "--bundled"] : [...lister.args];
   const call = `${program.name} ${args.join(" ")}`;
 
@@ -327,7 +389,7 @@ export function listClientModels(
       program.path,
       args,
       {
-        cwd,
+        cwd: program.folder,
         env: childEnv(env, platform, program.searchPath),
         encoding: "utf8",
         timeout: options.timeoutMs ?? CLIENT_LIST_TIMEOUT_MS,
