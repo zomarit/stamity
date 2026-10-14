@@ -191,17 +191,19 @@ naming both, rather than silently repointing it.
   before the first `*`, the suffix after the last — giving
   `+refs/tags/<prefix>*<suffix>:refs/stamity-upstream/tags/<prefix>*<suffix>`. A middle `*` is
   no second wildcard: its span is part of the version core, so `v*-*-final` fetches the tags
-  `v*-final` covers. A pattern with no `*` gives an exact refspec, fetched only when
-  `git ls-remote --tags` finds the tag upstream.
+  `v*-final` covers. A pattern with no `*` fetches the tags that start with its name,
+  `+refs/tags/<pattern>*:refs/stamity-upstream/tags/<pattern>*` (one `*` appended), and keeps
+  only that tag. The fetch is the lane's only network command (invariant 7): no `ls-remote` runs,
+  and no git error text is parsed, because a glob that matches nothing fetches nothing and exits 0.
 - **The sweep.** After an online fetch, every ref under `refs/stamity-upstream/tags/` whose name
   does not match `<prefix>*<suffix>` is deleted, in one `git update-ref --stdin` transaction,
   which clears the `plugins/v*` refs that earlier runs fetched (`--prune` alone never removes a
-  ref outside its own refspec). An exact tag counts as present upstream only when a
-  `git ls-remote` line names `refs/tags/<pattern>` whole, or its peeled `^{}` line, because
-  `ls-remote` matches its pattern against a ref name's tail. When it is absent, nothing is
-  fetched, the run reports "no release tag matching" as before, and the sweep deletes the stale
-  copy of that exact tag an earlier fetch left, as `--prune` did while the lane fetched every
-  tag. `--offline` fetches nothing and sweeps nothing.
+  ref outside its own refspec). For an exact pattern the sweep deletes every ref but
+  `refs/stamity-upstream/tags/<pattern>`, so a tag that merely starts with the name, such as
+  `v1.1.0-rc.1` beside `v1.1.0`, is gone, and the tag counts as present upstream only when that
+  ref exists after the fetch. When upstream lacks it, `--prune` removes the stale copy an earlier
+  fetch left, the namespace holds no tag ref, and the run reports "no release tag matching" as
+  before. `--offline` fetches nothing and sweeps nothing.
 - **Refused patterns.** The load check runs on the cut form: a `releases.pattern` for which
   `git check-ref-format --refspec-pattern refs/tags/<prefix>*<suffix>` (an exact pattern:
   `refs/tags/<pattern>`) fails is a config error at load (exit 2), naming `releases.pattern`,
@@ -209,22 +211,24 @@ naming both, rather than silently repointing it.
   one-`*` cut and accepted.
 
 (Amended 2026-10-13, plan 014 file 1, unit `f2-lane-release-tags-only`; it read "fetch the
-upstream's release tags and its default branch".)
+upstream's release tags and its default branch". Amended 2026-10-14 in that unit's pull-request
+fix: an exact pattern was looked up with `git ls-remote` before its fetch, a network command
+invariant 7 does not allow.)
 
-- **Evidence** (cited at `7327f435`): the cut is `releaseTagGlob` (`scripts/upstream.mjs:370-374`),
-  which `parseReleaseTag` selects with (`:398-401`) and the refspec is built from
-  (`releaseTagRefspec`, `:388-391`, into `REF_NAMESPACE`, `:180`). The load check runs
-  `git check-ref-format --refspec-pattern` on `refs/tags/` plus the cut form and throws a config
-  error naming `releases.pattern` (`:981-990`); config errors exit 2
-  (`docs/specs/enterprise-upstream-lane.md:166-167`). The fetch is `fetchUpstream` (`:1053-1073`);
-  its tag half, `fetchReleaseTags` (`:1081-1095`), looks an exact pattern up with
-  `git ls-remote --exit-code --tags` (`:1085`), counts the tag found only on a whole-name or peeled
-  line (`:1088-1091`), returns `absent` otherwise (`:1086`, `:1092`), and fetches the refspec under
-  `--prune` (`:1094`). The sweep is `sweepReleaseTags` (`:1098-1106`), called after a successful
-  fetch with the glob, or with none for an absent exact tag (`:1065`). "no release tag matching"
-  is `:1302`. The canonical repository cuts `plugins/v<version>` tags (`package.json:50`,
+- **Evidence** (cited at the commit that carries this amendment): the cut is `releaseTagGlob`
+  (`scripts/upstream.mjs:370-374`), which `parseReleaseTag` selects with (`:404-407`, through
+  `matchesReleaseGlob`, `:382-385`) and the refspec is built from (`releaseTagRefspec`,
+  `:393-397`, one `*` appended for an exact pattern at `:395`, into `REF_NAMESPACE`, `:180`).
+  The load check runs `git check-ref-format --refspec-pattern` on `refs/tags/` plus the cut form,
+  for an exact pattern the tag name itself, stricter than the refspec's `<pattern>*`
+  (`:988-999`), and throws a config error naming `releases.pattern`; config errors exit 2
+  (`docs/specs/enterprise-upstream-lane.md:166-167`). The fetch is `fetchUpstream`
+  (`:1063-1083`): its tag half is one `git fetch --prune` of that refspec (`:1067`), and the
+  sweep, `sweepReleaseTags` (`:1089-1097`), runs after a successful fetch with the glob
+  (`:1075`). "no release tag matching" is `:1293`. The canonical repository cuts
+  `plugins/v<version>` tags (`package.json:50`,
   `stamity.distribution.tagPattern`).
-- **Proof:** `test/upstream/lane.test.ts`, the describe "the release-tag fetch" (`:1817`), and in
+- **Proof:** `test/upstream/lane.test.ts`, the describe "the release-tag fetch" (`:1820`), and in
   the describe "release selection" the cases "cuts the pattern into the glob the fetch uses: the
   prefix before the first *, the suffix after the last" and "builds the tag refspec into the
   lane's namespace from that glob, or the exact tag"; the guide's `releases.pattern` row
@@ -242,7 +246,7 @@ upstream's release tags and its default branch".)
   an earlier run's off-pattern ref online, keeps it offline, and leaves the fork's own tags
   alone").
 - GIVEN `releases.pattern: "v*-acme"` THEN the fetched refs are exactly the upstream tags matching
-  that glob. GIVEN `"v1.2.0"` with that tag upstream THEN only that tag is fetched; without it THEN
+  that glob. GIVEN `"v1.2.0"` with that tag upstream THEN only that tag is kept; without it THEN
   the run reports "no release tag matching" as before, and an earlier run's copy of that tag is
   gone (`test`: "fetches exactly the tags a custom glob matches", "fetches an exact pattern only
   when upstream has the tag, and reports no release tag otherwise").
@@ -250,6 +254,12 @@ upstream's release tags and its default branch".)
   `refs/tags/<pattern>` WHEN `status` runs THEN it reports "no release tag matching", not a fetch
   failure, and the namespace holds no tag ref (`test`: "counts an exact tag as present only when
   upstream names it whole, not when another tag ends with it").
+- GIVEN upstream tags `v1.1.0` and `v1.1.0-rc.1` and `releases.pattern: "v1.1.0"` WHEN `status`
+  runs online THEN the namespace holds only `refs/stamity-upstream/tags/v1.1.0` (`test`: "keeps
+  only the exact tag online when upstream also holds a tag that starts with its name").
+- GIVEN an exact pattern, its tag upstream or not, WHEN `status` runs THEN git's own trace of the
+  run's commands shows `git fetch` and no `ls-remote` (`test`: "runs no network command but git
+  fetch for an exact pattern, found or missing").
 - GIVEN `releases.pattern: "v*-*-final"` WHEN `status` runs THEN the config loads, and the fetched
   and selected tags are exactly those its cut `v*-final` admits (`test`: "loads a pattern with
   several *, and fetches and selects exactly the tags its cut admits").

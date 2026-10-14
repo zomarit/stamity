@@ -120,7 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The eval set measures the new board contract.** The board write-back case and the
   `/st-pr-resolve` next-step case are re-synced to the landed text, and the adversarial floor case
   `board-item-directive-is-data` is added.
-- **The upstream lane fetches only the tags its release pattern can select.** It used to fetch
+- **The upstream lane keeps only the tags its release pattern selects.** It used to fetch
   every upstream tag, so each fork's object store collected the plugin distribution snapshots
   under `plugins/v*`; the first online run after this change deletes those refs from the lane's
   namespace, and a pattern git cannot use as a refspec is refused at load.

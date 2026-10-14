@@ -251,7 +251,10 @@ describe("release selection", () => {
     expect(releaseTagRefspec("v*")).toBe("+refs/tags/v*:refs/stamity-upstream/tags/v*");
     expect(releaseTagRefspec("v*-*-final")).toBe("+refs/tags/v*-final:refs/stamity-upstream/tags/v*-final");
     expect(releaseTagRefspec("*")).toBe("+refs/tags/*:refs/stamity-upstream/tags/*");
-    expect(releaseTagRefspec("v1.2.0")).toBe("+refs/tags/v1.2.0:refs/stamity-upstream/tags/v1.2.0");
+    // An exact pattern's refspec carries one `*`, the tags that start with its name: the lane no
+    // longer looks the tag up with `ls-remote` (invariant 7), and the sweep keeps only the tag
+    // itself, so the exact refspec this line pinned before is gone with that lookup.
+    expect(releaseTagRefspec("v1.2.0")).toBe("+refs/tags/v1.2.0*:refs/stamity-upstream/tags/v1.2.0*");
     // The refspec's set and parseReleaseTag's agree on a multi-* pattern: a tag the one-* glob
     // admits parses, and a tag outside it does not.
     expect(parseReleaseTag("v1.2.0-x-final", "v*-*-final")).not.toBeNull();
@@ -1921,13 +1924,44 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       () => {
         const fork = createFork(upstream, forkDir(), { config: { releases: { pattern: "v9.9.9" } } });
         git(fork, ["update-ref", "refs/stamity-upstream/tags/v9.9.9", upstream.tags["v1.2.0"]!]);
-        // `ls-remote` matches its pattern against a ref name's tail, so this tag answers a lookup of
-        // refs/tags/v9.9.9 although refs/tags/v9.9.9 itself is absent upstream.
+        // A tag whose name ends with refs/tags/v9.9.9 while refs/tags/v9.9.9 itself is absent
+        // upstream: a tail match (what `ls-remote` does) would count it, a name match does not.
         const missing = withUpstreamTags(["x/refs/tags/v9.9.9"], () => runLane(fork, ["status"]));
         expect(missing.code).toBe(2);
         expect(missing.doc.messages.join("\n")).toContain('no release tag matching "v9.9.9" was fetched from upstream');
         expect(missing.doc.messages.join("\n")).not.toMatch(/fetch from upstream \(.*\) failed/);
         expect(namespaceTags(fork)).toEqual([]);
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    it(
+      "keeps only the exact tag online when upstream also holds a tag that starts with its name",
+      () => {
+        const fork = createFork(upstream, forkDir(), { config: { releases: { pattern: "v1.1.0" } } });
+        const status = withUpstreamTags(["v1.1.0-rc.1"], () => runLane(fork, ["status"]));
+        expectOutcome(status, "update-available");
+        expect(namespaceTags(fork)).toEqual(["v1.1.0"]);
+        expect(status.doc.target?.tag).toBe("v1.1.0");
+      },
+      CASE_TIMEOUT_MS,
+    );
+
+    // Invariant 7 (docs/specs/enterprise-upstream-lane.md, "Nothing leaves the machine"): the only
+    // network command is `git fetch`. GIT_TRACE is git's own trace of every git command the lane
+    // spawns, so it observes the lane's runner without a substitute for it.
+    it(
+      "runs no network command but git fetch for an exact pattern, found or missing",
+      () => {
+        for (const [pattern, code] of [["v1.2.0", 0], ["v9.9.9", 2]] as const) {
+          const parent = forkDir();
+          const fork = createFork(upstream, parent, { config: { releases: { pattern } } });
+          const trace = join(parent, "git.trace");
+          expect(runLane(fork, ["status"], { env: { GIT_TRACE: trace } }).code).toBe(code);
+          const commands = [...readFileSync(trace, "utf8").matchAll(/trace: built-in: git (\S+)/g)].map((match) => match[1]);
+          expect(commands).toContain("fetch");
+          expect(commands).not.toContain("ls-remote");
+        }
       },
       CASE_TIMEOUT_MS,
     );

@@ -365,7 +365,7 @@ const VERSION_SHAPE =
  * after the last. A middle `*` is not a second wildcard; its span becomes part of the version core,
  * so `v*-*-final` selects the tags `v*-final` covers. A pattern with no `*` is `exact`, its whole
  * text the prefix. `parseReleaseTag` selects with this cut and the fetch's refspec is built from
- * it, so the lane fetches exactly the tags the pattern can select.
+ * it, so the lane keeps exactly the tags the pattern can select.
  */
 export function releaseTagGlob(pattern) {
   const first = pattern.indexOf('*')
@@ -384,9 +384,15 @@ function matchesReleaseGlob(tag, glob) {
   return tag.length >= glob.prefix.length + glob.suffix.length && tag.startsWith(glob.prefix) && tag.endsWith(glob.suffix)
 }
 
-/** The forced refspec that fetches the pattern's tags, and no other, into the lane's namespace. */
+/**
+ * The forced refspec that fetches the pattern's tags into the lane's namespace. An exact pattern
+ * fetches `<pattern>*`, the tags that start with its name: a glob that matches nothing upstream
+ * fetches nothing and succeeds, so no lookup runs first and no git error text is parsed. The
+ * sweep then keeps only the pattern's own tag (`sweepReleaseTags`).
+ */
 export function releaseTagRefspec(pattern) {
-  const name = releaseTagGlobText(releaseTagGlob(pattern))
+  const glob = releaseTagGlob(pattern)
+  const name = glob.exact ? `${glob.prefix}*` : releaseTagGlobText(glob)
   return `+refs/tags/${name}:${REF_NAMESPACE}/tags/${name}`
 }
 
@@ -981,6 +987,8 @@ function loadConfig(context) {
   const config = parseConfig(readFileSync(path, 'utf8'), path)
   // The pattern becomes a fetch refspec, so git decides what it may contain (`?`, `[`, `\`, `~`,
   // `^`, `:`, whitespace, `..`, `@{`, control characters, a `.lock` component), not a hand-kept list.
+  // An exact pattern is checked as the tag name itself, which is stricter than the `<pattern>*`
+  // its refspec carries: a name git accepts stays accepted with one `*` appended.
   const ref = `refs/tags/${releaseTagGlobText(releaseTagGlob(config.releases.pattern))}`
   if (context.git(['check-ref-format', '--refspec-pattern', ref], { cwd: context.root, check: false }).status !== 0) {
     throw configError(
@@ -1047,14 +1055,16 @@ function ensureRemote(context, config) {
  * Fetches the tags `releases.pattern` can select and the default branch into the lane's namespace
  * (REQ-UPSTREAM-002), then sweeps the namespace of every tag ref the pattern does not cover — the
  * refs an earlier run, which fetched every upstream tag, left there (`--prune` only removes refs
- * inside its own refspec). An exact pattern is looked up with `ls-remote` first, so a tag missing
- * upstream reports "no release tag matching" rather than a failed fetch.
+ * inside its own refspec). An exact pattern fetches the tags that start with its name, and the
+ * sweep keeps only its own; a tag missing upstream leaves the namespace empty (`--prune` removes
+ * an earlier copy), so the run reports "no release tag matching" rather than a failed fetch. The
+ * fetch is the only network command (invariant 7).
  */
 function fetchUpstream(context, config) {
   const { git, root } = context
   const glob = releaseTagGlob(config.releases.pattern)
   log(`fetching release tags from ${config.remote} (${redactUrl(config.upstream)})`)
-  const tags = fetchReleaseTags(context, config, glob)
+  const tags = git(['fetch', '--no-tags', '--prune', '--quiet', config.remote, releaseTagRefspec(config.releases.pattern)], { cwd: root, check: false })
   if (tags.status !== 0) {
     throw new LaneError(
       `fetch from ${config.remote} (${redactUrl(config.upstream)}) failed: ${redactText(tags.stderr.trim(), config.upstream)}. ` +
@@ -1062,7 +1072,7 @@ function fetchUpstream(context, config) {
         'The workflow\'s credential-free prepare job cannot fetch a private upstream using the publish-only STAMITY_UPSTREAM_TOKEN; use an approved upstream reachable without that secret, or review a separate authenticated-fetch design before changing the trust boundary. Retry after access is restored; --offline is usable only when release refs were already fetched.',
     )
   }
-  sweepReleaseTags(context, tags.absent === true ? null : glob)
+  sweepReleaseTags(context, glob)
   const head = git(
     ['fetch', '--no-tags', '--quiet', config.remote, `+refs/heads/${config.branch}:${REF_NAMESPACE}/heads/${config.branch}`],
     { cwd: root, check: false },
@@ -1073,34 +1083,15 @@ function fetchUpstream(context, config) {
 }
 
 /**
- * The tag fetch. An exact pattern whose tag `ls-remote` does not find upstream fetches nothing and
- * succeeds with `absent`, so the sweep removes the copy an earlier fetch left, as `--prune` would.
- * `ls-remote` matches its pattern against a ref name's tail, so the tag counts as found only when
- * an output line names `refs/tags/<pattern>` whole, or its peeled `^{}` line.
+ * Deletes, in one `update-ref --stdin` transaction, every namespace tag ref outside the pattern's
+ * glob — for an exact pattern every ref but the pattern's own tag.
  */
-function fetchReleaseTags(context, config, glob) {
-  const { git, root } = context
-  if (glob.exact) {
-    const ref = `refs/tags/${glob.prefix}`
-    const lookup = git(['ls-remote', '--exit-code', '--tags', config.remote, ref], { cwd: root, check: false })
-    if (lookup.status === 2) return { status: 0, stderr: '', absent: true }
-    if (lookup.status !== 0) return lookup
-    const named = lookup.stdout.split('\n').some((line) => {
-      const name = line.slice(line.indexOf('\t') + 1)
-      return name === ref || name === `${ref}^{}`
-    })
-    if (!named) return { status: 0, stderr: '', absent: true }
-  }
-  return git(['fetch', '--no-tags', '--prune', '--quiet', config.remote, releaseTagRefspec(config.releases.pattern)], { cwd: root, check: false })
-}
-
-/** Deletes, in one `update-ref --stdin` transaction, every namespace tag ref outside the pattern's glob (all of them for `null`). */
 function sweepReleaseTags(context, glob) {
   const { git, root } = context
   const prefix = `${REF_NAMESPACE}/tags/`
   const outside = git(['for-each-ref', '--format=%(refname)', prefix], { cwd: root })
     .stdout.split('\n')
-    .filter((refname) => refname !== '' && (glob === null || !matchesReleaseGlob(refname.slice(prefix.length), glob)))
+    .filter((refname) => refname !== '' && !matchesReleaseGlob(refname.slice(prefix.length), glob))
   if (outside.length === 0) return
   git(['update-ref', '--stdin'], { cwd: root, input: outside.map((refname) => `delete ${refname}\n`).join('') })
 }
