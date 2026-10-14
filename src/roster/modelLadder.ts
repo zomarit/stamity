@@ -58,55 +58,45 @@
  * escalation's effort step is.
  * Verdict roles and the spec-author never fall back to a weaker class.
  *
- * NEVER INVENT A VALUE. A class this module cannot resolve for a client yields
- * `undefined`, and the adapter omits the key. The client then applies its own
- * default — an honest unknown — where a guessed value would be a fabricated
- * sizing decision that outranks the operator and expires without warning. Both
- * shipped alias tables already carried this rule in their own words; it is
- * stated once here, for all four clients. `content/commands/st-work.md`
- * states it once more where it introduces the ladder table — the only shipped
- * prose telling a reader where a class GOES — and a third anchor in the
- * provenance case holds that text to this behaviour: a paragraph promising the
- * two keys on every emitted file would read as a projection guarantee the
- * resolvers below do not make, and the adapter suites already pin the absence
- * it would contradict.
+ * A WORKING PICK, READ FROM THE ACCOUNT. This header used to say "never
+ * invent a value": a class with no alias resolved to nothing, the adapter
+ * omitted the key, and on three of the four clients the client's own router
+ * re-decided every role's size. That rule is superseded (REQ-LADDER-006). A
+ * class now resolves, in this order, to the operator's pin for this client,
+ * the pin for every client, the client's own alias, the first entry of the
+ * shipped priority list (`./modelDefaults.ts`) that the account's own model
+ * list holds, and that list's entry 0 where no account list was read. Nothing
+ * here is invented: the priority list is dated, cited and read off each
+ * client's CLI, and the account's list is what `init` and `sync` read from the
+ * client and persisted — emission never starts a client. The one client that
+ * still resolves nothing by default is Cursor with no list read, where an
+ * unlisted id fails the spawn and an absent one inherits the session's model,
+ * so silence stays the safe answer there.
+ *
+ * The pick is opt-in per call: a caller passes {@link ModelPickSource} (the
+ * persisted list, or none) to {@link resolveModelValue}, and a call without it
+ * resolves pins and aliases only, as every call did before the pick existed.
+ * An adapter opts in when it carries the pick into its agent files.
  *
  * THE OPERATOR OUTRANKS THE LADDER. `stamity config` pins concrete ids per
- * class — pinned explicit ids on router-active platforms, with operator
- * override — and a pin wins over the built-in alias. Every supported client
- * accepts a concrete id in its model field (see the citations on each row), so
- * a pin is expressible everywhere the client has the field at all. Whether an
- * EFFORT setting reaches a given client is read off
- * {@link ClientModelProjection.effortCarrier} at the call site that needs it;
- * this module publishes no predicate for it. The one surface that would ask —
- * the config command's per-class effort rows — resolves a level without naming
- * a client, so a predicate exported for it would be a capability with no
- * caller plus a docstring naming one, which is the gap this header exists to
- * close.
+ * class and per client, and a pin wins over the alias and the pick, with one
+ * exception: where the account's list is known and does not hold the pin, the
+ * class is re-picked from that list, because an id the account lacks fails the
+ * call and outranks nothing. A pin with a bracket group is the operator's whole
+ * model expression and is never re-picked. Whether an EFFORT setting reaches a
+ * given client is read off {@link ClientModelProjection.effortCarrier} at the
+ * call site that needs it; this module publishes no predicate for it. The one
+ * surface that would ask — the config command's per-class effort rows —
+ * resolves a level without naming a client, so a predicate exported for it
+ * would be a capability with no caller plus a docstring naming one.
  *
- * WHY CURSOR'S TABLE IS EMPTY. That client's ladder used to emit `model:
- * inherit` for all four classes — a value the engine chose, restating the
- * client's own documented default as though the engine had decided something,
- * and inverting the pinning mandate above. An empty alias table is the fix at
- * the data layer: with no operator pin the class resolves to `undefined` and
- * the key is omitted (silence, not a re-declared default); with a pin the id
- * the operator named is emitted verbatim. The same reasoning gives the codex
- * and copilot rows empty tables: neither client documents a symbolic
- * vocabulary, so there is nothing to map a class ONTO without naming an id.
- *
- * WHAT AN EMPTY TABLE COSTS, SAID PLAINLY. Three of the four clients carry no
- * aliases, so on a repo with no operator pins this module resolves nothing for
- * them and the adapter omits the key — and the client's own router then picks
- * the model, re-deciding the sizing the ladder just made. The class still binds
- * as PROSE (it is what a generated body names, and what the post-substitution
- * check reads), but as an emitted CONSTRAINT the ladder binds on one client by
- * default and on the other three only once an operator pins ids per class. The
- * top class is unmapped everywhere: `frontier` resolves to a value on NO client
- * without a pin, including the one that publishes aliases. This is the honest
- * silence the never-invent rule chose over a guessed default rather than an
- * oversight — and it is not a gap a future alias table closes on its own, since
- * two of these clients publish no symbolic vocabulary to map onto at all. An
- * operator who wants the ladder enforced in the emitted files sets the pins.
+ * WHY ONLY ONE CLIENT HAS ALIASES. Claude Code publishes model-agnostic family
+ * names, so its row maps all four classes onto them, the top class onto the
+ * documented `fable` alias. Cursor's ladder used to emit `model: inherit` for
+ * all four classes — a value the engine chose, restating the client's own
+ * default as though the engine had decided something — and an empty alias table
+ * fixed that at the data layer. Copilot and Codex document no symbolic
+ * vocabulary either, so all three resolve through the pick instead.
  *
  * ONE EFFORT AXIS, TWO CARRIERS, FOUR SCALES. Effort is carried per client,
  * and no client drops it: Copilot's row named no carrier until its CLI's
@@ -139,6 +129,7 @@
 
 import { EFFORT_LEVELS, effortRank, type EffortLevel, type ModelClass, type Tool } from "../types/core.ts";
 import type { ModelConfig, SetupManifest } from "../types/manifest.ts";
+import { pickModel } from "./modelDefaults.ts";
 
 // ── The ladder ───────────────────────────────────────────────────
 
@@ -276,8 +267,8 @@ export interface ClientModelProjection {
   readonly effortTemplate: string | null;
   /**
    * The client's own symbolic names for ladder classes. Empty where the client
-   * documents none — see the module header on why empty means silence rather
-   * than a fallback.
+   * documents none — see the module header on how such a client resolves
+   * through the pick instead.
    */
   readonly aliases: Readonly<Partial<Record<ModelClass, string>>>;
   /**
@@ -336,9 +327,8 @@ export interface ClientModelProjection {
  *
  * The alias tables are deliberately asymmetric. Only one client publishes
  * model-agnostic names the ladder can map onto, so only that row carries
- * aliases; the rest resolve to nothing until an operator pins an id. That
- * asymmetry is a fact about the clients, not an incompleteness here — filling
- * the empty rows would mean choosing ids on the operator's behalf.
+ * aliases; the rest resolve through the pick from the account's own list
+ * (`./modelDefaults.ts`), never through an alias this table would invent.
  */
 export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjection>> = {
   claude: {
@@ -347,14 +337,11 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortCarrier: "key",
     effortKey: "effort",
     effortTemplate: null,
-    // Three aliases, and `frontier` deliberately absent. The alias vocabulary
-    // this client publishes is wider than these three, but nothing in it names
-    // a size ABOVE the top one, so mapping the deep-review class onto any of
-    // them would be a guess that silently downgrades it. An absent key inherits
-    // the session's model, which is the honest answer to a class with no name —
-    // and it makes this the only client where three of the four classes bind by
-    // default, with the fourth resolving on no client until an operator pins it.
-    aliases: { advanced: "opus", standard: "sonnet", economy: "haiku" },
+    // One family alias per class. The deep-review class takes `fable`, which
+    // the sub-agents page lists beside the other three as a `model:` value and
+    // the model-configuration page names this client's most capable family
+    // (both read 2026-10-14), so all four classes bind by default here.
+    aliases: { frontier: "fable", advanced: "opus", standard: "sonnet", economy: "haiku" },
     // Two rungs above the retired band and none below it: this client's floor
     // is `low`, so the one level another client documents underneath it rises
     // to `low` here rather than being dropped.
@@ -365,7 +352,7 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
       url: "https://code.claude.com/docs/en/sub-agents",
       accessDate: "2026-09-17",
     },
-    citation: { url: "https://code.claude.com/docs/en/sub-agents", accessDate: "2026-08-17" },
+    citation: { url: "https://code.claude.com/docs/en/sub-agents", accessDate: "2026-10-14" },
   },
   cursor: {
     tool: "cursor",
@@ -468,8 +455,8 @@ export type ModelPinMap = Readonly<Partial<Record<ModelClass, string>>>;
 /**
  * The pins that bind `tool`, class by class: the client's own key, else the
  * class's `all` (REQ-LADDER-005). A class with neither is absent, so
- * {@link resolveModelValue} falls back to the client's alias as it did before
- * pins were per client. Pure, and reads nothing but `models.pins`.
+ * {@link resolveModelValue} falls back to the client's alias, then to the
+ * pick. Pure, and reads nothing but `models.pins`.
  */
 export function pinsFor(models: ModelConfig | undefined, tool: Tool): ModelPinMap {
   const pins: Partial<Record<ModelClass, string>> = {};
@@ -498,27 +485,62 @@ function stated(value: string | undefined): string | undefined {
 }
 
 /**
- * One projected value: the operator's, else the ladder's, else nothing — and
- * nothing at all when the client has no key to write it into. Writing a value
- * into a field the client does not read is worse than omitting it: it is a
- * restriction the operator can see in the file and the client never applies.
+ * What the pick reads for one client, passed to {@link resolveModelValue} by a
+ * caller that carries the pick (see the module header).
  */
-function valueForKey(
-  key: string | null,
-  operator: string | undefined,
-  declared: string | undefined,
-): string | undefined {
-  if (key === null) return undefined;
-  return operator ?? declared;
+export interface ModelPickSource {
+  /**
+   * The ids this client's own CLI listed for the account, as persisted under
+   * `models.listed.<client>.ids`; absent when no list was read, in which case
+   * the shipped priority list's entry 0 applies where the client has one.
+   */
+  readonly listed?: readonly string[];
 }
 
-/** The model value before any effort parameter rides on it. */
+/**
+ * The words a model id may end on to say it already carries an effort level:
+ * the union scale plus `none`, which Cursor lists as a variant of its own.
+ */
+const EFFORT_SUFFIX = new RegExp(`[-_.](?:${[...EFFORT_LEVELS, "none"].join("|")})$`, "i");
+
+/**
+ * Whether the account's list holds `pin`. A Cursor pin may name a model family
+ * the list carries one id per effort variant of (`claude-opus-4-8` beside
+ * `claude-opus-4-8-high`), which its CLI accepts, so a family match counts.
+ */
+function listHolds(listed: readonly string[], pin: string): boolean {
+  return listed.includes(pin) || listed.some((id) => id.startsWith(`${pin}-`) && EFFORT_SUFFIX.test(id));
+}
+
+/**
+ * The model value before any effort parameter rides on it, in the order the
+ * module header gives: the pin (re-picked only when the account's list is
+ * known and lacks it), the client's alias, then — for a caller carrying the
+ * pick — the shipped list's first entry the account's list holds, else its
+ * entry 0 where no list was read. Nothing at all when the client has no model
+ * key: a value in a field the client does not read is a restriction the
+ * operator can see in the file and the client never applies.
+ */
 function baseModelValue(
   projection: ClientModelProjection,
   modelClass: ModelClass,
   pins: ModelPinMap,
+  effort: EffortLevel | undefined,
+  pick: ModelPickSource | undefined,
 ): string | undefined {
-  return valueForKey(projection.modelKey, stated(pins[modelClass]), projection.aliases[modelClass]);
+  if (projection.modelKey === null) return undefined;
+  const listed = pick?.listed;
+  const pin = stated(pins[modelClass]);
+  if (pin !== undefined) {
+    if (listed === undefined || pin.includes("[") || listHolds(listed, pin)) return pin;
+    // An id the account lacks fails the call; a re-pick that finds nothing on
+    // the list either keeps the operator's value rather than a shipped one.
+    return pickModel(projection.tool, modelClass, effort, listed)?.id ?? pin;
+  }
+  const alias = projection.aliases[modelClass];
+  if (alias !== undefined || pick === undefined) return alias;
+  const fromList = listed === undefined ? undefined : pickModel(projection.tool, modelClass, effort, listed);
+  return (fromList ?? pickModel(projection.tool, modelClass, effort))?.id;
 }
 
 /**
@@ -589,23 +611,27 @@ function emittedEffort(
  * The model value with the client's effort parameter appended, where that is
  * how the client carries effort at all.
  *
- * Two things pass through untouched. A client whose carrier is a key of its
- * own has nothing to append here. And a pinned value that already carries a
- * bracket group is emitted verbatim: options live comma-separated inside ONE
- * group, so a second group would be a value the client cannot parse — and an
- * operator who typed brackets has stated the whole model expression, effort
- * included if they wanted it. That verbatim rule is also how a class declines
- * the parameter on a model whose options do not include effort: pin the
- * documented empty-bracket form (`<id>[]`) and the ladder appends nothing.
+ * Four things pass through untouched (REQ-LADDER-004). A client whose carrier
+ * is a key of its own has nothing to append here. A pinned value that already
+ * carries a bracket group is emitted verbatim: options live comma-separated
+ * inside ONE group, so a second group would be a value the client cannot parse
+ * — and an operator who typed brackets has stated the whole model expression,
+ * effort included if they wanted it. That verbatim rule is also how a class
+ * declines the parameter on a model whose options do not include effort: pin
+ * the documented empty-bracket form (`<id>[]`) and the ladder appends nothing.
+ * And an id the account's list holds, or one ending on an effort word
+ * (`claude-opus-5-5-high`), names its effort variant already, so a bracket
+ * group would state the level twice.
  */
 function withEffortParameter(
   projection: ClientModelProjection,
   model: string,
   effort: EffortLevel | undefined,
+  listed: readonly string[] | undefined,
 ): string {
   if (projection.effortCarrier !== "model-suffix") return model;
   if (projection.effortTemplate === null || effort === undefined) return model;
-  if (model.includes("[")) return model;
+  if (model.includes("[") || listed?.includes(model) === true || EFFORT_SUFFIX.test(model)) return model;
   return model + projection.effortTemplate.replace(EFFORT_PLACEHOLDER, effort);
 }
 
@@ -613,36 +639,39 @@ function withEffortParameter(
  * The string an adapter writes for `modelClass` on `tool`, or `undefined` when
  * it must omit the key.
  *
- * Precedence: operator pin, then the client's own alias for the class, then
- * nothing. An unknown class — one no ladder row assigns — is an honest
- * unknown and resolves to `undefined` rather than throwing: content is data,
- * and a typo in one artifact's frontmatter costs that artifact its model key,
- * not the run.
+ * Precedence: operator pin, then the client's own alias, then — when `pick` is
+ * passed — the pick from the account's list and the shipped priority list
+ * (the module header gives the whole order), then nothing. An unknown class —
+ * one no ladder row assigns — resolves to `undefined` rather than throwing:
+ * content is data, and a typo in one artifact's frontmatter costs that
+ * artifact its model key, not the run.
  *
  * On a client whose effort carrier is the model value, the answer carries both
  * axes — `<id>[effort=<level>]` — because that client has no second key to
- * write the level into. `efforts` is read for the same override the standalone
- * key honours, so one operator setting binds on every client that can express
- * it, whichever shape it takes there. Callers that pass no `efforts` still get
- * the class's declared effort: the ladder's sizing decision reaches this
- * client exactly as it reaches the two with keys.
+ * write the level into, unless the id names its effort variant already.
+ * `efforts` is read for the same override the standalone key honours, so one
+ * operator setting binds on every client that can express it, whichever shape
+ * it takes there, and the pick looks for the variant at that level. Callers
+ * that pass no `efforts` still get the class's declared effort.
  */
 export function resolveModelValue(
   modelClass: string,
   tool: Tool,
   pins: ModelPinMap = {},
   efforts: EffortMap = {},
+  pick?: ModelPickSource,
 ): string | undefined {
   if (!isModelClass(modelClass)) return undefined;
   const projection = CLIENT_MODEL_PROJECTION[tool];
-  const model = baseModelValue(projection, modelClass, pins);
-  if (model === undefined) return undefined;
   // The client's OWN level, not the raw request: one operator setting has to
   // mean the same thing on both carriers, so the bracket client narrows
   // through the same scale the key carriers do (its scale is the whole union
   // today, which makes this a no-op there — and a correct one the day a
   // pass-through client documents a narrower parameter vocabulary).
-  return withEffortParameter(projection, model, emittedEffort(tool, modelClass, efforts));
+  const effort = emittedEffort(tool, modelClass, efforts);
+  const model = baseModelValue(projection, modelClass, pins, effort, pick);
+  if (model === undefined) return undefined;
+  return withEffortParameter(projection, model, effort, pick?.listed);
 }
 
 /**

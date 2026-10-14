@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { frontmatterField, parseFrontmatter } from "../../src/content/frontmatter.ts";
+import { MODEL_PRIORITY } from "../../src/roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
   EFFORT_PLACEHOLDER,
@@ -294,11 +295,14 @@ describe("the ladder table shipped in the work command", () => {
     );
     expect(prose).toMatch(/check effective dispatch\s+identity/);
     expect(prose).toMatch(/unresolved assignment/);
-    for (const tool of TOOLS) {
-      // The very first row of the table this paragraph introduces: no client
-      // publishes a name for the top class, so with no pin it resolves nowhere
-      // — the omission the sentence above promises, on all four at once.
-      expect(resolveModelValue("frontier", tool), tool).toBeUndefined();
+    // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-006, REQ-LADDER-007): this loop
+    // asserted the top class resolved on no client with no pin. Claude Code now maps it to its
+    // documented `fable` alias and the pick resolves Copilot and Codex from the shipped list, so the
+    // omission the sentence promises is measured where it still happens: Cursor with no account
+    // list and no pin, on every class. The wording anchors above are unchanged; file 4's `r3`
+    // rewords the shipped paragraph.
+    for (const modelClass of MODEL_CLASSES) {
+      expect(resolveModelValue(modelClass, "cursor", {}, {}, {}), modelClass).toBeUndefined();
     }
   });
 
@@ -421,12 +425,15 @@ describe("CLIENT_MODEL_PROJECTION", () => {
 });
 
 describe("resolveModelValue", () => {
-  it("projects the three aliased classes on claude and omits the class it has no name for", () => {
+  // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-007): the case asserted the top
+  // class had no alias on claude. The client documents `fable` as a `model:` value for its most
+  // capable family (code.claude.com/docs/en/sub-agents, read 2026-10-14), and the plan gate's
+  // sign-off maps `frontier` onto it, so all four classes now project.
+  it("projects every class onto claude's family aliases, the top class onto `fable`", () => {
+    expect(resolveModelValue("frontier", "claude")).toBe("fable");
     expect(resolveModelValue("advanced", "claude")).toBe("opus");
     expect(resolveModelValue("standard", "claude")).toBe("sonnet");
     expect(resolveModelValue("economy", "claude")).toBe("haiku");
-    // No alias is published above the top one, and none is invented here.
-    expect(resolveModelValue("frontier", "claude")).toBeUndefined();
   });
 
   it("emits nothing for cursor without a pin, and the operator's id with one", () => {
@@ -547,6 +554,80 @@ describe("pinsFor (REQ-LADDER-005)", () => {
     >[0];
 
     expect(pinsFor(models, "codex")).toEqual({ standard: "Y" });
+  });
+});
+
+describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
+  const CURSOR_LIST = ["auto", "claude-opus-5-5-high", "claude-sonnet-5-5-medium", "claude-haiku-5-5-low", "gpt-x-1"];
+
+  it("resolves in order: the client's pin, the class's pin, the pick over the list, entry 0", () => {
+    const models = { pins: { standard: { codex: "codex-own", all: "every-client" } } };
+    const listed = ["gpt-6-sol", "gpt-5.6-terra", "codex-own", "every-client"];
+
+    expect(resolveModelValue("standard", "codex", pinsFor(models, "codex"), {}, { listed })).toBe("codex-own");
+    expect(resolveModelValue("standard", "copilot", pinsFor(models, "copilot"), {}, { listed: ["every-client"] })).toBe(
+      "every-client",
+    );
+    // No pin: the first shipped candidate the account holds, here the second in the order.
+    expect(resolveModelValue("standard", "codex", {}, {}, { listed: ["gpt-5.6-terra"] })).toBe("gpt-5.6-terra");
+    // A list that holds no candidate falls through to entry 0, as having no list does.
+    expect(resolveModelValue("standard", "codex", {}, {}, { listed: ["other"] })).toBe("gpt-6-sol");
+    expect(resolveModelValue("standard", "codex", {}, {}, {})).toBe("gpt-6-sol");
+  });
+
+  it("re-picks a pin only when the account's list is known and lacks it", () => {
+    const pins: ModelPinMap = { advanced: "gpt-retired" };
+    expect(resolveModelValue("advanced", "codex", pins, {}, { listed: ["gpt-6-sol", "gpt-6-astra"] })).toBe(
+      "gpt-6-astra",
+    );
+    // Listed, or no list read: the pin stands.
+    expect(resolveModelValue("advanced", "codex", pins, {}, { listed: ["gpt-retired"] })).toBe("gpt-retired");
+    expect(resolveModelValue("advanced", "codex", pins, {}, {})).toBe("gpt-retired");
+    expect(resolveModelValue("advanced", "codex", pins)).toBe("gpt-retired");
+    // A re-pick that finds nothing on the list keeps the operator's value, never a shipped one.
+    expect(resolveModelValue("advanced", "codex", pins, {}, { listed: ["other"] })).toBe("gpt-retired");
+  });
+
+  it("never re-picks a bracketed Cursor pin or one naming a listed model family", () => {
+    const listed = ["claude-opus-4-8-high", "claude-opus-5-5-high"];
+    expect(
+      resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-8[context=1m,effort=high]" }, {}, { listed }),
+    ).toBe("claude-opus-4-8[context=1m,effort=high]");
+    expect(resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-8" }, {}, { listed })).toBe(
+      "claude-opus-4-8[effort=high]",
+    );
+    expect(resolveModelValue("advanced", "cursor", { advanced: "vendor-x-1" }, {}, { listed })).toBe(
+      "claude-opus-5-5-high",
+    );
+  });
+
+  it("keeps the alias on Claude Code whatever the pick is given", () => {
+    expect(resolveModelValue("standard", "claude", {}, {}, { listed: ["claude-sonnet-5-5"] })).toBe("sonnet");
+    expect(resolveModelValue("standard", "claude", { standard: "pinned" }, {}, { listed: ["x"] })).toBe("pinned");
+  });
+
+  it("gives Cursor the listed effort variant with no effort parameter appended", () => {
+    expect(resolveModelValue("advanced", "cursor", {}, {}, { listed: CURSOR_LIST })).toBe("claude-opus-5-5-high");
+    expect(resolveModelValue("economy", "cursor", {}, {}, { listed: CURSOR_LIST })).toBe("claude-haiku-5-5-low");
+    // An operator effort moves the variant looked for; the nearest listed one answers.
+    expect(resolveModelValue("standard", "cursor", {}, { standard: "high" }, { listed: CURSOR_LIST })).toBe(
+      "claude-sonnet-5-5-medium",
+    );
+  });
+
+  it("appends no effort parameter to an id the account lists or one ending on an effort word", () => {
+    // REQ-LADDER-004 (MODIFIED): a listed id names its own variant.
+    expect(resolveModelValue("standard", "cursor", { standard: "gpt-x-1" }, {}, { listed: CURSOR_LIST })).toBe(
+      "gpt-x-1",
+    );
+    for (const pin of ["claude-opus-5-5-high", "gpt-5.6-sol-xhigh", "gpt-5.6-luna-none", "grok-4.7-LOW"]) {
+      expect(resolveModelValue("standard", "cursor", { standard: pin }), pin).toBe(pin);
+    }
+    // Any other id still carries the class's effort, as before.
+    expect(resolveModelValue("standard", "cursor", { standard: "gpt-x-1" })).toBe("gpt-x-1[effort=medium]");
+    expect(resolveModelValue("standard", "cursor", { standard: "model-highway" })).toBe(
+      "model-highway[effort=medium]",
+    );
   });
 });
 
@@ -720,42 +801,56 @@ function ladderProse(): string {
 /**
  * The two honesty disclosures this data owes a reader, each measured before it is read.
  *
- * The exposures are real and were undocumented: three of the four clients carry no aliases,
- * so on an unpinned repo this module resolves nothing for them and the CLIENT's router picks
- * the model — the sizing decision the ladder just made never reaches the emitted file. And
- * the module claimed every placement no frontmatter can declare was named in a row's
- * `rationale`, while the review loop's escalation is named in no row at all. Each
- * case asserts the behaviour first and the sentence second, so the prose cannot outlive what
- * it describes and a reworded paragraph cannot quietly drop it.
+ * The first is where a class still resolves to nothing: before the pick, three of the four
+ * clients carried no aliases and the CLIENT's router sized every role on an unpinned repo; now
+ * only Cursor with no account list is left there. The second: the module claimed every placement
+ * no frontmatter can declare was named in a row's `rationale`, while the review loop's escalation
+ * is named in no row at all. Each case asserts the behaviour first and the sentence second, so
+ * the prose cannot outlive what it describes and a reworded paragraph cannot quietly drop it.
  */
 describe("the ladder's own exposure disclosures", () => {
-  it("says the client's router decides wherever the alias table is empty, and it does", () => {
-    const routerActive = TOOLS.filter((tool) => Object.keys(projection(tool).aliases).length === 0);
-    expect(routerActive.toSorted()).toEqual(["codex", "copilot", "cursor"]);
+  // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-006): the case pinned the header's
+  // "never invent a value" paragraph — no class resolving on the three alias-less clients and the
+  // client's router deciding. That rule is superseded by the pick from the account's own list, so
+  // the case now measures the pick's order (Copilot and Codex resolve from the shipped list with
+  // no account list, Cursor only from one) and pins the sentences that say so; a call that does
+  // not carry the pick still resolves nothing there, as before.
+  it("says which clients resolve through the pick, and the one that stays silent without a list", () => {
+    const aliasless = TOOLS.filter((tool) => Object.keys(projection(tool).aliases).length === 0);
+    expect(aliasless.toSorted()).toEqual(["codex", "copilot", "cursor"]);
 
-    // The measured exposure: no class resolves anywhere on these three without a pin, which
-    // is exactly the state in which the client's own routing wins.
-    for (const tool of routerActive) {
-      for (const modelClass of MODEL_CLASSES) {
+    for (const modelClass of MODEL_CLASSES) {
+      for (const tool of aliasless) {
+        // Without the pick: pins and aliases only, exactly as every call resolved before it.
         expect(resolveModelValue(modelClass, tool), `${tool}/${modelClass}`).toBeUndefined();
       }
+      expect(resolveModelValue(modelClass, "copilot", {}, {}, {}), modelClass).toBe(
+        MODEL_PRIORITY.copilot[modelClass][0]?.id,
+      );
+      expect(resolveModelValue(modelClass, "codex", {}, {}, {}), modelClass).toBe(
+        MODEL_PRIORITY.codex[modelClass][0]?.id,
+      );
+      expect(resolveModelValue(modelClass, "cursor", {}, {}, {}), modelClass).toBeUndefined();
+      expect(resolveModelValue(modelClass, "claude", {}, {}, {}), modelClass).toBeDefined();
     }
-    // ...and one client where the ladder does bind by default, so "inert" is a per-client
-    // claim rather than a claim about the ladder as a whole.
-    expect(resolveModelValue("standard", "claude")).toBeDefined();
 
     const prose = ladderProse();
-    expect(prose).toMatch(/the client's own router then picks the model/i);
-    expect(prose).toMatch(/binds on one client by default/i);
-    expect(prose).toMatch(/an operator who wants the ladder enforced in the emitted files/i);
+    expect(prose).toMatch(/That rule is superseded \(REQ-LADDER-006\)/);
+    expect(prose).toMatch(/The one client that still resolves nothing by default is Cursor with no list read/);
+    expect(prose).toMatch(/emission never starts a client/);
   });
 
-  it("says the top class resolves only under an operator pin, on every client", () => {
+  // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-007): the case pinned "`frontier`
+  // resolves to a value on NO client without a pin". Claude Code's `fable` alias and the pick now
+  // resolve it with no pin, so the case measures that and pins the alias sentence instead; a pin
+  // still resolves it everywhere, as before.
+  it("says the top class resolves without a pin wherever the client has an alias or the pick applies", () => {
+    expect(resolveModelValue("frontier", "claude")).toBe("fable");
+    expect(resolveModelValue("frontier", "codex", {}, {}, {})).toBe("gpt-6-astra");
     for (const tool of TOOLS) {
-      expect(resolveModelValue("frontier", tool), tool).toBeUndefined();
       expect(resolveModelValue("frontier", tool, { frontier: "pinned-id" }), tool).toBeDefined();
     }
-    expect(ladderProse()).toMatch(/`frontier` resolves to a value on NO client without a pin/);
+    expect(ladderProse()).toMatch(/the top class onto the documented `fable` alias/);
   });
 
   // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p4b-fixer-escalation): the case was
@@ -1117,7 +1212,13 @@ describe("kernel boundary", () => {
     // the leaf every layer may import, so the kernel rule the case exists for —
     // the roster imports nothing but types — is unchanged; what moved is the
     // stricter type-only claim that sat on top of it.
-    expect(specifiers.toSorted()).toEqual(["../types/core.ts", "../types/manifest.ts"]);
+    // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-006): the resolver's pick reads
+    // the shipped priority list from its sibling `./modelDefaults.ts`, a roster module the kernel
+    // rule admits; that sibling's own imports are held to the types leaf just below, so the claim
+    // the case exists for — the roster reaches nothing outside `src/types` — still holds.
+    expect(specifiers.toSorted()).toEqual(["../types/core.ts", "../types/manifest.ts", "./modelDefaults.ts"]);
+    const defaults = readFileSync(new URL("src/roster/modelDefaults.ts", REPO_ROOT), "utf8");
+    expect([...defaults.matchAll(/from\s+"([^"]+)"/g)].map((match) => match[1])).toEqual(["../types/core.ts"]);
     expect(source).toContain('from "../types/core.ts"');
     // The manifest edge stays type-only: the disclosure reads a shape, never a
     // function from that module.

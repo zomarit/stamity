@@ -134,6 +134,7 @@ import * as reviewCaps from "../roster/reviewCaps.ts";
 import * as agentPolicies from "../roster/agentPolicies.ts";
 import * as agentGrants from "../roster/agentGrants.ts";
 import * as modelLadder from "../roster/modelLadder.ts";
+import * as modelDefaults from "../roster/modelDefaults.ts";
 import * as changeClassify from "../change/classify.ts";
 import * as changeTestInputs from "../change/testInputs.ts";
 import * as changeScan from "../change/scan.ts";
@@ -331,6 +332,7 @@ export interface EngineRegistry {
     readonly agentPolicies: typeof agentPolicies;
     readonly agentGrants: typeof agentGrants;
     readonly modelLadder: typeof modelLadder;
+    readonly modelDefaults: typeof modelDefaults;
   };
   readonly config: {
     readonly parse: typeof configParse;
@@ -458,7 +460,7 @@ export function createEngine(): EngineRegistry {
     },
     guard: { promptGuard, outputBounds, tokenEstimate },
     resilience: { retry, failureClass, failureLog, adapterTimeout },
-    roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder },
+    roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder, modelDefaults },
     config: { parse: configParse },
     change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan },
   });

@@ -279,6 +279,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // Zero-import kernel data (boundary rule 3 holds it there), so it sits with
   // the other roster leaves rather than at its authoring phase.
   "src/roster/agentPolicies.ts": { unit: "p3-17", wave: 1 },
+  // The shipped model priority list and the pick over an account's list
+  // (REQ-LADDER-006): zero-import kernel data over src/types/core.ts, at wave 1
+  // so the wave-2 ladder, a different unit, may import it.
+  "src/roster/modelDefaults.ts": { unit: "e2-model-defaults-lister", wave: 1 },
   // Same shape one phase later: a TOML serializer over src/types/errors.ts and
   // nothing else. Placed at its true depth rather than at its unit's adapter
   // wave, so a future non-codex consumer is not forced above wave 10.
@@ -557,6 +561,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // same-wave edges in both directions that no call site wants.
   "src/cli/engine/emissionWrite.ts": { unit: "ew-u1", wave: 13 },
   "src/cli/engine/gitStatus.ts": { unit: "p2-03", wave: 13 },
+  // The client lister (REQ-LADDER-006): starts a client's own CLI through the
+  // wave-1 PATH walk and reads the wave-1 manifest types. Wave 13 beside the
+  // other engine seams of the CLI layer, below the wave-14 `init` and `sync`
+  // that read the lists before planning.
+  "src/cli/engine/clientModels.ts": { unit: "e2-model-defaults-lister", wave: 13 },
   "src/migration/detect.ts": { unit: "p2-04", wave: 13 },
   "src/migration/carry.ts": { unit: "p2-04", wave: 13 },
   // wave 14 (P2 wave 1) — command engines and the leaf commands

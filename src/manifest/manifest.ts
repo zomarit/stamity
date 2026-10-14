@@ -541,12 +541,14 @@ function collectMcpErrors(value: unknown, errors: string[]): void {
 /**
  * Why `value` cannot be a pinned model id, or `null` when it can.
  *
- * SHAPE only, and deliberately so: this engine ships no vendor model
- * catalogue, so a membership check would be a guarantee it cannot keep — the
- * id is passed through verbatim to whatever the client does with it. What is
- * checkable is that the string can carry a value at all: an empty or
- * whitespace-only pin emits a frontmatter key with no value, and a newline
- * would break the line-oriented dialects the adapters write.
+ * SHAPE only, and deliberately so here. Whether an account can run an id is a
+ * question for that client's own model list, which only its CLI answers: the
+ * reader never starts a client, so membership is asked elsewhere — the
+ * resolver re-picks a pin the persisted list lacks (`src/roster/modelLadder.ts`)
+ * and `check` warns on it (REQ-LADDER-008). What is checkable here is that the
+ * string can carry a value at all: an empty or whitespace-only pin emits a
+ * frontmatter key with no value, and a newline would break the line-oriented
+ * dialects the adapters write.
  */
 function modelPinDefect(value: unknown): string | null {
   if (typeof value !== "string") return "must be a string";
