@@ -1,0 +1,14 @@
+# main's record-relevant ignore rules: a run's role reports and ledger locks stay local, and an eval
+# run's raw payloads go to a Release archive, never to this branch.
+/.stamity/runs/*/reports/
+/.stamity/runs/*/ledger.jsonl.lock
+/.stamity/runs/*/ledger.jsonl.tmp.*
+/evals/runs/*/calls/
+/evals/runs/*/calls.json
+/evals/runs/*/samples.jsonl
+/evals/runs/*/*-attempt-*.json
+/evals/runs/*/sample-*.json
+/evals/runs/*/isolation-*.json
+/evals/runs/*/provider-responses.jsonl
+.DS_Store
+._*
