@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it, and for the release section and the section on dropping the deleted routes against the fork release workflow as commit 0801927b leaves it and the upstream lane script at commit 5284eaaa -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it, and for the release section and the section on dropping the deleted routes against the fork release workflow as commit 0801927b leaves it and the upstream lane script at commit 5284eaaa, and for that section's order against the 1.14 identity script and its test suite at commit c96c7146 -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -332,23 +332,31 @@ reported even when the merge is clean.
 this guide put in `regenerate`: `node scripts/generate-plugin-manifests.mjs` and
 `node scripts/generate-apm-package.mjs`. The lane runs the `regenerate` list it reads from the
 merged tree, so a fork that still lists either one ends its 1.15.0 integration as
-`regenerate-failed`. Before you integrate 1.15.0, commit these deletions on your integration
-branch:
+`regenerate-failed`. One edit has to land on your integration branch before you integrate 1.15.0:
+in `.stamity/upstream.json`, remove both commands from `regenerate`, and remove `.apm/**`,
+`apm.yml`, `plugin.json`, `.claude-plugin/**` and `.cursor-plugin/**` from `generatedPaths`.
 
-- In `.stamity/upstream.json`, remove both commands from `regenerate`, and remove `.apm/**`,
-  `apm.yml`, `plugin.json`, `.claude-plugin/**` and `.cursor-plugin/**` from `generatedPaths`.
-- In `package.json`, remove the `stamity.distribution` block. 1.15.0 ignores it and names it in a
-  one-line notice for one release.
-- Delete `renovate/plugins.json`, and drop it from any Renovate configuration that extends it.
+Leave `package.json` and `renovate/plugins.json` alone on the integration branch. It still runs
+1.14 code until the update branch lands, and in 1.14 the identity script and its always-on test
+suite read `renovate/plugins.json`, so deleting it there turns your CI red. Both go in the update
+worktree instead, as part of the merge:
 
-The release deletes `.apm/`, `apm.yml`, `plugin.json`, `.claude-plugin/` and `.cursor-plugin/`
-itself. Where your fork changed one of them, the merge reports a modify/delete conflict, and
-`git rm` on that path resolves it before `continue`. Where a conflict in
+- The release removes the `stamity.distribution` block from `package.json`. Where your fork changed
+  that block, the merge reports a conflict there; take upstream's side of those lines. 1.15.0
+  ignores a block that stays behind and names it in a one-line notice for one release.
+- The release deletes `renovate/plugins.json`. Drop it from any Renovate configuration of yours that
+  extends it, in the same worktree.
+
+The release also deletes `.apm/`, `apm.yml`, `plugin.json`, `.claude-plugin/` and
+`.cursor-plugin/`. Where your fork changed one of these paths or `renovate/plugins.json` (the 1.14
+identity script retargets that preset), the merge reports a modify/delete conflict, and `git rm` on
+that path resolves it before `continue`. Where a conflict in
 `.github/workflows/fork-release.yml` falls inside the distribution steps the release removes, take
-upstream's side of those lines. A distribution branch and tags your fork already pushed stay where
-they are: nothing in 1.15.0 reads or moves them, and a consumer pinned to one still resolves it.
-If an integration already ended `regenerate-failed`, run `abort`, commit the deletions, and run
-`integrate` again.
+upstream's side of those lines. If either the block or the preset is still there once the update
+branch has landed, delete it then; by that point the branch runs 1.15.0. A distribution branch and
+tags your fork already pushed stay where they are: nothing in 1.15.0 reads or moves them, and a
+consumer pinned to one still resolves it. If an integration already ended `regenerate-failed`, run
+`abort`, commit the `.stamity/upstream.json` edit, and run `integrate` again.
 
 ## Take the next release
 
