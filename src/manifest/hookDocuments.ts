@@ -18,7 +18,8 @@
  *
  * THE BOUND (S11, narrowed in the safe direction as the settings lane is): an
  * engine entry leaves without a backup only when the script it EXECUTES is the
- * engine's — on Cursor the engine's walk-up starter running the runner or a
+ * engine's — on Cursor the engine's walk-up starter running a script under
+ * `.stamity/generated/hooks/cursor/` (the runner, the model-fill hook) or a
  * guard (1.15.0 on, {@link walkUpStarterScript}), or (up to 1.14) the program's
  * first argument under `.stamity/generated/hooks/cursor/`, a guard path, or an
  * installed pack's `.stamity/packs/<id>/` (`./coOwnedJson.ts::executedScript`);
@@ -233,8 +234,9 @@ const CURSOR_RUNNER = `${CURSOR_SCRIPTS}stamity-portable-hook.mjs`;
  * What the engine writes into `.cursor/hooks.json`: each entry of a
  * `hooks.<event>` array, and `version`. An entry is recognised when its
  * command names the engine's Cursor scripts or a guard; it is in the bound
- * when it is the engine's walk-up starter running the runner or a guard
- * ({@link walkUpStarterScript}, 1.15.0 on), or when the script it executes
+ * when it is the engine's walk-up starter running one of the engine's Cursor
+ * scripts or a guard ({@link walkUpStarterScript}, 1.15.0 on: REQ-FLOW-037's
+ * bound, which the starter does not narrow), or when the script it executes
  * (the relative commands up to 1.14) is one of them, or lies in an installed
  * pack's folder.
  */
@@ -252,8 +254,10 @@ export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
         inBound: (element) => {
           const command = cursorCommand(element);
           const started = command === null ? null : walkUpStarterScript("cursor", command);
-          // A starter runs only what the engine wires through one: never a pack's script.
-          if (started !== null) return started === CURSOR_RUNNER || guards.has(started);
+          // A starter runs only what the engine wires through one — the runner, the
+          // model-fill hook, a guard — never a pack's script. `walkUpStarterScript`
+          // refuses a `.` or `..` segment, so a path under the folder names a file in it.
+          if (started !== null) return started.startsWith(CURSOR_SCRIPTS) || guards.has(started);
           const script = command === null ? null : executedScript(command);
           // `executedScript` refuses an empty segment, so a path under the folder names a file in it.
           return script !== null && (script.startsWith(CURSOR_SCRIPTS) || guards.has(script) || isPackScriptPath(script));

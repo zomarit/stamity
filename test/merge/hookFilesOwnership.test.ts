@@ -310,7 +310,12 @@ describe(".cursor/hooks.json owned entry by entry", () => {
     // An owner's entry between the engine's two session-start rows.
     const sessionStart = oneFourteen.hooks["sessionStart"] ?? [];
     expect(sessionStart.length).toBeGreaterThan(1);
-    await writeDoc(root, CURSOR_HOOKS, { ...relative, hooks: { ...oneFourteen.hooks, sessionStart: [sessionStart[0], OWNER_CURSOR_ENTRY, ...sessionStart.slice(1)] } });
+    // TEST CHANGE, justified (review/85, e5's review; plan 020 file 2, unit e7-cursor-pins):
+    // the document spread `node:path`'s `relative` function, which spreads to
+    // nothing, so the file under test had no `version`; it now spreads the 1.14
+    // document, so the upgrade runs over the file as 1.14 wrote it, version 1 kept.
+    expect(oneFourteen).toMatchObject({ version: 1 });
+    await writeDoc(root, CURSOR_HOOKS, { ...oneFourteen, hooks: { ...oneFourteen.hooks, sessionStart: [sessionStart[0], OWNER_CURSOR_ENTRY, ...sessionStart.slice(1)] } });
 
     const { report } = await sync(root);
 
@@ -584,6 +589,10 @@ describe("a --registry fork's hook documents are the engine's by the calls it re
       JSON.stringify(await readDoc(root, CURSOR_HOOKS)).replaceAll(`${boundCall(PREVIOUS)} sync`, `${boundCall(ENGINE_VERSION)} sync`),
     ) as unknown;
     expect(JSON.stringify(expected)).toContain(`${boundCall(ENGINE_VERSION)} sync`);
+    // TEST CHANGE, justified (review/84, plan 020 file 2, unit e7-cursor-pins):
+    // the model-fill hook's entry is among the starters the upgrade moves, so
+    // the no-.bak assertion below covers it (REQ-FLOW-037's bound).
+    expect(JSON.stringify(expected)).toContain(`${HOOKS_GENERATED_DIR}/cursor/stamity-model-pins.mjs`);
 
     await forkSync(root);
     const first = await readText(root, CURSOR_HOOKS);

@@ -43,11 +43,16 @@ import {
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
 import { RUNTIME_AGENT_IDS } from "../roster/agentPolicies.ts";
+import { modelMapPath, pickModel } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  MODEL_LADDER,
+  isModelClass,
+  nearestExpressibleEffort,
   pinsFor,
   resolveModelValue,
   type EffortMap,
+  type ModelPickSource,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
@@ -56,6 +61,7 @@ import {
   toCursorReadonlyFrontmatter,
 } from "../tools/translator.ts";
 import type { AdapterOutput } from "../types/content.ts";
+import type { ModelClass } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE } from "../types/markers.ts";
 
@@ -282,8 +288,22 @@ const ARTIFACT_IDS = {
   hooksConfig: "cursor-hooks-config",
   subagentGuard: "cursor-subagent-guard",
   mcpGuard: "cursor-mcp-guard",
+  modelMap: "cursor-model-map",
+  modelPins: "cursor-model-pins",
   mcp: "mcp-config",
 } as const;
+
+/**
+ * The model-fill hook (REQ-LADDER-007): a `preToolUse` script on Cursor's
+ * `Task` tool that writes the class's model into a Stamity sub-agent call that
+ * names none ({@link buildModelPinsHookScript}). It sits beside the portable
+ * runner, in the folder whose every script `.cursor/hooks.json`'s recogniser
+ * counts as the engine's (`../manifest/hookDocuments.ts`).
+ */
+export const MODEL_PINS_HOOK_PATH = `${HOOKS_GENERATED_DIR}/cursor/stamity-model-pins.mjs`;
+
+/** The tool Cursor spawns a sub-agent through, and the model-fill hook's matcher (cursor.com/docs/hooks, read 2026-10-14). */
+const SUBAGENT_TOOL = "Task";
 
 /**
  * This client's documented effort scale, rendered from the projection row so
@@ -297,7 +317,9 @@ const EFFORT_SCALE_CAP =
   "(cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model " +
   "value as `[effort=<level>]` and this client parses the group rather than ruling on the " +
   "value, so nothing is narrowed here: a level the chosen model does not offer is the " +
-  "model's to reject, and no key is emitted at all until a model id is pinned";
+  "model's to reject. No group follows an id that already names its effort variant (one " +
+  "on the account's list, or one ending on an effort word), and no key is emitted at all " +
+  "until a model id is pinned or picked from the account's list";
 
 /** What this client can and cannot do, as the generated capability matrix reads it. */
 export const cursorDialectFacts: AdapterDialectFacts = {
@@ -307,7 +329,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
   hooksConfigPath: CURSOR_HOOKS_CONFIG_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.cursor/agents/<id>.md` — `description`, `model` (the operator's pinned id for the role's class, carrying this client's `[effort=…]` parameter; the key is omitted entirely when no pin names one, so the client applies its own default rather than the engine restating it), `readonly`",
+    "`.cursor/agents/<id>.md` — `description`, `model` (the role's class model: the operator's pin, else the first shipped candidate the account's saved model list holds, at the class's effort variant; a pin that is not a listed variant carries this client's `[effort=…]` parameter. It is a default, not a hard limit; Stamity carries it on the dispatch and by a hook — the touchpoints pass the class model from `.stamity/generated/models/cursor.json` on each sub-agent call, and a `preToolUse` hook on `Task` fills it into a Stamity call that names none (`updated_input`; cursor.com/docs/agent/subagents and cursor.com/docs/hooks, accessed 2026-10-14). With no pin and no saved list the key is omitted entirely, so the client applies its own default rather than the engine guessing an id the account may not offer), `readonly`",
   mcpDialect: "cursor-json",
   entryFile: null,
   caps: [
@@ -430,7 +452,14 @@ export const cursorResiduePlanner: ResiduePlanner = {
     // over an operator setting `stamity config` already displays as binding.
     const pins = pinsFor(ctx.manifest.models, "cursor");
     const efforts = ctx.manifest.models?.effort ?? {};
+    // The account's own list, as `init` and `sync` persisted it: the resolver
+    // re-picks a pin the list lacks and picks a class with no pin from it, so
+    // emission reads the saved copy and never starts the client (REQ-LADDER-006).
+    const listed = ctx.manifest.models?.listed?.cursor?.ids;
+    const pick: ModelPickSource = listed === undefined ? {} : { listed };
     const spawnable: string[] = [...RUNTIME_AGENT_IDS];
+    // Each emitted agent's runtime id by its declared class, for the model map.
+    const roles: Partial<Record<string, ModelClass>> = {};
 
     // Each grant is RESOLVED rather than looked up: a roster row still answers
     // for every core id, and an installed pack's agent — which has no row at
@@ -444,6 +473,8 @@ export const cursorResiduePlanner: ResiduePlanner = {
       const runtimeId = prefixedId(agent.id);
       const pack = agent.provenance;
       spawnable.push(runtimeId);
+      const declaredClass = agent.frontmatter["model_class"];
+      if (isModelClass(declaredClass)) roles[runtimeId] = declaredClass;
       rows.push({
         path: `${CURSOR_AGENTS_DIR}/${runtimeId}.md`,
         content: buildCursorAgent(
@@ -458,6 +489,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
           render(agent.body),
           pins,
           efforts,
+          pick,
         ),
         owner: { adapter: "cursor", artifactId: agent.id, artifactType: "agent" },
       });
@@ -476,7 +508,20 @@ export const cursorResiduePlanner: ResiduePlanner = {
       }
     }
 
+    // The class-to-model map the touchpoints read when they pass `model` on a
+    // sub-agent call, and the hook that fills it into a call that names none.
+    const modelMap = buildCursorModelMap(roles, pins, efforts, pick);
     rows.push(
+      {
+        path: modelMapPath("cursor"),
+        content: `${JSON.stringify(modelMap, null, 2)}\n`,
+        owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.modelMap, artifactType: "infra" },
+      },
+      {
+        path: MODEL_PINS_HOOK_PATH,
+        content: buildModelPinsHookScript(modelMap),
+        owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.modelPins, artifactType: "infra" },
+      },
       {
         path: SUBAGENT_GUARD_PATH,
         // Every id this run can legitimately spawn: the shipped roster, plus
@@ -494,7 +539,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
       },
       {
         path: CURSOR_HOOKS_CONFIG_PATH,
-        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot),
+        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, { modelPins: true }),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.hooksConfig, artifactType: "infra" },
       },
     );
@@ -671,15 +716,25 @@ function readGlobs(item: CatalogItem, source: string): string[] {
  * `.cursor/agents/stamity-reviewer.md` is spawned as `stamity-reviewer`, which
  * is the id {@link buildSubagentGuardScript} matches against the roster.
  *
- * PIN OR OMIT, on the model field. Its vocabulary is a concrete model id —
- * optionally parameterised in brackets, `composer-2.5[fast=false]`, options
- * comma-separated inside one group — or the client's own keyword for deferring
- * to the session's model (cursor.com/docs/agent/subagents, accessed
- * 2026-08-17). This client publishes no model-agnostic alias a ladder class
+ * PIN, PICK OR OMIT, on the model field. Its vocabulary is a concrete model
+ * id — optionally parameterised in brackets, `composer-2.5[fast=false]`,
+ * options comma-separated inside one group — or the client's own keyword for
+ * deferring to the session's model (cursor.com/docs/agent/subagents, read
+ * 2026-10-14). This client publishes no model-agnostic alias a ladder class
  * could map onto, so the class resolves through the one projection table
- * ({@link resolveModelValue}): an operator pin for the class emits that id
- * verbatim, carrying the `[effort=…]` parameter this client uses as its effort
- * carrier, and NO pin emits no key at all.
+ * ({@link resolveModelValue}) with `pick`, the account's saved list
+ * (REQ-LADDER-006): an operator pin the list holds (or any pin, with no list)
+ * emits that id verbatim, carrying the `[effort=…]` parameter this client uses
+ * as its effort carrier unless the id names its effort variant already; a pin
+ * the list lacks, or no pin, takes the first shipped candidate the list holds,
+ * at the class's effort variant; with no pin and no list, no key at all.
+ *
+ * A DEFAULT, NOT A LIMIT. Cursor does not bind a sub-agent to this field: an
+ * enterprise fork measured on 3.13.25 that the model passed on the `Task` call
+ * decides. The touchpoints therefore pass the class's model from
+ * {@link buildCursorModelMap}'s map, and {@link buildModelPinsHookScript}
+ * fills it into a call that names none; this field is what a call outside both
+ * paths falls back to.
  *
  * BOTH AXES, ONE CALL. `efforts` is passed beside `pins` rather than left to
  * default because effort has no standalone key on this client (one effort
@@ -692,13 +747,12 @@ function readGlobs(item: CatalogItem, source: string): string[] {
  * parameter is additive and defaults to the ladder's own answer, so a caller
  * holding no operator settings still gets the class's declared effort.
  *
- * The absent key is the point, not a gap. Writing that defer-to-the-session
- * keyword restates the client's own documented default as though the engine
- * had decided something, and it inverts the pinning mandate (pinned explicit
- * ids on router-active platforms, operator override) with an in-code choice
- * nothing in the design sanctions. Silence says exactly what is true — this
- * engine pinned nothing here — and the client then applies the default that
- * belongs to it.
+ * The absent key, with no pin and no list, is the point, not a gap. Writing
+ * that defer-to-the-session keyword restates the client's own documented
+ * default as though the engine had decided something, and an id the account
+ * does not offer fails the spawn. Silence says exactly what is true — this
+ * engine knows no model the account offers — and the client then applies the
+ * default that belongs to it.
  *
  * `readonly: true` is the strongest per-agent restriction this client
  * expresses: it blocks edits and state-changing commands, but cannot name
@@ -720,16 +774,17 @@ export function buildCursorAgent(
   body: string,
   pins: ModelPinMap = {},
   efforts: EffortMap = {},
+  pick: ModelPickSource = {},
 ): string {
   const lines = [`description: ${frontmatterScalar(item.description)}`];
 
   const declaredClass = item.frontmatter["model_class"];
-  // A class off the ladder, or one with no pin, is left unwritten rather than
-  // guessed: an invented model value fails at spawn time, whereas an absent key
-  // takes the client's own default and works.
+  // A class off the ladder, or one with neither a pin nor a saved list, is left
+  // unwritten rather than guessed: an unlisted model value fails at spawn time,
+  // whereas an absent key takes the client's own default and works.
   const model =
     typeof declaredClass === "string"
-      ? resolveModelValue(declaredClass, "cursor", pins, efforts)
+      ? resolveModelValue(declaredClass, "cursor", pins, efforts, pick)
       : undefined;
   // Through the same scalar renderer as the description above: a pin is
   // operator free text whose shape check does not know YAML, so an unquoted
@@ -742,6 +797,57 @@ export function buildCursorAgent(
 
   const rendered = body.endsWith("\n") ? body : `${body}\n`;
   return `---\n${lines.join("\n")}\n---\n${rendered}`;
+}
+
+/** One class in the model map: the model the agent files carry, absent when none resolves, and the class's other listed candidates. */
+export interface CursorModelMapClass {
+  model?: string;
+  fallbacks: string[];
+}
+
+/** `.stamity/generated/models/cursor.json`: every ladder class's model, and each emitted role's class. */
+export interface CursorModelMap {
+  classes: Record<ModelClass, CursorModelMapClass>;
+  roles: Record<string, ModelClass>;
+}
+
+/**
+ * The class-to-model map (REQ-LADDER-007) the touchpoints read to pass
+ * `model` on each sub-agent call, and the one {@link buildModelPinsHookScript}
+ * builds in. Every ladder class is present in the ladder's order, `frontier`
+ * included although no agent file declares it, because a flow escalates a role
+ * to it on the call. `model` is what {@link buildCursorAgent} writes for the
+ * class, so a file and a call never disagree; with no pin and no saved list it
+ * is absent and the class reads `{ "fallbacks": [] }`. `fallbacks` are the
+ * class's other shipped candidates the list holds, in priority order, for a
+ * call the client refuses. `roles` maps each emitted agent's runtime id to the
+ * class its frontmatter declares, sorted by id so the bytes are stable.
+ */
+export function buildCursorModelMap(
+  roles: Readonly<Partial<Record<string, ModelClass>>>,
+  pins: ModelPinMap = {},
+  efforts: EffortMap = {},
+  pick: ModelPickSource = {},
+): CursorModelMap {
+  const classes = {} as Record<ModelClass, CursorModelMapClass>;
+  for (const { modelClass, defaultEffort } of MODEL_LADDER) {
+    const model = resolveModelValue(modelClass, "cursor", pins, efforts, pick);
+    // The level the resolver looked for the variant at: the operator's, else
+    // the ladder's, on this client's scale.
+    const effort = nearestExpressibleEffort(efforts[modelClass] ?? defaultEffort, "cursor");
+    const picked = pickModel("cursor", modelClass, effort, pick.listed);
+    const candidates = picked === undefined ? [] : [picked.id, ...picked.fallbacks];
+    classes[modelClass] = {
+      ...(model === undefined ? {} : { model }),
+      fallbacks: candidates.filter((id) => id !== model),
+    };
+  }
+  const sorted: Record<string, ModelClass> = {};
+  for (const id of Object.keys(roles).toSorted()) {
+    const modelClass = roles[id];
+    if (modelClass !== undefined) sorted[id] = modelClass;
+  }
+  return { classes, roles: sorted };
 }
 
 // ── Hooks ────────────────────────────────────────────────────────
@@ -782,52 +888,68 @@ interface CursorHookEntry {
  * REQ-FLOW-084): it finds the folder holding `.cursor/hooks.json` from wherever
  * the session started, so a hook runs the same from a subfolder as from the
  * root. `cli` pins the sync call the starter names when its script is missing.
+ *
+ * `opts.modelPins` appends the model-fill hook ({@link MODEL_PINS_HOOK_PATH})
+ * to `preToolUse`, after the planned rows, matched to `Task` and never
+ * `failClosed`: it rewrites a call's input and decides nothing, so a crash or a
+ * timeout lets the call through on the model it named. It runs through the
+ * starter directly, not through the portable runner, which drops Cursor's
+ * `updated_input` (`../hooks/portableRunner.ts`). The residue planner sets it;
+ * a direct call without it renders the document as before the hook existed.
  */
 export function buildHooksJson(
   rows: readonly HookInterchange[],
   cli: CliCallContext,
   hookScriptsRoot?: string,
+  opts: { modelPins?: boolean } = {},
 ): string {
   const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync", cli);
   const events: Record<string, CursorHookEntry[]> = {};
-  // The core's rows already carry the client's view of their own scripts. These
-  // two do not: they are placed AND wired by this adapter, so their commands are
-  // where a plugin's configuration could keep a repository path. Their script
-  // rows keep `.cursor/hooks/<file>` either way — that is where this repository
-  // writes the bytes, and the plugin emitter relocates them from there.
-  const guard = (file: string): string =>
+  // The core's rows already carry the client's view of their own scripts. The
+  // adapter's own scripts do not: they are placed AND wired by this adapter, so
+  // their commands are where a plugin's configuration could keep a repository
+  // path. Their script rows keep their repository paths either way — that is
+  // where this repository writes the bytes, and the plugin emitter relocates
+  // them from there.
+  const placed = (file: string): string =>
     hookScriptsRoot === undefined ? file : `${hookScriptsRoot}/${file.slice(file.lastIndexOf("/") + 1)}`;
+  // In a repository each adapter script runs through the same walk-up starter
+  // as the planned rows, so a session started in a subfolder still reaches it;
+  // with the script missing the starter exits 1 naming the sync call. The row
+  // it carries names the script; the script reads its payload and no argument.
+  const adapterScriptCommand = (file: string): string =>
+    hookScriptsRoot === undefined
+      ? portableHookCommand("cursor", { event: "pre_tool_use", command: ["node", file] }, { syncCall, script: file })
+      : shellCommand(["node", placed(file)]);
 
   for (const event of CANONICAL_HOOK_EVENTS) {
-    const matching = rows.filter((row) => row.event === event);
-    if (matching.length === 0) continue;
-    events[EVENT_RENAME[event]] = matching.map((row) => {
-      // Keys are assigned rather than spread-merged: assignment order is the
-      // serialized key order, so `command, matcher?, failClosed?` stays fixed
-      // and the emitted bytes are stable. Absent optionals are never written,
-      // so an omitted key is absent rather than present-and-undefined.
-      const entry: CursorHookEntry = { command: portableHookCommand("cursor", row, { syncCall }) };
-      if (row.timeoutMs !== undefined) entry.timeout = Math.ceil(row.timeoutMs / 1000);
-      if (row.matcher !== undefined) entry.matcher = row.matcher;
-      if (rowOptsIntoBlocking(event, row, hookScriptsRoot)) entry.failClosed = true;
-      return entry;
-    });
+    const entries = rows
+      .filter((row) => row.event === event)
+      .map((row) => {
+        // Keys are assigned rather than spread-merged: assignment order is the
+        // serialized key order, so `command, matcher?, failClosed?` stays fixed
+        // and the emitted bytes are stable. Absent optionals are never written,
+        // so an omitted key is absent rather than present-and-undefined.
+        const entry: CursorHookEntry = { command: portableHookCommand("cursor", row, { syncCall }) };
+        if (row.timeoutMs !== undefined) entry.timeout = Math.ceil(row.timeoutMs / 1000);
+        if (row.matcher !== undefined) entry.matcher = row.matcher;
+        if (rowOptsIntoBlocking(event, row, hookScriptsRoot)) entry.failClosed = true;
+        return entry;
+      });
+    if (event === "pre_tool_use" && opts.modelPins === true) {
+      entries.push({ command: adapterScriptCommand(MODEL_PINS_HOOK_PATH), matcher: SUBAGENT_TOOL });
+    }
+    if (entries.length === 0) continue;
+    events[EVENT_RENAME[event]] = entries;
   }
 
   // Both guards opt into blocking: an allowlist that logs and proceeds is not
   // an allowlist. Each fails open internally on an ambiguity it cannot judge —
   // announced on stderr, never silently — so the residual fail-closed surface is
-  // a crashed or timed-out script, not a guess. In a repository each runs
-  // through the same walk-up starter as the rows above, so a session started
-  // in a subfolder still reaches it; with the script missing the starter exits
-  // 1 naming the sync call, which `failClosed` turns into a refusal. The row
-  // it carries names the guard; the guard reads its payload and no argument.
-  const guardCommand = (file: string): string =>
-    hookScriptsRoot === undefined
-      ? portableHookCommand("cursor", { event: "pre_tool_use", command: ["node", file] }, { syncCall, script: file })
-      : shellCommand(["node", guard(file)]);
-  events[CURSOR_GUARD_EVENTS.subagentSpawn] = [{ command: guardCommand(SUBAGENT_GUARD_PATH), failClosed: true }];
-  events[CURSOR_GUARD_EVENTS.mcpExecution] = [{ command: guardCommand(MCP_GUARD_PATH), failClosed: true }];
+  // a crashed or timed-out script, not a guess; a missing one makes the starter
+  // exit 1, which `failClosed` turns into a refusal.
+  events[CURSOR_GUARD_EVENTS.subagentSpawn] = [{ command: adapterScriptCommand(SUBAGENT_GUARD_PATH), failClosed: true }];
+  events[CURSOR_GUARD_EVENTS.mcpExecution] = [{ command: adapterScriptCommand(MCP_GUARD_PATH), failClosed: true }];
 
   return `${JSON.stringify({ version: 1, hooks: events }, null, 2)}\n`;
 }
@@ -1250,6 +1372,83 @@ if (allowed.size === 0 && faults.length > 0) {
   // a failClosed failure here, and this guard is wired failClosed: true.
   allow();
 }
+`;
+}
+
+/**
+ * The model-fill hook (REQ-LADDER-007), wired on `preToolUse` for `Task`.
+ *
+ * Cursor's `preToolUse` answer may carry `updated_input`, the "modified tool
+ * input to use instead" (cursor.com/docs/hooks, read 2026-10-14), and the model
+ * on the `Task` call is the one that decides the sub-agent's (see
+ * {@link buildCursorAgent}). So a call to an emitted Stamity agent that names
+ * no model gets the class's model from `map`, built in, and nothing else of it
+ * changes: the input is copied whole and `model` set on the copy.
+ *
+ * It narrows its own reach rather than trusting the matcher's: the payload's
+ * `tool_name` must be `Task` exactly (the matcher is a pattern, and an MCP
+ * tool's name can contain the word), `tool_input.model` must be absent, and
+ * `tool_input.subagent_type` must be an own key of the map's roles inside the
+ * generated-content prefix, with a model for its class. The payload's top-level
+ * `model` is the session's, not the call's, and is never read.
+ *
+ * EVERY PATH ANSWERS `allow`, as valid JSON, and exits 0: the hook only ever
+ * adds a model, so it neither widens nor narrows a permission, and this client
+ * blocks a permission hook's call on invalid JSON even without `failClosed`.
+ * A payload it cannot read is passed through and named on stderr, as the spawn
+ * guard names one.
+ */
+export function buildModelPinsHookScript(map: CursorModelMap): string {
+  return `${guardHeader([
+    "stamity — model-fill hook for sub-agent calls.",
+    "",
+    "Wired on preToolUse for Task. When a call spawns one of this setup's agents",
+    "and names no model, it answers with the call's input plus the model the",
+    "class-to-model map below gives that agent's class; every other call is",
+    "allowed unchanged. It always allows, as valid JSON, and never blocks.",
+  ])}
+
+import { readFileSync } from "node:fs";
+
+const NAMESPACE = ${JSON.stringify(CONTENT_PREFIX)};
+const TOOL = ${JSON.stringify(SUBAGENT_TOOL)};
+const MAP = ${JSON.stringify(map, null, 2)};
+
+${REASON_HELPER}
+
+${READ_PAYLOAD}
+
+${NOTICE_HELPER}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// The class's model for a Task call that names none, or null to leave the call as it is.
+function modelFor(payload) {
+  if (payload.tool_name !== TOOL) return null;
+  const input = payload.tool_input;
+  if (!isObject(input) || (input.model !== undefined && input.model !== null)) return null;
+  const agentId = input.subagent_type;
+  if (typeof agentId !== "string" || !agentId.startsWith(NAMESPACE) || !Object.hasOwn(MAP.roles, agentId)) return null;
+  const modelClass = MAP.roles[agentId];
+  const entry = Object.hasOwn(MAP.classes, modelClass) ? MAP.classes[modelClass] : undefined;
+  return isObject(entry) && typeof entry.model === "string" ? entry.model : null;
+}
+
+let answer = { permission: "allow" };
+try {
+  const { payload, problem } = readPayload();
+  if (problem !== null) {
+    notice("stamity-cursor-model-pins", { reasonCode: "TASK_PAYLOAD_UNUSABLE", detail: problem, at: new Date().toISOString() });
+  } else {
+    const model = modelFor(payload);
+    if (model !== null) answer = { permission: "allow", updated_input: { ...payload.tool_input, model } };
+  }
+} catch (err) {
+  notice("stamity-cursor-model-pins", { reasonCode: "MODEL_FILL_FAILED", detail: reasonOf(err), at: new Date().toISOString() });
+}
+process.stdout.write(JSON.stringify(answer));
 `;
 }
 

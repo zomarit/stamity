@@ -11,6 +11,7 @@ import {
   EVENT_RENAME,
   LEGACY_CURSOR_GUARD_PATHS,
   MCP_GUARD_PATH,
+  MODEL_PINS_HOOK_PATH,
   SUBAGENT_GUARD_PATH,
   buildCursorAgent,
   buildHooksJson,
@@ -30,7 +31,7 @@ import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.t
 import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
 import { CANONICAL_HOOK_EVENTS, type HookInterchange } from "../../src/hooks/model.ts";
 import { IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS } from "../../src/hooks/scripts.ts";
-import { walkUpStarterScript } from "../../src/manifest/hookDocuments.ts";
+import { cursorHooksSpec, walkUpStarterScript } from "../../src/manifest/hookDocuments.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
@@ -226,6 +227,8 @@ interface CtxOptions {
    * value, so it needs its own way in here.
    */
   efforts?: EffortMap;
+  /** The account model lists `init` and `sync` persist (`models.listed`); absent where no client CLI answered. */
+  listed?: ModelConfig["listed"];
   /** The delivery dial, as `stamity config set ruleDelivery` persists it. */
   ruleDelivery?: RuleDelivery;
   /**
@@ -256,6 +259,7 @@ function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
   const models = {
     ...(over.pins === undefined ? {} : { pins: over.pins }),
     ...(over.efforts === undefined ? {} : { effort: over.efforts }),
+    ...(over.listed === undefined ? {} : { listed: over.listed }),
   };
   return {
     rootDir: getTemp().path("repo"),
@@ -727,6 +731,83 @@ describe("`.cursor/agents` definitions", () => {
     expect(modelLines(P.drifter)).toEqual(["model: every-client-z[effort=medium]"]);
   });
 
+  // REQ-LADDER-007 and REQ-LADDER-004: with the account's list persisted, every
+  // class takes the first shipped candidate the list holds, at the class's
+  // effort variant, and that id already names its effort.
+  describe("the pick from the account's list", () => {
+    const LISTED = ["claude-opus-5-5-high", "claude-opus-5-5-low", "claude-sonnet-5-5-medium", "gpt-5.6-sol-high", "claude-haiku-5-5-low"];
+    const listed: ModelConfig["listed"] = { cursor: { ids: LISTED, source: "cursor-agent-models" } };
+    const modelLines = (plan: readonly AdapterOutput[], path: string): string[] =>
+      contentAt(plan, path)
+        .split("\n")
+        .filter((line) => line.startsWith("model:"));
+
+    it("writes the listed effort variant into each agent file, with no [effort=…] after it", async () => {
+      const plan = await planFor(await seedCorpus(), { agents: ["reviewer", "implementer", "drifter"], listed });
+
+      expect(modelLines(plan, P.reviewer)).toEqual(["model: claude-opus-5-5-high"]);
+      expect(modelLines(plan, P.implementer)).toEqual(["model: claude-opus-5-5-high"]);
+      expect(modelLines(plan, P.drifter)).toEqual(["model: claude-sonnet-5-5-medium"]);
+      // The operator's effort moves the variant, still with no bracket group.
+      const low = await planFor(await seedCorpus(), { listed, efforts: { advanced: "low" } });
+      expect(modelLines(low, P.reviewer)).toEqual(["model: claude-opus-5-5-low"]);
+    });
+
+    it("re-picks a pin the account does not list, and keeps one it does", async () => {
+      // `composer-2` is not on the list: the resolver only knows that if the adapter passes the list.
+      const unlisted = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "composer-2" } } });
+      expect(modelLines(unlisted, P.reviewer)).toEqual(["model: claude-opus-5-5-high"]);
+
+      const kept = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "gpt-5.6-sol-high" } } });
+      expect(modelLines(kept, P.reviewer)).toEqual(["model: gpt-5.6-sol-high"]);
+    });
+
+    it("writes the class-to-model map every agent file agrees with, each emitted role mapped to its class", async () => {
+      const plan = await planFor(await seedCorpus(), { agents: ["reviewer", "implementer", "drifter"], listed });
+      const mapRow = byPath(plan).get(".stamity/generated/models/cursor.json");
+      expect(mapRow?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-model-map", artifactType: "infra" });
+      const map = JSON.parse(mapRow!.content) as {
+        classes: Record<string, { model?: string; fallbacks: string[] }>;
+        roles: Record<string, string>;
+      };
+
+      expect(map.classes).toEqual({
+        frontier: { model: "claude-opus-5-5-high", fallbacks: ["gpt-5.6-sol-high"] },
+        advanced: { model: "claude-opus-5-5-high", fallbacks: ["gpt-5.6-sol-high"] },
+        standard: { model: "claude-sonnet-5-5-medium", fallbacks: [] },
+        economy: { model: "claude-haiku-5-5-low", fallbacks: [] },
+      });
+      expect(map.roles).toEqual({ "stamity-drifter": "standard", "stamity-implementer": "advanced", "stamity-reviewer": "advanced" });
+      for (const [role, modelClass] of Object.entries(map.roles)) {
+        expect(modelLines(plan, `${CURSOR_AGENTS_DIR}/${role}.md`), role).toEqual([`model: ${map.classes[modelClass]?.model}`]);
+      }
+    });
+
+    it("drops the chosen model from its own fallbacks when a pin wins", async () => {
+      const plan = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "gpt-5.6-sol-high" } } });
+      const map = JSON.parse(contentAt(plan, ".stamity/generated/models/cursor.json")) as {
+        classes: Record<string, { model?: string; fallbacks: string[] }>;
+      };
+      expect(map.classes["advanced"]).toEqual({ model: "gpt-5.6-sol-high", fallbacks: ["claude-opus-5-5-high"] });
+    });
+
+    it("tells the capability matrix the agent file's model is a default the dispatch and a hook carry, re-dated", () => {
+      // An enterprise fork measured on Cursor 3.13.25 that the file's `model:`
+      // does not bind and the model on the Task call does (the plan's Context).
+      expect(cursorDialectFacts.agentsFormat).toContain(
+        "is a default, not a hard limit; Stamity carries it on the dispatch and by a hook",
+      );
+      expect(cursorDialectFacts.agentsFormat).toContain(".stamity/generated/models/cursor.json");
+      // Re-dated inline: a citation's own date moves only when every claim it covers was
+      // re-verified that day (`test/emit/capabilityMatrix.test.ts`, the currency pass).
+      expect(cursorDialectFacts.agentsFormat).toContain("cursor.com/docs/hooks, accessed 2026-10-14");
+      // The effort row no longer says a model is emitted only once pinned: a pick from the list writes one too.
+      const effortRow = cursorDialectFacts.caps.find((cap) => cap.name === "effort-scale")?.value ?? "";
+      expect(effortRow).toContain("picked from the account's list");
+      expect(effortRow).toContain("names its effort variant");
+    });
+  });
+
   it("drops readonly only for a grant that earns it, and keeps it for every unresolved shape", () => {
     const item = itemOf({ type: "agent", id: "packed" });
 
@@ -994,9 +1075,16 @@ describe("`.cursor/hooks.json`", () => {
       "node .stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs",
     ]);
     const preToolUse = doc.hooks[EVENT_RENAME.pre_tool_use] ?? [];
-    expect(preToolUse).toHaveLength(1);
+    // TEST CHANGE, justified (plan 020 file 2, unit e7-cursor-pins, REQ-LADDER-007):
+    // the event gains the engine's model-fill hook on `Task` after the core
+    // guard, so it holds two entries where it held one; the core guard's
+    // assertions are unchanged, and the new entry is asserted below and in
+    // `./cursorModelHook.test.ts`.
+    expect(preToolUse).toHaveLength(2);
     expect(childArgv(preToolUse[0]!.command)).toEqual(["node", PRE_TOOL_USE_GUARD_PATH]);
     expect(preToolUse[0]!.failClosed).toBeUndefined();
+    expect(preToolUse[1]).toMatchObject({ matcher: "Task" });
+    expect(startedScript(preToolUse[1]!.command)).toBe(MODEL_PINS_HOOK_PATH);
     // Same fact from the other side: the config row and the script body agree
     // that nothing here blocks, so the pair cannot drift into disagreement.
     const guardBody = contentAt(plan, PRE_TOOL_USE_GUARD_PATH);
@@ -1037,9 +1125,14 @@ describe("`.cursor/hooks.json`", () => {
     // meaning for a hook the repo wrote to decide: that hook reads whatever the
     // payload does carry, so its exit status is its own to mean.
     const pre = doc.hooks[EVENT_RENAME.pre_tool_use]!;
-    expect(pre.map((entry) => childArgv(entry.command))).toEqual([["node", PRE_TOOL_USE_GUARD_PATH], ["node", ".stamity/hooks/gate.mjs"]]);
+    // TEST CHANGE, justified (plan 020 file 2, unit e7-cursor-pins, REQ-LADDER-007):
+    // the engine's model-fill hook follows the planned rows on this event, so
+    // the list is read up to it; the authored row and the core guard keep the
+    // flags they had, and the new entry carries none.
+    expect(pre.slice(0, 2).map((entry) => childArgv(entry.command))).toEqual([["node", PRE_TOOL_USE_GUARD_PATH], ["node", ".stamity/hooks/gate.mjs"]]);
     expect(pre[0]!.failClosed).toBeUndefined();
     expect(pre[1]).toMatchObject({ matcher: "Bash", failClosed: true });
+    expect(pre.slice(2).map((entry) => [startedScript(entry.command), entry.failClosed])).toEqual([[MODEL_PINS_HOOK_PATH, undefined]]);
   });
 
   it("does not count the core pre-tool-use guard among the matrix's blocking emissions", async () => {
@@ -1181,6 +1274,41 @@ describe("`.cursor/hooks.json`", () => {
     for (const entry of entries) {
       expect(startedScript(entry.command), entry.command).not.toBeNull();
       expect(entry.command).toContain(`; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync'`);
+    }
+  });
+
+  // REQ-LADDER-007: the model-fill hook, wired by this adapter beside the core
+  // rows; its answers are run in `./cursorModelHook.test.ts`.
+  it("wires the model-fill hook on Task through the walk-up starter, never fail-closed, and writes its script beside the runner", async () => {
+    const plan = await planFor(await seedCorpus());
+    const entries = Object.values(parseHooks(contentAt(plan, P.hooksConfig)).hooks)
+      .flat()
+      .filter((entry) => startedScript(entry.command) === MODEL_PINS_HOOK_PATH);
+    expect(entries).toEqual([{ command: entries[0]?.command, matcher: "Task" }]);
+    expect(entries[0]!.command).toContain(`; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync'`);
+
+    expect(MODEL_PINS_HOOK_PATH).toBe(".stamity/generated/hooks/cursor/stamity-model-pins.mjs");
+    const script = byPath(plan).get(MODEL_PINS_HOOK_PATH);
+    expect(script?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-model-pins", artifactType: "infra" });
+    expect(script?.content.startsWith("#!/usr/bin/env node\n")).toBe(true);
+  });
+
+  // review/84 (e5's review): an upgrade moves the pinned sync call the entry's
+  // starter names, so the entry must be the engine's in the bound for the
+  // write lane to replace it in place rather than behind a backup.
+  it("counts the model-fill entry as the engine's, in the bound, whatever pinned call its starter names", async () => {
+    const spec = cursorHooksSpec({ guardPaths: [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH] });
+    const element = spec.elements[0]!;
+    const plan = await planFor(await seedCorpus());
+    const entry = Object.values(parseHooks(contentAt(plan, P.hooksConfig)).hooks)
+      .flat()
+      .find((candidate) => startedScript(candidate.command) === MODEL_PINS_HOOK_PATH);
+    expect(entry).toBeDefined();
+    const earlier = { ...entry!, command: entry!.command.replace(`@${ENGINE_VERSION} sync`, "@1.14.0 sync") };
+    expect(earlier.command).not.toBe(entry!.command);
+    for (const candidate of [entry!, earlier]) {
+      expect(element.recognise(candidate)).toBe(true);
+      expect(element.inBound(candidate)).toBe(true);
     }
   });
 
