@@ -13,7 +13,8 @@
 //                                           is kept, one changed on both refuses the run; one
 //                                           deleted on <ref> is deleted here only if unedited; a
 //                                           <ref> holding anything but records and the branch's
-//                                           own files, or two paths equal under case folding, is
+//                                           own files, a path outside printable ASCII, or two
+//                                           files or folders equal under case folding, is
 //                                           refused before any write
 //   commit -m <message> [--dry-run] [--allow-deletions]
 //                                           build a commit on the sync base from the records on
@@ -68,8 +69,16 @@ const TEMPLATES = [
 ]
 /** The files `init` writes beside the records: the only other paths a records commit may hold. */
 const BRANCH_FILES = new Set(TEMPLATES.map(([, destination]) => destination))
-/** A path as a disk that folds case and normalizes names (macOS, Windows) resolves it. */
+/**
+ * A path as a disk that folds case and normalizes names (macOS, Windows) resolves it: exact for the
+ * printable-ASCII names a records tree may hold, the only ones where every such disk folds alike.
+ */
 const folded = (path) => path.normalize('NFC').toLowerCase()
+/** A character outside printable ASCII (space to tilde), which disks that fold case fold in their own ways. */
+const UNPRINTABLE = /[^ -~]/gu
+const printable = (path) => path.match(UNPRINTABLE) === null
+/** A path with each character outside printable ASCII shown as its code point, so a refusal names it visibly. */
+const shown = (path) => path.replace(UNPRINTABLE, (char) => `<U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}>`)
 const KEPT_FOLDED = new Set(KEEP_ON_MAIN.map(folded))
 const MODES = new Set(['100644', '100755'])
 const MAX_BUFFER = 256 * 1024 * 1024
@@ -201,21 +210,57 @@ function blockedParent(ctx, path) {
   return null
 }
 
+const treePaths = (ctx, oid) => splitZ(ctx.git(['ls-tree', '-r', '-z', '--full-tree', '--name-only', oid]))
+
+/**
+ * Each set of names in a tree, files and the folders above them alike, that a disk that folds case
+ * writes as one, as `a and b`. Names are grouped under their exact parent folder, so a folder in
+ * two spellings is named once, there, and not again for every file below it.
+ */
+function casePairs(paths) {
+  const names = new Set(paths.flatMap((path) => path.split('/').map((_, i, parts) => parts.slice(0, i + 1).join('/'))))
+  const spellings = new Map()
+  for (const name of names) {
+    const key = JSON.stringify([name.slice(0, name.lastIndexOf('/') + 1), folded(name)])
+    spellings.set(key, [...(spellings.get(key) ?? []), name])
+  }
+  return [...spellings.values()].filter((group) => group.length > 1).map((group) => group.toSorted().join(' and '))
+}
+
+/** The plain-git route that drops an old spelling the records branch already holds, which neither verb here can. */
+const REPAIR = [
+  'The records branch already holds this, so neither restore, which refuses it, nor commit, which needs a checkout synced to it, can drop it. ' +
+    'Drop it with plain git, from this checkout (on a disk that folds case too), <old-spelling> being the spelling you drop; ' +
+    'a record only that spelling holds goes with it, so save it first (git show origin/records:<path>) and publish it again under the spelling you keep:',
+  ...[
+    'git fetch origin records',
+    'git worktree add --detach <folder> origin/records',
+    'git -C <folder> rm -r --cached --quiet -- <old-spelling>',
+    'git -C <folder> commit -q -m "records: drop the old spelling"',
+    'git -C <folder> push origin HEAD:refs/heads/records',
+    'git worktree remove --force <folder>',
+    'node scripts/records.mjs restore',
+  ].map((step) => `  ${step}`),
+]
+
 /**
  * A records tree holds the records and the files `init` writes, nothing else (main's placeholder in
- * any case included), and no two paths equal under case folding, which a disk that folds case
- * writes as one file. `restore` refuses a ref, and `commit` the tree it built, that breaks either
- * rule; `holds` and `outcome` word the refusal for the verb, `fix` says how to drop an old spelling.
+ * any case included), every path in printable ASCII, and no two names, files or folders, equal
+ * under case folding, which a disk that folds case writes as one. `restore` refuses a ref, and
+ * `commit` the tree it built, that breaks a rule; `holds` and `outcome` word the refusal for the
+ * verb, `fix` says how to drop an old spelling, and `onBranch` says whether the records branch
+ * already holds a pair, which adds the plain-git repair.
  */
-function refuseUnsafeTree(ctx, oid, { holds, outcome, fix }) {
-  const paths = splitZ(ctx.git(['ls-tree', '-r', '-z', '--full-tree', '--name-only', oid]))
+function refuseUnsafeTree(ctx, oid, { holds, outcome, fix, onBranch }) {
+  const paths = treePaths(ctx, oid)
   const stray = paths.filter((path) => !BRANCH_FILES.has(path) && (!isRecordPath(path) || KEPT_FOLDED.has(folded(path))))
-  const spellings = new Map()
-  for (const path of paths) spellings.set(folded(path), [...(spellings.get(folded(path)) ?? []), path])
-  const pairs = [...spellings.values()].filter((group) => group.length > 1).map((group) => group.toSorted().join(' and '))
+  const unprintable = paths.filter((path) => !printable(path)).map(shown)
+  const pairs = casePairs(paths)
   const lines = [
     ...(stray.length === 0 ? [] : [`refused: ${holds} paths that are neither records nor the branch's own files (${[...BRANCH_FILES].join(', ')}); ${outcome}:`, ...stray]),
-    ...(pairs.length === 0 ? [] : [`refused: ${holds} paths equal under case folding, which a disk that folds case writes as one file; ${outcome}. ${fix}:`, ...pairs]),
+    ...(unprintable.length === 0 ? [] : [`refused: ${holds} paths with a character outside printable ASCII, which disks that fold case fold in their own ways; ${outcome}:`, ...unprintable]),
+    ...(pairs.length === 0 ? [] : [`refused: ${holds} names, files or folders, equal under case folding, which a disk that folds case writes as one; ${outcome}. ${fix}:`, ...pairs]),
+    ...(pairs.length > 0 && onBranch() ? REPAIR : []),
   ]
   if (lines.length > 0) stop(1, lines)
 }
@@ -224,7 +269,9 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
   if (fetch) fetchRecords(ctx)
   const oid = requireCommit(ctx, ref, 'fetch the records branch, or run `init` once')
   // One pushed without this script that breaks the tree rule is refused before any write, so the records job fails on it.
-  refuseUnsafeTree(ctx, oid, { holds: `${ref} holds`, outcome: 'nothing was written', fix: 'Delete the old spelling of each on the records branch and commit again' })
+  refuseUnsafeTree(ctx, oid, {
+    holds: `${ref} holds`, outcome: 'nothing was written', fix: 'Drop the old spelling of each from the records branch', onBranch: () => true,
+  })
   const rows = lsTree(ctx, oid)
   const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
   if (unsupported.length > 0) stop(1, [`refused: ${ref} holds entries restore does not write (only regular files under the record paths):`, ...unsupported])
@@ -311,7 +358,7 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
       ...recreated.map((row) => `re-created ${row.path}: it was gone from disk; if you deleted it on purpose, delete it again and publish with \`commit --allow-deletions\``),
       ...pending.map(({ row }) => `kept ${row.path}: a local edit not yet published`),
       ...edited.map((path) => `kept ${path}: deleted on ${ref} and edited here; the next \`commit\` publishes it again unless you remove it`),
-      ...renamed.map(({ path, spelled }) => `kept ${path}: ${ref} holds it as ${spelled}; rename this copy to that name (where the disk folds case) ` +
+      ...renamed.map(({ path, spelled }) => `kept ${path}: ${ref} holds it as ${spelled}; rename this copy, or the folder whose case differs, to that name (where the disk folds case) ` +
         'or remove it (where the two names are two files); the next `commit` refuses until you do'),
     ],
   }
@@ -442,7 +489,9 @@ async function publishIn(ctx, { message, dryRun, allowDeletions, runGates, held 
   // Never publish what every later `restore`, and the records job, would refuse.
   refuseUnsafeTree(ctx, tree, {
     holds: 'the commit would hold', outcome: 'nothing was pushed',
-    fix: 'Delete the old spelling of each (where the disk folds case, rename the file to the spelling you keep instead) and commit again',
+    fix: 'Delete the old spelling of each (where the disk folds case, rename the file or folder to the spelling you keep instead) and commit again',
+    // The base is origin/records: a pair already there is not this checkout's to drop.
+    onBranch: () => casePairs(treePaths(ctx, base)).length > 0,
   })
   if (tree === ctx.git(['rev-parse', `${base}^{tree}`]).trim()) return { code: 0, lines: ['nothing to publish: the records on disk equal origin/records'] }
   const commit = ctx.git(['commit-tree', tree, '-p', base, '-m', message]).trim()
@@ -504,8 +553,9 @@ export async function init({ base, ...options } = {}) {
     if (existing.length > 0) stop(1, [`refused: the records branch already exists (${existing.join(', ')}); init runs once`])
     const source = requireCommit(ctx, base)
     const rows = lsTree(ctx, source)
-    const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
-    if (unsupported.length > 0) stop(1, ['refused: only regular files under the record paths are imported:', ...unsupported])
+    const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode) || !printable(row.path))
+      .map((row) => `${row.mode} ${shown(row.path)}`)
+    if (unsupported.length > 0) stop(1, ['refused: only regular files under the record paths, named in printable ASCII, are imported:', ...unsupported])
     const index = join(ctx.git(['rev-parse', '--absolute-git-dir']).trim(), 'records-init.index')
     rmSync(index, { force: true })
     let tree

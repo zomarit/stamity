@@ -29,6 +29,23 @@ const GITKEEP = (KEEP_ON_MAIN as readonly string[])[0] ?? "";
 const ALPHA = ".stamity/runs/2026-01-01_alpha";
 const RUN = "evals/runs/2026-01-01-run-1";
 const PLAN = "docs/plans/001-alpha.md";
+/** ALPHA's folder in another case: one folder where the disk folds case, two where it does not. */
+const ALPHA_UP = ALPHA.replace("alpha", "ALPHA");
+// Built from code points, so this file holds only ASCII: record names outside printable ASCII, and how the script shows each.
+const SIGMA_PLAN = `docs/plans/${String.fromCodePoint(0x3c3)}.md`;
+const SIGMA_SHOWN = "docs/plans/<U+03C3>.md";
+const DEL_PLAN = `docs/plans/a${String.fromCodePoint(0x7f)}.md`;
+const DEL_SHOWN = "docs/plans/a<U+007F>.md";
+/** The plain-git repair a refusal names for a pair the records branch already holds, `<folder>` and `<old-spelling>` to fill. */
+const REPAIR = [
+  "git fetch origin records",
+  "git worktree add --detach <folder> origin/records",
+  "git -C <folder> rm -r --cached --quiet -- <old-spelling>",
+  "git -C <folder> commit -q -m \"records: drop the old spelling\"",
+  "git -C <folder> push origin HEAD:refs/heads/records",
+  "git worktree remove --force <folder>",
+  "node scripts/records.mjs restore",
+];
 // Built at run time so the test-input census does not read the name as this repository's README.md:
 // here it is the records branch's template and its place at that branch's root.
 const README = ["README", "md"].join(".");
@@ -377,6 +394,83 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(readdirSync(join(w.clone, "docs/plans"))).toEqual(["001-alpha.md"]);
   });
 
+  it("refuses, before any write, a records commit holding one folder in two spellings, naming both once, forced or not", async () => {
+    const w = world();
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const before = w.synced(w.clone);
+    // No two full paths fold equal here: only the folders do, and a disk that folds case writes both into one.
+    const crafted = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, upstream\n")},${PLAN}`);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "b\n")},${ALPHA_UP}/b.md`);
+    });
+    for (const force of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
+      const result: Result = await records.restore({ ...w.opts, ref: crafted, fetch: false, force });
+      expect(result.code, `${String(force)}: ${result.lines.join("\n")}`).toBe(1);
+      expect(result.lines[0]).toContain("equal under case folding");
+      expect(result.lines.filter((line) => line.startsWith(".stamity/runs/"))).toEqual([`${ALPHA_UP} and ${ALPHA}`]);
+      expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+      expect(readdirSync(join(w.clone, ".stamity/runs"))).toEqual(["2026-01-01_alpha"]);
+      expect(readdirSync(join(w.clone, ALPHA)).toSorted()).toEqual(["ledger.jsonl", "record.md"]);
+      expect(w.synced(w.clone)).toBe(before);
+    }
+  });
+
+  it("refuses, before any write, a records commit holding a path outside printable ASCII, naming it, forced or not", async () => {
+    const w = world();
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const before = w.synced(w.clone);
+    for (const [odd, shown] of [[SIGMA_PLAN, SIGMA_SHOWN], [DEL_PLAN, DEL_SHOWN]] as const) {
+      const crafted = w.craft(w.clone, upstream, (indexed) => {
+        indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, upstream\n")},${PLAN}`);
+        indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "odd\n")},${odd}`);
+      });
+      for (const force of [false, true]) {
+        // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
+        const result: Result = await records.restore({ ...w.opts, ref: crafted, fetch: false, force });
+        expect(result.code, `${shown} ${String(force)}: ${result.lines.join("\n")}`).toBe(1);
+        expect(result.lines.some((line) => line.includes("outside printable ASCII") && line.includes("nothing was written"))).toBe(true);
+        expect(result.lines).toContain(shown);
+        expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+        expect(readdirSync(join(w.clone, "docs/plans"))).toEqual(["001-alpha.md"]);
+        expect(w.synced(w.clone)).toBe(before);
+      }
+    }
+  });
+
+  it("names the plain-git repair for a pair the records branch holds, and following it as printed lets restore run clean", async () => {
+    const w = world();
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const paired = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "b\n")},${ALPHA_UP}/b.md`);
+    });
+    // Pushed without this script: neither restore, which refuses the ref, nor commit, whose checkout cannot sync to it, can drop it.
+    w.git(w.clone, "push", "-q", "origin", `${paired}:refs/heads/records`);
+    const before = w.synced(w.clone);
+    const refused: Result = await records.restore(w.opts);
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines).toContain(`${ALPHA_UP} and ${ALPHA}`);
+    expect(w.synced(w.clone)).toBe(before);
+    const at = refused.lines.findIndex((line) => line.includes("with plain git"));
+    expect(at, refused.lines.join("\n")).toBeGreaterThan(-1);
+    const steps = refused.lines.slice(at + 1).map((line) => line.trim());
+    expect(steps).toEqual(REPAIR);
+    // Each step run as printed, on this host's disk, the placeholders filled.
+    const scratch = join(w.dir, "repair");
+    for (const step of steps.slice(0, -1)) {
+      const words = (step.match(/"[^"]*"|\S+/g) ?? []).map((word) => word.replace(/^"(.*)"$/, "$1"))
+        .map((word) => (word === "<folder>" ? scratch : word === "<old-spelling>" ? ALPHA_UP : word));
+      execFileSync("git", words.slice(1), { cwd: w.clone, env: w.env, stdio: "pipe" });
+    }
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    const tree = w.tree("records");
+    expect(tree.filter((path) => path.startsWith(".stamity/runs/"))).toEqual([`${ALPHA}/ledger.jsonl`, `${ALPHA}/record.md`]);
+    expect(w.git(w.origin, "rev-parse", "records^")).toBe(paired);
+    expect(w.synced(w.clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+    expect(existsSync(scratch)).toBe(false);
+  });
+
   it.skipIf(!POSIX)("refuses a symlinked folder or file in place of a record deleted on the other side, forced or not, deleting nothing", async () => {
     const w = world();
     const b = await w.machine("b");
@@ -532,6 +626,8 @@ describe("commit", { timeout: 60_000 }, () => {
       expect(refused.lines[0]).toContain("nothing was pushed");
       expect(refused.lines[0]).toContain("the old spelling");
       expect(refused.lines).toContain(`${renamed} and ${PLAN}`);
+      // The branch holds one spelling only, so the old one is this checkout's to drop: no plain-git repair is named.
+      expect(refused.lines.some((line) => line.includes("with plain git"))).toBe(false);
     }
     expect(gates.calls).toHaveLength(0);
     expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
@@ -543,6 +639,53 @@ describe("commit", { timeout: 60_000 }, () => {
     expect(published.lines.filter((line) => line.includes("docs/plans/"))).toEqual([`M ${renamed}`]);
     expect(w.tree("records")).not.toContain(PLAN);
     expect(w.git(w.origin, "show", `records:${renamed}`)).toBe("# plan, revised");
+  });
+
+  it("refuses a folder in two spellings that the records branch already holds, naming the plain-git repair, and pushes nothing", async () => {
+    const w = world();
+    const beta = ".stamity/runs/2026-01-03_beta", betaUp = beta.replace("beta", "BETA");
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    // A pair that landed before this check, or by plain git, and that this checkout last synced to.
+    const paired = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# beta\n\nStatus: in progress\n")},${beta}/record.md`);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "b\n")},${betaUp}/b.md`);
+    });
+    w.git(w.clone, "push", "-q", "origin", `${paired}:refs/heads/records`);
+    w.git(w.clone, "fetch", "-q", "origin");
+    w.git(w.clone, "update-ref", SYNC_BASE, paired);
+    // The run is in progress, so its folder stays out of the listing on any disk, and the other spelling's
+    // file is the base's byte for byte: the built tree is the base's pair plus one plan edit, on every host.
+    w.write(w.clone, `${beta}/record.md`, "# beta\n\nStatus: in progress\n");
+    w.write(w.clone, `${betaUp}/b.md`, "b\n");
+    w.write(w.clone, PLAN, "# plan, revised\n");
+    const before = { clone: w.refs(w.clone), origin: w.refs(w.origin) };
+    const gates = passing();
+    for (const dryRun of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- each publish reads the checkout the previous one left
+      const refused: Result = await records.publish({ ...w.opts, message: "m", dryRun, runGates: gates.run });
+      expect(refused.code, `${String(dryRun)}: ${refused.lines.join("\n")}`).toBe(1);
+      expect(refused.lines.some((line) => line.includes("equal under case folding") && line.includes("nothing was pushed"))).toBe(true);
+      expect(refused.lines.filter((line) => line.startsWith(".stamity/runs/"))).toEqual([`${betaUp} and ${beta}`]);
+      const at = refused.lines.findIndex((line) => line.includes("with plain git"));
+      expect(at, refused.lines.join("\n")).toBeGreaterThan(-1);
+      expect(refused.lines.slice(at + 1).map((line) => line.trim())).toEqual(REPAIR);
+    }
+    expect(gates.calls).toHaveLength(0);
+    expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+  });
+
+  it("refuses a record path outside printable ASCII, naming it, and pushes nothing", async () => {
+    const w = world();
+    w.write(w.clone, SIGMA_PLAN, "# plan, another\n");
+    w.write(w.clone, PLAN, "# plan, revised\n");
+    const before = { clone: w.refs(w.clone), origin: w.refs(w.origin) };
+    const gates = passing();
+    const refused: Result = await records.publish({ ...w.opts, message: "m", runGates: gates.run });
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines.some((line) => line.includes("outside printable ASCII") && line.includes("nothing was pushed"))).toBe(true);
+    expect(refused.lines).toContain(SIGMA_SHOWN);
+    expect(gates.calls).toHaveLength(0);
+    expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
   });
 
   it("refuses a case variant of the placeholder main keeps, naming it, and pushes nothing", async () => {
@@ -727,6 +870,18 @@ describe("verify, guard and init", { timeout: 60_000 }, () => {
     expect(refused.code).toBe(1);
     expect(local.refs(local.origin)).not.toContain("refs/heads/records");
   });
+
+  it("init refuses a record path outside printable ASCII at the base, naming it, and creates no branch", async () => {
+    const local = world({ init: false });
+    local.write(local.clone, SIGMA_PLAN, "# plan, another\n");
+    local.git(local.clone, "add", "--", SIGMA_PLAN);
+    local.git(local.clone, "-c", "commit.gpgsign=false", "commit", "-qm", "a record named outside ASCII");
+    const refused: Result = await records.init({ ...local.opts, base: local.git(local.clone, "rev-parse", "HEAD") });
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines).toContain(`100644 ${SIGMA_SHOWN}`);
+    expect(local.refs(local.clone)).not.toContain("refs/heads/records");
+    expect(local.refs(local.origin)).not.toContain("refs/heads/records");
+  });
 });
 
 describe("the CLI", { timeout: 60_000 }, () => {
@@ -788,7 +943,8 @@ describe("the branch templates", () => {
   it("tells a reader how to restore and publish, and that a run in progress is left out", () => {
     const readme = template(README);
     for (const text of ["node scripts/records.mjs setup", "node scripts/records.mjs commit -m", "never forced",
-      "cannot be deleted", "Status: in progress", "deleted on the branch", "publishes it again", "nothing but records", "differ only in case", "`commit` refuses to build one"])
+      "cannot be deleted", "Status: in progress", "deleted on the branch", "publishes it again", "nothing but records", "differ only in case", "`commit` refuses to build one",
+      "printable ASCII", "files or folders", "`git rm -r --cached`", "`git push origin HEAD:refs/heads/records`"])
       expect(readme).toContain(text);
   });
 });
