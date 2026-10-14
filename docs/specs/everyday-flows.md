@@ -3250,7 +3250,7 @@ amended 2026-10-15). A command with no `node` on `PATH` exits 127 from the shell
 ### REQ-FLOW-085 — The session start names a cloud or CI session
 
 Added 2026-10-15 (plan 020 file 2, units `e9-session-start-detection` and `e10-cloud-docs-matrix`; `e10` read at
-`fee88300`).
+`fee88300`, and re-read at the integration head `1855a20f`, after its fix round).
 
 Given `CLAUDE_CODE_REMOTE` set to `true`, `COPILOT_AGENT_PROMPT`, `CURSOR_AGENT_SOCKET`, or `CI` or `GITHUB_ACTIONS`, each
 set to a value other than empty, `false` or `0`, When the session-start hook runs, Then after the learnings and handoff
@@ -3259,26 +3259,31 @@ order (a Claude Code cloud session, a Copilot cloud agent session, a self-hosted
 not-enforced lines as `- …`, and `Also detected: <names>.` when other markers are set (`CLOUD_SESSIONS` and
 `sessionLines`, `src/hooks/scripts.ts`). A marker is read by presence only and no value is printed, and the script makes
 no network call. A client's lines are that client's `sessionStart` rows in `CLIENT_CLOUD_FACTS`
-(`src/hooks/model.ts`, at `fee88300`), each row carrying its vendor page, access date and status: Claude Code's
-"GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api." and "The review-gate counter resets with the
-VM."; Copilot's "A preToolUse hook that times out fails open.", "An ask answer is read as deny." and "Hooks run only
-from the default branch."; a self-hosted Cursor worker's "subagentStart is skipped in a first or read-only turn.". The
-CI line, "No person answers; declared defaults apply.", is the engine's own behaviour and stays in the script.
+(`src/hooks/model.ts`, at `1855a20f`), each row carrying its vendor page, access date and status, and only a
+`documented` row carrying one: Claude Code's "GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api."
+and "The review-gate counter resets with the VM."; Copilot's "A preToolUse hook that times out fails open.", "An ask
+answer is read as deny." and "Hooks run only when the hooks file is on the default branch; this clone's copy is the one
+loaded."; a self-hosted Cursor worker none, its session named alone. The CI line, "No person answers; declared defaults
+apply.", is the engine's own behaviour and stays in the script.
 
 The capability matrix carries the same table: a dated "In the vendor's cloud" cell per client in its glance table, and a
 "Cloud sessions" section listing every row with its fact, the line the session start prints, its status, its source
 and its access date, a page that says nothing on a point rendered "not documented, read <date>"
-(`src/emit/capabilityMatrix.ts`, at `fee88300`). `docs/customization.md` and `docs/troubleshooting.md` state which
+(`src/emit/capabilityMatrix.ts`, at `1855a20f`). `docs/customization.md` and `docs/troubleshooting.md` state which
 clouds run which hooks and cite that section (REQ-FLOW-086).
 
 - **As built, where the delta differed:** a self-hosted Cursor worker no longer prints "The MCP guard does not run.",
   which the delta's unit listed: Cursor's page says it only of Cursor-hosted agents, so the fact stays an `unverified`
-  row with no session line (`build/75`). `CURSOR_AGENT_SOCKET` as the self-hosted marker is a `not documented` row: the
-  self-hosted page names no such variable. The blank line before the lines keeps the resume card "everything after the
+  row with no session line (`build/75`). The fix round took the same line rule further: the self-hosted worker's
+  "subagentStart is skipped in a first or read-only turn." went too, Cursor's page saying it of cloud agents only, and
+  Copilot's "Hooks run only from the default branch." became the line above, because no cited page says a branch's
+  changed copy never runs (`review/120`, `review/121`). `CURSOR_AGENT_SOCKET` as the self-hosted marker is an
+  `unverified` row: the self-hosted page names no such variable. The blank line before the lines keeps the resume card "everything after the
   last blank line" for its two readers.
 - **Proof:** `test/hooks/scripts.test.ts` ("the session start names a cloud or CI session (REQ-FLOW-085)"),
   `test/hooks/sessionStartCard.test.ts`, `test/hooks/scriptBudget.test.ts` (the session-start row at 49,152 bytes and
-  1,100 lines), `test/emit/capabilityMatrix.test.ts` ("the cloud column and the Cloud sessions section"), and
+  1,100 lines), `test/emit/capabilityMatrix.test.ts` ("the cloud column and the Cloud sessions section", which also
+  holds every row carrying a session line to `documented`), and
   `test/cloud/containerLeg.test.ts`.
 
 ### REQ-FLOW-086 — Copilot hooks use camelCase

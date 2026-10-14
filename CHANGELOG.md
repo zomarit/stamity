@@ -311,10 +311,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `pluginUninstall` (`clean --json`). `check` still prints as many rows: the new `model-pins`
     row (under Added) takes its place in the count.
   - **The exports** `INSTALL_MODES`, `INSTALL_MODE_DEFAULT`, `PLUGIN_OWNED_CLASSES`, `InstallMode`,
-    `PluginClientRecord`, `PluginConfig`, `PluginOwnedClass` and `EngineRegistry.plugins`, and the
-    capability matrix's `PLUGIN_CONTAINER_CLASSES`, `PluginContainerClass`, `PluginContainerFact`
-    and `CapabilityMatrixInputs.plugins`, which `EngineRegistry.emit.capabilityMatrix` made
-    public. The capability matrix page loses its "Plugin containers" section.
+    `PluginClientRecord`, `PluginConfig`, `PluginOwnedClass`, `EngineRegistry.plugins` and
+    `EngineRegistry.emit.ownership` (`isPluginOwned`, `withoutPluginOwnedRows`,
+    `sharedProjectionOwners`, `pluginOwnedSummary` and `PluginOwnedClasses`); `SetupManifest.plugin`
+    is typed `unknown`. Of the modules the registry makes public: `readInstallMode` and
+    `pluginOwnedClasses` (`EngineRegistry.manifest.manifest`), `HooksPlanContext.pluginOwnedHooks`
+    (`EngineRegistry.emit.hooksInfra`), `ClientModelProjection.acceptsConcreteIds`
+    (`EngineRegistry.roster.modelLadder`), and the capability matrix's `PLUGIN_CONTAINER_CLASSES`,
+    `PluginContainerClass`, `PluginContainerFact` and `CapabilityMatrixInputs.plugins`
+    (`EngineRegistry.emit.capabilityMatrix`). `EmissionPlan.packReach` drops no artifact as
+    `plugin-owned` any more, and the reason leaves its type. The capability matrix page loses its
+    "Plugin containers" section.
   - **For a fork.** `scripts/fork-identity.mjs` runs no generator and leaves a leftover
     `renovate/plugins.json` alone. A `stamity.distribution` block in `package.json` is ignored
     with a one-line notice for one release, not refused. `fork-release.yml` publishes the npm

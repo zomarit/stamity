@@ -44,7 +44,7 @@ doctor
   ok    plugin-duplicates    no leftover plugin install
   ok    pack-reach           no installed pack is recorded in the ledger
   ok    model-pins           no selected client lists its models (claude runs on its family aliases)
-  ok    invariants           invariants 1.2.0 · ratified 2026-08-31 · last amended 2026-10-09
+  ok    invariants           invariants 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
 drift: clean — every generated file matches what a sync would write
 
