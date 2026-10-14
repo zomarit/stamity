@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, for the records job and the record set its CI section names, and against `.github/workflows/ci.yml`, for the APM and plugin route lanes it no longer runs. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, for the records job and the record set its CI section names, and against `.github/workflows/ci.yml`, for the APM and plugin route lanes it no longer runs and the `cloud-container` job a full run now needs. -->
 <!-- Re-open when: a check named below is added, renamed or removed in `.github/workflows/`, the
      required-approval count changes, the MAJOR/MINOR/PATCH bump rules change, what the private
      layer holds changes, or a trigger in the EU AI Act section fires. `test/docsPages.test.ts`
@@ -8,7 +8,7 @@
 
 # Governance
 
-> Last updated: 2026-10-12
+> Last updated: 2026-10-14
 
 This page is for a contributor or a reviewer who wants to know who runs stamity and how a change
 gets in. It answers four questions: who decides, the two required checks a change passes to land,
@@ -51,7 +51,9 @@ check has one stable name, so a required check does not rotate when the matrix d
 ### What `all-ci-checks` covers
 
 `all-ci-checks` is the aggregator job in `.github/workflows/ci.yml`, and it runs on every event.
-A full run passes when the check matrix passes.
+A full run passes when the check matrix and the `cloud-container` job both pass. That job runs the
+suite under `test/cloud/` inside a Linux container pinned by digest, with an empty home folder and
+no client account, as a cloud agent's machine would run the hooks this setup emits.
 
 The check matrix runs four legs: the pinned Node floor, the current LTS, and Windows in two
 shards, each shard running half of the test suite. Which step runs on which leg is not uniform.
@@ -70,7 +72,8 @@ shards, each shard running half of the test suite. Which step runs on which leg 
 - **The floor leg only** runs the tarball smoke: pack the tarball, install it, run the published
   shape. What it proves is a runtime claim about the oldest supported Node.
 
-A change whose every path falls in a lane takes the `lanes` job in place of the check matrix.
+A change whose every path falls in a lane takes the `lanes` job in place of the check matrix and
+the `cloud-container` job.
 There are three lanes: `specs` (the spec), `learnings` (the recorded learnings) and `website` (the
 docs site and every other `docs/` path). A record is a path the `records` branch holds instead of
 `main`: the run records, the deferral inbox, handoffs, evidence, plans, and the eval runs,

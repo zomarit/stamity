@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the eval inputs retired behind tag evals-retired-2026-10-13, and against the records set the `records` branch holds. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the eval inputs retired behind tag evals-retired-2026-10-13, against the records set the `records` branch holds, and against the CI workflow for the `cloud-container` job its CI section names. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
@@ -83,9 +83,9 @@ covers the mechanics.
 Two required status contexts gate a merge.
 
 `all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. A full run passes when the check
-matrix passes. The matrix has four legs: the declared Node floor, the LTS canonical, and Windows in
-two shards that split the test suite between them. Beside the six steps you already ran, it adds
-four things:
+matrix and the `cloud-container` job both pass. The matrix has four legs: the declared Node floor,
+the LTS canonical, and Windows in two shards that split the test suite between them. Beside the six
+steps you already ran, it adds four things:
 
 - A generate-and-diff self-consistency step over every generated artifact class.
 - The dogfood check, `node dist/cli.js check`, which re-proves this repository's own generated setup
@@ -97,7 +97,13 @@ four things:
 - A repository hygiene scan on pull requests. It rejects tracked runtime files, new raw evidence,
   and growth past the file budgets.
 
-A change whose every path falls in a lane takes the `lanes` job instead of the check matrix.
+The `cloud-container` job runs beside the matrix, on the same side of the split. It imitates a cloud
+agent's machine: inside a Linux container (`node:24-bookworm`, pinned by digest) with an empty home
+folder and no client account, it runs `test/cloud/`, which drives every hook command `init` emits
+from the repository root and from below it, with `node` on PATH and without it.
+
+A change whose every path falls in a lane takes the `lanes` job instead of the check matrix and the
+`cloud-container` job.
 `node scripts/ci/records-only.mjs` decides; its name is older than its three lanes. The lanes, the
 engine's `.gitkeep` excepted at every location:
 
@@ -135,8 +141,8 @@ site, last, when the change touches a `website` path or no diff was read.
 
 A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed
 commit's tree is the head tree of a pull request whose latest `ci.yml` pull-request run passed
-`all-ci-checks`. When it is, the check matrix and the `lanes` job both skip:
-that tree was already proven; the `records` job still runs. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
+`all-ci-checks`. When it is, the check matrix, the `cloud-container` job and the `lanes` job all
+skip: that tree was already proven; the `records` job still runs. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
 answers not proven rather than failing a job, so the push runs the `lanes` job or the full side, as
 `records-only.mjs` decides for its diff. The skip reaches only `ci.yml`:
 `pack-signing-rehearsal.yml` and `docs-site.yml` still run on a push whose paths match their own

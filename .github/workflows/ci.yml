@@ -33,9 +33,9 @@
 #     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
 #     tree equals the head tree of a pull request holding that commit, and that head's newest
 #     `ci.yml` pull-request run passed: its latest attempt's one `all-ci-checks` job concluded
-#     `success`. Then `check` and `lanes` both skip: the tree they would test is the one the pull
-#     request's run already passed. The evidence is this
-#     workflow's own run, not the app that reports it: every workflow's jobs report as GitHub
+#     `success`. Then `check`, `cloud-container` and `lanes` all skip: the tree they would test is
+#     the one the pull request's run already passed. The evidence is this workflow's own run,
+#     not the app that reports it: every workflow's jobs report as GitHub
 #     Actions, so an `all-ci-checks` check run on the head from any other check suite is a second
 #     producer. That, any other conclusion, a tree no head carries, and any failed, malformed or
 #     stalled read all print `false`, which is full CI and never a red reader. The push-only
