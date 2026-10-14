@@ -1379,7 +1379,14 @@ describe("/st-work — Prove", () => {
     const protocol = (await corpusFile(PROTOCOL_PATH)).parsed.body;
     expect(protocol.split("\n")).toContain("## Close walk");
     // The three parts the walk covers.
-    expect(qa).toContain("the rows no evidence proved, the spec delta merge and the commit");
+    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/53): the pin read "the rows no evidence proved, ...", a set
+    // that holds rows the qa skill sends to `Not done:` and has no cap. What moved: the walk asks
+    // the rows the qa skill leaves for the person, at most three; the old wording is asserted gone.
+    expect(qa).toContain(
+      "the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit",
+    );
+    expect(qa).not.toContain("the rows no evidence proved");
     // The declared default is the lowest-blast-radius one: nothing committed, merged or signed.
     expect(qa).toContain("`Default if no response: leave uncommitted`");
     expect(qa).toContain("those rows not signed and the delta unmerged");
@@ -1477,9 +1484,16 @@ describe("/st-work — Prove", () => {
   it("summarises only the rows the prover leaves, folds proven rows, and keeps step 3 as it is (REQ-FLOW-081)", async () => {
     const raw = (await workFile).raw;
     const qa = collapse(section(await body(), "### QA checkpoint"));
+    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/53, review/54): the pin read "once the prover returns: only the
+    // rows it leaves for a person". The prover returns only `agent-run` or `not proven` and never
+    // applies the five categories or the cap, and no line of this command dispatched it. What moved:
+    // step 1 names the prover the qa skill asks this run to dispatch, and the rows that skill leaves
+    // for the person, at most three with the security-negative row; the old wording is asserted gone.
     expect(qa).toContain(
-      "1. Emit a what-to-verify summary once the prover returns: only the rows it leaves for a person, each with a check a person can run in under a minute.",
+      "1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for the person, at most three with the security-negative row, each with a check a person can run in under a minute.",
     );
+    expect(qa).not.toContain("only the rows it leaves for a person");
     expect(qa).not.toContain("each observable behavior this change added or altered");
     // Step 3 and its two lines are unchanged.
     expect(raw).toContain(

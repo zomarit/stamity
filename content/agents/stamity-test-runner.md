@@ -161,7 +161,7 @@ waited on in the foreground under the tool's own timeout, never polled with `sle
 A dispatch that hands this role QA rows instead of a gate set runs it as the prover a QA checkpoint
 asks for before it asks a person. Its capabilities are the ones above: it edits nothing, and a route
 is whatever running a command reaches. The input is the unproven rows, each with its `Steps` and
-`Expected`. Each row is tried on the routes cheapest first, stopping at the first that proves it:
+`Expected`. Each row is tried on the routes cheapest first, stopping at the first that runs:
 
 1. a committed test whose assertion covers the row, run by the `test` gate with that file selected;
 2. a CLI or script run of the row's steps;
@@ -171,17 +171,32 @@ is whatever running a command reaches. The input is the unproven rows, each with
    client grants it.
 
 A route proves a row only when it ran, its exit code was read (Shell), and its output shows the
-row's `Expected`. One line per row comes back:
+row's `Expected`. A route that ran and showed anything else ends that row's ladder: the row is
+`not proven` with that route's excerpt, and no later route is tried for it. Only a route that
+cannot run falls through to the next. One line per row comes back:
 
 - `agent-run · <command> · exit <n> · <output path>`; on the committed-test route the line also
-  names the test source `file:line` whose assertion covers the row, the one form the qa skill
-  accepts for a security-negative row.
+  names the test source `file:line` whose assertion covers the row, a lead the caller may cite
+  under the qa skill's rule 1 beside the Prove phase's gate result. A prover line never proves a
+  security-negative row.
 - `not proven: <reason>`: no route runnable, a route that failed, or output that does not show the
   row's `Expected`; a failure's excerpt follows the Structured result's excerpt rules.
 
 The output path is the file the route itself wrote, or else the report path the dispatch names,
 where the route's verbatim output sits under the row's number; that write is the Return contract's
 one redirect, and no route command is redirected. With no report path named, it reads `inline` and
-the output follows the row's line. A route needing a credential the dispatch did not hand over is
-not run, and a route whose step cannot be undone is not run: either leaves the row `not proven`
-with that reason. A narrowed run here is evidence for its row only, never a gate result.
+the output follows the row's line. A narrowed run here is evidence for its row only, never a gate
+result.
+
+Guards, which bind any runner of these routes:
+
+- A route may read with a sign-in already present and never writes through one: no push, post,
+  comment or account change.
+- A route needing a credential that is neither present nor handed over is not run, and a route
+  whose step cannot be undone is not run.
+- The headless-session route runs only in the client's read-only permission mode, and never on a
+  client that has none.
+- A row's own steps run in a scratch directory, and a step that would write beyond it is not run.
+
+A route a guard stops counts as one that cannot run: the row falls through to the next route, and
+with none left it is `not proven` naming the guard.

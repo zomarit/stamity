@@ -35,24 +35,24 @@ Each trigger fires once per instance, not once per diff:
 | a security-adjacent path changed (auth, permissions, input validation, secret handling) | one negative row: attempt exactly what the change should deny, and record the refusal expected |
 | UI changed and the repo declares breakpoints or themes | one per declared combination the change renders in |
 
-**A row needs a person for one of five categories only:** taste or judgment
-(how a page, a screen, a style or an image reads as it renders), a real
-account the run cannot hold, a step that cannot be undone, physical or
-OS-native use, and legal or policy wording. Every other row is auto-proven or
-reported, never asked. Before this table is built, every row no artifact
-covers goes to the prover: this skill cannot spawn, so it tells its caller to
-dispatch the test-runner in its row-proving mode with those rows (a caller
-that cannot dispatch runs the cheapest routes itself and says so), and an
-unattended run proves the same way. A row a route proves reads `agent-run`.
-A row outside the five that no route proves goes on the run's `Not done:` as
-"not proven: <reason>", never to the person; one inside them is the person's.
-At most three rows reach the person, most important first; any further row
-is listed "over the cap, not asked: <reason>", which blocks nothing by itself.
-The exception is the negative row a security-adjacent path derives: it is
-auto-proven only where a committed test's assertion covers it (that pass's
-rule 1: the test source `file:line` beside the runner's command and outcome);
-a check run once for the row is not proof for it, and with no such test it
-stays on the human path. An `agent-run` never proves that row.
+**A row needs a person for one of five categories only:** taste or judgment (how a
+page, a screen, a style or an image reads as it renders), a real account the run cannot
+hold, a step that cannot be undone, physical or OS-native use, and legal or policy
+wording. Every other row is auto-proven or reported, never asked. Before this table is
+built, every row no artifact covers goes to the prover: this skill cannot spawn, so it
+tells its caller to dispatch the test-runner in its row-proving mode with those rows (a
+caller that cannot dispatch runs the cheapest routes itself under that mode's guards
+and says so), and an unattended run proves the same way. A row a route proves reads
+`agent-run`. A row outside the five that no route proves goes on the run's `Not done:`
+as "not proven: <reason>", never to the person; one inside them is the person's. At
+most three rows reach the person: the security-negative row below first whenever it is
+the person's, then the most important; any further row is listed "over the cap, not
+asked: <reason>", which blocks nothing by itself. An H row over the cap stays an H row,
+asked at the next checkpoint under the carry rule below. The exception is the negative
+row a security-adjacent path derives: it is auto-proven only where a committed test's
+assertion covers it (that pass's rule 1: the test source `file:line` beside the
+runner's command and outcome); a check run once for the row is not proof for it, and
+with no such test it stays on the human path. An `agent-run` never proves that row.
 
 A change whose class (`gate classify`'s, which the caller passes) is `docs`,
 `records` or `tests` emits the line "no walk-through required — <class> only",
@@ -140,7 +140,7 @@ records `Shippable: not signed`.
 - [ ] Every failing M row has a filed follow-up, linked.
 - L failures are recorded, not blocking.
 - Rollback: <the concrete revert path — a revert command, or the flag to flip>.
-- Shippable: YES / NO / not signed. YES only with no H row accepted-unwalked;
+- Shippable: YES / NO / not signed. YES only once every H row is walked or proven;
   otherwise NO, naming the open H row. On NO, list the blocking rows.
 ```
 

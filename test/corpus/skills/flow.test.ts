@@ -729,7 +729,14 @@ describe("qa — the human checkpoint", () => {
     expect(text).toContain(
       "this skill cannot spawn, so it tells its caller to dispatch the test-runner in its row-proving mode",
     );
-    expect(text).toContain("a caller that cannot dispatch runs the cheapest routes itself and says so");
+    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/51, signed off): the pin read "...runs the cheapest routes itself
+    // and says so". What moved: a caller that runs the routes itself holds edit rights the prover
+    // does not, so it runs them under the test-runner's Row proving guards, pointed at, not copied.
+    expect(text).toContain(
+      "a caller that cannot dispatch runs the cheapest routes itself under that mode's guards and says so",
+    );
+    expect(text).not.toContain("runs the cheapest routes itself and says so");
     expect(text).not.toContain("the run's test-runner executes its check before this table is built");
     // A row outside the five that no route proves is a gap the run reports, not a person's row.
     expect(text).toContain(
@@ -739,9 +746,22 @@ describe("qa — the human checkpoint", () => {
       "A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2.",
     );
     // The cap: three, most important first; the rest proven or listed with a reason.
-    expect(text).toContain("At most three rows reach the person, most important first;");
+    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/50, signed off): the pin read "At most three rows reach the
+    // person, most important first;", and an H row over the cap, the security-negative row
+    // included, then sat beside `Shippable: YES` with nobody asked. What moved: the
+    // security-negative row takes one of the three places, first; any other H row over the cap
+    // stays an H row, asked at the next checkpoint by the carry rule. The listing still blocks
+    // nothing by itself; the Shippable line below is what an open H row holds back.
+    expect(text).toContain(
+      "At most three rows reach the person: the security-negative row below first whenever it is the person's, then the most important;",
+    );
+    expect(text).not.toContain("At most three rows reach the person, most important first;");
     expect(text).toContain('"over the cap, not asked: <reason>"');
     expect(text).toContain("blocks nothing by itself");
+    expect(text).toContain(
+      "An H row over the cap stays an H row, asked at the next checkpoint under the carry rule below.",
+    );
     // The class the caller passes skips the walk, unless a rendered page changed.
     expect(text).toContain("`docs`, `records` or `tests`");
     expect(text).toContain('"no walk-through required — <class> only", with no sign-off block and no ask');
@@ -786,7 +806,9 @@ describe("qa — the human checkpoint", () => {
     // goes on `Not done:`). The exception still follows the person-row rule's last sentence, the cap,
     // and still precedes the class clause; the exception's own words are pinned unchanged above.
     const at = text.indexOf(exception);
-    expect(at).toBeGreaterThan(text.indexOf("At most three rows reach the person, most important first;"));
+    // The cap's anchor moved with review/50 (2026-10-14); the exception still follows the cap.
+    expect(text.indexOf("An H row over the cap stays an H row")).toBeGreaterThan(-1);
+    expect(at).toBeGreaterThan(text.indexOf("An H row over the cap stays an H row"));
     expect(at).toBeLessThan(text.indexOf("A change whose class (`gate classify`'s, which the caller passes)"));
     // The row it names is the one the trigger table derives, in the table's own words...
     expect(text).toContain("a security-adjacent path changed (auth, permissions, input validation, secret handling)");
@@ -908,9 +930,15 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/never a row whose Risk is now `H`, which is asked at every checkpoint/);
     expect(text).toMatch(/an H row accepted unwalked blocks release/);
     // REQ-FLOW-018 item 4 (review/52): the Shippable line itself is bound to the H state.
+    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/50, signed off): the pin read "YES only with no H row
+    // accepted-unwalked", which an H row listed over the cap (neither walked, proven nor
+    // accepted-unwalked) satisfied. What moved: YES needs every H row walked or proven, which still
+    // holds an accepted-unwalked H row back; the old wording is asserted gone.
     expect(text).toContain(
-      "Shippable: YES / NO / not signed. YES only with no H row accepted-unwalked; otherwise NO, naming the open H row.",
+      "Shippable: YES / NO / not signed. YES only once every H row is walked or proven; otherwise NO, naming the open H row.",
     );
+    expect(text).not.toContain("YES only with no H row accepted-unwalked");
     // REQ-FLOW-018 item 3 (build/46): a carried row names the record its acceptance came from.
     expect(text).toContain("carried as `accepted-unwalked (carried from <run-id>)`, not asked again");
     // REQ-FLOW-017 criterion 3 (review/53): `walked` rests on the person's reply, quoted.

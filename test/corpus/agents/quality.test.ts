@@ -490,14 +490,31 @@ describe("test-runner — row proving", () => {
     expect(at.toSorted((a, b) => a - b)).toEqual(at);
     expect(proving).toContain("the client's own browser tool only where the dispatching client grants it");
     expect(proving).toContain("cheapest first");
+    // Added 2026-10-14 (fixer round 1 of f7-prove-before-asking; 2026-10-14_cli-native/review/52):
+    // a route that ran and showed anything but the row's Expected ends that row's ladder, so a later
+    // route cannot pass a row an earlier run contradicted; only a route that cannot run falls through.
+    expect(proving).toContain("stopping at the first that runs");
+    expect(proving).not.toContain("stopping at the first that proves it");
+    expect(proving).toContain(
+      "A route that ran and showed anything else ends that row's ladder: the row is `not proven` with that route's excerpt, and no later route is tried for it. Only a route that cannot run falls through to the next.",
+    );
 
     // The two output forms, word for word as the qa skill reads them.
     expect(proving).toContain("`agent-run · <command> · exit <n> · <output path>`");
     expect(proving).toContain("`not proven: <reason>`");
     // A route proves a row only on a read exit code and the row's Expected in its output.
     expect(proving).toContain("its exit code was read (Shell), and its output shows the row's `Expected`");
-    // The committed-test route names the assertion, the one form a security-negative row accepts.
+    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/49): the comment read "the one form a security-negative row
+    // accepts", matching the section's own claim, which the qa skill contradicts ("An `agent-run`
+    // never proves that row"). What moved: the committed-test route still names the assertion, as
+    // a lead the caller cites under the qa skill's rule 1 beside the Prove phase's gate result, and
+    // a prover line never proves a security-negative row; the old claim is asserted gone.
     expect(proving).toContain("the test source `file:line` whose assertion covers the row");
+    expect(proving).toContain(
+      "a lead the caller may cite under the qa skill's rule 1 beside the Prove phase's gate result. A prover line never proves a security-negative row.",
+    );
+    expect(proving).not.toContain("the one form the qa skill accepts for a security-negative row");
   });
 
   it("edits nothing, runs no step that cannot be undone, and keeps the role's capabilities", async () => {
@@ -508,6 +525,33 @@ describe("test-runner — row proving", () => {
     expect(proving).toContain("a route whose step cannot be undone is not run");
     expect(proving).toContain("no route command is redirected");
     expect(frontmatterField(file.parsed, "capabilities")).toEqual(["read", "execute"]);
+  });
+
+  // Added 2026-10-14 (fixer round 1 of f7-prove-before-asking; 2026-10-14_cli-native/review/51,
+  // signed off): the routes reach whatever a command reaches, the person's sign-ins included, so the
+  // guards say what a route may do through them, how the headless-session route is confined, and
+  // where a row's own steps write. No client is named: the guard is stated by permission mode.
+  it("reads through a present sign-in but never writes through one, and confines the session and the steps", async () => {
+    const file = await load("agents/stamity-test-runner.md");
+    const proving = section(file, "Row proving").replace(/\s+/g, " ");
+
+    expect(proving).toContain("Guards, which bind any runner of these routes:");
+    expect(proving).toContain(
+      "A route may read with a sign-in already present and never writes through one: no push, post, comment or account change.",
+    );
+    expect(proving).toContain(
+      "A route needing a credential that is neither present nor handed over is not run",
+    );
+    expect(proving).not.toContain("a credential the dispatch did not hand over");
+    expect(proving).toContain(
+      "The headless-session route runs only in the client's read-only permission mode, and never on a client that has none.",
+    );
+    expect(proving).toContain(
+      "A row's own steps run in a scratch directory, and a step that would write beyond it is not run.",
+    );
+    expect(proving).toContain(
+      "A route a guard stops counts as one that cannot run: the row falls through to the next route, and with none left it is `not proven` naming the guard.",
+    );
   });
 });
 

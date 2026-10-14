@@ -275,8 +275,8 @@ package with an install script, any other lockfile format, a parse failure, or a
 
 The mandatory closing checkpoint, human-facing, at every intensity:
 
-1. Emit a what-to-verify summary once the prover returns: only the rows it leaves for a person,
-   each with a check a person can run in under a minute.
+1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows
+   that skill leaves for the person, at most three with the security-negative row, each with a check a person can run in under a minute.
 2. Invoke the qa skill by name for the guided pass, handing it the class and
    lenses `gate classify` named (`unclear` when none ran). The step belongs to
    the command already running, not to a trigger match: a request arriving
@@ -296,7 +296,7 @@ The checkpoint covers what automation cannot.
 its `## Human sign-off` rules.
 
 **The close walk.** What is left for the person is asked by the question protocol's Close walk,
-in rounds of numbered options: the rows no evidence proved, the spec delta merge and
+in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
 the commit. `Default if no response: leave uncommitted`, with those rows not
 signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
