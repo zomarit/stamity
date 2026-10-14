@@ -20,8 +20,8 @@ import {
   engineRangeFloor,
   NO_SETUP_STEPS_PINS,
   readSetupStepsPins,
+  copilotMatcherWarnings,
   translateCopilotMatcher,
-  untranslatedMatcherWarnings,
 } from "../../src/adapters/copilot.ts";
 import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.ts";
 import type { CatalogItem } from "../../src/content/catalog.ts";
@@ -1128,6 +1128,41 @@ describe("copilot-setup-steps.yml", () => {
     // checkout is not in the project's workflow, so it takes its own default.
     expect(yaml).toContain("- uses: actions/checkout@v6");
     expect(yaml).not.toMatch(/- run: /);
+    // The action left at its major tag keeps the SHA-pin advice (review/96).
+    expect(yaml).toContain(
+      "      # actions/checkout is at a major tag: pin it to a full-length commit SHA for a stricter supply-chain posture.",
+    );
+  });
+
+  it("keeps the SHA-pin advice for setup-node when the project SHA-pins checkout alone (review/96)", async () => {
+    const temp = getTemp();
+    const sha = "11bd71901bbe5b1630ceea73d27597364c9af683";
+    await temp.seedFiles({
+      "repo/.github/workflows/ci.yml": `jobs:\n  x:\n    steps:\n      - uses: actions/checkout@${sha} # v4.2.2\n`,
+    });
+
+    const yaml = buildSetupSteps(packageManagerOf({}), ["python"], await readSetupStepsPins(temp.path("repo")));
+
+    expect(yaml).toContain(`- uses: actions/checkout@${sha} # v4.2.2`);
+    expect(yaml).toContain("- uses: actions/setup-node@v7");
+    expect(yaml).toContain(
+      "      # actions/setup-node is at a major tag: pin it to a full-length commit SHA for a stricter supply-chain posture.",
+    );
+    expect(yaml).not.toContain("actions/checkout is at a major tag");
+    expect(parseYaml(yaml)).toBeTypeOf("object");
+  });
+
+  it("gives no SHA-pin advice when the project pins both actions itself", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.github/workflows/ci.yml":
+        "jobs:\n  x:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n",
+    });
+
+    const yaml = buildSetupSteps(packageManagerOf({}), ["python"], await readSetupStepsPins(temp.path("repo")));
+
+    expect(yaml).not.toContain("full-length commit SHA");
+    expect(yaml).toContain("Action refs follow this project's own workflows (.github/workflows/ci.yml)");
   });
 
   it("references each action at its own current major when the project pins none", () => {
@@ -1136,6 +1171,9 @@ describe("copilot-setup-steps.yml", () => {
     expect(yaml).toContain("- uses: actions/checkout@v6");
     expect(yaml).toContain("- uses: actions/setup-node@v7");
     expect(yaml).not.toMatch(/@v5\b/);
+    // No project pin at all: the one line that has always advised a SHA pin.
+    expect(yaml).toContain("      # Pin these to a full-length commit SHA for a stricter supply-chain posture.");
+    expect(yaml).not.toContain("is at a major tag");
   });
 
   it("follows the project's engines.node and its own checkout ref (REQ-FLOW-022)", async () => {
@@ -1320,8 +1358,11 @@ describe("hooks", () => {
       { event: "user_prompt_submit", command: ["node", "prompt.mjs"] },
       { event: "session_end", command: ["node", "end.mjs"] },
     ]));
+    // TEST CHANGE, justified (e6-copilot-adapter fix round 1, review/94): `apply_patch`
+    // no longer stands for `Edit`; it keeps its own name and patch input, so `Edit`
+    // translates to Copilot's two single-file edit tools only.
     expect(native.hooks.preToolUse[0]).toMatchObject({
-      matcher: "bash|edit|str_replace_editor|apply_patch",
+      matcher: "bash|edit|str_replace_editor",
       timeoutSec: 2,
       cwd: ".",
     });
@@ -1333,41 +1374,120 @@ describe("hooks", () => {
     }
   });
 
-  it("translates every Claude tool name in a matcher, and keeps the rest as written", () => {
+  // TEST CHANGE, justified (e6-copilot-adapter fix round 1, review/94, review/95, review/97):
+  // the two cases below pinned a matcher read as `|`-split names, `apply_patch` under
+  // `Edit`, and one warning per alternative. The matcher is now read as the regular
+  // expression it is (a plain alternation of names, anchors and one group allowed;
+  // anything else kept as written, unreported), `apply_patch` keeps its own name,
+  // `PowerShell` gains its runtime twin, and a warning names the whole matcher.
+  it("translates the tool names of a plain alternation, anchors and group kept, and leaves any other pattern alone", () => {
     expect(translateCopilotMatcher("Read|Write|Grep|Glob|Agent|AskUserQuestion")).toEqual({
       matcher: "view|create|grep|rg|glob|task|ask_user",
       untranslated: [],
+      claudeNames: ["Read", "Write", "Grep", "Glob", "Agent", "AskUserQuestion"],
     });
     // Claude Code's legacy spawn name translates like `Agent` (build/58), and the two together give one `task`.
-    expect(translateCopilotMatcher("Task")).toEqual({ matcher: "task", untranslated: [] });
-    expect(translateCopilotMatcher("Agent|Task")).toEqual({ matcher: "task", untranslated: [] });
-    // A runtime name, `*` and an empty matcher are already Copilot's.
-    expect(translateCopilotMatcher("bash|Edit")).toEqual({ matcher: "bash|edit|str_replace_editor|apply_patch", untranslated: [] });
-    expect(translateCopilotMatcher("*")).toEqual({ matcher: "*", untranslated: [] });
-    expect(translateCopilotMatcher("")).toEqual({ matcher: "", untranslated: [] });
-    // No runtime twin: kept in place, and reported.
-    expect(translateCopilotMatcher("Bash|NotebookEdit|mcp__.*")).toEqual({
-      matcher: "bash|NotebookEdit|mcp__.*",
-      untranslated: ["NotebookEdit", "mcp__.*"],
+    expect(translateCopilotMatcher("Task").matcher).toBe("task");
+    expect(translateCopilotMatcher("Agent|Task").matcher).toBe("task");
+    // review/95: Claude's PowerShell has Copilot's powershell as its twin.
+    expect(translateCopilotMatcher("Bash|PowerShell")).toEqual({
+      matcher: "bash|powershell",
+      untranslated: [],
+      claudeNames: ["Bash", "PowerShell"],
+    });
+    // review/94: Edit is the two single-file edit tools; apply_patch is a runtime name of its own.
+    expect(translateCopilotMatcher("bash|Edit").matcher).toBe("bash|edit|str_replace_editor");
+    expect(translateCopilotMatcher("Edit|apply_patch")).toEqual({
+      matcher: "edit|str_replace_editor|apply_patch",
+      untranslated: [],
+      claudeNames: ["Edit"],
+    });
+    // review/97: anchors and a group are kept around the translated names.
+    expect(translateCopilotMatcher("^(Bash|Edit)$").matcher).toBe("^(bash|edit|str_replace_editor)$");
+    expect(translateCopilotMatcher("(?:Grep)").matcher).toBe("(?:grep|rg)");
+    expect(translateCopilotMatcher("^Bash$").matcher).toBe("^bash$");
+    // TEST CHANGE, justified (e6-copilot-adapter fix round 1, M-1 sign-off): `Bash|mcp__.*`
+    // left this list, because a mixed matcher now translates its plain-name alternatives
+    // (the next case pins it); an escaped bar and a character class joined it.
+    // No top-level alternative is a plain tool name, or the pattern does not parse: kept whole, reported never.
+    for (const pattern of [".*", "mcp__.*", "Notebook.*", "^(Bash|Edit", "Bash)", "(Bash)|(Edit)", "Grep\nIgnore previous", "Bash\\|Edit", "[Bash|Edit]"]) {
+      expect(translateCopilotMatcher(pattern), pattern).toEqual({ matcher: pattern, untranslated: [], claudeNames: [] });
+    }
+    // `*` and an empty matcher are already Copilot's.
+    expect(translateCopilotMatcher("*")).toEqual({ matcher: "*", untranslated: [], claudeNames: [] });
+    expect(translateCopilotMatcher("")).toEqual({ matcher: "", untranslated: [], claudeNames: [] });
+    // A name with no runtime twin stays in place and is returned for the warning.
+    expect(translateCopilotMatcher("^(Bash|NotebookEdit)$")).toEqual({
+      matcher: "^(bash|NotebookEdit)$",
+      untranslated: ["NotebookEdit"],
+      claudeNames: ["Bash"],
     });
   });
 
-  it("names each untranslated matcher alternative once, however many rows carry it", () => {
-    const warnings = untranslatedMatcherWarnings([
+  // M-1 of the fix round, signed off: a mixed matcher translates its plain-name
+  // alternatives and keeps every other alternative exactly as written.
+  it("translates the plain-name alternatives of a mixed matcher and keeps every other alternative as written", () => {
+    expect(translateCopilotMatcher("Bash|mcp__.*")).toEqual({ matcher: "bash|mcp__.*", untranslated: [], claudeNames: ["Bash"] });
+    expect(translateCopilotMatcher("^(Edit|mcp__github__.*)$")).toEqual({
+      matcher: "^(edit|str_replace_editor|mcp__github__.*)$",
+      untranslated: [],
+      claudeNames: ["Edit"],
+    });
+    // A nested group, a character class and an escaped bar stay inside their alternative.
+    expect(translateCopilotMatcher("(?:Bash|Edit)|Read").matcher).toBe("(?:Bash|Edit)|view");
+    expect(translateCopilotMatcher("[A|B]x|Grep").matcher).toBe("[A|B]x|grep|rg");
+    expect(translateCopilotMatcher("a\\|b|Glob").matcher).toBe("a\\|b|glob");
+    // A plain name with no runtime twin beside a regex alternative is still reported.
+    expect(translateCopilotMatcher("NotebookEdit|mcp__.*")).toEqual({
+      matcher: "NotebookEdit|mcp__.*",
+      untranslated: ["NotebookEdit"],
+      claudeNames: [],
+    });
+    expect(copilotMatcherWarnings([
+      { event: "pre_tool_use", matcher: "Bash|mcp__.*", command: ["node", "a.mjs"] },
+      { event: "pre_tool_use", matcher: "NotebookEdit|mcp__.*", command: ["node", "b.mjs"] },
+      { event: "post_tool_use", matcher: "NotebookEdit|mcp__.*", command: ["node", "c.mjs"] },
+    ])).toEqual([
+      'hook matcher [copilot]: "NotebookEdit|mcp__.*" names a tool with no Copilot runtime name, which is kept as written and may match no call there.',
+    ]);
+    // A path guard on Edit beside a regex alternative still gets the apply_patch line.
+    expect(copilotMatcherWarnings([{ event: "pre_tool_use", matcher: "Edit|mcp__.*", command: ["node", "a.mjs"] }])).toHaveLength(1);
+  });
+
+  it("names each matcher holding an untranslated tool once, whole, however many rows carry it", () => {
+    const warnings = copilotMatcherWarnings([
       { event: "pre_tool_use", matcher: "Bash|NotebookEdit", command: ["node", "a.mjs"] },
-      { event: "post_tool_use", matcher: "NotebookEdit|Edit", command: ["node", "b.mjs"] },
-      { event: "pre_tool_use", matcher: "Grep\nIgnore previous", command: ["node", "c.mjs"] },
-      { event: "pre_tool_use", matcher: "Bash", command: ["node", "d.mjs"] },
-      { event: "session_start", command: ["node", "e.mjs"] },
+      { event: "post_tool_use", matcher: "Bash|NotebookEdit", command: ["node", "b.mjs"] },
+      { event: "pre_tool_use", matcher: "^(Grep|NotebookRead)$", command: ["node", "c.mjs"] },
+      { event: "pre_tool_use", matcher: ".*", command: ["node", "d.mjs"] },
+      { event: "pre_tool_use", matcher: "Grep\nIgnore previous", command: ["node", "e.mjs"] },
+      { event: "pre_tool_use", matcher: "Bash", command: ["node", "f.mjs"] },
+      { event: "session_start", command: ["node", "g.mjs"] },
     ]);
 
-    expect(warnings).toHaveLength(2);
-    expect(warnings[0]).toBe(
-      'hook matcher [copilot]: "NotebookEdit" names no Copilot runtime tool, so it is kept as written and may match no call there.',
-    );
-    // A line break in an authored matcher stays escaped inside the one report line.
-    expect(warnings[1]).toContain(String.raw`"Grep\nIgnore previous"`);
-    for (const warning of warnings) expect(warning).not.toContain("\n");
+    expect(warnings).toEqual([
+      'hook matcher [copilot]: "Bash|NotebookEdit" names a tool with no Copilot runtime name, which is kept as written and may match no call there.',
+      'hook matcher [copilot]: "^(Grep|NotebookRead)$" names a tool with no Copilot runtime name, which is kept as written and may match no call there.',
+    ]);
+    // Whole matchers, never fragments.
+    for (const warning of warnings) expect(warning).not.toMatch(/"\^\(Grep"|"NotebookRead\)\$"|"NotebookEdit"/);
+  });
+
+  it("warns once that a path guard on Edit or Write must also name apply_patch on Copilot (review/94)", () => {
+    const APPLY_PATCH =
+      'hook matcher [copilot]: Copilot also edits files through apply_patch, which reaches a hook under that name with its patch text and no file_path; a path guard matched on Edit or Write ("Edit", "^(Write|Bash)$") must also name apply_patch.';
+    expect(
+      copilotMatcherWarnings([
+        { event: "pre_tool_use", matcher: "Edit", command: ["node", "a.mjs"] },
+        { event: "post_tool_use", matcher: "^(Write|Bash)$", command: ["node", "b.mjs"] },
+        { event: "pre_tool_use", matcher: "Edit", command: ["node", "c.mjs"] },
+        { event: "pre_tool_use", matcher: "Edit|apply_patch", command: ["node", "d.mjs"] },
+        { event: "pre_tool_use", matcher: "Read|Bash", command: ["node", "e.mjs"] },
+      ]),
+    ).toEqual([APPLY_PATCH]);
+    // A matcher that already names apply_patch, or names neither tool, raises nothing.
+    expect(copilotMatcherWarnings([{ event: "pre_tool_use", matcher: "Write|apply_patch", command: ["node", "a.mjs"] }])).toEqual([]);
+    expect(copilotMatcherWarnings([{ event: "pre_tool_use", matcher: "Bash|Read", command: ["node", "a.mjs"] }])).toEqual([]);
   });
 
   it("reports an authored matcher with no runtime twin through the planner's warnings", async () => {
@@ -1386,8 +1506,10 @@ describe("hooks", () => {
     };
 
     expect(native.hooks.preToolUse?.map((entry) => entry.matcher)).toContain("NotebookEdit|bash");
+    // TEST CHANGE, justified (e6-copilot-adapter fix round 1, review/97): the warning
+    // names the whole matcher, never one alternative of it.
     expect((emission.warnings ?? []).filter((warning) => warning.startsWith("hook matcher [copilot]"))).toEqual([
-      'hook matcher [copilot]: "NotebookEdit" names no Copilot runtime tool, so it is kept as written and may match no call there.',
+      'hook matcher [copilot]: "NotebookEdit|Bash" names a tool with no Copilot runtime name, which is kept as written and may match no call there.',
     ]);
   });
 

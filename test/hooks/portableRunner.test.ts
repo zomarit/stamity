@@ -155,13 +155,26 @@ describe("portable native hook boundary", () => {
     expect(JSON.parse(result.stdout).permissionDecisionReason).toBe("Agent");
   });
 
+  // TEST CHANGE, justified (e6-copilot-adapter fix round 1, review/95): `powershell`
+  // now maps to Claude's `PowerShell` (the it.each above covers it), so the
+  // pass-through list names `apply_patch` in its place (review/94).
   it("passes a Copilot tool name with no Claude twin through unchanged, an inherited property name included", async () => {
     const f = await fixture("copilot", ECHO_TOOL);
-    for (const name of ["powershell", "Bash", "constructor", "toString", "github-mcp-server/get_issue"]) {
+    for (const name of ["apply_patch", "Bash", "constructor", "toString", "github-mcp-server/get_issue"]) {
       const result = execute(f, { toolName: name, toolArgs: {} });
       expect(result.status, `${name}: ${result.stderr}`).toBe(0);
       expect(JSON.parse(result.stdout).permissionDecisionReason, name).toBe(name);
     }
+  });
+
+  it("hands apply_patch to an authored hook under its own name with its patch input unchanged (review/94)", async () => {
+    const ECHO_INPUT = 'import {readFileSync} from "node:fs"; const input = JSON.parse(readFileSync(0,"utf8")); process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:JSON.stringify({name:input.tool_name,input:input.tool_input})}}));';
+    const patch = "*** Begin Patch\n*** Update File: src/secret.ts\n@@\n-a\n+b\n*** End Patch\n";
+    const result = execute(await fixture("copilot", ECHO_INPUT), { toolName: "apply_patch", toolArgs: JSON.stringify({ input: patch }) });
+    expect(result.status, result.stderr).toBe(0);
+    const seen = JSON.parse(JSON.parse(result.stdout).permissionDecisionReason);
+    expect(seen).toEqual({ name: "apply_patch", input: { input: patch } });
+    expect(seen.input).not.toHaveProperty("file_path");
   });
 
   it("restores tool names on Copilot alone: Cursor and Codex hand the hook the name they were sent", async () => {
@@ -178,11 +191,13 @@ describe("portable native hook boundary", () => {
   it("lets the core guard place every mapped shell, edit, read and spawn call, and narrows no category it placed before", () => {
     const categories = unionToolCategoryMap();
     const categoryOf = (name: string): string | undefined => (Object.hasOwn(categories, name) ? categories[name] : undefined);
+    // TEST CHANGE, justified (e6-copilot-adapter fix round 1, review/94, review/95):
+    // `apply_patch` left the table and `powershell` joined it.
     const expected: Record<string, string> = {
       bash: "execute",
+      powershell: "execute",
       edit: "edit",
       str_replace_editor: "edit",
-      apply_patch: "edit",
       create: "edit",
       view: "read",
       grep: "read",
@@ -199,6 +214,9 @@ describe("portable native hook boundary", () => {
       // A runtime name the guard already placed keeps its category through the mapping.
       if (categoryOf(runtime) !== undefined) expect(categoryOf(claude), runtime).toBe(categoryOf(runtime));
     }
+    // apply_patch keeps its name, which the guard places nowhere, exactly as before the table.
+    expect(Object.hasOwn(COPILOT_RUNTIME_TOOL_NAMES, "apply_patch")).toBe(false);
+    expect(categoryOf("apply_patch")).toBeUndefined();
     // The question tool is in no category under either name, so the guard treats it as it did.
     expect(categoryOf("ask_user")).toBeUndefined();
     expect(categoryOf("AskUserQuestion")).toBeUndefined();

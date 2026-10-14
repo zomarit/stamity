@@ -83,22 +83,29 @@ const STARTER_ANCHORS: Readonly<Partial<Record<Tool, { segments: readonly string
  * Copilot's runtime tool names, as a camelCase-keyed hooks file delivers them
  * in `toolName`, mapped back to the Claude names the interchange speaks
  * (REQ-FLOW-086). An authored hook keyed on `Bash` or `Edit` therefore reads
- * the same `tool_name` on Copilot as on Claude Code, and the Copilot adapter
- * translates authored matchers through the inverse of this one table
- * (`../adapters/copilot.ts`). Several runtime names share one Claude name:
- * Copilot edits a file through `edit`, `str_replace_editor` or `apply_patch`,
- * and searches through `grep` or `rg`. A name not listed reaches the hook as
- * Copilot sent it, so the core guard sees it exactly as before this table.
- * The table is the plan's settled reading of the Copilot hooks reference
- * (docs/plans/020-cli-native-02.md, 2026-10-14).
+ * the same `tool_name` on Copilot as on Claude Code for the tools listed here,
+ * and the Copilot adapter translates authored matchers through the inverse of
+ * this one table (`../adapters/copilot.ts`). The name is what is restored: the
+ * tool's input is Copilot's own, under the interchange's `tool_input` key.
+ * Several runtime names share one Claude name: Copilot edits one file through
+ * `edit` or `str_replace_editor`, and searches through `grep` or `rg`.
+ *
+ * `apply_patch` is deliberately absent (review/94). Its input is patch text
+ * that can name several files, and no single file path can be read from it
+ * without a confirmed format, so a hook handed it as `Edit` would read no
+ * `file_path` and a path guard would pass it. It reaches the hook under its
+ * own name, as does any name not listed, so the core guard sees it exactly as
+ * before this table. The table is the plan's settled reading of the Copilot
+ * hooks reference (docs/plans/020-cli-native-02.md, 2026-10-14), with
+ * `powershell` added from review/95.
  */
 export const COPILOT_RUNTIME_TOOL_NAMES: Readonly<Record<string, string>> = Object.freeze({
   bash: "Bash",
+  powershell: "PowerShell",
   view: "Read",
   create: "Write",
   edit: "Edit",
   str_replace_editor: "Edit",
-  apply_patch: "Edit",
   grep: "Grep",
   rg: "Grep",
   glob: "Glob",

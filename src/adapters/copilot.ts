@@ -363,7 +363,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
-    return { outputs: rows, warnings: [...untranslatedMatcherWarnings(core.hooks.interchangeFor(TOOL)), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
+    return { outputs: rows, warnings: [...copilotMatcherWarnings(core.hooks.interchangeFor(TOOL)), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 
@@ -629,11 +629,28 @@ export function buildSetupSteps(
         "      # Node is here for the generated hooks; this file installs no dependencies for that stack.",
       ];
   const copied = [pins.checkout, pins.setupNode].flatMap((pin) => (pin === null ? [] : [pin.source]));
+  // Every action the project does not pin itself keeps the SHA-pin advice
+  // (review/96), so a file whose checkout is SHA-pinned still says its
+  // tag-referenced setup-node could be pinned too.
+  const tagged = (
+    [
+      ["actions/checkout", pins.checkout],
+      ["actions/setup-node", pins.setupNode],
+    ] as const
+  ).flatMap(([name, pin]) => (pin === null ? [name] : []));
   const refNote =
     copied.length === 0
-      ? "      # Pin these to a full-length commit SHA for a stricter supply-chain posture."
-      : `      # Action refs follow this project's own workflows (${[...new Set(copied)].join(", ")}) ` +
-        "where they use the action, else a major tag; each sync re-reads them.";
+      ? ["      # Pin these to a full-length commit SHA for a stricter supply-chain posture."]
+      : [
+          `      # Action refs follow this project's own workflows (${[...new Set(copied)].join(", ")}) ` +
+            "where they use the action, else a major tag; each sync re-reads them.",
+          ...(tagged.length === 0
+            ? []
+            : [
+                `      # ${tagged.join(" and ")} ${tagged.length === 1 ? "is" : "are"} at a major tag: ` +
+                  `pin ${tagged.length === 1 ? "it" : "them"} to a full-length commit SHA for a stricter supply-chain posture.`,
+              ]),
+        ];
 
   return [
     "name: Copilot Setup Steps",
@@ -657,7 +674,7 @@ export function buildSetupSteps(
     "    permissions:",
     "      contents: read",
     "    steps:",
-    refNote,
+    ...refNote,
     `      - uses: ${actionUse("checkout", pins.checkout)}`,
     ...steps,
     "",
@@ -991,11 +1008,14 @@ function yamlScalar(value: string): string {
  * rename: the prompt event is `userPromptSubmitted` and the end of the
  * agent's turn is `agentStop`.
  *
- * The portable runner turns the camelCase payload back into the interchange
- * before any script reads it — `session_id`, `tool_name` (with the Claude tool
- * name restored, {@link COPILOT_RUNTIME_TOOL_NAMES}), `tool_input`, and
- * `hook_event_name` in its PascalCase spelling — so an authored hook reads the
- * same fields here as on Claude Code.
+ * The portable runner turns the camelCase payload back into the interchange's
+ * keys before any script reads it: `session_id`, `tool_name`, `tool_input`
+ * (with `filePath` also given as `file_path`), and `hook_event_name` in its
+ * PascalCase spelling. The Claude tool name is restored only for the tools
+ * {@link COPILOT_RUNTIME_TOOL_NAMES} lists, and the input stays Copilot's own.
+ * `apply_patch` keeps its name and its patch text (review/94), so a path guard
+ * written for Claude's `Edit` and `Write` must also name it here
+ * ({@link copilotMatcherWarnings} says so).
  *
  * A literal table, as `CLAUDE_EVENT_NAMES` and Cursor's `EVENT_RENAME` are,
  * so a canonical rename cannot silently change what gets emitted.
@@ -1033,49 +1053,170 @@ const COPILOT_MATCHER_NAMES: ReadonlyMap<string, readonly string[]> = (() => {
   return map;
 })();
 
-/** The runtime names themselves: an author who already wrote `bash` named a Copilot tool. */
-const COPILOT_RUNTIME_NAMES: ReadonlySet<string> = new Set(Object.keys(COPILOT_RUNTIME_TOOL_NAMES));
+/**
+ * The runtime names an author may already have written: the table's, plus
+ * `apply_patch`, which reaches a hook under its own name (review/94).
+ */
+const COPILOT_RUNTIME_NAMES: ReadonlySet<string> = new Set([...Object.keys(COPILOT_RUNTIME_TOOL_NAMES), "apply_patch"]);
+
+/** Claude's two single-file write tools, whose path guards Copilot's `apply_patch` slips past. */
+const PATH_GUARDED_TOOLS: ReadonlySet<string> = new Set(["Edit", "Write"]);
+
+/** A top-level alternative that is a plain tool name: the characters a tool or MCP name uses, no regex syntax. */
+const PLAIN_TOOL_NAME = /^[A-Za-z_][\w-]*$/u;
+
+/**
+ * Walk a regular expression's source, skipping escaped characters and
+ * character classes, and hand each other character to `visit` with the group
+ * depth after it. False when the parentheses or a class do not balance, or
+ * when `visit` stops the walk by answering `false`.
+ */
+function walkRegex(source: string, visit: (char: string, index: number, depth: number) => boolean | void): boolean {
+  let depth = 0;
+  let inClass = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index] ?? "";
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (inClass) {
+      if (char === "]") inClass = false;
+      continue;
+    }
+    if (char === "[") {
+      inClass = true;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    else if (char === ")" && --depth < 0) return false;
+    if (visit(char, index, depth) === false) return false;
+  }
+  return depth === 0 && !inClass;
+}
+
+/**
+ * A matcher's parts (M-1 of the fix round, signed off): an optional `^`, an
+ * optional group wrapping the whole rest (`(` or `(?:`, closed by its last
+ * character), the top-level `|`-alternatives inside it, and an optional `$`.
+ * `null` when the source does not balance, so it is kept whole.
+ */
+function matcherParts(matcher: string): { anchor: string; open: string | null; alternatives: string[]; end: string } | null {
+  const anchor = matcher.startsWith("^") ? "^" : "";
+  let body = matcher.slice(anchor.length);
+  const end = body.endsWith("$") && !body.endsWith("\\$") ? "$" : "";
+  body = body.slice(0, body.length - end.length);
+  const prefix = body.startsWith("(?:") ? "(?:" : body.startsWith("(") && !body.startsWith("(?") ? "(" : null;
+  let open: string | null = null;
+  if (prefix !== null) {
+    let close = -1;
+    walkRegex(body, (char, index, depth) => {
+      if (char === ")" && depth === 0) {
+        close = index;
+        return false;
+      }
+      return undefined;
+    });
+    if (close === body.length - 1) {
+      open = prefix;
+      body = body.slice(prefix.length, -1);
+    }
+  }
+  const alternatives: string[] = [];
+  let from = 0;
+  const balanced = walkRegex(body, (char, index, depth) => {
+    if (char === "|" && depth === 0) {
+      alternatives.push(body.slice(from, index));
+      from = index + 1;
+    }
+  });
+  if (!balanced) return null;
+  alternatives.push(body.slice(from));
+  return { anchor, open, alternatives, end };
+}
+
+/** An authored matcher in Copilot's runtime vocabulary; see {@link translateCopilotMatcher}. */
+export interface CopilotMatcher {
+  /** The matcher Copilot is given. */
+  readonly matcher: string;
+  /** Plain-name alternatives that are neither a Claude name with a runtime twin nor a runtime name. */
+  readonly untranslated: string[];
+  /** The Claude names that were translated, in matcher order. */
+  readonly claudeNames: string[];
+}
 
 /**
  * An authored matcher in Copilot's runtime vocabulary (REQ-FLOW-086).
  *
- * The matcher is read as `|`-separated alternatives. Each alternative that is
- * a Claude tool name becomes the runtime names it stands for (`Bash|Edit` →
- * `bash|edit|str_replace_editor|apply_patch`); `*`, an empty matcher and a
- * runtime name pass unchanged. Any other alternative (a regular expression, an
- * MCP tool, a tool with no runtime twin) is kept as written and returned in
- * `untranslated`, so the planner can say once that it may match nothing.
+ * The matcher is a regular expression, read as its top-level alternatives,
+ * with an anchor at either end and one group wrapping the rest kept
+ * ({@link matcherParts}; review/97 and the round's M-1 sign-off). Each
+ * alternative that is a plain tool name is translated: a Claude tool name
+ * becomes the runtime names it stands for (`^(Bash|Edit)$` →
+ * `^(bash|edit|str_replace_editor)$`), a runtime name passes unchanged, and
+ * any other name is kept in place and returned in `untranslated`. Every other
+ * alternative (`mcp__.*`, a nested group, a class) is kept exactly as written,
+ * so `Bash|mcp__.*` → `bash|mcp__.*`. A source that does not balance is kept
+ * whole.
  */
-export function translateCopilotMatcher(matcher: string): { matcher: string; untranslated: string[] } {
-  if (matcher === "" || matcher === "*") return { matcher, untranslated: [] };
+export function translateCopilotMatcher(matcher: string): CopilotMatcher {
+  const parts = matcherParts(matcher);
+  if (parts === null) return { matcher, untranslated: [], claudeNames: [] };
+  const { anchor, open, end } = parts;
   const names: string[] = [];
   const untranslated: string[] = [];
-  for (const alternative of matcher.split("|")) {
-    const runtime = COPILOT_MATCHER_NAMES.get(alternative);
-    if (runtime !== undefined) names.push(...runtime);
-    else {
+  const claudeNames: string[] = [];
+  for (const alternative of parts.alternatives) {
+    const runtime = PLAIN_TOOL_NAME.test(alternative) ? COPILOT_MATCHER_NAMES.get(alternative) : undefined;
+    if (runtime !== undefined) {
+      names.push(...runtime);
+      claudeNames.push(alternative);
+    } else {
       names.push(alternative);
-      if (alternative !== "*" && !COPILOT_RUNTIME_NAMES.has(alternative)) untranslated.push(alternative);
+      if (PLAIN_TOOL_NAME.test(alternative) && !COPILOT_RUNTIME_NAMES.has(alternative)) untranslated.push(alternative);
     }
   }
-  return { matcher: [...new Set(names)].join("|"), untranslated: [...new Set(untranslated)] };
+  const list = [...new Set(names)].join("|");
+  return {
+    matcher: `${anchor}${open === null ? list : `${open}${list})`}${end}`,
+    untranslated: [...new Set(untranslated)],
+    claudeNames: [...new Set(claudeNames)],
+  };
 }
 
 /**
- * One warning per authored matcher alternative with no Copilot runtime twin,
- * each named once however many rows carry it. Quoted through `JSON.stringify`,
- * so a matcher from a hook file cannot put a line break into the report.
+ * What `init` and `sync` say about the authored matchers on this client,
+ * each matcher quoted whole through `JSON.stringify`, never as fragments:
+ *
+ * - one line per distinct matcher with a plain-name alternative that has no
+ *   runtime twin, kept as written (build/57, review/97, the round's M-1);
+ * - one line, once, when a matcher names `Edit` or `Write` without
+ *   `apply_patch`: Copilot also edits files through `apply_patch`, which
+ *   reaches the hook under its own name with patch text and no `file_path`,
+ *   so a path guard there must name it as well (review/94).
  */
-export function untranslatedMatcherWarnings(rows: readonly HookInterchange[]): string[] {
-  const named = new Set<string>();
+export function copilotMatcherWarnings(rows: readonly HookInterchange[]): string[] {
+  const untranslated = new Set<string>();
+  const pathGuards = new Set<string>();
   for (const row of rows) {
     if (row.matcher === undefined) continue;
-    for (const alternative of translateCopilotMatcher(row.matcher).untranslated) named.add(alternative);
+    const read = translateCopilotMatcher(row.matcher);
+    if (read.untranslated.length > 0) untranslated.add(row.matcher);
+    // No Claude name translates to apply_patch, so a matcher covers it only by naming it.
+    const namesPatch = matcherParts(row.matcher)?.alternatives.includes("apply_patch") ?? false;
+    if (read.claudeNames.some((name) => PATH_GUARDED_TOOLS.has(name)) && !namesPatch) pathGuards.add(row.matcher);
   }
-  return [...named].map(
-    (alternative) =>
-      `hook matcher [copilot]: ${JSON.stringify(alternative)} names no Copilot runtime tool, so it is kept as written and may match no call there.`,
+  const lines = [...untranslated].map(
+    (matcher) =>
+      `hook matcher [copilot]: ${JSON.stringify(matcher)} names a tool with no Copilot runtime name, which is kept as written and may match no call there.`,
   );
+  if (pathGuards.size > 0) {
+    lines.push(
+      "hook matcher [copilot]: Copilot also edits files through apply_patch, which reaches a hook under that name with its " +
+        `patch text and no file_path; a path guard matched on Edit or Write (${[...pathGuards].map((matcher) => JSON.stringify(matcher)).join(", ")}) must also name apply_patch.`,
+    );
+  }
+  return lines;
 }
 
 /**
