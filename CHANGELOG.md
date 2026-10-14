@@ -153,14 +153,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Every touchpoint ends on a walk of its leftovers, the summary last.** All nine commands ask
   each leftover through the client's own question tool, Critical, Warning and `decision-waiting`
   items first and the recommended option first, in as many rounds as the tool's limits need, and
-  print their summary or proof block only after the last answer, with nothing after it. A client
-  with no question tool gets plain numbered text; a run nobody answers takes each declared
-  default and writes `Default applied:`, and a real defect waits as `decision-waiting`.
-  `/st-ask`'s walk records decisions only, and `/st-quick`'s offers to carry an item to `/st-work`
-  now or leave it on `Not done:`. The charter's invariants move to 1.3.0: invariant 2 asks once a
-  turn in rounds until nothing is undecided, and invariant 5 reads learnings only through the
-  session-start screen, running the committed session-start script where no hook ran and opening
-  only the files it lists as loaded. The question protocol names each client's question tool.
+  print their summary or proof block only after the last answer, with nothing after it. Where the
+  session offers no question tool, the walk asks in plain numbered text; a run nobody answers
+  takes each declared default and writes `Default applied:`, and a real defect waits as
+  `decision-waiting`. `/st-ask`'s walk records decisions only, and `/st-quick`'s offers to carry
+  an item to `/st-work` now or leave it on `Not done:`. The charter's invariants move to 1.3.0:
+  invariant 2 asks once a turn in rounds until nothing is undecided, and invariant 5 reads
+  learnings only through the session-start screen, running the committed session-start script
+  where no hook ran and opening only the files it lists as loaded.
+- **The question protocol names a question tool on every client.** 1.14 named one on Claude Code
+  only and sent the other three to plain text. Now each client's protocol names its tool, each
+  fact with the date its source was read: Claude Code's `AskUserQuestion`, one to four questions
+  a call; Cursor's `AskQuestion` from 2.4, where the serving model offers it; `askQuestions` in
+  VS Code and `ask_user` in Copilot CLI; and Codex's `request_user_input`, one to three questions
+  a call, which Plan mode offers and Default mode only behind a feature flag. A sub-agent still
+  hands its question back as a blocked result, and a skipped or headless question, as under
+  `agent -p`, `codex exec` or `--no-ask-user`, reads as no answer.
 - **QA proves every row it can before it asks a person.** Before the QA table, the test-runner
   tries each unproven row, cheapest route first: a committed test, a CLI or script run, a `gh` or
   API read, a headless client session, the repository's browser harness. A row it proves reads
@@ -177,23 +185,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface is wide too. `st-verify` gains the judgment check `maint-module-depth`, to which
   `maint-size-outliers` defers a file with a narrow interface, and `/st-plan`'s `interfaces` cell
   names the module interface a unit lands behind.
-- **The session start names a cloud or CI session.** When `CLAUDE_CODE_REMOTE=true`,
-  `COPILOT_AGENT_PROMPT`, `CURSOR_AGENT_SOCKET` (a self-hosted Cursor worker), `CI` or
-  `GITHUB_ACTIONS` is set, the session-start hook prints a line naming the session and the guards
-  not enforced there, such as a Copilot cloud `preToolUse` hook that times out failing open. It
-  prints no variable's value and makes no network call. The docs say which clouds run which
-  hooks, the capability matrix gains a dated cloud column, and the `npx` fix-it hint says it
-  needs the npm registry.
+- **The session start names a cloud or CI session.** When `CLAUDE_CODE_REMOTE` is `true`, or
+  `COPILOT_AGENT_PROMPT`, `CURSOR_AGENT_SOCKET` (a self-hosted Cursor worker, by a marker no
+  vendor page names yet), `CI` or `GITHUB_ACTIONS` is set to anything but empty, `false` or `0`,
+  the session-start hook names the first such session, then what differs there. In a Claude Code
+  cloud session: GraphQL, `gh pr`, `gh issue` and Projects are unavailable, and the review-gate
+  counter resets with the VM. In a Copilot cloud agent session: a `preToolUse` hook that times out
+  fails open, an `ask` answer is read as deny, and hooks run only when the hooks file is on the
+  default branch. In CI: no person answers, so declared defaults apply. A self-hosted Cursor
+  worker gets the session's name alone, and any further marker set is named on one
+  `Also detected:` line. It prints no variable's value and makes no network call.
+- **What each vendor's cloud runs, in one dated table.** The session start's cloud lines come from
+  a table of facts, each with its source, the date it was read and a status (documented, not
+  documented, or unverified), and the capability matrix renders the same table as an "In the
+  vendor's cloud" column and a "Cloud sessions" section, so the page and the session start cannot
+  disagree. The customization guide says which clouds run which hooks, and the troubleshooting
+  page gains "A hook never runs in a cloud session": Codex cloud documents no project hooks; a
+  Claude Code cloud session with several repositories loads none; Copilot's cloud agent runs them
+  only once the hooks file is on the default branch; Cursor's hosted agents run no `sessionStart`,
+  `sessionEnd` or MCP hook, and none during their early read-only turns.
+- **The `npx` fix-it hint says what it needs.** Where a generated message offers
+  `npx -y @zomarit/stamity@<version> <verb>`, it now adds ", which needs the npm registry", or
+  "which needs the registry it names" for a fork that names one, so a sandbox with no route to it,
+  as a cloud session can be, knows why that call fails. A fork's `npx --no` call fetches nothing
+  and carries no such clause.
 - **`/st-pr-resolve` and `/st-board` work in a REST-only session.** Where the session start says
   GraphQL is unavailable, or a `gh api graphql` call is refused, every GitHub call they make uses
   a REST `gh api` form where one exists. A Projects board is refused there with "Projects boards
   are unavailable in a REST-only session", a review thread's resolution state is reported
   unknown, and `/st-pr-resolve` fetches a pull request's head by its number rather than by the
   branch name its author chose.
-- **A CI leg that imitates a cloud machine.** This repository's CI runs every emitted hook command
-  in a Linux container with an empty home folder, from the root and from folders below it, with
-  `node` present and absent and under each cloud marker, and `all-ci-checks` requires it on every
-  full run. Its container image is pinned by digest, and its token can only read the repository.
+- **A CI leg that imitates a cloud machine.** This repository's CI runs every hook command `init`
+  emits for the four clients in a Linux container with an empty home folder and no client account,
+  from the root and from two folders below it, with `node` present and absent, with no session
+  marker and under each one the session start detects, and `all-ci-checks` requires the job on
+  every full run. Its container image is pinned by digest, and its token can only read the
+  repository. The `check` legs run the same suite on their runners, the Windows ones through
+  `cmd`. These are repository surfaces: the published package never carried them.
 
 ### Changed
 

@@ -160,6 +160,13 @@ its own files under the home folder; what each client does there was not checked
 `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of them. Emission and `check`'s drift
 comparison read only the saved list and start no client.
 
+**The saved model lists are committed with the setup.** Each selected client's list is saved under
+`models.listed` in `.stamity/manifest.json`, a file a repository commits, so anyone who can read the
+repository, everyone for a public one, sees which models that client's account offered when the
+list was read, Codex's hidden entries included. With `STAMITY_NO_CLIENT_PROBE=1` set from the first
+`init`, no list is read and `models.listed` stays empty. Set later, it stops further reads but keeps
+the lists already saved; delete `models.listed` from the manifest to drop them.
+
 **Board writes are the touchpoints' own, not the engine's.** `/st-board` and `/st-pr-resolve` call
 the authenticated GitHub CLI, `gh`, or a configured GitHub MCP server from the agent's session; the
 engine makes none of these calls. Once a board is linked, `/st-board` writes to it by default: it
