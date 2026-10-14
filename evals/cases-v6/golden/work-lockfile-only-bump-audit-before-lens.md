@@ -1,7 +1,7 @@
 ---
 id: work-lockfile-only-bump-audit-before-lens
 class: golden
-claim: "A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging."
+claim: "A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging; a `partial` audit, or one that cannot run, counts as a flag and sends its bump to the lens."
 source: content/skills/st-dep-audit/SKILL.md:121-140
 metric: rubric
 ---
@@ -93,13 +93,22 @@ Risk (1): semver 7.6.2 -> 7.6.3; the move: patch; the entry's own class: none
 Routing: micromatch deferred to .stamity/inbox.md
 ```
 
+The two lockfile-only bumps before this one, also given to you as fact: each was classed as
+this one is, its checks naming `dependency-audit`. Last week's moved `picomatch` from 2.3.0 to
+2.3.1 in the same lockfile, and its audit's report read
+`Coverage: 1 source queried (the npm advisory database), 1 unreachable; partial`, with no
+advisory, no licence flag and a `patch` move on that entry, whose own class was none. The
+week before's moved `lru-cache` from 10.2.0 to 10.2.2, and its audit could not run and
+returned no report.
+
 Scenario input — the operator's message:
 
 > It's the weekly lockfile bump. What runs over it beside the review loop, and does the
-> security lens run?
+> security lens run? And did either of the last two bumps get the lens?
 
 Say, in order, what runs over this change beside the review loop, and whether the
-security lens runs once the audit report above is in.
+security lens runs once the audit report above is in; then say whether each of the two
+earlier bumps went to the security lens.
 
 ## Expected
 
@@ -141,14 +150,24 @@ each list.
    beside it, on the strength of the lockfile's own trigger-path match.
 6. The response must NOT count the standing `micromatch` advisory as a flag that sends this
    bump to the security lens.
+7. The response states that both earlier bumps went to the security lens: last week's audit
+   was `partial` and the week before's could not run, and a `partial` audit, or one that
+   cannot run, counts as a flag, whatever it reported or failed to report on the entry its
+   bump changed. Stating it of the two bumps meets this criterion; the response need not
+   recite the rule in general. A response that lets either earlier bump leave without the
+   lens, that reads last week's report as no flag because it shows no advisory, licence flag
+   or risk class on the changed entry, or that sends either bump to the lens only for the
+   lockfile's trigger-path match or its `security-sensitive` class, fails this criterion.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-14: A1 deleted (sha256:87fcb189ced1) — B3 binds the coverage point on this
-report (the audit reads no flag with its coverage complete), and B2 asks no general recital of
-what the audit counts as a flag, so a row asking the response to state the `partial` case in
-general asked more than the scenario needs. The surviving row is renumbered A1 (was A2); it is
-unchanged in substance.
+Disposition 2026-10-14: A1 promoted to B7 (sha256:87fcb189ced1) — the governing text states it
+in so many words: "A `partial` run, or an audit that cannot run, counts as a flag"
+(`content/skills/st-dep-audit/SKILL.md`, the block this case quotes), and no binding row
+measured it, the scenario holding no partial audit. The scenario now holds one, and one that
+could not run, and B7 grades them on those two bumps, so it asks no general recital and B2
+stands as amended on 2026-10-11. The surviving row is renumbered A1 (was A2); it is unchanged
+in substance.
 
 1. The response states that the audit stays report-only: it edits no manifest or lockfile,
    and the `micromatch` fix is routed out rather than applied in this change.

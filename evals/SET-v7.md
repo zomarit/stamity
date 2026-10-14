@@ -128,7 +128,7 @@ whose citation the reader cannot locate is admitted as uncited — a third state
 read as a pass.
 
 Derived roster: **139 cases — 79 golden, 30 adversarial,
-30 probes; 32 floor cases; 747 binding and 117 advisory criteria**. Counts derive from
+30 probes; 32 floor cases; 748 binding and 117 advisory criteria**. Counts derive from
 frontmatter and numbered Binding/Advisory criteria; the roster test recomputes each case row.
 A skipped case remains an explicit measurement gap.
 
@@ -2760,27 +2760,41 @@ case's scored samples in runs 44 and 45 stay as recorded, and by the rule of the
 incremental run carries no sample of the retired case onto this roster. The dated citations above
 stay as they were.
 
-**`work-lockfile-only-bump-audit-before-lens` A1 deleted, 2026-10-14 (the same unit).** A1 asked
-that the response state that a `partial` audit, or one that cannot run, would count as a flag and
-send the bump to the lens. It failed in all three samples at run 44, the case's first measurement,
-and again at run 45. Run 45 named no repeat, because B2's amendment of 2026-10-11 moved the case's
-`## Expected` block between the two runs and the comparison reads only unmoved blocks, though A1's
-own text did not move (ledger row `build/26` of run 2026-10-11_release-1-14-0). The promote-or-delete
-disposition is taken here, before another run of this configuration, on one test: deleted when a
-binding row covers the advisory row's claim, else promoted. B3 covers it on this report: it reads
-the report as no flag with "coverage is complete" among its points, the coverage that the
-2026-10-11 paragraph above names among the five points B3 grades. And B2 since that amendment asks no
-general recital of what the audit counts as a flag; A1 asked for that recital's `partial` clause,
-on a report whose coverage is complete. A1 is deleted. The note under the case's Advisory heading
-reads `Disposition 2026-10-14: A1 deleted (sha256:87fcb189ced1)`, the hash of the deleted row's own
-text, and the surviving row is renumbered A1 (was A2), unchanged in substance. The case's B / A
-moves from 6 / 2 to 6 / 1 and the set's advisory criteria from 118 to 117; no binding row, claim,
-`source:` range, Brief, floor tag or roster count moves. The case has no cases-v5 copy, so the
-disposition is recorded here and under the case's Advisory heading, and `EXPECTED_MOVES` gains no
-row. What no row measures after this, as before it: the `partial` sentence itself. This case and
-`work-install-script-bump-keeps-security-lens` quote it, and neither scenario holds a partial audit
-for a binding row to read. Under the incremental rule the case re-measures, because its case-file
-bytes moved.
+**`work-lockfile-only-bump-audit-before-lens` A1 promoted to B7, 2026-10-14 (the same unit).** A1
+asked that the response state that a `partial` audit, or one that cannot run, would count as a flag
+and send the bump to the lens. It failed in all three samples at run 44, the case's first
+measurement, and again at run 45. Run 45 named no repeat, because B2's amendment of 2026-10-11
+moved the case's `## Expected` block between the two runs and the comparison reads only unmoved
+blocks, though A1's own text did not move (ledger row `build/26` of run 2026-10-11_release-1-14-0).
+The promote-or-delete disposition is taken here, before another run of this configuration, on one
+test: deleted when a binding row covers the advisory row's claim, else promoted. No binding row
+covered it. B3 grades this report's reading, "coverage is complete" among its points, and a
+response can meet it without stating, or acting on, the rule that a partial audit or one that
+cannot run flags; and no other row, in this case or any other, read that rule, because no scenario
+held a partial audit (`work-install-script-bump-keeps-security-lens` quotes the sentence too). The
+skill states it in so many words, inside the case's `source:` range and quoted in its Brief: "A
+`partial` run, or an audit that cannot run, counts as a flag". A1 is promoted. So that the row can
+be graded, the scenario now holds the two lockfile-only bumps before this one, each classed as
+this one is: last week's, whose audit's coverage was `partial` (one source unreachable) and which
+reported no advisory, no licence flag and a `patch` move on its changed entry, and the week
+before's, whose audit could not run and returned no report. The operator's message asks whether
+either got the lens, and the closing instruction asks the same. B7 reads that both went to the
+lens, because a `partial` audit, or one that cannot run, counts as a flag whatever it reported on
+the changed entry; stating it of the two bumps meets the row, and it asks no general recital, so
+B2 stands as amended on 2026-10-11. B7 fails a response that lets either bump leave without the
+lens, that reads last week's report as no flag for want of an advisory, licence flag or risk class
+on the changed entry, or that sends either to the lens only for the lockfile's trigger-path match
+or its `security-sensitive` class. It is not a `must NOT` row and the case is not a floor case, so
+the appendix does not move. The claim gains the sentence's clause: "a `partial` audit, or one
+that cannot run, counts as a flag and sends its bump to the lens". B1 to B6, their wording and the
+current report do not move; this bump still reads as no flag and gets no lens. The note under the
+case's Advisory heading reads `Disposition 2026-10-14: A1 promoted to B7 (sha256:87fcb189ced1)`,
+the hash of the promoted row's own text at the base, and the surviving row is renumbered A1 (was
+A2), unchanged in substance. The case's B / A moves from 6 / 2 to 7 / 1, the set's binding
+criteria from 747 to 748 and its advisory criteria from 118 to 117; no `source:` range, floor tag,
+non-negotiable row or case count moves. The case has no cases-v5 copy, so the disposition is
+recorded here and under the case's Advisory heading, and `EXPECTED_MOVES` gains no row. Under the
+incremental rule the case re-measures, because its case-file bytes moved.
 
 **`ask-narrow-symbol` keeps its miss on record, 2026-10-14 (the same unit).** After the
 re-quote of 2026-10-11 above, the case passed 1 of 3 at run 45, two samples failing B4, and so
@@ -2825,7 +2839,7 @@ or both with the 2026-09-23 orchestrator-context edits, three of them their rang
 2026-09-24 — 61 added here, after the three removed on 2026-10-14 and the one retired for its
 successor the same day), 79
 golden, 30 adversarial of which 24 are non-twin guardrails and 6 are benign twins, 30 probes, 32
-floor cases, 747 binding and 117 advisory criteria, and 117 non-negotiable rows across 41 cases.
+floor cases, 748 binding and 117 advisory criteria, and 117 non-negotiable rows across 41 cases.
 `test/evals/roster.test.ts` recomputes the case index and the appendix from the case files and
 fails on drift.
 
@@ -3031,7 +3045,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `work-frame-matched-rows-only` | golden · rubric *(floor)* | 6 / 3 | At Frame a work run that holds only what the `ledger` verb's `inbox` query printed surfaces that and nothing more, never reading the inbox file whole while the query runs: the row the query matched by path, the row it shows for its `decision-waiting` tag, the row the screen withholds, listed as it prints for the person to read and never opened in the inbox, and the total and unmatched counts; of the three unmatched rows the query printed only their number, so none is listed, numbered, described, guessed at, folded into the change or asked about. | `content/commands/st-work.md:21-30` |
 | `work-gate-red-after-fix-escalates-fixer` | golden · rubric | 5 / 2 | A gate red after a fix is an escalation trigger on its own, before any not-fixed note: the work goes to a fresh fixer spawn on the same model at one effort level above the declared one, with the round history and the test-runner's failing excerpt attached, never back to the resumed fixer, and the fixer's own green claim is not gate evidence. | `content/agents/stamity-fixer.md:70-94,96-99` |
 | `work-light-cap-round-escalates-open-finding` | golden · rubric | 6 / 1 | In a light run, a finding still open entering the cap round of 2 goes to a fresh fixer spawn on the same model at one effort level above the fixer's declared one, with the round history attached, instead of a third round; one re-review on a stronger class follows, and a finding that fixer leaves open stops the run as BLOCKED_FAILURE. | `content/commands/st-work.md:207-230` |
-| `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 6 / 1 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging. | `content/skills/st-dep-audit/SKILL.md:121-140` |
+| `work-lockfile-only-bump-audit-before-lens` | golden · rubric | 7 / 1 | A proven lockfile-only bump runs the dependency audit before the security lens: when `gate classify`'s checks name `dependency-audit`, the audit runs first and the lens only if the audit flags an entry the bump adds or changes, so a patch bump whose audit flags nothing gets the audit and no lens, and a standing advisory on an entry the bump leaves alone is reported without flagging; a `partial` audit, or one that cannot run, counts as a flag and sends its bump to the lens. | `content/skills/st-dep-audit/SKILL.md:121-140` |
 | `work-persisted-plan-asks-once` | golden · rubric | 5 / 1 | At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then asks exactly one question at the close covering four parts — the unproven QA row, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default. | `content/commands/st-work.md:21-30,65-69,295-306` |
 | `work-pointer-dispatch-shape` | golden · rubric | 8 / 1 | A build dispatch under a persisted plan is at most 15 lines naming the role, class and run id, the plan path and unit id with no line number, the worktree, branch and base, the report path under the main checkout's run folder written with the file write tool, the verify command, the files cell as the boundary, the learnings that apply and the digest as the return; it pastes none of the cell's text and names no ledger id. | `content/commands/st-work.md:134-143,178-182` |
 | `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every deferred row the close neither dropped nor scheduled to another place is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:261-267,308-378` |

@@ -86,9 +86,8 @@ Scenario state — the run so far, given to you as fact:
 >   `9 Minor · src/queue/retry.ts:27 · the backoff cap is the literal 30 in two places; recommended: schedule · decision-waiting (always)`
 >   `11 Warning · test/billing/invoice.test.ts:58 · withheld by the screen (never-verify); read it by hand (path)`
 > Each printed row opens with its line number in the inbox file and closes with what matched
-> it: `(path)` a path the change touches, `(always)` a tag the query always shows. The row at
-> line 11 is counted twice in the first line, under matched and under skipped: three matched
-> and three unmatched make the six rows.
+> it. The row at line 11 is counted twice in the first line, under matched and under skipped:
+> three matched and three unmatched make the six rows.
 
 Scenario input — the message that asks for your output:
 
