@@ -7,6 +7,7 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
+import { createApp } from "../../src/index.ts";
 import { createManifest, readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import type { ContentSelection } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
@@ -50,7 +51,13 @@ import { useTempDir } from "../support/tempDir.ts";
  * reclaim what is provably the engine's.
  */
 
-const ENGINE_VERSION = "1.0.0-reclaim-mcp-preserve";
+/**
+ * The running version, as `clean` uses (`ctx.app.version`). A sync at another
+ * version renders Copilot's hooks file with another pinned sync call, and
+ * `clean` refuses a file this version renders differently before it removes
+ * anything — the version-skew guard, not the lane these cases assert.
+ */
+const ENGINE_VERSION = createApp().version;
 const T0 = new Date("2026-08-18T00:00:00.000Z");
 const T1 = new Date("2026-08-18T01:00:00.000Z");
 
@@ -101,14 +108,14 @@ function emptySelection(): ContentSelection {
   return { items: { agent: [], skill: [], rule: [], command: [] } };
 }
 
-function planFor(rootDir: string): Promise<SyncPlan> {
+function planFor(rootDir: string, version = ENGINE_VERSION): Promise<SyncPlan> {
   // The git seam is stubbed to a clean tree: no child process, no host state.
-  return planSync(rootDir, ENGINE_VERSION, { runner: () => "" });
+  return planSync(rootDir, version, { runner: () => "" });
 }
 
-function applyFor(rootDir: string, plan: SyncPlan): ReturnType<typeof applySync> {
+function applyFor(rootDir: string, plan: SyncPlan, version = ENGINE_VERSION): ReturnType<typeof applySync> {
   return applySync(rootDir, plan, {
-    engineVersion: ENGINE_VERSION,
+    engineVersion: version,
     force: false,
     dryRun: false,
     now: T1,
@@ -227,7 +234,7 @@ async function addUserContent(rootDir: string, relPath: string): Promise<void> {
  * documents. Nothing is hand-written into those documents here: they hold the
  * engine's real rendering, which is what the ownership proof re-derives.
  */
-async function syncedRepo(): Promise<string> {
+async function syncedRepo(version = ENGINE_VERSION): Promise<string> {
   const handle = getTemp();
   __setContentRootForTests(handle.path("corpus"));
   await handle.seedFiles({
@@ -242,7 +249,7 @@ async function syncedRepo(): Promise<string> {
       ...createManifest({
         tools: [...TOOLS],
         selection: emptySelection(),
-        generatorVersion: ENGINE_VERSION,
+        generatorVersion: version,
         now: T0,
       }),
       mcp: { servers: [CURATED_ID] },
@@ -250,7 +257,7 @@ async function syncedRepo(): Promise<string> {
     { now: T0 },
   );
 
-  await applyFor(rootDir, await planFor(rootDir));
+  await applyFor(rootDir, await planFor(rootDir, version), version);
   expect(await idsByDoc(rootDir)).toEqual(MERGED_DOCS.map((doc) => [doc, [CURATED_ID]]));
   return rootDir;
 }
@@ -420,6 +427,25 @@ describe("clean lane — the uninstall verb over documents holding operator cont
       before,
     );
     expect(result.stdout).toContain("remove the engine's own content from this path and keep the rest");
+  });
+
+  it("refuses, removing nothing, when an earlier version wrote Copilot's hooks file", async () => {
+    // The hooks file's starter names the sync call pinned to the version that
+    // wrote it (REQ-FLOW-084), so this version renders other bytes there and
+    // cannot prove the delete. The refusal must come before any document is
+    // touched: the operator's entries stay exactly as they were.
+    const rootDir = await syncedRepo("1.0.0-reclaim-mcp-preserve");
+    await Promise.all(MERGED_DOCS.map((doc) => addUserContent(rootDir, doc)));
+    const before = await Promise.all(MERGED_DOCS.map((doc) => readFile(abs(rootDir, doc), "utf8")));
+
+    const result = await runClean(rootDir);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("clean refused");
+    expect(result.stderr).toContain(".github/hooks/stamity.json");
+    expect(await Promise.all(MERGED_DOCS.map((doc) => readFile(abs(rootDir, doc), "utf8")))).toEqual(
+      before,
+    );
   });
 });
 
