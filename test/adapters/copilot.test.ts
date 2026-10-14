@@ -904,7 +904,11 @@ describe("body substitution", () => {
     expect(prompt.content).toContain("npm run test");
     expect(prompt.content).toContain("eslint");
     // The marker resolves to THIS client's ask-user guidance, not the neutral table.
-    expect(prompt.content).toContain("GitHub Copilot documents no native question tool");
+    // TEST CHANGE, justified (2026-10-15, unit e12-translator; REQ-FLOW-080): the pin read
+    // "GitHub Copilot documents no native question tool"; Copilot ships `askQuestions` (VS Code)
+    // and `ask_user` (Copilot CLI) now, and the rendered note names both.
+    expect(prompt.content).toContain("ask through the `askQuestions` tool");
+    expect(prompt.content).toContain("Copilot CLI use `ask_user`");
     expect(prompt.content).not.toContain(PLATFORM_TOOL_MARKER);
   });
 

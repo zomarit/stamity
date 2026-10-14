@@ -330,7 +330,7 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     // code.claude.com/docs/en/sub-agents (accessed 2026-08-13)
     tool: "claude",
     mechanism:
-      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write` in the repository layout, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there; the four verdict roles and the spec-author also carry `Bash` in the repository layout, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell`; a plugin install renders no `Bash` for them",
+      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; the four verdict roles and the spec-author also carry `Bash`, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell`",
     strength: "hard",
   },
   {
@@ -391,28 +391,48 @@ const ASK_USER_TOOLS: Readonly<Record<Tool, AskUserToolEntry>> = {
   claude: {
     tool: "claude",
     toolName: "AskUserQuestion",
-    // code.claude.com/docs/en/sub-agents (accessed 2026-08-13): AskUserQuestion
-    // is removed from every sub-agent context, even when the agent lists it, so
-    // the ask belongs to whoever holds the main conversation.
-    note: "**Platform:** Ask through the `AskUserQuestion` tool. A delegated sub-agent cannot call it — the tool is stripped from every sub-agent context — so a sub-agent returns its question as a blocked result and the delegating agent runs the ask.",
+    // code.claude.com/docs/en/agent-sdk/user-input (accessed 2026-10-15): one to
+    // four questions a call, two to four options each; not available in
+    // sub-agents. code.claude.com/docs/en/sub-agents (accessed 2026-10-15): the
+    // tool is removed from every sub-agent, even when its `tools` lists it.
+    // code.claude.com/docs/en/headless (accessed 2026-10-15): a run with no
+    // person to answer removes or denies it.
+    note: "**Platform:** Ask through the `AskUserQuestion` tool, one to four questions a call, two to four options each; a sub-agent never has it, so it returns its question as a blocked result and the delegating agent asks. Where the tool is missing use the plain-text fallback below, and a skipped or headless question reads as no answer.",
   },
   cursor: {
     tool: "cursor",
-    toolName: null,
-    // cursor.com/docs/agent/subagents (accessed 2026-08-13): no native question tool.
-    note: "**Platform:** Cursor documents no native question tool. Use the plain-text fallback below for every ASK checkpoint, and stop for the answer instead of assuming one.",
+    toolName: "AskQuestion",
+    // cursor.com/changelog/2-4 (accessed 2026-10-15): the question tool works in
+    // any conversation, sub-agents and skills included. forum.cursor.com/t/173657,
+    // a staff reply of 2026-10-03 (accessed 2026-10-15): the tool's id is
+    // `AskQuestion`; `agent -p` rejects it at once with the wording of a user
+    // skip; some models ask in plain text instead and never get the tool. The id
+    // is not on a docs page as of 2026-10-15 (cursor.com/docs/agent/tools names
+    // it "Ask questions"), so the forum reply is its one source.
+    note: "**Platform:** Ask through the `AskQuestion` tool where the serving model offers it (Cursor 2.4 and later), and otherwise use the plain-text fallback below; a sub-agent still returns its question as a blocked result. `agent -p` rejects the tool as if the user skipped it, so a skipped or headless question reads as no answer.",
   },
   copilot: {
     tool: "copilot",
-    toolName: null,
-    // docs.github.com/en/copilot/reference/custom-agents-configuration (accessed 2026-08-13).
-    note: "**Platform:** GitHub Copilot documents no native question tool. Use the plain-text fallback below for every ASK checkpoint, and stop for the answer instead of assuming one.",
+    toolName: "askQuestions",
+    // code.visualstudio.com/updates/v1_110 (accessed 2026-10-15): `askQuestions`
+    // moved into VS Code core and works in sub-agents too.
+    // docs.github.com/en/copilot/reference/cli-command-reference (accessed
+    // 2026-10-15): Copilot CLI's `ask_user` tool, off under `--no-ask-user`.
+    // Unverified 2026-10-15: that `ask_user` takes one question a call — no page
+    // read today states its per-call limit.
+    note: "**Platform:** In VS Code ask through the `askQuestions` tool (it reaches sub-agents since 1.110, yet a sub-agent still returns its question as a blocked result); in Copilot CLI use `ask_user`, one question at a time, which `--no-ask-user` turns off. Where neither is offered use the plain-text fallback below, and a skipped or headless question reads as no answer.",
   },
   codex: {
     tool: "codex",
-    toolName: null,
-    // learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-08-13).
-    note: "**Platform:** Codex documents no native question tool. Use the plain-text fallback below for every ASK checkpoint, and stop for the answer instead of assuming one.",
+    toolName: "request_user_input",
+    // github.com/openai/codex at main (accessed 2026-10-15):
+    // codex-rs/core/src/tools/handlers/request_user_input.rs — root thread only,
+    // blocking in Plan mode; request_user_input_spec.rs — one to three questions
+    // a call; codex-rs/features/src/lib.rs — Default mode needs the
+    // `default_mode_request_user_input` feature (under development, off);
+    // codex-rs/exec/src/lib.rs — `codex exec` rejects the request. No docs page
+    // under developers.openai.com/codex names the tool as of 2026-10-15.
+    note: "**Platform:** Ask through the `request_user_input` tool, one to three questions a call: Plan mode waits for the answer, Default mode has it only behind a feature flag, and a sub-agent never has it, so it returns its question as a blocked result. Where the tool is refused (Default mode, `codex exec`) use the plain-text fallback below, and a skipped or headless question reads as no answer.",
   },
 };
 

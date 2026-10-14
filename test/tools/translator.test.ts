@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
@@ -217,12 +219,60 @@ describe("ask-user platform table", () => {
       expect(entry.tool).toBe(tool);
       expect(entry.note.length).toBeGreaterThan(0);
     }
+    // TEST CHANGE, justified (2026-10-15, plan 020 file 2, unit e12-translator; REQ-FLOW-080):
+    // these pins read `null` for Cursor, Copilot and Codex, which documented no question tool
+    // when the map was written (2026-08-13). All three ship one now (sources dated beside each
+    // row in `ASK_USER_TOOLS`), so every client names its tool.
     expect(getAskUserToolEntry("claude").toolName).toBe("AskUserQuestion");
-    // Null rather than a guessed name: a wrong tool name fails silently at the
-    // moment the agent needed an answer.
-    expect(getAskUserToolEntry("cursor").toolName).toBeNull();
-    expect(getAskUserToolEntry("copilot").toolName).toBeNull();
-    expect(getAskUserToolEntry("codex").toolName).toBeNull();
+    expect(getAskUserToolEntry("cursor").toolName).toBe("AskQuestion");
+    expect(getAskUserToolEntry("copilot").toolName).toBe("askQuestions");
+    expect(getAskUserToolEntry("codex").toolName).toBe("request_user_input");
+  });
+
+  it("keeps every note to two sentences that name the fallback and read a skipped answer as no answer", () => {
+    for (const tool of TOOLS) {
+      const { note, toolName } = getAskUserToolEntry(tool);
+      // A period ends a sentence only before whitespace or the end, so the
+      // version numbers inside a note (`2.4`, `1.110`) are not counted.
+      const sentences = note.split(/[.!?](?=\s|$)/).filter((part) => part.trim().length > 0);
+      expect(sentences.length, tool).toBeLessThanOrEqual(2);
+      expect(note, tool).toMatch(/^\*\*Platform:\*\* /);
+      expect(note, tool).toContain(`\`${String(toolName)}\``);
+      expect(note, tool).toContain("the plain-text fallback below");
+      expect(note, tool).toMatch(/a skipped or headless question reads as no answer/);
+      // The note lands in a Markdown table cell in the cross-client projection.
+      expect(note, tool).not.toContain("|");
+    }
+    // The client-specific limits the close walk bundles against.
+    expect(getAskUserToolEntry("claude").note).toContain("one to four questions a call, two to four options each");
+    expect(getAskUserToolEntry("codex").note).toContain("one to three questions a call");
+    expect(getAskUserToolEntry("copilot").note).toContain("`ask_user`");
+    expect(getAskUserToolEntry("copilot").note).toContain("`--no-ask-user`");
+    // Cursor's tool exists only on some models: the note says so and the fallback stands.
+    expect(getAskUserToolEntry("cursor").note).toContain("where the serving model offers it");
+    // Every client but one keeps the tool out of sub-agents; the one that offers it there
+    // still has its sub-agent return the question blocked (the protocol's Floor item 7).
+    for (const tool of TOOLS) expect(getAskUserToolEntry(tool).note, tool).toMatch(/sub-agent/);
+  });
+
+  it("cites a dated source above every row of the map", () => {
+    // The source is a comment, not a field (the entry's shape is the adapters' contract), so
+    // the check reads the module's own text: each row's block carries an access date.
+    const source = readFileSync(
+      fileURLToPath(new URL("../../src/tools/translator.ts", import.meta.url)),
+      "utf8",
+    );
+    const start = source.indexOf("const ASK_USER_TOOLS");
+    const end = source.indexOf("\n};\n", start);
+    expect(start).toBeGreaterThan(-1);
+    const map = source.slice(start, end);
+    for (const tool of TOOLS) {
+      const at = map.indexOf(`\n  ${tool}: {`);
+      expect(at, tool).toBeGreaterThan(-1);
+      const next = TOOLS.map((other) => map.indexOf(`\n  ${other}: {`)).filter((i) => i > at);
+      const block = map.slice(at, next.length === 0 ? map.length : Math.min(...next));
+      expect(block, tool).toMatch(/\(accessed \d{4}-\d{2}-\d{2}\)/);
+    }
   });
 
   it("renders one markdown row per tool", () => {
@@ -232,8 +282,12 @@ describe("ask-user platform table", () => {
     for (const tool of TOOLS) {
       expect(lines.some((line) => line.startsWith(`| \`${tool}\` |`))).toBe(true);
     }
-    expect(buildAskUserPlatformTable()).toContain("`AskUserQuestion`");
-    expect(buildAskUserPlatformTable()).toContain("_none documented_");
+    // TEST CHANGE, justified (2026-10-15, unit e12-translator; REQ-FLOW-080): the second pin read
+    // "_none documented_", the cell three clients rendered with no tool; every row now names one.
+    for (const name of ["AskUserQuestion", "AskQuestion", "askQuestions", "request_user_input"]) {
+      expect(buildAskUserPlatformTable()).toContain(`| \`${name}\` |`);
+    }
+    expect(buildAskUserPlatformTable()).not.toContain("_none documented_");
   });
 });
 
@@ -313,12 +367,14 @@ describe("the verdict-role report write in the coverage rows", () => {
     expect(claude?.mechanism).toContain("the four verdict roles also carry `Write`");
     expect(claude?.mechanism).toContain("`writePaths`");
     expect(claude?.mechanism).toContain("never `Edit` or `NotebookEdit`");
-    // The Write holds in the repository layout only; a plugin install renders
-    // none, and the row says so rather than disclosing a grant that is absent.
-    expect(claude?.mechanism).toContain("`Write` in the repository layout");
+    // TEST CHANGE, justified (2026-10-15, unit e12-translator, ledger build/32): the pins read
+    // "`Write` in the repository layout" and a plugin-install clause. 1.15.0 deleted the plugin
+    // route, so the repository layout is the only one and the row states no condition that
+    // cannot arise; the Write's scope is pinned unconditionally instead.
     expect(claude?.mechanism).toContain(
-      "a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there",
+      "the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file",
     );
+    expect(claude?.mechanism).not.toMatch(/plugin|repository layout/);
     expect(claude?.mechanism).not.toContain("stay read-only here");
     // The mechanism cell lands in a Markdown table.
     expect(claude?.mechanism).not.toContain("|");
@@ -495,7 +551,10 @@ describe("read-only git in the Claude dialect (sw05-read-only-git-grants)", () =
     expect(coverageMechanism("claude")).toContain("the four verdict roles and the spec-author also carry `Bash`");
     expect(coverageMechanism("claude")).toContain("log, show, diff, rev-list, merge-base");
     expect(coverageMechanism("claude")).toContain("never `PowerShell`");
-    expect(coverageMechanism("claude")).toContain("a plugin install renders no `Bash` for them");
+    // TEST CHANGE, justified (2026-10-15, unit e12-translator, ledger build/32): this pin read
+    // "a plugin install renders no `Bash` for them"; the plugin route is gone (1.15.0), so the
+    // clause is gone and the row must not bring it back.
+    expect(coverageMechanism("claude")).not.toContain("plugin");
     expect(coverageMechanism("cursor")).toContain("`readonly: true` blocks state-changing shell commands");
     expect(coverageMechanism("copilot")).toContain("the brief must carry the diff");
     expect(coverageMechanism("codex")).toContain("permits read-only git (log, show, diff, rev-list, merge-base)");
