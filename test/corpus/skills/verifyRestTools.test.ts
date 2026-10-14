@@ -467,8 +467,11 @@ describe("maintainability axis — module depth (REQ-FLOW-082)", () => {
     expect(block).toContain(
       "`<path:line> exports=<k> (median <m>), lines=<n> (median <x>), forwards=<f>/<k>`",
     );
-    expect(block).toMatch(
-      /`maint-size-outliers` deferred here is cited with its module's export count beside the repo median/i,
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/8 as decided): the sentence read "A file or function `maint-size-outliers` deferred
+    // here"; only a whole file defers now, so the subject names a file alone.
+    expect(block).toContain(
+      "A file `maint-size-outliers` deferred here is cited with its module's export count beside the repo median",
     );
     // A judgment row needs a verdict both ways, not only a finding shape.
     expect(block).toMatch(/the module is deep and passes/i);
@@ -493,6 +496,19 @@ describe("maintainability axis — module depth (REQ-FLOW-082)", () => {
     // checks from contradicting each other on one file.
     expect(block).toMatch(/exports at or below the repo median/i);
     expect(block).toMatch(/is deferred to `maint-module-depth` and records no hit here/i);
+    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/8 as decided):
+    // the deferral covered functions too, and `maint-module-depth` judges only a module's
+    // interface, so a 1,000-line function inside a narrow-export module passed both checks. Only a
+    // whole file defers; a function keeps the size check.
+    expect(block).toContain("A whole file whose module exports at or below the repo median export count");
+    expect(block).toContain("A function is never deferred.");
+    expect(block).not.toMatch(/A file or function whose module exports/i);
+    // Added 2026-10-14 (same round, review/9): with no export construct, export counts read as
+    // zero would make the median zero and defer every file, so the size check could never hit and
+    // its row read pass. There the deferral does not apply.
+    expect(block).toContain(
+      "On a stack with no export construct there are no export counts, so nothing is deferred and every file keeps this check.",
+    );
   });
 });
 

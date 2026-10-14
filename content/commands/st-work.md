@@ -186,23 +186,23 @@ Every sub-agent returns a structured result, read without its transcript:
 ### Gates
 
 Each Prove pass first runs `stamity gate scan --base <the run's base>` (the record's `Base:` line):
-a hit stops it, naming path, line and rule, and the commit when the hit is in the branch's history,
-never the value, never cleared by rewriting the value and scanning again; a hit on a deliberate
+a hit stops it, naming path, line and rule, and the commit when it is in the branch's history,
+never the value, never cleared by rewriting the value and rescanning; a hit on a deliberate
 fixture is the person's to settle. A non-empty `unscanned` list puts
 `secret scan: <n> files unscanned` under `Not done:`, naming the paths.
 `stamity gate classify --base <the run's base> --json` names the class: its checks run on the
 selected files in the build, its gates on the final tree, as `test-runner` maps them. The narrower
-gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger
+gates rest on one condition: the repo's CI runs the full matrix on every `product` or stronger
 change and on a schedule. With no base, the scan takes `HEAD` and the final tree runs
 `${STAMITY:VERIFY_GATE_ALL}` unclassified (`unclear`), as after a classify exiting 1; committed work then lists
 `secret scan: not run` under `Not done:`, as do a CLI that cannot run or lacks `gate` and a scan's
-`reason`, both on the full gates; one saying `git was not started here` stops the run. A class
-naming `review-once` gets one review pass: a Critical or Warning it raises is fixed and
-closure-reviewed once; no further round runs. The test-runner runs each gate once and reads the
-exit code from the tool (`unknown`, never a pass), returning gate-by-gate pass/fail/unknown,
-commands and verbatim failing excerpts, never bare pass/fail. A pass may cite this run's earlier
-result on a byte-identical tree (same HEAD, diff, untracked files), never a lighter pass; the final
-tree always gets a run of its own. Judgment-only passes run inline.
+`reason`, both on the full gates; one saying `git was not started here` stops the run as
+BLOCKED_DEPENDENCY, quoting it. A class naming `review-once` gets one review pass: a Critical or
+Warning it raises is fixed and closure-reviewed once; no further round runs. The test-runner runs
+each gate once and reads the exit code from the tool (`unknown`, never a pass), giving per-gate
+pass/fail/unknown, commands and verbatim failing excerpts, never bare pass/fail. A pass may cite
+this run's result on a byte-identical tree (same HEAD, diff, untracked files), never a lighter
+pass; the final tree always gets a run of its own. Judgment-only passes run inline.
 
 ### Review loop
 
@@ -297,13 +297,13 @@ its `## Human sign-off` rules.
 
 **The close walk.** What is left for the person is asked by the question protocol's Close walk,
 in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not
-signed and the delta unmerged.
+the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
 close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
 `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
+together after the last round: fixes and schedules first, the commit or hand-off choice last.
 
 ### Proof block
 

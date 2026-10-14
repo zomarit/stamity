@@ -501,7 +501,15 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
     const scan = lines.findIndex((line) => line.startsWith("## 3. Leftover scan"));
     const routing = lines.findIndex((line) => line.startsWith("## 4. Routing"));
     const protocol = lines.findIndex((line) => line.startsWith("### Critical Deferral Protocol"));
-    const proof = lines.findIndex((line) => line.startsWith("Close with this run's proof block:"));
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/66): the anchor read "Close with this run's proof block:". 33f7d50b moved the
+    // proof block after the handoff's answer, so the line now opens "Close with this run's proof
+    // block, printed after the handoff's answer …" and the paragraph gained the next-step clause.
+    // The rule this case pins is intact: the notes count still sits beside the findings by
+    // severity in the paragraph's first four lines, so the pin follows the wording and the
+    // paragraph's end is found rather than counted.
+    const PROOF_ANCHOR = "Close with this run's proof block,";
+    const proof = lines.findIndex((line) => line.startsWith(PROOF_ANCHOR));
     const scanText = lines.slice(scan, routing);
     const defaults = scanText
       .filter((line) => /^\| \d+ \|/.test(line))
@@ -532,10 +540,14 @@ describe("severity scale — one `## Severity` section in the six finding-raisin
     expect(flat(lines.slice(proof, proof + 4).join("\n"))).toContain(
       "findings by severity plus the notes count, REVISE/DEFER counts,",
     );
-    expect(lines[proof + 4]).toBe("");
+    expect(proof).toBeGreaterThan(-1);
+    // The proof-block paragraph is the last one before the next section.
+    const proofEnd = lines.findIndex((line, at) => at > proof && line === "");
+    expect(proofEnd).toBeGreaterThan(proof);
+    expect(lines[proofEnd + 1]).toBe("## Meta-feedback");
     // The sections the eval cases quote are each found once, by their opening words, and in the
     // order the cases cite them (re-anchored 2026-10-10, the note above the vocabulary test).
-    for (const anchor of ["## 4. Routing", "### Critical Deferral Protocol", "Close with this run's proof block:"]) {
+    for (const anchor of ["## 4. Routing", "### Critical Deferral Protocol", PROOF_ANCHOR]) {
       expect(lines.filter((line) => line.startsWith(anchor)), anchor).toHaveLength(1);
     }
     expect(scan).toBeGreaterThan(inference);

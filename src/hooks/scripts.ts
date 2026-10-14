@@ -774,7 +774,7 @@ const RESUMABLE = ${json([...RESUMABLE_STATUSES])};
 const SESSIONS = [
 ${CLOUD_SESSIONS.map((session) => `  ${json(session)},`).join("\n")}
 ];
-const INVISIBLE =new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
+const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
 const SCREEN = [
 ${screen}
 ];

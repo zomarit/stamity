@@ -1224,7 +1224,7 @@ describe("pr-resolve — collection and evaluation", () => {
       "After the push, a fresh read",
     ].map((step) => rest.indexOf(step));
     expect(order.every((at) => at >= 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(order.toSorted((a, b) => a - b)).toEqual(order);
     // The ref a push names: an allowlist checked first, then git's own check, quoted throughout.
     expect(rest).toContain('`git push origin "HEAD:refs/heads/<ref>"`');
     expect(rest).toContain(

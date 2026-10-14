@@ -336,6 +336,11 @@ describe("light trio — the closing next step", () => {
     );
     // The empty case is stated rather than left as a silent omission.
     expect(text).toContain("with nothing outstanding, the line says so");
+    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/64): the step
+    // follows the close walk's answers, as `/st-work`'s does, so an item the person scheduled or
+    // dropped in the walk is not offered back as the next step.
+    expect(text).toContain("derived from this run's own state and the walk's answers, not from the ladder above");
+    expect(text).toContain("An item the walk scheduled or dropped is not the step.");
   });
 
   it("debug derives its next step from the run's own state, not the escalation table", async () => {
@@ -351,6 +356,11 @@ describe("light trio — the closing next step", () => {
       "a surviving hypothesis makes its discriminating observation the step",
     );
     expect(text).toContain("None of those, and the line says so");
+    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/64): the step
+    // follows the close walk's answers, as `/st-work`'s does, so a clause the person scheduled or
+    // dropped in the walk is not offered back as the next step.
+    expect(text).toContain("derived from this run's own state and the walk's answers, not from the table above");
+    expect(text).toContain("An item the walk scheduled or dropped is not the step.");
   });
 
   it("quick derives its next step from the batch's own state, not the escalation table", async () => {

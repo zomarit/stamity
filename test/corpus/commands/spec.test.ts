@@ -335,6 +335,13 @@ describe("/st-spec — design decisions carried as text", () => {
     expect(contract).toMatch(/an open `\[NEEDS CLARIFICATION\]` marker/);
     expect(contract).toMatch(/an unconfirmed T2 or T3 proposal/);
     expect(contract).toMatch(/a census gap/);
+    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/64): the step
+    // follows the close walk's answers, as `/st-work`'s does, so an item the person scheduled or
+    // dropped in the walk is not offered back as the next step.
+    expect(contract).toContain(
+      "Next step — derived from this run's own state and the walk's answers, never a fixed menu",
+    );
+    expect(contract).toContain("An item the walk scheduled or dropped is not the step.");
   });
 
   // REQ-FLOW-080: the run walks its own leftovers through the question protocol's Close walk

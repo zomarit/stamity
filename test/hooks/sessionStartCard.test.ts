@@ -647,6 +647,15 @@ describe("the session-start resume card", () => {
     for (const name of RESUME_CARD_HOST_NAMES.path) expect(names.get("node:path")).toContain(name);
     expect(buildSessionStartScript({ layout: "container" })).toMatch(/^import \{ dirname, isAbsolute, join, resolve, sep \} from "node:path";$/m);
   });
+
+  // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/65): the
+  // session-start detection change dropped the space after `=` in the emitted screen pattern's
+  // declaration. People read the generated script and the goldens diff it, so its spacing is held.
+  it("declares the invisible-character pattern with ordinary spacing", () => {
+    const script = buildSessionStartScript();
+    expect(script).toMatch(/^const INVISIBLE = new RegExp\(/m);
+    expect(script).not.toContain("const INVISIBLE =new");
+  });
 });
 
 describe("the resume card's read guards", () => {

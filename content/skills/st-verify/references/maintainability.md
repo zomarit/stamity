@@ -26,10 +26,12 @@ distribution.
 How: measure lines per file and per function across the changed area, then
 compare against the repo median rather than an absolute number.
 Threshold: a file or function above three times the repo median is a hit, and
-the median is reported alongside so the multiple is readable. A file or function
+the median is reported alongside so the multiple is readable. A whole file
 whose module exports at or below the repo median export count is deferred to
 `maint-module-depth` and records no hit here: a long body behind a narrow
-interface is deep, not an outlier.
+interface is deep, not an outlier. A function is never deferred. On a stack
+with no export construct there are no export counts, so nothing is deferred and
+every file keeps this check.
 
 **`maint-dead-exports`** — exported symbols with no consumer.
 How: cross the export inventory of the changed modules against references across
@@ -77,7 +79,7 @@ costs to learn. Apply the deletion test: inline the module into its callers;
 when the complexity it hid reappears at each call site the module is deep and
 passes, and when little does it is a pass-through, a layer whose interface is
 nearly as wide as what it hides, and fails. The interface is the test surface,
-so a test that reaches past it counts against the module. A file or function
+so a test that reaches past it counts against the module. A file
 `maint-size-outliers` deferred here is cited with its module's export count
 beside the repo median. Evidence:
 `<path:line> exports=<k> (median <m>), lines=<n> (median <x>), forwards=<f>/<k>`,

@@ -219,10 +219,11 @@ hypothesis by the `stamity-question-protocol` rule's Close walk. Instrumentation
 capture-later agreement was decided at step 3: the report lists it with that agreement, and the walk
 does not ask about it again.
 
-The closing report ends on one recommended next step, derived from this run's own state and not
-from the table above: a regression clause with no test makes writing it the step; instrumentation
-held under a capture-later agreement makes the strip at the window's end the step; a surviving
-hypothesis makes its discriminating observation the step. None of those, and the line says so.
+The closing report ends on one recommended next step, derived from this run's own state and the
+walk's answers, not from the table above: a regression clause with no test makes writing it the
+step; instrumentation held under a capture-later agreement makes the strip at the window's end the
+step; a surviving hypothesis makes its discriminating observation the step. An item the walk
+scheduled or dropped is not the step. None of those, and the line says so.
 The line ends there: one step, no second step behind it and no "if you meant X instead" branch.
 A fact that would change the step is named above the step as a fact to settle, never as a second
 ending the reader has to choose between.

@@ -835,7 +835,10 @@ describe("/st-work — Prove", () => {
   it("requires structured gate results from a dedicated test-runner", async () => {
     const gates = collapse(section(await body(), "### Gates"));
     expect(gates).toContain("test-runner");
-    expect(gates).toContain("gate-by-gate");
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/43 as signed off, option 1): this pinned "gate-by-gate"; "per-gate" pays part of the
+    // refused-folder stop's status and quoted reason above the re-attachment cut. Same result shape.
+    expect(gates).toContain("per-gate pass/fail/unknown");
     expect(gates).toContain("verbatim failing excerpts");
     // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close, fix round 1,
     // `build/20` as signed off, option 1): this pinned "Bare pass/fail is not a result". The rule
@@ -874,10 +877,15 @@ describe("/st-work — Prove", () => {
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, the orchestrator's
     // note on p5e's scan output): this pinned "a hit stops it, naming path, line and rule, never the
     // value"; a hit in a commit's added lines since the base carries that commit, named too.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/43 as signed off, option 1): these pinned "the commit when the hit is in the branch's
+    // history" and "rewriting the value and scanning again". The refused-folder stop gained its
+    // status and its quoted reason above the re-attachment cut, and the Gates paragraph's other words
+    // tightened to pay for them; the meaning is the same.
     expect(gates).toContain(
-      "a hit stops it, naming path, line and rule, and the commit when the hit is in the branch's history, never the value",
+      "a hit stops it, naming path, line and rule, and the commit when it is in the branch's history, never the value",
     );
-    expect(gates).toContain("never cleared by rewriting the value and scanning again");
+    expect(gates).toContain("never cleared by rewriting the value and rescanning");
     expect(gates).toContain("a hit on a deliberate fixture is the person's to settle");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round, `review/120`): this
     // pinned "An `unscanned` list puts …", which dropped the paths and read as covering an empty
@@ -916,13 +924,19 @@ describe("/st-work — Prove", () => {
     // git, which opens that layout. The stop sits here, in the text in force when the scan returns
     // and above the re-attachment cut, rather than in the Specialist pass below it; the clause's
     // other words tightened to pay for it.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/43 as signed off, option 1): this ended "… stops the run."; the stop now names its
+    // status and quotes the engine's reason, as the scan-hit stop names what it carries.
     expect(gates).toContain(
-      "as do a CLI that cannot run or lacks `gate` and a scan's `reason`, both on the full gates; one saying `git was not started here` stops the run.",
+      "as do a CLI that cannot run or lacks `gate` and a scan's `reason`, both on the full gates; one saying `git was not started here` stops the run as BLOCKED_DEPENDENCY, quoting it.",
     );
     // Added 2026-10-09 (the p3 fix round, `review/119`): the maintainer's opening answer 2 puts
     // the CI condition in `/st-work`'s Gates text; it moved here from the test-runner body.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/43 as signed off, option 1): this pinned "the repository's CI"; "repo" pays part of the
+    // refused-folder stop's status and quoted reason above the re-attachment cut. Same condition.
     expect(gates).toContain(
-      "The narrower gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger change and on a schedule.",
+      "The narrower gates rest on one condition: the repo's CI runs the full matrix on every `product` or stronger change and on a schedule.",
     );
     // One review pass for a `review-once` class (`plan/48`).
     // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close, fix round 1,
@@ -1169,7 +1183,11 @@ describe("/st-work — Prove", () => {
   it("stops the run on a gate reason naming a refused folder, in Gates above the cut (REQ-PLUGIN-046)", async () => {
     const raw = (await workFile).raw;
     const gates = collapse(section(await body(), "### Gates"));
-    const stop = "one saying `git was not started here` stops the run.";
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, corpus fix batch round 1,
+    // review/43 as signed off, option 1): this pinned "… stops the run." with no status and no word
+    // on the reason, so a stopped run could paraphrase the engine's warning that plain git there
+    // opens the folder. The stop now names BLOCKED_DEPENDENCY and quotes the reason.
+    const stop = "one saying `git was not started here` stops the run as BLOCKED_DEPENDENCY, quoting it.";
     expect(gates).toContain(`a scan's \`reason\`, both on the full gates; ${stop}`);
     expect(raw.indexOf("`git was not started here` stops the run")).toBeLessThan(raw.indexOf("\n### Specialist pass\n"));
     // The Specialist pass no longer carries a copy of the rule.
@@ -1391,6 +1409,17 @@ describe("/st-work — Prove", () => {
     expect(qa).toContain("`Default if no response: leave uncommitted`");
     expect(qa).toContain("those rows not signed and the delta unmerged");
     expect(qa).toContain("with none left, there is no ask");
+    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44): the walk
+    // asks in rounds and the protocol puts Critical, Warning and `decision-waiting` rows first, so a
+    // Minor leftover can be asked after the commit. Answers applied as they arrived let "commit" in
+    // round 1 run before "fix now" in round 2 and leave the fix out of the chosen commit; they now
+    // apply together after the last round, the commit choice last.
+    expect(qa).toContain(
+      "The answers take effect together after the last round: fixes and schedules first, the commit or hand-off choice last.",
+    );
+    expect(qa.indexOf("The answers take effect together")).toBeGreaterThan(
+      qa.indexOf("A part with nothing to decide drops out"),
+    );
     // It follows the row-states paragraph, whose rows it asks about.
     expect(qa.indexOf("**The close walk.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
   });
