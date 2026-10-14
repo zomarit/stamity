@@ -375,10 +375,12 @@ export function buildAllowlistCoverageTable(): string {
 /**
  * How one client asks its operator a question at an ASK checkpoint.
  *
- * `toolName` is `null` when the client documents no native question tool. The
- * bias is to leave it `null` rather than guess: a wrong tool name fails at the
- * exact moment the agent needed an answer, and it fails quietly, whereas the
- * plain-text fallback always reaches the operator.
+ * `toolName` needs a dated source, not necessarily a docs page: a vendor staff
+ * reply or the client's own source code counts, provided the row's comment says
+ * which source it is and when it was read. `null` means no source names a tool
+ * at all. A guess is never a name: a wrong tool name fails at the exact moment
+ * the agent needed an answer, and it fails quietly, whereas the plain-text
+ * fallback always reaches the operator.
  */
 export interface AskUserToolEntry {
   readonly tool: Tool;
