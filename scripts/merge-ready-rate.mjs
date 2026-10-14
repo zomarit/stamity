@@ -56,7 +56,8 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
       const today = new Date().toLocaleDateString('en-CA')
       const path = writeMeasurementSnapshot(ROOT, today)
       console.log(`Wrote ${path}`)
-      console.log('Regenerate the page with `node scripts/generate-docs.mjs --page measurements`.')
+      console.log('The page renders the pinned MEASUREMENT_SNAPSHOT_PATH, not this file: publish it with `node scripts/records.mjs commit -m <message>`,')
+      console.log('then move the pin (src/cli/docs/measurements.ts) in the same `main` commit that runs `node scripts/generate-docs.mjs --page measurements`.')
     }
 
     const report = computeMergeReadyRate(ROOT)
