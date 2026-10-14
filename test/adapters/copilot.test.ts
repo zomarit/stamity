@@ -29,6 +29,7 @@ import { renderCapabilityMatrix } from "../../src/emit/capabilityMatrix.ts";
 import type { PackageManagerInfo } from "../../src/detect/packageManager.ts";
 import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
 import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
+import { sanitizeLabel } from "../../src/cli/kit/prompts.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { ledgerHashIndex, ledgerPathSet, safeWriteFile } from "../../src/merge/safeWrite.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
@@ -1028,6 +1029,22 @@ describe("model pinning", () => {
     expect(agentAt(repicked, "implementer")).not.toContain("gpt-5.5");
   });
 
+  it("flattens control characters a display-form pin carries before the warning prints it (review/114)", async () => {
+    const raw = "Bad\u001b[2J\u0007 Name (copilot)";
+    const ctx = ctxOf({ pins: { standard: { copilot: raw } } });
+    const residue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
+
+    const warnings = (residue.warnings ?? []).filter((line) => line.startsWith("model pin [copilot]: standard"));
+    expect(warnings).toHaveLength(1);
+    // The same form `check`'s model-pins row prints (`sanitizeLabel`): ESC and BEL dropped.
+    expect(warnings[0]).toContain(`"${sanitizeLabel(raw)}"`);
+    expect(warnings[0]).toContain('"Bad[2J Name (copilot)"');
+    expect(warnings[0]).not.toContain("\u001b");
+    expect(warnings[0]).not.toContain("\u0007");
+    // Nothing of the pin reaches the agent file either.
+    expect(rowAt(residue.outputs, ".github/agents/stamity-fixer.agent.md").content).not.toContain("Name (copilot)");
+  });
+
   it("drops a pin typed as a display name, picks the class from the list, and warns once naming the class (build/65)", async () => {
     const ctx = ctxOf({ pins: { advanced: { copilot: "Claude Opus 5.5 (copilot)" } }, listed: ["gpt-6-astra"] });
     const residue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
@@ -1866,6 +1883,14 @@ describe("hooks", () => {
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("`models:`");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).not.toContain("only under an operator pin");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("unverified");
+    // review/113: the shipped first entry only when no list was read, and nothing when the list
+    // holds no candidate.
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).not.toContain("else the shipped list —");
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("only when no list was read");
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain(
+      "a saved list holding none of the class's candidates writes neither key",
+    );
+    expect(pick).toContain("whenever the class resolves");
     const urls = COPILOT_DIALECT_FACTS.citations.map((citation) => citation.url);
     expect(urls).toContain("https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model");
     expect(urls).toContain("https://code.visualstudio.com/docs/agent-customization/custom-agents");

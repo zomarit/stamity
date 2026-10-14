@@ -42,6 +42,7 @@ import {
   type CliCallContext,
 } from "../emit/substitution.ts";
 import { CLIENT_HOOK_GUARANTEES } from "../hooks/model.ts";
+import { printableName } from "../manifest/coOwnedJson.ts";
 import type { McpEmission } from "../mcp/emit.ts";
 import {
   grantableFootprint,
@@ -180,7 +181,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
   hooksConfigPath: COPILOT_HOOKS_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` the class model's display name as `<name> (copilot)` where the shipped list gives one (whether any reader takes it on a `target: github-copilot` agent is unverified), `models:` the class's CLI ids in priority order — the operator's pin, else the pick from the account's saved list, else the shipped list — `reasoning-effort:` at the declared class's level) over a markdown prompt; the class-to-model map at `.stamity/generated/models/copilot.json`",
+    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` the class model's display name as `<name> (copilot)` where the shipped list gives one (whether any reader takes it on a `target: github-copilot` agent is unverified), `models:` the class's CLI ids in priority order whenever the class resolves — the operator's pin, else the first shipped candidate the account's saved list holds, else, only when no list was read, the shipped list's first entry; a saved list holding none of the class's candidates writes neither key — `reasoning-effort:` at the declared class's level) over a markdown prompt; the class-to-model map at `.stamity/generated/models/copilot.json`",
   mcpDialect: "vscode-json",
   entryFile: null,
   caps: [
@@ -245,7 +246,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     {
       name: "model-pick",
       value:
-        "emitted — `models: [<id>, …]` per agent, the class's CLI ids in priority order: the " +
+        "emitted — `models: [<id>, …]` per agent whenever the class resolves, the class's CLI ids in " +
+        "priority order: the " +
         "runtime uses the first one the plan can access, falls back to the session's model when " +
         "none resolves, and `models` overrides `model`; under an Auto session model a sub-agent " +
         "inherits the resolved session model whatever the file says (Copilot CLI command reference, " +
@@ -687,14 +689,25 @@ function idPins(pins: ModelPinMap): ModelPinMap {
   return kept;
 }
 
-/** One warning per class whose Copilot pin is a display name, naming the class, the value and what a pin takes. */
+/**
+ * One warning per class whose Copilot pin is a display name, naming the class,
+ * the value and what a pin takes.
+ *
+ * The pin is the manifest's text, which validation refuses only a line break
+ * in, and `sync` prints warnings to the terminal as they are. So it is printed
+ * through {@link printableName}, the adapter-layer twin of the
+ * `sanitizeLabel` form `check`'s model-pins row prints the same value in:
+ * tabs become spaces and every control, bidi, tag and default-ignorable code
+ * point is dropped, so no escape sequence reaches the operator's terminal
+ * (ledger row 2026-10-14_cli-native/review/114).
+ */
 function displayNamePinWarnings(pins: ModelPinMap): string[] {
   const lines: string[] = [];
   for (const { modelClass } of MODEL_LADDER) {
     const pin = pins[modelClass];
     if (pin === undefined || !DISPLAY_NAME_PIN.test(pin.trim())) continue;
     lines.push(
-      `model pin [copilot]: ${modelClass} is pinned to "${pin.trim()}", a display name; Copilot pins take ` +
+      `model pin [copilot]: ${modelClass} is pinned to "${printableName(pin.trim())}", a display name; Copilot pins take ` +
         `model ids (such as ${MODEL_PRIORITY.copilot[modelClass][0]?.id ?? "a listed id"}), so the pin is not ` +
         `written and ${modelClass} takes the pick from the account's model list. Set an id with ` +
         `\`stamity config set model.${modelClass}.copilot <id>\`.`,

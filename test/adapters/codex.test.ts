@@ -827,9 +827,18 @@ describe("model allocation", () => {
 
   it("states in its capability facts that the file's model outranks a per-call escalation (build/62)", () => {
     const row = codexResiduePlanner.facts.caps.find((cap) => cap.name === "model-escalation")?.value ?? "";
-    expect(row).toMatch(/^a per-call escalation does not change a role's model/);
+    // TEST CHANGE, justified (fix round 2, ledger row 2026-10-14_cli-native/review/113): the row
+    // opened "a per-call escalation does not change a role's model" and said every emitted agent
+    // file carries `model`. Since build/66 a saved list holding none of a class's candidates writes
+    // no `model`, so the row is scoped to a file that carries one and names the case that does not.
+    expect(row).toMatch(/^a per-call escalation does not change the model of a role whose agent file carries `model`/);
     expect(row).toContain("takes precedence over the spawn's");
     expect(row).toContain("subagents, read 2026-10-14");
+    expect(row).not.toContain("every emitted agent file carries");
+    expect(row).toContain("a saved list holding none of the class's candidates writes no `model`");
+    expect(row).toContain("only when no list was read");
+    expect(codexResiduePlanner.facts.agentsFormat).not.toContain("in every file");
+    expect(codexResiduePlanner.facts.agentsFormat).toContain("a saved list holding none of the class's candidates writes none");
     // The matrix renders it from the same facts object.
     const codexFacts = LIVE_CAPABILITY_INPUTS.facts.find((facts) => facts.tool === "codex");
     expect(codexFacts?.caps.find((cap) => cap.name === "model-escalation")?.value).toBe(row);

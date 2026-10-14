@@ -343,9 +343,10 @@ const CODEX_FACTS: AdapterDialectFacts = {
   hooksConfigPath: CODEX_HOOKS_FILE,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    `TOML subagent definitions under ${CODEX_AGENTS_DIR}/ — \`model\` in every file (the operator's ` +
-    "pin, else the first shipped candidate the account's saved `codex debug models` list holds, else " +
-    "the shipped list's first entry) and `model_reasoning_effort` at the class's level; a value in the " +
+    `TOML subagent definitions under ${CODEX_AGENTS_DIR}/ — \`model\` whenever the class resolves (the ` +
+    "operator's pin, else the first shipped candidate the account's saved `codex debug models` list " +
+    "holds, else, only when no list was read, the shipped list's first entry; a saved list holding none " +
+    "of the class's candidates writes none) and `model_reasoning_effort` at the class's level; a value in the " +
     "file takes precedence over the spawn's and the parent's (subagents page, accessed 2026-10-14); the " +
     "class-to-model map at `.stamity/generated/models/codex.json`",
   mcpDialect: "codex-toml",
@@ -386,12 +387,16 @@ const CODEX_FACTS: AdapterDialectFacts = {
     {
       name: "model-escalation",
       value:
-        "a per-call escalation does not change a role's model — every emitted agent file carries " +
-        "`model`, and a value in the file takes precedence over the spawn's, the `[agents]` " +
-        "default's and the parent's, for `model` and `model_reasoning_effort` alike; a role runs on " +
-        "its file's model whatever model the call names (learn.chatgpt.com/docs/agent-configuration/" +
-        "subagents, read 2026-10-14). Escalating a role on this client means pinning its class " +
-        "(`stamity config set model.<class>.codex <id>`) and re-syncing",
+        "a per-call escalation does not change the model of a role whose agent file carries `model` — " +
+        "a value in the file takes precedence over the spawn's, the `[agents]` default's and the " +
+        "parent's, for `model` and `model_reasoning_effort` alike, so such a role runs on its file's " +
+        "model whatever model the call names (learn.chatgpt.com/docs/agent-configuration/subagents, " +
+        "read 2026-10-14). A file carries `model` whenever its class resolves: the operator's pin, else " +
+        "the first shipped candidate the account's saved list holds, else, only when no list was read, " +
+        "the shipped list's first entry; a saved list holding none of the class's candidates writes no " +
+        "`model`, and neither does an agent that declares no ladder class, and there the spawn's model, " +
+        "else the parent's, applies, so an escalation does bind. Escalating a role whose file carries " +
+        "`model` means pinning its class (`stamity config set model.<class>.codex <id>`) and re-syncing",
     },
   ],
   citations: [
@@ -451,8 +456,9 @@ export const codexResiduePlanner: ResiduePlanner = {
     // re-read the same two maps once per subagent.
     //
     // The account's saved list rides beside them: a class with no pin takes the
-    // first shipped candidate on it, else the shipped list's entry 0, and
-    // emission never starts the client to read it (REQ-LADDER-006).
+    // first shipped candidate on it, and nothing when it holds none; the shipped
+    // list's entry 0 only when no list was read. Emission never starts the
+    // client to read it (REQ-LADDER-006).
     const listed = ctx.manifest.models?.listed?.[TOOL]?.ids;
     const models: ModelOptions = {
       ...(ctx.manifest.models?.pins === undefined ? {} : { pins: pinsFor(ctx.manifest.models, TOOL) }),
@@ -1030,9 +1036,10 @@ interface ClassModels {
 /**
  * The class's model through the one resolver, with the pick
  * (REQ-LADDER-006): the operator's pin (re-picked when the saved list lacks
- * it), else the first shipped candidate the saved list holds, else the shipped
- * list's entry 0 — so every ladder class resolves on this client. The
- * fallbacks are the pick's candidates without the model. No Codex candidate
+ * it), else the first shipped candidate the saved list holds, else, only when
+ * no list was read, the shipped list's entry 0; a saved list holding none of
+ * the class's candidates resolves the class to nothing. The fallbacks are the
+ * pick's candidates without the model. No Codex candidate
  * carries an effort variant, so the pick reads no level.
  */
 function classModels(modelClass: ModelClass, opts: ModelOptions): ClassModels {
@@ -1091,12 +1098,13 @@ export function buildCodexModelMap(
  * the sandbox read-only, so an unknown grant narrows rather than widens.
  *
  * Both allocation axes come from the ladder (`../roster/modelLadder.ts`), never
- * from a table of this adapter's own. `model` is written for every ladder
- * class ({@link classModels}): the operator's pin, else the pick from the
- * account's saved list, else the shipped priority list's entry 0, each a model
- * this client's CLI listed when its row was read (REQ-LADDER-007). The file's
- * value outranks the spawn's and the parent's, so a role runs on its class's
- * model rather than on whatever the parent session runs. `model_reasoning_effort`
+ * from a table of this adapter's own. `model` is written whenever the class
+ * resolves ({@link classModels}): the operator's pin, else the pick from the
+ * account's saved list, else, only when no list was read, the shipped priority
+ * list's entry 0 (REQ-LADDER-007); a saved list holding none of the class's
+ * candidates writes no `model`. Where it is written, the file's value outranks
+ * the spawn's and the parent's, so a role runs on its class's model rather
+ * than on whatever the parent session runs. `model_reasoning_effort`
  * carries the class's effort, operator override first.
  */
 export function buildAgentToml(
