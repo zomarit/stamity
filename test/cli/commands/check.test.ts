@@ -8,13 +8,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkClaudeHookShell,
   checkCommand,
+  checkModelPins,
   checkNodeVersion,
   evaluateExpectations,
   resolveCharterGates,
   runDoctor,
   runDriftGate,
   type DoctorCheck,
+  type ModelLister,
 } from "../../../src/cli/commands/check.ts";
+import type { ModelListOutcome } from "../../../src/cli/engine/clientModels.ts";
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
@@ -446,7 +449,10 @@ describe("check — a healthy repository", () => {
     // TEST CHANGE, justified: REQ-PLUGIN-045 — check names each reclaim path
     expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
     expect(doc.provenance?.generatedBy).toBe(createApp().version);
-    expect(doc.provenance?.manifestVersion).toBe("1.0.0");
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e1-pins-contract, REQ-LADDER-005):
+    // the manifest generation moved from 1.0.0 to 2.0.0 with per-client pins, so a fresh sync
+    // writes 2.0.0; e1 left this expectation behind and this lane owns the file.
+    expect(doc.provenance?.manifestVersion).toBe("2.0.0");
     // Was `files: 0`. Counted off the ledger rather than pinned to a literal so
     // the rollup stays asserted without this suite owning the adapter's file
     // count; the guard below keeps it from passing vacuously at zero.
@@ -501,7 +507,9 @@ describe("check — a healthy repository", () => {
   // `pack-reach` row below; the assertion is the array, which names every row.
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): fifteen to
   // fourteen — the `plugin-runtime` row left with the plugin route.
-  it("returns the fourteen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row,
+  // REQ-LADDER-008): fourteen to fifteen with the `model-pins` row below.
+  it("returns the fifteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -551,6 +559,11 @@ describe("check — a healthy repository", () => {
       // this repository, so it sits before `invariants`, which alone reads the installed corpus.
       // No other row moved.
       "pack-reach",
+      // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row,
+      // REQ-LADDER-008): `model-pins` joined after `pack-reach`. It answers about this
+      // repository's pins against the account's model list, so it sits with the repository
+      // rows, before `invariants`, which alone reads the installed corpus. No other row moved.
+      "model-pins",
       "invariants",
     ]);
   });
@@ -3370,7 +3383,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     });
     // Outside `runDoctor`: the fifteenth row exists only because a flag asked for it.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
-    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(14);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
+    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(15);
   });
 
   it("fails another --expect-version naming the running release and generatedBy", async () => {
@@ -3735,7 +3749,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
 
     expect(doc).not.toHaveProperty("expectations");
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
-    expect(doc.doctor).toHaveLength(14);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
+    expect(doc.doctor).toHaveLength(15);
     expect(human.stdout).not.toContain("expectations");
   });
 });
@@ -3750,11 +3765,13 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
 
     expect(doc.doctor.map((entry) => entry.id)).not.toContain("change-classes");
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
-    expect(doc.doctor).toHaveLength(14);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
+    expect(doc.doctor).toHaveLength(15);
   });
 
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
-  it("passes a valid class file, as the fifteenth row before invariants", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
+  it("passes a valid class file, as the sixteenth row before invariants", async () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
@@ -3774,7 +3791,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
       detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
     });
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids).toHaveLength(15);
+    expect(ids).toHaveLength(16);
     expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
   });
 
@@ -3880,5 +3897,274 @@ describe("evaluateExpectations (REQ-PLUGIN-047)", () => {
       version: { expected: "1.12.0", running: "1.12.0", generatedBy: null, ok: false },
       tools: { expected: ["claude"], recorded: null, missing: [], extra: [], ok: false },
     });
+  });
+});
+
+/**
+ * `model-pins` (REQ-LADDER-008, plan 020 file 2, unit e4-check-model-row): each selected
+ * client's pinned and emitted models, compared with the account's own list — read live where
+ * the client's CLI answers (Codex with `--bundled`, so no network refresh), else the list the
+ * last `sync` saved under `models.listed`. A model the list lacks warns, naming the client, the
+ * class and the model; with nothing to compare the row passes as unverified; it never fails.
+ */
+describe("check — model-pins", () => {
+  const CODEX_SAVED = { ids: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } as const;
+
+  function pinnedManifest(tools: Tool[], models: SetupManifest["models"]): SetupManifest {
+    const manifest = createManifest({
+      tools,
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "1.15.0",
+      now: T0,
+    });
+    return models === undefined ? manifest : { ...manifest, models };
+  }
+
+  /**
+   * A stand-in for `listClientModels`, recording each call. Justified fake: the real lister
+   * starts the machine's own client CLIs, which read its accounts and may go to the network —
+   * no unit test may. The command-level cases below start a real program on a scoped PATH.
+   */
+  function fakeLister(answers: Partial<Record<Tool, ModelListOutcome>>): {
+    lister: ModelLister;
+    calls: { tool: Tool; codexBundled: boolean | undefined }[];
+  } {
+    const calls: { tool: Tool; codexBundled: boolean | undefined }[] = [];
+    const lister: ModelLister = (tool, _env, _cwd, options) => {
+      calls.push({ tool, codexBundled: options?.codexBundled });
+      return Promise.resolve(answers[tool] ?? { kind: "absent" });
+    };
+    return { lister, calls };
+  }
+
+  it("warns naming codex, the class and the model when the saved list lacks the pin", async () => {
+    const manifest = pinnedManifest(["claude", "codex"], {
+      pins: { standard: { codex: "gpt-5.5" } },
+      listed: { codex: { ...CODEX_SAVED, ids: [...CODEX_SAVED.ids] } },
+    });
+    const { lister, calls } = fakeLister({ codex: { kind: "listed", ids: ["gpt-5.5"], source: "codex-debug-models" } });
+
+    const verdict = await checkModelPins(manifest, { STAMITY_NO_CLIENT_PROBE: "1" }, lister, "/repo");
+
+    expect(verdict.id).toBe("model-pins");
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain(`codex standard: the pinned model "gpt-5.5" is not on codex's list (saved by the last sync)`);
+    expect(verdict.detail).toContain(npxCommand("config set model.standard.codex <id>"));
+    // The switch reads the saved list only: no client is started, even one that would answer.
+    expect(calls).toEqual([]);
+    // Only the unlisted model is named; the classes the saved list holds are not.
+    expect(verdict.detail.split("\n")).toHaveLength(1);
+  });
+
+  it("passes as unverified when no client CLI is on PATH and no list was saved", async () => {
+    const manifest = pinnedManifest(["claude", "cursor", "codex"], { pins: { standard: { codex: "gpt-5.5" } } });
+    const { lister, calls } = fakeLister({});
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail:
+        "cursor: unverified — no cursor CLI on PATH and no saved list; " +
+        "codex: unverified — no codex CLI on PATH and no saved list",
+    });
+    expect(calls.map((call) => call.tool)).toEqual(["cursor", "codex"]);
+    // With the switch set, the same answer says why no client was asked.
+    expect((await checkModelPins(manifest, { STAMITY_NO_CLIENT_PROBE: "1" }, lister, "/repo")).detail).toBe(
+      "cursor: unverified — client probe off (STAMITY_NO_CLIENT_PROBE=1) and no saved list; " +
+        "codex: unverified — client probe off (STAMITY_NO_CLIENT_PROBE=1) and no saved list",
+    );
+  });
+
+  it("reads the live list before the saved one, Codex with --bundled", async () => {
+    const manifest = pinnedManifest(["codex"], {
+      pins: { standard: { all: "gpt-5.5" } },
+      listed: { codex: { ids: ["gpt-5.5", ...CODEX_SAVED.ids], source: "codex-debug-models" } },
+    });
+    const { lister, calls } = fakeLister({ codex: { kind: "listed", ids: [...CODEX_SAVED.ids], source: "codex-debug-models" } });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(calls).toEqual([{ tool: "codex", codexBundled: true }]);
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toBe(
+      `codex standard: the pinned model "gpt-5.5" is not on codex's list (read live); pin a listed one with ` +
+        npxCommand("config set model.standard.codex <id>"),
+    );
+  });
+
+  it("warns on an emitted model the live list no longer holds, and names sync", async () => {
+    // No pin: emission picks from the saved list, which still holds gpt-6-luna for economy.
+    const manifest = pinnedManifest(["codex"], {
+      listed: { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } },
+    });
+    const { lister } = fakeLister({ codex: { kind: "listed", ids: ["gpt-6-sol"], source: "codex-debug-models" } });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toBe(
+      `codex economy: the emitted model "gpt-6-luna" is not on codex's list (read live); ` +
+        `${npxCommand("sync")} reads the list again and re-picks`,
+    );
+  });
+
+  it("passes when every pinned and emitted model is on the list, counting them", async () => {
+    const manifest = pinnedManifest(["claude", "codex"], {
+      pins: { advanced: { codex: "gpt-6-sol" } },
+      listed: { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } },
+    });
+    const { lister } = fakeLister({ codex: { kind: "listed", ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "codex: 4 class(es), each pinned or emitted model on the list (read live)",
+    });
+  });
+
+  it("counts a Cursor family pin the list carries per effort variant as listed", async () => {
+    const manifest = pinnedManifest(["cursor"], { pins: { advanced: { all: "claude-opus-4-8" } } });
+    const { lister } = fakeLister({
+      cursor: { kind: "listed", ids: ["auto", "claude-opus-4-8-high", "claude-opus-4-8-low"], source: "cursor-agent-models" },
+    });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    // Only the pinned class has a model: with no saved list Cursor emits none for the rest.
+    expect(verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "cursor: 1 class(es), each pinned or emitted model on the list (read live)",
+    });
+    // The other side of the family rule: only an exact effort variant counts, so a pin that a
+    // listed id merely starts with (`claude-opus-4` before `claude-opus-4-8-high`) still warns.
+    const off = await checkModelPins(
+      pinnedManifest(["cursor"], { pins: { advanced: { all: "claude-opus-4" } } }),
+      {},
+      lister,
+      "/repo",
+    );
+    expect(off.status).toBe("warn");
+    expect(off.detail).toContain(`cursor advanced: the pinned model "claude-opus-4" is not on cursor's list`);
+  });
+
+  it("falls back to the saved list when the live read times out, and is unverified with neither", async () => {
+    const manifest = pinnedManifest(["codex", "copilot"], {
+      pins: { standard: { all: "gpt-5.5" } },
+      listed: { codex: { ...CODEX_SAVED, ids: [...CODEX_SAVED.ids] } },
+    });
+    const { lister } = fakeLister({ codex: { kind: "timeout" }, copilot: { kind: "timeout" } });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail.split("\n")).toEqual([
+      `codex standard: the pinned model "gpt-5.5" is not on codex's list (saved by the last sync); pin a listed one with ` +
+        npxCommand("config set model.standard.codex <id>"),
+      "copilot: unverified — the copilot CLI did not answer within 10 s and no saved list",
+    ]);
+  });
+
+  it("flattens control characters a pin carries before printing it", async () => {
+    const manifest = pinnedManifest(["codex"], {
+      pins: { standard: { codex: "bad\u0007\u001bid" } },
+      listed: { codex: { ...CODEX_SAVED, ids: [...CODEX_SAVED.ids] } },
+    });
+
+    const verdict = await checkModelPins(manifest, { STAMITY_NO_CLIENT_PROBE: "1" }, fakeLister({}).lister, "/repo");
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain(`the pinned model "badid"`);
+    expect(verdict.detail).not.toContain("\u0007");
+    expect(verdict.detail).not.toContain("\u001b");
+  });
+
+  it("passes with nothing to list for a Claude-only setup or no readable manifest", async () => {
+    const { lister, calls } = fakeLister({});
+
+    expect(await checkModelPins(pinnedManifest(["claude"], undefined), {}, lister, "/repo")).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "no selected client lists its models (claude runs on its family aliases)",
+    });
+    expect(await checkModelPins(null, {}, lister, "/repo")).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "no readable manifest, so no model pins to verify",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  /** A folder outside the test repository's tree: the lister never starts a program the repository holds. */
+  const getBin = useTempDir("stamity-check-bin");
+
+  /**
+   * A `codex` on a PATH holding only `bin`, in a folder beside the repository: it prints a
+   * one-model catalogue when asked for the bundled list, and leaves a marker file behind on
+   * every start, so a case can tell whether the row started it at all.
+   */
+  async function fakeCodex(handle: TempDirHandle): Promise<{ env: Record<string, string>; marker: string }> {
+    const marker = handle.path("codex-started");
+    await handle.seedFiles({
+      "bin/codex": [
+        "#!/bin/sh",
+        `: > '${marker}'`,
+        'if [ "$1 $2 $3" = "debug models --bundled" ]; then',
+        `  printf '%s\\n' '{"models":[{"slug":"gpt-6-sol"}]}'`,
+        "  exit 0",
+        "fi",
+        "exit 3",
+        "",
+      ].join("\n"),
+    });
+    await chmod(handle.path("bin", "codex"), 0o755);
+    return { env: { PATH: [handle.path("bin"), "/usr/bin", "/bin"].join(delimiter) }, marker };
+  }
+
+  async function pinCodex(root: string, models: SetupManifest["models"]): Promise<void> {
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("the fixture wrote no manifest");
+    await writeManifest(root, { ...manifest, ...(models === undefined ? {} : { models }) }, { now: T0 });
+  }
+
+  const posixOnly = process.platform === "win32" ? it.skip : it;
+
+  posixOnly("check --json carries the row as model-pins, after pack-reach, read off a live codex", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-5.5" } } });
+    const { env, marker } = await fakeCodex(getBin());
+
+    const { doc } = await runJson(root, env);
+
+    const ids = doc.doctor.map((entry) => entry.id);
+    expect(ids.indexOf("model-pins")).toBe(ids.indexOf("pack-reach") + 1);
+    const verdict = row(doc, "model-pins");
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain(`codex standard: the pinned model "gpt-5.5" is not on codex's list (read live)`);
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  posixOnly("reads only the saved list under STAMITY_NO_CLIENT_PROBE=1, starting no client", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
+    await pinCodex(root, {
+      pins: { standard: { codex: "gpt-5.5" } },
+      listed: { codex: { ids: ["gpt-5.5", "gpt-6-astra", "gpt-6-luna"], source: "codex-debug-models" } },
+    });
+    const { env, marker } = await fakeCodex(getBin());
+
+    const verdict = await doctorRow(root, "model-pins", { ...env, STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "codex: 4 class(es), each pinned or emitted model on the list (saved by the last sync)",
+    });
+    expect(existsSync(marker)).toBe(false);
   });
 });

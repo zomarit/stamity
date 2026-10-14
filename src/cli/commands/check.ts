@@ -35,7 +35,9 @@ import {
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
 import type { PackArtifactReach, PackReach } from "../../types/content.ts";
-import { TOOLS, type Tool, VALID_TOOLS } from "../../types/core.ts";
+import { MODEL_PRIORITY } from "../../roster/modelDefaults.ts";
+import { MODEL_LADDER, pinsFor, resolveModelValue } from "../../roster/modelLadder.ts";
+import { EFFORT_LEVELS, TOOLS, type Tool, VALID_TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import {
   isPackOwner,
@@ -45,6 +47,12 @@ import {
   type SetupManifest,
 } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import {
+  CLIENT_LIST_TIMEOUT_MS,
+  listClientModels,
+  type ListClientModelsOptions,
+  type ModelListOutcome,
+} from "../engine/clientModels.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import { CliFailure, type FailureDoc } from "../kit/output.ts";
@@ -62,7 +70,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — fourteen environment and state probes, each a
+ * 1. **DOCTOR** — fifteen environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -452,7 +460,7 @@ async function checkLearnings(
 /**
  * The repository's class file (REQ-FLOW-061): the change classes and the
  * test-input map `gate classify` reads from a base commit. No row when the file
- * is absent, so a repository without one keeps its fourteen rows. This reads the
+ * is absent, so a repository without one keeps its fifteen rows. This reads the
  * work tree's copy, the one the next pull request lands as a base: it passes
  * when the validator accepts it, and fails naming the first error, since a base
  * holding a refused copy has `gate classify` apply only its raising entries
@@ -1443,6 +1451,171 @@ function describeAwaitingPack(pack: PackReach): string {
 }
 
 
+// ── Model pins ─────────────────────────────────────────────────────────────
+
+/** The client lister's shape (`../engine/clientModels.ts::listClientModels`), the seam a test turns. */
+export type ModelLister = (
+  tool: Tool,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  options?: ListClientModelsOptions,
+) => Promise<ModelListOutcome>;
+
+/**
+ * The tail after `<model>-` that makes a listed id an effort variant of that
+ * model: one effort level or `none`, optionally `-fast`. The same rule as the
+ * ladder's own (`../../roster/modelLadder.ts`, `EFFORT_VARIANT_TAIL` and
+ * `listHolds`, module-private there), so this row and the resolver agree on
+ * what a list holds.
+ */
+const LISTED_EFFORT_VARIANT_TAIL = new RegExp(`^(?:${[...EFFORT_LEVELS, "none"].join("|")})(?:-fast)?$`, "i");
+
+/**
+ * Whether `ids` holds `model`: the id itself, or — a Cursor family pin
+ * (`claude-opus-4-8`) — an exact effort variant of it (`claude-opus-4-8-high`),
+ * which that client's CLI accepts, never a longer id that merely starts with it
+ * (`claude-opus-5-5-high` is not a variant of `claude-opus-5`). The ladder
+ * keeps such a pin rather than re-picking it, so the row must not warn on it.
+ */
+function listHoldsModel(ids: readonly string[], model: string): boolean {
+  return (
+    ids.includes(model) ||
+    ids.some((id) => id.startsWith(`${model}-`) && LISTED_EFFORT_VARIANT_TAIL.test(id.slice(model.length + 1)))
+  );
+}
+
+/** A model value without its bracket options (`<id>[effort=high]` → `<id>`), the part a list names. */
+function modelIdOf(value: string): string {
+  const bracket = value.indexOf("[");
+  return (bracket === -1 ? value : value.slice(0, bracket)).trim();
+}
+
+/** Why one client has nothing to compare with, after its live read came to `outcome`. */
+function unverifiedReason(tool: Tool, outcome: ModelListOutcome | null): string {
+  if (outcome === null) return "client probe off (STAMITY_NO_CLIENT_PROBE=1)";
+  switch (outcome.kind) {
+    case "timeout":
+      return `the ${tool} CLI did not answer within ${CLIENT_LIST_TIMEOUT_MS / 1000} s`;
+    case "unreadable":
+      return sanitizeLabel(outcome.message);
+    default:
+      return `no ${tool} CLI on PATH`;
+  }
+}
+
+/** One client's part of the row: the models its list lacks, or the line that says how it went. */
+interface ClientModelVerdict {
+  readonly warnings: readonly string[];
+  readonly note: string;
+  /** Whether `note` says the client could not be verified; such a note is kept beside warnings. */
+  readonly unverified: boolean;
+}
+
+/**
+ * One listing client's pinned and emitted models against the list `listed`
+ * (live) or the one the last `sync` saved. The emitted model is the one
+ * emission resolves from the saved list (`resolveModelValue` with the pick),
+ * so a saved list the account has since moved past shows as an emitted model
+ * the live list lacks.
+ */
+function verifyClientModels(
+  tool: Tool,
+  models: SetupManifest["models"],
+  live: ModelListOutcome | null,
+): ClientModelVerdict {
+  const saved = models?.listed?.[tool]?.ids;
+  const reference =
+    live?.kind === "listed"
+      ? { ids: live.ids, label: "read live" }
+      : saved === undefined
+        ? null
+        : { ids: saved, label: "saved by the last sync" };
+  if (reference === null) {
+    return { warnings: [], note: `${tool}: unverified — ${unverifiedReason(tool, live)} and no saved list`, unverified: true };
+  }
+
+  const pins = pinsFor(models, tool);
+  const efforts = models?.effort ?? {};
+  const pick = saved === undefined ? {} : { listed: saved };
+  const warnings: string[] = [];
+  let compared = 0;
+  for (const { modelClass } of MODEL_LADDER) {
+    const pinned = modelIdOf(pins[modelClass] ?? "");
+    const emittedValue = resolveModelValue(modelClass, tool, pins, efforts, pick);
+    const emitted = emittedValue === undefined ? "" : modelIdOf(emittedValue);
+    if (pinned === "" && emitted === "") continue;
+    compared += 1;
+    const where = `${tool}'s list (${reference.label})`;
+    if (pinned !== "" && !listHoldsModel(reference.ids, pinned)) {
+      warnings.push(
+        `${tool} ${modelClass}: the pinned model "${sanitizeLabel(pinned)}" is not on ${where}; pin a listed one with ` +
+          packageCommand(`config set model.${modelClass}.${tool} <id>`),
+      );
+    }
+    if (emitted !== "" && emitted !== pinned && !listHoldsModel(reference.ids, emitted)) {
+      warnings.push(
+        `${tool} ${modelClass}: the emitted model "${sanitizeLabel(emitted)}" is not on ${where}; ` +
+          `${packageCommand("sync")} reads the list again and re-picks`,
+      );
+    }
+  }
+  const note =
+    compared === 0
+      ? `${tool}: no model pinned or emitted to compare (${reference.label})`
+      : `${tool}: ${compared} class(es), each pinned or emitted model on the list (${reference.label})`;
+  return { warnings, note, unverified: false };
+}
+
+/**
+ * Model pins, verified against the account's own model list (REQ-LADDER-008).
+ *
+ * For each selected client whose CLI can list models (Cursor, Copilot, Codex;
+ * Claude Code runs on its family aliases), every class's pinned model and the
+ * model emission writes are compared with the list the client's CLI prints now
+ * — Codex asked for its bundled catalogue, so the read makes no network call —
+ * or, where the CLI is absent, slow or unreadable, with the list the last
+ * `sync` saved under `models.listed`. `STAMITY_NO_CLIENT_PROBE=1` starts no
+ * client and reads the saved list only. A model the list lacks warns, naming
+ * the client, the class and the model, with the remedy: pin a listed id, or
+ * `sync` to re-read the list and re-pick.
+ *
+ * Never `fail`: the list is the account's, outside anything this repository
+ * can change, and a CI gate on it would fail on a vendor's model retirement.
+ * With nothing to compare it passes, saying "unverified" and why.
+ *
+ * `env` is the app's runtime environment: it holds the `PATH` the clients are
+ * found on and the switch. Every id a pin or a list carries goes through
+ * `sanitizeLabel` before it is printed.
+ */
+export async function checkModelPins(
+  manifest: SetupManifest | null,
+  env: NodeJS.ProcessEnv,
+  lister: ModelLister,
+  cwd: string,
+): Promise<DoctorCheck> {
+  const id = "model-pins";
+  if (manifest === null) {
+    return { id, status: "pass", detail: "no readable manifest, so no model pins to verify" };
+  }
+  const clients = TOOLS.filter((tool) => manifest.tools.includes(tool) && Object.hasOwn(MODEL_PRIORITY, tool));
+  if (clients.length === 0) {
+    return { id, status: "pass", detail: "no selected client lists its models (claude runs on its family aliases)" };
+  }
+  const probeOff = env["STAMITY_NO_CLIENT_PROBE"] === "1";
+  const live = await Promise.all(
+    clients.map((tool) => (probeOff ? Promise.resolve(null) : lister(tool, env, cwd, { codexBundled: true }))),
+  );
+  const verdicts = clients.map((tool, index) => verifyClientModels(tool, manifest.models, live[index] ?? null));
+  const warnings = verdicts.flatMap((verdict) => verdict.warnings);
+  if (warnings.length > 0) {
+    // Plain newlines: the renderer indents each continuation line under the
+    // detail column, so `--json` carries no layout whitespace.
+    const unverified = verdicts.filter((verdict) => verdict.unverified).map((verdict) => verdict.note);
+    return { id, status: "warn", detail: [...warnings, ...unverified].join("\n") };
+  }
+  return { id, status: "pass", detail: verdicts.map((verdict) => verdict.note).join("; ") };
+}
+
 /**
  * Every doctor probe, in report order.
  *
@@ -1472,6 +1645,7 @@ export async function runDoctor(
     packIntegrity,
     pluginDuplicates,
     packReach,
+    modelPins,
     changeClasses,
     invariants,
   ] = await Promise.all([
@@ -1483,6 +1657,7 @@ export async function runDoctor(
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
     guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
+    guarded("model-pins", () => checkModelPins(manifest, app.runtime.env, listClientModels, rootDir)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);
@@ -1507,6 +1682,10 @@ export async function runDoctor(
     pluginDuplicates,
     // What an installed pack ships that no selected client receives.
     packReach,
+    // Whether each client's pinned and emitted models are on the account's own
+    // list; it answers about this repository's pins, so it sits with the
+    // repository rows.
+    modelPins,
     // Present only with a class file. It answers about this repository, so it
     // sits with the repository rows, before the one row that reads the corpus.
     ...(changeClasses === null ? [] : [changeClasses]),
@@ -1619,7 +1798,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the doctor's fourteen probes on screen, which a diagnostic command exists to
+ * the doctor's fifteen probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
@@ -2404,7 +2583,7 @@ function expectationMismatches(report: ExpectationReport): string[] {
 /**
  * The `expectations` doctor row. Printed only when a flag asked for it, after
  * `invariants` and outside {@link runDoctor}, so a run without the flags keeps
- * its fourteen rows (fifteen with a class file). A manifest that could not be read leaves nothing to compare
+ * its fifteen rows (sixteen with a class file). A manifest that could not be read leaves nothing to compare
  * against: the row says so, and the `manifest` row above it carries the cause.
  */
 function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorCheck {
@@ -2532,7 +2711,7 @@ export const checkCommand: CommandModule = {
       readProvenance(rootDir, ctx.engine),
     ]);
     // The caller's expectations, only when a flag asked (REQ-PLUGIN-047): one
-    // more row after the fourteen, so its `fail` reaches `ok` like any other.
+    // more row after the fifteen, so its `fail` reaches `ok` like any other.
     const expectations =
       expected === null ? null : expectationOutcome(expected, manifestState.manifest, ctx.app.version);
     const doctor = expectations === null ? probes : [...probes, expectations.row];
