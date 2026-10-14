@@ -27,8 +27,10 @@ import type { ListedModels } from "../../types/manifest.ts";
  * folders ahead of the user's `PATH`, and a repository can commit one or have a
  * dependency install a `bin` there. A program the walk still finds whose real
  * path lies inside the working tree (a link from outside pointing in) is
- * refused, never started. So a file a repository carries under a client's name
- * is not what starts. The output must open with that client's own header or the
+ * refused, never started. The child is given that trimmed `PATH` too, so a
+ * launcher that finds its interpreter by name (`#!/usr/bin/env node`) cannot
+ * reach one the repository placed. So a file a repository carries under a
+ * client's name, or under an interpreter's, is not what starts. The output must open with that client's own header or the
  * outcome is `unreadable`, which limits what is kept, not what runs; and an id is kept only when it has the shape of a model id
  * (letters, digits and `._:/-`, at most 100 characters), which no line break,
  * space or quote passes, so a kept id is always a value `modelPinDefect` in the
@@ -226,8 +228,45 @@ function trustedSearchPath(
     .join(delimiter);
 }
 
-/** What the walk found for a client: a program to start, one refused, or nothing. */
-type FoundProgram = { kind: "found"; name: string; path: string } | { kind: "refused"; name: string } | null;
+/**
+ * What the walk found for a client: a program to start, with the trimmed search
+ * path its child is given; one refused; or nothing.
+ */
+type FoundProgram =
+  | { kind: "found"; name: string; path: string; searchPath: string | undefined }
+  | { kind: "refused"; name: string }
+  | null;
+
+/**
+ * The key `env` holds its search path under, as the child reads it: `PATH` on
+ * POSIX; on Windows the first spelling in sort order of any letter case, the
+ * one Node keeps when it hands a plain object to a child (and the one
+ * `searchPathOf` reads).
+ */
+function searchPathKey(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string {
+  if (platform !== "win32") return "PATH";
+  return (
+    Object.keys(env)
+      .toSorted()
+      .find((name) => name.toUpperCase() === "PATH") ?? "Path"
+  );
+}
+
+/**
+ * The child's environment: `env` with its search path replaced by the trimmed
+ * one, under the same key, and nothing else changed. The walk's trim is not
+ * enough on its own: a client launcher that starts its interpreter by name
+ * (`#!/usr/bin/env node`) searches the child's `PATH`, which would otherwise
+ * still hold the repository's `node_modules/.bin`.
+ */
+function childEnv(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+  searchPath: string | undefined,
+): NodeJS.ProcessEnv {
+  if (searchPath === undefined) return env;
+  return { ...env, [searchPathKey(env, platform)]: searchPath };
+}
 
 /** The first of `programs` the walk finds outside the working tree, by name and absolute path. */
 function findProgram(
@@ -245,7 +284,7 @@ function findProgram(
     if (found === null) continue;
     const real = probe.realPath(found);
     if (root === null || real === null || isWithin(real, root, windows)) return { kind: "refused", name };
-    return { kind: "found", name, path: found };
+    return { kind: "found", name, path: found, searchPath: path };
   }
   return null;
 }
@@ -289,7 +328,7 @@ export function listClientModels(
       args,
       {
         cwd,
-        env,
+        env: childEnv(env, platform, program.searchPath),
         encoding: "utf8",
         timeout: options.timeoutMs ?? CLIENT_LIST_TIMEOUT_MS,
         killSignal: "SIGKILL",

@@ -268,6 +268,48 @@ describe("listClientModels", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  posixOnly("gives the child the trimmed PATH, so a launcher's `env` interpreter is never the repository's", async () => {
+    // review/81: a client stub outside the tree starts its interpreter through `/usr/bin/env`, and
+    // the repository plants an interpreter of that name in its own `node_modules/.bin`.
+    const repo = await repoDir();
+    const marker = getTemp().path("started");
+    await fakeProgram(join(repo, "node_modules", ".bin"), "stamity-fake-interp", `: > '${marker}'\nexit 0`);
+    await mkdir(getTemp().path("bin"));
+    await writeFile(
+      getTemp().path("bin", "codex"),
+      "#!/usr/bin/env stamity-fake-interp\n",
+      "utf8",
+    );
+    await chmod(getTemp().path("bin", "codex"), 0o755);
+
+    const path = [join(repo, "node_modules", ".bin"), getTemp().path("bin"), "/usr/bin", "/bin"].join(":");
+    const outcome = await listClientModels("codex", { PATH: path }, repo);
+
+    expect(existsSync(marker)).toBe(false);
+    // `env` finds no interpreter of that name on the trimmed PATH, so the stub fails to start.
+    expect(outcome.kind).toBe("unreadable");
+  });
+
+  posixOnly("changes nothing else in the child's environment", async () => {
+    const repo = await repoDir();
+    const bin = getTemp().path("bin");
+    const trimmed = `${bin}:/usr/bin:/bin`;
+    // The stub reports, as two model ids, whether it saw exactly the trimmed PATH and the other variable.
+    await fakeProgram(
+      bin,
+      "agent",
+      `[ "$PATH" = '${trimmed}' ] && p=path-trimmed || p=path-other\nprintf 'Available models\\n\\n%s - P\\n%s - K\\n' "$p" "$KEEP_ME"`,
+    );
+
+    const outcome = await listClientModels(
+      "cursor",
+      { PATH: `${join(repo, "node_modules", ".bin")}:${trimmed}`, KEEP_ME: "kept-1" },
+      repo,
+    );
+
+    expect(outcome).toEqual({ kind: "listed", ids: ["path-trimmed", "kept-1"], source: "cursor-agent-models" });
+  });
+
   posixOnly("refuses a program on PATH that links into the working tree, and starts nothing", async () => {
     const repo = getTemp().path("repo");
     const marker = getTemp().path("started");
