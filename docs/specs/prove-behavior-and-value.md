@@ -1134,12 +1134,14 @@ already holds is refused with the plain-git repair printed, whose `git rm` takes
    `restore` with the same ref and fetch (`:202-211`, `:381-394`).
 2. **`restore [--ref <ref>] [--no-fetch] [--force]`** writes the records of the ref, by default `origin/records`, into
    the checkout (`:282-379`).
-   - It merges three ways against the sync base: a record changed only on the ref is written; one changed only on disk
-     is kept and listed as a pending edit; one changed on both refuses the run, listed, with nothing written. With no
-     sync base, a differing file refuses as before. `--force` takes the ref's copy of every differing record, a pending
-     edit included (`:292-313`, `:335-350`).
-   - A record the base holds and the ref does not was deleted there. Its copy here is deleted only when it is the
-     base's byte for byte, `--force` or not, so `restore` never deletes a file that holds unpublished bytes (S25, S26).
+   - It merges three ways against the sync base, comparing each record's bytes and mode (`100644` or `100755`), so a
+     change of mode alone, on either side, is a change (the mode since `371445b4`): a record changed only on the ref
+     is written, its mode applied; one changed only on disk is kept and listed as a pending edit; one changed on both
+     refuses the run, listed, with nothing written. With no sync base, a differing file refuses as before. `--force`
+     takes the ref's copy of every differing record, a pending edit included (`:292-313`, `:335-350`).
+   - A record the base holds and the ref does not was deleted there. Its copy here is deleted only when it matches the
+     base in bytes and mode, `--force` or not, so `restore` never deletes a file that holds an unpublished change
+     (S25, S26).
      An edited copy refuses a plain run; under `--force` it is kept and named, with the warning that the next `commit`
      publishes it again. A path the ref holds in another case, or `main`'s placeholder in any case, is never deleted
      (`:314-332`).
