@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). The section on the removed APM and plugin routes was written 2026-10-14 against plan 020 file 1 and the frozen refs it keeps, and is re-read at the next cut. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, or a path joins or leaves `.stamity/`.
      `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
@@ -91,6 +91,16 @@ files, and no machine should consent to that on your behalf.
 
 `--dry-run` previews the whole run without writing. `--tools <csv>` names the clients up front.
 `--force` replaces an existing setup in place.
+
+### If you installed through APM or a plugin
+
+1.15.0 removes the APM route and the client-plugin route, and the npm CLI above is the one install
+route from then on. An install that names this repository without a ref
+(`apm install zomarit/stamity`, or a marketplace add of the repository) stops resolving, because
+`main` no longer carries those trees. The frozen refs still resolve: the `plugin-dist` branch, the
+`plugins/v<version>` tags, and the `v<version>` tags up to 1.14.0, so an install pinned to one of
+them keeps working at that version and gets no update. To move on, install the CLI and run `init`
+as above.
 
 ## What init writes for each client
 

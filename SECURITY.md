@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the inbox, the run ledgers and the signing evidence this page names. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the inbox, the run ledgers and the signing evidence this page names, and for the publish job's tool surface against the release workflow as commit 0801927b leaves it. -->
 <!-- Re-open when: a `file::symbol` address below stops resolving, a control in the table loses its
      last caller under `src/`, a new install route or execution surface ships, a control named under
      "Publishing this package" changes in `.github/workflows/release.yml`, or the crosswalk in
@@ -186,10 +186,10 @@ properties of that file, rather than properties of a maintainer's laptop.
   credential and takes no checkout of this repository. Its whole tool surface is three SHA-pinned
   actions — harden-runner, setup-node and download-artifact — plus npm (which the job first
   upgrades by one registry download pinned to the exact version 12.0.2 and asserts against the
-  trusted-publishing floor before use), the GitHub CLI, `node` running programs written inline in
-  the workflow, and POSIX shell with `sha256sum`. It verifies the tarball's SHA-256 against the
-  first job's OUTPUT, a channel separate from the artifact under verification. So a compromised
-  build-time dependency runs in the job that has no credential.
+  trusted-publishing floor before use), the GitHub CLI, and POSIX shell with `sha256sum` and `awk`.
+  It verifies the tarball's SHA-256 against the first job's OUTPUT, a channel separate from the
+  artifact under verification. So a compromised build-time dependency runs in the job that has no
+  credential.
 - **No stored npm token.** Publishing is `npm publish --provenance` over GitHub OIDC trusted
   publishing. The publishing job mints a short-lived credential per run, so there is no long-lived
   publishing credential in this repository to leak or to rotate.

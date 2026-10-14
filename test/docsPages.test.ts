@@ -2635,9 +2635,34 @@ describe("the guides", () => {
     ]) {
       expect(headings, `the fork guide still carries "${removed}"`).not.toContain(removed);
     }
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, review/3): a fork set up from
+    // the 1.14 guide lists the two generators below in its `.stamity/upstream.json` `regenerate`,
+    // and 1.15.0 deletes both, so its integration ends `regenerate-failed` unless the guide tells it
+    // to drop them (plan 020 file 1, Risks). The one section that says so may name those two
+    // generators; it is held to naming them, the five generated paths, `stamity.distribution` and
+    // `renovate/plugins.json`, and every other line of the guide stays under the ban.
+    const dropSection = sectionOf(guide, "### Drop the deleted routes from a fork set up before 1.15.0");
+    expect(dropSection, "the fork guide no longer tells an existing fork what to delete").not.toBe("");
+    for (const named of [
+      "node scripts/generate-plugin-manifests.mjs",
+      "node scripts/generate-apm-package.mjs",
+      "`.apm/**`",
+      "`apm.yml`",
+      "`plugin.json`",
+      "`.claude-plugin/**`",
+      "`.cursor-plugin/**`",
+      "`stamity.distribution`",
+      "`renovate/plugins.json`",
+      "`regenerate-failed`",
+    ]) {
+      expect(flowed(dropSection), `the deletion section does not name ${named}`).toContain(named);
+    }
+    const outsideDrop = guide.replace(dropSection, "");
+    for (const generator of ["generate-apm-package.mjs", "generate-plugin-manifests.mjs"]) {
+      const where = `the fork guide still names \`${generator}\` outside the deletion section`;
+      expect(outsideDrop, where).not.toContain(generator);
+    }
     for (const command of [
-      "generate-apm-package.mjs",
-      "generate-plugin-manifests.mjs",
       "generate-plugin-packages.mjs",
       "build-plugin-runtime.mjs",
       "build-plugin-distribution.mjs",
@@ -2654,6 +2679,17 @@ describe("the guides", () => {
     expect(release, "the release section still pushes a plugin distribution").not.toMatch(
       /plugins\/v<version>|plugin distribution|release\.json/,
     );
+    // ADDED 2026-10-14 (run 2026-10-14_cli-native, review/5): `publish` in
+    // `.github/workflows/fork-release.yml` still creates the GitHub release `v<version>` with the
+    // tarball and its `.sha256`, re-uploads only missing assets, and its notes tell a consumer to
+    // run `sha256sum -c`; the section that approves that job names all three.
+    for (const claim of [
+      "creates the GitHub release `v<version>`",
+      "An existing GitHub release receives only the assets it is missing",
+      "`sha256sum -c <asset>.sha256`",
+    ]) {
+      expect(flowed(release), `the release section does not say: ${claim}`).toContain(claim);
+    }
   });
 
   it("the enterprise-forks guide sets a fork's identity with the one command, not a copy-paste block", () => {
@@ -2842,6 +2878,22 @@ describe("the guides", () => {
     );
     for (const key of ["arrow keys", "space toggles", "enter confirms"]) {
       expect(text, `the getting-started guide omits how to work the menu: ${key}`).toContain(key);
+    }
+  });
+
+  it("getting started tells an APM or plugin user the routes are gone and which refs still resolve", () => {
+    // ADDED 2026-10-14 (run 2026-10-14_cli-native, review/4): an unpinned `apm install` or a
+    // marketplace add of this repository breaks when `main` loses the trees, and plan 020 file 1's
+    // Risks name this page as where such a user learns it, with the frozen refs and the one route.
+    const section = flowed(sectionOf(read(GETTING_STARTED), "### If you installed through APM or a plugin"));
+    expect(section, "the getting-started guide says nothing about the removed routes").not.toBe("");
+    for (const claim of [
+      "1.15.0 removes the APM route and the client-plugin route",
+      "`plugin-dist`",
+      "`plugins/v<version>`",
+      "run `init`",
+    ]) {
+      expect(section, `the removed-routes section does not say: ${claim}`).toContain(claim);
     }
   });
 

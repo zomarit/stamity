@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it, and for the release section and the section on dropping the deleted routes against the fork release workflow as commit 0801927b leaves it and the upstream lane script at commit 5284eaaa -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -325,6 +325,30 @@ often quietly invalidated: the charter template, the core types, the agent roste
 and the MCP catalog. `shadows` is the one thing the lane cannot derive for itself. Declare a file
 of yours that stands in for a bundled artifact, and a release that moves the artifact behind it is
 reported even when the merge is clean.
+
+### Drop the deleted routes from a fork set up before 1.15.0
+
+1.15.0 deletes the APM and plugin routes, and with them the two generators an earlier version of
+this guide put in `regenerate`: `node scripts/generate-plugin-manifests.mjs` and
+`node scripts/generate-apm-package.mjs`. The lane runs the `regenerate` list it reads from the
+merged tree, so a fork that still lists either one ends its 1.15.0 integration as
+`regenerate-failed`. Before you integrate 1.15.0, commit these deletions on your integration
+branch:
+
+- In `.stamity/upstream.json`, remove both commands from `regenerate`, and remove `.apm/**`,
+  `apm.yml`, `plugin.json`, `.claude-plugin/**` and `.cursor-plugin/**` from `generatedPaths`.
+- In `package.json`, remove the `stamity.distribution` block. 1.15.0 ignores it and names it in a
+  one-line notice for one release.
+- Delete `renovate/plugins.json`, and drop it from any Renovate configuration that extends it.
+
+The release deletes `.apm/`, `apm.yml`, `plugin.json`, `.claude-plugin/` and `.cursor-plugin/`
+itself. Where your fork changed one of them, the merge reports a modify/delete conflict, and
+`git rm` on that path resolves it before `continue`. Where a conflict in
+`.github/workflows/fork-release.yml` falls inside the distribution steps the release removes, take
+upstream's side of those lines. A distribution branch and tags your fork already pushed stay where
+they are: nothing in 1.15.0 reads or moves them, and a consumer pinned to one still resolves it.
+If an integration already ended `regenerate-failed`, run `abort`, commit the deletions, and run
+`integrate` again.
 
 ## Take the next release
 
@@ -779,7 +803,8 @@ one in place of `publish`:
   approval can wait.
 - **`publish`** runs in the `fork-release` environment and checks nothing out. It verifies what
   `gates` uploaded before it acts: the tarball's digest, and its own name, version and registry.
-  Then it publishes the tarball to your registry.
+  Then it publishes the tarball to your registry and creates the GitHub release `v<version>`
+  carrying the tarball and its `.sha256` file.
 - **`dry-run-summary`** holds no permission. It writes what a real run would have published into
   the run summary.
 
@@ -792,11 +817,13 @@ commit carries the canonical package name.
 
 A rerun of the same release publishes nothing twice. The registry step skips a version already
 published with this tarball's integrity, and it refuses one published from another tarball; a
-published version is never replaced.
+published version is never replaced. An existing GitHub release receives only the assets it is
+missing, and none it already carries is replaced.
 
 ### Know what proves a release
 
-The tarball's digest and your registry's own authentication. A fork release carries no npm
+The tarball's checksum and your registry's own authentication. A consumer checks the tarball from
+the GitHub release with `sha256sum -c <asset>.sha256`. A fork release carries no npm
 provenance, because npm provenance needs a public source repository. It carries no build attestation either. GitHub's attestations for a private
 repository need GitHub Enterprise Cloud, and the maintainer's decision of 2026-09-24 leaves them
 unbuilt until a company asks for them.

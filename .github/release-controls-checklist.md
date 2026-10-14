@@ -22,7 +22,7 @@ platform controls below sit on top of these; they do not replace them.
 
 - **Job split, credential isolation.** A `gates` job runs the build, the suite, the leak gate
   and the packed-artifact smoke on the shipping commit and holds **no** `id-token`; a separate
-  `publish` job holds `id-token: write` and runs only npm, git, the GitHub CLI and four
+  `publish` job holds `id-token: write` and runs only npm, the GitHub CLI and three
   SHA-pinned actions. A compromised build-time dependency runs in the job that has no
   credential.
 - **OIDC trusted publishing, no stored token.** `publish` authenticates through a per-run OIDC
