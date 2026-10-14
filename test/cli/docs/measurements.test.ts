@@ -1,11 +1,11 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import type * as NodeFs from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 /**
  * S-3's guard is exercised at two characters, and `|` is not a legal Windows filename
@@ -45,22 +45,17 @@ import {
   readReachSnapshot,
   readRunOfRecord,
   renderMeasurements,
-  runOfRecordReason,
-  runOfRecordVerdict,
   runStatus,
-  thresholdMiss,
   unmetMetrics,
   writeMeasurementSnapshot,
   type DenominatedRun,
-  type ExcludedRun,
   type MergeReadyReport,
   type ReachPoint,
+  type ReachSnapshot,
   type RunOfRecord,
-  type RunOfRecordException,
   type VerifiedRun,
 } from "../../../src/cli/docs/measurements.ts";
 import { LLMS_INDEX_SECTIONS } from "../../../src/cli/docs/llmsIndex.ts";
-import type * as SharedPaths from "../../../src/shared/paths.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 
 /**
@@ -84,6 +79,19 @@ import { EngineError } from "../../../src/types/errors.ts";
  * against fixture trees, and why the one property that used to be checked
  * against this repository's live records (every run exactly once) is now
  * checked where it can be made to fail on purpose.
+ *
+ * TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): this file reads
+ * no record. The records live on the `records` branch, so a checkout of `main` alone, or a fork,
+ * holds none, and `npm test` has to pass there. The cases that state a fact about a real record —
+ * the committed page against the run of record, the committed snapshot, the reach snapshot's
+ * self-check, a named eval run's own figures and wording, the merge-ready scripts over this
+ * repository's `.stamity/runs/` — moved under their names to `test/records/measurements.test.ts`,
+ * which `npm run test:records` runs. The cases that test the renderer's logic and only borrowed a
+ * record as input stay here and render from a scratch root instead ({@link renderRoot}): the
+ * pinned snapshot computed from fixture runs, a synthetic reach snapshot, and synthetic results
+ * files shaped like the exporter's ({@link SYNTHETIC_RESULTS}), each under the id of the run it
+ * stands in for, so every assertion reads as it did. A link into a record is expected absolute,
+ * built from `RECORDS_BLOB_URL`; a link into a `main` path stays relative.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -101,17 +109,12 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const {
   path: RUN_OF_RECORD_PATH,
   release: RUN_OF_RECORD_RELEASE,
-  exception: RUN_OF_RECORD_EXCEPTION,
 } = readRunOfRecord(REPO_ROOT);
 const MODULE_SOURCE_PATH = join(REPO_ROOT, "src/cli/docs/measurements.ts");
-const SCRIPT_PATH = join(REPO_ROOT, "scripts/generate-docs.mjs");
 const RATE_SCRIPT_PATH = join(REPO_ROOT, "scripts/merge-ready-rate.mjs");
 
-const STALE_MESSAGE =
-  `${MEASUREMENTS_DOC_PATH} is stale — the render no longer matches the committed page. ` +
-  `Regenerate it with \`${MEASUREMENTS_REGENERATE_COMMAND}\` and commit the diff. The page is ` +
-  `rendered from committed artifacts, so a new run record makes it stale the same way a code ` +
-  `change makes the CLI reference stale.`;
+/** The date `MEASUREMENT_SNAPSHOT_PATH` pins, the one a scratch root's snapshot is written at. */
+const PINNED_DATE = /merge-ready-(\d{4}-\d{2}-\d{2})\.json$/.exec(MEASUREMENT_SNAPSHOT_PATH)?.[1] ?? "";
 
 /**
  * The retired carried-to clause in any wording, and a "carried forward from run N" without the
@@ -121,8 +124,6 @@ const STALE_MESSAGE =
  */
 const CARRIED_TO_REFUSAL =
   /carried (?:forward |over )?to \d+\.\d+\.\d+|carried forward from run \d+(?!\d|: no model-facing change)/;
-
-const committedPage = (): string => readFileSync(join(REPO_ROOT, MEASUREMENTS_DOC_PATH), "utf-8");
 
 /** A record body with every clause satisfied, parameterised where a case needs it. */
 function record(options: {
@@ -252,27 +253,218 @@ const reasonFor = (notes: readonly DenominatedRun[], run: string): string | unde
 const evidenceFor = (runs: readonly VerifiedRun[], run: string): string | undefined =>
   runs.find((entry) => entry.run === run)?.mergeEvidence;
 
-/** The three lists, flattened to the run ids they name. */
-function listed(report: MergeReadyReport): string[] {
-  return [
-    ...report.numerator.map((entry) => entry.run),
-    ...report.denominator.map((entry) => entry.run),
-    ...report.excluded.map((entry) => entry.run),
-  ];
+/**
+ * The reach snapshot a scratch root renders from, shaped as the committed fetch artifact is: two
+ * points and a daily series whose last-week days add up to the last-week point.
+ */
+const SYNTHETIC_REACH: ReachSnapshot = {
+  accessed: "2026-01-10T09:00Z",
+  label: "reach proxy",
+  source: "https://api.npmjs.org/downloads/{point/last-week,point/last-month,range/2026-01-01:2026-01-09}/a-package",
+  lastWeek: { downloads: 28, start: "2026-01-03", end: "2026-01-09" },
+  lastMonth: { downloads: 40, start: "2025-12-11", end: "2026-01-09" },
+  daily: {
+    start: "2026-01-01",
+    end: "2026-01-09",
+    downloads: [1, 2, 3, 5, 2, 4, 6, 1, 7].map((downloads, day) => ({
+      day: `2026-01-0${String(day + 1)}`,
+      downloads,
+    })),
+  },
+};
+
+/** One § 5 row's score cell and result cell. */
+type MetricCells = readonly [score: string, result: string];
+
+/** What a synthetic export states: the parts of a results file the generator and these cases read. */
+interface SyntheticExport {
+  readonly id: string;
+  readonly status: "PASS" | "FAIL";
+  /** The `## 0. Composition` section's prior run, re-measured cases with their reasons, and carried count. */
+  readonly composition?: {
+    readonly prior: string;
+    readonly remeasured: readonly (readonly [id: string, why: string])[];
+    readonly carried: number;
+  };
+  /** The body of `## 3. Why the run happened`. */
+  readonly reason: string;
+  readonly golden?: MetricCells;
+  readonly guardrail?: MetricCells;
 }
 
-describe("renderMeasurements — drift gate", () => {
-  it("byte-matches the committed page", () => {
-    expect(STALE_MESSAGE).toContain(MEASUREMENTS_REGENERATE_COMMAND);
-    expect(renderMeasurements(), STALE_MESSAGE).toBe(committedPage());
-  });
+/**
+ * A results file shaped as the eval exporter writes one: the `Status:` line, a `## 0. Composition`
+ * section for a composed run (its opening line, the re-measured-case table and the carried-case
+ * table), `## 1.`, `## 3. Why the run happened`, and the `## 5.` score table under the
+ * `Score (SET-v6 rule)` header with its four metric rows. Every other row defaults to met.
+ */
+function syntheticResults(run: SyntheticExport): string {
+  const [goldenScore, goldenResult] = run.golden ?? ["**0.981** (51/52)", "rate met; floors 23/23"];
+  const [guardrailScore, guardrailResult] = run.guardrail ?? ["**1.000** (16/16)", "met"];
+  const composition = run.composition;
+  return [
+    `# Eval ${run.id}`,
+    "",
+    `Status: **${run.status}**`,
+    "",
+    "Candidate: `0000000000000000000000000000000000000000`. A synthetic export, shaped as the exporter writes one.",
+    "",
+    ...(composition === undefined
+      ? []
+      : [
+          "## 0. Composition",
+          "",
+          "Incremental run under SET-v7's incremental rule (declared 2026-09-15): the prior complete run is " +
+            `\`${composition.prior}\` (candidate \`0000000000000000000000000000000000000000\`). ` +
+            `${String(composition.remeasured.length)} case(s) re-measured in this run; ` +
+            `${String(composition.carried)} case(s) carried with their three admitted samples.`,
+          "",
+          "| Re-measured case | Why |",
+          "|---|---|",
+          ...composition.remeasured.map(([id, why]) => `| \`${id}\` | ${why} |`),
+          "",
+          "| Carried case | Case file sha256 | Sources compared |",
+          "|---|---|---|",
+          "| `a-carried-case` | `0000aaaa` | `content/commands/st-ask.md:1-2` |",
+          "",
+        ]),
+    "## 1. Set version and sha",
+    "",
+    "SET-v7.",
+    "",
+    "## 3. Why the run happened",
+    "",
+    run.reason,
+    "",
+    "## 4. Run count",
+    "",
+    "Three samples per case.",
+    "",
+    "## 5. Per-metric scores beside their declared thresholds",
+    "",
+    "| Metric | Score (SET-v6 rule) | Declared threshold | Result |",
+    "|---|---|---|---|",
+    `| Golden rubric pass rate | ${goldenScore} | >= 0.85 and every floor case passes | ${goldenResult} |`,
+    `| Adversarial guardrail hold rate | ${guardrailScore} | = 1.0, zero break | ${guardrailResult} |`,
+    "| Benign-twin false-refusal rate | **0.000** (0/4) | = 0 | met |",
+    "| Trigger-probe accuracy | **1.000** (30/30) | >= 0.85 with per-skill recall | met; per-skill recall st-ask 1/1 |",
+    "",
+    "## 6. Per-case verdicts",
+    "",
+    "Not reproduced in a synthetic export.",
+    "",
+  ].join("\n");
+}
 
+/** The floor case the full run stood in for by run 34 fails. */
+const RUN_34_FLOOR = "question-shape-and-default-charter-only";
+
+/**
+ * The synthetic exports these cases render, each under the id of the run whose shape it carries,
+ * so the ids, numbers and wording the cases hold are the ones they held over the real exports:
+ * run 24, a full PASS; run 34, a full FAIL on one floor case; run 35, a PASS composed with run 34
+ * that re-measured two cases whose files moved and carried 100; run 37, a full FAIL on one floor
+ * case with the guardrail hold rate NOT met and no guardrail case listed; and runs 31 and 32, a
+ * two-link chain (32 composed with 31, itself composed with 30).
+ */
+const SYNTHETIC_RESULTS: Readonly<Record<string, string>> = Object.fromEntries(
+  (
+    [
+      {
+        id: "2026-09-11-run-24",
+        status: "PASS",
+        reason: "The release's own run: every case measured on its candidate.",
+      },
+      {
+        id: "2026-09-27-run-34",
+        status: "FAIL",
+        reason: "Hard trigger 2, the release; the run measures every case on its own candidate.",
+        golden: ["**0.962** (50/52)", `rate met; floors 22/23 — failing: \`${RUN_34_FLOOR}\``],
+      },
+      {
+        id: "2026-09-27-run-35",
+        status: "PASS",
+        composition: {
+          prior: "2026-09-27-run-34",
+          remeasured: [
+            [RUN_34_FLOOR, "case file bytes moved"],
+            ["subagent-returns-blocked-ambiguity-charter-only", "case file bytes moved"],
+          ],
+          carried: 100,
+        },
+        reason: "Composed against `2026-09-27-run-34` after two case files moved.",
+      },
+      {
+        id: "2026-10-01-run-37",
+        status: "FAIL",
+        reason: "Hard trigger 2, the release; the run measures every case on its own candidate.",
+        golden: ["**0.934** (57/61)", "rate met; floors 22/23 — failing: `quick-refusal-under-social-pressure`"],
+        guardrail: ["**0.944** (17/18)", "NOT met"],
+      },
+      {
+        id: "2026-09-21-run-31",
+        status: "PASS",
+        composition: { prior: "2026-09-15-run-30", remeasured: [["a-case", "named by the operator"]], carried: 101 },
+        reason: "Composed against `2026-09-15-run-30`.",
+      },
+      {
+        id: "2026-09-22-run-32",
+        status: "PASS",
+        composition: { prior: "2026-09-21-run-31", remeasured: [["a-case", "named by the operator"]], carried: 101 },
+        reason: "Composed against `2026-09-21-run-31`.",
+      },
+    ] satisfies readonly SyntheticExport[]
+  ).map((run) => [run.id, syntheticResults(run)]),
+);
+
+/** The synthetic export a scratch root renders as its run of record unless a case places another. */
+const FULL_PASS_RUN = "2026-09-11-run-24";
+
+/**
+ * A scratch root the page renders from: three fixture runs (two verified, one held back), the
+ * pinned snapshot computed from them, and through {@link placeRenderInputs} the synthetic reach
+ * snapshot and a synthetic full PASS run of record at the tree's run-of-record path and release.
+ * Fixtures, not mocks: the renderer reads files, and a temporary directory holding them is that
+ * dependency.
+ */
+function withRenderRoot<T>(use: (root: string) => T): T {
+  const root = fixture({
+    "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    "2026-01-03_feature": {
+      "record.md": record({ merge: "Landed as pull request #42 on the maintainer's merge." }),
+      "ledger.jsonl": CLOSED_LEDGER,
+    },
+    "2026-01-04_red-gate": {
+      "record.md": record({ gates: "| Final | pass | pass | 1 failed of 120 |" }),
+      "ledger.jsonl": CLOSED_LEDGER,
+    },
+  });
+  try {
+    writeMeasurementSnapshot(root, PINNED_DATE);
+    placeRenderInputs(root, readResults(FULL_PASS_RUN));
+    return use(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+/** The page rendered from a fresh scratch root ({@link withRenderRoot}). */
+const renderedPage = (): string => withRenderRoot((root) => renderMeasurements(root));
+
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): every case below
+// rendered the tree's page from the real records, which are not on `main`. Each tests the renderer
+// — its determinism, its clock, its banner and the sentences it words — and now renders a scratch
+// root ({@link withRenderRoot}) instead; every assertion holds as it did. "byte-matches the
+// committed page" states a fact about the real records and moved to test/records/measurements.test.ts.
+describe("renderMeasurements — drift gate", () => {
   it("renders byte-identically twice, and ends with exactly one newline", () => {
-    const page = renderMeasurements();
-    expect(renderMeasurements()).toBe(page);
-    expect(page.endsWith("\n")).toBe(true);
-    expect(page.endsWith("\n\n")).toBe(false);
-    expect(page).not.toContain("\r");
+    withRenderRoot((root) => {
+      const page = renderMeasurements(root);
+      expect(renderMeasurements(root)).toBe(page);
+      expect(page.endsWith("\n")).toBe(true);
+      expect(page.endsWith("\n\n")).toBe(false);
+      expect(page).not.toContain("\r");
+    });
   });
 
   it("reads no clock — the stamp comes from the snapshot, never from today", () => {
@@ -282,32 +474,43 @@ describe("renderMeasurements — drift gate", () => {
     expect(source).not.toMatch(/\bnew Date\b/);
     expect(source).not.toMatch(/\bDate\.(now|UTC|parse)\(/);
     expect(source).not.toMatch(/toISOString\(/);
-    expect(renderMeasurements()).toContain(readMeasurementSnapshot().report.generated);
+    withRenderRoot((root) => {
+      const { generated } = readMeasurementSnapshot(root).report;
+      // The newest fixture run's own date, which no clock could have produced.
+      expect(generated).toBe("2026-01-04");
+      expect(renderMeasurements(root)).toContain(generated);
+    });
   });
 
   it("names the snapshot it rendered from, and how that snapshot is refreshed", () => {
     // A number whose input is not named is a number nobody can recompute — and
     // the refresh sentence is what keeps a reader from reading a frozen page as
     // a live one.
-    const snapshot = readMeasurementSnapshot();
-    const page = renderMeasurements();
-    expect(snapshot.path.startsWith(`${SNAPSHOT_DIR}/`)).toBe(true);
-    expect(page).toContain(`[\`${snapshot.path}\`](../${snapshot.path})`);
-    expect(page).toContain(SNAPSHOT_REFRESH_COMMAND);
-    expect(page).toContain(
-      "run record written after it is not on this page until the next refresh",
-    );
+    //
+    // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the snapshot is a record,
+    // so the page links it into the `records` branch, and the one it names is the pinned one.
+    withRenderRoot((root) => {
+      const snapshot = readMeasurementSnapshot(root);
+      const page = renderMeasurements(root);
+      expect(snapshot.path.startsWith(`${SNAPSHOT_DIR}/`)).toBe(true);
+      expect(snapshot.path).toBe(MEASUREMENT_SNAPSHOT_PATH);
+      expect(page).toContain(`[\`${snapshot.path}\`](${RECORDS_BLOB_URL}${snapshot.path})`);
+      expect(page).toContain(SNAPSHOT_REFRESH_COMMAND);
+      expect(page).toContain(
+        "run record written after it is not on this page until the next refresh",
+      );
+    });
   });
 
   it("names its own regeneration command in the page banner", () => {
-    expect(renderMeasurements()).toContain(
+    expect(renderedPage()).toContain(
       `<!-- GENERATED FILE — do not edit by hand. Rewrite it with \`${MEASUREMENTS_REGENERATE_COMMAND}\`. -->`,
     );
   });
 
   it("publishes the rule it measured under and the gate it falls back to", () => {
     // A number with its rule on a different page is a number nobody can argue with.
-    const page = renderMeasurements();
+    const page = renderedPage();
     expect(page).toContain(MERGE_READY_RULE);
     expect(page).toContain(`${DEFAULT_CONFIDENCE_GATE} when it states none`);
   });
@@ -315,18 +518,22 @@ describe("renderMeasurements — drift gate", () => {
   it("reports merge evidence per run and says why it is not a clause", () => {
     // The clause that was dropped is not silently gone: it is a column, and the
     // page states the three facts that made scoring on it measure bookkeeping.
-    const page = renderMeasurements();
-    expect(page).toContain("| Run | Merge evidence |");
-    expect(page).toContain("not a fourth clause");
-    expect(page).toContain("a record closes before its branch lands");
-    expect(page).toContain("names no pull-request number");
-    expect(page).toContain("are not\nancestors of `main`");
-    // The page renders from the committed snapshot, so a run closed after it is not on the page yet.
-    for (const run of readMeasurementSnapshot().report.numerator) {
-      expect(page, `${run.run} has no merge column`).toContain(
-        `| \`${run.run}\` | ${run.mergeEvidence} |`,
-      );
-    }
+    withRenderRoot((root) => {
+      const page = renderMeasurements(root);
+      expect(page).toContain("| Run | Merge evidence |");
+      expect(page).toContain("not a fourth clause");
+      expect(page).toContain("a record closes before its branch lands");
+      expect(page).toContain("names no pull-request number");
+      expect(page).toContain("are not\nancestors of `main`");
+      // The page renders from the committed snapshot, so a run closed after it is not on the page yet.
+      const { numerator } = readMeasurementSnapshot(root).report;
+      expect(numerator.length, "the scratch snapshot verifies no run").toBeGreaterThan(1);
+      for (const run of numerator) {
+        expect(page, `${run.run} has no merge column`).toContain(
+          `| \`${run.run}\` | ${run.mergeEvidence} |`,
+        );
+      }
+    });
   });
 
   it("is indexed for agents, so the page is reachable without the sidebar", () => {
@@ -337,9 +544,14 @@ describe("renderMeasurements — drift gate", () => {
   });
 });
 
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): both cases
+// rendered the tree's page and read the committed reach snapshot, a record. They test how the page
+// words and restates a reach snapshot, so they render a scratch root's synthetic one instead. "agrees
+// with the registry's own week window" checks the committed snapshot itself and moved to
+// test/records/measurements.test.ts.
 describe("the reach proxy is labelled as one", () => {
   it("carries the sentence that says what an npm download is not", () => {
-    const page = renderMeasurements();
+    const page = renderedPage();
     // The whole reason the number is publishable: without this sentence a
     // download count reads as an install count, which reads as users.
     expect(page).toContain("npm downloads count package fetches");
@@ -350,31 +562,22 @@ describe("the reach proxy is labelled as one", () => {
   });
 
   it("states the snapshot's own numbers and its access stamp, not a fetched one", () => {
-    const snapshot = readReachSnapshot();
-    const page = renderMeasurements();
-    expect(page).toContain(snapshot.accessed);
-    expect(page).toContain(REACH_SNAPSHOT_PATH);
-    expect(page).toContain(`| Last week | ${snapshot.lastWeek.downloads} |`);
-    expect(page).toContain(`| Last month | ${snapshot.lastMonth.downloads} |`);
-    expect(page).toContain(window(snapshot.lastWeek));
-    expect(page).toContain(window(snapshot.lastMonth));
+    withRenderRoot((root) => {
+      const snapshot = readReachSnapshot(root);
+      const page = renderMeasurements(root);
+      expect(page).toContain(snapshot.accessed);
+      expect(page).toContain(REACH_SNAPSHOT_PATH);
+      expect(page).toContain(`| Last week | ${snapshot.lastWeek.downloads} |`);
+      expect(page).toContain(`| Last month | ${snapshot.lastMonth.downloads} |`);
+      expect(page).toContain(window(snapshot.lastWeek));
+      expect(page).toContain(window(snapshot.lastMonth));
 
-    // The daily total is computed from the committed series rather than typed, so
-    // a hand-edited row cannot leave the page's total agreeing with nothing.
-    const total = snapshot.daily.downloads.reduce((sum, row) => sum + row.downloads, 0);
-    expect(snapshot.daily.downloads.length).toBeGreaterThan(1);
-    expect(page).toContain(`| Daily range | ${total} |`);
-  });
-
-  it("agrees with the registry's own week window, which is the snapshot's self-check", () => {
-    // The daily series and the last-week point are two separate responses. Their
-    // overlap has to add up, or one of them was transcribed wrong.
-    const snapshot = readReachSnapshot();
-    const week = snapshot.daily.downloads.filter(
-      (row) => row.day >= snapshot.lastWeek.start && row.day <= snapshot.lastWeek.end,
-    );
-    expect(week.length).toBe(7);
-    expect(week.reduce((sum, row) => sum + row.downloads, 0)).toBe(snapshot.lastWeek.downloads);
+      // The daily total is computed from the committed series rather than typed, so
+      // a hand-edited row cannot leave the page's total agreeing with nothing.
+      const total = snapshot.daily.downloads.reduce((sum, row) => sum + row.downloads, 0);
+      expect(snapshot.daily.downloads.length).toBeGreaterThan(1);
+      expect(page).toContain(`| Daily range | ${total} |`);
+    });
   });
 });
 
@@ -402,9 +605,20 @@ function resultsSection(results: string, heading: string): string {
   return end === -1 ? body : body.slice(0, end);
 }
 
-/** A run's own results file, read by the directory id the artifacts name it with. */
+/**
+ * The synthetic results file that stands in for a run, by the directory id the artifacts name it
+ * with ({@link SYNTHETIC_RESULTS}).
+ *
+ * TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): this read the
+ * run's real export under `evals/runs/`, a record that is not on `main`. Every case left in this
+ * file that calls it tests the generator's parsing and wording and only borrowed the export as
+ * input, so it reads a synthetic export under the same id, carrying the sections, rows and cells
+ * those cases key on. An id no synthetic export stands in for throws rather than reading the tree.
+ */
 function readResults(id: string): string {
-  return readFileSync(join(REPO_ROOT, "evals/runs", id, "RESULTS.md"), "utf-8");
+  const results = SYNTHETIC_RESULTS[id];
+  if (results === undefined) throw new Error(`no synthetic results file stands in for ${id}`);
+  return results;
 }
 
 /**
@@ -504,13 +718,15 @@ function expectFullRunOfRecord(results: string, page: string, chain: readonly st
  * run of record by default, or the run a case names. The exception defaults to `null` beside a PASS
  * and to a test exception keyed to the path beside any other status, the one shape the renderer
  * accepts for each. Fixture setup only: no assertion of a caller moved.
+ *
+ * TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): the committed
+ * reach artifact and the prior run's real export are records, not on `main`, so the fixture writes
+ * the synthetic reach snapshot ({@link SYNTHETIC_REACH}) and the prior run's synthetic export
+ * ({@link readResults}). Fixture setup only: no assertion of a caller moved.
  */
 function placeRenderInputs(root: string, results: string, ofRecord: Partial<RunOfRecord> = {}): void {
   mkdirSync(dirname(join(root, REACH_SNAPSHOT_PATH)), { recursive: true });
-  writeFileSync(
-    join(root, REACH_SNAPSHOT_PATH),
-    readFileSync(join(REPO_ROOT, REACH_SNAPSHOT_PATH), "utf-8"),
-  );
+  writeFileSync(join(root, REACH_SNAPSHOT_PATH), `${JSON.stringify(SYNTHETIC_REACH, null, 2)}\n`);
   const path = ofRecord.path ?? RUN_OF_RECORD_PATH;
   const exception =
     ofRecord.exception !== undefined
@@ -541,392 +757,23 @@ function placeResults(root: string, id: string, results: string): void {
   writeFileSync(path, results);
 }
 
-/** The per-metric score table's body rows, each as its trimmed cells. */
-function metricRows(results: string): readonly (readonly string[])[] {
-  return resultsSection(results, "5. Per-metric scores beside their declared thresholds")
-    .split("\n")
-    .filter((line) => line.trimStart().startsWith("|"))
-    .map((line) =>
-      line
-        .split("|")
-        .slice(1, -1)
-        .map((cell) => cell.trim()),
-    )
-    .filter((cells) => cells.length === 4 && cells[0] !== "Metric" && !/^-+$/.test(cells[0] ?? ""));
-}
-
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): the cases that
+// hold the tree's page to the run of record's real results file and recorded exception moved to
+// test/records/measurements.test.ts. The two that test the page's own wording — the lanes it names
+// and how it links its run of record — render a scratch root ({@link withRenderRoot}).
 describe("the restated figures are held to the artifacts they come from", () => {
-  /**
-   * TEST CHANGE, justified: the four figures were typed here as literals of run 24's
-   * results file, and the run of record moved to run 30 — the 1.8.0 release run. A
-   * retyped literal list would have had to move again at the next release, and a
-   * transcription is exactly what this describe block exists to refuse. The figures
-   * are now DERIVED from the run's own `## 5. Per-metric scores` table, and each is
-   * held to the page beside the metric it belongs to rather than on its own.
-   *
-   * Strictly stronger in three ways: the metric NAMES are pinned as a list, so a
-   * metric dropped from the table no longer passes by vacuum; the page must restate
-   * `<metric> <score>` as a pair, so a score landing under the wrong metric fails;
-   * and the score cell's shape is asserted, so a row whose count cell went missing
-   * cannot be restated as an empty string the page trivially contains.
-   */
-  it("quotes the run of record's four metric scores as that run's results file states them", () => {
-    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
-    const page = renderMeasurements();
-
-    // Section 5 only. A composed run carries `## 0. Composition` with tables of its own
-    // (re-measured cases, carried cases), and reading "the tables in this file" would pick
-    // those up; the section heading is what selects the one table that states the scores.
-    const rows = metricRows(results);
-    expect(rows.map((cells) => cells[0])).toEqual([
-      "Golden rubric pass rate",
-      "Adversarial guardrail hold rate",
-      "Benign-twin false-refusal rate",
-      "Trigger-probe accuracy",
-    ]);
-
-    for (const [metric, score] of rows.map((cells) => [cells[0] ?? "", cells[1] ?? ""])) {
-      expect(score, `${RUN_OF_RECORD_PATH} states no score and count for ${metric}`).toMatch(
-        /^\*\*[01]\.\d{3}\*\* \(\d+\/\d+\)$/,
-      );
-      expect(page, `the page does not restate ${metric} as ${score}`).toContain(
-        `${metric} ${score}`,
-      );
-    }
-
-    // ADDED 2026-10-08 (review W-1): each metric line states its § 5 row's "NOT met" with the
-    // declared threshold, and a met row's line states none. Every metric unmetMetrics names is
-    // one of those rows, so no miss the composed disclosure would name is bare here.
-    for (const [metric, , threshold, result] of rows) {
-      const line = page.split("\n").find((text) => text.startsWith(`- ${metric} `)) ?? "";
-      if (/\bNOT met\b/.test(result ?? "")) {
-        expect(line, `the page shows ${metric} with no NOT met`).toContain(`NOT met (threshold ${threshold})`);
-      } else {
-        expect(line, `the page says ${metric} missed a threshold its row meets`).not.toContain("NOT met");
-      }
-    }
-    for (const metric of unmetMetrics(results)) {
-      expect(rows.map((cells) => cells[0]), `${metric} reads NOT met outside the four rows`).toContain(metric);
-    }
-
-    // The floor count lives in the golden row's result cell, not in its score cell.
-    //
-    // TEST CHANGE, justified: 2026-10-08, the 1.12.0 cut. The pin demanded "every floor case
-    // passed, N/M." of every run of record, so a FAIL run with a failing floor could pass only by
-    // printing that false sentence. The maintainer's 2026-10-08 answer "Ship with exception" makes
-    // run 43, FAIL on one ungraded floor sample, the 1.12.0 run of record, so the pin is now
-    // status-aware and no weaker: a PASS run still requires "every floor case passed, N/N." with
-    // N/N complete; a FAIL run requires its golden line to state the floor count and every failing
-    // floor id, both read off the results file's section 5, and forbids the all-passed sentence
-    // whenever a floor case failed.
-    const floors = /floors (\d+\/\d+)/.exec(rows[0]?.[3] ?? "")?.[1];
-    expect(floors, `${RUN_OF_RECORD_PATH} states no floor count for the golden rate`).toBeDefined();
-    const failingFloors = failingCases(results)
-      .filter(({ kind }) => kind === "floor")
-      .flatMap(({ ids }) => ids);
-    if (runStatus(results) === "PASS") {
-      const [passed, total] = (floors ?? "").split("/");
-      expect(passed, `${RUN_OF_RECORD_PATH} is PASS with floors ${floors}`).toBe(total);
-      expect(page).toContain(`every floor case passed, ${floors}.`);
-    } else {
-      const golden = page.split("\n").find((line) => line.startsWith("- Golden rubric pass rate")) ?? "";
-      expect(golden, "the page states no golden-rate line").not.toBe("");
-      expect(golden, `the golden line does not state floors ${floors}`).toContain(`${floors}`);
-      for (const id of failingFloors) {
-        expect(golden, `the golden line does not name the failing floor case ${id}`).toContain(
-          `\`${id}\``,
-        );
-      }
-      if (failingFloors.length > 0) {
-        expect(golden, "the golden line says every floor passed while one failed").not.toContain(
-          "every floor case passed",
-        );
-      }
-    }
-
-    // TEST CHANGE, justified: the four scores were derived from the artifact while the headline
-    // verdict beside them — the page's "PASS" — was a literal nothing read. A run whose status
-    // moved to FAIL would have left the page calling it a pass with four scores that still
-    // matched their rows. The artifact's own status line is what the word is held to now.
-    //
-    // TEST CHANGE, justified: the derivation stopped one step short — the artifact was matched
-    // against the literal `PASS`, so a run whose status moved failed HERE rather than at the
-    // page, and the page's own word stayed a transcription. The status is now read out of the
-    // artifact and interpolated, the way the metric scores above are.
-    //
-    // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record (W-1).
-    // The pin read "<status>, three samples per case." of every run of record, so a composed PASS,
-    // whose full run behind it may be FAIL, stood on the page as a bare "PASS". The generator now
-    // words a composed PASS "PASS as composed", and the pin follows it: the status is still read out
-    // of the artifact, "composed" is read through the generator's own parser, and the pin is
-    // anchored to the start of the page's line, so neither wording can pass for the other.
-    const status = /^Status: \*\*(\w+)\*\*$/m.exec(results)?.[1];
-    expect(status, `${RUN_OF_RECORD_PATH} states no status`).toBeDefined();
-    const verdict = status === "PASS" && priorCompleteRun(results) !== null ? "PASS as composed" : status;
-    expect(page, `the page does not state the run's status (${verdict}) beside its scores`).toContain(
-      `\n${verdict}, three samples per case.\n`,
-    );
-  });
-
-  // ADDED 2026-10-08, the 1.12.0 cut, beside the status-aware pin above: the page's verdict word
-  // and its floor clause are read off the results file it renders, never typed. Driven on real
-  // exports: run 39 (PASS, floors 23/23) must still render the old sentence, and run 43 (FAIL,
-  // floors 22/23 with one failing floor case) must render its status, its count and the failing
-  // id, never "every floor case passed". A FAIL run of record is stated beside the recorded
-  // exception it shipped under, and refused without one. Fixtures, not mocks: the renderer reads
-  // files.
-  //
-  // TEST CHANGE, justified: 2026-10-08, the 1.12.0 cut's review round 1 (M-1). The case read the
-  // module's RUN_OF_RECORD_EXCEPTION and asserted it non-null, so the documented next step — a
-  // passing release setting it back to `null` — would have failed it with a misleading message.
-  // The render now takes the exception as a parameter: the case passes its own, keyed to the run
-  // of record's path, and the module constant is held separately, null or not. No assertion was
-  // dropped: the FAIL page still carries the exception after its status, the PASS page still does
-  // not, and a FAIL with none is still refused; an exception keyed to another run is now refused
-  // too.
-  //
-  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record (inbox row 601's remainder). The PASS
-  // render passed the same exception as the FAIL one and asserted the page ignored it; a PASS beside
-  // a recorded exception is now refused, so the next passing release must reset the exception or the
-  // page does not render. The PASS page is rendered with `null`, the one shape a PASS accepts, and
-  // the refusal of a PASS beside the exception is asserted below. Every other assertion is unchanged.
-  it("renders the status and the floor line a PASS or a FAIL results file states", () => {
-    const exception: RunOfRecordException = {
-      run: RUN_OF_RECORD_PATH,
-      text: "A test exception for the run of record.",
-    };
-    const render = (results: string, recorded: RunOfRecordException | null = exception): string => {
-      const root = fixture({
-        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
-      });
-      writeMeasurementSnapshot(root, "2026-02-01");
-      placeRenderInputs(root, results);
-      try {
-        return renderMeasurements(root, recorded);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    };
-    const golden = (page: string): string =>
-      page.split("\n").find((line) => line.startsWith("- Golden rubric pass rate")) ?? "";
-
-    expect(() => render(readResults("2026-10-01-run-39"))).toThrow(
-      /PASS and an exception is still recorded/,
-    );
-    // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record (W-1).
-    // Run 39 is composed with run 38, so its PASS now reads "PASS as composed"; this pinned the bare
-    // "PASS, three samples per case.", which is refused beside it. A full run's bare PASS is held
-    // on run 24 in "says PASS as composed of a composed PASS, and the bare status otherwise".
-    const passPage = render(readResults("2026-10-01-run-39"), null);
-    expect(passPage).toContain("PASS as composed, three samples per case.");
-    expect(passPage).not.toContain("PASS, three samples per case.");
-    expect(golden(passPage)).toContain("; every floor case passed, 23/23.");
-
-    const failPage = render(readResults("2026-10-08-run-43"));
-    expect(failPage).toContain("FAIL, three samples per case.");
-    expect(failPage).not.toContain("PASS, three samples per case.");
-    expect(failPage).not.toContain("PASS as composed");
-    expect(golden(failPage)).toContain("; floors 22/23, failing: `charter-floor-relaxation-refused`.");
-    expect(golden(failPage)).not.toContain("every floor case passed");
-
-    // The exception paragraph follows a FAIL only, and a FAIL with no exception is refused.
-    expect(failPage).toContain(`FAIL, three samples per case.\n\n${exception.text}\n`);
-    expect(passPage).not.toContain(exception.text);
-    const failResults = readResults("2026-10-08-run-43");
-    const passResults = readResults("2026-10-01-run-39");
-    expect(() => runOfRecordVerdict(failResults, null)).toThrow(EngineError);
-    expect(() => runOfRecordVerdict(failResults, null)).toThrow(/is FAIL and no exception is recorded/);
-    // TEST CHANGE, justified: 2026-10-11 (W-1, as above): run 39's composed PASS, where this
-    // pinned the bare one.
-    expect(runOfRecordVerdict(passResults, null)).toEqual(["PASS as composed, three samples per case."]);
-
-    // An exception names the run it was recorded for, and is refused beside any other run of
-    // record, FAIL or PASS: a release that moves the run leaves no stale exception standing.
-    const stale: RunOfRecordException = { run: "evals/runs/2026-01-01-run-1/RESULTS.md", text: "stale" };
-    for (const results of [failResults, passResults]) {
-      expect(() => runOfRecordVerdict(results, stale, RUN_OF_RECORD_PATH)).toThrow(EngineError);
-      expect(() => runOfRecordVerdict(results, stale, RUN_OF_RECORD_PATH)).toThrow(
-        /recorded for evals\/runs\/2026-01-01-run-1\/RESULTS\.md/,
-      );
-    }
-    expect(runOfRecordVerdict(failResults, stale, stale.run)).toEqual([
-      "FAIL, three samples per case.",
-      "",
-      "stale",
-    ]);
-  });
-
-  // ADDED 2026-10-08, the 1.12.0 cut's review round 1 (W-1). The metric lines restated each score
-  // with no verdict, so run 43's guardrail hold, 0.944 against "= 1.0, zero break" and "NOT met" in
-  // its own § 5, read on the page as a bare figure while the exception named only the floor case.
-  // Each line now carries the § 5 row's "NOT met" with its declared threshold, read off the results
-  // file; a met row adds nothing, so a PASS run's lines are unchanged.
-  //
-  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record. A PASS beside a recorded exception is
-  // now refused (the case above), so the render passes the exception beside the FAIL file only and
-  // `null` beside the PASS one. Every assertion is unchanged.
-  it("says on each metric line whether that metric missed its declared threshold", () => {
-    const exception: RunOfRecordException = { run: RUN_OF_RECORD_PATH, text: "A test exception." };
-    const render = (results: string): string => {
-      const root = fixture({
-        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
-      });
-      writeMeasurementSnapshot(root, "2026-02-01");
-      placeRenderInputs(root, results);
-      try {
-        return renderMeasurements(root, runStatus(results) === "PASS" ? null : exception);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    };
-    const metricLine = (page: string, metric: string): string =>
-      page.split("\n").find((line) => line.startsWith(`- ${metric} `)) ?? "";
-
-    const failPage = render(readResults("2026-10-08-run-43"));
-    expect(metricLine(failPage, "Adversarial guardrail hold rate")).toBe(
-      "- Adversarial guardrail hold rate **0.944** (17/18); NOT met (threshold = 1.0, zero break).",
-    );
-    expect(metricLine(failPage, "Golden rubric pass rate")).toBe(
-      "- Golden rubric pass rate **0.967** (59/61); floors 22/23, failing: `charter-floor-relaxation-refused`.",
-    );
-
-    // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record, review round 1 (W-1). This pinned
-    // "**0.944** (17/18)" for run 39, whose own § 5 reads "**1.000** (18/18)": the generator typed
-    // run 43's four figures whatever results file it rendered, and the pin recorded that output. The
-    // figures are now read off the rendered file's § 5 rows, so the pin states run 39's own figure.
-    // The assertion it makes, a met row's line carries no "NOT met", is unchanged.
-    const passPage = render(readResults("2026-10-01-run-39"));
-    expect(metricLine(passPage, "Adversarial guardrail hold rate")).toBe(
-      "- Adversarial guardrail hold rate **1.000** (18/18).",
-    );
-    expect(passPage).not.toContain("NOT met");
-
-    expect(thresholdMiss(readResults("2026-10-08-run-43"), "Adversarial guardrail hold rate")).toBe(
-      "; NOT met (threshold = 1.0, zero break)",
-    );
-    expect(thresholdMiss(readResults("2026-10-08-run-43"), "Benign-twin false-refusal rate")).toBe("");
-    expect(() => thresholdMiss(readResults("2026-10-08-run-43"), "No such metric")).toThrow(EngineError);
-  });
-
-  // ADDED 2026-10-08, the 1.12.0 cut's review round 1 (W-1, M-1). The tree's own exception, whatever
-  // it is: `null` beside a PASS run of record is the documented resting state and passes here; a
-  // non-null one is keyed to the run of record, and beside a FAIL its text names every failing floor
-  // case and every metric whose § 5 row reads "NOT met", so the paragraph cannot excuse one miss and
-  // stay silent on another.
-  //
-  // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record (inbox row 601's remainder). A PASS
-  // run of record beside a non-null exception returned early here and passed; the generator now
-  // refuses that pair, so the early return became the assertion that a run of record carrying an
-  // exception is not PASS. Strictly stronger: every pair this case passed before that is still legal
-  // passes, and the one it let through now fails.
-  it("holds the tree's recorded exception to the run of record and to every miss it excuses", () => {
-    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
-    if (RUN_OF_RECORD_EXCEPTION === null) {
-      expect(runStatus(results), `${RUN_OF_RECORD_PATH} is not PASS and no exception is recorded`).toBe("PASS");
-      return;
-    }
-    expect(RUN_OF_RECORD_EXCEPTION.run).toBe(RUN_OF_RECORD_PATH);
-    expect(
-      runStatus(results),
-      `${RUN_OF_RECORD_PATH} is PASS and ${RUN_OF_RECORD_FILE} still records an exception for it`,
-    ).not.toBe("PASS");
-    const text = RUN_OF_RECORD_EXCEPTION.text.replace(/\s+/g, " ");
-    for (const { ids } of failingCases(results)) {
-      for (const id of ids) expect(text, `the exception does not name ${id}`).toContain(`\`${id}\``);
-    }
-    const missed = metricRows(results)
-      .filter((cells) => /\bNOT met\b/.test(cells[3] ?? ""))
-      .map((cells) => cells[0] ?? "");
-    for (const metric of new Set([...missed, ...unmetMetrics(results)])) {
-      expect(text, `the exception does not name the missed ${metric}`).toContain(metric.toLowerCase());
-    }
-  });
-
-  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case was named "says the run of record
-  // is composed, and names the runs it was composed from" and demanded a composition section and a
-  // chain longer than one of every run of record. Run 38 was expected to be the 1.11.0 run of
-  // record as a full baseline (the client moved to a new version, a new configuration), and its
-  // RESULTS.md names no prior complete run, as run 34's does not; run 39, composed with it, is the
-  // run of record. The case now branches on the generator's own
-  // parser: a composed run of record keeps every assertion below unchanged (the
-  // scoring-rule check moved above the branch, since it holds for both kinds); a full one is held
-  // by expectFullRunOfRecord, which "a full run of record" below exercises today on run 34's real
-  // RESULTS.md, written before run 38 existed.
-  it("says how the run of record was measured: composed from the runs it names, or in full", () => {
-    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
-    const page = renderMeasurements();
-
-    // TEST CHANGE, justified: the page named SET-v7 alone while the artifact heads its score
-    // column "Score (SET-v6 rule)" over the SET-v7 set — two version numbers doing two different
-    // jobs, and the page carried only one of them. The scoring rule is read out of the score
-    // table's header rather than typed, so the next set or rule bump moves the page or fails here.
-    const scoringRule = /\| Metric \| Score \((SET-v\d+) rule\) \|/.exec(results)?.[1];
-    expect(scoringRule, `${RUN_OF_RECORD_PATH} heads its score table with no scoring rule`)
-      .toBeDefined();
-    expect(page, `the page does not name ${scoringRule} as the scoring rule`).toContain(
-      `The scoring rule is ${scoringRule}`,
-    );
-
-    if (priorCompleteRun(results) === null) {
-      expectFullRunOfRecord(results, page, compositionChain(runId(RUN_OF_RECORD_PATH)));
-      return;
-    }
-
-    // A composed run scores the whole set from samples some of which were carried from an
-    // earlier run rather than measured again. The page says so, because "PASS, three samples
-    // per case" over 102 cases otherwise reads as 306 fresh measurements on this candidate.
-    const composition = resultsSection(results, "0. Composition");
-    expect(composition, `${RUN_OF_RECORD_PATH} carries no composition section`).toContain(
-      "incremental rule",
-    );
-    expect(page).toContain("SET-v7's incremental rule");
-    expect(page).toContain("composed");
-
-    // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut (review W-3). This walked the chain to its
-    // terminus and matched `runs? ([\d, and]+) re-measured`, a sentence naming two or more
-    // incremental links. The page words one composition link — the prior run measured every case
-    // in full — and the generator refuses a prior that is itself composed, so that multi-link
-    // sentence can never render. The case now holds the one link the page words, and asserts the
-    // refusal on the real two-link chain run 32 -> run 31 -> run 30.
-    const chain = compositionChain(runId(RUN_OF_RECORD_PATH));
-    const found = chain.join(" -> ");
-    expect(chain.length, `the page words one composition link, but the chain is ${found}`).toBe(2);
-
-    // What makes the prior run the full run: it composes from nothing, so every case in it was
-    // measured on its own candidate. That is the claim the page makes about the baseline it names.
-    const baseline = chain.at(-1) ?? "";
-    expect(
-      resultsSection(readResults(baseline), "0. Composition"),
-      `the chain ${found} ends at a run that is itself composed`,
-    ).toBe("");
-    const [run, base] = chain.map(runNumber);
-    expect(page, `the page does not name run ${base} as the full run of ${found}`)
-      .toContain(`Run ${base} measured every case in full`);
-    expect(page, `the page does not name the one link of ${found}`).toMatch(
-      new RegExp(`run ${run} re-measured [^,]+, composed with run ${base},`),
-    );
-
-    // A two-link chain is refused by name rather than worded as one link.
-    const root = mkdtempSync(join(tmpdir(), "stamity-two-link-"));
-    try {
-      placeResults(root, "2026-09-21-run-31", readResults("2026-09-21-run-31"));
-      expect(() => measurementMethod(root, "32", readResults("2026-09-22-run-32"))).toThrow(
-        /composes through two or more links \(run 32 -> run 31 -> run 30\)/,
-      );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
+  // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): rendered from a scratch root,
+  // and the run of record is a record, so its link is the absolute `records` branch form; the
+  // workflow is a `main` path, so its link stays relative.
   it("names first-run lanes the workflow actually declares", () => {
     const workflow = readFileSync(join(REPO_ROOT, CI_WORKFLOW_PATH), "utf-8");
-    const page = renderMeasurements();
+    const page = renderedPage();
     for (const lane of ["Tarball smoke (publish shape)", "apm-install", "Dogfood check"]) {
       expect(workflow, `${CI_WORKFLOW_PATH} declares no ${lane}`).toContain(lane);
       expect(page, `the page does not name ${lane}`).toContain(lane);
     }
     expect(page).toContain(`(../${CI_WORKFLOW_PATH})`);
-    expect(page).toContain(`(../${RUN_OF_RECORD_PATH})`);
+    expect(page).toContain(`(${RECORDS_BLOB_URL}${RUN_OF_RECORD_PATH})`);
   });
 
   // ADDED at the 1.10.0 cut, which runs the set and so retires the carried clause the 1.9.1 cut
@@ -937,12 +784,16 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // TEST CHANGE, justified: 2026-10-08 (unit c3-release-rules). The refusal's pattern moved, byte
   // for byte, into CARRIED_TO_REFUSAL so the case below runs fixture strings through the pattern
   // this case applies; nothing it refuses or admits moved.
+  //
+  // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): rendered from a scratch root
+  // whose run-of-record file names the tree's run and release, and the run of record is a record,
+  // so its link is the absolute `records` branch form; the run and release it names are the same.
   it("links the run of record as its release's own run, and carries it to no later release", () => {
-    const page = renderMeasurements();
+    const page = renderedPage();
     const run = runNumber(runId(RUN_OF_RECORD_PATH));
     expect(run, `${RUN_OF_RECORD_PATH} names no run number`).not.toBe("");
     expect(page).toContain(
-      `[run ${run}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run`,
+      `[run ${run}](${RECORDS_BLOB_URL}${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run`,
     );
     expect(page, "the page still carries the run of record to a later release").not.toMatch(
       CARRIED_TO_REFUSAL,
@@ -977,6 +828,11 @@ describe("the restated figures are held to the artifacts they come from", () => 
 // full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), written before
 // run 38 existed, and hold the composed branch beside it on run 35's so the two renders are told
 // apart.
+//
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): the real exports
+// are records, not on `main`, and these cases test the parser and the two branches of the method
+// paragraph, so they read synthetic exports shaped like run 34's and run 35's ({@link readResults}).
+// Every edit and assertion is unchanged; the render writes the pinned snapshot.
 describe("a full run of record", () => {
   const FULL_RUN = "2026-09-27-run-34";
   const COMPOSED_RUN = "2026-09-27-run-35";
@@ -1017,7 +873,7 @@ describe("a full run of record", () => {
     expect(() => priorCompleteRun(drifted)).toThrow(EngineError);
     expect(() => priorCompleteRun(drifted)).toThrow(/cannot be read as a full run/);
 
-    // Each marker refuses on its own, planted in run 34's real full file.
+    // Each marker refuses on its own, planted in run 34's full file.
     const full = readResults(FULL_RUN);
     for (const marker of [
       "| Carried case | Case file sha256 | Sources compared |\n| --- | --- | --- |\n",
@@ -1040,7 +896,9 @@ describe("a full run of record", () => {
       const root = fixture({
         "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       });
-      writeMeasurementSnapshot(root, "2026-02-01");
+      // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
+      // snapshot, not the newest file, so the scratch root writes its snapshot at the pinned date.
+      writeMeasurementSnapshot(root, PINNED_DATE);
       placeRenderInputs(root, results);
       try {
         return renderMeasurements(root);
@@ -1085,18 +943,17 @@ describe("a full run of record", () => {
 // record was a two-file change at best. They are read from `evals/run-of-record.json` now, under the
 // root the page renders, so a scratch root carrying its own file renders its own run. Fixtures, not
 // mocks: the renderer reads files, and a temporary directory holding them is that dependency.
+//
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): the five cases
+// that render or read run 39's real export — "is read when a reader needs it, not when the module
+// loads", "renders the run and release a scratch root's own file names", "refuses a results file
+// whose score cell is not a score and a count", "refuses a file naming a results file that is
+// absent" and "refuses a PASS run of record beside a recorded exception" — moved under this describe
+// to test/records/measurements.test.ts. The three left read only `main`'s run-of-record file, a
+// scratch root's, and `src/` and `scripts/`.
 describe("evals/run-of-record.json names the run of record", () => {
   const PASS_RUN = "2026-10-01-run-39";
   const PASS_PATH = `evals/runs/${PASS_RUN}/RESULTS.md`;
-
-  /** A scratch root holding a snapshot and one release run, which every render reads. */
-  const scratch = (): string => {
-    const root = fixture({
-      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
-    });
-    writeMeasurementSnapshot(root, "2026-02-01");
-    return root;
-  };
 
   // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record, review round 1 (M-1). The case held
   // three module constants to the file; the constants are gone, because reading the file when the
@@ -1105,99 +962,6 @@ describe("evals/run-of-record.json names the run of record", () => {
   it("is what the generator reads under the tree's root", () => {
     const file = JSON.parse(readFileSync(join(REPO_ROOT, RUN_OF_RECORD_FILE), "utf-8")) as RunOfRecord;
     expect(readRunOfRecord(REPO_ROOT)).toEqual(file);
-  });
-
-  // ADDED 2026-10-08, unit c2-run-of-record, review round 1 (M-1). The module read the file when it
-  // loaded, so a malformed file failed every import of it: `generate-docs.mjs` could write no page,
-  // the docs index included, and `merge-ready-rate.mjs`, which imports the module before its `try`,
-  // exited on a stack trace. The import must succeed, and the first reader that needs the run of
-  // record gets the one-line message naming the file. The module resolves its root through
-  // `findPackageRoot`, so a fresh module graph whose `findPackageRoot` names a scratch root is the
-  // seam: the tree's own file is never touched.
-  it("is read when a reader needs it, not when the module loads", async () => {
-    const root = mkdtempSync(join(tmpdir(), "stamity-run-of-record-"));
-    placeRunOfRecord(root, "{ path: evals/runs }\n");
-    vi.resetModules();
-    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => ({
-      ...(await importOriginal<typeof SharedPaths>()),
-      findPackageRoot: () => root,
-    }));
-    try {
-      const fresh = await import("../../../src/cli/docs/measurements.ts");
-      const index = await import("../../../src/cli/docs/llmsIndex.ts");
-      expect(fresh.MEASUREMENTS_DOC_PATH).toBe(MEASUREMENTS_DOC_PATH);
-      expect(index.LLMS_INDEX_SECTIONS).toEqual(LLMS_INDEX_SECTIONS);
-      let message = "";
-      try {
-        fresh.runOfRecordVerdict(readResults(PASS_RUN), null);
-      } catch (error) {
-        message = error instanceof Error ? error.message : String(error);
-      }
-      expect(message).toMatch(/^evals\/run-of-record\.json is not JSON: /);
-      expect(message.split("\n")).toHaveLength(1);
-    } finally {
-      vi.doUnmock("../../../src/shared/paths.ts");
-      vi.resetModules();
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("renders the run and release a scratch root's own file names", () => {
-    const root = scratch();
-    try {
-      placeRenderInputs(root, readResults(PASS_RUN), { path: PASS_PATH, release: "1.11.0", exception: null });
-      const page = renderMeasurements(root);
-      expect(page).toContain(`[run 39](../${PASS_PATH}) — the 1.11.0 release run —`);
-      // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record
-      // (W-1): run 39 is composed with run 38, so its PASS reads "PASS as composed"; this pinned
-      // the bare "PASS, three samples per case.".
-      expect(page).toContain("\nPASS as composed, three samples per case.\n");
-      expect(page).toContain("The scoring rule is SET-v6, which is what run 39's own score table");
-      // ADDED 2026-10-08, review round 1 (W-1): the four figures are run 39's own § 5 scores, not
-      // the tree's run of record's. The generator typed run 43's, so this render stated run 39 as
-      // PASS beside run 43's golden and guardrail figures.
-      expect(page).toContain("- Golden rubric pass rate **0.918** (56/61); every floor case passed, 23/23.\n");
-      expect(page).toContain("- Adversarial guardrail hold rate **1.000** (18/18).\n");
-      expect(page).toContain("- Benign-twin false-refusal rate **0.000** (0/4).\n");
-      expect(page).toContain("- Trigger-probe accuracy **1.000** (30/30).\n");
-      expect(page).not.toContain("**0.967** (59/61)");
-      expect(page).not.toContain("**0.944** (17/18)");
-      expect(page, "the scratch render still names the tree's run of record").not.toContain(RUN_OF_RECORD_PATH);
-      expect(page).not.toContain(`the ${RUN_OF_RECORD_RELEASE} release run`);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  // ADDED 2026-10-08, review round 1 (W-1): a score the page reads off § 5 and cannot parse is
-  // refused, naming the metric, rather than restated as whatever the cell holds.
-  it("refuses a results file whose score cell is not a score and a count", () => {
-    const root = scratch();
-    try {
-      const results = readResults(PASS_RUN).replace("| **0.918** (56/61) |", "| 0.918 |");
-      placeRenderInputs(root, results, { path: PASS_PATH, release: "1.11.0", exception: null });
-      expect(() => renderMeasurements(root)).toThrow(EngineError);
-      expect(() => renderMeasurements(root)).toThrow(
-        /"Golden rubric pass rate" row states its score as "0\.918"/,
-      );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("refuses a file naming a results file that is absent", () => {
-    const root = scratch();
-    try {
-      placeRenderInputs(root, readResults(PASS_RUN), { path: PASS_PATH, release: "1.11.0", exception: null });
-      const absent = "evals/runs/2026-12-31-run-99/RESULTS.md";
-      placeRunOfRecord(root, { path: absent, release: "1.99.0", exception: null });
-      expect(() => renderMeasurements(root)).toThrow(EngineError);
-      expect(() => renderMeasurements(root)).toThrow(
-        /No results file at evals\/runs\/2026-12-31-run-99\/RESULTS\.md/,
-      );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
   });
 
   it("refuses a malformed file, naming it", () => {
@@ -1240,31 +1004,6 @@ describe("evals/run-of-record.json names the run of record", () => {
     }
   });
 
-  it("refuses a PASS run of record beside a recorded exception", () => {
-    const passResults = readResults(PASS_RUN);
-    const text = "An exception the passing release forgot to reset.";
-    expect(() => runOfRecordVerdict(passResults, { run: RUN_OF_RECORD_PATH, text })).toThrow(EngineError);
-    expect(() => runOfRecordVerdict(passResults, { run: RUN_OF_RECORD_PATH, text })).toThrow(
-      /PASS and an exception is still recorded/,
-    );
-    expect(() => runOfRecordVerdict(passResults, { run: RUN_OF_RECORD_PATH, text })).toThrow(
-      /set exception to null in evals\/run-of-record\.json/,
-    );
-
-    // Through the page: the file a passing release left with the old exception does not render.
-    const root = scratch();
-    try {
-      placeRenderInputs(root, passResults, {
-        path: PASS_PATH,
-        release: "1.11.0",
-        exception: { run: PASS_PATH, text },
-      });
-      expect(() => renderMeasurements(root)).toThrow(/PASS and an exception is still recorded/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   it("is the one place src/ and scripts/ learn the run of record's path from", () => {
     const spelled: string[] = [];
     const walk = (dir: string): void => {
@@ -1286,6 +1025,12 @@ describe("evals/run-of-record.json names the run of record", () => {
 // these cases hold that wording on today's real pair and on the composition 1.11.0 is likely to
 // publish (run 39 re-measuring the one case run 38 lost a sample of), written before either run
 // existed.
+//
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): the real exports
+// are records, not on `main`, and these cases test how the paragraph is worded from a pair of
+// results files, so they read synthetic exports shaped like runs 34, 35, 37, 24, 31 and 32
+// ({@link readResults}). Each edit and expected line is unchanged, but for the prior run's link,
+// which is a record and so the absolute `records` branch form, built from `RECORDS_BLOB_URL`.
 describe("the composed paragraph is derived from the two results files", () => {
   const FULL_RUN = "2026-09-27-run-34";
   const COMPOSED_RUN = "2026-09-27-run-35";
@@ -1311,8 +1056,8 @@ describe("the composed paragraph is derived from the two results files", () => {
   };
 
   /**
-   * Run 35's real export with its `## 0. Composition` section replaced, so every other section — the
-   * score table, the per-case verdicts — stays a real exporter's output.
+   * Run 35's export with its `## 0. Composition` section replaced, so every other section — the
+   * score table, the per-case verdicts — stays the export's own.
    */
   const recomposed = (composition: string): string => {
     const real = readResults(COMPOSED_RUN);
@@ -1338,7 +1083,10 @@ describe("the composed paragraph is derived from the two results files", () => {
     "",
   ].join("\n");
 
-  it("reads run 35's composition and run 34's verdict off their real results files", () => {
+  // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): renamed from "…off their real
+  // results files": the files are the synthetic exports standing in for run 35 and run 34, and every
+  // value the case reads off them is the one it read off the real pair.
+  it("reads run 35's composition and run 34's verdict off their results files", () => {
     expect(compositionOf(readResults(COMPOSED_RUN))).toEqual({
       prior: FULL_RUN,
       remeasured: [
@@ -1360,7 +1108,7 @@ describe("the composed paragraph is derived from the two results files", () => {
     expect(method("35", readResults(COMPOSED_RUN), { [FULL_RUN]: readResults(FULL_RUN) })).toEqual([
       ...RULE_LINES,
       "Run 34 measured every case in full.",
-      "[Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case, " +
+      `[Run 34](${RECORDS_BLOB_URL}evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case, ` +
         "`question-shape-and-default-charter-only`; run 35 re-measured two cases, composed with " +
         "run 34, and carried the other 100 from it.",
       "The re-measured cases are `question-shape-and-default-charter-only` (case file bytes moved) " +
@@ -1370,7 +1118,7 @@ describe("the composed paragraph is derived from the two results files", () => {
   });
 
   it("renders a run composed with a prior FAIL on one floor case, one case re-measured", () => {
-    // Run 37's real export is the shape a full run FAIL on one floor case has today — its § 5 golden
+    // Run 37's export is the shape a full run FAIL on one floor case has today — its § 5 golden
     // row names `quick-refusal-under-social-pressure` and its guardrail row says only "NOT met" —
     // so it stands in for run 38 under run 38's id.
     //
@@ -1388,7 +1136,7 @@ describe("the composed paragraph is derived from the two results files", () => {
     expect(lines).toEqual([
       ...RULE_LINES,
       "Run 38 measured every case in full.",
-      "[Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case, " +
+      `[Run 38](${RECORDS_BLOB_URL}evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case, ` +
         "`quick-refusal-under-social-pressure`, and the adversarial guardrail hold rate not met; " +
         "run 39 re-measured one case, composed with run 38, and carried the other 112 from it.",
       "The re-measured case is `quick-refusal-under-social-pressure` (prior samples not all admitted).",
@@ -1413,10 +1161,10 @@ describe("the composed paragraph is derived from the two results files", () => {
         "case, `pr-comment-ingress-screen`; run 39 re-measured one case",
     );
 
-    // Run 24 is a real full run whose own status is PASS: no failing case, no FAIL word.
+    // Run 24 is a full run whose own status is PASS: no failing case, no FAIL word.
     const passing = method("39", run39, { "2026-10-01-run-38": readResults("2026-09-11-run-24") });
     expect(passing.join("\n")).toContain(
-      "[Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was PASS; run 39 re-measured one case",
+      `[Run 38](${RECORDS_BLOB_URL}evals/runs/2026-10-01-run-38/RESULTS.md) alone was PASS; run 39 re-measured one case`,
     );
     expect(passing.join("\n")).not.toContain("alone was FAIL");
   });
@@ -1487,336 +1235,6 @@ describe("the composed paragraph is derived from the two results files", () => {
     const escaping = run35.replace("prior complete run is `2026-09-27-run-34`", "prior complete run is `..`");
     expect(escaping, "the fixture edit did not land").not.toBe(run35);
     expect(() => method("35", escaping, priors)).toThrow(/not an eval run id/);
-  });
-});
-
-// ADDED 2026-10-11, the 1.14.0 cut, on the review of unit c7-run-of-record (W-1 and W-2; ledger rows
-// review/52 and review/53 of run 2026-10-11_release-1-14-0). The page called run 45 "PASS" and gave
-// its five re-measured cases as "case file bytes moved", so a reader of the page alone never learned
-// that four expected rows were amended after run 44's FAIL. The page now prints the run of record's
-// own "Why the run happened" section, read from its results file; one fixed sentence where a
-// re-measured case's file moved; a link to a note beside the run where its folder holds one; and
-// "PASS as composed" where a composed run passes. Fixtures, not mocks: the generator reads files,
-// and a temporary directory holding real exports is that dependency.
-describe("the page says why its run of record happened", () => {
-  const REASON = "3. Why the run happened";
-  const MOVED_35 = "| `subagent-returns-blocked-ambiguity-charter-only` | case file bytes moved |";
-  const pathOf = (id: string): string => `evals/runs/${id}/RESULTS.md`;
-
-  /** Run `runOfRecordReason` for the run `id` over a fixture root holding `files` by repo-relative path. */
-  const reason = (id: string, results: string, files: Record<string, string> = {}): readonly string[] => {
-    const root = mkdtempSync(join(tmpdir(), "stamity-reason-"));
-    try {
-      for (const [path, text] of Object.entries(files)) {
-        mkdirSync(dirname(join(root, path)), { recursive: true });
-        writeFileSync(join(root, path), text);
-      }
-      return runOfRecordReason(root, pathOf(id), results);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  };
-
-  /** The § 3 block as the page prints it: one line naming the file, then the section, quoted. */
-  const quoted = (run: string, results: string): readonly string[] => [
-    `Run ${run}'s results file states why the run happened, in its § 3, quoted as it stands:`,
-    "",
-    ...resultsSection(results, REASON)
-      .trim()
-      .split("\n")
-      .map((line) => (line.trim() === "" ? ">" : `> ${line}`)),
-  ];
-
-  /** The one fixed sentence, on its two lines. */
-  const changed = (prior: string, run: string): readonly string[] => [
-    `A case file that moved between run ${prior} and run ${run} was changed after run ${prior}'s scores were known,`,
-    "and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.",
-  ];
-
-  const noteLine = (run: string, id: string): string =>
-    `Run ${run} carries a note beside its results file, [\`NOTE.md\`](../evals/runs/${id}/NOTE.md), to be read with it.`;
-
-  /** A results file with the body of its § 3 removed and the heading kept. */
-  const withoutReason = (results: string): string => {
-    const emptied = results.replace(
-      /\n## 3\. Why the run happened\n[\s\S]*?\n## 4\. /,
-      "\n## 3. Why the run happened\n\n## 4. ",
-    );
-    expect(emptied, "the fixture edit did not land").not.toBe(results);
-    return emptied;
-  };
-
-  it("prints the section and the sentence for a composed run with a moved case file", () => {
-    const run35 = readResults("2026-09-27-run-35");
-    expect(compositionOf(run35)?.remeasured.map(({ why }) => why)).toEqual([
-      "case file bytes moved",
-      "case file bytes moved",
-    ]);
-    const expected = ["", ...quoted("35", run35), "", ...changed("34", "35"), ""];
-    expect(reason("2026-09-27-run-35", run35)).toEqual(expected);
-    // The quote is the file's own text, not a sentence about it.
-    expect(quoted("35", run35).at(-1)).toContain("the trigger was not recorded at prepare");
-
-    // One moved case file among other reasons is enough.
-    const mixed = run35.replace(MOVED_35, MOVED_35.replace("case file bytes moved", "named by the operator"));
-    expect(mixed, "the fixture edit did not land").not.toBe(run35);
-    expect(reason("2026-09-27-run-35", mixed)).toEqual(expected);
-
-    // The 1.14.0 pair, by id: the page carries the words the finding asked for, read from run 45.
-    const run45 = readResults("2026-10-11-run-45");
-    const lines = reason("2026-10-11-run-45", run45);
-    expect(lines).toEqual(["", ...quoted("45", run45), "", ...changed("44", "45"), ""]);
-    expect(lines.join("\n")).toContain("four Expected rows amended");
-  });
-
-  it("prints the section and no such sentence for a composed run with no moved case file", () => {
-    // Run 39 re-measured a case whose prior samples were not all admitted; run 43 one the operator named.
-    for (const [run, id] of [["39", "2026-10-01-run-39"], ["43", "2026-10-08-run-43"]] as const) {
-      const results = readResults(id);
-      expect(priorCompleteRun(results), `${id} is not composed`).not.toBeNull();
-      const lines = reason(id, results);
-      expect(lines).toEqual(["", ...quoted(run, results), ""]);
-      expect(lines.length).toBeGreaterThan(4);
-      expect(lines.join("\n")).not.toContain("was changed after");
-    }
-
-    // The exporter's other reasons are not a moved case file: the corpus moved, or the case is new.
-    const run35 = readResults("2026-09-27-run-35");
-    const others = run35
-      .replace(MOVED_35, MOVED_35.replace("case file bytes moved", "case absent at the prior candidate"))
-      .replace(
-        "| `question-shape-and-default-charter-only` | case file bytes moved |",
-        "| `question-shape-and-default-charter-only` | source text moved: content/x.md:1-2 |",
-      );
-    expect(compositionOf(others)?.remeasured.map(({ why }) => why)).toEqual([
-      "source text moved: content/x.md:1-2",
-      "case absent at the prior candidate",
-    ]);
-    expect(reason("2026-09-27-run-35", others)).toEqual(["", ...quoted("35", others), ""]);
-  });
-
-  it("prints the section and no such sentence for a full run", () => {
-    for (const [run, id] of [
-      ["34", "2026-09-27-run-34"],
-      ["24", "2026-09-11-run-24"],
-      ["44", "2026-10-11-run-44"],
-    ] as const) {
-      const results = readResults(id);
-      expect(priorCompleteRun(results), `${id} is not a full run`).toBeNull();
-      const lines = reason(id, results);
-      expect(lines).toEqual(["", ...quoted(run, results), ""]);
-      expect(lines.length).toBeGreaterThan(4);
-      expect(lines.join("\n")).not.toContain("was changed after");
-    }
-  });
-
-  it("prints no section where the results file states none, and still says a case file moved", () => {
-    // Run 12's real export carries no § 3 heading at all.
-    const run12 = readResults("2026-09-10-run-12");
-    expect(resultsSection(run12, REASON)).toBe("");
-    expect(reason("2026-09-10-run-12", run12)).toEqual([]);
-
-    // A heading with nothing under it prints no empty quote.
-    expect(reason("2026-09-27-run-34", withoutReason(readResults("2026-09-27-run-34")))).toEqual([]);
-    expect(reason("2026-09-27-run-35", withoutReason(readResults("2026-09-27-run-35")))).toEqual([
-      "",
-      ...changed("34", "35"),
-      "",
-    ]);
-  });
-
-  it("links the note beside the run of record when its folder holds one", () => {
-    const run39 = readResults("2026-10-01-run-39");
-    const note39 = { "evals/runs/2026-10-01-run-39/NOTE.md": "# A note\n" };
-    expect(reason("2026-10-01-run-39", run39, note39)).toEqual([
-      "",
-      ...quoted("39", run39),
-      "",
-      noteLine("39", "2026-10-01-run-39"),
-      "",
-    ]);
-    expect(reason("2026-10-01-run-39", run39).join("\n")).not.toContain("NOTE.md");
-
-    // A note in another run's folder is not this run's.
-    const elsewhere = { "evals/runs/2026-10-01-run-38/NOTE.md": "# A note\n" };
-    expect(reason("2026-10-01-run-39", run39, elsewhere).join("\n")).not.toContain("NOTE.md");
-
-    // Beside the sentence, the link is the next line of the same paragraph.
-    const run35 = readResults("2026-09-27-run-35");
-    expect(
-      reason("2026-09-27-run-35", run35, { "evals/runs/2026-09-27-run-35/NOTE.md": "# A note\n" }),
-    ).toEqual([
-      "",
-      ...quoted("35", run35),
-      "",
-      ...changed("34", "35"),
-      noteLine("35", "2026-09-27-run-35"),
-      "",
-    ]);
-  });
-
-  it("says PASS as composed of a composed PASS, and the bare status otherwise", () => {
-    const composedPass = readResults("2026-10-01-run-39");
-    const fullPass = readResults("2026-09-11-run-24");
-    const composedFail = readResults("2026-10-08-run-43");
-    expect([priorCompleteRun(composedPass) !== null, runStatus(composedPass)]).toEqual([true, "PASS"]);
-    expect([priorCompleteRun(fullPass) !== null, runStatus(fullPass)]).toEqual([false, "PASS"]);
-    expect([priorCompleteRun(composedFail) !== null, runStatus(composedFail)]).toEqual([true, "FAIL"]);
-
-    expect(runOfRecordVerdict(composedPass, null)).toEqual(["PASS as composed, three samples per case."]);
-    expect(runOfRecordVerdict(fullPass, null)).toEqual(["PASS, three samples per case."]);
-    const exception: RunOfRecordException = { run: pathOf("2026-10-08-run-43"), text: "A test exception." };
-    expect(runOfRecordVerdict(composedFail, exception, exception.run)).toEqual([
-      "FAIL, three samples per case.",
-      "",
-      "A test exception.",
-    ]);
-  });
-
-  it("renders the block between the method paragraph and the scoring rule, and nothing where there is none", () => {
-    const render = (id: string, results: string, note: boolean): string => {
-      const root = fixture({
-        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
-      });
-      writeMeasurementSnapshot(root, "2026-02-01");
-      placeRenderInputs(root, results, { path: pathOf(id), release: "2.0.0" });
-      if (note) writeFileSync(join(root, "evals/runs", id, "NOTE.md"), "# A note\n");
-      try {
-        return renderMeasurements(root);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    };
-
-    const run35 = readResults("2026-09-27-run-35");
-    const composed = render("2026-09-27-run-35", run35, true);
-    expect(composed).toContain("\nPASS as composed, three samples per case.\n");
-    expect(composed).toContain(
-      [
-        "ranges found identical at both candidates. The set is SET-v7.",
-        "",
-        ...quoted("35", run35),
-        "",
-        ...changed("34", "35"),
-        noteLine("35", "2026-09-27-run-35"),
-        "",
-        "The scoring rule is SET-v6, which is what run 35's own score table is headed with.",
-      ].join("\n"),
-    );
-
-    // A full run with its reason: the quote, and neither the sentence nor a link.
-    const run34 = readResults("2026-09-27-run-34");
-    const full = render("2026-09-27-run-34", run34, false);
-    expect(full).toContain(
-      [
-        "Run 34 measured every case in full on its own candidate. The set is SET-v7.",
-        "",
-        ...quoted("34", run34),
-        "",
-        "The scoring rule is SET-v6, which is what run 34's own score table is headed with.",
-      ].join("\n"),
-    );
-    expect(full).not.toContain("was changed after");
-    expect(full).not.toContain("NOTE.md");
-
-    // No reason, no moved case file and no note: the paragraph is the one the page had before.
-    const bare = render("2026-09-27-run-34", withoutReason(run34), false);
-    expect(bare).toContain(
-      "The set is SET-v7.\nThe scoring rule is SET-v6, which is what run 34's own score table is headed with.",
-    );
-    expect(bare).not.toContain("states why the run happened");
-  });
-
-  // Run 38 is a real full run whose § 3 says "the full re-measure": quoted, it is on the page, and
-  // the full-run check reads the page's own wording, not the quote.
-  it("refuses a composition claim the page words itself, and admits one a full run's own reason states", () => {
-    const id = "2026-10-01-run-38";
-    const results = readResults(id);
-    expect(priorCompleteRun(results), `${id} is not a full run`).toBeNull();
-    expect(resultsSection(results, REASON)).toContain("re-measure");
-
-    const root = fixture({
-      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
-    });
-    let page = "";
-    try {
-      writeMeasurementSnapshot(root, "2026-02-01");
-      placeRenderInputs(root, results, { path: pathOf(id), release: "2.0.0" });
-      page = renderMeasurements(root);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-    expect(page).toContain(`\n${quoted("38", results).join("\n")}\n`);
-    expect(page.split("\n").filter((line) => line.startsWith(">")).join("\n")).toContain("re-measure");
-
-    expectFullRunOfRecord(results, page, [id]);
-    // The same words on a line the page words itself are still refused.
-    expect(() =>
-      expectFullRunOfRecord(results, page.replace("\nThe scoring rule is", "\nRun 38 re-measured one case.\nThe scoring rule is"), [id]),
-    ).toThrow(/composition claim \("re-measure"\)/);
-  });
-
-  it("holds the tree's page to its own run of record's section, moved case files and note", () => {
-    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
-    const page = renderMeasurements();
-    const run = runNumber(runId(RUN_OF_RECORD_PATH));
-
-    const section = resultsSection(results, REASON).trim();
-    if (section === "") {
-      expect(page).not.toContain("states why the run happened");
-    } else {
-      expect(page).toContain(`\n${quoted(run, results).join("\n")}\n`);
-    }
-
-    const composition = compositionOf(results);
-    const moved = composition?.remeasured.some(({ why }) => why === "case file bytes moved") ?? false;
-    if (composition !== null && moved) {
-      expect(page).toContain(`\n${changed(runNumber(composition.prior), run).join("\n")}\n`);
-    } else {
-      expect(page).not.toContain("was changed after");
-    }
-
-    const note = `evals/runs/${runId(RUN_OF_RECORD_PATH)}/NOTE.md`;
-    if (existsSync(join(REPO_ROOT, note))) {
-      expect(page).toContain(`\n${noteLine(run, runId(RUN_OF_RECORD_PATH))}\n`);
-    } else {
-      expect(page).not.toContain("NOTE.md");
-    }
-  });
-});
-
-describe("the committed snapshot the page renders from", () => {
-  it("parses, and states a rate that matches the lists it carries", () => {
-    const { path, report } = readMeasurementSnapshot();
-    expect(path).toMatch(/^evals\/measurements\/merge-ready-\d{4}-\d{2}-\d{2}\.json$/);
-    expect(report.rule).toBe(MERGE_READY_RULE);
-    expect(report.rate.n).toBe(report.numerator.length);
-    expect(report.rate.d).toBe(report.numerator.length + report.denominator.length);
-    expect(report.rate.value).toBe(Number((report.rate.n / report.rate.d).toFixed(3)));
-    expect(report.rate.d, "a rate over an empty denominator states nothing").toBeGreaterThan(0);
-  });
-
-  it("records what it was computed from, so a stale snapshot can be told from a current one", () => {
-    const { report } = readMeasurementSnapshot();
-    expect(report.computedFrom.records).toBeGreaterThan(10);
-    expect(report.computedFrom.newestRecordDate).toBe(report.generated);
-    expect(report.computedFrom.changelogHead).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(
-      readFileSync(join(REPO_ROOT, "CHANGELOG.md"), "utf-8"),
-      "the changelog no longer carries the head the snapshot recorded",
-    ).toContain(`## [${report.computedFrom.changelogHead}]`);
-  });
-
-  it("names a run only once across its three lists, and gives each a reason", () => {
-    const { report } = readMeasurementSnapshot();
-    const runs = listed(report);
-    expect(new Set(runs).size, "a run appears in two lists").toBe(runs.length);
-    const setAside: readonly ExcludedRun[] = [...report.excluded, ...report.denominator];
-    for (const entry of setAside) {
-      expect(entry.reason.trim().length, `${entry.run} is set aside for no reason`).toBeGreaterThan(
-        5,
-      );
-    }
   });
 });
 
@@ -2361,7 +1779,10 @@ describe("the snapshot seam", () => {
       },
     });
     const path = writeMeasurementSnapshot(root, "2026-02-01");
-    const snapshot = readMeasurementSnapshot(root);
+    // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the read with no path now
+    // reads the pinned snapshot, which this root does not hold, so the case reads back the path it
+    // froze. Every assertion is unchanged; the pinned read has its own case below.
+    const snapshot = readMeasurementSnapshot(root, path);
 
     expect(path).toBe(`${SNAPSHOT_DIR}/merge-ready-2026-02-01.json`);
     expect(snapshot.path).toBe(path);
@@ -2385,45 +1806,74 @@ describe("the snapshot seam", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("reads the newest snapshot by filename date, not by write order", () => {
+  // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-020): was "reads the
+  // newest snapshot by filename date, not by write order". The snapshots live on the `records`
+  // branch, so a snapshot taken there after the page was committed must not move the page: the read
+  // is the one `MEASUREMENT_SNAPSHOT_PATH` pins. The case keeps its guard against write order and
+  // filename order, and holds the pinned file against a newer and an older one, each computed over
+  // a different tree so the report read back tells them apart.
+  it("reads the pinned snapshot, not the newest file", () => {
     const root = fixture({
       "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
     });
-    // Written newest-first on purpose: mtime order and filename order disagree
-    // here, and a checkout's timestamps are not committed.
-    writeMeasurementSnapshot(root, "2026-03-09");
-    writeMeasurementSnapshot(root, "2026-02-01");
-    expect(readMeasurementSnapshot(root).path).toBe(
-      `${SNAPSHOT_DIR}/merge-ready-2026-03-09.json`,
-    );
-    rmSync(root, { recursive: true, force: true });
+    const addRun = (run: string, gates?: string): void => {
+      mkdirSync(join(root, RUNS_DIR, run), { recursive: true });
+      writeFileSync(join(root, RUNS_DIR, run, "record.md"), record(gates === undefined ? {} : { gates }));
+      writeFileSync(join(root, RUNS_DIR, run, "ledger.jsonl"), CLOSED_LEDGER);
+    };
+    try {
+      // Written newest-first on purpose: mtime order and filename order disagree with the pin here,
+      // and a checkout's timestamps are not committed.
+      const newer = writeMeasurementSnapshot(root, "2999-12-31");
+      addRun("2026-01-03_red-gate", "| Final | pass | pass | 1 failed of 120 |");
+      const pinned = writeMeasurementSnapshot(root, PINNED_DATE);
+      addRun("2026-01-04_feature");
+      const older = writeMeasurementSnapshot(root, "2000-01-01");
+      expect(pinned).toBe(MEASUREMENT_SNAPSHOT_PATH);
+      expect(older < pinned && pinned < newer, "the pin is neither the newest nor the oldest file").toBe(true);
+
+      const snapshot = readMeasurementSnapshot(root);
+      expect(snapshot.path).toBe(MEASUREMENT_SNAPSHOT_PATH);
+      expect(snapshot.report.rate).toEqual({ n: 1, d: 2, value: 0.5 });
+      expect(readMeasurementSnapshot(root, newer).report.rate).toEqual({ n: 1, d: 1, value: 1 });
+      expect(readMeasurementSnapshot(root, older).report.rate).toEqual({ n: 2, d: 3, value: 0.667 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("renders the page from the snapshot, not from the records beside it", () => {
     const root = fixture({
       "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
     });
-    writeMeasurementSnapshot(root, "2026-02-01");
+    // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
+    // snapshot, so the root writes its snapshot at the pinned date.
+    writeMeasurementSnapshot(root, PINNED_DATE);
     // A second run lands AFTER the snapshot — the case the seam exists for.
     const later = join(root, RUNS_DIR, "2026-02-14_later-run");
     mkdirSync(later, { recursive: true });
     writeFileSync(join(later, "record.md"), record({}));
     writeFileSync(join(later, "ledger.jsonl"), CLOSED_LEDGER);
 
-    // The reach snapshot is read from the real tree, so render against a root
-    // that carries both: copy the committed reach artifact into the fixture.
+    // The renderer reads the reach snapshot and the run of record's RESULTS.md under the root it
+    // renders, so the fixture carries both.
     //
     // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The renderer now also reads the run of
     // record's RESULTS.md under the root it renders, to tell a full run of record from a composed
     // one, so the fixture carries that file too (the real one, copied like the reach artifact).
     // Fixture setup only: every assertion of this case is unchanged.
-    placeRenderInputs(root, readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8"));
+    //
+    // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): the committed
+    // reach artifact and the run of record's real results file are records, not on `main`, so the
+    // fixture carries synthetic ones ({@link placeRenderInputs}). The snapshot the page names is the
+    // pinned one, where it named the 2026-02-01 file this case used to write.
+    placeRenderInputs(root, readResults(FULL_PASS_RUN));
 
     const page = renderMeasurements(root);
     expect(computeMergeReadyRate(root).rate.d, "the live tree moved, as the case intends").toBe(2);
     expect(page).toContain("**1 of 1 runs** (1.000)");
     expect(page).not.toContain("2026-02-14_later-run");
-    expect(page).toContain("merge-ready-2026-02-01.json");
+    expect(page).toContain(MEASUREMENT_SNAPSHOT_PATH);
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -2438,22 +1888,11 @@ describe("the snapshot seam", () => {
   });
 });
 
+// TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, REQ-PROVE-025): "prints the same
+// report the page renders from" and "prints a human summary naming the rule, the rate and every list"
+// run the script over this repository's `.stamity/runs/`, records not on `main`, and moved to
+// test/records/measurements.test.ts with "scripts/generate-docs.mjs --page measurements".
 describe("scripts/merge-ready-rate.mjs", () => {
-  it("prints the same report the page renders from", () => {
-    const stdout = execFileSync(process.execPath, [RATE_SCRIPT_PATH, "--json"], {
-      encoding: "utf-8",
-    });
-    expect(JSON.parse(stdout)).toEqual(JSON.parse(JSON.stringify(computeMergeReadyRate())));
-  });
-
-  it("prints a human summary naming the rule, the rate and every list", () => {
-    const stdout = execFileSync(process.execPath, [RATE_SCRIPT_PATH], { encoding: "utf-8" });
-    const report = computeMergeReadyRate();
-    expect(stdout).toContain(`${report.rate.n} of ${report.rate.d}`);
-    expect(stdout).toContain(report.rule);
-    for (const run of listed(report)) expect(stdout).toContain(run);
-  });
-
   it("refuses an unknown argument with the usage line and status 2", () => {
     const result = spawnSync(process.execPath, [RATE_SCRIPT_PATH, "--nonsense"], {
       encoding: "utf-8",
@@ -2461,25 +1900,6 @@ describe("scripts/merge-ready-rate.mjs", () => {
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("Unknown argument: --nonsense");
     expect(result.stderr).toContain("Usage: node scripts/merge-ready-rate.mjs");
-  });
-});
-
-describe("scripts/generate-docs.mjs --page measurements", () => {
-  const workspace = mkdtempSync(join(tmpdir(), "stamity-measurements-page-"));
-  afterAll(() => rmSync(workspace, { recursive: true, force: true }));
-
-  it("writes the rendered page, and a second run produces zero diff", () => {
-    const run = (): string => {
-      execFileSync(
-        process.execPath,
-        [SCRIPT_PATH, "--page", "measurements", "--out-dir", workspace],
-        { encoding: "utf-8" },
-      );
-      return readFileSync(join(workspace, MEASUREMENTS_DOC_PATH), "utf-8");
-    };
-    const first = run();
-    expect(first).toBe(renderMeasurements());
-    expect(run()).toBe(first);
   });
 });
 
@@ -2630,8 +2050,15 @@ describe("the measurement inputs", () => {
     }
   });
 
+  // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases, review/4 of this run): the case
+  // spelled the canonical repository's slug in code, which test/ci/forkIdentity.test.ts counts per
+  // file and lists no entry for here. It now holds the constant's shape — a GitHub blob URL of one
+  // owner and one repository on the `records` branch, ending in the slash a record path follows —
+  // without the slug, so a fork that renames the repository still meets it.
   it("links every record into the records branch with an absolute URL", () => {
-    expect(RECORDS_BLOB_URL).toBe("https://github.com/zomarit/stamity/blob/records/");
+    expect(RECORDS_BLOB_URL.startsWith("https://github.com/")).toBe(true);
+    expect(RECORDS_BLOB_URL.endsWith("/blob/records/")).toBe(true);
+    expect(RECORDS_BLOB_URL).toMatch(/^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/records\/$/);
   });
 });
 
