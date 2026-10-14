@@ -31,9 +31,12 @@ publishes it again unless you remove it. A record the branch renamed only in cas
 from your checkout, and `commit` refuses, naming both spellings, until you delete the old one.
 
 This branch holds nothing but records and its own four files (this README, `.gitignore`,
-`.gitattributes` and `.github/workflows/records.yml`), every path in printable ASCII, and no two
-files or folders that differ only in case. `restore` refuses a commit that breaks a rule, writing
-nothing, so the records checks fail on such a push, and `commit` refuses to build one. A case pair
-already on this branch is beyond both commands: drop the old spelling with plain git, in a detached
-worktree of `origin/records` (`git rm -r --cached`, a commit, a fast-forward
-`git push origin HEAD:refs/heads/records`), then run `restore`; the refusal prints each step.
+`.gitattributes` and `.github/workflows/records.yml`), every file and folder name made of
+letters, digits, `.`, `_` and `-` only, never ending in `.` and never a Windows device name
+(`CON`, `NUL`, `COM1` and the like, with or without an extension), and no two files or folders
+that differ only in case. `restore` refuses a commit that breaks a rule, writing nothing, so the
+records checks fail on such a push, `commit` refuses to build one, and `init` refuses to import one.
+A case pair already on this branch is beyond both commands: drop the old spelling with plain git,
+in a detached worktree of `origin/records` (`git --literal-pathspecs rm -r --cached`, which lists
+each path it removes, a commit, a fast-forward `git push origin HEAD:refs/heads/records`), then run
+`restore`; the refusal prints each step.
