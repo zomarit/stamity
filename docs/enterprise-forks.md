@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it, and for the release section and the section on dropping the deleted routes against the fork release workflow as commit 0801927b leaves it and the upstream lane script at commit 5284eaaa, and for that section's order against the 1.14 identity script and its test suite at commit c96c7146 -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it, and for the release section and the section on dropping the deleted routes against the fork release workflow as commit 0801927b leaves it and the upstream lane script at commit 5284eaaa, and for that section's order against the 1.14 identity script and its test suite at commit c96c7146, and for its package.json conflict against a scratch merge of commit 114aa996 into a fork renamed by that script -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -341,9 +341,15 @@ Leave `package.json` and `renovate/plugins.json` alone on the integration branch
 suite read `renovate/plugins.json`, so deleting it there turns your CI red. Both go in the update
 worktree instead, as part of the merge:
 
-- The release removes the `stamity.distribution` block from `package.json`. Where your fork changed
-  that block, the merge reports a conflict there; take upstream's side of those lines. 1.15.0
-  ignores a block that stays behind and names it in a one-line notice for one release.
+- The release removes the whole `stamity` object from `package.json`, and the
+  `stamity.distribution` block with it. The identity script put `stamity.publisher` inside that
+  object, so every fork that ran it meets a conflict there, whether or not it touched
+  `distribution`. Keep your side of that conflict and delete only the `distribution` key from it:
+  `stamity` keeps `publisher`, and `publishConfig` stays as the identity script left it. Taking
+  upstream's side drops `publisher` and, on a private fork, brings `publishConfig` back, so
+  `node scripts/fork-identity.mjs` with your identity arguments and `--check` reports drift and
+  exits 1. Run that check once the conflict is resolved; it exits 0. 1.15.0 ignores a
+  `distribution` key that stays behind and names it in a one-line notice for one release.
 - The release deletes `renovate/plugins.json`. Drop it from any Renovate configuration of yours that
   extends it, in the same worktree.
 
@@ -352,8 +358,8 @@ The release also deletes `.apm/`, `apm.yml`, `plugin.json`, `.claude-plugin/` an
 identity script retargets that preset), the merge reports a modify/delete conflict, and `git rm` on
 that path resolves it before `continue`. Where a conflict in
 `.github/workflows/fork-release.yml` falls inside the distribution steps the release removes, take
-upstream's side of those lines. If either the block or the preset is still there once the update
-branch has landed, delete it then; by that point the branch runs 1.15.0. A distribution branch and
+upstream's side of those lines. If either the `distribution` key or the preset is still there once
+the update branch has landed, delete it then; by that point the branch runs 1.15.0. A distribution branch and
 tags your fork already pushed stay where they are: nothing in 1.15.0 reads or moves them, and a
 consumer pinned to one still resolves it. If an integration already ended `regenerate-failed`, run
 `abort`, commit the `.stamity/upstream.json` edit, and run `integrate` again.
