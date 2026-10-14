@@ -170,6 +170,29 @@ describe("Windows fixture scheduling", () => {
     }
   });
 
+  // ADDED 2026-10-14 (unit r1-records-suite, review round 1, ledger review/1): the cases above run
+  // the win32 config, whose `parallel` project leaves out `test/records/**` on its own, so only this
+  // case reads the root `exclude` that keeps the records suite out of `npm test` on Linux and macOS.
+  it("keeps test/records out of the POSIX default suite, every other file discovered once", async () => {
+    // The host's win32 scheduling keys come off, and the root include (`vitest.config.ts`, the
+    // glob a win32 host empties) goes back on, so the config is the POSIX one on every host.
+    const { include: _hostInclude, projects: _hostProjects, sequence: _hostSequence, ...shared } = config.test ?? {};
+    const runner = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT },
+      { test: { ...shared, include: ["test/**/*.test.ts"], ...fixtureScheduling("linux") } },
+    );
+    try {
+      const discovered = (await runner.globTestSpecifications())
+        .map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
+      const files = (await testFilesOnDisk()).filter((file) => !isRecordsFile(file));
+      expect(discovered.filter(isRecordsFile), "npm test on POSIX discovers a records-suite file").toEqual([]);
+      expect(discovered.toSorted()).toEqual(files.toSorted());
+      expect(new Set(discovered).size).toBe(discovered.length);
+    } finally {
+      await runner.close();
+    }
+  });
+
   it.each(["darwin", "linux"] as const)("keeps %s scheduling unchanged", (platform) => {
     expect(fixtureScheduling(platform)).toEqual({});
   });

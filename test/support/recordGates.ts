@@ -96,6 +96,42 @@ const RETIRED_LEAD = /^(\d{4}-\d{2}-\d{2})(?:\s+|$)/u;
 const runDateOf = (ledgerPath: string): string | null =>
   /^\.stamity\/runs\/(\d{4}-\d{2}-\d{2})_[^/]*\/ledger\.jsonl$/u.exec(ledgerPath)?.[1] ?? null;
 
+/** The line a run record carries near its head while its run is still open. */
+export const IN_PROGRESS_STATUS = "Status: in progress";
+
+/** How many of a record's first lines are read for {@link IN_PROGRESS_STATUS}. */
+export const STATUS_HEAD_LINES = 15;
+
+/** One run folder's ledger, with its `record.md` text (`null` when the folder holds no record). */
+export interface RunLedger {
+  readonly ledgerPath: string;
+  readonly recordText: string | null;
+}
+
+/**
+ * The ledgers the records gate holds, and the ones it leaves out because their run is still in
+ * progress: a record with a line reading exactly {@link IN_PROGRESS_STATUS} within its first
+ * {@link STATUS_HEAD_LINES} lines. Such a run holds legal write-ahead `open` rows, and it is not
+ * published until its close, so neither its rows nor an inbox `Ref:` into it are held yet. A record
+ * with no such line, or no record at all, is read as closed, so the gate stays on by default.
+ *
+ * ADDED 2026-10-14 (unit r1-records-suite, review round 1, ledger review/3, sign-off S20).
+ */
+export const partitionByRunStatus = (
+  runs: readonly RunLedger[],
+): { readonly checked: string[]; readonly inProgress: string[] } => {
+  const inProgress = (recordText: string | null): boolean =>
+    recordText !== null &&
+    recordText
+      .split("\n")
+      .slice(0, STATUS_HEAD_LINES)
+      .some((line) => line.trimEnd() === IN_PROGRESS_STATUS);
+  return {
+    checked: runs.filter((run) => !inProgress(run.recordText)).map((run) => run.ledgerPath),
+    inProgress: runs.filter((run) => inProgress(run.recordText)).map((run) => run.ledgerPath),
+  };
+};
+
 /** `<ledger>#<id>` for every row a committed ledger left `open`. */
 export const openRowLabels = (ledgerPath: string, rows: readonly LedgerRow[]): string[] =>
   rows.filter((row) => row.state === "open").map((row) => `${ledgerPath}#${row.id}`);

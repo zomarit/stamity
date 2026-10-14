@@ -7,10 +7,13 @@ import { INBOX_PATH, parseInbox, SCHEDULE_RULE_HEADING } from "../../src/runs/in
 import { LEDGER_SUFFIX, parseLedger, type LedgerRow } from "../support/ledgerGrammar.ts";
 import {
   duplicateIds,
+  IN_PROGRESS_STATUS,
   LEGACY_CLOSED_LEDGERS,
   LEGACY_INFO_LEDGERS,
   openRowLabels,
+  partitionByRunStatus,
   recordGates,
+  type RunLedger,
   unaccountedDeferrals,
 } from "../support/recordGates.ts";
 
@@ -56,28 +59,47 @@ const { renderProblem, inboxRefs, retiredProblems } = recordGates({
   INBOX_PATH,
 });
 
+/** A run folder's record, read for its status line. */
+const RECORD_FILE = "record.md";
+
 /**
  * Every `ledger.jsonl` on disk under `.stamity/runs/`, one per run folder,
- * POSIX-spelled and sorted.
+ * POSIX-spelled and sorted, with the folder's `record.md` text (`null` when it has none).
  *
  * TEST CHANGE, justified (2026-10-14, unit r1-records-suite, REQ-PROVE-025): this
  * replaces `trackedLedgers`, which asked `git ls-files`; the records are restored
  * into a checkout rather than tracked by it, so the gate reads what is on disk.
  * Every ledger git tracked is on disk, so no ledger leaves the check.
+ *
+ * TEST CHANGE, justified (2026-10-14, unit r1-records-suite, review round 1, ledger
+ * review/3, sign-off S20): reading from disk also reached the runs still in progress,
+ * whose write-ahead `open` rows are legal until their close, so the gate went red on
+ * a legal state. `partitionByRunStatus` (`test/support/recordGates.ts`) leaves those
+ * runs out, with one printed line each; every closed run is held as before.
  */
-const ledgersOnDisk = (): string[] => {
+const ledgersOnDisk = (): RunLedger[] => {
   const runs = join(REPO_ROOT, ".stamity", "runs");
   if (!existsSync(runs)) return [];
   return readdirSync(runs, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(join(runs, entry.name, LEDGER_SUFFIX)))
-    .map((entry) => join(".stamity", "runs", entry.name, LEDGER_SUFFIX).replaceAll("\\", "/"))
-    .toSorted();
+    .map((entry) => {
+      const record = join(runs, entry.name, RECORD_FILE);
+      return {
+        ledgerPath: join(".stamity", "runs", entry.name, LEDGER_SUFFIX).replaceAll("\\", "/"),
+        recordText: existsSync(record) ? readFileSync(record, "utf8") : null,
+      };
+    })
+    .toSorted((a, b) => (a.ledgerPath < b.ledgerPath ? -1 : a.ledgerPath > b.ledgerPath ? 1 : 0));
 };
 
 const readRepoFile = (relPath: string): string =>
   readFileSync(join(REPO_ROOT, ...relPath.split("/")), "utf8");
 
-const LEDGERS = ledgersOnDisk();
+const { checked: LEDGERS, inProgress: IN_PROGRESS } = partitionByRunStatus(ledgersOnDisk());
+for (const path of IN_PROGRESS) {
+  console.info(`records gate — skipped, its run is still in progress (${IN_PROGRESS_STATUS}): ${path}`);
+}
+const IN_PROGRESS_SET = new Set(IN_PROGRESS);
 const INBOX_TEXT = existsSync(join(REPO_ROOT, ...INBOX_PATH.split("/")))
   ? readRepoFile(INBOX_PATH)
   : "";
@@ -88,8 +110,11 @@ describe("committed run ledgers", () => {
   it("finds the ledgers to check", () => {
     // The gate is vacuous the moment the enumeration stops matching, and a
     // vacuous gate over records nobody else reads is indistinguishable from a
-    // clean tree. Any tracked run directory means at least one ledger.
-    expect(LEDGERS.length, "no tracked ledger.jsonl under .stamity/runs/").toBeGreaterThan(0);
+    // clean tree. Any closed run directory on disk means at least one ledger.
+    expect(
+      LEDGERS.length,
+      "no closed run's ledger.jsonl found on disk under .stamity/runs/; run `node scripts/records.mjs restore`",
+    ).toBeGreaterThan(0);
     expect(LEDGERS.every((path) => path.startsWith(".stamity/runs/"))).toBe(true);
   });
 
@@ -193,7 +218,13 @@ describe("the deferral inbox", () => {
       if (!path.endsWith(LEDGER_SUFFIX)) continue;
       const parsed = PARSED.get(path);
       if (parsed === undefined) {
-        dangling.push(`${ref} — no tracked ledger at that path`);
+        // A `Ref:` into a run still in progress does not resolve: that ledger is not published
+        // until its close (ledger review/3, sign-off S20).
+        dangling.push(
+          IN_PROGRESS_SET.has(path)
+            ? `${ref} — its run is still in progress (${IN_PROGRESS_STATUS}), so its ledger is not published yet`
+            : `${ref} — no ledger found on disk at that path; run \`node scripts/records.mjs restore\``,
+        );
         continue;
       }
       if (!parsed.rows.some((row) => row.id === anchor)) dangling.push(`${ref} — no row with that id`);

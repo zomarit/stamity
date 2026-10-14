@@ -13,7 +13,14 @@ import {
 } from "../../src/runs/inboxStore.ts";
 import { lazyCleanup } from "../support/lazyCleanup.ts";
 import { SEVERITIES, parseLedger } from "../support/ledgerGrammar.ts";
-import { duplicateIds, openRowLabels, recordGates, unaccountedDeferrals } from "../support/recordGates.ts";
+import {
+  duplicateIds,
+  openRowLabels,
+  partitionByRunStatus,
+  recordGates,
+  STATUS_HEAD_LINES,
+  unaccountedDeferrals,
+} from "../support/recordGates.ts";
 
 /**
  * The records gate's fixture cases: the pure checks of `test/support/recordGates.ts`,
@@ -429,6 +436,57 @@ describe("fixtures — the report path and the decision flag (C1, C3)", () => {
     const { rows, problems } = parseLedger(LEDGER, text);
     expect(problems).toEqual([]);
     expect(rows[0]?.retired).toBe("2026-09-23 scheduled to the next package, owner: the maintainer");
+  });
+});
+
+// ADDED 2026-10-14 (unit r1-records-suite, review round 1, ledger review/3, sign-off S20): a run whose
+// record still reads `Status: in progress` holds legal write-ahead `open` rows and is not published
+// until its close, so the records gate leaves its ledger out; every other run is held as before.
+describe("fixtures — a run still in progress is left out of the gate", () => {
+  const OPEN_ROW = row({ id: "r1/prove/2", state: "open", rationale: "" });
+  const RUNNING = ".stamity/runs/2026-10-14_running/ledger.jsonl";
+  const CLOSED = ".stamity/runs/2026-10-14_closed/ledger.jsonl";
+  const UNMARKED = ".stamity/runs/2026-10-14_unmarked/ledger.jsonl";
+  const openIn = (ledgers: readonly string[]): string[] =>
+    ledgers.flatMap((path) => openRowLabels(path, parseLedger(path, OPEN_ROW).rows));
+
+  it("skips an in-progress run's ledger, so its write-ahead `open` row is not reported", () => {
+    const { checked, inProgress } = partitionByRunStatus([
+      { ledgerPath: RUNNING, recordText: "# Run record\n\nStatus: in progress\n\n## Entries\n" },
+    ]);
+    expect(inProgress).toEqual([RUNNING]);
+    expect(checked).toEqual([]);
+    expect(openIn(checked)).toEqual([]);
+  });
+
+  it("still fails a closed run's ledger that left a row `open`", () => {
+    const { checked, inProgress } = partitionByRunStatus([
+      { ledgerPath: RUNNING, recordText: "# Run record\n\nStatus: in progress\n" },
+      { ledgerPath: CLOSED, recordText: "# Run record\n\nStatus: closed 2026-10-14\n" },
+    ]);
+    expect(inProgress).toEqual([RUNNING]);
+    expect(openIn(checked)).toEqual([`${CLOSED}#r1/prove/2`]);
+  });
+
+  it("treats a record with no `Status:` line, or no record, as closed", () => {
+    const missing = ".stamity/runs/2026-10-14_no-record/ledger.jsonl";
+    const { checked, inProgress } = partitionByRunStatus([
+      { ledgerPath: UNMARKED, recordText: "# Run record\n\nOpened 2026-10-14; still running.\n" },
+      { ledgerPath: missing, recordText: null },
+    ]);
+    expect(inProgress).toEqual([]);
+    expect(openIn(checked)).toEqual([`${UNMARKED}#r1/prove/2`, `${missing}#r1/prove/2`]);
+  });
+
+  it("reads the status only from the record's head, and only as the whole line", () => {
+    const late = `${"line\n".repeat(STATUS_HEAD_LINES)}Status: in progress\n`;
+    const { checked, inProgress } = partitionByRunStatus([
+      { ledgerPath: CLOSED, recordText: late },
+      { ledgerPath: UNMARKED, recordText: "Status: in progress, then closed 2026-10-14\n" },
+      { ledgerPath: RUNNING, recordText: `${"line\n".repeat(STATUS_HEAD_LINES - 1)}Status: in progress\r\n` },
+    ]);
+    expect(checked).toEqual([CLOSED, UNMARKED]);
+    expect(inProgress).toEqual([RUNNING]);
   });
 });
 
