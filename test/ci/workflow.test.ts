@@ -285,7 +285,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the count moves
   // from ten to eight because `apm-install` and `plugin-route` leave with the APM and plugin routes,
   // which 1.15.0 deletes; `check` is the one heavy gate left, and every other lane is still pinned.
-  it("keeps the eight lanes: the classifier, the proven-push reader, the check matrix, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg): the
+  // count moves from eight to nine because `cloud-container` joins after `check`, whose side of the
+  // split it runs on; every other lane is still pinned, in its place.
+  it("keeps the nine lanes: the classifier, the proven-push reader, the check matrix, the cloud container leg, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
     // CHANGED by plan 008 file 3, unit V1w: `plugin-route` joins the merge-blocking set, so this
     // list and the aggregator's `needs` below both move. It sits beside `apm-install` because the
     // two answer the same KIND of question — what a real consumer's tooling does with a published
@@ -303,6 +306,7 @@ describe("ci.yml — the merge-blocking gate", () => {
       "changes",
       "prove-pr",
       "check",
+      "cloud-container",
       "lanes",
       "records",
       "supply-chain",
@@ -609,10 +613,14 @@ describe("ci.yml — the merge-blocking gate", () => {
     // routes and both jobs with them. The branch ruleset requires `all-ci-checks` and
     // `all-pr-checks` only, so no required context named the deleted jobs. Their assertions turn
     // around below: the report must not read a job that no longer exists.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
+    // `cloud-container` joins `needs` after `check`, because the aggregator requires it on a full
+    // run and asserts it skipped on the other two shapes, and it can only read a job it needs.
     expect(aggregator.needs).toEqual([
       "changes",
       "prove-pr",
       "check",
+      "cloud-container",
       "lanes",
       "records",
       "supply-chain",
@@ -624,6 +632,11 @@ describe("ci.yml — the merge-blocking gate", () => {
     // It must assert on the result rather than merely echo it: `needs` alone cannot express
     // "cancelled is not success".
     expect(report).toContain('test "${{ needs.check.result }}" = "success"');
+    // ADDED (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg): the cloud
+    // container leg is asserted both ways, as `check` is: run and green on a full run, skipped
+    // otherwise. The executed suite below proves which shape each line sits in.
+    expect(report).toContain('test "${{ needs.cloud-container.result }}" = "success"');
+    expect(report).toContain('test "${{ needs.cloud-container.result }}" = "skipped"');
     for (const retired of ["apm-install", "plugin-route"]) {
       expect(report, `the report still reads the deleted ${retired} job`).not.toContain(`needs.${retired}`);
     }
@@ -647,6 +660,61 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(report).toContain('test "${{ needs.records.result }}" = "skipped"');
     expect(report).not.toContain("github.repository");
     expect(stepOf(aggregator.steps, "Report").env).toEqual({ REPO: "${{ github.repository }}" });
+  });
+
+  // ADDED (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg; REQ-PROVE-037). A
+  // cloud agent's machine is a Linux container with no user folders; this job is one, running the
+  // suite that drives every emitted hook command from below the root, with `node` present and
+  // absent (test/cloud/containerLeg.test.ts). It runs repository code, so what is pinned is what
+  // it trusts: an image fixed by digest, a read-only token that the checkout does not keep, and no
+  // secret or client account anywhere in the job.
+  describe("the cloud container job", () => {
+    const job = () => jobOf(ci, "cloud-container");
+    const steps = () => stepsOf(ci, "cloud-container");
+
+    it("runs on the full side beside `check`, under the same condition and needs", () => {
+      expect(job().name).toBe("cloud-container (a Linux container with no user folders)");
+      expect(job().if).toBe(jobOf(ci, "check").if);
+      expect(job().needs).toEqual(jobOf(ci, "check").needs);
+      expect(job()["runs-on"]).toBe("ubuntu-latest");
+      expect(job()["timeout-minutes"]).toBeLessThanOrEqual(30);
+    });
+
+    it("runs inside node:24-bookworm pinned by digest, the full image that ships git", () => {
+      const container = (job() as WorkflowJob & { readonly container?: unknown }).container;
+      const image = typeof container === "string" ? container : (container as { readonly image?: unknown } | undefined)?.image;
+      // A tag alone is a moving target: the image that runs is whatever the tag names that day.
+      // The slim image ships no git, which `init` and the fixture's commit need.
+      expect(image).toMatch(/^node:24-bookworm@sha256:[0-9a-f]{64}$/);
+      // Nothing else in the container block: no credentials, no ports, no volume from the host.
+      expect(Object.keys(container as object)).toEqual(["image"]);
+    });
+
+    it("holds a read-only token that its checkout does not keep, and no secret", () => {
+      expect(job().permissions).toEqual({ contents: "read" });
+      const checkout = stepOf(steps(), "Checkout");
+      expect(checkout.uses).toBe(stepOf(stepsOf(ci, "check"), "Checkout").uses);
+      expect(checkout.with).toEqual({ "persist-credentials": false });
+      const text = JSON.stringify(job());
+      expect(text, "the job reads a secret").not.toContain("secrets.");
+      expect(text, "the job names a client credential").not.toMatch(/API_KEY|GITHUB_TOKEN|COPILOT|ANTHROPIC|CURSOR|CODEX/);
+      expect(job().env).toBeUndefined();
+    });
+
+    it("installs, builds, then runs the cloud suite with an empty HOME and no client probe", () => {
+      expect(steps().map((step) => step.name)).toEqual(["Checkout", "Install", "Build", "Cloud container suite"]);
+      // The image carries its own Node; a setup step would put the runner's toolchain back.
+      expect(steps().some((step) => (step.uses ?? "").startsWith("actions/setup-node@"))).toBe(false);
+      expect(runOf(steps(), "Install")).toBe("npm ci");
+      expect(runOf(steps(), "Build")).toBe("npm run build");
+      const suite = stepOf(steps(), "Cloud container suite");
+      expect(suite.env).toEqual({ STAMITY_NO_CLIENT_PROBE: "1" });
+      expect(suite.run?.trim().split("\n")).toEqual(['HOME="$(mktemp -d)"', "export HOME", "npx vitest run test/cloud"]);
+    });
+
+    it("is required by the aggregator", () => {
+      expect(jobOf(ci, "all-ci-checks").needs).toContain("cloud-container");
+    });
   });
 
   // REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the `plugin-route` lane's
@@ -945,7 +1013,10 @@ describe("ci.yml — the merge-blocking gate", () => {
     // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the proven
     // push now gates two lanes, `check` and `lanes`; `apm-install` and `plugin-route` left with the
     // routes 1.15.0 deletes. A proven push still asserts both `skipped`.
-    const GATED = ["check", "lanes"] as const;
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
+    // `cloud-container` joins the gated lanes; it carries `check`'s condition, so it runs on the
+    // full side, and the rule below evaluates it there over every combination.
+    const GATED = ["check", "cloud-container", "lanes"] as const;
     const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"] as const;
 
     it("reads the pull request's run only on a push to main, with read grants and the sha as data", () => {
@@ -983,7 +1054,8 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
 
     // TEST CHANGE, justified (unit d3-ci-qa, as `GATED` above): "four lanes" becomes "two lanes".
-    it("skips the two gated lanes exactly when a push is proven, and only with the classifier green", () => {
+    // TEST CHANGE, justified (unit e11-ci-container-leg, as `GATED` above): "two" becomes "three".
+    it("skips the three gated lanes exactly when a push is proven, and only with the classifier green", () => {
       // Every combination, including the ones no real run produces, against a rule written here
       // independently of the file: a lane runs only when `changes` succeeded, `prove-pr` succeeded
       // or was skipped, `proven` is not `true`, and the records answer picks this lane's side.
@@ -1072,6 +1144,9 @@ describe("ci.yml — the merge-blocking gate", () => {
       // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): the
       // short lane is the `lanes` job, and the map names each lane it runs.
       "`lanes`",
+      // ADDED (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg): the cloud
+      // container leg, merge-blocking on the full side.
+      "`cloud-container`",
       // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records` names
       // the canonical records job now, not a lane; the restore it runs is named beside it.
       "`records`",
@@ -1140,8 +1215,12 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
   // `apm-install` and `plugin-route`, which left with the routes 1.15.0 deletes, and the loops over
   // the heavy lanes run over `check` alone. Every shape and every assertion on `check`, `lanes`,
   // `prove-pr`, `changes` and `records` is kept one for one.
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
+  // `Results` gains `cloud-container`, which runs beside `check` on the full side: `success` in
+  // the full shape, `skipped` in the lanes and proven shapes and in the failed classifier's. Every
+  // shape and every assertion written before it is kept one for one; its own cases follow at the end.
   type Results = Readonly<
-    Record<"changes" | "prove-pr" | "check" | "lanes" | "records" | "supply-chain", string>
+    Record<"changes" | "prove-pr" | "check" | "cloud-container" | "lanes" | "records" | "supply-chain", string>
   >;
 
   function render(results: Results, full: string, proven: string): string {
@@ -1170,6 +1249,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     changes: "success",
     "prove-pr": "skipped",
     check: "success",
+    "cloud-container": "success",
     lanes: "skipped",
     records: "success",
     "supply-chain": "failure",
@@ -1178,6 +1258,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     changes: "success",
     "prove-pr": "skipped",
     check: "skipped",
+    "cloud-container": "skipped",
     lanes: "success",
     records: "success",
     "supply-chain": "failure",
@@ -1187,11 +1268,14 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     changes: "success",
     "prove-pr": "success",
     check: "skipped",
+    "cloud-container": "skipped",
     lanes: "skipped",
     records: "success",
     "supply-chain": "failure",
   };
-  const GATED = ["check", "lanes"] as const;
+  // TEST CHANGE, justified (unit e11-ci-container-leg, as `Results` above): the cloud container
+  // leg is gated as `check` is, so a proven push must find it skipped too.
+  const GATED = ["check", "cloud-container", "lanes"] as const;
 
   it("passes a proven push with every gated lane skipped, with the advisory lane red", () => {
     expect(execute(PROVEN, "true", "true")).toBe(0);
@@ -1273,6 +1357,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
       changes: "failure",
       "prove-pr": "skipped",
       check: "skipped",
+      "cloud-container": "skipped",
       lanes: "skipped",
       records: "success",
       "supply-chain": "success",
@@ -1307,6 +1392,29 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
           expect(execute({ ...shape, records }, full, proven, repo), `${label} ${repo} records=${records}`).not.toBe(0);
         }
       }
+    }
+  });
+
+  // ADDED (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg): the cloud container
+  // leg is required on a full run and must read `skipped` on the other two shapes, so a green
+  // aggregator never stands on a full run whose container leg did not pass, and a leg that ran
+  // where its condition says it cannot is a mis-wired condition, red.
+  it("fails a full run unless the cloud container leg passed", () => {
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(execute({ ...FULL, "cloud-container": result }, "true"), result).not.toBe(0);
+      expect(execute({ ...FULL, "cloud-container": result }, ""), `absent answer ${result}`).not.toBe(0);
+      expect(execute({ ...FULL, "prove-pr": "success", "cloud-container": result }, "true", "false"), `push ${result}`).not.toBe(0);
+    }
+    // The container leg's green cannot stand in for the matrix's, nor the reverse.
+    expect(execute({ ...FULL, check: "skipped" }, "true")).not.toBe(0);
+    expect(execute({ ...FULL, check: "failure" }, "true")).not.toBe(0);
+  });
+
+  it("fails a lanes answer or a proven push unless the cloud container leg skipped", () => {
+    for (const result of ["success", "failure", "cancelled"]) {
+      expect(execute({ ...SHORT, "cloud-container": result }, "false"), `lanes ${result}`).not.toBe(0);
+      expect(execute({ ...PROVEN, "cloud-container": result }, "true", "true"), `proven ${result}`).not.toBe(0);
+      expect(execute({ ...PROVEN, "cloud-container": result }, "false", "true"), `proven lanes ${result}`).not.toBe(0);
     }
   });
 });
@@ -1504,10 +1612,14 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     // canonical repository), not a pr-checks one.
     // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `apm-install`
     // and `plugin-route` leave with the routes 1.15.0 deletes; no pr-checks job joins.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
+    // `cloud-container` joins; it is a ci.yml job that reports on every event (skipped off the full
+    // side), not a pr-checks one, so this test's property is unchanged.
     expect(jobOf(ci, "all-ci-checks").needs).toEqual([
       "changes",
       "prove-pr",
       "check",
+      "cloud-container",
       "lanes",
       "records",
       "supply-chain",
