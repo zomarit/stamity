@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { CLI_REFERENCE_DOC_PATH } from "../../../src/cli/docs/cliReference.ts";
 import { CONFIG_REFERENCE_DOC_PATH } from "../../../src/cli/docs/configReference.ts";
-import { MEASUREMENTS_DOC_PATH } from "../../../src/cli/docs/measurements.ts";
+import { MEASUREMENTS_DOC_PATH, measurementInputs } from "../../../src/cli/docs/measurements.ts";
 import {
   LLMS_INDEX_DOC_PATH,
   LLMS_INDEX_SECTIONS,
@@ -350,13 +350,36 @@ describe("scripts/generate-docs.mjs", () => {
       ...REFERENCE_PAGES.map((page) => page.path),
       LLMS_INDEX_DOC_PATH,
     ];
+    // TEST CHANGE, justified: unit r2-measurements-page (REQ-PROVE-020). The measurements page's
+    // inputs moved to the `records` branch, so under `--page all` the generator now skips that page
+    // with a notice where the checkout holds none of them. The run goes through `spawnSync` so the
+    // notice on stderr can be read; the exit status, the compared paths and every assertion below
+    // are unchanged, and the added ones hold the notice to the checkout's own state.
+    const stderrs: string[] = [];
     const run = (): string[] => {
-      execFileSync(process.execPath, [SCRIPT_PATH, "--out-dir", all], { encoding: "utf-8" });
+      const result = spawnSync(process.execPath, [SCRIPT_PATH, "--out-dir", all], { encoding: "utf-8" });
+      expect(result.status, result.stderr).toBe(0);
+      stderrs.push(result.stderr);
       return paths.map((path) => readFileSync(join(all, path), "utf-8"));
     };
     const first = run();
     expect(first).toEqual(run());
     // The committed tree is what the same run would have produced in place.
     expect(first).toEqual(paths.map((path) => readFileSync(join(REPO_ROOT, path), "utf-8")));
+    const inputs = measurementInputs(REPO_ROOT);
+    for (const stderr of stderrs) {
+      if (inputs.present.length === 0) {
+        // No record in this checkout (`main` alone, a fork): the page is skipped, named, with the
+        // inputs it lacks and the command that restores them.
+        expect(stderr).toContain(
+          `generate-docs: measurements page skipped — no records in this checkout (missing ${inputs.missing.join(", ")}); node scripts/records.mjs restore brings them`,
+        );
+        expect(existsSync(join(all, MEASUREMENTS_DOC_PATH))).toBe(false);
+      } else {
+        // The records restored: the page renders, and no skip notice prints.
+        expect(stderr).not.toContain("measurements page skipped");
+        expect(existsSync(join(all, MEASUREMENTS_DOC_PATH))).toBe(true);
+      }
+    }
   });
 });

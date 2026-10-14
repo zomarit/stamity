@@ -25,9 +25,11 @@ import {
   DEFAULT_CONFIDENCE_GATE,
   MEASUREMENTS_DOC_PATH,
   MEASUREMENTS_REGENERATE_COMMAND,
+  MEASUREMENT_SNAPSHOT_PATH,
   MERGE_EVIDENCE_NONE,
   MERGE_READY_RULE,
   REACH_SNAPSHOT_PATH,
+  RECORDS_BLOB_URL,
   RUNS_DIR,
   RUN_OF_RECORD_FILE,
   SNAPSHOT_DIR,
@@ -35,7 +37,9 @@ import {
   compositionOf,
   computeMergeReadyRate,
   failingCases,
+  measurementInputs,
   measurementMethod,
+  measurementsAction,
   priorCompleteRun,
   readMeasurementSnapshot,
   readReachSnapshot,
@@ -2476,5 +2480,207 @@ describe("scripts/generate-docs.mjs --page measurements", () => {
     const first = run();
     expect(first).toBe(renderMeasurements());
     expect(run()).toBe(first);
+  });
+});
+
+/**
+ * The page's four inputs, and what the generator does with each state of them (REQ-PROVE-020,
+ * unit r2-measurements-page). The records live on the `records` branch, so a checkout of `main`
+ * alone holds none of them: the generator skips the page there, refuses a partial restore, and
+ * renders only when every input is on disk. Every case builds its own root, so none reads a real
+ * record and all of them run in the default suite.
+ */
+describe("the measurement inputs", () => {
+  const FULL_RUN = "2026-02-01-run-2";
+  const PRIOR_RUN = "2026-01-20-run-1";
+  const resultsPath = (id: string): string => `evals/runs/${id}/RESULTS.md`;
+  const fullResults = ["# Run 2", "", "Status: **PASS**", "", "## 1. Set version and sha", "", "SET-v7.", ""].join("\n");
+  const composedResults = [
+    "# Run 2",
+    "",
+    "Status: **PASS**",
+    "",
+    "## 0. Composition",
+    "",
+    `This run composes with the prior complete run: the prior complete run is \`${PRIOR_RUN}\`. ` +
+      "1 case(s) re-measured in this run; 2 case(s) carried.",
+    "",
+    "| Re-measured case | Why |",
+    "|---|---|",
+    "| `a-case` | source text moved: one line |",
+    "",
+    "## 1. Set version and sha",
+    "",
+    "SET-v7.",
+    "",
+  ].join("\n");
+
+  /** A root holding only `evals/run-of-record.json`, naming {@link FULL_RUN}: `main` with no record. */
+  function mainOnly(): string {
+    const root = mkdtempSync(join(tmpdir(), "stamity-measure-inputs-"));
+    placeRunOfRecord(root, { path: resultsPath(FULL_RUN), release: "2.0.0", exception: null });
+    return root;
+  }
+
+  /** Write `body` at the repo-relative `path` under `root`. */
+  function place(root: string, path: string, body: string): void {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), body);
+  }
+
+  it("lists the run of record's results and the two snapshots as missing on main alone", () => {
+    const root = mainOnly();
+    try {
+      expect(measurementInputs(root)).toEqual({
+        present: [],
+        missing: [resultsPath(FULL_RUN), REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("lists three inputs for a full run of record, all present once restored", () => {
+    const root = mainOnly();
+    try {
+      place(root, resultsPath(FULL_RUN), fullResults);
+      place(root, REACH_SNAPSHOT_PATH, "{}\n");
+      expect(measurementInputs(root)).toEqual({
+        present: [resultsPath(FULL_RUN), REACH_SNAPSHOT_PATH],
+        missing: [MEASUREMENT_SNAPSHOT_PATH],
+      });
+      place(root, MEASUREMENT_SNAPSHOT_PATH, "{}\n");
+      expect(measurementInputs(root)).toEqual({
+        present: [resultsPath(FULL_RUN), REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH],
+        missing: [],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("adds the prior complete run a composed run of record names, missing until it is on disk", () => {
+    const root = mainOnly();
+    try {
+      place(root, resultsPath(FULL_RUN), composedResults);
+      place(root, REACH_SNAPSHOT_PATH, "{}\n");
+      place(root, MEASUREMENT_SNAPSHOT_PATH, "{}\n");
+      // The prior run is named but absent: a partial restore, refused rather than rendered.
+      const partial = measurementInputs(root);
+      expect(partial).toEqual({
+        present: [resultsPath(FULL_RUN), REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH],
+        missing: [resultsPath(PRIOR_RUN)],
+      });
+      expect(measurementsAction("all", partial)).toEqual({ refuse: [resultsPath(PRIOR_RUN)] });
+
+      place(root, resultsPath(PRIOR_RUN), fullResults);
+      // A note beside the run of record stays optional: present or not, the inputs are four.
+      const four = [resultsPath(FULL_RUN), REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH, resultsPath(PRIOR_RUN)];
+      expect(measurementInputs(root)).toEqual({ present: four, missing: [] });
+      place(root, `evals/runs/${FULL_RUN}/NOTE.md`, "A note.\n");
+      expect(measurementInputs(root)).toEqual({ present: four, missing: [] });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a composed run of record whose prior run is not an eval run id", () => {
+    const root = mainOnly();
+    try {
+      place(root, resultsPath(FULL_RUN), composedResults.replace(PRIOR_RUN, "not-a-run"));
+      expect(() => measurementInputs(root)).toThrow(EngineError);
+      expect(() => measurementInputs(root)).toThrow(/not an eval run id/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("skips the page under --page all with no input, refuses any partial or explicit request, renders a full one", () => {
+    const none = { present: [], missing: ["a", "b", "c"] };
+    const some = { present: ["a"], missing: ["b", "c"] };
+    const all = { present: ["a", "b", "c"], missing: [] };
+    expect(measurementsAction("all", none)).toBe("skip");
+    expect(measurementsAction("measurements", none)).toEqual({ refuse: ["a", "b", "c"] });
+    expect(measurementsAction("all", some)).toEqual({ refuse: ["b", "c"] });
+    expect(measurementsAction("measurements", some)).toEqual({ refuse: ["b", "c"] });
+    expect(measurementsAction("all", all)).toBe("render");
+    expect(measurementsAction("measurements", all)).toBe("render");
+  });
+
+  it("reads the pinned snapshot only, and names it and the restore command when it is absent", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    try {
+      expect(MEASUREMENT_SNAPSHOT_PATH).toMatch(/^evals\/measurements\/merge-ready-\d{4}-\d{2}-\d{2}\.json$/);
+      // Another snapshot on disk is not the pinned one, so the read refuses rather than picking it.
+      writeMeasurementSnapshot(root, "2026-02-01");
+      expect(() => readMeasurementSnapshot(root)).toThrow(EngineError);
+      expect(() => readMeasurementSnapshot(root)).toThrow(MEASUREMENT_SNAPSHOT_PATH);
+      expect(() => readMeasurementSnapshot(root)).toThrow("node scripts/records.mjs restore");
+      // The path a caller passes is read as given, and refused when it is not a snapshot's.
+      expect(readMeasurementSnapshot(root, `${SNAPSHOT_DIR}/merge-ready-2026-02-01.json`).report).toEqual(
+        computeMergeReadyRate(root),
+      );
+      expect(() => readMeasurementSnapshot(root, `${SNAPSHOT_DIR}/../CHANGELOG.md`)).toThrow(
+        /not a measurement snapshot/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("links every record into the records branch with an absolute URL", () => {
+    expect(RECORDS_BLOB_URL).toBe("https://github.com/zomarit/stamity/blob/records/");
+  });
+});
+
+/**
+ * REQ-CTX-006: a ledger row's `report` and `decision_needed` keys never move the measure. Read over
+ * a synthetic fixture, so it holds under `npm test` with no record on disk: the same runs with and
+ * without the two keys give the same open-row count and the same rate.
+ */
+describe("the merge-ready rate over ledger rows that carry report and decision_needed", () => {
+  it("reports the same open-row count and rate as the same rows without those keys", () => {
+    const row = (id: string, state: string, extra: boolean): string =>
+      JSON.stringify({
+        id,
+        state,
+        ...(extra ? { report: `reports/${id.replaceAll("/", "-")}-open.md`, decision_needed: state === "open" } : {}),
+      });
+    const ledger = (rows: readonly (readonly [string, string])[], extra: boolean): string =>
+      `${rows.map(([id, state]) => row(id, state, extra)).join("\n")}\n`;
+    const runs = (extra: boolean): Record<string, Record<string, string>> => ({
+      "2026-01-02_closed": {
+        "record.md": record({}),
+        "ledger.jsonl": ledger([["build/1", "fixed"], ["review/2", "dropped"]], extra),
+      },
+      "2026-01-03_left-open": {
+        "record.md": record({}),
+        "ledger.jsonl": ledger([["build/1", "fixed"], ["review/2", "open"]], extra),
+      },
+      "2026-01-04_also-closed": {
+        "record.md": record({}),
+        "ledger.jsonl": ledger([["prove/1", "deferred"]], extra),
+      },
+    });
+    const openRows = (report: MergeReadyReport): number =>
+      report.denominator.filter((run) => run.reason === "the findings ledger still carries an open row").length;
+
+    const withKeys = fixture(runs(true));
+    const withoutKeys = fixture(runs(false));
+    try {
+      const keyed = computeMergeReadyRate(withKeys);
+      const plain = computeMergeReadyRate(withoutKeys);
+      // Activated: one run is held out by its open row, and two reach the numerator.
+      expect(openRows(plain)).toBe(1);
+      expect(plain.rate).toEqual({ n: 2, d: 3, value: 0.667 });
+      expect(openRows(keyed)).toBe(openRows(plain));
+      expect(keyed.rate).toEqual(plain.rate);
+      expect(keyed.denominator).toEqual(plain.denominator);
+    } finally {
+      rmSync(withKeys, { recursive: true, force: true });
+      rmSync(withoutKeys, { recursive: true, force: true });
+    }
   });
 });

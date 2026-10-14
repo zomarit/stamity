@@ -40,11 +40,24 @@
  * {@link computeMergeReadyRate} reads `.stamity/runs/` and is what
  * `scripts/merge-ready-rate.mjs --write` freezes into
  * `evals/measurements/merge-ready-<date>.json`; {@link renderMeasurements}
- * reads the newest such file and nothing else. The seam is not ceremony: a run
- * in flight writes its record throughout the run, so a page rendered live goes
- * stale mid-run and every later run would have to regenerate a documentation
- * page in the same commit as its own record. With the snapshot, the page moves
- * when someone refreshes it, and the page says which snapshot it came from.
+ * reads the one such file {@link MEASUREMENT_SNAPSHOT_PATH} pins and nothing
+ * else. The seam is not ceremony: a run in flight writes its record throughout
+ * the run, so a page rendered live goes stale mid-run and every later run would
+ * have to regenerate a documentation page in the same commit as its own record.
+ * With the snapshot, the page moves when someone refreshes it, and the page says
+ * which snapshot it came from.
+ *
+ * **The inputs live on the `records` branch; their names live on `main`.** The
+ * run records, the eval runs and both snapshots are kept on this repository's
+ * `records` branch, restored into a checkout by `node scripts/records.mjs
+ * restore`. `main` names the four inputs the page renders from
+ * ({@link measurementInputs}): the run of record through
+ * {@link RUN_OF_RECORD_FILE}, the prior complete run its results file names when
+ * it is composed, and the two snapshots by {@link REACH_SNAPSHOT_PATH} and
+ * {@link MEASUREMENT_SNAPSHOT_PATH}. A new snapshot on `records` changes nothing
+ * until `main` moves the pin, and the page links each record into that branch
+ * ({@link RECORDS_BLOB_URL}). A checkout with none of the inputs — `main` alone,
+ * or a fork — skips the page ({@link measurementsAction}); a partial one refuses.
  *
  * **Clock-free.** `generated` is the newest closed run record's own date, and
  * the snapshot's filename date is supplied by the caller rather than read here,
@@ -85,6 +98,26 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 
 /** Repo-relative path of the file that names the eval run of record, its release and its exception. */
 export const RUN_OF_RECORD_FILE = "evals/run-of-record.json";
+
+/**
+ * Repo-relative path of the one merge-ready snapshot the page renders from.
+ *
+ * Pinned rather than picked as the newest file: the snapshots live on the `records` branch, and a
+ * snapshot added there must not move a page committed on `main`. A release that takes a new
+ * snapshot moves this constant, and {@link RUN_OF_RECORD_FILE} where its run of record moves too, in
+ * the same `main` commit as the regenerated page, after the records it names have landed on
+ * `records`.
+ */
+export const MEASUREMENT_SNAPSHOT_PATH = "evals/measurements/merge-ready-2026-10-13.json";
+
+/**
+ * Where the page links a record: the `records` branch of this repository, which holds the run
+ * records and the eval evidence. A link into a `main` path stays repo-relative.
+ */
+export const RECORDS_BLOB_URL = "https://github.com/zomarit/stamity/blob/records/";
+
+/** The command that brings the records into a checkout, named by every refusal for a missing one. */
+const RECORDS_RESTORE_COMMAND = "node scripts/records.mjs restore";
 
 /** A run of record's results file: `evals/runs/<date>-run-<n>/RESULTS.md`, and nothing else. */
 const RUN_OF_RECORD_RESULTS = /^evals\/runs\/\d{4}-\d{2}-\d{2}-run-\d+\/RESULTS\.md$/;
@@ -1133,36 +1166,35 @@ export interface MeasurementSnapshot {
   readonly report: MergeReadyReport;
 }
 
-/** Every committed snapshot, newest filename date last. */
-function snapshotFiles(root: string): readonly string[] {
-  const dir = join(root, SNAPSHOT_DIR);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((name) => SNAPSHOT_FILE.test(name))
-    .toSorted();
-}
-
 /**
- * The newest committed measurement snapshot.
+ * The measurement snapshot at `path`, by default the one {@link MEASUREMENT_SNAPSHOT_PATH} pins.
  *
- * Newest by the date IN THE FILENAME rather than by mtime: the filename is
- * committed and a checkout's timestamps are not, so two clones agree on which
- * snapshot the page renders from.
+ * The pinned file, never the newest one on disk: the snapshots live on the `records` branch, so a
+ * snapshot taken there after the page was committed must not change what the page says. The path
+ * is named on the page, so it is held to a snapshot's own shape, `evals/measurements/` and a
+ * {@link SNAPSHOT_FILE} name, before it is read.
  *
- * Throws `EngineError` (`VALIDATION_ERROR`) when no snapshot exists, naming the
- * command that writes one — a page rendered from nothing is the failure this
- * whole seam exists to prevent.
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the path is not a snapshot's, and when no file is
+ * there, naming the path, the command that restores the records and the one that writes a new
+ * snapshot — a page rendered from nothing is the failure this whole seam exists to prevent.
  */
-export function readMeasurementSnapshot(root: string = repoRoot()): MeasurementSnapshot {
-  const newest = snapshotFiles(root).at(-1);
-  if (newest === undefined) {
+export function readMeasurementSnapshot(
+  root: string = repoRoot(),
+  path: string = MEASUREMENT_SNAPSHOT_PATH,
+): MeasurementSnapshot {
+  const name = path.slice(SNAPSHOT_DIR.length + 1);
+  if (!path.startsWith(`${SNAPSHOT_DIR}/`) || !SNAPSHOT_FILE.test(name)) {
+    fail(`${path} is not a measurement snapshot; one is ${SNAPSHOT_DIR}/merge-ready-<YYYY-MM-DD>.json.`);
+  }
+  const target = join(root, path);
+  if (!existsSync(target)) {
     fail(
-      `No measurement snapshot under ${SNAPSHOT_DIR}. Write one with \`${SNAPSHOT_REFRESH_COMMAND}\` ` +
-        `and commit it beside the page it renders.`,
+      `No measurement snapshot at ${path}, the one the page renders from. The records are not in ` +
+        `this checkout: \`${RECORDS_RESTORE_COMMAND}\` brings them. A new snapshot is written with ` +
+        `\`${SNAPSHOT_REFRESH_COMMAND}\` and pinned in the same commit as the page it renders.`,
     );
   }
-  const path = `${SNAPSHOT_DIR}/${newest}`;
-  return { path, report: JSON.parse(readFileSync(join(root, path), "utf-8")) as MergeReadyReport };
+  return { path, report: JSON.parse(readFileSync(target, "utf-8")) as MergeReadyReport };
 }
 
 /**
@@ -1290,6 +1322,59 @@ function readPriorRun(
   return { number, path, results };
 }
 
+/** The page's inputs on disk under a root, and the ones it lacks, repo-relative. */
+export interface MeasurementInputs {
+  readonly present: readonly string[];
+  readonly missing: readonly string[];
+}
+
+/**
+ * The inputs {@link renderMeasurements} reads under `root`, each as present or missing.
+ *
+ * Four at most, every one a record kept on the `records` branch and named from `main`: the run of
+ * record's results file ({@link RUN_OF_RECORD_FILE}), the reach snapshot, the pinned merge-ready
+ * snapshot and — once the run of record's results are on disk and name a prior complete run
+ * ({@link compositionOf}) — that prior run's results file, which the composed paragraph reads. A
+ * `NOTE.md` beside the run of record is optional and is not an input: the page links it only where
+ * it is there.
+ *
+ * Throws what {@link readRunOfRecord} and {@link compositionOf} throw, and `EngineError` when the
+ * prior run is not an eval run id, so a malformed record is refused before it is called absent.
+ */
+export function measurementInputs(root: string = repoRoot()): MeasurementInputs {
+  const { path } = readRunOfRecord(root);
+  const inputs = [path, REACH_SNAPSHOT_PATH, MEASUREMENT_SNAPSHOT_PATH];
+  const results = join(root, path);
+  if (existsSync(results)) {
+    const prior = compositionOf(readFileSync(results, "utf-8"))?.prior;
+    if (prior !== undefined) {
+      priorRunNumber(runOfRecordNumber(path), prior);
+      inputs.push(evalResultsPath(prior));
+    }
+  }
+  const present = inputs.filter((input) => existsSync(join(root, input)));
+  return { present, missing: inputs.filter((input) => !present.includes(input)) };
+}
+
+/** What the generator does with the measurements page: render it, skip it, or refuse naming the missing inputs. */
+export type MeasurementsAction = "render" | "skip" | { readonly refuse: readonly string[] };
+
+/**
+ * The generator's decision for the measurements page, from the page family asked for and
+ * {@link measurementInputs}.
+ *
+ * `--page all` with no input on disk skips the page: that checkout holds no records (`main` alone,
+ * or a fork), and the committed page stays as it is. Any input missing otherwise — a partial
+ * restore, or `--page measurements` asked for by name — refuses, naming the missing inputs, because
+ * a page rendered from some of its inputs is a broken state and not a fork. Every input present
+ * renders.
+ */
+export function measurementsAction(which: string, inputs: MeasurementInputs): MeasurementsAction {
+  if (which === "all" && inputs.present.length === 0) return "skip";
+  if (inputs.missing.length > 0) return { refuse: inputs.missing };
+  return "render";
+}
+
 /** A count as the page words it: "one" through "ten", then digits. */
 function countWord(count: number): string {
   return (
@@ -1365,7 +1450,7 @@ export function measurementMethod(
     "full baseline run per release, and a later run on another candidate re-measures only the cases",
     "whose inputs moved and carries the rest with provenance.",
     `Run ${prior.number} measured every case in full.`,
-    `[Run ${prior.number}](../${prior.path}) alone was ${priorVerdict(prior.results)}; ` +
+    `[Run ${prior.number}](${RECORDS_BLOB_URL}${prior.path}) alone was ${priorVerdict(prior.results)}; ` +
       `run ${runOfRecord} re-measured ${count}, composed with run ${prior.number}, ` +
       `and carried the other ${composition.carried} from it.`,
     ...(remeasured.length === 0
@@ -1445,7 +1530,7 @@ export function runOfRecordReason(root: string, path: string, results: string): 
   const note = `${path.slice(0, path.lastIndexOf("/"))}/${RUN_NOTE_FILE}`;
   if (existsSync(join(root, note))) {
     closing.push(
-      `Run ${run} carries a note beside its results file, [\`${RUN_NOTE_FILE}\`](../${note}), to be read with it.`,
+      `Run ${run} carries a note beside its results file, [\`${RUN_NOTE_FILE}\`](${RECORDS_BLOB_URL}${note}), to be read with it.`,
     );
   }
   if (closing.length > 0) lines.push("", ...closing);
@@ -1485,7 +1570,8 @@ function runTable(
  * Which run is of record, and its release, are read from {@link RUN_OF_RECORD_FILE} under `root`,
  * so a fixture root carries its own file. `exception` defaults to that file's; the suite passes its
  * own so a FAIL fixture renders whatever the file records. The snapshot is read first, so a root
- * with no snapshot is refused for that before anything else.
+ * with no snapshot is refused for that before anything else. Every link into a record is absolute,
+ * into the `records` branch ({@link RECORDS_BLOB_URL}); every link into a `main` path is relative.
  */
 export function renderMeasurements(
   root: string = repoRoot(),
@@ -1518,7 +1604,7 @@ export function renderMeasurements(
     "rendered. Every number below is computed from a committed artifact, so a claim here can be",
     "checked rather than believed.",
     "",
-    `The merge-ready figures are rendered from [\`${snapshot.path}\`](../${snapshot.path}), the frozen`,
+    `The merge-ready figures are rendered from [\`${snapshot.path}\`](${RECORDS_BLOB_URL}${snapshot.path}), the frozen`,
     `measurement committed beside this page. Refreshed per release by \`${SNAPSHOT_REFRESH_COMMAND}\``,
     "(the release checklist's record-currency line); the snapshot named above is the input, and a",
     "run record written after it is not on this page until the next refresh.",
@@ -1620,7 +1706,7 @@ export function renderMeasurements(
     "## Corpus behaviour: run of record",
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
-    `[run ${runOfRecord}](../${path}) — the ${release} release run —`,
+    `[run ${runOfRecord}](${RECORDS_BLOB_URL}${path}) — the ${release} release run —`,
     ...runOfRecordVerdict(results, recorded, path),
     "",
     ...measurementMethod(root, runOfRecord, results),

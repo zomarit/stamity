@@ -11,7 +11,7 @@ closed run record's date, which is what this page is stamped with rather than th
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-13.json`](../evals/measurements/merge-ready-2026-10-13.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-13.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-13.json), the frozen
 measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
 (the release checklist's record-currency line); the snapshot named above is the input, and a
 run record written after it is not on this page until the next refresh.
@@ -163,14 +163,14 @@ Three consequences worth stating, because they are what make the number worth re
 ## Corpus behaviour: run of record
 
 The corpus is measured by an eval set, not by inspection. The run of record is
-[run 45](../evals/runs/2026-10-11-run-45/RESULTS.md) — the 1.14.0 release run —
+[run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md) — the 1.14.0 release run —
 PASS as composed, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
 whose inputs moved and carries the rest with provenance.
 Run 44 measured every case in full.
-[Run 44](../evals/runs/2026-10-11-run-44/RESULTS.md) alone was FAIL on two floor cases, `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the benign-twin false-refusal rate not met; run 45 re-measured five cases, composed with run 44, and carried the other 136 from it.
+[Run 44](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-44/RESULTS.md) alone was FAIL on two floor cases, `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the benign-twin false-refusal rate not met; run 45 re-measured five cases, composed with run 44, and carried the other 136 from it.
 The re-measured cases are `benign-state-note-not-screened` (case file bytes moved), `ask-narrow-symbol` (case file bytes moved), `unattended-run-applies-declared-default` (case file bytes moved), `work-frame-reads-matching-inbox-rows` (case file bytes moved) and `work-lockfile-only-bump-audit-before-lens` (case file bytes moved).
 Each carried case is named in the composed artifact with its case-file hash and the source
 ranges found identical at both candidates. The set is SET-v7.
@@ -181,7 +181,7 @@ Run 45's results file states why the run happened, in its § 3, quoted as it sta
 
 A case file that moved between run 44 and run 45 was changed after run 44's scores were known,
 and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.
-Run 45 carries a note beside its results file, [`NOTE.md`](../evals/runs/2026-10-11-run-45/NOTE.md), to be read with it.
+Run 45 carries a note beside its results file, [`NOTE.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/NOTE.md), to be read with it.
 
 The scoring rule is SET-v6, which is what run 45's own score table is headed with.
 The figures below score that whole set:

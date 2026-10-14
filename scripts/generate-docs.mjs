@@ -24,7 +24,14 @@
 // happen before the renderers are loaded, which is why the imports below are
 // dynamic.
 //
-// Exit codes: 0 wrote the pages, 1 render or write failed, 2 bad arguments.
+// The measurements page renders from records kept on the `records` branch.
+// With none of them in the checkout (`main` alone, a fork), `--page all`
+// skips that page with a notice on stderr and leaves the committed page as it
+// is; with only some, or under `--page measurements` with any missing, it
+// refuses before any write, naming them.
+//
+// Exit codes: 0 wrote the pages (the measurements page possibly skipped),
+// 1 render or write failed or a measurements input is missing, 2 bad arguments.
 
 import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 import { resolve } from 'node:path'
@@ -63,9 +70,8 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   )
   const { renderReferencePages } = await import('../src/cli/docs/referencePages.ts')
   const { LLMS_INDEX_DOC_PATH, renderLlmsIndex } = await import('../src/cli/docs/llmsIndex.ts')
-  const { MEASUREMENTS_DOC_PATH, renderMeasurements } = await import(
-    '../src/cli/docs/measurements.ts'
-  )
+  const { MEASUREMENTS_DOC_PATH, measurementInputs, measurementsAction, renderMeasurements } =
+    await import('../src/cli/docs/measurements.ts')
   const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
 
   /** Repo-relative path -> page bytes, for the requested family. */
@@ -82,8 +88,20 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     // records, their ledgers, the changelog and the reach snapshot — so it is
     // stale whenever one of those moves, exactly like the pages above are
     // stale when their source module moves.
+    // Its inputs live on the `records` branch, so a checkout may hold none of
+    // them (skipped under `all`) or some of them (refused, before any write).
     if (which === 'measurements' || which === 'all') {
-      pages.set(MEASUREMENTS_DOC_PATH, renderMeasurements())
+      const inputs = measurementInputs()
+      const action = measurementsAction(which, inputs)
+      if (action === 'skip') {
+        console.error(
+          `generate-docs: measurements page skipped — no records in this checkout (missing ${inputs.missing.join(', ')}); node scripts/records.mjs restore brings them`,
+        )
+      } else if (action === 'render') {
+        pages.set(MEASUREMENTS_DOC_PATH, renderMeasurements())
+      } else {
+        throw new Error(`generate-docs: the measurements page needs ${action.refuse.join(', ')}`)
+      }
     }
     // The index lists the other pages, so it renders last — after anything that
     // would have refused has already refused.
