@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { delimiter, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -4182,6 +4182,34 @@ describe("check — model-pins", () => {
     expect(verdict.status).toBe("warn");
     expect(verdict.detail).toContain(`codex standard: the pinned model "gpt-5.5" is not on codex's list (read live)`);
     expect(existsSync(marker)).toBe(true);
+  });
+
+  // review/126: run in a workspace member, the row keeps the WORKSPACE root out of the lister's
+  // reach, as `workspace sync` does: a folder another repository of the workspace can write into
+  // supplies no client program. The control read before `workspace.json` exists starts it.
+  posixOnly("never starts a codex placed inside the workspace but outside the member", async () => {
+    const handle = getBin();
+    const member = handle.path("ws", "apps", "api");
+    await writeManifest(member, pinnedManifest(["codex"], { pins: { standard: { codex: "gpt-5.5" } } }), { now: T0 });
+    const { marker } = await fakeCodex(handle);
+    const inWorkspace = handle.path("ws", "tools", "bin");
+    await mkdir(inWorkspace, { recursive: true });
+    await rename(handle.path("bin", "codex"), join(inWorkspace, "codex"));
+    const env = { PATH: [inWorkspace, "/usr/bin", "/bin"].join(delimiter) };
+
+    // Control: with no workspace around the member, the folder lies outside its tree and the program starts.
+    expect((await doctorRow(member, "model-pins", env)).detail).toContain("(read live)");
+    expect(existsSync(marker)).toBe(true);
+
+    await rm(marker);
+    await handle.seedFiles({
+      "ws/workspace.json": `${JSON.stringify({ version: "1.0.0", defaults: { tools: ["codex"] }, repos: [{ path: "apps/api" }] })}\n`,
+    });
+
+    const verdict = await doctorRow(member, "model-pins", env);
+
+    expect(verdict.detail).not.toContain("(read live)");
+    expect(existsSync(marker)).toBe(false);
   });
 
   posixOnly("reads only the saved list under STAMITY_NO_CLIENT_PROBE=1, starting no client", async () => {

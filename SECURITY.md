@@ -148,8 +148,9 @@ included) and `workspace sync` read the model list of each selected client but C
 `--bundled`, or `copilot help config` (`src/cli/engine/clientModels.ts::listClientModels`). The
 program is found by the engine's `PATH` walk over the entries left once every relative entry,
 every entry inside the project tree and every `node_modules/.bin` entry are dropped, and one whose
-real path lies inside the tree is refused, never started; no program the repository carries is
-started. It runs with the operator's environment, so under the operator's own client account and
+real path lies inside the tree is refused, never started. For every verb, the tree is the enclosing
+workspace's root when the repository is a member of one, found as the workspace commands find it,
+else the repository's own root; no program the repository or a sibling member carries is started. It runs with the operator's environment, so under the operator's own client account and
 sign-in, given that trimmed `PATH`, started in the user's home folder (nothing starts when home
 lies inside the tree), with its input closed, no window, a 10-second limit after which it is
 killed, and at most 8 MiB of output read. Only ids shaped like a model id are kept, at most 200 a

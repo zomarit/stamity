@@ -46,7 +46,7 @@ import {
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
-import { listClientModels, type ModelListOutcome } from "../../engine/clientModels.ts";
+import { listClientModels, listerTreeRoot, type ModelListOutcome } from "../../engine/clientModels.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import { hasNpmChannel, packageName, registryOption } from "../../kit/packageName.ts";
 import {
@@ -258,7 +258,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // Each selected client's own model list, read once before anything is
   // planned (REQ-LADDER-006): the emission below picks every class's model
   // from it, and every later plan reads the copy saved here.
-  const listed = await readClientModelLists(manifest.tools, opts.env ?? process.env, rootDir, opts.listModels);
+  const listed = await readClientModelLists(
+    manifest.tools,
+    opts.env ?? process.env,
+    await listerTreeRoot(rootDir),
+    opts.listModels,
+  );
   if (Object.keys(listed).length > 0) manifest.models = { ...manifest.models, listed };
 
   // Installed packs survive a re-init, so their ledger rows must too. Seeded

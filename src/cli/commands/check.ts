@@ -50,6 +50,7 @@ import { STATE_DIR } from "../../types/markers.ts";
 import {
   CLIENT_LIST_TIMEOUT_MS,
   listClientModels,
+  listerTreeRoot,
   type ListClientModelsOptions,
   type ModelListOutcome,
 } from "../engine/clientModels.ts";
@@ -1642,7 +1643,9 @@ export async function runDoctor(
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
     guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
-    guarded("model-pins", () => checkModelPins(manifest, app.runtime.env, listClientModels, rootDir)),
+    guarded("model-pins", async () =>
+      checkModelPins(manifest, app.runtime.env, listClientModels, await listerTreeRoot(rootDir)),
+    ),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);

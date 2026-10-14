@@ -6,11 +6,13 @@ import {
   mkdir,
   readFile,
   readdir,
+  rm,
   stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_LISTED_MODELS,
@@ -972,6 +974,43 @@ describe("applyInit — the client model lists (REQ-LADDER-006)", () => {
     expect(listed.codex?.source).toBe("codex-debug-models");
     // A listing with no id left is no answer: the client keeps what it saved.
     expect(listed.copilot).toBeUndefined();
+  });
+
+  // review/126: run in a workspace member, init keeps the WORKSPACE root out of the lister's
+  // reach, as `workspace sync` does: a folder another repository of the workspace can write into
+  // supplies no client program. The real lister runs against a stand-in `codex` that leaves a
+  // marker when started; the control run before `workspace.json` exists starts it. POSIX only: a
+  // Windows PATH would need a `.cmd` shim, which the lister does not start.
+  it.skipIf(process.platform === "win32")("never starts a stand-in codex placed inside the workspace but outside the member", async () => {
+    const temp = getTemp();
+    const marker = temp.path("codex-started");
+    await temp.seedFiles({
+      "ws/tools/bin/codex": `#!/bin/sh\n: > '${marker}'\nprintf '%s' '{"models":[{"slug":"gpt-6-sol"}]}'\n`,
+    });
+    await chmod(temp.path("ws", "tools", "bin", "codex"), 0o755);
+    const member = temp.path("ws", "apps", "api");
+    await mkdir(member, { recursive: true });
+    const initIn = (force: boolean) =>
+      applyInit(
+        optionsFor(member, {
+          decisions: decisionsFor(member, { tools: ["codex"], toolsSource: "flag" }),
+          env: { PATH: temp.path("ws", "tools", "bin") },
+          force,
+        }),
+      );
+
+    // Control: with no workspace around the member, the folder lies outside its tree and the program starts.
+    await initIn(false);
+    expect(existsSync(marker)).toBe(true);
+
+    await rm(marker);
+    await temp.seedFiles({
+      "ws/workspace.json": `${JSON.stringify({ version: "1.0.0", defaults: { tools: ["codex"] }, repos: [{ path: "apps/api" }] })}\n`,
+    });
+
+    await initIn(true);
+
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("answers nothing for a client that times out, cannot be read or is absent", async () => {

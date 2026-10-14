@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, readFile } from "node:fs/promises";
+import { chmod, readFile, rm } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -86,13 +86,19 @@ vi.mock("../../../src/cli/engine/emission.ts", async (importOriginal) => {
 const listerAnswers = vi.hoisted(() => ({
   value: {} as Partial<Record<string, clientModelsModule.ModelListOutcome>>,
   asked: [] as string[],
+  /** Set by the one case that runs the real lister against a stand-in program it planted. */
+  real: false,
 }));
 vi.mock("../../../src/cli/engine/clientModels.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof clientModelsModule>();
   return {
     ...actual,
-    listClientModels: async (tool: string): Promise<clientModelsModule.ModelListOutcome> => {
+    listClientModels: async (
+      ...args: Parameters<typeof actual.listClientModels>
+    ): Promise<clientModelsModule.ModelListOutcome> => {
+      const [tool] = args;
       listerAnswers.asked.push(tool);
+      if (listerAnswers.real) return actual.listClientModels(...args);
       return listerAnswers.value[tool] ?? { kind: "absent" };
     },
   };
@@ -117,6 +123,7 @@ beforeEach(() => {
   plannerWarnings.value = [];
   listerAnswers.value = {};
   listerAnswers.asked = [];
+  listerAnswers.real = false;
 });
 
 afterEach(() => {
@@ -1089,6 +1096,47 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
     expect((await planSync(root, VERSION)).manifest.models?.listed).toEqual({
       codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
     });
+  });
+});
+
+/**
+ * review/126: run in a workspace member, `sync` keeps the WORKSPACE root out of the lister's
+ * reach, as `workspace sync` does, not only the member: a folder another repository of the
+ * workspace can write into supplies no client program. The real lister runs here against a
+ * stand-in `codex` that leaves a marker when started; the control run before `workspace.json`
+ * exists starts it, which is what makes the second answer mean anything. POSIX only: a Windows
+ * PATH would need a `.cmd` shim, which the lister does not start.
+ */
+describe("sync — in a workspace member, the lister keeps the workspace out", () => {
+  it.skipIf(process.platform === "win32")("never starts a stand-in codex placed inside the workspace but outside the member", async () => {
+    const handle = tempDir();
+    __setContentRootForTests(handle.path("corpus"));
+    const marker = handle.path("codex-started");
+    await handle.seedFiles({
+      "ws/tools/bin/codex": `#!/bin/sh\n: > '${marker}'\nprintf '%s' '{"models":[{"slug":"gpt-6-sol"}]}'\n`,
+    });
+    await chmod(handle.path("ws", "tools", "bin", "codex"), 0o755);
+    const member = handle.path("ws", "apps", "api");
+    const manifest = createManifest({ tools: ["codex"], selection: emptySelection(), generatorVersion: VERSION, now: T0 });
+    await writeManifest(member, manifest, { now: T0 });
+    listerAnswers.real = true;
+    const env = { PATH: handle.path("ws", "tools", "bin") };
+
+    // Control: with no workspace around the member, the folder lies outside its tree and the program starts.
+    expect((await runInProcess([syncCommand], ["sync", "--dry-run"], { cwd: member, env })).code).toBe(0);
+    expect(existsSync(marker)).toBe(true);
+
+    await rm(marker);
+    await handle.seedFiles({
+      "ws/workspace.json": `${JSON.stringify({ version: "1.0.0", defaults: { tools: ["codex"] }, repos: [{ path: "apps/api" }] })}\n`,
+    });
+
+    const result = await runInProcess([syncCommand], ["sync"], { cwd: member, env });
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(listerAnswers.asked).toEqual(["codex", "codex"]);
+    expect(existsSync(marker)).toBe(false);
+    expect((await readManifest(member))?.models).toBeUndefined();
   });
 });
 

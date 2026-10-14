@@ -9,6 +9,7 @@ import {
 } from "../../shared/programPath.ts";
 import type { Tool } from "../../types/core.ts";
 import type { ListedModels } from "../../types/manifest.ts";
+import { detectWorkspaceContext } from "../../workspace/detect.ts";
 
 /**
  * The client lister: the one place the engine starts a client's own CLI to read
@@ -337,6 +338,19 @@ function findProgram(
     return { kind: "found", name, path: found, searchPath: path, folder };
   }
   return null;
+}
+
+/**
+ * The `treeRoot` every verb hands {@link listClientModels} for the repository at
+ * `rootDir`: the root of the enclosing workspace when the repository is a member
+ * of one, found the way the workspace verbs find it
+ * (`detectWorkspaceContext`, the nearest `workspace.json` at or above), else
+ * `rootDir` itself. Every repository of a workspace can place a file under the
+ * workspace root, so a `PATH` entry in the root's own tree or a sibling member
+ * supplies no client program, whichever verb starts the lister.
+ */
+export async function listerTreeRoot(rootDir: string): Promise<string> {
+  return (await detectWorkspaceContext(rootDir)).workspaceRoot ?? rootDir;
 }
 
 /**

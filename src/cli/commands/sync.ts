@@ -4,6 +4,7 @@ import { MANIFEST_FILE } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { hasNpmChannel, npmRegistry, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
+import { listerTreeRoot } from "../engine/clientModels.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { readClientModelLists } from "./init/apply.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
@@ -215,7 +216,7 @@ export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): strin
 async function freshModelLists(ctx: CliContext, rootDir: string): ReturnType<typeof readClientModelLists> {
   const manifest = await ctx.engine.manifest.manifest.readManifest(rootDir);
   if (manifest === null) return {};
-  return readClientModelLists(manifest.tools, ctx.app.runtime.env, rootDir);
+  return readClientModelLists(manifest.tools, ctx.app.runtime.env, await listerTreeRoot(rootDir));
 }
 
 export const syncCommand: CommandModule = {
