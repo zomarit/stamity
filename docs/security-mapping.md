@@ -192,7 +192,7 @@ cannot load the client **refuses** the claim — never a pass, and never the pin
 | Actor | Vector | Control | Residual | Mapped ids | Gap |
 |---|---|---|---|---|---|
 | The operator's org | Installs from a source the org has not approved | Source policy is evaluated before any install is attempted, by pack id, scope wildcard or source kind. A deny match wins. An `allow` list denies everything it does not name. Code: `src/pack/orgPolicy.ts::evaluatePackSource` | Policy is written in ids, scopes and kinds, never in trust tiers, so a minimum tier cannot be expressed | LLM03, GOVERN 1.3, MANAGE 3.1 | Tiers are not a policy lever |
-| A pull request author | Drops a client with its guards, or moves the pinned release, and `check` stays green | `check --expect-version`, `--expect-tools` and `--expect-mode` take the expected release, clients and install mode from the caller and fail with `EXPECTATION_ERROR`. Code: `src/cli/commands/check.ts::evaluateExpectations` | Only as strong as its caller: without the flags, or with values the pull request can edit, `check` trusts the committed manifest | A05, A08, ASI04, GOVERN 1.5 | None |
+| A pull request author | Drops a client with its guards, or moves the pinned release, and `check` stays green | `check --expect-version` and `--expect-tools` take the expected release and clients from the caller and fail with `EXPECTATION_ERROR`. Code: `src/cli/commands/check.ts::evaluateExpectations` | Only as strong as its caller: without the flags, or with values the pull request can edit, `check` trusts the committed manifest | A05, A08, ASI04, GOVERN 1.5 | None |
 | A pull request author, or an agent working on a change | Lowers the checks its own change gets by editing the class file inside that change | `gate classify` names the class a flow's gates follow, and with a `--base` that resolves it reads `.stamity/change-classes.json` only as the base commit's blob, never the head's copy or the work tree's. A change to the file is `security-sensitive` by a built-in rule, a base copy the validator refuses applies only its raising entries, and a read that fails never gives a class below `product`: a change git could not read gets `product` with no lens, and a failed read of its lines `security-sensitive`. Code: `src/cli/commands/gate.ts::readBaseClassFile`, `src/change/classify.ts::parseClassFile` | Only as strong as its caller: the verb names a class and runs no gate, and the base is the caller's word, so a base that already holds the change's edit to the class file reads that edit. A change git could not read gets `product`, below the class its paths might have earned, and with it no security lens: `/st-work` runs that lens at every tier when the `reason` names a failed read; `/st-quick` then moves to `/st-work` only a batch with a path the security agent's trigger table names, and any other batch stays in the quick lane, where no lens runs; and a caller that reads the class alone gets no lens. Two known residuals in 1.14.0, each tracked in `.stamity/inbox.md` as the row named, both in the line rules: the `secret-name` rule misses a match longer than 1 024 characters that straddles the edge of one of its windows (`2026-10-08_product-core/review/139`), and no line rule covers a raw socket call, so a change whose lines hold one gets no lens from them (`2026-10-08_product-core/review/201`) | A05, A08, GOVERN 1.3 | None |
 
 ### 3. Prompt injection and content integrity
@@ -237,9 +237,8 @@ cannot load the client **refuses** the claim — never a pass, and never the pin
 
 | Actor | Vector | Control | Residual | Mapped ids | Gap |
 |---|---|---|---|---|---|
-| A build-time dependency | Reaches the publishing credential | The job that builds does not hold it. The gate job, the isolated third-party route job and `publish` are separate jobs. `publish` takes no checkout, and it verifies the tarball hash against the gate job's output. Code: `.github/workflows/release.yml` | A compromised build dependency runs where no credential is | ASI04, LLM03, A08, MANAGE 3.1 | None |
+| A build-time dependency | Reaches the publishing credential | The job that builds does not hold it. The gate job and `publish` are separate jobs. `publish` takes no checkout, and it verifies the tarball hash against the gate job's output. Code: `.github/workflows/release.yml` | A compromised build dependency runs where no credential is | ASI04, LLM03, A08, MANAGE 3.1 | None |
 | Anyone | Publishes a build nobody can trace to this repository | `npm publish --provenance` over OIDC trusted publishing. No long-lived token exists here, and third-party actions are SHA-pinned | The platform half is maintainer setup rather than a file: the required reviewer, the tag ruleset and the trusted-publisher entry. It is re-verified at each cut | ASI04, A06, A08, GOVERN 1.5, MANAGE 2.1 | The platform half is not code |
-| Anyone serving a plugin distribution | Serves a client plugin tree that is not the one this release built | Since 1.9.0 the same run publishes four client plugin archives, a distribution branch and a `plugins/v<version>` tag. The publish job verifies the distribution manifest against the digest the gate job put on its outputs channel, then every archive against that manifest, both before the npm publish; each archive carries a build-provenance attestation over the same OIDC identity; the branch is replaced by one orphan commit whose dates come from the manifest, and the push refuses a remote head that carries a parent or a release tag that already names another commit. Code: `.github/workflows/release.yml`, `scripts/plugins/releaseManifest.mjs::validateReleaseManifest` | Verification at the consumer's end is the consumer's: a mirror that republishes the tree is trusted the way its own repository is trusted, and nothing here attests a mirror | ASI04, LLM03, A08, A06, MANAGE 3.1 | No mirror attestation |
 | Anyone holding a fork's package name on the public registry | Serves a look-alike to a `--registry` fork's generated CLI call | Every pinned call a `--registry` fork renders carries `--@<scope>:registry=<url>`. A URL outside a strict plain-https grammar is refused by `fork-identity.mjs` before writing, and renders `npx --no` if it was set by hand. Code: `src/shared/cliCall.ts::scopeRegistryArg` | Unmeasured under PowerShell's `npx.ps1` shim | ASI04, LLM03, A08, A06 | None |
 
 ## Gaps this mapping leaves open
@@ -262,10 +261,7 @@ Every gap named in a row above, collected so the list reads without the tables.
    attests the catalog itself.
 7. **A verified signature is not an entitlement.** The pin comes from the pack's own declared
    signer, so a pack naming its own author verifies whoever that is.
-8. **No mirror attestation.** A plugin distribution is verified where it is published. An
-   organization that mirrors the tree is trusted the way its own repository is trusted, and
-   nothing here attests a mirror.
-9. **In-bound ledger records are unauthenticated.** The manifest carries no signature, so a
+8. **In-bound ledger records are unauthenticated.** The manifest carries no signature, so a
    forged row inside the owned-path bound whose hash matches the bytes still proves what a
    recorded hash proves on its own. At an instruction file, an engine-named file in a content
    folder, Copilot's hooks file and Cursor's two 1.11.0 guard names that is no longer a delete:
@@ -278,18 +274,18 @@ Every gap named in a row above, collected so the list reads without the tables.
    on the recorded hash alone. The second is a planted pack or override whose rendering copies
    an owner's file, and the third the Codex `[mcp_servers]` table, proved by its record alone.
    These are known residuals in 1.14.0, and SECURITY.md names where each is tracked.
-10. **An entry added to a co-owned config is not drift.** An allow row, hook entry or table that
+9. **An entry added to a co-owned config is not drift.** An allow row, hook entry or table that
     another tool or a pull request adds to `.claude/settings.json`, `.cursor/hooks.json`,
     `.codex/hooks.json` or `.codex/config.toml` is kept as the owner's, and `check` stays green.
     Only a Cursor entry Cursor rejects and a kept key that turns Codex's hooks off fail it.
-11. **Review roles load the change's own instructions.** On every client whose sub-agents are
+10. **Review roles load the change's own instructions.** On every client whose sub-agents are
     handed the checkout's instruction files, a branch that edits one is reviewed by roles
     already following the edit, and no screen reads that edit first. Copilot's reviewer and
     three lenses load them by the key the engine emits. On Claude Code a reviewer session was
     observed to be handed them by the client, in the main checkout, and the same is inferred for
     a branch's checkout. Cursor and Codex were not measured. A known residual in 1.14.0;
     SECURITY.md names where it is tracked.
-12. **Only the engine's own git is covered against a committed bare-repository folder.** The
+11. **Only the engine's own git is covered against a committed bare-repository folder.** The
     options the engine passes to git and the look it takes before git hold for the git the
     CLI's verbs themselves start, in a tree git checked out. Git that a client's own tools, a
     flow's session and its sub-agents, or the operator's shell start has neither, and started in
@@ -308,7 +304,7 @@ Every gap named in a row above, collected so the list reads without the tables.
     which keep the caller's git environment: a `GIT_COMMON_DIR` exported with no `GIT_DIR`, on a
     git older than 2.38, and a relative `GIT_DIR`, on any git. These are known residuals in
     1.14.0, and SECURITY.md names where each is tracked.
-13. **`PATH` is taken as given.** The engine starts git by an absolute path it resolves itself,
+12. **`PATH` is taken as given.** The engine starts git by an absolute path it resolves itself,
     and never from the folder git runs in: an empty `PATH` entry, a relative one and an entry
     that is that folder are skipped. Every other entry is searched as it stands. An entry that
     is a full path to some other folder counts whatever that folder is, one inside the checkout
@@ -321,12 +317,11 @@ Every gap named in a row above, collected so the list reads without the tables.
     a `node_modules/` the operator installed from a lockfile they read, or a CLI installed
     outside the checkout and started under the operator's own `PATH`. A known residual in
     1.14.0; SECURITY.md says what to look for.
-14. **Beside git, only the hook runner's start of `node` is covered.** The hook runner the
+13. **Beside git, only the hook runner's start of `node` is covered.** The hook runner the
     engine emits for Codex, Copilot and Cursor starts a `node` launcher, which every hook the
     engine writes names, by its own interpreter's absolute path, and any other launcher, `node`
-    spelled another way such as `node.exe` included, by a bare name in the repository root, or
-    in the session's folder for a hook a plugin carries, which on Windows is the lookup the row
-    closes for git (read, not run). Three other starts
+    spelled another way such as `node.exe` included, by a bare name in the repository root, which
+    on Windows is the lookup the row closes for git (read, not run). Three other starts
     are found by a bare name. The hook lines and MCP launchers the engine writes are started by
     the client, by the client's rules, which were not checked. Git that the operator's shell, a
     client's tools or a flow's session start is found by their rules, and what git itself

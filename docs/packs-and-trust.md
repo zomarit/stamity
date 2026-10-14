@@ -115,23 +115,6 @@ yours, then run `stamity sync`. Then add the pack again with `stamity add <id>`,
 `stamity sync`. `clean --pack` can refuse with `CLEAN_ERROR` before it removes anything, as after an
 upgrade of stamity itself: [Remove one pack](#remove-one-pack) says when, and what to run first.
 
-### Packs in a plugin-backed repository
-
-Where a client runs from its plugin, the plugin carries some classes and `sync` writes nothing
-under them. An installed pack's skills are the exception: no plugin ships them, so they are
-written anyway. A pack's commands, agents, rules and hooks get no exception, and wherever the
-client's plugin carries their class they are dropped. [Plugins](plugins.md) has the table, under
-Who owns what. `stamity check` reports the result in its `pack-reach` row. The row fails for an
-installed pack none of whose artifacts reaches a selected client. It warns instead in four cases:
-a pack whose only delivery left is an MCP server you have not selected, naming
-`stamity config mcp add <id>`; a pack with some artifacts dropped, naming each one; a pack with
-nothing a client loads; and a pack the organisation's trust policy denies, which is installed and
-projects nothing. Otherwise it passes. Remove a pack that reaches nothing with
-`stamity clean --pack <id>`, or, where its `tools:` list names a client, add that client with
-`stamity config set tools <list>`, then `stamity sync`. While a client's plugin carries a class,
-this repository writes none of that class for it; only a pack's skills are exempt.
-[Plugins](plugins.md) lists every status of the row with its remedy, under Troubleshooting.
-
 ## Which rung of the trust ladder a pack lands on
 
 Four rungs, ascending. Each one names who did the work.
@@ -353,7 +336,7 @@ owner:
 
 A clash can also arise after a pack is installed. The pack may come from an earlier version that
 never ran that check, or a later core upgrade, a new override or a fork-layer artifact may take one
-of its names. `sync` refuses any of these, and so do `check`, `init` and `plugin setup`, which plan
+of its names. `sync` refuses any of these, and so do `check` and `init`, which plan
 the same way. The refusal lists every clashing name with its owners, then one remedy per owner that
 can move. For a pack, run `stamity clean --pack <id>`. A pack whose names clash cannot be planned,
 so the engine cannot prove its client copies: `clean --pack` keeps each one and names it, and a copy

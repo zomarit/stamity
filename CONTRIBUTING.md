@@ -3,7 +3,7 @@
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
      eval set's version bumps — the `evals/` paths below carry that version in their own names.
-     `test/docsPages.test.ts` asserts the contributor-gate command, the leak-gate row, five
+     `test/docsPages.test.ts` asserts the contributor-gate command, the leak-gate row, four
      regeneration commands, the proven-push reader and the CI lane names; `test/ci/workflow.test.ts`
      asserts the two required status contexts. -->
 
@@ -82,10 +82,10 @@ covers the mechanics.
 
 Two required status contexts gate a merge.
 
-`all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. A full run passes when three
-lanes pass: the check matrix, the APM route lane, and the plugin route lane. The matrix has four
-legs: the declared Node floor, the LTS canonical, and Windows in two shards that split the test
-suite between them. Beside the six steps you already ran, it adds six things:
+`all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. A full run passes when the check
+matrix passes. The matrix has four legs: the declared Node floor, the LTS canonical, and Windows in
+two shards that split the test suite between them. Beside the six steps you already ran, it adds
+four things:
 
 - A generate-and-diff self-consistency step over every generated artifact class.
 - The dogfood check, `node dist/cli.js check`, which re-proves this repository's own generated setup
@@ -96,25 +96,8 @@ suite between them. Beside the six steps you already ran, it adds six things:
   reads it.
 - A repository hygiene scan on pull requests. It rejects tracked runtime files, new raw evidence,
   and growth past the file budgets.
-- The APM route gate, `node scripts/apm-install-smoke.mjs`. It installs this repository's `apm.yml`
-  and `.apm/` package into a throwaway consumer, then verifies the deployed tree: every primitive id
-  at its target's path, carrying its source heading. It runs on apm-cli 0.29.1, the minimum tested
-  client, and on 0.30.0, the current one. It runs once more on 0.29.0 with `--expect-failure`, so
-  the check keeps proving it can still see the routing failure that shipped zero primitives while
-  exiting 0.
-- The plugin route gate. Its lane builds the four client plugin roots the release builds, with the
-  release's own three build lines, then `node scripts/plugin-route-smoke.mjs` asks the clients about
-  them. It runs without `--invoke`, so what it proves is the credential-free half of the route: each
-  root's structure, plus — where that client's CLI installs on the runner — the install leg and the
-  discovery legs a listing command can answer
-  without an account. The other half needs a credential and runs elsewhere: discovery wherever the
-  only listing of a plugin's ids is what a driven session prints, and every invocation leg. Those run
-  nightly (`.github/workflows/nightly.yml`) behind per-client secrets — a workflow armed but disabled
-  at the repository until the maintainer enables it and sets them — and on a maintainer's machine
-  through the QA harness. A client CLI that will not install leaves its own legs skipped with a
-  notice, never a red lane; a broken root is red.
 
-A change whose every path falls in a lane takes the `lanes` job instead of those three.
+A change whose every path falls in a lane takes the `lanes` job instead of the check matrix.
 `node scripts/ci/records-only.mjs` decides; its name is older than its three lanes. The lanes, the
 engine's `.gitkeep` excepted at every location:
 
@@ -145,14 +128,14 @@ names a tracked page or record in a string literal is a reader of it and belongs
 dogfood `check`, because the session hook reads the learnings. The `website` lane adds the docs site
 build and the root typecheck, because a test imports a `website/` module. Any path in no lane, an
 empty diff, a push with no earlier commit to compare, a diff the script cannot read, the weekly
-schedule and a manual run get the full three lanes. So does a change the map cannot answer, though
+schedule and a manual run get the full check matrix. So does a change the map cannot answer, though
 every path of it is in a lane: no valid map at the base commit, a changed path no entry matches, or
 a matching entry that says `"all"`. On that side the LTS leg also builds the docs
 site, last, when the change touches a `website` path or no diff was read.
 
 A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed
 commit's tree is the head tree of a pull request whose latest `ci.yml` pull-request run passed
-`all-ci-checks`. When it is, the check matrix, the two route lanes and the `lanes` job all skip:
+`all-ci-checks`. When it is, the check matrix and the `lanes` job both skip:
 that tree was already proven; the `records` job still runs. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
 answers not proven rather than failing a job, so the push runs the `lanes` job or the full side, as
 `records-only.mjs` decides for its diff. The skip reaches only `ci.yml`:
@@ -160,10 +143,6 @@ answers not proven rather than failing a job, so the push runs the `lanes` job o
 filters. `all-ci-checks` asserts which of the three shapes ran, a proven push, the `lanes` job or
 the full side, so neither short answer reads as a full pass. It also asserts the `records` job:
 passed in this repository, skipped in a fork.
-
-Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
-`STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`
-needs it.
 
 `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on pull requests only. It carries the three
 gates only a pull request can be asked. They are the DCO trailer on every commit, the
@@ -198,9 +177,9 @@ Two habits ride on top. Property tests cover the invariant-bearing cores, throug
 (`test/**/*.property.test.ts`). Generate-and-diff gates re-render every generator-owned artifact and
 byte-compare it against the committed copy, so staleness fails the build.
 
-Those gates name their own repair unevenly. The matrix, docs and pins failures print the
-regeneration command. The plugin-manifest and APM failures say only that the file is stale. The
-sync-emitted trees are held drift-clean by `node dist/cli.js check` in CI rather than by a test.
+Those gates name their own repair. The matrix, docs and pins failures print the regeneration
+command. The sync-emitted trees are held drift-clean by `node dist/cli.js check` in CI rather
+than by a test.
 
 Coverage is report-only globally, with a blocking floor on the merge and emit core and on the
 owned-path bound, `src/manifest/ownedPaths.ts`. There is no mutation gating.
@@ -249,12 +228,9 @@ next regeneration. For the generator-owned rows that gate is a test. For the las
 | `docs/measurements.md` | `node scripts/merge-ready-rate.mjs --write`, then `node scripts/records.mjs commit -m <message>`, then a `main` commit that moves the pin and runs `node scripts/generate-docs.mjs --page measurements` |
 | `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` |
 | `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` |
-| `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` |
-| `apm.yml`, `.apm/` | `node scripts/generate-apm-package.mjs` |
-| `dist/plugins/` | `node scripts/generate-plugin-packages.mjs --out-dir dist/plugins --runtime <dir>` |
 | `AGENTS.md`, `CLAUDE.md` (its managed block), `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
 
-Five notes on that table:
+Four notes on that table:
 
 - `--write` on `merge-ready-rate.mjs` freezes a new snapshot under `evals/measurements/`. The
   measurements page renders the snapshot `MEASUREMENT_SNAPSHOT_PATH` in `src/cli/docs/measurements.ts`
@@ -264,14 +240,10 @@ Five notes on that table:
 - `generate-pack-manifests.mjs` verifies every pack against its own `pack.json` integrity map, then
   rewrites the pins module and nothing else. Its `--write` mode is maintenance, for after a
   deliberate pack edit. The plain invocation fails on the drift instead.
-- The three manifest generators each take `--check`, which verifies and writes nothing. That is how
-  CI runs them.
+- `generate-pack-manifests.mjs` also takes `--check`, which verifies and writes nothing. That is how
+  CI runs it.
 - The last row is this repository's own setup running its own output. `node dist/cli.js check` at
   the root reports whether that setup is still drift-clean.
-- `dist/plugins/` and the runtime built beside it sit inside the directory `package.json`
-  publishes (`files: ["dist"]`), so a local `npm pack` or `npm publish` run after that row ships
-  both trees in the tarball unless `npm run build` — which cleans `dist/` — runs first. The release
-  workflow is safe: it packs before it builds either tree, from a fresh checkout.
 
 The manifest here selects Claude alone. Claude does not read the `.agents/skills/` projection, so no
 `.agents/` tree is emitted or committed in this repository.
@@ -426,7 +398,7 @@ Something wrong that is not a vulnerability goes to the
 | `packs/` | the first-party packs |
 | `test/` | the three lanes |
 | `evals/` | the eval set and its cases; its run artifacts are on the `records` branch |
-| `scripts/` | generators, the leak gate, the three smokes (publish shape, APM route, client plugin route), and the upstream lane (`upstream.mjs`, for forks) |
+| `scripts/` | generators, the leak gate, the publish-shape smoke, and the upstream lane (`upstream.mjs`, for forks) |
 | `docs/` | the generated reference pages (`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `measurements.md`, `reference/`) beside the hand-written guides, plus `docs/specs/`; the plans under `docs/plans/` are on the `records` branch |
 | `website/` | the docs site, a separate npm project |
 

@@ -398,11 +398,9 @@ Three fork outcomes are about your repository rather than about the fork.
   never patched, and the fork layer must not break `sync` in a repository that installed the
   pack. Your own patch of that skill is an error.
 
-Everything on this page is a CLI consumer override. An APM package author customizes `content/`
-or the bundled `fork/` layer instead and regenerates the four classes. Package generation does
-not read a consumer's override tree. [Enterprise forks](enterprise-forks.md) covers public and
-independent private APM authoring, identity, authentication and updates, including which runtime
-capabilities require the packaged CLI.
+Everything on this page is a CLI consumer override. A fork's maintainer customizes `content/` or the
+bundled `fork/` layer instead, and [Enterprise forks](enterprise-forks.md) covers that layer, the
+fork's identity, its releases and its updates.
 
 ## What does each client do with your override?
 

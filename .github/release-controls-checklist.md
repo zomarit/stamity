@@ -107,27 +107,6 @@ being force-moved onto a different commit after the gates passed.
 - As a non-bypass actor, attempting to push a `v9.9.9` tag is rejected by the ruleset.
 - Moving an existing `v*` tag to a different commit is rejected.
 
-**The plugin distribution's refs, and why neither is governed by the ruleset above.** The same
-release publishes a plugin distribution: the `publish` job pushes the built tree as one orphan
-commit on the `plugin-dist` branch and creates a `plugins/v<version>` tag on it, both with the
-per-run `GITHUB_TOKEN` under the job's existing `contents: write`. The tag namespace is outside
-the `v*` ruleset **by construction** — `plugins/v1.8.0` does not match the `v*` pattern, which is
-why the ruleset's creation restriction does not refuse the workflow's own tag push and why a
-`plugins/*` ruleset would have to be a separate, deliberate decision rather than an accident of
-pattern overlap. The branch push is a **force** push, and that is the intended behaviour rather
-than a lapse: the tree is published whole, so each release REPLACES the branch head, and every
-earlier release stays fetchable through its own `plugins/v*` tag — which the step refuses to move
-once it exists (it reads the remote first and fails closed when the tag names another commit).
-Since 2026-09-20 the step also refuses, before any push, a tag whose shape is not
-`<namespace>/v<version>` for the release's own version and a branch whose remote head has a parent
-— both names reach the job as outputs of a job that ran third-party build code, and a distribution
-head is always an orphan, so a head with history is a source branch whatever the manifest called
-it.
-Any branch rule added on `plugin-dist` must therefore allow the workflow's token to force-push it;
-the kickoff's step 3 confirmed nothing currently blocks that. If a rule is ever added there, the
-symptom of getting it wrong is a release that publishes to npm and then fails at
-`Push plugin distribution`.
-
 ---
 
 ## Control 3 — npm trusted-publisher entry
@@ -199,7 +178,7 @@ patch included.
 A second line rides the same cut and lands *before* the tag rather than after it: the eval set is
 measured per the change-aware release rule of `evals/SET-v7.md` (REQ-PROVE-033). Runs when: the
 release's diff since the run of record touches `content/**` or another file a case's `source:`
-names (`scripts/plugins/setupCommand.mjs`); the emitted client files (the cross-client goldens);
+names; the emitted client files (the cross-client goldens);
 the eval set's files (`evals/SET-v7.md`, `evals/README.md`, `evals/coverage-exemptions-v6.md`, the
 selected rubric `evals/rubric-v7.md`, the model profiles `evals/model-profiles-v1.json` and
 `evals/MODEL-PROFILES-v1.md`); the case sets old and new (`evals/cases-v6/**`,

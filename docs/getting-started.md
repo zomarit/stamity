@@ -4,10 +4,9 @@ title: Getting started
 
 <!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
-     or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
-     APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page
-     to the hand-page contract; the generated `cli-reference.md` and `capability-matrix.md` are
-     what it must not contradict. -->
+     or leaves the CLI, a probe joins or leaves `check`, or a path joins or leaves `.stamity/`.
+     `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
+     `cli-reference.md` and `capability-matrix.md` are what it must not contradict. -->
 
 # Getting started
 
@@ -93,58 +92,6 @@ files, and no machine should consent to that on your behalf.
 `--dry-run` previews the whole run without writing. `--tools <csv>` names the clients up front.
 `--force` replaces an existing setup in place.
 
-## Install through APM instead
-
-If your team already uses APM — the Agent Package Manager — the same corpus installs straight
-from this repository as an APM package. That route needs no npm and runs no init walk.
-
-```sh
-apm install zomarit/stamity --target claude
-```
-
-Pin the ref for a repeatable install:
-
-```sh
-apm install zomarit/stamity#v<version> --target <claude|copilot|cursor|codex>
-```
-
-**The client floor is apm-cli 0.29.1.** That release fixed a type-detection cascade which used
-to route this repository's tree past its own APM package. 0.30.0 is the current tested client.
-
-An older client fails without failing. It exits 0, deploys nothing, and prints:
-
-```
-Agent Plugins v1.0.0 packages install natively only for the 'copilot' target
-```
-
-If you see that line with zero primitives deployed, upgrade the client and install again. Use
-`pip install --upgrade apm-cli`, `brew upgrade apm`, or whatever self-update your client offers.
-
-What arrives: 10 agents, 9 commands, 10 rules and 10 skills, each at the path its target reads.
-`codex` takes the agents and the skills only. APM's codex profile carries no command or rule
-class, and it folds instructions into `AGENTS.md` when you run `apm compile`.
-
-One difference from the npm route is worth knowing. An APM install clones this whole repository
-at the ref into your `apm_modules/` directory — tests, site and all — and deploys the primitives
-out of it. APM gitignores that directory itself. The primitives it deploys are the corpus,
-projected for APM by this repository's own generator and byte-checked in CI.
-
-APM delivers those four primitive classes and no more. The charter, hooks, MCP wiring and the
-engine itself stay with the packaged CLI route. For public downstreams or independent private
-packages, [the enterprise guide](enterprise-forks.md) covers source and fork customization,
-publisher identity, private authentication and the update lifecycle.
-
-## Install as a plugin instead
-
-The third route is a **client plugin**. Your client installs the plugin from a marketplace, the
-plugin carries the agents, skills, commands and hooks inside its own root, and one command —
-`/stamity:st-setup` on Claude Code, `/st-setup` on Cursor and the Copilot CLI — writes the files
-no container can carry: the charter, the rules your client reads by glob, your MCP documents and
-`.stamity/` itself. There is no `init` walk on that route, and no npm install either.
-
-The ownership split per class per client, the install commands, pinning and rollback, and the
-private-catalog route are [the plugins guide](plugins.md)'s to state.
-
 ## What init writes for each client
 
 `AGENTS.md` is written for every client. It is the charter: your repository's facts, the floor
@@ -191,15 +138,13 @@ workflow request reaches the same projection. Claude Code reads its own copy und
 `.claude/skills/`. The nine touchpoints sit in `.agents/skills/` as well, shared by Cursor and
 Codex, and each starts only when you name it.
 
-Every install route is proved before it ships. The npm and APM routes are proved on a clean
-machine, lane by lane, on [the measurements page](measurements.md); the plugin route has a
-merge-blocking job of its own, which builds the four roots a release builds and asks each client
-about them ([CONTRIBUTING](../CONTRIBUTING.md) names what it does and does not prove).
+The npm route is proved before it ships, on a clean machine, lane by lane, on
+[the measurements page](measurements.md).
 
-## The ten verbs
+## The nine verbs
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`plugin` · `clean`
+`clean`
 
 The package installs two names for one binary: `stamity` and the shorter alias `st`.
 
@@ -212,10 +157,8 @@ cannot describe a verb the CLI does not have or miss one it does.
 Four things, because each is about how two parts fit together rather than about any one verb.
 
 - **Which verbs need the manifest.** `sync`, `check`, `config`, `workspace`, `clean` and `add`
-  all read the manifest `init` wrote. `validate` runs with or without one. `plugin status` reads
-  it where there is one and reports its absence where there is not; `plugin setup` refuses on a
-  manifest, because writing one is what it does. `learn`, `handoff` and `ledger` ask only that
-  `.stamity/` exists.
+  all read the manifest `init` wrote. `validate` runs with or without one. `learn`, `handoff` and
+  `ledger` ask only that `.stamity/` exists.
 - **Which verbs need git.** Two do. The `worktree` verbs need a `git` binary on PATH and refuse
   without one. The hidden verb `gate` reads every change from git: where git does not answer,
   `gate scan` exits 1, and `gate classify` answers `product` with the failure named. So in a
@@ -410,7 +353,7 @@ One spelling per idea, across every page.
 | corpus | the canonical content stamity ships — `content/` plus `packs/`. Authored once, emitted per client. |
 | charter | the always-on file every generated setup carries: your repository's facts, the floor invariants, and the touchpoint index. It is written as `AGENTS.md`. |
 | touchpoint | one of the nine `/st-` slash commands your agent runs. Your client decides the invocation form. |
-| verb | one of the ten names you type after `stamity`: `init`, `sync`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `plugin`, `clean`. |
+| verb | one of the nine names you type after `stamity`: `init`, `sync`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `clean`. |
 | manifest | `.stamity/manifest.json` — the record of your setup: its clients, its config, and every file stamity wrote. |
 | managed block | the span between a `STAMITY:BEGIN` and a `STAMITY:END` marker. Every sync rewrites it; the text outside it is yours. |
 | drift | disk and the engine's output disagreeing. `check` asks whether a sync would change anything, and names each file that would. |

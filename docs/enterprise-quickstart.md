@@ -2,12 +2,12 @@
 title: Enterprise quickstart
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c96c7146. Re-attested 2026-10-14 for the fork-only route map, each step read against the section of the fork guide or the getting-started guide it links. -->
 <!-- Re-open when: a section this page links is renamed, moved or removed in `docs/enterprise-forks.md` or
-     `docs/plugins.md`. `test/docsPages.test.ts` holds this page to the hand-page contract and holds
-     every link text here to a heading in the guide it names. Re-open it too when either guide gains a
-     step between two sections this page names, which no check catches, or when a job moves between
-     the admin, the platform team and the developers. -->
+     `docs/getting-started.md`. `test/docsPages.test.ts` holds this page to the hand-page contract and
+     holds every link text here to a heading in the guide it names. Re-open it too when either guide
+     gains a step between two sections this page names, which no check catches, or when a job moves
+     between the admin, the platform team and the developers. -->
 
 # Enterprise quickstart
 
@@ -21,9 +21,9 @@ has the commands. The links go to the page, so find the section by its name ther
 
 | Role | What they own |
 |---|---|
-| Admin | The prerequisites, the Actions and branch controls, and the rollout of the plugin to every developer's client. |
-| Platform team | The fork, its identity and its releases, and the catalog repository developers install from. |
-| Developers | Installing the plugin, setting each repository up, and staying on the version the platform team pins. |
+| Admin | The prerequisites, the Actions and branch controls, and the release environment's reviewers. |
+| Platform team | The fork, its identity, its customization and its releases, and the update lane. |
+| Developers | Installing the fork's CLI from your registry, setting each repository up, and staying on the version the platform team pins. |
 
 ## Day 0: make the fork
 
@@ -33,34 +33,38 @@ The admin and the platform team do this once.
 - Copy the upstream history into a new private repository with Actions turned off, by following [Import the history into a private repository](enterprise-forks.md).
 - Give the private package its own name, repository and publisher with one command, from [Set the private package's identity](enterprise-forks.md).
 - Point the update lane at the upstream and name your integration branch in [Configure `.stamity/upstream.json`](enterprise-forks.md).
+- Take the regenerate list, the generated paths and the gates from [Start from these values for a fork of this repository](enterprise-forks.md).
+- Pick the cheapest place for each change you make, using [Choose where your customization lives](enterprise-forks.md).
+- Put your own agents, rules, commands and skills where upstream never writes, as [Author in the fork layer](enterprise-forks.md) shows.
 - Turn Actions back on last, once your changes are committed and your branch checks match your integration branch, as [Turn the workflows on last](enterprise-forks.md) explains.
 
 ## Day 1: release and roll out
 
-The platform team releases first, then the admin rolls out, then every developer installs.
+The admin arms the release, the platform team tags it, then every developer installs it.
 
-- Arm the release workflow and push your first version tag, as [Release your fork](enterprise-forks.md) shows.
-- Publish your customized content as a package your other repositories install, through [Ship your fork through APM](enterprise-forks.md).
-- Declare the marketplace, allow only that one, and mark the plugin on in every developer's Claude Code with the managed-settings file from [Roll the plugin out to your organization](enterprise-forks.md).
-- Open Claude Code once on each machine, finish its first-run screens, and then install the plugin, as [Start Claude Code once on each machine](enterprise-forks.md) explains.
-- Install the plugin in every other client, or find that client's organization route, under [Install](plugins.md).
-- Give each repository its charter and manifest with the one setup command in [Set the repository up](plugins.md).
+- Create the reviewed environment and set the variables and the token, as [Arm the workflow](enterprise-forks.md) shows.
+- Push your first version tag, or rehearse it first with a dispatch, by following [Tag a release](enterprise-forks.md).
+- Check what the run proved and what it did not, in [Know what proves a release](enterprise-forks.md).
+- Map your scope to your registry on every developer's machine, as [Consume the release](enterprise-forks.md) shows.
+- Give each repository its setup with your own package's `init`, the way [Set stamity up](getting-started.md) does it with the public one.
+- Prove each new setup with one small change, as [Make your first real change](getting-started.md) walks through.
 
 ## Day 2: take updates
 
 The platform team runs the update lane, and developers follow the version it pins.
 
+- Opt in to the scheduled update run and decide on its token, through [Turn on the GitHub workflow](enterprise-forks.md).
 - See what the next upstream release touches and merge it on an update branch, as [Take the next release](enterprise-forks.md) shows.
+- Act on what the lane reports, by its outcome and its exit code, from [Read the outcome and the exit code](enterprise-forks.md).
 - Fix a merge conflict in the lane's own worktree rather than in your checkout, by following [Resolve a conflict](enterprise-forks.md).
+- Let your own checks decide whether the merged fork still behaves, as [Write the gates that decide the upgrade](enterprise-forks.md) explains.
 - Land the update with a merge commit so the next update still finds its base, as [Land the update branch](enterprise-forks.md) explains.
 - Undo an attempt, or a release you already landed, with [Back out an attempt or a landed release](enterprise-forks.md).
-- Move developers to the new version, or back to the old one, client by client in [Pin, update, roll back](plugins.md).
-- Keep a repository that also depends on the package on the same engine as its plugin, as [Keep the runtime in step](plugins.md) describes.
-- Serve the release from your own catalog repository, where Renovate opens a pull request you review for each new version, through [Private catalogs and Renovate](plugins.md).
+- Recover a failed scheduled run and keep its evidence, as [Recover from a failed run](enterprise-forks.md) lists.
+- Move each repository to the new version, or keep it where it is, as [Keeping your setup current](getting-started.md) describes.
 
 ## Where to go next
 
 - [Enterprise forks](enterprise-forks.md) — the whole fork guide, including the fork layer that keeps your changes out of upstream's way.
-- [Plugins](plugins.md) — every client's install, pin and rollback, and which files the plugin carries.
 - [Customization](customization.md) — changing what the agents, rules, commands and skills say, before you reach for the fork layer.
 - [Packs and trust](packs-and-trust.md) — shipping extra content behind a signature and an org policy.

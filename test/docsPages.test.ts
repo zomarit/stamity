@@ -43,24 +43,22 @@ import {
 } from "./support/pageSections.ts";
 // @ts-expect-error — import-safe native ESM path list with no type declarations, outside the product package.
 import { isRecordPath } from "../scripts/records-paths.mjs";
-// @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
-// they run under bare Node in a release job, with no TypeScript nearby.
-import { buildCatalogIdentity } from "../scripts/plugins/catalogs.mjs";
-// @ts-expect-error — see above.
-import { resolveDistributionIdentity } from "../scripts/distribution-identity.mjs";
-// @ts-expect-error — see above.
-import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings.mjs";
+// TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site, REQ-PLUGIN-029 retired):
+// the three distribution imports that stood here (`buildCatalogIdentity`,
+// `resolveDistributionIdentity`, `renderClaudeManagedSettings`) fed one case only, the fork guide's
+// managed-settings block. That section left the guide with the plugin route, so the case and its
+// imports went with it, and nothing here imports from `scripts/plugins/`.
 // @ts-expect-error — the manual eval harness is import-safe native ESM, outside the product package.
 import { RUNNER_FILES } from "../scripts/eval/run.mjs";
 // @ts-expect-error — the CI lane classifier is import-safe native ESM with no type declarations.
 import { LANE_PATHS } from "../scripts/ci/records-only.mjs";
 
 /**
- * The gate on the fifteen hand-written pages: three at the root, twelve guides
+ * The gate on the fourteen hand-written pages: three at the root, eleven guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * fifteen are typed by a human, so the only guard is this file.
+ * fourteen are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -92,7 +90,7 @@ import { LANE_PATHS } from "../scripts/ci/records-only.mjs";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all fifteen pages because the hand bucket is
+ * Two properties are asserted on all fourteen pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -152,13 +150,14 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 
 // Declared in path order, which is not the order GUIDES reads in: this block is a lookup and
 // the array below is GUIDES' own reading order, so the customization guide sits first here and
-// SIXTH there, and the workspaces guide last here and SEVENTH there.
+// FIFTH there, and the workspaces guide last here and SIXTH there.
 //
-// Three corrections this comment has already needed, kept as the warning they are. The ordinals
+// Four corrections this comment has already needed, kept as the warning they are. The ordinals
 // are indices into a literal array, so inserting one entry moves every entry after it —
-// DOCTRINE at position 3 moved these two once, and PLUGINS at position 3 has moved them again.
+// DOCTRINE at position 3 moved these two once, PLUGINS at position 3 moved them again, and
+// PLUGINS leaving with the plugin route (plan 020 file 1, 1.15.0) moved them back by one.
 // And the array is NOT the sidebar's sequence, which this comment used to claim: the sidebar
-// follows it except for MIGRATION, which is FIFTH here and deliberately unlisted there
+// follows it except for MIGRATION, which is FOURTH here and deliberately unlisted there
 // (`website/sidebars.ts`; MAPPED_GUIDES below carries the same decision for the README map).
 const CUSTOMIZATION = "docs/customization.md";
 const DOCTRINE = "docs/doctrine.md";
@@ -167,17 +166,16 @@ const ENTERPRISE_QUICKSTART = "docs/enterprise-quickstart.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
-const PLUGINS = "docs/plugins.md";
 const SECURITY_MAPPING = "docs/security-mapping.md";
 const TROUBLESHOOTING = "docs/troubleshooting.md";
 const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The twelve hand-written guides under `docs/`.
+ * The eleven hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these twelve are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these eleven are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -185,19 +183,19 @@ const WORKSPACES = "docs/workspaces.md";
  * and from the roster by `test/ci/docsRoster.test.ts`. They are not published
  * pages, so the published-page contract does not apply to them.
  */
+// TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site, REQ-PLUGIN-030 retired):
+// PLUGINS, third here since the plugin route shipped, left with that route; `docs/plugins.md` is
+// deleted, so the bucket is eleven guides and fourteen pages. Every other entry keeps its order.
 const GUIDES: readonly string[] = [
   GETTING_STARTED,
   WORKING_WITH_STAMITY,
-  // Third, beside the two pages a first-time reader takes first: the plugin route is an
-  // alternative to `init`, not a topic a reader reaches for after the setup already works.
-  PLUGINS,
   DOCTRINE,
   MIGRATION,
   CUSTOMIZATION,
   WORKSPACES,
-  // Eighth, directly before the fork guide it routes into, as the sidebar and the README map put
+  // Seventh, directly before the fork guide it routes into, as the sidebar and the README map put
   // it. Inserted after WORKSPACES on purpose: the ordinals the comment above the path constants
-  // names (the customization guide SIXTH, the workspaces guide SEVENTH) sit before it and do not
+  // names (the customization guide FIFTH, the workspaces guide SIXTH) sit before it and do not
   // move.
   ENTERPRISE_QUICKSTART,
   ENTERPRISE_FORKS,
@@ -881,10 +879,11 @@ async function corpusCounts(): Promise<Map<string, number>> {
 describe("hand pages", () => {
   // Renamed on each growth of the bucket — "all seven" when the workflow guide joined, "all
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
-  // twelve" when the enterprise-forks guide did, "all fifteen" when the enterprise quickstart did:
+  // twelve" when the enterprise-forks guide did, "all fifteen" when the enterprise quickstart did,
+  // and "all fourteen" when the plugins guide left with the plugin route (plan 020 file 1):
   // the name states the membership count, and the loop below is unchanged through all of them and
   // still runs over every member.
-  it("all fifteen exist and carry real content", () => {
+  it("all fourteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -1264,7 +1263,11 @@ describe("README", () => {
   // that joins the CLI and not these two arrays leaves both pages understating the surface with
   // nothing failing — which is exactly how README went on saying "seven verbs" while `workspace`
   // shipped. A verb lands in `src/cli.ts` and in both arrays, in that order.
-  it("states the command surface — ten verbs plus the plumbing verbs", () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site, REQ-PLUGIN-047): the
+  // `plugin` verb leaves the advertised surface with the plugin route (unit d6-verb removes it from
+  // `src/cli.ts`), so README names nine verbs and this array drops it from its CLI position between
+  // `worktree` and `clean`. The order and length assertions below are unchanged.
+  it("states the command surface — nine verbs plus the plumbing verbs", () => {
     const text = read(README);
     const ADVERTISED = [
       "init",
@@ -1275,11 +1278,6 @@ describe("README", () => {
       "config",
       "workspace",
       "worktree",
-      // TEST CHANGE, justified: `plugin` joined the advertised surface in `src/cli.ts` between
-      // `worktree` and `clean`, and this array asserts ORDER as well as membership — so the
-      // verb lands here in the CLI's own position, not appended where it would read as a
-      // reshuffle of the list a reader scans.
-      "plugin",
       "clean",
     ];
     // TEST CHANGE, justified (strictly stronger): nine `toContain` calls over the
@@ -1297,9 +1295,9 @@ describe("README", () => {
     expect(listed, "README's `·` verb list is not the advertised surface").toEqual(ADVERTISED);
     // The count WORD beside the list is still hand-typed; the length assertion
     // next to it is what makes the two disagreeing visible.
-    expect(listed).toHaveLength(10);
+    expect(listed).toHaveLength(9);
     expect(commands, "README's verb count word does not match its own list").toContain(
-      "ten verbs",
+      "nine verbs",
     );
     expect(text).toContain("`learn`");
     // TEST CHANGE, justified: `handoff` joined `learn` behind the advertised surface, so
@@ -2133,6 +2131,18 @@ describe("SECURITY.md", () => {
     expect(text).toMatch(/atomic rename/i);
     expect(text).toMatch(/does not defend/i);
   });
+
+  // ADDED 2026-10-14 (plan 020 file 1, unit d4-docs-site, REQ-PLUGIN-047): the plugin route's
+  // controls leave the code with the route — `checkPluginRuntime` and `compatibilityOf` with the
+  // `plugin-runtime` row and `plugin status`, `--expect-mode` with the install mode — so neither
+  // security page may go on citing one as a control the engine runs.
+  it.each([SECURITY, SECURITY_MAPPING])("%s cites none of the deleted plugin route's controls", (page) => {
+    const body = read(page);
+    expect(body.length, `${page} read as empty`).toBeGreaterThan(500);
+    for (const token of ["checkPluginRuntime", "compatibilityOf", "--expect-mode", "plugin setup", "apm-route"]) {
+      expect(body, `${page} still cites \`${token}\``).not.toContain(token);
+    }
+  });
 });
 
 /**
@@ -2281,10 +2291,23 @@ describe("CONTRIBUTING.md", () => {
       "node scripts/generate-capability-matrix.mjs",
       "node scripts/generate-docs.mjs",
       "node scripts/generate-pack-manifests.mjs",
-      "node scripts/generate-plugin-packages.mjs",
+      // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site): the
+      // `node scripts/generate-plugin-packages.mjs` row left with the plugin route; unit
+      // d5-scripts-trees deletes the script and its `dist/plugins/` tree, and CONTRIBUTING's
+      // regeneration table drops the row with the plugin and APM manifest rows.
       "node dist/cli.js sync",
     ]) {
       expect(text, `CONTRIBUTING.md omits \`${command}\``).toContain(command);
+    }
+    // ADDED 2026-10-14 (plan 020 file 1, unit d4-docs-site): the page named four scripts the
+    // plugin and APM routes' deletion removes (`generate-plugin-manifests.mjs`,
+    // `generate-apm-package.mjs`, `generate-plugin-packages.mjs`, `apm-install-smoke.mjs`). Every
+    // `node scripts/<file>.mjs` it names now has to exist, so a row left behind by a deletion fails
+    // here rather than sending a contributor to a missing file.
+    const named = new Set([...text.matchAll(/node (scripts\/[\w./-]+\.mjs)/g)].map((match) => match[1] ?? ""));
+    expect(named.size, "CONTRIBUTING.md names no script to run").toBeGreaterThanOrEqual(4);
+    for (const script of named) {
+      expect(existsSync(join(REPO_ROOT, script)), `CONTRIBUTING.md names missing ${script}`).toBe(true);
     }
   });
 
@@ -2559,11 +2582,23 @@ describe("the guides", () => {
     expect(guide, "the guide never says a rename needs no test edit").toContain(
       "Your rename needs no test edit at all.",
     );
-    // The two exceptions the same paragraph has to carry, or the rule above is a trap: the
-    // presets hold the identity as data, and nothing derives them.
-    for (const preset of ["`renovate/plugins.json`", "`renovate/companion.json`"]) {
-      expect(guide, `the guide never names ${preset} as identity data`).toContain(preset);
-    }
+    // The exception the same paragraph has to carry, or the rule above is a trap: the preset
+    // holds the identity as data, and nothing derives it.
+    //
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site): this named
+    // `renovate/plugins.json` beside `renovate/companion.json`. The plugin preset leaves with the
+    // plugin route (unit d5-scripts-trees deletes it, unit d1-fork-identity stops retargeting it),
+    // so the guide names the one preset the identity script still moves, never says the script
+    // moves the deleted one, and says a fork tree still holding it keeps it untouched.
+    expect(guide, "the guide never names `renovate/companion.json` as identity data").toContain(
+      "`renovate/companion.json`",
+    );
+    expect(guide, "the guide still says the script retargets `renovate/plugins.json`").not.toMatch(
+      /renovate\/plugins\.json` names the repository|moves the two\s+Renovate presets/,
+    );
+    expect(flowed(guide), "the guide never says a leftover plugin preset is left untouched").toContain(
+      flowed("A fork tree that still holds the\n`renovate/plugins.json` preset of the deleted plugin route keeps it untouched."),
+    );
     // What a rename carries on its own, named so a reader stops looking for it.
     expect(guide, "the guide never says the tarball smoke follows the renamed name").toContain(
       "`scripts/tarball-smoke.mjs`",
@@ -2582,57 +2617,42 @@ describe("the guides", () => {
       "--is-ancestor v1.5.0",    );
   });
 
-  it("the enterprise-forks guide states the plugin-distribution route it tells a fork to run", () => {
-    // Left for this unit by the release-workflow one, which wrote the section and had no docs
-    // pin to hang it on. Three claims a fork ACTS on, and all three are checkable rather than
-    // atmospheric: the builder it runs, the `package.json` block that decides what the built
-    // catalogs say, and why the branch push is forced. Each is read from the mechanism where
-    // one exists, so the pin fails when the mechanism moves rather than when the prose does.
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site, REQ-PLUGIN-027 and
+  // REQ-PLUGIN-029 retired in part): "the enterprise-forks guide states the plugin-distribution route
+  // it tells a fork to run" stood here and pinned the guide's `## Ship your fork's plugin
+  // distribution` section (its two builders, the `stamity.distribution` keys and the forced
+  // `plugin-dist` push). That section, the APM section before it and the managed-settings rollout
+  // after the release section left the guide with the two routes; the case below holds the guide to
+  // that removal instead, so a section or a builder coming back fails by name.
+  it("the enterprise-forks guide carries no section or command of the deleted plugin and APM routes", () => {
     const guide = read(ENTERPRISE_FORKS);
-
-    // The two builders, asserted to EXIST as well as to be named: a renamed script would
-    // otherwise leave the guide pointing at a command a reader cannot run.
-    for (const script of [
-      "scripts/build-plugin-runtime.mjs",
-      "scripts/build-plugin-distribution.mjs",
+    const headings = [...guide.matchAll(/^#{2,4} (.+)$/gm)].map((match) => match[1] ?? "");
+    expect(headings.length, "the fork guide read as having no headings").toBeGreaterThan(20);
+    for (const removed of [
+      "Ship your fork through APM",
+      "Ship your fork's plugin distribution",
+      "Roll the plugin out to your organization",
     ]) {
-      expect(guide, `the fork guide never names \`${script}\``).toContain(script);
-      expect(
-        existsSync(join(REPO_ROOT, script)),
-        `the fork guide names missing ${script}`,
-      ).toBe(true);
+      expect(headings, `the fork guide still carries "${removed}"`).not.toContain(removed);
     }
-
-    // The configuration block, read off the validator that decides the key set rather than
-    // transcribed here: a fifth key would be one the guide does not mention, and a dropped one
-    // would be a key the guide still tells a fork to set.
-    const identity = read("scripts/distribution-identity.mjs");
-    const declared = /const DISTRIBUTION_KEYS = \[([^\]]*)\]/.exec(identity)?.[1];
-    expect(declared, "distribution-identity.mjs has no DISTRIBUTION_KEYS to read").not.toBeUndefined();
-    const keys = [...(declared ?? "").matchAll(/'([^']*)'/g)].map((match) => match[1] ?? "");
-    expect(keys.length, "the key list read as empty, so the loop below asserts nothing").toBe(4);
-    expect(guide, "the fork guide never names the `stamity.distribution` block").toContain(
-      "`stamity.distribution`",
-    );
-    for (const key of keys) {
-      // The key as a code span, allowing the path form the guide uses for the one key whose
-      // value is a map (`sources.<client>`). The alternative — demanding the bare key — would
-      // make the guide name `sources` twice to satisfy a test rather than a reader.
-      expect(guide, `the fork guide omits the \`${key}\` key a fork has to set`).toMatch(
-        new RegExp(`\`${key}[.\`]`),
-      );
+    for (const command of [
+      "generate-apm-package.mjs",
+      "generate-plugin-manifests.mjs",
+      "generate-plugin-packages.mjs",
+      "build-plugin-runtime.mjs",
+      "build-plugin-distribution.mjs",
+      "managed-settings.mjs",
+      "apm install",
+      "plugins.md",
+    ]) {
+      expect(guide, `the fork guide still names \`${command}\``).not.toContain(command);
     }
-
-    // The force semantics: the flag AND the reason. A guide that printed `--force` without
-    // saying why would read as a shortcut, which is the one reading the section exists to deny.
-    expect(guide, "the fork guide never shows the forced branch push").toContain(
-      "git push --force <your remote> HEAD:refs/heads/plugin-dist",
-    );
-    expect(guide, "the fork guide never says why the branch push is forced").toContain(
-      "`--force` on the branch is the intended shape rather than a shortcut",
-    );
-    expect(guide, "the fork guide never says the tag is what keeps history").toMatch(
-      /tag\*{0,2} is what keeps history/,
+    // The release section survives, minus its distribution steps: a fork releases its CLI, and the
+    // page no longer tells it to push a distribution branch or tag.
+    const release = sectionOf(guide, "## Release your fork");
+    expect(release, "the fork guide lost its release section").not.toBe("");
+    expect(release, "the release section still pushes a plugin distribution").not.toMatch(
+      /plugins\/v<version>|plugin distribution|release\.json/,
     );
   });
 
@@ -2683,45 +2703,25 @@ describe("the guides", () => {
     }
   });
 
-  it("the enterprise-forks guide's managed-settings block is the renderer's own output", () => {
-    // Plan 010, unit docs-guides (REQ-PLUGIN-029). The template's allowlist entry must equal the
-    // declared source field for field, or the client admits no marketplace at all, so a block an
-    // admin copies from the page is held to `renderClaudeManagedSettings` for the canonical
-    // identity. The ref is read from the block itself, so a version bump moves the page without
-    // breaking the pin — and a block whose two refs disagree still fails, because the renderer
-    // writes one ref into both places.
-    const section = sectionOf(read(ENTERPRISE_FORKS), "## Roll the plugin out to your organization");
-    const block = fencedBlocksOf(section, "json")[0];
-    expect(block, "the rollout section carries no json block").toBeDefined();
-    const shown = JSON.parse(block ?? "{}") as {
-      extraKnownMarketplaces?: Record<string, { source?: { ref?: unknown } }>;
-    };
-    const ref = Object.values(shown.extraKnownMarketplaces ?? {})[0]?.source?.ref;
-    expect(typeof ref, "the block's declared marketplace carries no ref").toBe("string");
-    const pkg = {
-      name: SCOPED_PACKAGE,
-      repository: { type: "git", url: `git+https://github.com/${OWNER}/${PRODUCT}.git` },
-    };
-    const identity = buildCatalogIdentity(pkg, resolveDistributionIdentity(pkg)) as Record<string, unknown>;
-    const rendered = JSON.parse(JSON.stringify(renderClaudeManagedSettings(identity, { ref }))) as Record<
-      string,
-      unknown
-    >;
-    expect(Object.keys(rendered).length, "the renderer rendered no keys").toBe(4);
-    expect(shown, "the page's template is not the renderer's output").toEqual(rendered);
-    expect(Object.keys(shown), "the page's template reorders the renderer's keys").toEqual(Object.keys(rendered));
-  });
-
-  it("the enterprise quickstart routes into the two guides and repeats none of their commands", () => {
-    // Plan 010, unit docs-quickstart (REQ-PLUGIN-030). The page is a route map, not a third copy:
-    // it orders the enterprise steps by day and hands each one to the guide that owns it. Three
-    // properties hold it to that. It links both guides; it carries no fenced block longer than one
-    // line, so no command block from either guide is restated here to drift from its owner; and
-    // it stays within its 120-line budget, which the cell declares.
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site, REQ-PLUGIN-030 retired:
+  // "superseded by the fork-only quickstart page"). Two cases that stood here left with the plugin
+  // route: "the enterprise-forks guide's managed-settings block is the renderer's own output" (the
+  // rollout section and `scripts/plugins/managed-settings.mjs` are deleted) and "the plugins guide
+  // adds a Codex marketplace only at a ref" (`docs/plugins.md` is deleted). The quickstart case was
+  // "routes into the two guides"; the page is now the fork-only route map, so it routes into the
+  // fork guide, and its other steps link `docs/getting-started.md`, whose headings are now held the
+  // same way the fork guide's are. The no-command-block rule, the 120-line budget, the floor of
+  // sixteen routed steps and the one-link-per-step rule are unchanged.
+  it("the enterprise quickstart routes into the fork guide and repeats none of its commands", () => {
+    // Plan 010, unit docs-quickstart. The page is a route map, not a second copy: it orders the
+    // enterprise steps by day and hands each one to the guide that owns it. Three properties hold
+    // it to that. It links the fork guide and no plugin page; it carries no fenced block longer
+    // than one line, so no command block from a guide is restated here to drift from its owner;
+    // and it stays within its 120-line budget, which the cell declares.
     const text = read(ENTERPRISE_QUICKSTART);
     const targets = linkTargets(text);
     expect(targets, "the quickstart does not link the fork guide").toContain("enterprise-forks.md");
-    expect(targets, "the quickstart does not link the plugins guide").toContain("plugins.md");
+    expect(targets, "the quickstart still links the deleted plugins guide").not.toContain("plugins.md");
     for (const block of fencedBlocks(text)) {
       expect(lines(block.trim()).length, "the quickstart carries a multi-line fenced block").toBeLessThanOrEqual(1);
     }
@@ -2732,7 +2732,7 @@ describe("the guides", () => {
     // is held here: every link into either guide names a heading that guide carries, and a heading
     // renamed there fails here instead of leaving a step that points at nothing.
     const headings = new Map<string, Set<string>>();
-    for (const guide of [ENTERPRISE_FORKS, PLUGINS]) {
+    for (const guide of [ENTERPRISE_FORKS, GETTING_STARTED]) {
       const found = [...read(guide).matchAll(/^#{1,6} (.+)$/gm)].map((match) => match[1] ?? "");
       headings.set(guide.replace(/^docs\//, ""), new Set(found));
     }
@@ -2741,10 +2741,11 @@ describe("the guides", () => {
       const known = headings.get(match[2] ?? "");
       if (known === undefined) continue;
       expect(known.has(match[1] ?? ""), `the quickstart links "${match[1]}", no heading in ${match[2]}`).toBe(true);
-      routed += 1;
+      if (match[2] === "enterprise-forks.md") routed += 1;
     }
     // Every step the cell names, and nothing degenerate: a page that dropped to a bare link per
-    // guide would pass the two containment checks above.
+    // guide would pass the two containment checks above. Counted into the fork guide alone, so a
+    // step moved to another page cannot keep the floor.
     expect(routed, "the quickstart routes fewer steps than the day sections name").toBeGreaterThanOrEqual(16);
 
     // One link per step. A step is a bullet under a day heading; two links in one is two steps,
@@ -2755,19 +2756,6 @@ describe("the guides", () => {
       for (const bullet of bullets) {
         expect(linkTargets(bullet).length, `a step under ${day} carries other than one link`).toBe(1);
       }
-    }
-  });
-
-  it("the plugins guide adds a Codex marketplace only at a ref", () => {
-    // Ledger build/18 and review/61 (plan 010). Measured on codex-cli 0.155.1: a Codex marketplace
-    // added with no `--ref` checks out the default branch, which carries no Codex catalog, falls
-    // back to that branch's Claude catalog and installs the PUBLIC npm package it names — on a
-    // private fork, the public registry in place of the private source. Every Codex add line the
-    // page prints carries a ref, as the Codex root README's does.
-    const adds = [...read(PLUGINS).matchAll(/^.*codex plugin marketplace add .*$/gm)].map((match) => match[0]);
-    expect(adds.length, "the plugins guide prints no Codex marketplace add").toBeGreaterThan(1);
-    for (const line of adds) {
-      expect(line, "a Codex marketplace add line carries no --ref").toMatch(/ --ref \S/);
     }
   });
 
@@ -2815,7 +2803,7 @@ describe("the guides", () => {
     // `workspace` a required word on that page rather than an optional one, and `worktree` after
     // it. The plumbing verbs are deliberately absent — `learn`, `handoff`, `ledger` and `gate` are
     // not something a reader types.
-    for (const command of [
+    const verbs = [
       "init",
       "sync",
       "check",
@@ -2824,13 +2812,27 @@ describe("the guides", () => {
       "config",
       "workspace",
       "worktree",
-      // TEST CHANGE, justified: the same verb, in the same CLI position, in the second
-      // hand-maintained copy of the surface this file's comment above names.
-      "plugin",
+      // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site): `plugin` leaves
+      // this second hand-maintained copy of the surface with the README array above, from the
+      // same CLI position.
       "clean",
-    ]) {
+    ];
+    for (const command of verbs) {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);
     }
+    // ADDED 2026-10-14 (plan 020 file 1, unit d4-docs-site): containment alone cannot see a verb
+    // the CLI dropped and the page's `·` list kept, which is the shape the plugin verb's removal
+    // takes. The list under the verbs heading is held to the array, order included, and the
+    // heading's count word to its length, as README's case above holds README's.
+    const section = text.split(/^(?=## )/m).find((part) => /^## The [a-z]+ verbs\n/.test(part)) ?? "";
+    expect(section, "the getting-started guide has no `## The <n> verbs` section").not.toBe("");
+    const run = /((?:`[a-z-]+` · )+`[a-z-]+`)/.exec(section.replaceAll("\n", " "))?.[1];
+    expect(run, "the getting-started verbs section carries no `·` verb list").toBeDefined();
+    expect((run ?? "").split(" · ").map((verb) => verb.replaceAll("`", ""))).toEqual(verbs);
+    expect(section.startsWith(`## The ${countWord(verbs.length)} verbs\n`)).toBe(true);
+    expect(text, "the getting-started glossary counts the verbs apart from its list").toContain(
+      `one of the ${countWord(verbs.length)} names you type after \`stamity\``,
+    );
     expect(text, "the getting-started guide does not say where state lives").toContain(".stamity/");
     // The clients question is a checkbox menu on a TTY, and no page in `docs/` said how to
     // work one — the keys were spelled only in `src/cli/kit/prompts.ts`'s own hint line. A
@@ -2865,16 +2867,17 @@ describe("the guides", () => {
     // turn it off under the per-invocation trust override, and `codex exec` ran no project hook in
     // 3 of 3 runs with the cause not isolated. Each site keeps its 0.154.0 history and adds that
     // result, and none may say again that the project file's key was measured to be read.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d4-docs-site): two sites left with
+    // the plugin route, `docs/plugins.md` (deleted here) and `scripts/plugins/clients/codex.mjs`
+    // (deleted by unit d5-scripts-trees). The seven that remain are held exactly as before.
     const sites = [
       TROUBLESHOOTING,
       CUSTOMIZATION,
       SECURITY,
       CLIENT_CONTRACTS,
       GETTING_STARTED,
-      PLUGINS,
       CAPABILITY_MATRIX,
       "scripts/qa/hook-runs.mjs",
-      "scripts/plugins/clients/codex.mjs",
     ];
     for (const site of sites) {
       const text = read(site).replace(/\s+/g, " ");

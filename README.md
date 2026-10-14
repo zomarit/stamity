@@ -1,5 +1,5 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the run records and the eval evidence this page links and names, and for the merge-ready figure `docs/measurements.md` renders from the snapshot it pins. -->
-<!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
+<!-- Re-open when: the corpus counts, the nine-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
 
@@ -59,7 +59,7 @@ signed pack, `worktree setup` fetches your own `origin` for a branch with no loc
 npm about newer versions until you switch it off. Two touchpoints go further, through the authenticated GitHub CLI,
 `gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and comments on its items by
 default behind one preview, and moves them only with `--move`. [Getting started](docs/getting-started.md) has the
-prerequisites, what `init` asks and writes per client, and a second install route that needs no npm.
+prerequisites, and what `init` asks and writes per client.
 
 ## How it works
 
@@ -76,7 +76,7 @@ Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings 
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`plugin` · `clean` — ten verbs. Behind them are four plumbing verbs an agent calls and nobody
+`clean` — nine verbs. Behind them are four plumbing verbs an agent calls and nobody
 types, `learn`, `handoff`, `ledger` and `gate`. What each verb does, every flag it takes and every
 status it exits with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders
 from the program itself, so it cannot describe a verb the CLI does not have, or miss one it does.
@@ -111,9 +111,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
 | [`docs/measurements.md`](docs/measurements.md) | Generated: the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the twelve guides, the charter and every generated reference page. |
-| [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
-| [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus, served from this repository. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the eleven guides, the charter and every generated reference page. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages from the tree. Its one page of its own is the landing page at `website/src/pages/index.tsx`. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The contributor gate CI runs, the three test lanes, and how to regenerate a derived file. |
@@ -121,19 +119,18 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Setting stamity up in your own repository for the first time, through to one change proved by a passing verification gate. |
 | [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | Which of the nine touchpoints to open, what that one may do, and what is on disk when it stops. |
-| [`docs/plugins.md`](docs/plugins.md) | Installing stamity as a client plugin — who owns which class, the install route per client, pinning and rollback, and the private-catalog route. |
 | [`docs/doctrine.md`](docs/doctrine.md) | Why stamity ships what it ships — the root question, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Making the agents, rules, commands and skills say what your repository needs — replacing one, patching one, and removing either again. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — what a workspace is, how to create one, and what the cascade pushes down. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | Installing content on top of the corpus — the trust tier it lands on, signing one of your own, and what `add` refuses. |
 | [`docs/enterprise-quickstart.md`](docs/enterprise-quickstart.md) | The enterprise route in order — who does what, then day 0 the fork, day 1 the release and rollout, day 2 the updates — each step linked to its guide. |
-| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, releasing the fork through its own workflow, and rolling the plugin out with managed settings. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, and releasing the fork through its own workflow. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
 Hook scripts are not in that corpus row, because they are not corpus content. The three portable bodies are
 generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a fourth, the review gate,
-from its own adapter. Eight rows above are marked Generated, written by four generators, and
+from its own adapter. Six rows above are marked Generated, written by two generators, and
 [CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command that rewrites it. Every link on this
 page is repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence.
 

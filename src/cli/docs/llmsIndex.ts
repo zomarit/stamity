@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the twelve guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the eleven guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -112,7 +112,7 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "README.md",
         title: "README",
         description:
-          "what stamity generates from one canonical source and for which clients, the ten verbs, where each subject lives, and what this repository can prove.",
+          "what stamity generates from one canonical source and for which clients, the nine verbs, where each subject lives, and what this repository can prove.",
         regenerateCommand: null,
       },
       {
@@ -163,17 +163,6 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         regenerateCommand: null,
       },
       {
-        // Third, beside the two pages a first-time reader takes first, and in
-        // the same position `test/docsPages.test.ts`'s GUIDES and the sidebar
-        // put it: the plugin route is an alternative to `init` rather than a
-        // topic reached after a setup already works.
-        path: "docs/plugins.md",
-        title: "Plugins",
-        description:
-          "installing stamity as a client plugin — which artifact class each container carries and which stays in the repository, the install route per client, setup, pinning and rollback, the companion runtime, and the private-catalog route.",
-        regenerateCommand: null,
-      },
-      {
         path: "docs/doctrine.md",
         title: "Doctrine",
         description:
@@ -220,7 +209,7 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "docs/enterprise-forks.md",
         title: "Enterprise forks",
         description:
-          "taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, releasing the fork through its own workflow, rolling the plugin out to an organization with managed settings, and the opt-in update workflow.",
+          "taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, releasing the fork through its own workflow, and the opt-in update workflow.",
         regenerateCommand: null,
       },
       {

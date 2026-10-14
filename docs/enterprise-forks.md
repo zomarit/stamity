@@ -2,23 +2,16 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page, and for the identity section against the identity script as commit 382a6173 leaves it -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
      holds this page to the hand-page contract. `test/upstream/lane.test.ts` owns the lane's behaviour, and
      the content, emission and validate suites own the fork layer's. A move of CONTRIBUTING.md's
      regeneration table moves the `regenerate` list and the `generatedPaths` list below with it.
-     Re-open the plugin-distribution section when the jobs, the build steps or the distribution branch
-     and tag push in `.github/workflows/release.yml` change, or when a key joins or leaves the
-     `stamity.distribution` block in `scripts/distribution-identity.mjs`; `test/ci/workflow.test.ts`
-     pins those steps and `test/ci/pluginDistribution.test.ts` the builder they run.
-     Re-open the identity, release and rollout sections when a flag joins or leaves
-     `scripts/fork-identity.mjs`, a variable, secret, job or proof moves in
-     `.github/workflows/fork-release.yml`, or a key or the client floor moves in
-     `scripts/plugins/managed-settings.mjs`; the rollout section's vendor facts were read
-     2026-09-24, and its client facts were measured 2026-09-26 in the managed-settings walk, so
-     re-open it too when a later walk of that template records a different outcome.
+     Re-open the identity and release sections when a flag joins or leaves
+     `scripts/fork-identity.mjs`, or a variable, secret, job or proof moves in
+     `.github/workflows/fork-release.yml`.
      Re-open the gates section when the census in `test/ci/testInputsGuard.test.ts` changes what
      it asks of a test's reads, or the `*.md` entry leaves the `testInputs` map of
      `.stamity/change-classes.json`. -->
@@ -79,11 +72,10 @@ reset, so it is no route for a customized fork.
 
 Start with approved empty private package and consumer repositories, an integration branch that
 permits reviewed merge commits, and named owners for updates and for monitoring. Confirm access to
-upstream git releases, npm dependencies, the APM client and its Python dependencies, Actions, and
-the runner you selected. Where network policy requires mirrors, configure the approved git, npm and
-Python endpoints and the permitted Actions first, then repeat the same fetch, build and install
-checks against them. This guide uses APM's private git route; an experimental APM registry is a
-separate deployment choice. Official sources and tested clients are recorded in
+upstream git releases, npm dependencies, Actions, and the runner you selected. Where network
+policy requires mirrors, configure the approved git and npm endpoints and the permitted Actions
+first, then repeat the same fetch, build and install checks against them. Official sources and
+tested clients are recorded in
 [the enterprise downstream plan](https://github.com/zomarit/stamity/blob/records/docs/plans/005-enterprise-downstream-support.md).
 
 Confirm the destination owner's GitHub plan supports the private branch controls you need. Private
@@ -140,55 +132,44 @@ deletes them, and nothing in the lane reads them.
 One command sets the publisher, the repository and the package name, from the checkout's root:
 
 ```sh
-npm ci --ignore-scripts
 node scripts/fork-identity.mjs --repository "$STAMITY_PRIVATE_URL"
 npm install --package-lock-only --ignore-scripts
 ```
 
 `scripts/fork-identity.mjs` sets `name` to `@<scope>/stamity`, `stamity.publisher` to the owner,
 and `repository.url`, `homepage` and `bugs.url` to the repository you name; version, description
-and license keep their values. It sets `private: true`, removes `publishConfig`, moves the two
-Renovate presets and runs both generators. The install comes first because those generators import
-the dependencies. The lockfile refresh comes last because the script stays offline and leaves
-`package-lock.json`, whose root entry carries the old name, alone.
+and license keep their values. It sets `private: true`, removes `publishConfig` and moves the
+Renovate preset. It runs no generator and needs nothing installed, since it reads only Node's
+built-ins and its sibling scripts. The lockfile refresh comes last because the script stays offline
+and leaves `package-lock.json`, whose root entry carries the old name, alone.
 
 Two flags change what it writes:
 
 - `--registry <url>` makes a fork that publishes its own CLI. It removes `private` and sets
   `publishConfig.registry` to that https URL, which is what the release workflow in
-  **Release your fork** below requires. Without it the package stays private, which is right for
-  a fork that ships through APM or a plugin distribution only.
+  **Release your fork** below requires. Without it the package stays private and has no npm
+  channel.
 - `--scope <scope>` names the npm scope when it differs from the owner. The default is the owner
-  in lowercase. The package is always `@<scope>/stamity`, and the unscoped `stamity` is what the
-  plugin id, the marketplace name and the `/stamity:` command namespace derive from, so those stay
-  the same in every fork.
+  in lowercase. The package is always `@<scope>/stamity`.
 
-It validates through the same `scripts/distribution-identity.mjs` both generators run, and it
-refuses before writing anything on an invalid identity: a repository off the public GitHub host, a
-scope npm would refuse, or a registry URL that is not plain https. That is the rule every pinned
-CLI call applies to the registry it names: `https://<host>[:<port>][/<path>]`, the host of letters,
+It validates through `scripts/distribution-identity.mjs`, and it refuses before writing anything
+on an invalid identity: a repository off the public GitHub host, a scope npm would refuse, or a
+registry URL that is not plain https. That is the rule every pinned CLI call applies to the registry it names: `https://<host>[:<port>][/<path>]`, the host of letters,
 digits, `.` and `-`, the path of letters, digits, `.`, `_`, `~`, `/` and `-`, so no credentials,
 query, fragment, `%` escape, space or shell character. It never echoes the URL it refused. It also refuses, naming the file, to rewrite a file with uncommitted
 edits. A rerun with the same arguments moves no byte, and `--check` writes nothing and exits 1
 naming each file that differs from its target.
 
-The script moves the two Renovate presets because they carry the identity as data rather than
-deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
-`renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
-its own. The runtime's own remedies
+The script moves the Renovate preset because it carries the identity as data rather than deriving
+it: `renovate/companion.json` names the npm package it pins. A fork tree that still holds the
+`renovate/plugins.json` preset of the deleted plugin route keeps it untouched. Everything else
+follows your manifest on its own. The runtime's own remedies
 (`run: npx -y --@<scope>:registry=<url> <your package>@<version> init` with `--registry`,
 `npx --no <your package>@<version> init` without it) and `scripts/tarball-smoke.mjs` read `name`
-from `package.json`, and the four plugin
-manifests are projected from it. The regenerated marketplace entry follows the package. Without
-`--registry` the package is private and has no npm channel, so the entry carries a `github` source
-naming your repository instead of an npm package you never publish. With `--registry` the entry
-carries an `npm` source naming your package and version but no registry, so a developer's client
-fetches it from your registry only on a machine that maps your scope to that registry in its
-`.npmrc`. Without the mapping it asks the public npm registry for your package name.
+from `package.json`.
 
-The CLI calls your setup writes follow the same split. `init`, `sync` and the plugin build pin
-every call they write into `AGENTS.md`, the generated bodies, the hook hints, the guard messages
-and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
+The CLI calls your setup writes follow the same split. `init` and `sync` pin every call they write
+into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
 do the same. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
 the project already has installed, whatever package name that copy carries, and never a download —
 and falls back to the pinned call only where npm refuses because no copy is installed. With
@@ -196,8 +177,8 @@ and falls back to the pinned call only where npm refuses because no copy is inst
 npx finds a scope's registry only in npm's configuration, and `publishConfig` in your manifest
 steers `npm publish` only, so the call carries the setting itself: npx takes your package from
 your registry on every machine, with or without a scope mapping in its `.npmrc`, and every other
-package from the default registry. The setup, the CLI's remedies, the update notice's move command,
-`sync --help` and the plugin roots all print this form. The flag outranks an `.npmrc` mapping, so a
+package from the default registry. The setup, the CLI's remedies, the update notice's move command
+and `sync --help` all print this form. The flag outranks an `.npmrc` mapping, so a
 machine that reaches your scope through a mirror is sent to the registry you published to for the
 fallback call, while a project that installs the pinned version runs that copy with no registry
 request. A registry URL outside the plain-https rule above (no credentials, query, fragment, `%`
@@ -214,18 +195,13 @@ that nobody holds on the public npm registry, and a `-y` call would install what
 published there under it, without asking. `--no` makes npm run a copy the project already has
 installed at that version and refuse to fetch one. Anywhere else the call stops with an npm error, a
 404 while nothing is published under the name and `npx canceled due to missing packages` once
-something is, and no package is installed or run. The route to a
-runnable copy in this mode is your plugin distribution: each plugin root carries its own copy of
-the engine, and the root's `README.md` prints the locator line that runs it, as
-[the plugins guide](plugins.md) describes under **Set the repository up** and
-**Keep the runtime in step**. The hints also name the short `stamity <verb>` form, for a machine
-where the CLI is on `PATH`.
+something is, and no package is installed or run. The hints also name the short `stamity <verb>`
+form, for a machine where the CLI is on `PATH`.
 
 The release and docs-deployment workflows you inherit also check the running repository's identity
 and visibility. Their public publication jobs run only in the public canonical repository. Preserve
-those guards when you review an upstream release. Private APM needs its generated tree and a
-private git ref. A fork's own npm publishing goes through `.github/workflows/fork-release.yml`
-(**Release your fork** below), which does nothing until you name your destination. Docs
+those guards when you review an upstream release. A fork's own npm publishing goes through
+`.github/workflows/fork-release.yml` (**Release your fork** below), which does nothing until you name your destination. Docs
 deployment needs a separate reviewed workflow and an explicit private destination before you
 enable it.
 
@@ -245,11 +221,11 @@ assertion for your own filters and your full gate still checks the policy you in
 Your rename needs no test edit at all. Every suite that has to know who this package is reads
 `test/support/identity.ts`, which answers from your own `package.json`: the name, the version, the
 publisher, whether the package is private, whether a registry serves it, which registry its pinned
-calls name, and the `<owner>/<repository>` route your `repository.url` names. So a test asserts the remedy string, the
-marketplace source or the Renovate pin that YOUR identity implies, and the inherited gate is green
+calls name, and the `<owner>/<repository>` route your `repository.url` names. So a test asserts the remedy string
+or the Renovate pin that YOUR identity implies, and the inherited gate is green
 on your tree for the same reason it is green upstream. Three things are still yours to keep true, and
-all three are data rather than tests: the identity step above (the manifest and the two Renovate
-presets), the branch filters in the paragraph before this one, and the test-input map. A test your
+all three are data rather than tests: the identity step above (the manifest and the Renovate
+preset), the branch filters in the paragraph before this one, and the test-input map. A test your
 fork adds declares the tracked documents it names in the `testInputs` map of
 `.stamity/change-classes.json`, as **Write the gates that decide the upgrade** below shows for its
 sample. Run the regenerate list in the
@@ -315,14 +291,11 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
     "node scripts/generate-capability-matrix.mjs",
     "node scripts/generate-docs.mjs",
     "node scripts/generate-pack-manifests.mjs",
-    "node scripts/generate-plugin-manifests.mjs",
-    "node scripts/generate-apm-package.mjs",
     "npm run build && node dist/cli.js sync"
   ],
   "generatedPaths": [
-    ".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json",
+    ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json",
     ".stamity/generated/**",
-    "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**",
     "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**",
     "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"
   ],
@@ -332,11 +305,11 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
 ```
 
 `remote`, `branch` and `releases` are left at their defaults here. The `regenerate` list is
-[the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, less three rows:
+[the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, less two rows:
 the measurements row, whose `merge-ready-rate.mjs --write` freezes a dated snapshot and whose
-second command the plain `generate-docs.mjs` above already covers; the pack-manifest
+second command the plain `generate-docs.mjs` above already covers; and the pack-manifest
 `generate-pack-manifests.mjs --write` row, which rewrites an integrity map after a deliberate pack
-edit; and the `dist/plugins/` row, which is ignored rather than tracked. `generatedPaths` is the
+edit. `generatedPaths` is the
 tracked left column of the rows that remain, plus `.stamity/manifest.json`, which `sync` writes
 beside `.stamity/generated/`. The measurements page is not listed: a fork holds no records, so
 `generate-docs.mjs` skips that page there with a notice and leaves the committed page as it is.
@@ -719,13 +692,12 @@ bare, `fork/skills/verify/SKILL.md`. Because `verify` is the id the bundled `st-
 projects to every client as `st-verify`, directory and `name` alike. Every call site and every
 cross-reference to that skill keeps working. A fork skill whose id nothing bundled holds is an
 addition, and it projects under its own bare directory. Either way the directory travels whole:
-`SKILL.md` plus the supported companion files beneath it, as UTF-8 text for the CLI and as the
-original bytes for APM. APM excludes patch control files from the installed companions. The one
+`SKILL.md` plus the supported companion files beneath it, as UTF-8 text. The one
 thing a fork skill cannot do is land in a projection directory another skill already occupies under
 a different id. That is refused, naming the file to move. Nor can any fork artifact take a name
 that an artifact of another class installs under. A fork command `qa` lands in `st-qa`, the folder
 of the bundled skill `st-qa`, and so does a command beside a fork skill that replaced the bundled
-one. `sync`, `check`, `init` and `plugin setup` refuse such a name in every consumer before they plan
+one. `sync`, `check` and `init` refuse such a name in every consumer before they plan
 anything. The refusal names the fork file to rename in the fork's source, and the fix ships only
 when you publish the package again.
 
@@ -738,233 +710,18 @@ alone, so those do not move.
 [The fork-layer spec](specs/fork-layer.md) is the design reference behind all of it: what was
 decided, what was dropped, and why.
 
-## Ship your fork through APM
-
-Direct `content/` edits already reach the generated APM package. Fork additions, full replacements
-and patches reach it through the same resolved catalog: a replacement appears once with your body,
-and a patch preserves the resolved patched body. Run `node scripts/generate-apm-package.mjs` after
-authoring, then commit `apm.yml` and `.apm/`. Check for your own expected content in an installed
-consumer, because generation alone cannot prove the client discovered it.
-
-| Distribution | Author customization | What consumers receive |
-| --- | --- | --- |
-| Canonical public APM | Canonical source | Generated rules, commands, agents and skills |
-| Public downstream APM | Direct `content/` edits and the fork layer | Those four resolved classes from the downstream ref |
-| Independent private APM | The same inputs and explicit identity | Those classes after authenticated private git installation |
-| Packaged CLI | Source and engine changes, plus the bundled fork layer | Existing CLI behaviour and supported client emission, with consumer override precedence |
-
-APM delivery depends on the target profile. The tested Claude, Copilot and Cursor profiles deploy
-all four classes. Codex deploys agents and skills, with instructions compiled by APM separately.
-This package does not deliver stamity's charter, hooks, MCP wiring, engine and runtime, or CLI
-behaviour through APM. Editing those sources changes a downstream repository or its packaged CLI,
-not the APM projection. The plugin manifests committed in the source checkout (`.claude-plugin/`,
-`.cursor-plugin/plugin.json`, `plugin.json`) keep their direct `content/` surface, while the built
-distribution roots carry the fork layer: `scripts/build-plugin-distribution.mjs` runs
-`scripts/generate-plugin-packages.mjs`, which stages `fork/` beside `content/` through
-`scripts/plugins/corpusStage.mjs` — what REQ-PLUGIN-022 of `docs/specs/plugin-lifecycle.md` proves
-per root. Consumer `.stamity/overrides/` precedence belongs to the CLI and is not read during APM
-generation.
-
-### Cut a private release
-
-Use your existing private APM and Renovate engine's release convention. Choose a tag that is
-distinct from upstream's release tags, which the lane reads in its own namespace and a copy
-imported with the earlier `--mirror` recipe holds as its own, and that your version policy
-accepts. `v1.5.0-acme.1`, for example, is a prerelease and needs a consumer policy that allows
-prereleases. Update the package version, regenerate, run the full gates, review and commit on the
-integration branch, and only then tag.
-
-Your update engine also has to order those tags correctly. Native Renovate APM updates use a
-coerced version policy by default, which can treat `.1` and `.2` prerelease tags as the same
-version. For that manager, merge a rule scoped to this private dependency into your existing
-configuration, then prove it offers the second tag:
-
-```json
-{
-  "packageRules": [{
-    "matchManagers": ["apm"],
-    "matchPackageNames": ["acme/stamity-private"],
-    "versioning": "semver",
-    "ignoreUnstable": false
-  }]
-}
-```
-
-That rule fits this guide's own `v<semver>-<suffix>` private tags. It does not fit the
-`plugins/v<version>` tag scheme of a mirrored plugin distribution (the route the **Ship your fork's
-plugin distribution** section below describes): Renovate's `apm` manager reads such a tag through
-the `github-tags` datasource, `semver` marks `plugins/v1.9.0` an invalid value, and the dependency
-gets no update at all — measured 2026-09-22 by the private-chain rehearsal with renovate 44.107.0,
-whose engine floor is Node `^24.11.0`. The rule for that scheme is the regex versioning the shipped
-`renovate/plugins.json` preset uses:
-
-```json
-{
-  "packageRules": [{
-    "matchManagers": ["apm"],
-    "matchPackageNames": ["<owner>/stamity-plugins-mirror"],
-    "versioning": "regex:^plugins/v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-  }]
-}
-```
-
-With either rule the native manager runs `apm install` inside its own run to refresh the lock, so
-`apm` must be on Renovate's `PATH` with `GITHUB_APM_PAT` in its environment — without them the
-update is found and the run ends in a lockfile error — and the pull request carries the deployed
-files beside `apm.yml` and the lock (the rehearsal's changed `apm.yml`, `apm.lock.yaml` and one
-deployed skill file).
-
-If your deployed engine uses another manager, apply that manager's equivalent supported policy, or
-choose its supported stable tag convention. Keep the existing engine, and do not infer ordering
-from a successful APM install. [The upstream-lane spec](specs/enterprise-upstream-lane.md) records
-the dependency contracts behind this prerequisite.
-
-```sh
-set -euo pipefail
-STAMITY_PRIVATE_TAG='v1.5.0-acme.1'
-test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
-test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .fork)" = false
-test "$(node -p "require('./package.json').version")" = "${STAMITY_PRIVATE_TAG#v}"
-node scripts/generate-apm-package.mjs --check
-test -z "$(git status --porcelain)"
-git tag "$STAMITY_PRIVATE_TAG"
-git push origin "$STAMITY_PRIVATE_TAG"
-```
-
-The private git tag is enough for APM on its own. If your engine consumes GitHub Release objects,
-add one on that same private repository with its reviewed notes:
-`gh release create "$STAMITY_PRIVATE_TAG" --repo "$STAMITY_DOWNSTREAM" --verify-tag`. Check the
-actual visibility immediately before you release. These releases stay separate from the canonical
-project's public npm, APM and docs release.
-
-### Install it in a consumer repository
-
-The consumer names the private ref in `apm.yml` in the same form as a public dependency. Declare
-the intended supported clients in `targets` as well; this example selects Claude. Native Renovate
-APM runs plain `apm install` to refresh the lock and the deployed files. A manual `--target` flag is
-not remembered for that run, and several detected clients with no manifest targets can fail a
-noninteractive installation. List every intended client explicitly. Write `[claude, copilot]` when
-both are required.
-
-```yaml
-targets: [claude]
-dependencies:
-  apm:
-    - acme/stamity-private#v1.5.0-acme.1
-```
-
-Use apm-cli **0.29.1 or newer**; **0.30.0** is the current tested client. Supply an approved read
-credential through your secret manager as `GITHUB_APM_PAT_ACME` for this example owner, or as
-`GITHUB_APM_PAT`. A per-organisation credential takes precedence over the general APM token, which
-in turn precedes `GITHUB_TOKEN` and `GH_TOKEN`. A consumer's Actions token normally cannot read
-another private repository: grant the selected credential access explicitly, and complete
-organisation SSO authorization where it is needed. Keep the values out of manifests, URLs, command
-history, logs and evidence.
-
-```sh
-apm install
-```
-
-Then read `apm.lock.yaml`. The dependency must be `apm_package` and must resolve to the private
-commit you intended. Assert an independently specified customization marker in every expected
-installed class, skill directory and name, and companion file. Retain the client version, the source
-ref, the resolved SHA and the byte hashes in your approved private evidence location. An
-authentication failure is an incomplete installation, even when stale files from an earlier install
-remain.
-
-After the reviewed upstream merge and the second private release, let your existing Renovate engine
-open its consumer update pull request. Verify its actual run, the ref it chose, its access, its
-checks and the resolved lockfile and installed content. Keep that engine's manager and policy
-configuration: a proposed config or a simulated update does not prove the deployed integration. The
-distribution owner closes this step with observed evidence.
-
-## Ship your fork's plugin distribution
-
-APM is one of the routes a consumer takes; the plugin marketplaces are the others. A release of
-this repository also publishes a **distribution root** — four client roots with the runtime
-bundled in each, their archives and checksums, four marketplace catalogs, a complete APM package
-and a `release.json` describing all of it — as one orphan commit on the `plugin-dist` branch,
-tagged `plugins/v<version>`. Your fork publishes its own, from its own tree, to its own branch.
-Nothing about that route reaches out to this repository.
-
-Build it the way the release does:
-
-```sh
-npm pack --pack-destination .
-node scripts/build-plugin-runtime.mjs --tarball <scope>-stamity-<version>.tgz --out dist/plugin-runtime
-node scripts/build-plugin-distribution.mjs \
-  --out dist/plugins \
-  --runtime dist/plugin-runtime \
-  --source-commit "$(git rev-parse HEAD)" \
-  --source-commit-date "$(git show -s --format=%cI HEAD)"
-```
-
-The runtime is built from the **tarball**, not from the working tree: `npm pack` is the only thing
-that knows what `files` publishes. npm names a scoped package's tarball after both halves of its
-name, `<scope>-stamity-<version>.tgz` — `zomarit-stamity-<version>.tgz` in this repository — and
-the release workflow reads that name from `npm pack --json` rather than spelling it. Both trees
-go under `dist/` because it is ignored; an untracked
-tree beside the checkout enters `git ls-files --others` and every tree-cleanliness check that
-reads it. The two provenance flags are inputs rather than clock reads, which is what makes two
-builds of one commit produce byte-identical archives — pass them, or the builder reads this
-checkout's `HEAD` instead, and on a machine with no git it cannot, so it refuses the build and
-asks for `--source-commit`.
-
-One thing the recipe leaves under `dist/`: `package.json` publishes `files: ["dist"]`, so a local
-`npm pack` or `npm publish` run after it ships `dist/plugins` and `dist/plugin-runtime` inside the
-tarball unless `npm run build` — which cleans `dist/` — runs first; the release workflow packs
-before it builds either tree, from a fresh checkout.
-
-Everything the built tree names about your fork comes from the `stamity.distribution` block in
-your `package.json`: `branch` (default `plugin-dist`), `tagPattern` (default `plugins/v<version>`),
-the optional `ownerEmail`, and `sources.<client>`, which decides what each catalog's `source`
-object is — a `git-subdir` entry pointing at your https remote, a `github` entry, an `archive`
-entry whose `url` names a release asset, or an `npm` entry. The block takes `kind`, `url`, `repo`,
-`path` and `registry` only; an archive's digest is not one of them, because the builder computes it
-from the archive it writes and puts it in the catalog. `scripts/distribution-identity.mjs`
-validates the block and refuses an `ssh://` or `git@` remote and a URL carrying a read token:
-authentication belongs to the fetching client, never to a published catalog. Rebuild after
-editing the block and every catalog in the tree changes with it; nothing else has to.
-
-A fork that publishes its CLI does not run the rest of this by hand: the release workflow in the
-next section builds this tree, pushes it and tags it from one `v*` tag. That workflow refuses a
-package that is still `private: true`, because it publishes the CLI in the same run. So a fork
-that ships only through APM or a plugin distribution pushes the tree to its own branch itself.
-The branch is what a marketplace fetches:
-
-```sh
-cd dist/plugins
-git init && git checkout --orphan plugin-dist
-git add -A -f && git commit -m "plugins: v<version> from <source commit>"
-git tag plugins/v<version>
-git push --force <your remote> HEAD:refs/heads/plugin-dist
-git push <your remote> refs/tags/plugins/v<version>
-```
-
-`--force` on the branch is the intended shape rather than a shortcut: the tree is published whole,
-and a merge of two releases' catalogs would describe neither. The **tag** is what keeps history —
-create it once per version and never move it. `dist/plugins/README.md` in the built tree carries
-each client's install, pin, update and rollback commands and the APM install spec for that same
-tag, so a consumer of your mirror reads the routes from the tree rather than from this page.
-
-`release.json` carries `distribution.commit: null` on the branch, because the commit a tree lands
-on cannot be known while it is being built. The canonical release re-stamps that one field into
-the copy it attaches to its GitHub release; a fork that wants the same can pass
-`--distribution-commit <sha>` to a rebuild, or leave it null and let the tag be the pin.
-
 ## Release your fork
 
-`.github/workflows/fork-release.yml` releases a fork's CLI, its plugin distribution and its APM
-refs from one tag. It ships in every copy of this repository and does nothing until you name your
-destination. In this repository it ends green with a notice on every run, because the canonical
+`.github/workflows/fork-release.yml` releases a fork's CLI from one tag. It ships in every copy of
+this repository and does nothing until you name your destination. In this repository it ends green with a notice on every run, because the canonical
 release goes through `release.yml` and nowhere else.
 
 ### Arm the workflow
 
 Set the identity with `--registry` first, as **Set the private package's identity** above
-describes. The workflow publishes the CLI in the same run as the distribution, so it refuses a
-package that is still `private: true`, one that still carries the canonical name, and one whose
-`publishConfig.registry` differs from the registry you name below.
+describes. The workflow publishes the CLI, so it refuses a package that is still `private: true`,
+one that still carries the canonical name, and one whose `publishConfig.registry` differs from the
+registry you name below.
 
 Next, create the `fork-release` environment in the repository's settings, with required
 reviewers. It is the run's one approval point: the publish job waits there, and it holds the only
@@ -1018,14 +775,11 @@ one in place of `publish`:
   these two and says so), and the package is not the canonical one, not private, and names the
   variable's registry. A failed proof stops the run with a remedy naming
   `scripts/fork-identity.mjs`. Then it runs the canonical release's ladder, from `npm ci` to the
-  tarball smoke, checks the generated manifests are current, packs the tarball, builds the plugin
-  distribution and uploads both, kept for seven days, which is how long the approval can wait.
-- **`publish`** runs in the `fork-release` environment and checks nothing out. It verifies
-  everything `gates` uploaded before it acts: every digest, the tarball's own name, version and
-  registry, and every `.sha256` file. Then it publishes the tarball to your registry, pushes the
-  distribution branch and the `plugins/v<version>` tag, and creates the GitHub release
-  `v<version>` carrying the tarball, every plugin archive, a `.sha256` file for each, and
-  `release.json`.
+  tarball smoke, packs the tarball and uploads it, kept for seven days, which is how long the
+  approval can wait.
+- **`publish`** runs in the `fork-release` environment and checks nothing out. It verifies what
+  `gates` uploaded before it acts: the tarball's digest, and its own name, version and registry.
+  Then it publishes the tarball to your registry.
 - **`dry-run-summary`** holds no permission. It writes what a real run would have published into
   the run summary.
 
@@ -1038,25 +792,18 @@ commit carries the canonical package name.
 
 A rerun of the same release publishes nothing twice. The registry step skips a version already
 published with this tarball's integrity, and it refuses one published from another tarball; a
-published version is never replaced. The distribution commit takes its dates from `release.json`,
-so a rerun builds the same commit. A `plugins/v<version>` tag that already points at another
-commit is refused, never moved. The branch push replaces only a distribution head, one commit with
-no parent. An existing GitHub release receives only the assets it is missing.
+published version is never replaced.
 
 ### Know what proves a release
 
-Checksums and your registry's own authentication. A consumer checks each asset with
-`sha256sum -c <asset>.sha256`, and `release.json` carries the digest of every archive and of the
-runtime tarball. A fork release carries no npm provenance, because npm provenance needs a public
-source repository. It carries no build attestation either. GitHub's attestations for a private
+The tarball's digest and your registry's own authentication. A fork release carries no npm
+provenance, because npm provenance needs a public source repository. It carries no build attestation either. GitHub's attestations for a private
 repository need GitHub Enterprise Cloud, and the maintainer's decision of 2026-09-24 leaves them
 unbuilt until a company asks for them.
 
 ### Consume the release
 
-APM consumers can pin either ref the run creates: the source tag `v<version>`, or the
-distribution tag `plugins/v<version>`, whose tree carries a complete APM package at its root. A
-developer who installs the CLI from your registry maps your scope to it once, in their own
+A developer who installs the CLI from your registry maps your scope to it once, in their own
 `.npmrc`, and signs in with the registry's own credential through `npm login` with the same
 `--scope` and `--registry`:
 
@@ -1071,152 +818,6 @@ release that touches `.github/workflows/`, so that update arrives as the
 `Upstream <tag> needs a reviewed push` issue. A person reads the workflow diff and pushes it, as
 **Turn on the GitHub workflow** below describes. A fork on an earlier release has no release
 workflow until that push lands.
-
-## Roll the plugin out to your organization
-
-This section is for the administrator who sets up the plugin in every developer's Claude Code at
-once: one file declares the marketplace, allows only that one, and turns the plugin on, so that
-nobody runs `marketplace add` by hand. Each developer still starts Claude Code once and installs
-the plugin once, as **Start Claude Code once on each machine** below describes. Cursor's team marketplace and
-Codex's workspace route are the other two organization routes, and
-[the plugins guide](plugins.md) describes them under each client's install.
-
-A distribution tree carries `admin/claude-managed-settings.json` when Claude is among the clients
-it was built for. A release builds all four, so every release tree carries it; a build you run for
-other clients only does not. `scripts/build-plugin-distribution.mjs` renders it through
-`scripts/plugins/managed-settings.mjs` from the identity the catalogs come from, so it names your
-repository and the tag the tree was built at. Take it from the tree at the tag you roll out. This
-is the file the renderer writes for this repository at the tag its `ref` names:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "stamity": {
-      "source": {
-        "source": "github",
-        "repo": "zomarit/stamity",
-        "ref": "plugins/v1.14.0"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "stamity@stamity": true
-  },
-  "strictKnownMarketplaces": [
-    {
-      "source": "github",
-      "repo": "zomarit/stamity",
-      "ref": "plugins/v1.14.0"
-    }
-  ],
-  "requiredMinimumVersion": "2.1.277"
-}
-```
-
-The four keys do four jobs:
-
-- `extraKnownMarketplaces` declares the marketplace for every user. The client records it when a
-  developer first starts an interactive session.
-- `enabledPlugins` marks the plugin as turned on for every user. In the walk it did not install
-  the plugin by itself.
-- `strictKnownMarketplaces` admits only that marketplace. A user's `marketplace add` of any other
-  source is refused. It checks marketplace sources only, so the plugin's own source inside the
-  marketplace needs no entry of its own.
-- `requiredMinimumVersion` refuses to start a client older than 2.1.277. That is the first release
-  that treats an invalid allowlist as an empty one instead of ignoring it.
-
-The template pins the release tag. To follow the distribution branch instead, change the `ref` in
-the declared source and in the allowlist entry together, as described under the warnings below.
-
-The template names the repository the tree was built from. An organization that serves a mirror
-of the distribution instead, as [the plugins guide](plugins.md) describes under **Private catalogs
-and Renovate**, also sets `repo` to its mirror's `<owner>/<repo>`, in the same two places: the
-source under `extraKnownMarketplaces` and the entry in `strictKnownMarketplaces`. The renderer has
-no command that takes another repository, so this is a hand edit. Keep the two entries identical,
-`repo` and `ref` alike. If they differ by one character, every marketplace is blocked, as the
-warnings below describe.
-
-### Put the file where the client reads it
-
-| System | Path |
-|---|---|
-| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
-| Linux and WSL | `/etc/claude-code/managed-settings.json` |
-| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
-
-Beside the file, a `managed-settings.d/` folder takes drop-in files.
-
-Managed settings can come from four sources, and the client ranks them. First comes the
-server-managed policy of the Claude console, then an MDM profile or the machine-wide registry key,
-then this file, then the per-user registry key. The first source that carries managed settings
-wins, and the client ignores the rest without saying so. So on a machine that is already under a
-console or MDM policy, this file does nothing. Run `/status` in a session and read **Setting
-sources** to see which source won.
-
-### Start Claude Code once on each machine
-
-After the file lands on a machine, each developer opens Claude Code once in a terminal and
-finishes its first-run screens, such as the theme choice and the folder trust question. Until then
-the client does not know the managed marketplace.
-`claude plugin marketplace list` says "No marketplaces configured", and
-`claude plugin install stamity@stamity` fails with "Plugin "stamity" not found in marketplace
-"stamity"". A headless `claude -p` without a login does not fix that, and in the walk a first
-start that stopped at the theme choice recorded nothing either. A session past the first-run
-screens records the marketplace within seconds, even before a login. Then the developer runs this
-once:
-
-```sh
-claude plugin install stamity@stamity
-```
-
-In the walk, the session did not install the plugin on its own, although `enabledPlugins` names
-it. That session was not logged in. Whether a logged-in session installs the plugin without this
-command was not measured.
-
-### Know how the file fails closed
-
-- A file that is not valid JSON stops Claude Code from starting. Parse it before you ship it.
-- An allowlist that is empty or invalid blocks every marketplace for every user. From 2.1.277 an
-  invalid value is enforced as an empty allowlist.
-- The client matches the allowlist exactly. An entry whose `ref`, or `repo`, differs from the
-  declared source by one character matches nothing, and the declared marketplace is blocked with
-  the rest. A developer who already has the plugin sees it fail to load with "Marketplace
-  'stamity' is not in the allowed marketplace list", and `marketplace update` is refused. A new
-  developer gets no marketplace, and the install fails with "not found in marketplace", an error
-  that names no policy. The renderer writes both from one value, and
-  `test/ci/managedSettings.test.ts` holds them equal. Edit both or neither.
-- An invalid `requiredMinimumVersion` is dropped, so any client version then starts.
-
-A private repository is fetched with each machine's own git credentials. The managed file carries
-none, and it must not carry any. A developer whose git cannot read your repository gets no plugin.
-
-### Know what was measured
-
-The template was walked on 2026-09-26 on Claude Code 2.1.281 on Linux, with the file at
-`/etc/claude-code/managed-settings.json`, rendered for this repository at `plugins/v1.9.1`, and
-with no login. The record is `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`
-on the `records` branch.
-
-- The client obeyed the file at the Linux path.
-- After one interactive start the marketplace was listed, and the install put the plugin at the
-  tag's commit. The allowlist did not block the plugin's own source.
-- `claude plugin marketplace add anthropics/claude-code` was refused: "blocked by enterprise
-  policy", followed by the one allowed source.
-- With `requiredMinimumVersion` set above the client's version, a session, `claude -p` and
-  `claude plugin list` each exited 1 with a message naming both versions. `claude --version`
-  still answered. The client's own code leaves `claude update`, `claude install` and
-  `claude doctor` out of that check, so an old client can still update itself; that was read from
-  the client, not run.
-- With the allowlist's `ref` one release away from the declared source's, the lock-out under the
-  warnings above happened, for a new developer and for one who already had the plugin.
-
-Not measured: a logged-in session, the macOS and Windows paths, the `managed-settings.d/` folder,
-the ranking of managed sources, `/status`, the failures for invalid JSON and an empty or invalid
-allowlist, 2.1.277 as the first release that enforces an invalid allowlist as an empty one, and
-the dropping of an invalid `requiredMinimumVersion`. Those come from Claude Code's documentation, its managed-settings, plugin-marketplaces
-and setup pages, accessed 2026-09-24. The template's shape is derived and tested: the renderer by
-`test/ci/managedSettings.test.ts`, and the block above against the renderer by
-`test/docsPages.test.ts`.
 
 ## Turn on the GitHub workflow
 
@@ -1322,15 +923,14 @@ fast-forward or a squash, and check it by hand. Only the GitHub reading is autom
 verified for this release. Everywhere else the same misconfiguration surfaces as `ancestry-lost`
 after the first landing.
 
-The two generators are not portable in that sense, and the boundary is `repository.url`. Both
-`scripts/generate-plugin-manifests.mjs` and `scripts/generate-apm-package.mjs` resolve the identity
-through `scripts/distribution-identity.mjs`, which accepts a URL on the public GitHub host and
-refuses every other host before it writes a byte. A copy on GitHub Enterprise Server, on GitLab or
-on a bare mirror therefore cannot run the regenerate step against its real remote. Two ways
-through: keep `repository.url` on the public destination you mirror from and hold the other host as
-a remote only, or run the generators against a manifest whose `repository.url` names that public
-destination and publish the generated tree from there. The lane, the gates and the APM tree work
-either way. The identity resolution is the only part that requires the public host.
+The identity step is not portable in that sense, and the boundary is `repository.url`. The
+identity script, `scripts/fork-identity.mjs`, resolves the identity through
+`scripts/distribution-identity.mjs`, which accepts a URL on the public GitHub host and refuses every
+other host before it writes a byte.
+A copy on GitHub Enterprise Server, on GitLab or on a bare mirror therefore cannot name its real
+remote there. Keep `repository.url` on the public destination you mirror from and hold the other
+host as a remote only. The lane and the gates work either way. The identity resolution is the only
+part that requires the public host.
 
 ### Recover from a failed run
 
@@ -1354,14 +954,12 @@ fixtures, and retain proof that the destination received both.
 Before you clean up those fixtures, retain:
 
 - the private and non-fork metadata, and the initial and final tags and SHAs;
-- the authenticated installed-content assertions;
 - the ordinary-file upstream release, the update run, and the pull request with its checks;
 - the reviewed merge ancestry and customization;
-- the actual Renovate consumer pull request, and the final installation;
 - the missing-pull-request retry, the unchanged repeat, the separate landing-policy warning, and
   the reviewed workflow-change recovery.
 
-Missing authorization, credentials, an observed Renovate run or a monitoring destination leaves
+Missing authorization, credentials or a monitoring destination leaves
 that exact proof as `Not done:` while independent work continues. Keep private evidence in its
 approved private location.
 
