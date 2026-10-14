@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
@@ -88,6 +88,10 @@ criterion is added or removed, so the count below holds. The container hook layo
 `hookScriptsRoot` set, is still in the code with no route left to set it: the Claude adapter still renders no report
 `Write` there (`src/adapters/claude.ts:482-488` at `d590a266`), and the plan's follow-up row removes the layout
 (`docs/plans/020-cli-native-01.md`, its Follow-ups).
+
+On 2026-10-15 the Prove-phase merge of plan 020 files 2 to 4 (`docs/plans/020-cli-native-02.md` to `-04.md`, the same
+run) amended REQ-CTX-017 from its unit `e12-translator`'s report, citing that unit's commit `ecf11a74`, and added one
+criterion beside it; no other requirement here moved.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -1021,6 +1025,22 @@ implementer's or fixer's account", where the delta's criterion said "no implemen
 (ledger `build/35`). On Cursor the role relies on `readonly: true`; on Copilot no verdict role gets `execute`; on
 Codex the grant is prose inside the `read-only` sandbox (`docs/capability-matrix.md:272-274`).
 
+Amended 2026-10-15 (plan 020 file 2, unit `e12-translator`, folding ledger row `build/32` of run `2026-10-14_cli-native`;
+read at its commit `ecf11a74`). The capability matrix's Claude allow-list coverage row states the grants with no layout
+condition, since 1.15.0 leaves one layout: the four verdict roles carry `Write`, admitted only for a regular file
+matching the row's `writePaths` under the repository root, never `Edit` or `NotebookEdit`, and the four verdict roles
+and the spec-author carry `Bash`, admitted only for `git` with one read-only subcommand, never `PowerShell`
+(`ADAPTER_ALLOWLIST_COVERAGE`, `src/tools/translator.ts:333`). Its two plugin-install clauses, "a plugin install … renders
+no `Write`" and "a plugin install renders no `Bash` for them", and its "in the repository layout" qualifier are gone. The
+"(route retired 1.15.0)" notes in this file stand, as does REQ-CTX-003's container-layout rule while
+`hookScriptsRoot` stays in the code. The citations `docs/capability-matrix.md:271` (under REQ-CTX-003's amendment of
+2026-09-30) and `:271-274` (above) name the page as last generated; it is regenerated from the changed row at
+integration, and the citations are re-pointed to its new lines then, not by this merge.
+
+- GIVEN the Claude coverage row THEN it pins the `Write` and `Bash` scopes unconditionally and names neither a plugin nor
+  a repository layout (`test/tools/translator.test.ts`, the coverage-row pin and its read-only-git sibling; added
+  2026-10-15).
+
 **Expand/contract:** the grant is additive, and rollback is a re-sync at the prior version. The consumer is the policy
 document, whose schema id is unchanged (`src/tools/allowlist.ts`). A guard suite proves the grant stays read-only.
 
@@ -1117,8 +1137,9 @@ not in `/st-work`'s paragraph (`review/49`); the delta defined neither.
 
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are one hundred and forty-four
-criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 144 (amended
+One set per requirement, plus one for the invariants. There are one hundred and forty-five
+criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 145 (amended
+2026-10-15, when REQ-CTX-017's amendment of that day added one, beside its requirement; it read 144, amended
 2026-10-10, when REQ-CTX-019 and REQ-CTX-020 added seven; it read 137, amended 2026-09-30, where
 it read 111, while the command already returned 119 before that merge, ledger `build/5` of run
 `2026-09-30_optimization-sweep`). Each is machine-checkable unless tagged `judgment:`. Run the

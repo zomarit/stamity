@@ -1,6 +1,6 @@
 ---
 id: model-ladder
-# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
@@ -28,6 +28,16 @@ REQ-LADDER-004 and the paragraphs dated 2026-10-10 come from the spec delta of r
 `s1-spec-merge` against the integration head `a60cb496`. They shipped with 1.14.0, which set
 `status` to `shipped-with-1.14.0`. A ledger id in that text (`review/5`, `build/21`) is that run's own
 unless a run is named beside it. `## References` says which citations the merge re-pointed.
+
+REQ-LADDER-005 to REQ-LADDER-008, and the paragraphs dated 2026-10-15 under REQ-LADDER-004, REQ-LADDER-006 and
+REQ-LADDER-007, come from the spec deltas of `docs/plans/020-cli-native-02.md`, `-03.md` and `-04.md` (plan 020 files 2
+to 4, run `2026-10-14_cli-native`), merged in file order at that run's Prove phase, each entry in its amended form, and
+from the deltas its units' reports declared. Every `path:line` in that text reads at the integration head `bd89c476`.
+Where a delta and the landed code differed, the text states what the code does, and a line headed "As built" says what
+moved. A ledger id in that text (`build/66`, `review/86`) is that run's own. They ship with 1.15.0; `status` names the
+release the requirements before them shipped with. File 2's delta also removed the "never invent a value" rule from
+this spec's Invariants; no bullet here states it (the rule stood in the code comment of `src/roster/modelLadder.ts`
+and in `docs/configuration.md`, both superseded by the pick of REQ-LADDER-006), so the Invariants are unchanged.
 
 ## Intent
 
@@ -264,6 +274,208 @@ Proof: `test/types/domain.test.ts`, `test/roster/modelLadder.test.ts`,
 `test/cli/commands/config.test.ts`, `test/emit/capabilityMatrix.test.ts`; `docs/configuration.md`
 and `docs/capability-matrix.md`, regenerated.
 
+Amended 2026-10-15 (plan 020 file 2, units `e2-model-defaults-lister` and `e7-cursor-pins`, with `e2`'s fix round on
+`review/80`). Cursor's `[effort=…]` suffix is not appended to a model the account's saved list holds, nor to one ending
+on an effort word, that word optionally followed by Cursor's `-fast` modifier (`grok-4.7-low-fast`); `model-fast` still
+takes the suffix, since `fast` is no effort word (`EFFORT_VARIANT` and `EFFORT_SUFFIX`, `src/roster/modelLadder.ts:507-510`).
+Cursor reaches the rule through its adapter, which passes the saved list to the resolver (REQ-LADDER-007).
+
+- GIVEN Cursor's saved list holding `claude-opus-5-5-high` and the class `advanced` at effort `high` THEN the agent file
+  names `claude-opus-5-5-high` with no `[effort=…]`; GIVEN a pin `grok-4.7-low-fast` and no list THEN no bracket
+  follows it, and GIVEN `model-fast` THEN `[effort=<level>]` does (`test/roster/modelLadder.test.ts`, the effort-suffix
+  case; `test/adapters/cursor.test.ts`; added 2026-10-15).
+
+### REQ-LADDER-005 — Pins per client
+
+Added 2026-10-15 (plan 020 file 2, units `e1-pins-contract` and `e3-config-wiring` with their fix rounds).
+
+A class pin is per client: `models.pins.<class>` is a map, `{ all?, claude?, cursor?, copilot?, codex? }`, and a client
+reads its own key, else `all` (`ClassPins`, `src/types/manifest.ts`; `pinsFor`, `src/roster/modelLadder.ts`). The
+manifest's generation moves `1.0.0` → `2.0.0` in one migration step, `PER_CLIENT_PINS_STEP`
+(`src/manifest/manifest.ts`): each string pin becomes `{ all: "<id>" }`, the held `plugin` block and every other field
+keep their value and key order, the step is idempotent, and a 1.0.0 pin that is not a string is carried through for
+validation to name. An engine that reads only 1.x refuses a 2.x manifest with its upgrade message, as one that reads
+2.x refuses 3.x. Validation refuses a class pin that is not a map, a key other than `all` or a client, by name, a
+class key spelled `__proto__`, and a value `modelPinDefect` refuses (a line break), and an adapter quotes every value it
+writes. `stamity config` addresses sixteen keys `model.<class>.<client>`, each writing `pins.<class>.<client>`, beside
+the four `model.<class>` keys, which write `pins.<class>.all` and keep the per-client keys beside it; `none` on either
+key deletes it and drops each map it empties, so no key stores the word `none` as a model; a pin for a client the setup
+does not select is kept, and `config set` says so once while a pin is left (`modelClientSpec` and `applyClassPin`,
+`src/cli/commands/config.ts`).
+
+- GIVEN `model.standard.cursor = X` and `model.standard = Y` WHEN Cursor is emitted THEN its standard agents carry `X`
+  and every other client's carry `Y`.
+- GIVEN a 1.0.0 manifest with `pins.standard = "Y"` and a `plugin` block WHEN it is read THEN `pins.standard` is
+  `{ all: "Y" }`, the block is value-identical, the version is 2.0.0, `sync` persists 2.0.0, and migrating twice
+  equals migrating once; GIVEN a 3.0.0 manifest THEN the clean upgrade refusal.
+- GIVEN `pins.standard = { vim: "Z" }`, or a `__proto__` class key in a 1.0.0 file, THEN the manifest is refused naming
+  the key.
+- GIVEN `config set model.standard.cursor claude-sonnet-5-5-high` THEN the manifest holds `pins.standard.cursor` and
+  `config get` prints it; GIVEN `none` THEN the key is gone; GIVEN `config set model.advanced none` on a manifest that
+  pinned nothing THEN no key holds `none`; GIVEN a client key seeded before `config set model.standard Z` THEN it stays
+  beside `all: Z`.
+
+As built, beyond the delta: the per-client keys, the `none` rule on the class key (ledger `build/49`, a defect the class
+key carried before) and the not-selected notice are `e3`'s; the `__proto__` refusal is `review/70`.
+
+Proof: `test/manifest/manifest.test.ts`, `test/roster/modelLadder.test.ts`, `test/adapters/claude.test.ts`,
+`test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`, `test/adapters/codex.test.ts`,
+`test/cli/commands/config.test.ts`, `test/types/domain.test.ts`.
+
+Expand/contract: one manifest generation bump with its migration. An older engine refuses the 2.0.0 file cleanly, so a
+downgrade to 1.14 needs the per-client keys removed and the version written back by hand; rollback is otherwise a
+re-sync at the prior version on a manifest restored from history. The consumers are the four adapters, `config`, the
+`model-pins` row (REQ-LADDER-008) and `src/index.ts`'s exported types `ClassPins` and `ListedModels`.
+
+### REQ-LADDER-006 — A working pick out of the box
+
+Added 2026-10-15 (plan 020 file 2, units `e2-model-defaults-lister`, `e3-config-wiring` and `e8-copilot-codex-claude-pins`
+with their fix rounds; the delta's amended text of 2026-10-15 from `build/66`).
+
+Given a Cursor, Codex or Copilot CLI on `PATH`, When `init`, `sync` or `workspace sync` runs, Then the client's model list
+is read once, within 10 s, persisted under `models.listed.<client>` as `{ ids, source }`, and each class takes the first
+candidate of the shipped priority list (`MODEL_PRIORITY`, `src/roster/modelDefaults.ts`, its citations dated) the saved
+list holds; Given a saved list holding none of a class's candidates, Then that class writes no model key. Given no CLI
+and no saved list, Then Copilot and Codex take the shipped list's first entry and Cursor writes no model. Claude Code
+keeps its family aliases. Emission and `check`'s drift gate never start a client.
+
+- **The resolver's order** (`baseModelValue`, `src/roster/modelLadder.ts:555-578`): the pin, kept while the saved list
+  holds it and re-picked from that list when it does not, keeping the operator's value where the re-pick finds
+  nothing; the client's alias; the pick over the saved list; the shipped list's entry 0 only when no list was read.
+  A list holds a pin when it holds it exactly or holds `<pin>-<effort word>`, optionally `-fast`, never a longer id
+  that merely starts with it, and a bracketed pin is judged by its base id before `[` (`listHoldsPin`, `:541-544`;
+  `review/78`, `review/79`). The pick is a pure function of the pins, the saved list and the priority order; no pick is
+  persisted, so a second account's list re-picks an unpinned class (`build/41`).
+- **The read** (`listClientModels`, `src/cli/engine/clientModels.ts`): Cursor's `agent models`, Codex's
+  `codex debug models` and Copilot CLI's help-config listing, each parsed (`parseCursorModels`, `parseCodexModels`,
+  `parseCopilotHelpConfig`) and refused as `unreadable` when the output does not open with the client's header. The
+  program is found by a walk over absolute `PATH` entries only, dropping every entry inside the working tree and every
+  `node_modules/.bin`, and a program whose real path lies in the tree is refused; the child gets that same trimmed
+  `PATH`, starts in the user's home folder and never inside the tree, with stdin closed, `windowsHide` and a 10 s kill,
+  and nothing starts when home is inside the tree or cannot be resolved (`review/76`, `review/81`, `review/82`,
+  `review/93`). On Windows an npm shim (`codex.cmd`) is not run without a shell, so the outcome is `absent` and the
+  shipped list applies.
+- **What is kept** (`readClientModelLists` and `MAX_LISTED_MODELS`, `src/cli/commands/init/apply.ts`): only `listed`
+  outcomes, deduplicated in printed order, each id matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$`, at most 200; a
+  listing with no such id is no answer, and a client that is absent, times out or is unreadable keeps its saved list.
+  `sync` lays the answers over the saved lists through `planSync`'s `listedOverlay`, `--dry-run` reads and writes
+  nothing, `workspace sync` reads each member's lists under the workspace root as `sync` does, and `init` reads them
+  under the run's own environment. `STAMITY_NO_CLIENT_PROBE=1` starts no client anywhere; the test configuration and
+  the child-process harness set it (`vitest.config.ts`; `test/support/cliHarness.ts`).
+
+- GIVEN each captured client output under `test/fixtures/client-models/` THEN its parser returns the ids in order; GIVEN
+  an `agent` whose output does not open with `Available models` THEN `unreadable`; GIVEN a binary that sleeps 20 s THEN
+  `timeout` within 11 s (`test/cli/engine/clientModels.test.ts`).
+- GIVEN no list THEN Copilot and Codex take entry 0 and Cursor nothing; GIVEN a saved Codex list holding no candidate of
+  a class THEN that class's agent file carries no `model` and keeps `model_reasoning_effort`
+  (`test/roster/modelDefaults.test.ts`, `test/roster/modelLadder.test.ts`, `test/adapters/codex.test.ts`).
+- GIVEN a fake lister answering for Cursor WHEN `sync` runs THEN `models.listed.cursor` is persisted and a second `sync`
+  moves no byte but the `updatedAt` stamp; GIVEN the lister timing out THEN the saved list is kept; GIVEN
+  `STAMITY_NO_CLIENT_PROBE=1` THEN no probe runs; GIVEN 500 ids and hostile entries THEN 200 are kept and every bad id
+  dropped (`test/cli/commands/sync.test.ts`, `test/cli/commands/initApply.test.ts`, `test/cli/commands/workspace.test.ts`).
+- GIVEN a `codex` planted in `<repo>/node_modules/.bin`, under the tree, or behind a link into it, or an interpreter
+  planted for a launcher's `#!/usr/bin/env` line, THEN nothing in the tree runs (`test/cli/engine/clientModels.test.ts`).
+
+As built, where the delta differed: the delta's "Given no CLI, Then Copilot and Codex take the shipped list's first
+entry" holds only when no list was read; a saved list that holds no candidate writes no key (`build/66`, the landed
+resolver above). The child's working folder and `PATH`, and the 200-id cap, are beyond the delta. `SECURITY.md` names the
+program start and that the account's list lands in the committed manifest (`review/116`, `review/119`).
+
+Expand/contract: the list is additive under `models.listed`; a repository whose clients are not on `PATH` emits as
+before but for Copilot's and Codex's shipped entry. Rollback is a re-sync at the prior version on a restored manifest.
+
+Amended 2026-10-15 (plan 020 file 4, unit `r3-ladder-sentence` and its fix round; the delta's amended text from
+`review/102`, `build/62` and `build/66`). `/st-work`'s Model ladder section states the order above: "A class resolves
+through its pin (re-picked when the account's saved list lacks it), then the client's alias, then the account's own
+model list, then, only when no list was read, the shipped list; with none of these the key is left out. Where an agent
+file's model takes precedence over the call's, a per-call escalation leaves it unchanged." It replaced "A class without a
+supported model name or operator pin leaves selection to the client's own default." The client whose file model takes
+precedence, Codex, is named only in that client's capability facts (`model-escalation`, `src/adapters/codex.ts`), since
+the corpus names no client in model-facing text (`content/commands/st-work.md:462-469`).
+
+- GIVEN `test/roster/modelLadder.test.ts`'s wording case THEN it reads both sentences and the refusal fallback whole,
+  no `outranks` in the paragraph, and checks each rung of the order on the resolver; GIVEN `work.test.ts` THEN the
+  body and its reserve are unchanged (added 2026-10-15).
+
+### REQ-LADDER-007 — Each client carries the pick
+
+Added 2026-10-15 (plan 020 file 2, units `e7-cursor-pins` and `e8-copilot-codex-claude-pins` with their fix rounds; the
+delta's amended text from `build/65`, `build/66` and `review/113`).
+
+- **Claude Code** keeps its family aliases, `frontier` mapped to the documented `fable`.
+- **Cursor.** The agent file's `model:` is the class's resolved value, with no doubled effort (REQ-LADDER-004). A
+  `preToolUse` hook on `Task`, `.stamity/generated/hooks/cursor/stamity-model-pins.mjs` with the map built in, is wired
+  through the walk-up starter (REQ-FLOW-084) and never `failClosed`; it copies `tool_input` and sets `model` only when
+  `tool_name` is `Task`, `model` is absent and `subagent_type` is an emitted `stamity-*` id whose class has a model, and
+  every other payload, a malformed one included, answers `{"permission":"allow"}` with exit 0. The map's `model` is
+  what a `Task` call can pass: a listed id or the operator's pin as typed, never an engine-added `[effort=…]` group, which
+  stays in the agent file (`buildCursorModelMap` and `callableModel`, `src/adapters/cursor.ts`; `review/100`).
+- **Copilot.** Agent files carry `models: [<CLI ids>]`, the class's model first, then its other shipped candidates the
+  saved list holds, and, where the shipped list gives the model a display name, a `model: "<Display Name> (copilot)"`
+  line whose reader on these agents is unverified, since every agent sets `target: github-copilot`. No `modelPolicy`. A
+  pin typed in the display form is written nowhere: its class takes the pick and `init`/`sync` warn once per class,
+  printing the pin sanitised (`agentModelLines`, `idPins` and `displayNamePinWarnings`, `src/adapters/copilot.ts`;
+  `review/110`, `review/114`).
+- **Codex.** `.codex/agents/*.toml` carries `model_reasoning_effort`, and `model` whenever the class resolves; a saved
+  list holding none of a class's candidates writes no `model` (`buildAgentToml`, `src/adapters/codex.ts`).
+- **The map.** Every client gets `.stamity/generated/models/<client>.json`,
+  `{ "classes": { "<class>": { "model"?, "fallbacks": [...] } }, "roles": { "stamity-<id>": "<class>" } }`, every ladder
+  class in ladder order and every emitted role; `fallbacks` lists the class's other shipped candidates on the list,
+  Claude's is empty. Each is an `infra` row of its client.
+- **The capability facts** say the agent-file `model` on Cursor is a default, not a hard limit, and that Stamity carries
+  it on the dispatch and by a hook; Copilot's `model-pick` row marks its `models` claim as the CLI reference's alone and
+  its `cloud-model` row says the cloud agent's picker decides; Codex's `model-escalation` row says a file's `model` takes
+  precedence over a per-call escalation where one is written (`build/38`, `build/62`, `review/109`, `review/113`).
+
+- GIVEN a Task payload without `model` for `stamity-reviewer` THEN the hook answers the map's class model; GIVEN one with
+  `model`, an unmapped id, `__proto__` or extra fields THEN `{"permission":"allow"}` and no other field moves; GIVEN a
+  malformed payload THEN valid JSON `allow` and exit 0; GIVEN the command run from `repo/sub/deeper` THEN the same
+  answer (`test/adapters/cursorModelHook.test.ts`).
+- GIVEN a Cursor pin and no list THEN the agent file carries `<pin>[effort=<level>]` and the map `<pin>`; GIVEN no list
+  and no pin THEN no `model:` line and an empty map class (`test/adapters/cursor.test.ts`).
+- GIVEN no pin and no list THEN Copilot's agent files carry `models` and Codex's `model` from the shipped list; GIVEN a
+  Codex pin THEN it wins; GIVEN a display-form Copilot pin THEN it is in neither `models`, `model:` nor the map, and one
+  sanitised warning names the class; GIVEN each client's map THEN it parses and lists every role
+  (`test/adapters/copilot.test.ts`, `test/adapters/codex.test.ts`, `test/adapters/claude.test.ts`).
+
+As built, where the delta differed: the delta's first form wrote a display-form Copilot pin to the `model:` line; it
+landed written nowhere, with the warning (`build/65`, revised at `e8`'s review). The Cursor map's bracket-free value is
+`review/100`'s. Unverified and recorded so: how Cursor merges `updated_input` across two `preToolUse` hooks on `Task`,
+and the `Task` tool's input fields, which no Cursor page documents (the plan's measurement on Cursor 3.13.25).
+
+Amended 2026-10-15 (plan 020 file 3, units `f3-work-close`, `f4-board-close`, `f5-touchpoints-a` and
+`f6-touchpoints-b`; plan 020 file 4, unit `r3-ladder-sentence`). Every touchpoint whose `spawns:` is not empty passes
+the role's class model from the client's map on each sub-agent call, and on a refusal with a list takes the class's
+first listed fallback, else the closest, and says so in one line: `/st-work`'s Frame ("pass each role's class model
+from the client's map at `.stamity/generated/models/`", `content/commands/st-work.md:19-20`) with the fallback in its
+Model ladder section (`:467-468`), and one sentence each in `/st-board`, `/st-plan`, `/st-rework`, `/st-pr-resolve`,
+`/st-debug`, `/st-quick`, `/st-ask` and `/st-spec`.
+
+- GIVEN each of those bodies THEN it carries the model sentence (`test/corpus/commands/work.test.ts`, `board.test.ts`,
+  `plan.test.ts`, `feedbackPair.test.ts`, `lightTrio.test.ts`, `spec.test.ts`; added 2026-10-15).
+
+### REQ-LADDER-008 — `check` verifies pins
+
+Added 2026-10-15 (plan 020 file 2, unit `e4-check-model-row`, with the integration fix of `review/86`).
+
+`stamity check` prints a `model-pins` doctor row after `pack-reach` (`checkModelPins`, `src/cli/commands/check.ts`). For
+each selected client that lists models (Cursor, Copilot, Codex) it compares every class's pinned model and emitted
+model, both without bracket options, with the list the client's CLI prints now (Codex asked with `--bundled`), else the
+list the last `sync` saved. It judges a model by the resolver's own predicate, `listHoldsPin`, so the report and the
+emission agree (`review/86`). A pinned model the list lacks warns naming the client, the class and the model, with
+`config set model.<class>.<client> <id>`; an emitted model the list lacks warns naming `sync`. With nothing to compare
+the row passes with `unverified` and its reason in the detail; under `STAMITY_NO_CLIENT_PROBE=1` it starts no client and
+reads the saved list only. Every printed value passes `sanitizeLabel`, and the row never fails.
+
+- GIVEN a saved Codex list without `gpt-5.5` and a pin `gpt-5.5` THEN `warn` naming codex, the class and the model;
+  GIVEN no CLI and no list THEN `pass` with "unverified"; GIVEN `check --json` THEN the row id is `model-pins` at
+  `pack-reach`'s index plus one; GIVEN a fake `codex` on `PATH` and the switch set THEN it is not started
+  (`test/cli/commands/check.test.ts`, the describe "check — model-pins").
+
+As built, where the delta differed: `checkModelPins` takes the working folder as a fourth parameter, which the lister
+needs. Open, as Minors of the run: a pin live-listed but missing from the saved list passes with no nudge to `sync`
+(`review/88`), and no test reaches the `unreadable` reason (`review/89`).
+
 ## References
 
 - `docs/plans/008-plugin-lifecycle-02.md` — unit C9.
@@ -290,6 +502,17 @@ and `docs/capability-matrix.md`, regenerated.
   (`501d4997`, 24 lines): `:441-458` became `:465-482`, `:470-481` became `:494-505` and
   `:446-448` became `:470-472`. The Invariants' second bullet and the closed Concerns bullet carry
   that pass's two dated amendments.
+- `docs/plans/020-cli-native-02.md`, `-03.md` and `-04.md`, with `.stamity/runs/2026-10-14_cli-native/` (its record,
+  ledger and units' reports) — the spec deltas, sign-offs and ledger rows the text dated 2026-10-15 cites
+  (REQ-LADDER-004 to REQ-LADDER-008), added 2026-10-15.
+- `source` (added 2026-10-15): `src/roster/modelDefaults.ts` (`MODEL_PRIORITY`, `pickModel`, `modelMapPath`),
+  `src/roster/modelLadder.ts` (`pinsFor`, `listHoldsPin`, `resolveModelValue`), `src/cli/engine/clientModels.ts`
+  (`listClientModels`), `src/cli/commands/init/apply.ts` (`readClientModelLists`), `src/manifest/manifest.ts`
+  (`PER_CLIENT_PINS_STEP`), `src/types/manifest.ts` (`ClassPins`, `ListedModels`), `src/cli/commands/config.ts`,
+  `src/cli/commands/check.ts` (`checkModelPins`), and the four adapters.
+- `test` (added 2026-10-15): `test/roster/modelDefaults.test.ts`, `test/cli/engine/clientModels.test.ts` with its
+  fixtures under `test/fixtures/client-models/`, `test/adapters/cursorModelHook.test.ts`, and the suites each
+  requirement above names.
 
 ## Concerns
 

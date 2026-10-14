@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.14.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -67,6 +67,12 @@ the amendments with a CI or release job, as they stood there at `c96c7146`; the 
 spec's stub. It also amends REQ-PROVE-002, REQ-PROVE-003, REQ-PROVE-021, REQ-PROVE-025, REQ-PROVE-030, REQ-PROVE-031
 and REQ-PROVE-033 where they named the deleted routes, and cites the tree at `d590a266`, the integration head the
 deletion landed on. It ships with 1.15.0.
+
+REQ-PROVE-037, and the text dated 2026-10-15 under REQ-PROVE-017, REQ-PROVE-023, REQ-PROVE-025 and REQ-PLUGIN-020, come
+from the spec deltas of `docs/plans/020-cli-native-02.md` and `-04.md` (plan 020 files 2 and 4, the same run), merged in
+file order at that run's Prove phase, each entry in its amended form, with the as-built corrections its units' reports
+declared. They cite the integration head `bd89c476`; a ledger id in that text (`review/47`, `build/39`) is that run's
+own. They ship with 1.15.0.
 
 ## Intent
 
@@ -581,6 +587,19 @@ refuses a run committed to `main`, and the checklist names the publish step.
   record file the branch holds (`test/records/docsPages.test.ts`, "resolves every records-branch link to a record file
   the branch holds"). No test refuses a repo-relative record link on `evals/README.md` itself; that the page carries
   none is `judgment: reviewer`.
+
+Amended 2026-10-15 (plan 020 file 4, unit `r2-eval-prep` and its fix round; the inbox row
+`2026-10-13_records-branch/review/40`). The deferred rewrite landed: step 6 of the eval-run skill's override reads
+"Publish the run artifact with `node scripts/records.mjs commit -m …`; it lives on the `records` branch, never on
+`main`." (`.stamity/overrides/skills/st-eval-run/SKILL.md`, step 6), and the first sentence of `evals/SET-v7.md`'s
+run-artifact contract says the same. The paragraph above's "Two eval inputs still say to commit `RESULTS.md` with the
+change that caused the run … their rewrite is deferred to the 1.15.0 release's preparation" describes the tree before
+it; since both are triggers of the release eval (REQ-PROVE-033), the 1.15.0 release runs the full set, as it does for
+its other changes. The release notes' records commit is now the one the tag's `records:` line names (REQ-PROVE-023,
+amended 2026-10-15). No test pins step 6's wording; the override's readers check its roster figures and its release rule.
+
+- GIVEN the eval-run skill's override THEN no sentence says to commit a run's results with the change, and step 6 names
+  `node scripts/records.mjs commit` and the `records` branch. `judgment: reviewer` (added 2026-10-15).
 
 ### REQ-PROVE-018 — Hand pages re-attested
 
@@ -1133,6 +1152,40 @@ Criteria:
 - GIVEN a checkout of `main` with no record on disk WHEN `npm run build && node dist/cli.js check` runs THEN it reports
   no drift (S33; observed at `074c11d8` and at `f73b6086`, the run record's section "r7 — the records leave `main`").
 
+Amended 2026-10-15 (plan 020 file 4, unit `r1-release-machinery` and its fix round; the inbox rows
+`2026-10-13_records-branch/close/1`, `pr/9` and `pr/10`; `build/39`, `build/71`). The release restores the records the cut
+recorded. The cut writes the records commit into the annotated tag's message as one line, `records: <sha>`, the
+records branch's tip after the cut's last records publish read by its full ref (the release checklist's seventh line,
+`.github/release-controls-checklist.md:324-343`). `release.yml`'s "Restore the records" reads that line in the shell,
+never through a workflow expression, and restores exactly that commit with
+`node scripts/records.mjs restore --ref "$RECORDS_SHA" --no-fetch --force`
+(`.github/workflows/release.yml:282-311`). It refuses, before any command uses the value and without printing it, a tag
+that is not annotated (a lightweight tag's contents are its commit's message), a message with no `records:` line or more
+than one, and a value that is not exactly 40 lower-case hexadecimal characters; `records.mjs restore --ref` already
+refuses a commit holding anything but records. A run on any other ref, a rehearsal, publishes nothing and restores
+`refs/remotes/origin/records`, saying so. Every records fetch and ref in the checklist and in `records.mjs`'s printed
+repair text is spelled in full, `+refs/heads/records:refs/remotes/origin/records` and `refs/remotes/origin/records`, so
+a tag named `origin/records` cannot stand in for the branch (`scripts/records.mjs`, its repair text). A later records
+publish therefore cannot change what a release was gated on.
+
+- GIVEN a cut THEN the annotated tag carries `records: <sha>` and the release workflow restores exactly that commit;
+  GIVEN no line, two lines, a lightweight tag carrying a well-formed line, or a value that is upper-case, 39 or 41
+  characters, missing the space, or carrying shell text (`$(touch pwned)`, `<sha>; touch pwned`, a backtick) THEN the
+  step exits 1, starts nothing, writes no `pwned` file and does not print the value; GIVEN a rehearsal on a branch THEN
+  it restores the full ref, not a decoy tag named `origin/records` (`test/ci/workflow.test.ts`, the describe
+  "release.yml — the records pin, executed"; added 2026-10-15).
+- GIVEN the checklist THEN its seventh line's commands are present, every `git fetch` naming `records` carries
+  `+refs/heads/records:refs/remotes/origin/records`, and no command spells the short `origin/records`; GIVEN the
+  printed repair text walked in a clone holding a tag named `records` on origin THEN it restores clean
+  (`test/ci/workflow.test.ts`, the describe "release-controls-checklist.md — the cut pins the records";
+  `test/ci/recordsScript.test.ts`, "names the plain-git repair …"; added 2026-10-15).
+
+As built, beyond the delta: the annotated-tag and one-line refusals and the lower-case rule. The annotated read relies on
+the pinned `actions/checkout` keeping tag objects, which it does by fetching tags ref to ref (`review/47`, answered from
+the pinned action's source, rejection upheld); a comment in the step says so, and the first release cut with the pin is
+where that is first seen on a real runner. A dry-run rehearsal dispatched from a tag cut before 1.15.0, which has no
+`records:` line, now stops at this step; rehearsals run from a branch (the sign-off on `build/24`).
+
 ### REQ-PROVE-024 — `scripts/records.mjs` publishes and restores records without touching `main`
 
 Added 2026-10-14 (plan 014 file 2, its § A as re-planned in run `2026-10-13_records-branch`, with the sync rules of S20,
@@ -1334,6 +1387,14 @@ Criteria:
 - GIVEN a push to `records`, once `main` carries the tools, WHEN `records.yml` runs THEN the leak gate, the hygiene check
   and `npm run test:records` each run, and any failure is red. `judgment: maintainer` (the run's conclusion;
   `test/ci/recordsScript.test.ts`, the describe "the branch templates", pins the steps).
+
+Amended 2026-10-15 (plan 020 file 4, unit `r1-release-machinery`; `build/39`, `build/71`). Item 2's release run restores
+the records commit the tag pins, not `origin/records` as it stands: on a `v*` tag run "Restore the records" restores the
+commit the annotated tag's `records:` line names, and only a rehearsal on a branch restores
+`refs/remotes/origin/records` (REQ-PROVE-023, amended 2026-10-15; `.github/workflows/release.yml:282-311`, the restore
+step, and `:322-323`, the records suite). So the fourth criterion's "each restores `origin/records` before
+`npm run test:records`" reads, for `release.yml`, "the commit its tag pins, or `origin/records` on a rehearsal"; `ci.yml`'s
+`records` job is unchanged. Test evidence adds `test/ci/workflow.test.ts`'s "release.yml — the records pin, executed".
 
 ### REQ-PROVE-030 — A push whose tree already passed as a pull request skips the test matrix
 
@@ -1570,6 +1631,46 @@ configuration; on the public route it names the harness id.
   `inputs.json`, a record, so it moved unchanged to the records suite; the synthetic comparator cases stay in
   `test/evals/manualRunner.test.ts`.)
 
+### REQ-PROVE-037 — A CI leg imitates a cloud machine
+
+Added 2026-10-15 (plan 020 file 2, unit `e11-ci-container-leg`, with its docs fix for `build/68`; cited at `bd89c476`).
+
+`ci.yml`'s `cloud-container` job runs `test/cloud/` inside a Linux container with no user folders, on every full CI run,
+and `all-ci-checks` requires it (`.github/workflows/ci.yml:460-502`).
+
+- **The job.** It carries `check`'s `needs` and condition, so it runs exactly where `check` does; `runs-on:
+  ubuntu-latest` in `container: node:24-bookworm`, the full image that ships git, pinned by the digest of its
+  multi-platform index, read from the registry on 2026-10-14 with the re-read command in its comment; `permissions:
+  contents: read`, a checkout with `persist-credentials: false`, no secret and no client account; `npm ci`,
+  `npm run build`, then `npx vitest run test/cloud` with `HOME` a fresh empty folder and `STAMITY_NO_CLIENT_PROBE=1`.
+- **The aggregator.** `all-ci-checks` needs it beside `check`, and asserts it `success` on a full run and `skipped` on a
+  lanes answer and on a proven push (`:776-818`); `CONTRIBUTING.md` and `GOVERNANCE.md` name it as part of a full run.
+- **The suite** (`test/cloud/containerLeg.test.ts`). In a fresh git repository it runs `node dist/cli.js init --tools
+  claude,cursor,copilot,codex -y`, commits, and runs every emitted hook command through the platform shell (`sh -c` on
+  POSIX; `cmd /d /s /c` on the Windows legs of `check`, Claude Code's POSIX-only commands excepted) with a payload, from
+  the root, `sub/` and `sub/deeper/`, with `node` present and absent (`PATH=/usr/bin:/bin`), under no marker and each of
+  the four session markers. From below the root every command matches the root's exit code and output; with no `node`
+  Claude Code's `PreToolUse` exits 2 with "stamity: the pre-tool-use guard could not run", and every other command exits
+  as not found (127 under `sh`, 9009 under `cmd`) with empty stdout, Copilot's `preToolUse` and Cursor's
+  `subagentStart` failing closed as documented; with an empty `HOME` Cursor's MCP guard denies with
+  `NO_MCP_SERVERS_CONFIGURED`; each marker's `Session:` line appears (REQ-FLOW-085), and no marker's value is printed.
+
+- GIVEN `test/ci/workflow.test.ts` THEN the job exists, is pinned by digest, holds read-only permissions and a checkout
+  that keeps no credentials, runs the cloud suite with an empty `HOME` and the probe off, and `all-ci-checks` requires it
+  on a full run and asserts it `skipped` on a lanes answer and a proven push (the describe "the cloud container job" and
+  the executed aggregator's two cases).
+- GIVEN the leg THEN from `sub/deeper/` every command matches the root's exit code, and with no `node` the exits above
+  hold (`test/cloud/containerLeg.test.ts`). Seen red when Copilot's commands were swapped for cwd-relative ones.
+
+As built, where the delta differed: the delta named `node`-less exits only for Claude's `PreToolUse`, Copilot's
+`preToolUse` and Cursor's `subagentStart`; the suite holds every command, and names the Windows code (9009). The
+container run and the Windows `cmd` path had not run before the pull request's CI (`build/69`, open until that CI shows
+them green). Nothing refreshes the pinned digest, so the job keeps the 2026-10-14 image's toolchain until
+someone re-reads it (`review/115`, open). This is ordinary testing, not a run in any vendor's cloud.
+
+**Expand/contract:** an added required job; the ruleset requires `all-ci-checks` alone, so no required context goes
+missing. Rollback is a revert of the job with its aggregator assertions.
+
 ### REQ-PLUGIN-020 — The CI lanes, the proven push, the nightly guard and the records job
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -1644,6 +1745,13 @@ release surfaces of 1.15.0:
   `all-ci-checks` and `all-pr-checks` alone, both kept, so no required context goes missing (`docs/plans/020-cli-native-01.md`,
   unit `d3-ci-qa`, its edge case). Rollback is a revert of the change.
 
+Amended 2026-10-15 (plan 020 file 2, unit `e11-ci-container-leg`; cited at `bd89c476`). The aggregator's `needs` gain
+`cloud-container`: `changes`, `prove-pr`, `check`, `cloud-container`, `lanes`, `records` and `supply-chain`
+(`.github/workflows/ci.yml:789`). The job sits on the full side beside `check`: a proven push asserts `check`,
+`cloud-container` and `lanes` all `skipped`, a lanes-only change `lanes` passed with `check` and `cloud-container` skipped,
+and the full side `check` and `cloud-container` passed with `lanes` skipped (`:803-818`; REQ-PROVE-037). The bullet above
+and REQ-PROVE-030's proven-push skip read with the job beside `check`.
+
 ### REQ-PLUGIN-025 — The release eval artifact on the records branch
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -1678,3 +1786,7 @@ its artifact to `records` with `node scripts/records.mjs commit -m <message>` be
 ## Evidence
 
 `.stamity/runs/2026-09-14_package-11/record.md` — the `949bde9` baseline, the eleven decisions, the three phases.
+
+`docs/plans/020-cli-native-02.md` and `-04.md`, with `.stamity/runs/2026-10-14_cli-native/` (its record, ledger and
+units' reports) — the spec deltas, sign-offs and ledger rows the text dated 2026-10-15 cites (REQ-PROVE-017,
+REQ-PROVE-023, REQ-PROVE-025, REQ-PROVE-037, REQ-PLUGIN-020), added 2026-10-15.

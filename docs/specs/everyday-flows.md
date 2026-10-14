@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -106,6 +106,16 @@ on. The same pass dropped the route clauses of REQ-FLOW-002, REQ-FLOW-025, REQ-F
 and, folding the inbox row `2026-10-11_release-1-14-0/review/5`, restated REQ-FLOW-071's sentence on the live run. It
 ships with 1.15.0.
 
+REQ-FLOW-080 to REQ-FLOW-088, and the text dated 2026-10-15, come from the spec deltas of
+`docs/plans/020-cli-native-02.md`, `-03.md` and `-04.md` (plan 020 files 2 to 4, the same run), merged once, in file
+order, at that run's Prove phase: each entry in its amended form, with the as-built corrections its units' reports
+declared. Every `path:line` in that text reads at the integration head `bd89c476`, except two units not yet on it when
+this merge ran: `e10-cloud-docs-matrix`, read at its commit `fee88300`, and `e12-translator`, read at its commit
+`ecf11a74`; a citation of either names that commit. Where a delta and the landed code differed, the text states what
+the code does, and a line headed "As built" says what moved. A ledger id in that text (`review/61`, `build/66`) is that
+run's own. The charter's invariants moved to 1.3.0 in the same files (invariants 2 and 5; invariant 6 rewrapped, its
+words unchanged), with a row in `docs/doctrine.md`; the charter carries no ids. It ships with 1.15.0.
+
 ## Intent
 
 The nine commands and the setup that serves them should do what a user asks, day to day: calls resolve, gates run
@@ -173,6 +183,16 @@ the token, both routes deleted in 1.15.0; the sentences read at `c96c7146`).
     that file's hash, so it asks for hook approval again after each stamity upgrade.
   - `sync --help` prints its update line by the same channel rule: a package with no channel is told to install the
     newer release into the project and run `npx --no <name> sync` (`review/109`).
+- **Amended 2026-10-15** (plan 020 file 2, unit `e10-cloud-docs-matrix`; read at `fee88300`). The hint names what the
+  fallback needs: `` `stamity <verb>` where the CLI is installed, else `npx -y <package>@<v> <verb>`, which needs the npm
+  registry ``; a fork that names its registry reads "which needs the registry it names", and the `npx --no` form,
+  which fetches nothing, carries no clause (`cliCallHint`, `src/shared/cliCall.ts`). The sentence holds no parenthesis
+  and no single quote, so the Claude guard's tail and the Codex hooks description stay recognisable as the engine's
+  (`GUARD_TAIL`, `src/manifest/coOwnedJson.ts`; `CHECK_HINT`, `src/manifest/hookDocuments.ts`), and a 1.14 Codex
+  description still normalises to its recorded hash. Every generated sentence that embeds the hint ends on it: the
+  tamper notice's two lines (`src/hooks/scripts.ts`) and the Cursor roster refusal (`src/adapters/cursor.ts`). Proof:
+  `test/shared/cliCall.test.ts`, `test/emit/noBareCliCall.test.ts`, `test/adapters/claude.test.ts` ("says what the
+  fallback needs, in a tail both owner patterns still read"), `test/adapters/codex.test.ts`, `test/hooks/scripts.test.ts`.
 - **Evidence (before):** the docs promise "Nothing is installed globally" and set up with `npx @zomarit/stamity init`
   (`docs/getting-started.md`); at `67d2b954`, 29 backticked calls to `stamity <verb>` across 9 content files had no npx
   prefix.
@@ -460,6 +480,14 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   `review/4`): the rows left for a person are the kinds REQ-FLOW-069 names, and `/st-work`'s QA step hands the qa
   skill the class and lenses `gate classify` named, `unclear` when none ran (`content/commands/st-work.md:280-281`).
   The three states above and the sign-off rules do not change.
+- **Amended 2026-10-15** (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; `review/61`). Two states
+  join the three: `agent-run`, with the prover's command, exit code and output path, and `contradicted`, with the
+  prover's redacted excerpt (`content/skills/st-qa/SKILL.md:80-84`). Proven rows, `auto-proven` and `agent-run`, fold
+  into one line with their pointers (`:118-119`). A `contradicted` row is failing: a walk is recorded beside its
+  excerpt and does not clear it, and only a later run showing `Expected` does (`:129-130`). `/st-work`'s proof-block QA
+  line folds the proven rows, lists each row not proven or over the cap with its reason and each `contradicted` row
+  with its excerpt, then each person row's state and the sign-off (`content/commands/st-work.md:318-319`). The rows
+  left for a person are those REQ-FLOW-081 leaves.
 - **Proof:** `test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; census `work-proof-block-fields`
   and `probe-none-work-run-qa-checkpoint`; must-holds `probe-qa-select` and the floor
   `unattended-run-applies-declared-default`; new case `qa-bare-signoff-records-unwalked`; QA.
@@ -483,6 +511,14 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   "all <n> rows auto-proven; no person asked" (ledger `build/47`); the carry exception keys on the row's Risk now, not
   on its Risk when accepted (`review/54`). The delta attributed the hash to "the harness"; census S8 corrects it: the
   skill's input hash is its own.
+- **Amended 2026-10-15** (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; `review/50`, `review/61`).
+  "All N rows auto-proven" counts `agent-run` rows, and the checkpoint closes on their pointers with no ask
+  (`content/skills/st-qa/SKILL.md:123-124`). Item 1's rows "ride the run's close walk" (REQ-FLOW-080; `:158-159`),
+  where they rode "the run's one close question". Item 4's bar is tighter: `Shippable: YES` only once every `H` row is
+  walked or proven and none stands `contradicted`; otherwise `NO`, naming the open `H` row (`:143-144`). So an `H` row
+  over the cap of three, which stays an `H` row asked at the next checkpoint, holds `YES` back as an `accepted-unwalked`
+  `H` row does (`:50-51`). Item 4's earlier sentence ("recorded only with no `H` row accepted-unwalked") still holds as
+  a necessary condition.
 - **Proof:** `test/corpus/skills/flow.test.ts`; QA.
 
 ### REQ-FLOW-019 — `/st-work` asks only what needs the person
@@ -506,6 +542,15 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   the whole file (`content/commands/st-work.md:21-27`). The close's one question of item 3 gains the leftovers as a
   fourth part (REQ-FLOW-074), and with no response the unattended rule applies beside "leave uncommitted"
   (REQ-FLOW-075; `:302-305`).
+- **Amended 2026-10-15** (plan 020 file 3, units `f3-work-close` and `f7-prove-before-asking`, and the corpus fix batch's
+  `review/44`). Item 3 is the close walk (REQ-FLOW-080): the label reads "**The close walk.**" where it read "**The close
+  asks once.**", and the parts — the rows the qa skill leaves for the person (at most three), the spec delta merge, the
+  commit, and the leftovers as a fourth — are asked through the question protocol's Close walk, in rounds of numbered
+  options. The default, "leave uncommitted", and the empty-part rule are unchanged; the answers take effect together
+  after the last round, fixes and schedules first and the commit or hand-off choice last
+  (`content/commands/st-work.md:298-306`). The proof block prints after the walk's last answer with nothing after it
+  (`:310-311`), and the spec-author merges once the close walk confirms it (`:418-420`). Item 3's "one question" and the
+  2026-10-10 paragraph's "the close's one question" read as the walk.
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
   `unattended-run-applies-declared-default`; new case `work-persisted-plan-asks-once`; QA.
@@ -614,6 +659,18 @@ From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw10-f
   - **`--maturity` has a CLI case.** `init -y --maturity enterprise` writes `maturityTier: enterprise` and the panel's
     disclosure line reads `(tier: enterprise, …)`; an unknown tier is refused before anything is written
     (`test/cli/commands/init.test.ts:581-603`).
+- **Amended 2026-10-15** (plan 020 file 2, unit `e6-copilot-adapter` and its fix round; `review/96`). The Copilot setup
+  workflow always installs Node, because the generated Copilot hooks run on `node`: every repository gets
+  `setup-node`, its `node-version` from the project's pin as above, else `lts/*`; a repository with no Node toolchain
+  still gets no install step, and the file says Node is there for the hooks (`buildSetupSteps` and `setupNodeStep`,
+  `src/adapters/copilot.ts`). The bullet's "else `@v5`" reads per action: `actions/checkout@v6` and
+  `actions/setup-node@v7` (`DEFAULT_ACTION_REFS`, the same file), the project's own refs, a SHA pin with its comment
+  included, still winning. With no project pin the file advises pinning both actions to a full-length commit SHA, as
+  before; where the project pins one, each action left at its major tag keeps that advice by name. The bullet's "A
+  repository with no Node toolchain gets a checkout only" describes the releases before 1.15.0.
+  - GIVEN a Python repository THEN the workflow holds `setup-node` at `lts/*` and no install step; GIVEN project pins (a
+    SHA plus comment) THEN they win; GIVEN a SHA-pinned `checkout` alone THEN the advice names `setup-node`; GIVEN no
+    pins THEN `checkout@v6`, `setup-node@v7` and no `@v5` (`test/adapters/copilot.test.ts`; added 2026-10-15).
 - **Proof:** `test/cli/commands/initPanel.test.ts`, `test/cli/commands/init.test.ts`,
   `test/cli/commands/initApply.test.ts`, `test/cli/commands/check.test.ts`, `test/cli/notice/updateNotice.test.ts`,
   `test/cli/commands/sync.test.ts`, `test/adapters/copilot.test.ts`; the Codex pins in `test/adapters/codex.test.ts`
@@ -666,6 +723,9 @@ state, and reads the date from the caller's clock. A row whose `retired` value a
   `stamity ledger inbox-write`; where no CLI form runs or the installed copy lacks that verb, it appends with the file
   tools and records `inbox: by hand (no CLI)` (REQ-FLOW-078; `content/commands/st-work.md:392-399`). The retire step
   through `ledger close --retired` does not change.
+- **Amended 2026-10-15** (plan 020 file 3, unit `f4-board-close`). The board's retirer bullet reads "its close walk
+  dropped" where the paragraph of 2026-10-10 quotes "its one question dropped" (`content/commands/st-board.md`, its
+  Retirers bullet; REQ-FLOW-080). Who retires a row does not change.
 - **Proof:** `test/runs/ledgerClose.test.ts`, `test/cli/docs/cliReference.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/board.test.ts`, `test/records/ledgers.test.ts`;
   must-holds `work-proof-block-fields` and `quick-next-step-derived-from-batch-state`; QA.
@@ -891,6 +951,13 @@ when such a script lives there.
     it; `sync` and `init` keep the entry and warn naming it. The check reads the event key against the 21 events
     cursor.com/docs/hooks lists (read 2026-10-07, Cursor 3.23.23; `CURSOR_HOOK_EVENTS`) and each entry by type: `type`
     absent or `"command"` needs a `command`, `"prompt"` needs a `prompt`, any other `type` fails (`cursorHookDefects`).
+  - **Amended 2026-10-15** (plan 020 file 2, units `e5-hook-starter` and `e7-cursor-pins`; `review/84`). The script an
+    entry runs is read through the 1.15 walk-up starter as well as the earlier `node <script>` form: a Cursor entry
+    whose starter runs a script under `.stamity/generated/hooks/cursor/`, or one of the two guards, is the engine's, and
+    one that runs anything else, a pack script included, or an edited starter, is not (`walkUpStarterScript`,
+    `src/manifest/hookDocuments.ts`). The model-fill entry of REQ-LADDER-007 is the engine's by that rule, so an upgrade
+    rewrites it in place with no `.bak`. The bound this requirement states is unchanged; `e5`'s narrower first reading,
+    a starter in the bound only when it runs the runner or a guard, was brought to this text before the merge.
 - **Units:** `u0-hook-files-ownership`.
 - **Evidence (before):** all three were whole-file outputs (`src/adapters/cursor.ts:778-819`,
   `src/adapters/codex.ts:930-973`, `:1097-1149`, at `d10db029`). Measured 2026-10-06 on 1.11.0: an owner entry in
@@ -957,7 +1024,7 @@ bytes still hash to what the ledger recorded, inside the engine's bound; an edit
 - **Proof:** `test/emit/namePrefix.test.ts`, `test/adapters/cursor.test.ts`, `test/merge/hookFilesOwnership.test.ts`;
   `test/adapters/cursorLegacyGuards.test.ts` with its four fixtures (added 2026-10-08).
 
-### REQ-PLUGIN-005 — The emitted hook runner starts `node` by an absolute path
+### REQ-PLUGIN-005 — The emitted runner starts its launcher by an absolute path
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
 `2026-10-14_cli-native`). Only its CLI amendment moved. The requirement's first half, how a plugin container's hooks
@@ -980,6 +1047,30 @@ repository-mode reading stands: the guard reads the one policy document it was r
 (`policiesPathFor` and `POLICIES_PATH_FROM_SCRIPT`, `src/emit/hooksInfra.ts:104`, `:119-121`). The container layout
 the rest of that half described, `hookScriptsRoot` set, is still in the code with no route left to set it; the plan's
 follow-up row removes it (`docs/plans/020-cli-native-01.md`, its Follow-ups).
+
+Amended 2026-10-15 (plan 020 file 2, unit `e5-hook-starter`; the delta's amended text from `review/83`; the inbox rows
+`2026-10-11_release-1-14-0/close/5` and `close/9`). Every launcher starts by an absolute path (`launcherPath` in
+`buildPortableHookRunner`, `src/hooks/portableRunner.ts:266-283`; the fault exits at `:253`, `:302-304`). `node` and `node.exe`, in any letter case on Windows, start as
+`process.execPath`; a launcher spelled as a path is resolved against the child's folder; any other name is started by
+the absolute path of an inlined copy of the engine's own `PATH` walk (`src/shared/programPath.ts`), which takes only
+full-path entries, skips any entry whose real path is the folder the hook runs in, and tries `.com` then `.exe` on
+Windows. Where no entry holds it, the hook fails naming the launcher ("launcher \"<name>\" not found on PATH outside the
+folder the hook runs in") through the row's own fault exit, the one the runner already took for a failed start: 1, 2 on
+a Codex blocking row, and 0 on Copilot's core-guard row, whose fault posture the runner pinned before this change; never
+an exit that turns a blocking row's fault into a pass. So the paragraph of 2026-10-12's "a row naming any other launcher,
+`node.exe` and a path to node included, is started by the name the row gives" describes 1.14.0, and `SECURITY.md` names
+this start beside git's with the residual closed. The heading read "The emitted hook runner starts `node` by an absolute
+path".
+
+- GIVEN a launcher `node.exe` THEN it starts `process.execPath` on all three clients; GIVEN `Node`, `NODE.EXE` or
+  `Node.Exe` on Windows THEN the same; GIVEN a launcher no accepted entry holds THEN the hook fails with the row's fault
+  exit naming it; GIVEN another launcher's file at the repository root, reached by an empty `PATH` entry, `.` or its full
+  path, THEN it is not started (`test/hooks/portableRunner.test.ts`, the launcher cases; added 2026-10-15).
+
+As built, where the delta differed: the delta's first wording said a launcher the walk cannot find exits 1; the code
+takes each row's fault exit, which the delta was amended to before this merge (`review/83`). The amended delta named 1
+for every Cursor and Copilot row; the landed runner keeps Copilot's core-guard row at its existing 0, as the unit's report
+states and the runner's tests pin.
 
 ### REQ-PLUGIN-014 — The manifest's `gates` object, and the `plugin` key held through the 1.15 line
 
@@ -1827,6 +1918,28 @@ Amended 2026-10-14 (plan 020 file 1, unit `d7-engine`; cited at `d590a266`). The
 read nothing from the manifest's held `plugin` block (REQ-PLUGIN-045, amended 2026-10-14), and "each in repository
 mode" names the one install mode 1.15.0 has. Nothing else in this requirement moved.
 
+Amended 2026-10-15 (plan 020 file 3, units `f3-work-close` and `f5-touchpoints-a`, `f3`'s fix round on `build/20` and the
+corpus fix batch's `review/43`; the inbox row `2026-10-11_release-1-14-0/review/70`). A `gate` reason that names a
+refused folder stops the flows with that reason, where residual (4) above reads that `/st-quick` and `/st-work` take it
+as a scan that did not run and go on with the session's own git. `/st-work`'s Gates paragraph, above the re-attachment
+cut so a resumed run keeps it, reads that a scan's `reason` "saying `git was not started here` stops the run as
+BLOCKED_DEPENDENCY, quoting it" (`content/commands/st-work.md:198-200`). `/st-quick`'s Scan step stops the batch on a
+`reason` from either `gate` call that says git was not started because a folder has the layout of a bare repository: no
+later step runs, no git command runs in that folder, the commit included, and the report gives that reason under
+`Not done:` with every applied item listed as ungated (`content/commands/st-quick.md:164-167`). Both read the producer's
+wording, which `describeGitFailure` builds for `gate scan` and `gate classify` alike (`src/cli/commands/gate.ts`), and a
+test holds that wording so a reworded producer cannot disarm the stop (`test/corpus/commands/lightTrio.test.ts`).
+Residual (4)'s other halves stand: git a client, a session or the operator's shell starts takes no look, and a folder of
+the shape below the setup root meets none. One flow is outside the stop: `/st-debug` runs git itself and reads no `gate`
+reason, so at such a folder the stop does not reach it (`content/commands/st-debug.md:22`; recorded by `f5`'s report as
+pre-existing).
+
+- GIVEN `/st-work`'s Gates paragraph THEN it carries the stop before `### Specialist pass`, and the Specialist pass
+  carries no copy of it; GIVEN `/st-quick` THEN the stop sentence sits in step 1 after the `not run` path it overrides
+  and before `2. **Classify.**`, and `src/cli/commands/gate.ts` still carries "git was not started here: this folder,
+  or a folder above it, has the layout of a bare repository" (`test/corpus/commands/work.test.ts`,
+  `test/corpus/commands/lightTrio.test.ts`; added 2026-10-15).
+
 ### REQ-PLUGIN-047 `check` takes the expected release and client set from its caller
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -2074,6 +2187,12 @@ the record head's `Base:` line (REQ-CTX-012).
   names the charter's line, which its own session loads (`content/commands/st-quick.md:187-188`). A `red` verdict
   writes nothing to the named report path and is returned in full, rows and excerpts
   (`content/agents/stamity-test-runner.md:144-145`).
+- **Amended 2026-10-15** (plan 020 file 3, units `f2-protocol-charter` and `f3-work-close`). "A scan naming a `reason`
+  takes the full gates" holds except for a `reason` naming a refused folder, which stops the run or the batch
+  (REQ-PLUGIN-046, amended 2026-10-15); `/st-work`'s sentence now reads "as do a CLI that cannot run or lacks `gate` and
+  a scan's `reason`, both on the full gates" (`content/commands/st-work.md:197-200`). Invariant 4's words are unchanged;
+  the charter's invariants are at 1.3.0 since invariants 2 and 5 moved (REQ-FLOW-080, REQ-FLOW-088;
+  `content/charter/stamity-charter.md:8`, `:10`), so the last criterion below reads `invariants_version` `1.3.0`.
 - **Proof:** `test/corpus/commands/work.test.ts`, `test/corpus/commands/lightTrio.test.ts`,
   `test/corpus/agents/quality.test.ts`, `test/corpus/cliCallForm.test.ts`, `test/content/charter.test.ts`,
   `test/content/invariantsVersion.test.ts`; QA.
@@ -2472,6 +2591,19 @@ the row points at that result (`content/skills/st-qa/SKILL.md:38-43`).
     (`:43-44`, `:105-107`; `review/2`). The three kinds bound which rows are created for a person; missing evidence
     is still never scored as a pass.
   - The one person row also checks that the links to and from the changed page resolve (`:55-57`; `review/4`).
+- **Amended 2026-10-15** (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; the inbox row
+  `2026-10-10_next-tier/build/42`). Five categories replace the three kinds: taste or judgment (how a page, a screen, a
+  style or an image reads as it renders), a real account the run cannot hold, a step that cannot be undone, physical or
+  OS-native use, and legal or policy wording (`content/skills/st-qa/SKILL.md:38-41`). The prover runs first and at most
+  three rows reach the person (REQ-FLOW-081): the rule above that the run's test-runner executes a row's check before
+  the table is built is now the caller's dispatch of the prover, and a row outside the five that no route proves goes
+  on `Not done:` as "not proven: <reason>", never to the person (`:41-51`). So the "As built" bullet "a row whose check
+  is missing, cannot run or fails stays on the human path" reads by category: such a row is the person's when it is in
+  one of the five, and otherwise goes on `Not done:`, a `contradicted` one with its excerpt (`:113-117`). The
+  security-negative amendment stands, the row taking the first of the three places whenever it is the person's, and an
+  `agent-run` never proves it (`:47-55`). The Auto-prove table and rule 1 now accept the same two forms, a test's
+  `file:line` beside the gate result or the prover's `agent-run` (`:96-97`, `:107-112`), which settles the "two
+  readings of auto-proven" this spec's `## Concerns` records.
 - **Proof:** `test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; must-hold
   `qa-bare-signoff-records-unwalked`; QA.
 
@@ -2538,6 +2670,12 @@ no such key (`src/adapters/copilot.ts:486-520`, the line at `:511`; `:536-549`).
   live check). (Amended 2026-10-14, folding the inbox row `2026-10-11_release-1-14-0/review/5`; it read "No live run
   has yet loaded an agent carrying the key either, so its effect rests on the changelog and the loader's key list
   (`build/13`)".)
+- **Amended 2026-10-15** (plan 020 file 2, unit `e8-copilot-codex-claude-pins` and its fix round; `build/38`,
+  `review/111`). The capability rows `sub-agent-instructions` and `effort-axis` name the live run of 2026-10-11 on
+  Copilot CLI 1.0.89, QA row 2 of run `2026-10-10_next-tier`, as their evidence, citing its record "on the `records`
+  branch"; the run carried `include-custom-instructions` and `reasoning-effort`, and the rows claim no live load of a
+  `model` key (`COPILOT_DIALECT_FACTS`, `src/adapters/copilot.ts`). The "capability row" bullet above reads with that
+  evidence beside the changelog's.
 - **Expand/contract:** one added frontmatter key on every emitted Copilot agent. Rollback is a re-sync at the prior
   version (route clause dropped 1.15.0: the sentence on the APM package's own Copilot agents, which carried no such
   key, `build/12`; the APM route is deleted). The accepted risk is in `## Risks`.
@@ -2607,6 +2745,24 @@ and `q10b-flow-close-pointers` and their fix rounds. The rule's text is `/st-boa
   - A withheld or skipped row is never decided, where the delta had the close list it "among the leftovers the same
     way" (`review/42`).
   - `/st-rework`'s rows are decided at phase 4, where the plan had them ride its handoff ask (`review/52`).
+- **Amended 2026-10-15** (plan 020 file 3, units `f3-work-close`, `f4-board-close`, `f5-touchpoints-a` and
+  `f6-touchpoints-b` with their fix rounds; the delta's amended text from `f5`'s review, `review/29`). The leftovers are
+  asked in tool form, in rounds, by the question protocol's Close walk (REQ-FLOW-080), as the close's fourth part.
+  - **The answers** read: "Each question offers its row's options, the recommended one first: fix now, schedule or drop,
+    `show` on a note, or stop, every leftover row on `Not done:`; a client with no question tool takes the protocol's
+    plain-text fallback." The batched one-line form `L2 fix; drop L1: <reason>; show L3` is gone, since the protocol's
+    fallback asks one leftover per turn (`content/commands/st-board.md`, its "Leftovers at a close" bullet; `f4`'s
+    decided Minor).
+  - **A stop part-way through the walk.** Answers given in an earlier round stand and are applied, a `fix now` among
+    them still taking its one fix round, and only the rows still undecided take the stop's handling (`review/18`, and
+    the round-2 closure's note).
+  - **The other flows.** Each touchpoint walks its own leftovers (REQ-FLOW-080): `/st-pr-resolve`'s triage ask is the
+    walk's first round and still decides each DEFER row, with no closing ask for it, and a FIX that stays blocked lands
+    as its row only after the walk asks it, `decision-waiting` with `when: next attended close` its default
+    (`content/commands/st-pr-resolve.md`, its Close; `review/21`); `/st-rework`'s handoff ask is the walk's one round and
+    its DEFER rows stay decided at phase 4; `/st-quick` walks its refused or deferred items and pre-existing failures,
+    carry to `/st-work` now or leave on `Not done:`, and appends no inbox row (REQ-FLOW-077). The bullet "The other
+    flows" above, and its "`/st-quick` has no leftovers ask", describe 1.14.0.
 - **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/feedbackPair.test.ts`; must-holds `work-persisted-plan-asks-once` and
   `work-proof-block-fields`; QA.
@@ -2634,6 +2790,9 @@ about every `decision-waiting` row first. A real defect is never dropped by defa
   done:` and no note (`:461-462`; amended 2026-10-10, the whole-branch review's fix round, `review/91`).
 - **As built, where the delta differed:** the delta did not define `stop`, and named the `Status:` count in no
   entry; both are the landed bullet's (`review/48`).
+- **Amended 2026-10-15** (plan 020 file 3, unit `f2-protocol-charter`). A question a headless client skipped reads as no
+  answer, so its leftover takes the rule above (`content/rules/stamity-question-protocol.md:88-91`). The no-answer rule
+  is now worded once, in the protocol's Close walk, which each touchpoint points at.
 - **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/runs/inboxStore.test.ts`; QA.
 
@@ -2746,6 +2905,12 @@ rounds. The writers are the five `/st-board` names (`content/commands/st-board.m
   still append with the file tools.
 - **The audit's flag** reads the changed entry's own risk class as well as the bump's move (REQ-FLOW-065, amended
   2026-10-10).
+- **Amended 2026-10-15** (plan 020 file 3, unit `f5-touchpoints-a` and its fix rounds; the delta's amended text from
+  `f5`'s review, `review/29`). `/st-quick` walks its leftovers and still appends no inbox row: before its report the batch
+  walks each refused or deferred item and each pre-existing failure left alone by the protocol's Close walk, with two
+  options, carry it to `/st-work` now or leave it on `Not done:`, and the next step follows the walk's answers
+  (`content/commands/st-quick.md:221-229`). Its last paragraph is unchanged: "This lane appends no inbox row" (`:231-232`).
+  The bullet above's "and has no leftovers ask" goes; the lane stays a retirer and no writer.
 - **As built, where the delta differed:**
   - The delta's "`files:` when its location is `—`" is in the plan, rework, pr-resolve and work texts. The meta row
     stands at `—` with none: its default trigger, `when: next board fill`, is no touch, and the reader asks a path of
@@ -2899,6 +3064,303 @@ residual.
   whole-file read, said so. Rollback is a re-sync at the prior version.
 - **Proof:** `test/corpus/commands/board.test.ts`, `test/corpus/cliCallForm.test.ts` (the `CALL_SITES` row for
   `commands/st-board.md`), `test/corpus/commands/plan.test.ts`.
+
+### REQ-FLOW-080 — Every touchpoint ends on a walk, the summary last
+
+Added 2026-10-15 (plan 020 file 3, units `f2-protocol-charter` to `f6-touchpoints-b` with their fix rounds, and the
+corpus fix batch's `review/44` and `review/64`; plan 020 file 2's question-tool map, below).
+
+Given leftovers, When a run ends, Then each is asked through the client's own question tool, one leftover per question,
+Critical, Warning and `decision-waiting` items first, the recommended option first, each option with its one-line
+trade-off and a declared default; related questions bundle into one call up to the tool's per-call limit and the rest
+follow in rounds, one ask per turn, until none is undecided; and the summary or proof block prints after the last
+answer, with nothing after it. With no question tool the walk is plain numbered text, one leftover per turn. With
+nobody to answer, each leftover takes its declared default and the run writes its `Default applied:` line; a real
+defect is never defaulted to dropped and waits as `decision-waiting`; a question a headless client skipped reads as no
+answer. With no leftovers there is no walk (`## Close walk`, `content/rules/stamity-question-protocol.md:76-97`, the
+section after `## Gates` and the last, naming no client and no tool, with the `<!-- STAMITY:PLATFORM-TOOL -->` marker
+and the plain-text fallback after it). Charter invariant 2 allows the rounds: "one ask per turn (one question-tool call
+of related questions, else one numbered list), numbered options, a declared default-if-no-response, rounds until none is
+undecided, no second request in the same turn", its sub-agent sentence unchanged (`content/charter/stamity-charter.md:48-50`).
+
+Each touchpoint points at the Close walk and names its own leftovers:
+
+- **`/st-work`:** the close's parts, as REQ-FLOW-019 states (amended 2026-10-15); the answers take effect together
+  after the last round (`content/commands/st-work.md:298-311`).
+- **`/st-board`:** its `open` items, walked before its return block, which prints last (`content/commands/st-board.md`,
+  its Return contract and its "Leftovers at a close" bullet; REQ-FLOW-074).
+- **`/st-debug`:** each regression clause with no test and each surviving hypothesis; instrumentation held under a
+  capture-later agreement is listed with that agreement and not asked again, since an unanswered question would fall to
+  "strip now" (`review/30`); the report and its next step last.
+- **`/st-quick`:** each refused or deferred item and each pre-existing failure left alone, carry to `/st-work` now or
+  leave on `Not done:`; no inbox row (`content/commands/st-quick.md:221-229`; REQ-FLOW-077).
+- **`/st-ask`:** its Blocked rows, Contradictions and low-confidence claims; each decision is recorded in the answer,
+  nothing is written, and acting on it is the person's.
+- **`/st-spec`:** open `[NEEDS CLARIFICATION]` markers, unconfirmed T2/T3 proposals and census gaps. A marker's question
+  declares "leave it marked" as its default, and only an answer the person gives replaces a marker; in `create`,
+  `extract` and `sync` the spec-author writes an answered marker into its requirement with an ADR stub, and a marker
+  left undecided or defaulted stays and is listed under Open markers (`review/28`, `review/38`). The greenfield one-round
+  interview names the close walk as its one exception.
+- **`/st-plan`:** each open question still carried, then each follow-up's schedule fields, the recommended schedule
+  first and the Drop list among the options; each answer lands in the artifact before a follow-up row appends, and an
+  answer that changes a unit re-runs the plan-lint gate and the structural coverage pass before the block
+  (`content/commands/st-plan.md:414-420`; `review/22`).
+- **`/st-rework`:** the handoff ask is the walk's one round, a drafted issue body's confirmation bundled into it; on
+  `stop` the DEFER rows phase 4 appended stand, are not offered `fix now` and are not appended twice; the next step is
+  the proof block's last field (the inbox rows `2026-10-10_next-tier/build/31`, `review/52`; `review/23`).
+- **`/st-pr-resolve`:** the triage ask is the walk's first round, then a blocked FIX's round and the re-poll consent,
+  `poll / done (default)`; the block prints after the last answer, the re-poll included (`review/21`).
+
+`/st-debug`, `/st-spec` and `/st-ask` derive their next step from the walk's answers as well as the run's state, and
+`/st-quick` names any `Not done:` item in its next-step line (the corpus fix batch's `review/64`; `f5`'s round 2).
+
+- **As built, where the delta differed:** invariants 2 and 5 hold every clause on six lines between them, freed by
+  rewrapping invariant 6 from three lines to two with its words unchanged, the charter staying at 95 lines; invariant 2
+  keeps "Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings" byte for byte (`review/11`). The
+  protocol's Gates bullet and Floor item 6 read "one ask per turn" (`review/12`). The delta's "one per question" holds
+  per leftover, a call bundling related ones.
+- **Expand/contract:** text only, under invariants 1.3.0, a MINOR step with its `docs/doctrine.md` row; a repository
+  that never re-syncs keeps the one-question close. Rollback is a re-sync at the prior version.
+- **Proof:** `test/corpus/rules/protocol.test.ts` ("question-protocol — the close walk (REQ-FLOW-080)"),
+  `test/content/charter.test.ts`, `test/content/invariantsVersion.test.ts`, `test/corpus/commands/work.test.ts`,
+  `test/corpus/commands/board.test.ts`, `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/spec.test.ts`,
+  `test/corpus/commands/plan.test.ts`, `test/corpus/commands/feedbackPair.test.ts`; new floor case
+  `close-summary-after-last-decision`, its must-holds B4–B6, with the no-leftovers twin
+  `benign-close-no-leftovers-asks-nothing-extra`; the close cases and the five `*-next-step-derived-*` cases re-synced
+  to the walk (`evals/SET-v7.md`).
+
+Amended 2026-10-15 (plan 020 file 2, unit `e12-translator`; read at `ecf11a74`). The client's question tool is the
+translator's map, `ASK_USER_TOOLS` (`src/tools/translator.ts`), which the protocol's marker renders for each client: one
+named tool per client, each row citing a source read on 2026-10-15. Claude Code: `AskUserQuestion`, one to four
+questions a call and two to four options each, never in a sub-agent. Cursor: `AskQuestion`, from 2.4 and only where the
+serving model offers it; `agent -p` rejects it as a user skip, and the tool's id rests on a forum staff reply, not a docs
+page. GitHub Copilot: `askQuestions` in VS Code, reaching sub-agents since 1.110, and `ask_user` in Copilot CLI, which
+`--no-ask-user` turns off; that `ask_user` takes one question a call is unverified. Codex: `request_user_input`, one to
+three questions a call, waiting for the answer in Plan mode, in Default mode only behind a feature flag, rejected by
+`codex exec`, its source the client's repository. Each rendered note is at most two sentences, keeps the plain-text
+fallback, says a sub-agent returns its question as a blocked result, and reads a skipped or headless question as no
+answer. The row type keeps `toolName: string | null`, though no row is `null` now.
+
+- GIVEN the map THEN every client has a `toolName` and a note of at most two sentences naming the fallback and reading a
+  skipped answer as no answer, each row with a dated source; GIVEN the rendered platform table THEN four named rows;
+  GIVEN the Copilot rendering THEN its note names `askQuestions` (`test/tools/translator.test.ts`,
+  `test/adapters/copilot.test.ts`; added 2026-10-15).
+
+### REQ-FLOW-081 — The run proves a row before it asks the person
+
+Added 2026-10-15 (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; the delta's amended text from
+`f7`'s return and its reviews, `review/50`, `review/51`, `review/59` to `review/61`, and the sign-off on `build/25`).
+
+Given an unproven QA row, Then the prover has tried its routes, cheapest first, before the table is built: a committed
+test whose assertion covers the row, a CLI or script run of its steps, a `gh` or API read, a headless client session,
+then the repository's browser harness, the client's own browser tool only where the dispatching client grants it. The
+prover is the test-runner in its row-proving mode, its capabilities unchanged: it edits nothing (`## Row proving`,
+`content/agents/stamity-test-runner.md:159-209`). The qa skill cannot spawn, so it tells its caller to dispatch the
+prover, and a caller that cannot dispatch runs the cheapest routes itself under the same guards and says so; an
+unattended run proves the same way (`content/skills/st-qa/SKILL.md:41-46`).
+
+- **One line per row.** `agent-run · <command> · exit <n> · <output path>` when a route ran, its exit code was read and
+  its output shows the row's `Expected` (the committed-test route also names the test source `file:line`, a lead, never
+  proof of a security-negative row); `contradicted · <command> · exit <n> · <output path>` with that output's redacted
+  excerpt when a route ran and showed anything else; `not proven: <reason>` when no route could run or the route that
+  ran left its exit code `unknown`. A route that ran ends that row's routes; only one that cannot run falls through.
+- **Who is asked.** At most three rows reach the person, each in one of REQ-FLOW-069's five categories or the
+  security-negative row no committed test covers, which stays the person's and takes the first place; the rest are
+  listed "over the cap, not asked: <reason>", which blocks nothing by itself, and an `H` row there stays an `H` row,
+  asked at the next checkpoint. A row outside the five that no route proves goes on `Not done:` as "not proven:
+  <reason>". An `agent-run` never proves a security-negative row (`content/skills/st-qa/SKILL.md:38-55`).
+- **Failing rows.** A `contradicted` row is failing: a walk is recorded beside its excerpt and does not clear it, and
+  only a later run showing `Expected` does; `Shippable` reads `YES` only once every `H` row is walked or proven and none
+  stands `contradicted` — a walked reply alone never clears one (`:129-130`, `:143-144`; REQ-FLOW-018, amended
+  2026-10-15).
+- **The guards**, binding any runner of the routes: a route reads through a sign-in already present and never writes
+  through one (no push, post, comment or account change); a route needing a credential neither present nor handed over,
+  or a step that cannot be undone, is not run; the headless-session route runs only in the client's read-only
+  permission mode and never on a client that has none; a row's own steps run in a scratch directory with the home
+  directory and the config-directory variables a program reads pointed into it, and a step that cannot be confined
+  that way cannot run; every saved or inline route output has a credential-shaped value replaced with `[redacted]`, and
+  the digest's `security:` line names each row so redacted (`content/agents/stamity-test-runner.md:187-209`).
+- **`/st-work`'s summary** shrinks to the rows the prover leaves for the person, at most three with the
+  security-negative row, each with a check a person can run in under a minute, a `contradicted` one with its excerpt
+  (`content/commands/st-work.md:278-279`); its step 3, the browser-evidence offer, is unchanged, and the core step does
+  not need that skill.
+
+- **As built, where the delta differed:** the delta's first form had three states and no person-row exception; the
+  exception, the `contradicted` state, the confinement and the redaction were added by the unit's reviews and amended
+  into the delta before this merge (`review/63`).
+- **Proof:** `test/corpus/agents/quality.test.ts` ("test-runner — row proving"), `test/corpus/skills/flow.test.ts`,
+  `test/corpus/commands/work.test.ts`; new cases `qa-prove-before-asking`, its benign twin
+  `benign-qa-second-account-stays-person-row`, and `qa-contradicted-row-fails-security-row-first`;
+  `qa-ui-change-keeps-person-row` re-baselined (`evals/SET-v7.md`).
+
+### REQ-FLOW-082 — Review and verify check module depth
+
+Added 2026-10-15 (plan 020 file 3, unit `f8-deep-modules`, with the corpus fix batch's `review/8` and `review/9`).
+
+Given a new layer whose interface mirrors what it wraps, Then the reviewer's maintainability lens files a pass-through
+finding: its row names "a new layer whose interface is nearly as wide as what it hides (a pass-through); a function or
+file well past the repo's own norms whose interface is wide too" (`content/agents/stamity-reviewer.md:47`). Given a big
+file with one export, Then there is no size-only finding: `maint-size-outliers` defers a whole file whose module exports
+at or below the repo median export count to `maint-module-depth` and records no hit, a function is never deferred, and a
+stack with no export construct defers nothing (`content/skills/st-verify/references/maintainability.md:24-34`).
+`st-verify` carries the judgment check `maint-module-depth`, with no `Threshold:`: the deletion test, the interface as
+the test surface, a deferred file cited with its export count beside the median, the evidence form
+`<path:line> exports=<k> (median <m>), lines=<n> (median <x>), forwards=<f>/<k>`, a port at a cross-cutting boundary
+the repo declares not counted as a pass-through, and `not-applicable` for a re-export index, a generated file or a
+test-only helper (`:77-88`).
+
+- **As built:** functions keep `maint-size-outliers`; only a whole file defers (the sign-off on `f8`'s review).
+- **Proof:** `test/corpus/agents/spine.test.ts`, `test/corpus/skills/verifyRestTools.test.ts`; new case
+  `reviewer-shallow-wrapper-pass-through`.
+
+### REQ-FLOW-083 — A plan unit names the module interface it lands behind
+
+Added 2026-10-15 (plan 020 file 3, unit `f6-touchpoints-b`). The `interfaces` cell of `/st-plan`'s unit table reads
+"the exact signatures, schemas, props, and error shapes the implementer needs, inline, and the module interface the
+unit lands behind" (`content/commands/st-plan.md:352`).
+
+- **Proof:** `test/corpus/commands/plan.test.ts` ("names the module interface a unit lands behind in its `interfaces`
+  cell (REQ-FLOW-083)").
+
+### REQ-FLOW-084 — Hook commands do not depend on the working directory
+
+Added 2026-10-15 (plan 020 file 2, unit `e5-hook-starter`, with `e7-cursor-pins`'s `review/84` and `review/85`).
+
+Given a session started in `repo/sub`, When an emitted Cursor or Copilot hook command runs, Then it walks up to its
+client's anchor file and behaves as from the root. Every Cursor and Copilot entry, Cursor's two guards included with
+`failClosed` kept, is a `node -e` walk-up starter rendered by `portableHookCommand(tool, row, { syncCall, script? })`
+from one anchor table (`STARTER_ANCHORS`, `src/hooks/portableRunner.ts`): Cursor's walk starts at `CURSOR_PROJECT_DIR`
+when that folder holds `.cursor/hooks.json`, else at the working directory; Copilot's walks to
+`.github/hooks/stamity.json`; Codex's starter is byte-identical to 1.14's, so the trust Codex recorded holds. The starter
+runs its script from the root it finds, by default the portable runner; a missing script exits 1 naming the pinned sync
+call, and no anchor above exits 1. The script is held to plain root-relative segments and the call to
+`STARTER_SAFE_CALL`, so the program holds no `$`, backtick, `%`, backslash or inner quote and reads the same under `sh`
+and `cmd`. The starter names the pinned call, so each release rewrites the engine's entries, as on Codex. 1.14's
+relative commands stay recognised as the engine's, and the first 1.15 `sync` replaces them in place, owner entries
+kept, with no `.bak` under a recorded ledger (`walkUpStarterScript`, `src/manifest/hookDocuments.ts`; REQ-FLOW-037,
+amended 2026-10-15). A command with no `node` on `PATH` exits 127 from the shell, as before.
+
+- **As built, beyond the delta:** where `.github/hooks/stamity.json` is not tracked and clean in git, each upgrade's
+  overwrite leaves a `.bak` by the rendering proof, since the entries now name the version (`build/45`, open).
+  `CURSOR_PROJECT_DIR` on every Cursor hook rests on the plan's vendor read of 2026-10-14 (`build/43`, open).
+- **Proof:** `test/hooks/portableRunner.test.ts` ("the walk-up starter on Cursor and Copilot"),
+  `test/manifest/hookDocuments.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursor.test.ts`,
+  `test/cloud/containerLeg.test.ts` (REQ-PROVE-037).
+
+### REQ-FLOW-085 — The session start names a cloud or CI session
+
+Added 2026-10-15 (plan 020 file 2, units `e9-session-start-detection` and `e10-cloud-docs-matrix`; `e10` read at
+`fee88300`).
+
+Given `CLAUDE_CODE_REMOTE` set to `true`, `COPILOT_AGENT_PROMPT`, `CURSOR_AGENT_SOCKET`, or `CI` or `GITHUB_ACTIONS`, each
+set to a value other than empty, `false` or `0`, When the session-start hook runs, Then after the learnings and handoff
+index and before any resume card it prints one blank line, `Session: <name>.` for the first detected session in that
+order (a Claude Code cloud session, a Copilot cloud agent session, a self-hosted Cursor worker, a CI run), that session's
+not-enforced lines as `- …`, and `Also detected: <names>.` when other markers are set (`CLOUD_SESSIONS` and
+`sessionLines`, `src/hooks/scripts.ts`). A marker is read by presence only and no value is printed, and the script makes
+no network call. A client's lines are that client's `sessionStart` rows in `CLIENT_CLOUD_FACTS`
+(`src/hooks/model.ts`, at `fee88300`), each row carrying its vendor page, access date and status: Claude Code's
+"GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api." and "The review-gate counter resets with the
+VM."; Copilot's "A preToolUse hook that times out fails open.", "An ask answer is read as deny." and "Hooks run only
+from the default branch."; a self-hosted Cursor worker's "subagentStart is skipped in a first or read-only turn.". The
+CI line, "No person answers; declared defaults apply.", is the engine's own behaviour and stays in the script.
+
+The capability matrix carries the same table: a dated "In the vendor's cloud" cell per client in its glance table, and a
+"Cloud sessions" section listing every row with its fact, the line the session start prints, its status, its source
+and its access date, a page that says nothing on a point rendered "not documented, read <date>"
+(`src/emit/capabilityMatrix.ts`, at `fee88300`). `docs/customization.md` and `docs/troubleshooting.md` state which
+clouds run which hooks and cite that section (REQ-FLOW-086).
+
+- **As built, where the delta differed:** a self-hosted Cursor worker no longer prints "The MCP guard does not run.",
+  which the delta's unit listed: Cursor's page says it only of Cursor-hosted agents, so the fact stays an `unverified`
+  row with no session line (`build/75`). `CURSOR_AGENT_SOCKET` as the self-hosted marker is a `not documented` row: the
+  self-hosted page names no such variable. The blank line before the lines keeps the resume card "everything after the
+  last blank line" for its two readers.
+- **Proof:** `test/hooks/scripts.test.ts` ("the session start names a cloud or CI session (REQ-FLOW-085)"),
+  `test/hooks/sessionStartCard.test.ts`, `test/hooks/scriptBudget.test.ts` (the session-start row at 49,152 bytes and
+  1,100 lines), `test/emit/capabilityMatrix.test.ts` ("the cloud column and the Cloud sessions section"), and
+  `test/cloud/containerLeg.test.ts`.
+
+### REQ-FLOW-086 — Copilot hooks use camelCase
+
+Added 2026-10-15 (plan 020 file 2, unit `e6-copilot-adapter` and its fix round, `review/94` to `review/97`; and unit
+`e10-cloud-docs-matrix` for the guides, read at `fee88300`).
+
+`.github/hooks/stamity.json` keys its events `sessionStart`, `preToolUse`, `postToolUse`, `userPromptSubmitted`,
+`agentStop` and `sessionEnd`, and each entry is `{ type: "command", bash, command, cwd: ".", matcher?, timeoutSec? }`,
+`bash` and `command` holding the same starter (`COPILOT_EVENT_NAMES` and `buildCopilotHooksJson`,
+`src/adapters/copilot.ts`). The Copilot runner hands authored hooks the Claude tool name for each runtime name in
+`COPILOT_RUNTIME_TOOL_NAMES` — `bash` → `Bash`, `powershell` → `PowerShell`, `view` → `Read`, `create` → `Write`, `edit`
+and `str_replace_editor` → `Edit`, `grep` and `rg` → `Grep`, `glob` → `Glob`, `task` → `Agent`, `ask_user` →
+`AskUserQuestion` — by an own-property read, the tool input staying Copilot's own, and passes any other name unchanged
+(`src/hooks/portableRunner.ts`, the table and the runner's mapping at `:318-324`). `apply_patch` keeps its own name and
+its patch input, with no `file_path`. An authored matcher is read as its top-level alternatives, an anchor at either end
+and one wrapping group kept; each plain-name alternative translates through the inverse table, Claude's legacy `Task`
+like `Agent`, and every other alternative is kept as written; a source that does not balance is kept whole. `init` and
+`sync` name once a matcher whose plain name has no runtime twin, and say once that a path guard matched on `Edit` or
+`Write` must also name `apply_patch` (`translateCopilotMatcher` and `copilotMatcherWarnings`, `src/adapters/copilot.ts`).
+`check` adds no row for it. The guides say Copilot's cloud agent uses hooks only when the file is on the default
+branch and loads them from the clone, that a Claude Code cloud session with several repositories loads no repository
+hooks, and that Codex cloud documents no project hooks, so none are assumed to run (`docs/customization.md:430-441`, at
+`fee88300`; `docs/troubleshooting.md`, "A hook never runs in a cloud session").
+
+- **As built, where the delta differed:** the delta's matcher example mapped `Edit` to `apply_patch` too; the landed
+  runner keeps `apply_patch` apart, because the vendor's patch format names no path an authored path guard could read,
+  and the plan was amended to it (`review/94`). Unverified, recorded as a dated row: whether Copilot's `edit`, `create`
+  and `view` name their path argument `filePath` or `path` (`build/76`).
+- **Expand/contract:** the 1.14 PascalCase file is replaced on the first 1.15 `sync`, its bytes kept recoverable by the
+  rendering proof; rollback is a re-sync at the prior version.
+- **Proof:** `test/adapters/copilot.test.ts`, `test/hooks/portableRunner.test.ts`, `test/emit/hooksInfra.test.ts`.
+
+### REQ-FLOW-087 — PR-resolve and the board work in a REST-only session
+
+Added 2026-10-15 (plan 020 file 3, units `f4-board-close` and `f6-touchpoints-b` with their fix rounds; the delta's
+amended text from `f4`'s blocked return).
+
+Given a REST-only session — the session-start banner says GraphQL is unavailable (REQ-FLOW-085), or a `gh api graphql`
+call is refused — Then every GitHub call of `/st-pr-resolve` and `/st-board` uses a REST `gh api` form where one exists.
+The text names the session by what the agent observes, never by client.
+
+- **`/st-board`:** issues and their comments through `gh api repos/<owner>/<repo>/issues…`, labels and `pulls/<n>`;
+  every REST listing the run depends on passes `per_page=100` and `--paginate`, the issue listing reads `state=all` and
+  leaves out entries carrying `pull_request`. A Projects board is refused with "Projects boards are unavailable in a
+  REST-only session", and setup refuses a Projects link there. A 403 on a read of the linked repository is reported as
+  `not attached to this session`, never as a missing board; a 403 on the permission read alone is a failed write check;
+  a 403 whose message names a rate limit is reported as a rate limit, ahead of both
+  (`content/commands/st-board.md:225`, the GitHub row).
+- **`/st-pr-resolve`:** one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.base.repo.full_name,
+  .head.repo.full_name, .head.ref, .head.sha]'`, `<n>` checked to be digits only; a head repository other than the base
+  is refused on that read, before any fetch. Then `git fetch origin "pull/<n>/head"`, a failed fetch stopping the round;
+  `git rev-parse FETCH_HEAD` must equal the head sha the read returned, else the round is refused before any checkout;
+  then `git checkout -B "pr-resolve-<n>" "<sha>"` on that verified sha. The author's branch name enters no fetch and no
+  checkout. A pushed ref holds only letters, digits, `.`, `_`, `/` and `-`, then passes `git check-ref-format --branch`,
+  and is always quoted; after the push a fresh read of the head sha must equal `git rev-parse HEAD`, else no
+  `Implemented in` reply posts. No remote URL is read or printed (`content/commands/st-pr-resolve.md:58-80`). A review
+  thread's resolution state is reported `unknown`, and a thread counts answered when its newest comment carries the
+  command's signature line posted by the account the run replies as (section 1).
+
+- **As built, where the delta differed:** the delta's first sentence named Claude Code's cloud; the corpus names no
+  client in model-facing text, so the condition is named by observation (`f4`'s blocked return). The REST checkout
+  verifies the fetched commit's content against the API's head sha instead of checking `origin`'s URL, which an
+  intermediate fix round had added: the landed code reads no remote configuration (the design signed off at that
+  round's security lens, `review/39` to `review/42`, and `review/58`). The board's paging and 403 readings are beyond
+  the delta (`review/16`, `review/17`, `review/32`).
+- **Proof:** `test/corpus/commands/board.test.ts` ("works a REST-only session in REST forms and refuses a Projects board
+  there (REQ-FLOW-087)"), `test/corpus/commands/feedbackPair.test.ts` ("takes the REST forms in a REST-only session,
+  named by what the agent observes (REQ-FLOW-087)" and "fetches a REST-only head by number, refuses a fork head, and
+  refuses a ref outside the allowlist"), `test/corpus/invariants.test.ts` (invariant 17).
+
+### REQ-FLOW-088 — A cloud with no session-start hook reads learnings through the screen
+
+Added 2026-10-15 (plan 020 file 3, unit `f2-protocol-charter` and its fix round, `review/13`; the delta's amended text
+from `review/27`). Charter invariant 5 reads: "Read `.stamity/learnings/` before project-specific work, only through
+the session-start banner or, where no hook ran, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run
+with an empty stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect."
+(`content/charter/stamity-charter.md:55-57`). The command names no glob and no `/dev/null`, so it reads the same under
+every shell.
+
+- **Proof:** `test/content/charter.test.ts` (the invariant 5 pins, with no `/dev/null` and no `hooks/*/`),
+  `test/content/invariantsVersion.test.ts` (the 1.3.0 hash row).
 
 ## Acceptance criteria
 
@@ -3082,6 +3544,11 @@ above.
 - GIVEN the reply "not signing, row 3 broke" THEN no row reads `accepted-unwalked` and the checkpoint stays open.
 - GIVEN any QA record THEN no row reads `walked` unless the person's reply, quoted in the record, names it or says every
   row was walked.
+- GIVEN the qa skill THEN its Proof column names `agent-run` with command, exit code and output path and `contradicted`
+  with the prover's redacted excerpt, and proven rows fold into one line; GIVEN a `contradicted` row and a reply that
+  says it was walked THEN the walk is recorded beside the excerpt and the row stays failing; GIVEN `/st-work`'s proof
+  block THEN its QA line folds the proven rows and lists each row not proven, over the cap or `contradicted` with its
+  reason or excerpt (`test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; added 2026-10-15).
 
 **REQ-FLOW-018**
 
@@ -3093,6 +3560,10 @@ above.
   THEN the row is asked again.
 - GIVEN a row whose Risk is `H` recorded `accepted-unwalked` THEN `Shippable` does not read `YES` and the record names
   the open `H` row.
+- GIVEN an `H` row that stands `contradicted`, or an `H` row over the cap of three left unasked, THEN `Shippable` does
+  not read `YES`; it reads `YES` only once every `H` row is walked or proven and none stands `contradicted`; GIVEN every
+  row proven, `agent-run` rows among them, THEN no QA question is asked and the record carries "all N rows auto-proven"
+  (`test/corpus/skills/flow.test.ts`; eval case `qa-contradicted-row-fails-security-row-first`; added 2026-10-15).
 
 **REQ-FLOW-019**
 
@@ -3101,12 +3572,14 @@ above.
 - GIVEN standard intensity and a fresh persisted plan WHEN the plan gate is reached THEN no question is asked, and the
   record holds `Default applied: plan gate → option 1, execute now (persisted plan <path>)`.
 - GIVEN deep intensity THEN the plan gate asks.
-- GIVEN a close with person rows, a spec delta and uncommitted changes THEN exactly one question is asked, naming all
-  three, and its declared default reads "leave uncommitted".
+- GIVEN a close with person rows, a spec delta and uncommitted changes THEN the close walk asks about all three, one ask
+  per turn in rounds of numbered options, and its declared default reads "leave uncommitted" (amended 2026-10-15, plan
+  020 file 3; it read "exactly one question is asked, naming all three").
 - GIVEN no answer to that question THEN nothing is committed, no spec file changes, and QA reads `not signed`.
 - GIVEN that question has been answered THEN no later turn of the run asks about committing.
-- GIVEN a close with person rows, a spec delta, uncommitted changes and leftovers THEN exactly one question is asked,
-  naming all four (added 2026-10-10, unit `q10a-work-close`; REQ-FLOW-074).
+- GIVEN a close with person rows, a spec delta, uncommitted changes and leftovers THEN the walk asks about all four, and
+  the proof block prints after its last answer with nothing after it (added 2026-10-10, unit `q10a-work-close`;
+  REQ-FLOW-074; amended 2026-10-15, plan 020 file 3; it read "exactly one question is asked, naming all four").
 
 **REQ-FLOW-020**
 
@@ -3370,7 +3843,8 @@ above.
 - GIVEN a class whose checks name `review-once` and a Warning it raises THEN the Warning is fixed and closure-reviewed
   once, and no further round runs.
 - GIVEN the charter THEN invariant 4 reads "Done means the gates `gate classify` names exit 0 (all if it did not run)."
-  with the `Not done:` line unchanged, and `invariants_version` reads `1.2.0`.
+  with the `Not done:` line unchanged, and `invariants_version` reads `1.3.0` (amended 2026-10-15, plan 020 file 3; it
+  read `1.2.0`, which invariants 2 and 5 moved).
 
 **REQ-FLOW-064**
 
@@ -3497,10 +3971,13 @@ above.
 
 **REQ-FLOW-069**
 
-- GIVEN the qa skill WHEN read THEN it names the three kinds, says every other row is auto-proven from a check the run's
-  test-runner executes before the table is built, and keeps on the human path a row whose check is missing, cannot run
-  or fails, and holds the negative row of a security-adjacent path to a committed test's assertion (amended 2026-10-10,
-  the whole-branch review's fix round, `review/94`).
+- GIVEN the qa skill WHEN read THEN it names the five categories, says every row no artifact covers goes to the prover
+  first and at most three rows reach the person, sends an unproven row to the person only within the five and
+  otherwise to `Not done:`, and holds the negative row of a security-adjacent path to a committed test's assertion,
+  which an `agent-run` never proves (amended 2026-10-10, the whole-branch review's fix round, `review/94`; amended
+  2026-10-15, plan 020 file 3, unit `f7-prove-before-asking`: it read "names the three kinds, says every other row is
+  auto-proven from a check the run's test-runner executes before the table is built, and keeps on the human path a row
+  whose check is missing, cannot run or fails").
 - GIVEN a change to a security-adjacent path whose negative row no committed test's assertion covers THEN that row is
   not recorded `auto-proven` on a check the test-runner ran once for it; it stays on the human path and is asked (added
   2026-10-10, the whole-branch review's fix round, `review/94`). `judgment: reviewer`
@@ -3517,7 +3994,9 @@ above.
   it, a check run once for that row being no proof for it (`content/skills/st-qa/SKILL.md:43-44`, `:45-49`,
   `:105-107`, `:113`; amended 2026-10-10, `review/83`; it read "THEN no person row is created and no QA question is
   asked"; amended 2026-10-10, the whole-branch review's cap round, `review/103`: the clause on the negative row and
-  its citation `:45-49` added). `judgment: reviewer`
+  its citation `:45-49` added). `judgment: reviewer` (Amended 2026-10-15, plan 020 file 3: "the three kinds" reads "the
+  five categories", and a row whose check is missing, cannot run or fails is the person's only within them; the
+  citations above read at `5cd61743`.)
 
 **REQ-FLOW-070**
 
@@ -3553,7 +4032,11 @@ above.
   `review/91`, `review/96`, `review/97`), an `unparsed:` line as the person's to fix, the never-open floor as Frame's,
   `fill`'s and `/st-plan`'s with the close writing through the `ledger` verb's `inbox-write`, `stop` as every leftover
   row on `Not done:`, and what `show` prints and where it is refused (amended 2026-10-12, run
-  `2026-10-12_board-writes`; it read "the never-open floor as Frame's alone with what the close's write reads").
+  `2026-10-12_board-writes`; it read "the never-open floor as Frame's alone with what the close's write reads"); and,
+  amended 2026-10-15 (plan 020 file 3, unit `f4-board-close`), the close walk as the way the leftovers are asked, each
+  question's options with the recommended one first, the protocol's plain-text fallback for a client with no question
+  tool, no `L2 fix; drop L1: <reason>; show L3` form, and an earlier round's answers standing on a later `stop`
+  (`test/corpus/commands/board.test.ts`).
 - GIVEN a close holding a Warning finding whose author's note urges dropping it, and two notes, THEN the Warning is
   listed with fix now or schedule as its recommendation, never pre-set to drop and never folded into the notes line.
   `judgment: reviewer`
@@ -3611,7 +4094,9 @@ above.
   `/st-pr-resolve`'s deferral, `/st-rework`'s DEFER row, its critical-deferred row and its meta row, and the dep-audit
   row on a day and on a touch — THEN `parseInbox` reads each below the heading with no problem.
 - GIVEN `/st-board`'s census THEN it names five writers, and `/st-quick` among the retirers and not the writers;
-  GIVEN `/st-quick`'s body THEN its last paragraph says the lane appends no inbox row and offers no leftovers ask.
+  GIVEN `/st-quick`'s body THEN its last paragraph says the lane appends no inbox row, and its walk offers carry to
+  `/st-work` now or leave on `Not done:` and names no inbox, append, fix-now, drop or schedule branch (amended
+  2026-10-15, plan 020 file 3; it read "and offers no leftovers ask"; `test/corpus/commands/lightTrio.test.ts`).
 - GIVEN a deferred advisory at `critical` or `high` THEN the dep-audit row carries a `by:` day the operator named and
   never `when: touched`.
 - GIVEN a `/st-plan` follow-up with no date and no trigger a run can check THEN it goes to the plan's Drop list and
@@ -3647,6 +4132,109 @@ above.
   "still read the file whole". *(corpus: `test/corpus/commands/board.test.ts`, `test/corpus/cliCallForm.test.ts`)*
 - GIVEN `/st-plan`'s Shared intake item 4 WHEN read THEN it names `stamity ledger inbox` with `--plan` and `--paths` and
   the same fallback. *(corpus: `test/corpus/commands/plan.test.ts`)*
+
+**REQ-FLOW-080** (added 2026-10-15)
+
+- GIVEN the question protocol THEN `## Close walk` is the section after `## Gates` and the last, holds no walk without
+  leftovers, the order, the per-call limit and rounds, the summary last with nothing after it, `Default applied:`,
+  `decision-waiting` and a skipped headless question as no answer, names no client id or native tool, and carries the
+  platform marker once with the plain-text fallback after it; GIVEN each client's rendering THEN no marker is left and
+  that client's note is there. *(test: `test/corpus/rules/protocol.test.ts`)*
+- GIVEN the charter THEN 95 lines, none over 117 characters, invariant 2 holding "one ask per turn", the rounds and its
+  1.2.0 sub-agent sentence, invariant 6's words unchanged on two lines, and the 1.3.0 hash row matching.
+  *(test: `test/content/charter.test.ts`, `test/content/invariantsVersion.test.ts`)*
+- GIVEN each of the nine touchpoints THEN it points at the Close walk, names its own leftovers, and ends on its report,
+  return block or proof block with nothing after it; GIVEN `/st-quick` THEN no inbox append; GIVEN `/st-spec` THEN a
+  marker's default is "leave it marked". *(corpus: `work.test.ts`, `board.test.ts`, `lightTrio.test.ts`, `spec.test.ts`,
+  `plan.test.ts`, `feedbackPair.test.ts` under `test/corpus/commands/`)*
+- GIVEN three leftovers on a client with no question tool and an operator asking for the summary THEN the summary prints
+  only after the last answer, no leftover is decided by the run itself, and no real defect is defaulted to dropped.
+  `judgment: reviewer` *(eval: floor case `close-summary-after-last-decision`)*
+
+**REQ-FLOW-081** (added 2026-10-15)
+
+- GIVEN the test-runner THEN its `## Row proving` section lists the five routes in order, the stop at the first that
+  runs, the three line forms, the guards and the redaction, and its capabilities stay `read, execute`.
+  *(test: `test/corpus/agents/quality.test.ts`)*
+- GIVEN the qa skill THEN at most 150 body lines, the five categories, the cap of three with the security-negative row
+  first, `agent-run`, `contradicted`, "over the cap, not asked" and the exception that an `agent-run` never proves the
+  security-negative row. *(test: `test/corpus/skills/flow.test.ts`)*
+- GIVEN `/st-work` THEN step 1's summary names only the rows the prover leaves for the person, and step 3's browser line
+  and the bundle row are unchanged. *(test: `test/corpus/commands/work.test.ts`)*
+- GIVEN a row that needs a second real account THEN it stays the person's and the pass proceeds; GIVEN a contradicted
+  `H` row and a walked reply THEN `Shippable` reads `NO` naming it. `judgment: reviewer` *(eval:
+  `benign-qa-second-account-stays-person-row`, `qa-prove-before-asking`, `qa-contradicted-row-fails-security-row-first`)*
+
+**REQ-FLOW-082** (added 2026-10-15)
+
+- GIVEN the reviewer's Maintainability row THEN it holds the pass-through clause and the size-with-wide-interface clause.
+  *(test: `test/corpus/agents/spine.test.ts`)*
+- GIVEN the maintainability reference THEN `maint-module-depth` sits under Judgment with no `Threshold:`, states the
+  deletion test, the evidence form, the carve-out and the not-applicable subjects, `maint-size-outliers` names the
+  deferral, ids stay unique, and the reference stays within 40–100 lines; GIVEN one export and 900 lines THEN no size
+  hit. *(test: `test/corpus/skills/verifyRestTools.test.ts`)*
+- GIVEN a cache wrapper forwarding five methods THEN the reviewer files a pass-through finding, and GIVEN a 902-line
+  one-export file THEN no size finding. `judgment: reviewer` *(eval: `reviewer-shallow-wrapper-pass-through`)*
+
+**REQ-FLOW-083** (added 2026-10-15)
+
+- GIVEN `/st-plan`'s unit table THEN its `interfaces` row names the module interface the unit lands behind.
+  *(test: `test/corpus/commands/plan.test.ts`)*
+
+**REQ-FLOW-084** (added 2026-10-15)
+
+- GIVEN an emitted Cursor and Copilot hook command run from `repo/sub/deeper` THEN the same output and exit code as from
+  the root, through `sh` on POSIX and `cmd` on Windows; GIVEN a missing runner THEN exit 1 naming the sync call; GIVEN
+  no anchor above THEN exit 1. *(test: `test/hooks/portableRunner.test.ts`, `test/cloud/containerLeg.test.ts`)*
+- GIVEN `CURSOR_PROJECT_DIR` set to the root and a decoy `sub/.cursor/hooks.json` with its own runner WHEN a session in
+  `sub/` runs the command THEN the root's runner runs; GIVEN the variable naming a folder without the anchor THEN the
+  walk from the working directory decides. *(test: `test/hooks/portableRunner.test.ts`)*
+- GIVEN a 1.14 `.cursor/hooks.json` with an owner entry between the engine's, under a recorded ledger, WHEN `sync -y`
+  runs THEN the engine's entries become starters in place, the owner entry stays, no `.bak` is taken, and `check` exits
+  0; GIVEN Codex THEN `.codex/hooks.json` is byte-identical. *(test: `test/merge/hookFilesOwnership.test.ts`,
+  `test/manifest/hookDocuments.test.ts`)*
+
+**REQ-FLOW-085** (added 2026-10-15)
+
+- GIVEN each marker THEN its `Session:` line and its lines, byte-exact; GIVEN `CLAUDE_CODE_REMOTE=false` or `=1`,
+  `CI=false`, `CI=0` or an empty value THEN the banner alone; GIVEN `GITHUB_ACTIONS` and `CI` without the Copilot marker
+  THEN the CI line only; GIVEN several markers THEN the first by priority and `Also detected:`; GIVEN
+  `COPILOT_AGENT_PROMPT` holding an instruction, or a marker holding a newline and a forged `Session:` line, THEN no
+  value prints; GIVEN every client's generated script THEN no network word and the budget held.
+  *(test: `test/hooks/scripts.test.ts`, `test/hooks/sessionStartCard.test.ts`, `test/hooks/scriptBudget.test.ts`)*
+- GIVEN `node scripts/generate-capability-matrix.mjs` THEN the page is byte-identical to the committed one, each client's
+  glance cell carries a dated cloud cell, and every `CLIENT_CLOUD_FACTS` row renders once with its URL and an ISO
+  date, a page that says nothing as "not documented, read <date>"; GIVEN the session start's lines THEN they equal the
+  table's `sessionStart` rows, in order. *(test: `test/emit/capabilityMatrix.test.ts`)*
+
+**REQ-FLOW-086** (added 2026-10-15)
+
+- GIVEN the planned hooks file THEN no key starts with a capital letter and every entry has `type: "command"`,
+  `bash` equal to `command` and `cwd: "."`; GIVEN an upgrade over a 1.14 PascalCase file THEN one recoverable copy is
+  kept. *(test: `test/adapters/copilot.test.ts`)*
+- GIVEN a camelCase payload with `toolName: "bash"` THEN the authored hook receives `tool_name: "Bash"`; GIVEN
+  `apply_patch` THEN it arrives under its own name with no `file_path`; GIVEN `constructor` or an MCP name THEN it passes
+  unchanged; GIVEN each mapped name THEN the core guard places it as before. *(test: `test/hooks/portableRunner.test.ts`)*
+- GIVEN `^(Bash|Edit)$` THEN `^(bash|edit|str_replace_editor)$`; GIVEN `Bash|mcp__.*` THEN `bash|mcp__.*`; GIVEN
+  `NotebookEdit|Bash` THEN one warning naming the whole matcher; GIVEN a matcher naming `Edit` without `apply_patch`
+  THEN one `apply_patch` warning. *(test: `test/adapters/copilot.test.ts`)*
+
+**REQ-FLOW-087** (added 2026-10-15)
+
+- GIVEN `/st-board` THEN the GitHub row names the observed condition, the REST forms, `per_page=100` with `--paginate` on
+  every listing, the Projects sentence word for word and the three 403 readings, and setup refuses a Projects link
+  there. *(test: `test/corpus/commands/board.test.ts`)*
+- GIVEN `/st-pr-resolve`'s Pre-flight THEN the REST-only block reads the pull request once, refuses a fork head before
+  any fetch, fetches by number, refuses a `FETCH_HEAD` other than the read's head sha before any checkout, checks out
+  that sha, names no client and no client variable, validates the pushed ref by allowlist then `check-ref-format`, and
+  verifies the head after the push; GIVEN section 1 THEN the thread-state fallback. *(test:
+  `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/invariants.test.ts`)*
+
+**REQ-FLOW-088** (added 2026-10-15)
+
+- GIVEN the charter THEN invariant 5 names `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with
+  an empty stdin and opening only the files it lists as loaded, and holds no `/dev/null` and no `hooks/*/`.
+  *(test: `test/content/charter.test.ts`)*
 
 ## References
 
@@ -3695,6 +4283,19 @@ above.
   REQ-FLOW-078).
 - `source` (added 2026-10-12): `src/cli/commands/ledger.ts::runInboxWrite`, `src/runs/ledgerStore.ts::writeInbox`,
   `src/runs/inboxStore.ts::editInboxText`.
+- `docs/plans/020-cli-native-02.md`, `-03.md` and `-04.md`, with `.stamity/runs/2026-10-14_cli-native/` (its record,
+  ledger and units' reports) — the spec deltas, sign-offs and ledger rows the text dated 2026-10-15 cites
+  (REQ-FLOW-080 to REQ-FLOW-088; the amended requirements name theirs), added 2026-10-15.
+- `source` (added 2026-10-15): `content/rules/stamity-question-protocol.md` (`## Close walk`),
+  `content/charter/stamity-charter.md` (invariants 2 and 5), `content/agents/stamity-test-runner.md` (`## Row proving`),
+  `content/skills/st-qa/SKILL.md`, `content/skills/st-verify/references/maintainability.md`,
+  `src/hooks/portableRunner.ts` (`portableHookCommand`, `launcherPath`, `COPILOT_RUNTIME_TOOL_NAMES`),
+  `src/manifest/hookDocuments.ts` (`walkUpStarterScript`), `src/hooks/scripts.ts` (`CLOUD_SESSIONS`), `src/hooks/model.ts`
+  (`CLIENT_CLOUD_FACTS`, at `fee88300`), `src/emit/capabilityMatrix.ts`, `src/shared/cliCall.ts` (`cliCallHint`),
+  `src/adapters/copilot.ts` (`COPILOT_EVENT_NAMES`, `translateCopilotMatcher`, `buildSetupSteps`), `src/tools/translator.ts`
+  (`ASK_USER_TOOLS`, at `ecf11a74`).
+- `test` (added 2026-10-15): `test/cloud/containerLeg.test.ts`, `test/corpus/rules/protocol.test.ts`, and the suites
+  each requirement names; eval cases in `evals/cases-v6/` as each Proof bullet names them.
 
 ## Risks
 
@@ -3846,7 +4447,10 @@ above.
     check the test-runner executed, while its Auto-prove table and rule 1 ask for the test source's `file:line`
     (`content/skills/st-qa/SKILL.md:41-43`, `:90`, `:100-104`). Recorded as observed; this merge settles neither.
     Amended 2026-10-10 (the whole-branch review's fix round, `review/94`): the negative row of a security-adjacent path
-    is held to rule 1's pointer (`:45-49`); for every other row the two readings stand.
+    is held to rule 1's pointer (`:45-49`); for every other row the two readings stand. Settled 2026-10-15 (plan 020 file
+    3, unit `f7-prove-before-asking`, folding this row): the Auto-prove table and rule 1 accept the same two forms, a
+    test's `file:line` beside the gate result or the prover's `agent-run` (`content/skills/st-qa/SKILL.md:96-97`,
+    `:107-112`; REQ-FLOW-069, amended 2026-10-15).
   - **Copilot's verdict roles load the working tree's instructions** (`review/22`, a security finding and a decision
     left open). With REQ-FLOW-071's key, Copilot's reviewer and lenses load the checkout's `AGENTS.md`, `CLAUDE.md`
     and `copilot-instructions.md`, so a branch that edits one is judged by roles already following the edit.
@@ -3871,3 +4475,15 @@ above.
   - **The no-CLI fallback reads the file.** With no CLI form, or an installed copy without `inbox-write`, the close
     appends with the file tools and records `inbox: by hand (no CLI)` (`content/commands/st-work.md:398-399`; S18), so
     on a read-before-edit client that append reads the inbox whole.
+- REQ-FLOW-080 to REQ-FLOW-088 — the residuals run `2026-10-14_cli-native` recorded, as merged on 2026-10-15; each id is
+  that run's ledger row:
+  - **Eval cases read the walk's order, not the tool call.** The cases run without tools, so they grade that the
+    summary waits for the last answer, not that the client's question tool was called; a person's walk of a real close
+    at the release's QA covers the call (plan 020 file 3, its Risks).
+  - **A hook write the version names.** Copilot's hook entries name the pinned version, so an upgrade rewrites
+    `.github/hooks/stamity.json`, and where that file is not tracked and clean it leaves a `.bak` (`build/45`).
+  - **Vendor facts not re-read on a docs page:** `CURSOR_PROJECT_DIR` on every Cursor hook (`build/43`), Copilot's path
+    argument name for `edit`, `create` and `view` (`build/76`), and how Cursor merges `updated_input` across two
+    `preToolUse` hooks on `Task`.
+  - **`/st-debug` and a refused folder.** It starts git itself and reads no `gate` reason, so REQ-PLUGIN-046's stop of
+    2026-10-15 does not reach it (recorded by `f5-touchpoints-a`'s report as pre-existing).
