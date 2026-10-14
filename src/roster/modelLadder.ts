@@ -65,7 +65,8 @@
  * class now resolves, in this order, to the operator's pin for this client,
  * the pin for every client, the client's own alias, the first entry of the
  * shipped priority list (`./modelDefaults.ts`) that the account's own model
- * list holds, and that list's entry 0 where no account list was read. Nothing
+ * list holds, and that list's entry 0 where no account list was read; a list
+ * that was read and holds no candidate resolves the class to nothing. Nothing
  * here is invented: the priority list is dated, cited and read off each
  * client's CLI, and the account's list is what `init` and `sync` read from the
  * client and persisted — emission never starts a client. The one client that
@@ -547,7 +548,7 @@ export function listHoldsPin(listed: readonly string[], pin: string): boolean {
  * module header gives: the pin (re-picked only when the account's list is
  * known and lacks it), the client's alias, then — for a caller carrying the
  * pick — the shipped list's first entry the account's list holds, else its
- * entry 0 where no list was read. Nothing at all when the client has no model
+ * entry 0 where no list was read; a list that holds no candidate gives nothing. Nothing at all when the client has no model
  * key: a value in a field the client does not read is a restriction the
  * operator can see in the file and the client never applies.
  */
@@ -569,8 +570,11 @@ function baseModelValue(
   }
   const alias = projection.aliases[modelClass];
   if (alias !== undefined || pick === undefined) return alias;
-  const fromList = listed === undefined ? undefined : pickModel(projection.tool, modelClass, effort, listed);
-  return (fromList ?? pickModel(projection.tool, modelClass, effort))?.id;
+  // A list that was read decides alone: one that holds none of the class's
+  // candidates resolves to nothing, never to a shipped id the account lacks,
+  // which the client would refuse (ledger row 2026-10-14_cli-native/build/66).
+  // The shipped entry 0 is for a client whose list was never read.
+  return pickModel(projection.tool, modelClass, effort, listed)?.id;
 }
 
 /**

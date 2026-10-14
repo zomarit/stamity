@@ -609,9 +609,28 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
     );
     // No pin: the first shipped candidate the account holds, here the second in the order.
     expect(resolveModelValue("standard", "codex", {}, {}, { listed: ["gpt-5.6-terra"] })).toBe("gpt-5.6-terra");
-    // A list that holds no candidate falls through to entry 0, as having no list does.
-    expect(resolveModelValue("standard", "codex", {}, {}, { listed: ["other"] })).toBe("gpt-6-sol");
+    // TEST CHANGE, justified (fix round 1 of e8, ledger row 2026-10-14_cli-native/build/66): two
+    // lines here asserted that a list holding no candidate falls through to entry 0, as having no
+    // list does. By the sign-off it resolves to nothing instead, so they moved to the case below,
+    // which pins both sides; the order this case asserts is otherwise unchanged.
+  });
+
+  it("takes the shipped entry 0 only when no list was read, and writes nothing when the list holds no candidate (build/66)", () => {
+    // No list read: the shipped list's first entry, on both clients that ship one.
     expect(resolveModelValue("standard", "codex", {}, {}, {})).toBe("gpt-6-sol");
+    expect(resolveModelValue("advanced", "copilot", {}, {}, {})).toBe("claude-opus-5.5");
+    // A saved list with none of the class's candidates: no model at all, never an unlisted
+    // shipped id, which the account would refuse.
+    expect(resolveModelValue("standard", "codex", {}, {}, { listed: ["other"] })).toBeUndefined();
+    expect(resolveModelValue("advanced", "copilot", {}, {}, { listed: ["other"] })).toBeUndefined();
+    // An empty saved list is a list read, not a missing one.
+    expect(resolveModelValue("economy", "codex", {}, {}, { listed: [] })).toBeUndefined();
+    // Non-degenerate: the same list with one candidate on it resolves to that candidate.
+    expect(resolveModelValue("standard", "codex", {}, {}, { listed: ["other", "gpt-5.6-terra"] })).toBe(
+      "gpt-5.6-terra",
+    );
+    // An alias still answers on Claude Code whatever a list says.
+    expect(resolveModelValue("standard", "claude", {}, {}, { listed: ["other"] })).toBe("sonnet");
   });
 
   it("re-picks a pin only when the account's list is known and lacks it", () => {

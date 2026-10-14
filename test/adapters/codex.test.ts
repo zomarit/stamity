@@ -782,6 +782,11 @@ describe("model allocation", () => {
     expect(tomlValue(await read({ listed, pins: { advanced: { codex: "gpt-5.6-luna" } } }), "model")).toBe(
       '"gpt-5.6-luna"',
     );
+    // A saved list with none of the class's candidates: no `model` key, never an unlisted shipped
+    // id (ledger row 2026-10-14_cli-native/build/66); the effort still binds.
+    const none = await read({ listed: { codex: { ids: ["gpt-5.6-luna"], source: "codex-debug-models" as const } } });
+    expect(none).not.toContain("\nmodel = ");
+    expect(none).toContain('model_reasoning_effort = "high"');
     // A pin with no list read is kept as written.
     expect(tomlValue(await read({ pins: { advanced: { codex: "gpt-fixture-pro" } } }), "model")).toBe(
       '"gpt-fixture-pro"',

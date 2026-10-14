@@ -1003,10 +1003,14 @@ describe("model pinning", () => {
     expect(modelsOf(agentAt(plan, "implementer"))).toEqual(["gpt-6-astra", "claude-opus-5"]);
     expect(frontmatterValue(agentAt(plan, "test-runner"), "model")).toBe('"GPT-6 Luna (copilot)"');
     expect(modelsOf(agentAt(plan, "test-runner"))).toEqual(["gpt-6-luna"]);
-    // `standard` has no candidate on this list: the resolver's shipped fallback, entry 0, alone —
-    // a model the plan cannot access falls back to the session's on this client.
-    expect(frontmatterValue(agentAt(plan, "fixer"), "model")).toBe('"Claude Sonnet 5 (copilot)"');
-    expect(modelsOf(agentAt(plan, "fixer"))).toEqual(["claude-sonnet-5"]);
+    // TEST CHANGE, justified (fix round 1, ledger row 2026-10-14_cli-native/build/66): the case
+    // asserted the resolver's old fallback, the shipped entry 0 (`claude-sonnet-5`) written although
+    // the account does not list it. By the sign-off a saved list that holds none of a class's
+    // candidates writes no model key, so the session's model applies.
+    // `standard` has no candidate on this list.
+    expect(frontmatterValue(agentAt(plan, "fixer"), "model")).toBeUndefined();
+    expect(modelsOf(agentAt(plan, "fixer"))).toBeUndefined();
+    expect(agentAt(plan, "fixer")).not.toContain("claude-sonnet-5");
   });
 
   it("names a pinned model by its display name when the shipped list gives one, and re-picks a pin the list lacks", async () => {
@@ -1022,6 +1026,37 @@ describe("model pinning", () => {
     expect(frontmatterValue(agentAt(repicked, "implementer"), "model")).toBe('"Claude Opus 5 (copilot)"');
     expect(modelsOf(agentAt(repicked, "implementer"))).toEqual(["claude-opus-5"]);
     expect(agentAt(repicked, "implementer")).not.toContain("gpt-5.5");
+  });
+
+  it("drops a pin typed as a display name, picks the class from the list, and warns once naming the class (build/65)", async () => {
+    const ctx = ctxOf({ pins: { advanced: { copilot: "Claude Opus 5.5 (copilot)" } }, listed: ["gpt-6-astra"] });
+    const residue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
+    const implementer = rowAt(residue.outputs, ".github/agents/stamity-implementer.agent.md").content;
+
+    // Neither in `models`, which takes CLI ids, nor moved to `model:`: the class takes the pick.
+    expect(implementer).not.toContain("Claude Opus 5.5 (copilot)");
+    expect(modelsOf(implementer)).toEqual(["gpt-6-astra"]);
+    const map = JSON.parse(rowAt(residue.outputs, ".stamity/generated/models/copilot.json").content) as {
+      classes: Record<string, { model?: string }>;
+    };
+    expect(map.classes["advanced"]?.model).toBe("gpt-6-astra");
+
+    // One warning, naming the client, the class and the value, and saying what a pin takes.
+    const warnings = (residue.warnings ?? []).filter((line) => line.includes("Claude Opus 5.5 (copilot)"));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("[copilot]");
+    expect(warnings[0]).toContain("advanced");
+    expect(warnings[0]).toContain("Copilot pins take model ids");
+
+    // Non-degenerate: an id pin on the same class binds and raises no such warning.
+    const idCtx = ctxOf({ pins: { advanced: { copilot: "gpt-6-astra" } } });
+    const idResidue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(idCtx), idCtx);
+    expect((idResidue.warnings ?? []).some((line) => line.includes("model ids"))).toBe(false);
+    expect(modelsOf(rowAt(idResidue.outputs, ".github/agents/stamity-implementer.agent.md").content)).toEqual([
+      "gpt-6-astra",
+      "claude-opus-5.5",
+      "claude-opus-5",
+    ]);
   });
 
   // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the pin is quoted inside
@@ -1755,6 +1790,7 @@ describe("hooks", () => {
     expect(COPILOT_DIALECT_FACTS.ruleShape).toContain("patterns comma-separated");
     // A live run on 1.0.89 has loaded an agent carrying the key (QA row 2 of 2026-10-10_next-tier).
     expect(effortAxis).toContain("a live run on Copilot CLI 1.0.89 (2026-10-11) loaded an agent carrying");
+    expect(effortAxis).toContain("on the `records` branch");
 
     // Both rows reach the published matrix verbatim — a declaration nothing
     // renders is a claim only this file can read.
@@ -1781,7 +1817,9 @@ describe("hooks", () => {
     expect(row).toContain(
       "a live run on 1.0.89 (2026-10-11) with the key emitted loaded it: the sub-agent quoted the charter's version line",
     );
-    expect(row).toContain("`.stamity/runs/2026-10-10_next-tier/record.md`, QA row 2");
+    // TEST CHANGE, justified (fix round 1, review/111): the cite read the bare path, which main does
+    // not carry; it now says the record lives on the `records` branch.
+    expect(row).toContain("`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2");
     // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key; ledger rows review/21 and
     // review/23): the pin read "`--no-custom-instructions` still overrides it", a clause with no
     // source and no mark. The clause now names the page it was read from, which the citation
@@ -1811,6 +1849,12 @@ describe("hooks", () => {
     expect(pick).toContain("`models: [<id>, …]` per agent");
     expect(pick).toContain("`<name> (copilot)`");
     expect(pick).toContain("No `modelPolicy` is written");
+    // review/109: the `models` behaviour is the reference's claim, not a measured one.
+    expect(pick).toContain("no live run has loaded an agent carrying `models` or `model`");
+    // review/110: whether VS Code reads `model:` on these agents is unverified.
+    expect(pick).toContain("unverified");
+    expect(pick).toContain("`target: github-copilot`");
+    expect(pick).not.toContain("form VS Code reads");
     expect(pick).toContain(".stamity/generated/models/copilot.json");
     // The CLI reference's own caveat: under Auto, a sub-agent inherits the session's model.
     expect(pick).toContain("Auto");
@@ -1821,6 +1865,7 @@ describe("hooks", () => {
 
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("`models:`");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).not.toContain("only under an operator pin");
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("unverified");
     const urls = COPILOT_DIALECT_FACTS.citations.map((citation) => citation.url);
     expect(urls).toContain("https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model");
     expect(urls).toContain("https://code.visualstudio.com/docs/agent-customization/custom-agents");

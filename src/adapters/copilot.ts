@@ -180,7 +180,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
   hooksConfigPath: COPILOT_HOOKS_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` the class model's display name as `<name> (copilot)` where the shipped list gives one, `models:` the class's CLI ids in priority order — the operator's pin, else the pick from the account's saved list, else the shipped list — `reasoning-effort:` at the declared class's level) over a markdown prompt; the class-to-model map at `.stamity/generated/models/copilot.json`",
+    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` the class model's display name as `<name> (copilot)` where the shipped list gives one (whether any reader takes it on a `target: github-copilot` agent is unverified), `models:` the class's CLI ids in priority order — the operator's pin, else the pick from the account's saved list, else the shipped list — `reasoning-effort:` at the declared class's level) over a markdown prompt; the class-to-model map at `.stamity/generated/models/copilot.json`",
   mcpDialect: "vscode-json",
   entryFile: null,
   caps: [
@@ -213,7 +213,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         `\`${EFFORT_SCALE.at(-1)}\` (Copilot CLI reference, accessed 2026-10-10; the key in the ` +
         "1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a live run on Copilot CLI 1.0.89 " +
         "(2026-10-11) loaded an agent carrying `reasoning-effort: high` and its sub-agent ran at " +
-        "that level (`.stamity/runs/2026-10-10_next-tier/record.md`, QA row 2); a level the model " +
+        "that level (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2); " +
+        "a level the model " +
         "does not offer is reported and falls back to the session's; the cloud agent's handling of " +
         "the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
     },
@@ -231,7 +232,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         "1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on " +
         "Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`, and " +
         "a live run on 1.0.89 (2026-10-11) with the key emitted loaded it: the sub-agent quoted the " +
-        "charter's version line (`.stamity/runs/2026-10-10_next-tier/record.md`, QA row 2); " +
+        "charter's version line (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` " +
+        "branch, QA row 2); " +
         "`--no-custom-instructions` overrides it (Copilot CLI command reference, accessed " +
         "2026-10-10; unverified on 1.0.89, where no live run passed the flag); the cloud agent's " +
         "handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
@@ -247,10 +249,14 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         "runtime uses the first one the plan can access, falls back to the session's model when " +
         "none resolves, and `models` overrides `model`; under an Auto session model a sub-agent " +
         "inherits the resolved session model whatever the file says (Copilot CLI command reference, " +
-        "read 2026-10-14). No `modelPolicy` is written, so a `/subagents` override still wins. " +
-        "`model:` carries the display name in the qualified `<name> (copilot)` form VS Code reads " +
-        "(VS Code custom-agents page, read 2026-10-14), and only where the shipped list gives one. " +
-        "The class-to-model map at `.stamity/generated/models/copilot.json` holds the same ids",
+        "read 2026-10-14). That behaviour is the reference's claim: no live run has loaded an agent " +
+        "carrying `models` or `model`, and which CLI version's loader takes `models` is unchecked. " +
+        "No `modelPolicy` is written, so a `/subagents` override still wins. `model:` carries the " +
+        "display name in the qualified `<name> (copilot)` form VS Code's custom-agents page documents " +
+        "(read 2026-10-14), only where the shipped list gives one; whether VS Code reads it on these " +
+        "agents is unverified, since every one sets `target: github-copilot`. A pin typed as a " +
+        "display name is not written, and `sync` warns. The class-to-model map at " +
+        "`.stamity/generated/models/copilot.json` holds the same ids",
     },
     {
       name: "cloud-model",
@@ -424,7 +430,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
-    return { outputs: rows, warnings: [...copilotMatcherWarnings(core.hooks.interchangeFor(TOOL)), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
+    return { outputs: rows, warnings: [...copilotMatcherWarnings(core.hooks.interchangeFor(TOOL)), ...displayNamePinWarnings(pins), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 
@@ -650,13 +656,51 @@ function classModels(
   listed: readonly string[] | undefined,
 ): ClassModels {
   const pick: ModelPickSource = listed === undefined ? {} : { listed };
-  const model = resolveModelValue(modelClass, TOOL, pins, efforts, pick);
+  const model = resolveModelValue(modelClass, TOOL, idPins(pins), efforts, pick);
   const picked = pickModel(TOOL, modelClass, undefined, listed);
   const candidates = picked === undefined ? [] : [picked.id, ...picked.fallbacks];
   return {
     ...(model === undefined ? {} : { model }),
     fallbacks: candidates.filter((id) => id !== model),
   };
+}
+
+/**
+ * A pin typed as a qualified display name, `<name> (<vendor>)`, the form VS
+ * Code's `model:` takes. A CLI id carries no space and no parenthesis, so a
+ * value ending on a parenthesised word after a space is a name, not an id.
+ */
+const DISPLAY_NAME_PIN = /\s\([^()]+\)$/;
+
+/**
+ * The pins that bind on this client: every one but a display-name pin
+ * (ledger row 2026-10-14_cli-native/build/65). Such a pin is not written into
+ * `models`, which takes CLI ids, nor moved to `model:`, which nothing is shown
+ * to read on these `github-copilot` agents; its class takes the pick instead,
+ * and {@link displayNamePinWarnings} says so.
+ */
+function idPins(pins: ModelPinMap): ModelPinMap {
+  const kept: Partial<Record<ModelClass, string>> = {};
+  for (const [modelClass, pin] of Object.entries(pins)) {
+    if (isModelClass(modelClass) && pin !== undefined && !DISPLAY_NAME_PIN.test(pin.trim())) kept[modelClass] = pin;
+  }
+  return kept;
+}
+
+/** One warning per class whose Copilot pin is a display name, naming the class, the value and what a pin takes. */
+function displayNamePinWarnings(pins: ModelPinMap): string[] {
+  const lines: string[] = [];
+  for (const { modelClass } of MODEL_LADDER) {
+    const pin = pins[modelClass];
+    if (pin === undefined || !DISPLAY_NAME_PIN.test(pin.trim())) continue;
+    lines.push(
+      `model pin [copilot]: ${modelClass} is pinned to "${pin.trim()}", a display name; Copilot pins take ` +
+        `model ids (such as ${MODEL_PRIORITY.copilot[modelClass][0]?.id ?? "a listed id"}), so the pin is not ` +
+        `written and ${modelClass} takes the pick from the account's model list. Set an id with ` +
+        `\`stamity config set model.${modelClass}.copilot <id>\`.`,
+    );
+  }
+  return lines;
 }
 
 /** The display name the shipped list gives a Copilot model id, from any class, or `undefined`. */
@@ -672,14 +716,18 @@ function displayName(id: string): string | undefined {
  * The `model:` and `models:` lines for an agent, or no line at all
  * (REQ-LADDER-007).
  *
- * Two keys, because two readers take a model from this file in two shapes.
- * The CLI reads `models`, CLI ids in priority order, uses the first one the
- * plan can access and overrides `model` with it; VS Code reads `model` as the
- * qualified display name, `<name> (copilot)`. So `models` carries the class's
- * model first and its other candidates behind it, and `model` carries the
- * first one's display name — only where the shipped list gives one, since an
- * id is not a name VS Code resolves. `modelPolicy` is never written: its
- * `required` value would lock out the operator's own `/subagents` override.
+ * Two keys, in the two shapes the vendors document. The CLI reference says the
+ * CLI reads `models`, CLI ids in priority order, uses the first one the plan
+ * can access and overrides `model` with it; VS Code's custom-agents page gives
+ * `model` as the qualified display name, `<name> (copilot)`. So `models`
+ * carries the class's model first and its other candidates behind it, and
+ * `model` carries the first one's display name — only where the shipped list
+ * gives one, since an id is not a display name. Whether VS Code reads `model`
+ * on these agents is unverified: every one sets `target: github-copilot`, and
+ * the line is kept because it is harmless where nothing reads it. No live run
+ * has loaded either key yet. `modelPolicy` is never written: its `required`
+ * value would lock out the operator's own `/subagents` override. A pin typed
+ * as a display name binds nowhere and is dropped ({@link idPins}).
  *
  * An artifact that declares no class, or a class off the ladder, has asked for
  * no model. Every value is quoted like every other scalar this file emits: a
