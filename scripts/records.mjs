@@ -10,7 +10,8 @@
 //                                           write the records of <ref> (origin/records) into the
 //                                           checkout, three ways against the sync base: a record
 //                                           changed only on <ref> is written, one changed only here
-//                                           is kept, one changed on both refuses the run
+//                                           is kept, one changed on both refuses the run; one
+//                                           deleted on <ref> is deleted here only if unedited
 //   commit -m <message> [--dry-run] [--allow-deletions]
 //                                           build a commit on the sync base from the records on
 //                                           disk, gate that exact commit, then push it; refuses
@@ -28,7 +29,8 @@
 // a revision the caller supplies is resolved to an object id with `--end-of-options` before any
 // other command sees it; no push is ever forced; `main`'s index is never written (the branch's
 // index is a separate GIT_INDEX_FILE, and a GIT_INDEX_FILE inherited from the caller is dropped);
-// no file is ever deleted from the working tree; and nothing is written through a symlink.
+// no working-tree file is deleted but a record `restore` finds deleted on the ref whose copy here
+// is the sync base's byte for byte; and nothing is written through a symlink.
 //
 // The module API is the six verbs, each `async (options) → { code, lines }` (`publish` is the
 // CLI's `commit`); `root` and `env` are accepted by every verb, and `publish` takes `runGates`, the
@@ -218,15 +220,34 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     if (process.platform !== 'win32' && ((stat.mode & 0o100) !== 0) !== (row.mode === '100755')) modes.push({ row, stat })
     else unchanged++
   }
+  // A record the sync base holds and the ref does not was deleted there since: this copy goes too
+  // only when it is the base's byte for byte, so no unpublished byte is lost; an edited copy is a
+  // conflict. A symlink is never hashed or followed. --force deletes nothing, as before the base.
+  const onRef = new Set(rows.map((row) => row.path)), deletes = [], edited = []
+  for (const [path, baseOid] of force || was === null ? [] : was) {
+    if (onRef.has(path) || !isRecordPath(path)) continue
+    const parent = blockedParent(ctx, path)
+    if (parent !== null) { if (parent.why === 'symlink') symlinks.add(parent.path); continue }
+    const stat = lstatOrNull(ctx.abs(path))
+    if (stat === null) continue
+    if (stat.isFile() && ctx.git(['hash-object', `--path=${path}`, '--', path]).trim() === baseOid) deletes.push(path)
+    else edited.push(path)
+  }
   if (symlinks.size > 0) stop(1, ['refused: a record or one of its folders is a symlink, and restore never writes through one:', ...[...symlinks].toSorted()])
-  if (blocked.size > 0) stop(1, ['refused: something other than a file is in the way of a record, and restore never deletes:', ...[...blocked].toSorted()])
+  if (blocked.size > 0) stop(1, ['refused: something other than a file is in the way of a record, and restore never deletes one:', ...[...blocked].toSorted()])
   if (differs.length > 0 && !force && was === null)
     stop(1, [`refused: ${differs.length} local record(s) differ from ${ref}; nothing was written (--force overwrites them):`, ...differs.map(({ row }) => row.path)])
-  if (differs.length > 0 && !force)
+  if ((differs.length > 0 || edited.length > 0) && !force)
     stop(1, [
-      `refused: ${differs.length} record(s) changed both here and on ${ref} since the last sync (${synced}); nothing was written.`,
-      `For each, save your copy, write ${ref}'s (git show ${ref}:<path>), run restore again, then re-apply your edit; --force takes ${ref}'s copy of every differing record:`,
-      ...differs.map(({ row }) => row.path),
+      `refused: ${differs.length + edited.length} record(s) changed both here and on ${ref} since the last sync (${synced}); nothing was written.`,
+      ...(differs.length === 0 ? [] : [
+        `For each, save your copy, write ${ref}'s (git show ${ref}:<path>), run restore again, then re-apply your edit; --force takes ${ref}'s copy of every differing record:`,
+        ...differs.map(({ row }) => row.path),
+      ]),
+      ...(edited.length === 0 ? [] : [
+        `Deleted on ${ref} and edited here: move your copy out of the checkout and run restore again, then put it back and commit it if it should stay; --force keeps every one as it is:`,
+        ...edited,
+      ]),
     ])
   // --force takes the ref's copy of every differing record, a pending edit included.
   const overwrite = [...updates, ...differs, ...(force ? pending.splice(0) : [])]
@@ -241,12 +262,14 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     if (process.platform === 'win32') continue
     chmodSync(ctx.abs(row.path), row.mode === '100755' ? (stat.mode | 0o111) & 0o777 : stat.mode & 0o666)
   }
+  for (const path of deletes) rmSync(ctx.abs(path))
   ctx.git(['update-ref', SYNC_BASE, oid])
   return {
     code: 0,
     lines: [
       `restored ${writes.length} record(s) from ${ref}, updated ${updates.length}, overwrote ${overwrite.length - updates.length}, ` +
-        `fixed ${modes.length} mode(s), ${unchanged} unchanged, kept ${pending.length} local edit(s)`,
+        `fixed ${modes.length} mode(s), deleted ${deletes.length}, ${unchanged} unchanged, kept ${pending.length} local edit(s)`,
+      ...deletes.map((path) => `deleted ${path}: deleted on ${ref}, and this copy was the last synced one`),
       ...pending.map(({ row }) => `kept ${row.path}: a local edit not yet published`),
     ],
   }

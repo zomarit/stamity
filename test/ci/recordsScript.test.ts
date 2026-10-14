@@ -218,6 +218,49 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
   });
 
+  it("removes a record the other side deleted when this copy is the sync base's, and keeps an unpublished new file", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    rmSync(join(b, PLAN));
+    expect((await records.publish({ root: b, env: w.env, message: "b", allowDeletions: true, runGates: passing().run }) as Result).code).toBe(0);
+    w.write(w.clone, `${ALPHA}/notes.md`, "unpublished\n");
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(restored.lines.some((line) => line.startsWith(`deleted ${PLAN}`))).toBe(true);
+    expect(existsSync(join(w.clone, PLAN))).toBe(false);
+    expect(readFileSync(join(w.clone, `${ALPHA}/notes.md`), "utf8")).toBe("unpublished\n");
+    expect(w.synced(w.clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+    const published: Result = await records.publish({ ...w.opts, message: "a", runGates: passing().run });
+    expect(published.code, published.lines.join("\n")).toBe(0);
+    expect(published.lines).toContain(`A ${ALPHA}/notes.md`);
+    expect(published.lines.filter((line) => line.includes(PLAN))).toEqual([]);
+    expect(w.tree("records")).not.toContain(PLAN);
+  });
+
+  it("refuses a record deleted on the other side and edited here, writing nothing, and --force deletes nothing", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    rmSync(join(b, PLAN));
+    rmSync(join(b, `${ALPHA}/ledger.jsonl`));
+    w.write(b, `${RUN}/RESULTS.md`, "# results, from b\n");
+    expect((await records.publish({ root: b, env: w.env, message: "b", allowDeletions: true, runGates: passing().run }) as Result).code).toBe(0);
+    const before = w.synced(w.clone);
+    w.write(w.clone, PLAN, "# plan, a's unpublished edit\n");
+    const refused: Result = await records.restore(w.opts);
+    expect(refused.code).toBe(1);
+    expect(refused.lines).toContain(PLAN);
+    expect(refused.lines).not.toContain(`${ALPHA}/ledger.jsonl`);
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, a's unpublished edit\n");
+    expect(readFileSync(join(w.clone, `${ALPHA}/ledger.jsonl`), "utf8")).toBe("{\"id\":\"alpha/1\"}\n");
+    expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results\n");
+    expect(w.synced(w.clone)).toBe(before);
+    const forced: Result = await records.restore({ ...w.opts, force: true });
+    expect(forced.code, forced.lines.join("\n")).toBe(0);
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, a's unpublished edit\n");
+    expect(existsSync(join(w.clone, `${ALPHA}/ledger.jsonl`))).toBe(true);
+    expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results, from b\n");
+  });
+
   it.skipIf(!POSIX)("never writes through a symlinked record folder", async () => {
     const w = world();
     const outside = join(w.dir, "outside");
@@ -522,6 +565,6 @@ describe("the branch templates", () => {
   it("tells a reader how to restore and publish, and that a run in progress is left out", () => {
     const readme = template(README);
     for (const text of ["node scripts/records.mjs setup", "node scripts/records.mjs commit -m", "never forced",
-      "cannot be deleted", "Status: in progress"]) expect(readme).toContain(text);
+      "cannot be deleted", "Status: in progress", "deleted on the branch"]) expect(readme).toContain(text);
   });
 });

@@ -24,4 +24,6 @@ From a checkout of `main`:
 Pushes are never forced, and the branch cannot be deleted. When `commit` refuses because the
 branch moved, run `node scripts/records.mjs restore`, then `commit` again. `restore` writes what
 changed only on the branch, keeps what you changed and have not published, and refuses, writing
-nothing, when a record changed on both sides.
+nothing, when a record changed on both sides. A record deleted on the branch is deleted from your
+checkout only when your copy is the one you last synced; if you edited it since, `restore` refuses
+the same way, and `--force` keeps it.
