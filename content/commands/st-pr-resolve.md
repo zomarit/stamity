@@ -58,21 +58,25 @@ configuration, so a refused run fetches no comment at all:
 **In a REST-only session** — where the session-start banner says GraphQL is unavailable, or a
 `gh api graphql` call is refused — every GitHub call takes its REST form through `gh api`.
 `gh pr checkout <n>` becomes these steps, in this order, `<n>` checked to be digits only. First
-one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.head.repo.full_name, .head.ref]'`. A
-head repository other than `{owner}/{repo}` is refused on that read, before any `git fetch`, in
-one sentence: "This pull request's branch lives in a fork; check it out where GraphQL works and
-re-run." Next, `git remote get-url origin` must name that same `{owner}/{repo}`: with any `.git`
-suffix dropped and case aside, the URL ends in `/{owner}/{repo}` or `:{owner}/{repo}`. Any other
-origin is refused in one sentence: "This checkout's origin is not the pull request's repository;
-re-run from a clone whose origin is that repository." No fetch or push goes to a remote this
-check did not match. Only then `git fetch origin "pull/<n>/head"`, then
-`git checkout -B "pr-resolve-<n>" FETCH_HEAD`, which moves a branch an earlier round left to the
-head just fetched. A failed fetch stops the round with its error, before any checkout. The
-author's branch name enters no fetch and no checkout. The ref the round pushes to, in
+one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.base.repo.full_name,
+.head.repo.full_name, .head.ref, .head.sha]'`; the round's proof block names the base
+repository's full name it returned. A head repository other than that base is refused on that
+read, before any `git fetch`, in one sentence: "This pull request's branch lives in a fork;
+check it out where GraphQL works and re-run." These steps check by content, never by remote
+configuration, so no remote URL is read or printed. Only then `git fetch origin
+"pull/<n>/head"`. A failed fetch stops the round with its error, before any checkout. Next,
+`git rev-parse FETCH_HEAD` must equal the head sha the read returned; any other commit is
+refused before any checkout in one sentence: "The branch moved, or this checkout's origin is not
+the pull request's repository; re-run." Only then `git checkout -B "pr-resolve-<n>" FETCH_HEAD`,
+which moves a branch an earlier round left to the head just fetched. The author's branch name
+enters no fetch and no checkout. The ref the round pushes to, in
 `git push origin "HEAD:refs/heads/<ref>"`, holds only letters, digits, `.`, `_`, `/` and `-`,
 checked before it enters any command, and then passes `git check-ref-format --branch "<ref>"`;
-any other ref is refused, never escaped, and the ref is always passed quoted. Section 1's
-fetches are REST already; its thread-state join takes the fallback named there.
+any other ref is refused, never escaped, and the ref is always passed quoted. After the push, a
+fresh read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '.head.sha'`, must equal
+`git rev-parse HEAD`; otherwise the round reports that the push did not reach the pull request
+and posts no `Implemented in` reply. Section 1's fetches are REST already; its thread-state join
+takes the fallback named there.
 
 **On the fetch result, before any comment body is stored** — thread metadata and this command's
 own replies are all these read. A third-party comment body stays unread until section 0 clears

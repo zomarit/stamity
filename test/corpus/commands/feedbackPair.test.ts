@@ -1124,11 +1124,19 @@ describe("pr-resolve — collection and evaluation", () => {
     // ordered, the fork refusal on the read and an origin check both before any fetch, so the
     // sentence that opened the block names the order and the read alone. The fetch and checkout
     // sentence is pinned whole beside it; the case below pins the order.
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 4; ledger rows
+    // `2026-10-14_cli-native/review/39` to `review/42`, signed off): the origin URL check matched
+    // a look-alike remote, read only the first fetch URL, compared with a value the run never saw,
+    // and printed the URL into the transcript. What changed about the contract: no remote URL is
+    // read; the read returns the base repository and the head's sha too, and the fetched commit
+    // must equal that sha before the checkout. Nothing is relaxed: both sentences are pinned
+    // whole, and the case below pins the sha checks and their order.
     expect(preflight).toContain(
-      "`gh pr checkout <n>` becomes these steps, in this order, `<n>` checked to be digits only. First one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.head.repo.full_name, .head.ref]'`.",
+      "`gh pr checkout <n>` becomes these steps, in this order, `<n>` checked to be digits only. First one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.base.repo.full_name, .head.repo.full_name, .head.ref, .head.sha]'`; the round's proof block names the base repository's full name it returned.",
     );
+    expect(preflight).toContain('Only then `git fetch origin "pull/<n>/head"`.');
     expect(preflight).toContain(
-      "Only then `git fetch origin \"pull/<n>/head\"`, then `git checkout -B \"pr-resolve-<n>\" FETCH_HEAD`, which moves a branch an earlier round left to the head just fetched.",
+      "Only then `git checkout -B \"pr-resolve-<n>\" FETCH_HEAD`, which moves a branch an earlier round left to the head just fetched.",
     );
     // It sits in the batch that runs before the first fetch, where the checkout happens.
     expect(preflight.indexOf("In a REST-only session")).toBeLessThan(
@@ -1172,23 +1180,39 @@ describe("pr-resolve — collection and evaluation", () => {
     // changed about the contract: the refusal runs on the read, an origin check follows, and
     // both precede the fetch. Nothing is relaxed: the refusal sentence keeps its wording, and
     // the order and the origin check are pinned below.
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 4; ledger rows
+    // `2026-10-14_cli-native/review/39` to `review/42`, signed off): the fork refusal compared
+    // with gh's expanded `{owner}/{repo}`, a value the read never showed the run, and an origin
+    // URL check followed that matched a look-alike remote and printed the URL. What changed
+    // about the contract: the refusal compares with the base repository the read returns, no
+    // remote URL is read, and the fetched commit and the pushed commit are checked by sha.
+    // Nothing is relaxed: the refusal keeps its wording and position, and each sha check is
+    // pinned whole with its refusal or its withheld reply.
     expect(rest).toContain(
-      "A head repository other than `{owner}/{repo}` is refused on that read, before any `git fetch`, in one sentence: \"This pull request's branch lives in a fork; check it out where GraphQL works and re-run.\"",
+      "A head repository other than that base is refused on that read, before any `git fetch`, in one sentence: \"This pull request's branch lives in a fork; check it out where GraphQL works and re-run.\"",
     );
-    // origin must be the repository the read names, checked before any fetch or push.
+    // Content, not remote configuration: no remote URL is read or printed.
     expect(rest).toContain(
-      "Next, `git remote get-url origin` must name that same `{owner}/{repo}`: with any `.git` suffix dropped and case aside, the URL ends in `/{owner}/{repo}` or `:{owner}/{repo}`.",
+      "These steps check by content, never by remote configuration, so no remote URL is read or printed.",
     );
+    expect(rest).not.toMatch(/remote get-url|remote\.origin/);
+    // The fetched commit must be the head the read returned, checked before the checkout.
     expect(rest).toContain(
-      "Any other origin is refused in one sentence: \"This checkout's origin is not the pull request's repository; re-run from a clone whose origin is that repository.\" No fetch or push goes to a remote this check did not match.",
+      "Next, `git rev-parse FETCH_HEAD` must equal the head sha the read returned; any other commit is refused before any checkout in one sentence: \"The branch moved, or this checkout's origin is not the pull request's repository; re-run.\"",
     );
-    // The order: read, fork refusal, origin check, and only then the fetch and the checkout.
+    // The pushed commit must be the pull request's head on a fresh read, or no landed reply.
+    expect(rest).toContain(
+      "After the push, a fresh read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '.head.sha'`, must equal `git rev-parse HEAD`; otherwise the round reports that the push did not reach the pull request and posts no `Implemented in` reply.",
+    );
+    // The order: read, fork refusal, fetch, sha check, checkout, push, and the push's check.
     const order = [
       "First one read",
       "A head repository other than",
-      "`git remote get-url origin`",
       '`git fetch origin "pull/<n>/head"`',
+      "`git rev-parse FETCH_HEAD`",
       '`git checkout -B "pr-resolve-<n>" FETCH_HEAD`',
+      '`git push origin "HEAD:refs/heads/<ref>"`',
+      "After the push, a fresh read",
     ].map((step) => rest.indexOf(step));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
