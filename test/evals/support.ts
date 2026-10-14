@@ -113,28 +113,19 @@ export interface ParsedSource {
   readonly ranges: ReadonlyArray<readonly [number, number]>;
 }
 
-/**
- * The one governing source shape outside the corpus: a module under `scripts/plugins/`.
- * `st-setup` is the command a plugin root GENERATES rather than carries, so the text its two
- * cases quote is rendered by `setupCommand.mjs` and no `content/**` file carries it. Narrow on
- * purpose — a non-corpus source is left out of the coverage sum below, so a wider pattern would
- * be a quiet way out of the artifact accounting; `coverage.test.ts` lists every case using it.
- */
-const NON_CORPUS_SOURCE = /^scripts\/plugins\/[A-Za-z][\w-]*\.mjs$/;
-
 /** True when a source path is one of the `content/**` artifacts the coverage sum accounts for. */
 export const isCorpusSource = (path: string): boolean => path.startsWith("content/");
 
 /**
- * `path/to/file.md:12-30` or `path/to/file.md:12-30,44-51`, plus the `.mjs` shape
- * {@link NON_CORPUS_SOURCE} admits. Returns null on any shape the contract does not admit,
- * so the caller reports the case rather than silently skipping it.
+ * `path/to/file.md:12-30` or `path/to/file.md:12-30,44-51`. Returns null on any shape the
+ * contract does not admit, so the caller reports the case rather than silently skipping it.
+ * Markdown only: the one other shape, a `scripts/plugins/` module that rendered the plugin
+ * root's generated `st-setup` body, left with the plugin route on 2026-10-14.
  */
 export const parseSource = (value: string): ParsedSource | null => {
-  const match = /^([^\s:]+\.(?:md|mjs)):((?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*)$/.exec(value.trim());
+  const match = /^([^\s:]+\.md):((?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*)$/.exec(value.trim());
   if (!match) return null;
   const path = posix(match[1] ?? "");
-  if (path.endsWith(".mjs") && !NON_CORPUS_SOURCE.test(path)) return null;
   const ranges = (match[2] ?? "").split(",").map((part) => {
     const [from, to] = part.split("-");
     return [Number(from), Number(to ?? from)] as const;

@@ -47,16 +47,13 @@ export function loadInputs(root, profileName) {
   // The roster census, a literal on purpose: a run that silently loads a different number of cases
   // than the set document declares is not the set. Derive it before moving it —
   // `find evals/cases-v6 -name '*.md' | wc -l` — and move `SET-v7.md`'s counts in the same change.
-  requireEvidence(cases.length === 142 && new Set(cases.map(item => item.id)).size === 142, 'set-roster')
+  requireEvidence(cases.length === 139 && new Set(cases.map(item => item.id)).size === 139, 'set-roster')
   for (const scenario of cases) {
-    // A case's governing file is a committed input of the run, whatever surface it sits on, so two
-    // shapes are admitted here. A `content/` artifact is the ordinary one. The second is the module
-    // under `scripts/plugins/` that RENDERS the generated `st-setup` command body — that command is
-    // generated rather than carried, so no corpus file holds the text its two cases quote.
-    // `test/evals/support.ts` admits exactly this pair, and `test/evals/coverage.test.ts` names
-    // every case on the second shape, which keeps it a reviewed list and not an escape hatch.
-    requireEvidence(scenario.source?.startsWith('content/') ||
-      /^scripts\/plugins\/[A-Za-z][\w-]*\.mjs$/.test(scenario.source ?? ''), 'case-source')
+    // A case's governing file is a committed input of the run, and it is a `content/` artifact: the
+    // one other shape, the `scripts/plugins/` module that rendered the plugin root's generated
+    // `st-setup` body, left with the plugin route on 2026-10-14. `test/evals/coverage.test.ts`
+    // pins the list of cases governed outside `content/` empty.
+    requireEvidence(scenario.source?.startsWith('content/'), 'case-source')
     read(scenario.source)
   }
   const rubric = parseRubric(read(profile.rubric), historical)

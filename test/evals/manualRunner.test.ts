@@ -1744,12 +1744,12 @@ describe("committed inputs and manual entry point", () => {
   });
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();
-    // `scripts/plugins/setupCommand.mjs` is here because a case may be governed outside the
-    // corpus: the two `st-setup` cases source that module, `loadInputs` reads every case's
-    // governing file as a committed input, and a fixture tree missing it blocks on
-    // `input-not-committed` rather than on anything the run did.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d2-eval-cases): the
+    // fixture tree no longer copies `scripts/plugins/setupCommand.mjs`. It was here because the two
+    // `st-setup` cases sourced that module and `loadInputs` reads every case's governing file as a
+    // committed input; both cases left the set with the plugin route, the module is deleted with
+    // it, and every case's governing file now sits under `content`, which this list copies.
     for (const path of ["evals/cases-v4", "evals/cases-v6", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
-      "scripts/plugins/setupCommand.mjs",
       "evals/SET-v7.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       cpSync(join(REPO_ROOT, path), join(root, path), { recursive: true });

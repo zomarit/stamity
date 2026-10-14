@@ -54,52 +54,43 @@ describe("eval coverage — the derivation is not vacuous", () => {
   });
 });
 
-describe("eval coverage — a source outside content/ is listed, never summed", () => {
-  // `st-setup` is the one command a plugin root GENERATES rather than carries, so the two
-  // cases that measure it quote text `scripts/plugins/setupCommand.mjs` renders and can name
-  // no `content/**` artifact. Those cases are named here rather than folded into the sum
-  // above: a case leaving the artifact accounting is a reviewed decision, and this list is
-  // where the review happens. A third one appears as a red test, not as a silent exemption.
+// TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d2-eval-cases): this block
+// listed the two `st-setup` cases that sourced `scripts/plugins/setupCommand.mjs`, the module that
+// rendered the plugin root's generated `st-setup` body. The plugin route is deleted, both cases left
+// the set with it, and `parseSource` no longer admits any `.mjs` source. So the list of cases
+// governed outside `content/` is pinned empty; "refuses a .mjs source outside scripts/plugins/" now
+// refuses every non-markdown source, that directory included; and "names files that exist and are
+// no artifact of the coverage surface", which needed a non-empty list to mean anything, went with
+// the list. The list stays computed, so a case sourced at a markdown path outside `content/` still
+// shows here as a red test rather than as a quiet way out of the artifact accounting.
+describe("eval coverage — no case is governed outside content/", () => {
   const outside = cases
     .map((file) => ({ id: file.basename, path: parseSource(file.frontmatter.get("source") ?? "")?.path }))
     .filter((entry) => entry.path !== undefined && !isCorpusSource(entry.path));
 
-  it("governs outside content/ exactly the cases this list names", () => {
+  it("governs no case outside content/", () => {
     expect(
       outside.map((entry) => `${entry.id} → ${entry.path ?? ""}`),
-      "a case sourced outside `content/**` is admitted only by a row here and a line in SET-v7's Coverage section",
-    ).toEqual([
-      "st-setup-refuses-generated-setup → scripts/plugins/setupCommand.mjs",
-      "st-setup-fresh-repository → scripts/plugins/setupCommand.mjs",
-    ]);
+      "the list of cases governed outside `content/**` is empty since 2026-10-14; a case sourced elsewhere leaves the artifact accounting and is not admitted",
+    ).toEqual([]);
   });
 
-  // The narrowness is the whole guard, so it is tested rather than trusted: `parseSource`
-  // admits `.mjs` ONLY under `scripts/plugins/`, because that directory is where the generated
-  // `st-setup` body is rendered. Without these rows the widened pattern would read as "any
-  // `.mjs` anywhere", which is the escape hatch the list above exists to prevent.
-  it("refuses a .mjs source outside scripts/plugins/", () => {
-    expect(parseSource("scripts/plugins/setupCommand.mjs:104-143")).toEqual({
-      path: "scripts/plugins/setupCommand.mjs",
-      ranges: [[104, 143]],
+  it("parses a markdown source and refuses every other shape", () => {
+    expect(parseSource("content/commands/st-plan.md:91-100,169-171")).toEqual({
+      path: "content/commands/st-plan.md",
+      ranges: [
+        [91, 100],
+        [169, 171],
+      ],
     });
     for (const refused of [
+      "scripts/plugins/setupCommand.mjs:1-5",
+      "scripts/plugins/setupCommand.mjs:104-143",
       "scripts/eval/instrument.mjs:1-5",
-      "scripts/plugins/clients/claude.mjs:119-124",
       "src/plugins/capabilityFile.ts:1-5",
       "setupCommand.mjs:1-5",
-      "scripts/plugins/.hidden.mjs:1-5",
     ]) {
       expect(parseSource(refused), `${refused} must not parse as a source`).toBeNull();
-    }
-  });
-
-  it("names files that exist and are no artifact of the coverage surface", () => {
-    expect(outside.length, "the non-corpus list is empty, so nothing above is load-bearing").toBeGreaterThan(0);
-    for (const entry of outside) {
-      const path = entry.path ?? "";
-      expect(existsSync(join(REPO_ROOT, ...path.split("/"))), `${path} does not exist`).toBe(true);
-      expect(artifacts.includes(path), `${path} is a corpus artifact and belongs in the sum`).toBe(false);
     }
   });
 });
