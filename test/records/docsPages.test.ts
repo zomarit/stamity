@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -11,6 +12,9 @@ import {
   runStatus,
   unmetMetrics,
 } from "../../src/cli/docs/measurements.ts";
+import { namedPaths, releaseRuleTexts, uncovered } from "../support/pageSections.ts";
+// @ts-expect-error — import-safe native ESM path list with no type declarations, outside the product package.
+import { isRecordPath } from "../../scripts/records-paths.mjs";
 
 /**
  * The hand pages held to the eval records they cite (REQ-PROVE-020, REQ-PROVE-033, REQ-PROVE-025).
@@ -26,7 +30,8 @@ import {
  * disclosure pattern also admits a link in the absolute `records` branch form (`RECORDS_BLOB_URL`),
  * which the pages now use; and the case that held that pattern to run 37's real § 5 reads a
  * synthetic § 5 of the same shape. The helpers the release-rule cases read the checklist and SET-v7
- * through are copies of the ones `test/docsPages.test.ts` keeps for the cases that stayed there.
+ * through live in `test/support/pageSections.ts`, which `test/docsPages.test.ts` imports too
+ * (ledger build/10: they were copies here, and two copies can drift apart).
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -39,32 +44,10 @@ const DOCTRINE = "docs/doctrine.md";
 
 const read = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
 
-const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
-
 const collapsed = (text: string): string => text.replace(/\s+/g, " ");
 
 /** A literal for a `RegExp` source: every metacharacter escaped. */
 const literal = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/**
- * One heading's section of a page: from the heading line to the next heading of the same or a
- * higher level, or the page's end, fenced lines never read as headings. Empty when the heading is
- * absent. A copy of `sectionOf` in `test/docsPages.test.ts`.
- */
-function sectionOf(text: string, heading: string): string {
-  const all = lines(text);
-  const start = all.indexOf(heading);
-  if (start === -1) return "";
-  const level = (/^#+/.exec(heading)?.[0] ?? "").length;
-  let fenced = false;
-  for (let at = start + 1; at < all.length; at += 1) {
-    const line = all[at] ?? "";
-    if (line.startsWith("```")) fenced = !fenced;
-    const depth = fenced ? 0 : (/^(#+) /.exec(line)?.[1] ?? "").length;
-    if (depth > 0 && depth <= level) return all.slice(start, at).join("\n");
-  }
-  return all.slice(start).join("\n");
-}
 
 describe("the eval run of record on the hand pages", () => {
   /**
@@ -195,46 +178,8 @@ describe("the eval run of record on the hand pages", () => {
   });
 });
 
-// The release rule's texts, read the way `test/docsPages.test.ts` reads them for the cases that
-// stayed there (ADDED 2026-10-08, unit c3-release-rules): the checklist's eval line and SET-v7's
-// incremental section, whitespace-collapsed.
-const RELEASE_CHECKLIST = ".github/release-controls-checklist.md";
-const EVAL_SET = "evals/SET-v7.md";
-/** A per-release line opens "One line …" or "A <ordinal> line …" in the checklist's section. */
-const PER_RELEASE_LEAD = /^(?:One|A [a-z]+) line\b/;
-
-/** A section of a file read through `sectionOf`, refused when the heading is absent. */
-const fileSection = (path: string, heading: string): string => {
-  const section = sectionOf(read(path), heading);
-  expect(section, `${path} has no "${heading}" section`).not.toBe("");
-  return section;
-};
-
-/** Each per-release line with the paragraphs that follow it up to the next line. */
-const perReleaseLines = (): string[] => {
-  const found: string[] = [];
-  for (const paragraph of fileSection(RELEASE_CHECKLIST, "## Per-release record currency").split(
-    /\n\s*\n/,
-  )) {
-    const text = paragraph.trim();
-    if (PER_RELEASE_LEAD.test(text)) found.push(text);
-    else if (found.length > 0) found[found.length - 1] = `${found.at(-1) ?? ""}\n\n${text}`;
-  }
-  return found;
-};
-
-/** The two texts that state the release rule, whitespace-collapsed. */
-const releaseRuleTexts = (): ReadonlyArray<readonly [string, string]> => {
-  const evalLine = perReleaseLines().find((line) => line.startsWith("A second line"));
-  expect(evalLine, `${RELEASE_CHECKLIST} has no "A second line" (the eval line)`).toBeDefined();
-  return [
-    [`${RELEASE_CHECKLIST}'s eval line`, collapsed(evalLine ?? "")],
-    [
-      `${EVAL_SET}'s incremental section`,
-      collapsed(fileSection(EVAL_SET, "## Incremental runs — declared 2026-09-15")),
-    ],
-  ];
-};
+// The release rule's texts — the checklist's eval line and SET-v7's incremental section — are read
+// through `test/support/pageSections.ts`, the copy `test/docsPages.test.ts` reads them through too.
 
 interface RecordedConfiguration {
   readonly inputs: Readonly<Record<string, string>>;
@@ -249,19 +194,6 @@ const recordedConfiguration = (): RecordedConfiguration =>
       readonly configuration: RecordedConfiguration;
     }
   ).configuration;
-
-/** The backticked repository paths a text names. */
-const namedPaths = (text: string): string[] =>
-  [...text.matchAll(/`(\.?[\w-]+(?:\/[\w.*-]+)+)`/g)].map((match) => match[1] ?? "");
-
-/** The paths no named path covers; a named `dir/**` covers everything under `dir/`. */
-const uncovered = (paths: Iterable<string>, named: readonly string[]): string[] =>
-  [...paths].filter(
-    (path) =>
-      !named.some((pattern) =>
-        pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : pattern === path,
-      ),
-  );
 
 /** The files the run of record's own cases name in `source:`, line ranges dropped. */
 const recordedCaseSources = (): Set<string> => {
@@ -309,6 +241,51 @@ describe("the release eval follows what changed", () => {
       expect(text, `${where} does not name the pinned client version`).toContain(
         "the harness, which carries the pinned client version",
       );
+    }
+  });
+});
+
+// ADDED 2026-10-14 (ledger review/17, REQ-PROVE-020): every link into the `records` branch on a page
+// `main` carries resolves to a record. The pages link the records in the absolute `RECORDS_BLOB_URL`
+// form, which the default suite skips because a checkout of `main` does not carry its target — so
+// README's merge-ready snapshot and reach snapshot, the fork guide's plan 005 and every other such
+// link would ship as a dead link with every gate green. The records suite runs after
+// `node scripts/records.mjs restore`, so the targets are on disk here, at the paths the branch holds.
+// The pages are every markdown file `main` tracks, the records excluded, read off `git ls-files`
+// rather than a list typed here, so a page that starts linking the records is checked from its first
+// link; the three pages the review named must each still link one, so the scan cannot pass over
+// nothing.
+
+/** Whether a repository-relative POSIX path is a record, from the one list `guard` refuses on `main`. */
+const isRecord = isRecordPath as (path: string) => boolean;
+
+const ENTERPRISE_FORKS = "docs/enterprise-forks.md";
+
+/** A `records` branch address, as a markdown target or bare in the text. */
+const RECORDS_LINK = new RegExp(`${literal(RECORDS_BLOB_URL)}[^\\s<>()[\\]\`"']*`, "g");
+
+/** The markdown pages `main` tracks: every `*.md` git lists, the records left out. */
+const mainPages = (): string[] =>
+  execFileSync("git", ["ls-files", "-z", "--", "*.md"], { cwd: REPO_ROOT, encoding: "utf-8" })
+    .split("\0")
+    .filter((path) => path !== "" && !isRecord(path) && existsSync(join(REPO_ROOT, path)));
+
+describe("the records-branch links on main's pages", () => {
+  it("resolves every records-branch link to a record file the branch holds", () => {
+    const linking = new Set<string>();
+    const dead: string[] = [];
+    for (const page of mainPages()) {
+      for (const match of read(page).matchAll(RECORDS_LINK)) {
+        const url = match[0].replace(/[.,;:]+$/, "");
+        linking.add(page);
+        const path = url.slice(RECORDS_BLOB_URL.length).replace(/[#?].*$/, "");
+        const file = join(REPO_ROOT, path);
+        if (!isRecord(path) || !existsSync(file) || !statSync(file).isFile()) dead.push(`${page} links ${url}`);
+      }
+    }
+    expect(dead, "a page links the records branch at no record file").toEqual([]);
+    for (const page of [README, DOCTRINE, ENTERPRISE_FORKS]) {
+      expect(linking.has(page), `${page} links nothing on the records branch`).toBe(true);
     }
   });
 });

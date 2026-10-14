@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the run records and the eval evidence this page links and names. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the run records and the eval evidence this page links and names, and for the merge-ready figure `docs/measurements.md` renders from the snapshot it pins. -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -24,11 +24,11 @@ charter, commands, agents, skills, rules, hooks and MCP wiring, shaped for the c
 
 Every figure below comes from a committed artifact, so you can check it instead of believing it.
 
-**Merge-ready rate: 7 of 17 runs, 0.412.** A run is verified merge-ready when three things hold.
+**Merge-ready rate: 7 of 19 runs, 0.368.** A run is verified merge-ready when three things hold.
 Its final gate table is all passes. Its last review verdict is an approval at or above the
 confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
 never counts. The frozen snapshot is
-[`evals/measurements/merge-ready-2026-10-12.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-12.json),
+[`evals/measurements/merge-ready-2026-10-13.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-13.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
 **Eval run of record: [run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md), the 1.14.0 release run: PASS as composed with run 44, which alone was FAIL.**

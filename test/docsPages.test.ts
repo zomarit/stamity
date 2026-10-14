@@ -10,11 +10,12 @@ import {
   symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   MEASUREMENTS_DOC_PATH,
+  MEASUREMENT_SNAPSHOT_PATH,
   RECORDS_BLOB_URL,
   measurementInputs,
   readRunOfRecord,
@@ -30,6 +31,18 @@ import { packReinstallSteps } from "../src/pack/verifyInstalled.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 import { GATE_RUN_TIMEOUT_MS, leakGateFailureDetail, runLeakGateOnce } from "./support/leakGateRun.ts";
+import {
+  EVAL_SET,
+  RELEASE_CHECKLIST,
+  fileSection,
+  namedPaths,
+  perReleaseLines,
+  releaseRuleTexts,
+  sectionOf,
+  uncovered,
+} from "./support/pageSections.ts";
+// @ts-expect-error — import-safe native ESM path list with no type declarations, outside the product package.
+import { isRecordPath } from "../scripts/records-paths.mjs";
 // @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
 // they run under bare Node in a release job, with no TypeScript nearby.
 import { buildCatalogIdentity } from "../scripts/plugins/catalogs.mjs";
@@ -694,6 +707,13 @@ const RELEASE_CUT_DATE = "2026-10-12";
  * c3d81529 plus `Re-attested 2026-10-14`, the fork guide from its 2026-10-13 clause. A page re-read
  * today can honestly carry only today's date, which the 2026-10-13 pin refused as later than the
  * pass it ships in. `CONTRIBUTING.md` keeps its 2026-10-13 clause and every other page its cut date.
+ *
+ * NOT MOVED, 2026-10-14, by the same run's integration fix round (ledger review/16, review/19,
+ * review/20), which ran on the constant's own date. `CONTRIBUTING.md` was re-read for the record set
+ * its lanes paragraph names (plans, evidence and the eval records now among them) and moved its
+ * clause to `Re-attested 2026-10-14`; `GOVERNANCE.md`, outside the bucket, moved onto the commit
+ * form for the same paragraph; `SECURITY.md` was re-read for its controls table's inbox rows and run
+ * ledgers, and `README.md` for its merge-ready figure, both already on today's clause.
  */
 const REATTESTATION_DATE = "2026-10-14";
 
@@ -777,26 +797,8 @@ const afterFrontmatter = (text: string): string =>
 const linkTargets = (text: string): string[] =>
   [...text.matchAll(MARKDOWN_LINK)].map((match) => match[1] ?? "");
 
-/**
- * One heading's section of a page: from the heading line to the next heading of the same or a
- * higher level, or the page's end. Lines inside a fenced block are never read as headings, so a
- * shell comment in a command block cannot end a section early. Empty when the heading is absent,
- * so a pin reading it fails on its own non-empty assertion rather than on a thrown index.
- */
-function sectionOf(text: string, heading: string): string {
-  const all = lines(text);
-  const start = all.indexOf(heading);
-  if (start === -1) return "";
-  const level = (/^#+/.exec(heading)?.[0] ?? "").length;
-  let fenced = false;
-  for (let at = start + 1; at < all.length; at += 1) {
-    const line = all[at] ?? "";
-    if (line.startsWith("```")) fenced = !fenced;
-    const depth = fenced ? 0 : (/^(#+) /.exec(line)?.[1] ?? "").length;
-    if (depth > 0 && depth <= level) return all.slice(start, at).join("\n");
-  }
-  return all.slice(start).join("\n");
-}
+// `sectionOf`, one heading's section of a page, lives in `test/support/pageSections.ts` with the
+// release-rule readers (ledger build/10), so this file and the records suite read one copy.
 
 /** The bodies of a text's fenced blocks carrying one info string, in page order. */
 const fencedBlocksOf = (text: string, info: string): string[] =>
@@ -1365,6 +1367,63 @@ describe("README", () => {
       README_LINK_TARGETS.length,
     );
   });
+
+  // ADDED 2026-10-14 (ledger review/20): README's merge-ready figure is the one the measurements
+  // page renders, from the snapshot that page pins, since README says the page "shows the working".
+  // README stated 7 of 17 (0.412) from the 2026-10-12 snapshot while the page rendered 7 of 19
+  // (0.368) from the 2026-10-13 one, and nothing compared them. Both pages are on `main`; the
+  // page is held to its snapshot by the measurements drift check, so this holds README to the page.
+  it("states the merge-ready figure the measurements page renders, from the snapshot it pins", () => {
+    const readme = collapsed(read(README));
+    const stated = /\*\*Merge-ready rate: (\d+) of (\d+) runs, (\d\.\d+)\.\*\*/.exec(readme);
+    const rendered = /\*\*(\d+) of (\d+) runs\*\* \((\d\.\d+)\)/.exec(collapsed(read(MEASUREMENTS_DOC_PATH)));
+    expect(stated, "README states no merge-ready figure").not.toBeNull();
+    expect(rendered, `${MEASUREMENTS_DOC_PATH} renders no merge-ready figure`).not.toBeNull();
+    expect(stated?.slice(1), `README's merge-ready figure is not the one ${MEASUREMENTS_DOC_PATH} renders`).toEqual(
+      rendered?.slice(1),
+    );
+    expect(readme, "README does not link the snapshot the measurements page pins").toContain(
+      `(${RECORDS_BLOB_URL}${MEASUREMENT_SNAPSHOT_PATH})`,
+    );
+  });
+});
+
+/**
+ * ADDED 2026-10-14 (ledger review/18, REQ-PROVE-020): README, the doctrine and the fork guide link
+ * no record by a repo-relative path. The records live on the `records` branch, so a page on `main`
+ * links one as `RECORDS_BLOB_URL` plus its path. The hand-page existence check above refuses a
+ * relative record link only in a checkout without the records; after `records.mjs setup` they sit on
+ * disk, so it would pass on a maintainer's machine and fail only in CI. This reads the records set
+ * from `scripts/records-paths.mjs` (`isRecord`, below) and refuses any relative target inside it,
+ * on or off disk.
+ */
+const RECORD_LINK_PAGES: readonly string[] = [README, DOCTRINE, ENTERPRISE_FORKS];
+
+/** The repo-relative link targets on `page` (its text `text`) that resolve into the records set. */
+const relativeRecordTargets = (page: string, text: string): string[] =>
+  linkTargets(text).filter((target) => {
+    if (target.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(target)) return false;
+    const path = relative(REPO_ROOT, resolveTarget(page, target.replace(/[#?].*$/, "")))
+      .split(sep)
+      .join("/")
+      .replace(/\/+$/, "");
+    return isRecord(path);
+  });
+
+describe("record links on the pages that cite records", () => {
+  it("reads a relative link into a record as one, from the linking page's folder", () => {
+    expect(
+      relativeRecordTargets(DOCTRINE, "[a](../evals/runs/x/RESULTS.md) [b](../docs/plans/) [c](measurements.md)"),
+    ).toEqual(["../evals/runs/x/RESULTS.md", "../docs/plans/"]);
+    expect(relativeRecordTargets(README, `[a](${RECORDS_BLOB_URL}docs/plans/x.md) [b](evals/SET-v7.md)`)).toEqual([]);
+  });
+
+  it.each(RECORD_LINK_PAGES)("%s links no record by a repo-relative path", (page) => {
+    expect(
+      relativeRecordTargets(page, read(page)),
+      `${page} links a record repo-relatively; link it as RECORDS_BLOB_URL plus its path`,
+    ).toEqual([]);
+  });
 });
 
 /**
@@ -1469,43 +1528,9 @@ describe("the eval run of record on the hand pages", () => {
 // stated in two places a person reads — the release checklist's eval line and SET-v7's incremental
 // section. Each trigger is its own case and reads both texts, so a trigger dropped from either one
 // fails by name. REQ-PROVE-034: every per-release line of the checklist names the trigger it runs on.
-const RELEASE_CHECKLIST = ".github/release-controls-checklist.md";
-const EVAL_SET = "evals/SET-v7.md";
-/** A per-release line opens "One line …" or "A <ordinal> line …" in the checklist's section. */
-const PER_RELEASE_LEAD = /^(?:One|A [a-z]+) line\b/;
-
-/** A section of a file read through the shared `sectionOf`, refused when the heading is absent. */
-const fileSection = (path: string, heading: string): string => {
-  const section = sectionOf(read(path), heading);
-  expect(section, `${path} has no "${heading}" section`).not.toBe("");
-  return section;
-};
-
-/** Each per-release line with the paragraphs that follow it up to the next line. */
-const perReleaseLines = (): string[] => {
-  const found: string[] = [];
-  for (const paragraph of fileSection(RELEASE_CHECKLIST, "## Per-release record currency").split(
-    /\n\s*\n/,
-  )) {
-    const text = paragraph.trim();
-    if (PER_RELEASE_LEAD.test(text)) found.push(text);
-    else if (found.length > 0) found[found.length - 1] = `${found.at(-1) ?? ""}\n\n${text}`;
-  }
-  return found;
-};
-
-/** The two texts that state the release rule, whitespace-collapsed. */
-const releaseRuleTexts = (): ReadonlyArray<readonly [string, string]> => {
-  const evalLine = perReleaseLines().find((line) => line.startsWith("A second line"));
-  expect(evalLine, `${RELEASE_CHECKLIST} has no "A second line" (the eval line)`).toBeDefined();
-  return [
-    [`${RELEASE_CHECKLIST}'s eval line`, collapsed(evalLine ?? "")],
-    [
-      `${EVAL_SET}'s incremental section`,
-      collapsed(fileSection(EVAL_SET, "## Incremental runs — declared 2026-09-15")),
-    ],
-  ];
-};
+// The checklist and SET-v7 are read through `test/support/pageSections.ts` (`RELEASE_CHECKLIST`,
+// `EVAL_SET`, `fileSection`, `perReleaseLines`, `releaseRuleTexts`), the one copy this file and the
+// records suite share (ledger build/10).
 
 // TEST CHANGE, justified: 2026-10-08 (review/25, review/29). The `scripts/eval/**` row reads it
 // inside "the eval scripts (…)" now that the eval scripts name two entry points beside it; three
@@ -1542,18 +1567,7 @@ const EVAL_SKILL_COPIES: readonly string[] = [
   ".claude/skills/st-eval-run/SKILL.md",
 ];
 
-/** The backticked repository paths a text names. */
-const namedPaths = (text: string): string[] =>
-  [...text.matchAll(/`(\.?[\w-]+(?:\/[\w.*-]+)+)`/g)].map((match) => match[1] ?? "");
-
-/** The paths no named path covers; a named `dir/**` covers everything under `dir/`. */
-const uncovered = (paths: Iterable<string>, named: readonly string[]): string[] =>
-  [...paths].filter(
-    (path) =>
-      !named.some((pattern) =>
-        pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : pattern === path,
-      ),
-  );
+// `namedPaths` and `uncovered` come from `test/support/pageSections.ts` (ledger build/10).
 
 /** The rule's span in SET-v7, from its trigger clause to its FAIL sentence, whitespace-collapsed. */
 const RULE_SPAN_START = "when its diff since the run of record touches";
@@ -1640,12 +1654,14 @@ describe("the release eval follows what changed", () => {
 // root, so only a copy of the tree without the records can make it refuse.
 
 /**
- * The records set, the paths this repository keeps on the `records` branch rather than on `main`:
- * the run folders, the inbox, the handoffs but the scaffold's `.gitkeep`, the evidence, the plans,
- * and the eval runs, measurements, reach snapshots and their two archive notes.
+ * Whether a repository-relative POSIX path is a record, one the `records` branch keeps rather than
+ * `main`: `isRecordPath` from `scripts/records-paths.mjs`, the one list `scripts/records.mjs` reads
+ * for every verb, so this suite and the `guard` that refuses a record on `main` cannot disagree.
+ *
+ * TEST CHANGE, justified (2026-10-14, ledger build/11): this was a regular expression typing the
+ * records set a second time; it now reads the set from the module that defines it.
  */
-const RECORD_PATHS =
-  /^(?:\.stamity\/(?:runs|evidence)\/|\.stamity\/inbox\.md$|\.stamity\/handoffs\/(?!\.gitkeep$)|docs\/plans\/|evals\/(?:runs|measurements|reach)\/|evals\/EVIDENCE-STORAGE\.md$|evals\/ARCHIVE-MIGRATION-2026-09-15\.json$)/;
+const isRecord = isRecordPath as (path: string) => boolean;
 
 /** A `generatedPaths` glob as the lane reads one: `**` crosses folders, `*` stays inside one. */
 const globPattern = (glob: string): RegExp =>
@@ -1674,7 +1690,7 @@ function recordsFreeTree(): string {
   const root = mkdtempSync(join(tmpdir(), "stamity-records-free-"));
   const listed = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf-8" })
     .split("\0")
-    .filter((path) => path !== "" && !RECORD_PATHS.test(path));
+    .filter((path) => path !== "" && !isRecord(path));
   for (const path of listed) {
     if (!existsSync(join(REPO_ROOT, path))) continue;
     mkdirSync(dirname(join(root, path)), { recursive: true });

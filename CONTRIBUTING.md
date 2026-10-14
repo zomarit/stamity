@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-13 against the eval inputs retired behind tag evals-retired-2026-10-13. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the eval inputs retired behind tag evals-retired-2026-10-13, and against the records set the `records` branch holds. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
@@ -120,11 +120,15 @@ engine's `.gitkeep` excepted at every location:
 
 - `specs`: the spec under `docs/specs/`.
 - `learnings`: `.stamity/learnings/`.
-- `website`: `website/` and every other path under `docs/`, plans under `docs/plans/` included.
+- `website`: `website/` and every other path under `docs/`.
 
-A record (run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
-`.stamity/handoffs/`) is in no lane, so a change to one runs the full side. The records belong on
-the `records` branch, and the `records` job checks them there. It runs on every change, beside
+A record is a path the `records` branch holds instead of `main`, as `scripts/records-paths.mjs`
+lists them: run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
+`.stamity/handoffs/`, evidence under `.stamity/evidence/`, plans under `docs/plans/`, and the eval
+runs, measurements and reach snapshots under `evals/runs/`, `evals/measurements/` and
+`evals/reach/`, with two archive notes beside them in `evals/`. A plan still falls in the `website` lane by its path; every other record is in no
+lane, so a change to one runs the full side. The records belong on the `records` branch, and the
+`records` job checks them there. It runs on every change, beside
 whichever side ran, in this repository only, and it is merge-blocking here. It runs
 `node scripts/records.mjs guard`, which refuses a record tracked on the commit, restores the records
 from `origin/records` with `node scripts/records.mjs restore`, and then runs `npm run test:records`,

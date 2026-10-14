@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, for the records job and the record set its CI section names. -->
 <!-- Re-open when: a check named below is added, renamed or removed in `.github/workflows/`, the
      required-approval count changes, the MAJOR/MINOR/PATCH bump rules change, what the private
      layer holds changes, or a trigger in the EU AI Act section fires. `test/docsPages.test.ts`
@@ -88,8 +88,10 @@ rather than reddening the lane; a broken root is red.
 
 A change whose every path falls in a lane takes the `lanes` job in place of those three lanes.
 There are three lanes: `specs` (the spec), `learnings` (the recorded learnings) and `website` (the
-docs site and every other `docs/` path, plans included). A record (run records, the deferral inbox,
-handoffs) is in no lane. The job runs what those paths can break: the suites that read them, the
+docs site and every other `docs/` path). A record is a path the `records` branch holds instead of
+`main`: the run records, the deferral inbox, handoffs, evidence, plans, and the eval runs,
+measurements and reach snapshots with their archive notes. A plan still falls in the `website` lane by its path, and every
+other record is in no lane. The job runs what those paths can break: the suites that read them, the
 generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. The `learnings` lane
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
 typecheck. `scripts/ci/records-only.mjs` decides, and it reads the suites from the test-input map in

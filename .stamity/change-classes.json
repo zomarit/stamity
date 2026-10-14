@@ -79,7 +79,8 @@
         "test/ci/leakGate.test.ts",
         "test/ci/testInputsGuard.test.ts",
         "test/cli/docs/measurements.test.ts",
-        "test/docsPages.test.ts"
+        "test/docsPages.test.ts",
+        "test/records/specPlanCoverage.test.ts"
       ]
     },
     {
