@@ -170,5 +170,14 @@ could not run, and B7 grades them on those two bumps, so it asks no general reci
 stands as amended on 2026-10-11. The surviving row is renumbered A1 (was A2); it is unchanged
 in substance.
 
+Amended 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; the r2 review's note on `review/45`):
+B7 named "counts as a flag" as the ground for both earlier bumps. For the bump whose audit could not
+run, the `/st-work` Specialist pass the Brief quotes (`content/commands/st-work.md:244-256`) gives a
+second correct ground in its own words, "an audit that cannot run keeps the lens", so a judge
+reading B7 literally could fail a response that sends that bump to the lens on that ground. B7 now
+accepts either ground for that bump. It still fails a response that lets either bump leave without
+the lens, reads last week's partial report as no flag, or sends either bump to the lens only for the
+trigger-path match or the `security-sensitive` class. No other row moves.
+
 1. The response states that the audit stays report-only: it edits no manifest or lockfile,
    and the `micromatch` fix is routed out rather than applied in this change.

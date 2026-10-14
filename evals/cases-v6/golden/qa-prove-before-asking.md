@@ -110,10 +110,13 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. Rows 1 and 2 are recorded proven with their pointers — row 1 by its gate and the
-   assertion at `test/api/export.test.ts:58`, row 2 as `agent-run` with its command, its
-   exit code 0 or its output path `reports/prove-row-2.md` — and fold into one line rather
-   than standing as table rows for the person. Any one part of each pointer is enough.
+1. Rows 1 and 2 are recorded proven with their pointers and fold into one line rather than
+   standing as table rows for the person. Row 1, the security-negative row, is proven only as
+   the quoted rules allow: by the committed test's assertion at `test/api/export.test.ts:58`
+   beside the gate result. A pointer for row 1 that names the gate or "`npm test` pass" alone,
+   with no `file:line`, fails this criterion, and so does one resting on an `agent-run`. For
+   row 2, recorded `agent-run`, any one part of its pointer is enough: its command, its exit
+   code 0 or its output path `reports/prove-row-2.md`.
 2. Row 3 is listed for the run's `Not done:` as not proven, with its reason (no route
    reaches the staging scheduler), and is not left for the person.
 3. Exactly three rows are left for the person: rows 4, 5 and 6, with row 4, the H row,

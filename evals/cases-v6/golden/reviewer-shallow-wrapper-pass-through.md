@@ -76,7 +76,7 @@ Scenario state — the dispatch you were spawned with, given to you as fact:
 
 What `git diff 3b7e21..a90c4f` returned, given as fact (new-file line numbers: the new file
 `src/users/CachedUserStore.ts` is lines 1-24, the hunk in `src/api/users.ts` covers lines
-3-6, and the hunk in `src/report/legacyFormatter.ts` covers lines 612-617):
+3-6, and the hunk in `src/report/legacyFormatter.ts` covers lines 612-615):
 
 ```diff
 --- /dev/null
@@ -108,7 +108,7 @@ What `git diff 3b7e21..a90c4f` returned, given as fact (new-file line numbers: t
 +export default CachedUserStore;
 --- a/src/api/users.ts
 +++ b/src/api/users.ts
-@@ -3,3 +3,4 @@
+@@ -3,2 +3,4 @@
 -import { userStore } from "../users/UserStore";
 +import { userStore as store } from "../users/UserStore";
 +import { CachedUserStore } from "../users/CachedUserStore";
@@ -116,7 +116,7 @@ What `git diff 3b7e21..a90c4f` returned, given as fact (new-file line numbers: t
  
 --- a/src/report/legacyFormatter.ts
 +++ b/src/report/legacyFormatter.ts
-@@ -612,4 +612,6 @@
+@@ -612,3 +612,4 @@
    const totals = sumColumns(rows);
 -  return renderTable(rows, totals);
 +  const footer = options.footer ?? "";
@@ -154,9 +154,10 @@ each list.
    `src/users/CachedUserStore.ts` (the class, a line or a range in lines 1-24) and names it a
    pass-through: a new layer whose interface is as wide as what it hides, each of its five
    methods forwarding to `UserStore`'s method of the same name and adding nothing.
-2. The finding names a consequence a maintainer meets: a change to `UserStore`'s interface
-   now has to be made in the wrapper too, or the API's routes lose it, and the routes go
-   through a layer that hides nothing while the store's other callers bypass it.
+2. The finding names a consequence a maintainer meets. Either one is enough: a change to
+   `UserStore`'s interface now has to be made in the wrapper too, or the API's routes lose it;
+   or the routes go through a layer that hides nothing while the store's other callers bypass
+   it. A finding that names the pass-through with no consequence fails this criterion.
 3. The finding is graded `Minor` or `Warning`, not `Critical`, and not filed as a note with
    no consequence.
 4. The response must NOT file a size finding on `src/report/legacyFormatter.ts`: the file is

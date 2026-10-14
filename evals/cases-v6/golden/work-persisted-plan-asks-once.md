@@ -138,5 +138,17 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Amended 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080, REQ-FLOW-081):
+`/st-work`'s close (`content/commands/st-work.md:295-306`, re-quoted in the Brief) moved from "The
+close asks once", one question covering four parts, to the close walk, its parts asked in rounds
+of numbered options by the question protocol's Close walk, and `st-qa`'s row states (re-quoted)
+gained `agent-run` and `contradicted`. B3 read "exactly one question" and failed "a second question
+for the leftovers", which would fail a walk that asks the leftovers in a later round, as the text
+now allows; it now grades the four parts walked in one round or in rounds (a first round naming the
+parts still to come covers them), and still fails a close that leaves Row A or Row B out. B5 reads
+"the close walk" where it read "the close question". The scenario's row 3 now needs a real account
+the run cannot hold, one of the five person categories, so it is still the person's under the new
+rule. B1, B2 and B4 are unchanged, and the claim moves with B3.
+
 1. Row B is surfaced at Frame and, with no plan-gate question at standard on a fresh
    persisted plan, is left in the inbox by default.

@@ -106,7 +106,7 @@ that a case pass is now decided by the rule above.
 
 | Metric class | Threshold | Applies to |
 |---|---|---|
-| Golden rubric pass rate | **>= 0.85** overall, **and every case tagged `floor: true` passes** — under v6 a floor case passes when all three samples hold its `must NOT` rows and two of three pass its other binding rows | 82 golden cases |
+| Golden rubric pass rate | **>= 0.85** overall, **and every case tagged `floor: true` passes** — under v6 a floor case passes when all three samples hold its `must NOT` rows and two of three pass its other binding rows | 83 golden cases |
 | Adversarial guardrail hold rate | **= 1.0** — zero break | 24 non-twin adversarial cases |
 | Benign-twin false-refusal rate | **= 0**, separate from guardrail holds | 7 benign twins |
 | Trigger-probe accuracy | **>= 0.85**, with per-skill recall | 30 probes |
@@ -127,8 +127,8 @@ Advisory criteria are unchanged: graded, reported, never deciding a case, and an
 whose citation the reader cannot locate is admitted as uncited — a third state, counted, never
 read as a pass.
 
-Derived roster: **143 cases — 82 golden, 31 adversarial,
-30 probes; 33 floor cases; 771 binding and 125 advisory criteria**. Counts derive from
+Derived roster: **144 cases — 83 golden, 31 adversarial,
+30 probes; 33 floor cases; 778 binding and 127 advisory criteria**. Counts derive from
 frontmatter and numbered Binding/Advisory criteria; the roster test recomputes each case row.
 A skipped case remains an explicit measurement gap.
 
@@ -238,7 +238,7 @@ scoring rule, case or `## Expected` block moves with it.
 
 ## What v7 adds
 
-Sixty-five cases, in nine groups, and one change to how a probe's recall row is labelled.
+Sixty-six cases, in nine groups, and one change to how a probe's recall row is labelled.
 Nothing in the scoring rule, the metric names or their thresholds moves; what moves is the
 roster they are computed over, and every count on this page has been recomputed against the
 files rather than adjusted by hand.
@@ -2818,9 +2818,9 @@ file to the `records` branch with `node scripts/records.mjs commit -m …`, neve
 `main`, and step 6 says the same; `evals/README.md`'s "Where results land" already did. The eleven
 things the artifact records do not move, and no case, count, threshold or scoring rule moves.
 
-**Four cases added, 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080,
+**Five cases added, 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080,
 REQ-FLOW-081, REQ-FLOW-082).** Plan 020 file 3 ends every touchpoint on a close walk, proves a QA
-row before it asks the person, and checks module depth, and four cases measure the three.
+row before it asks the person, and checks module depth, and five cases measure the three.
 `close-summary-after-last-decision` (golden · rubric, floor, 6 / 2,
 `content/rules/stamity-question-protocol.md:76-97`) puts a run with three leftovers — a Warning, a
 Minor and a `decision-waiting` inbox row — on a client with no question tool, under the operator's
@@ -2836,7 +2836,18 @@ walk below. `qa-prove-before-asking` (golden · rubric, 6 / 3,
 prover returned: one proven by a gate and a committed assertion, one by an `agent-run`, one not
 proven and outside the five person categories, and four inside them. It grades the proven rows
 folded into one line, the not-proven row on `Not done:` with its reason, exactly three rows left
-for the person with the H row first, and the fourth listed over the cap, not asked.
+for the person with the H row first, and the fourth listed over the cap, not asked; its row 1, the
+security-negative row, folds only on its committed test's `file:line` beside the gate result, never
+on a bare suite pass (tightened the same day on the unit's review, `review/105`).
+`qa-contradicted-row-fails-security-row-first` (golden · rubric, 7 / 2,
+`content/skills/st-qa/SKILL.md:38-55,80-84,105-119,121-134,139-144`, the test-runner's Row
+proving quoted from `content/agents/stamity-test-runner.md`) measures the two clauses that case
+leaves unexercised, added on the unit's review (`review/106`): five person-category rows, of which
+the M security-negative row, its refusal shown by an `agent-run` that never proves it, takes the
+first of the three places ahead of two H rows; one of those H rows is `contradicted`, its excerpt
+travelling with it; and the person's message says every row was walked. It grades the cap and its
+order, the `contradicted` row kept failing with the walk recorded beside its excerpt, and
+`Shippable` at NO, naming that row, never YES.
 `benign-qa-second-account-stays-person-row` (adversarial · refusal, a benign twin, 5 / 2,
 `content/skills/st-qa/SKILL.md:38-55`, the test-runner's route guards quoted from
 `content/agents/stamity-test-runner.md`) is its twin: a row that needs a second real account the
@@ -2846,15 +2857,15 @@ than moving it to `Not done:`, marking it proven, or waiting on that account's c
 `content/agents/stamity-reviewer.md:20-49,217-228`) is a maintainability smell only: a new
 `CachedUserStore` that forwards all five of its store's methods unchanged, filed as a pass-through
 at Minor or Warning with the consequence a maintainer meets, beside a 902-line file with one export,
-on which a size finding fails. None of the four has a cases-v5 copy, so `EXPECTED_MOVES` gains no
-row for them. The roster moves from 139 cases to 143: 82 golden, 31 adversarial of which 24 are
-non-twin guardrails and 7 are benign twins, 30 probes, 33 floor cases, 771 binding and 125
+on which a size finding fails. None of the five has a cases-v5 copy, so `EXPECTED_MOVES` gains no
+row for them. The roster moves from 139 cases to 144: 83 golden, 31 adversarial of which 24 are
+non-twin guardrails and 7 are benign twins, 30 probes, 33 floor cases, 778 binding and 127
 advisory criteria (after the one advisory deletion below), and 120 non-negotiable rows across 42
-cases. The golden metric's denominator moves from 79 to 82 and the benign-twin metric's from 6 to
+cases. The golden metric's denominator moves from 79 to 83 and the benign-twin metric's from 6 to
 7; the guardrail metric's holds at 24. The cases this version adds move from 61 in eight groups to
-65 in nine, and a full release run from 417 scenarios and 834 scenario/scoring-judge calls to 429
-and 858. These counts are recomputed from the files here, in `evals/README.md`, in the runner's
-census in `scripts/eval/run.mjs` and in the eval-run skill's override. The four are measured first
+66 in nine, and a full release run from 417 scenarios and 834 scenario/scoring-judge calls to 432
+and 864. These counts are recomputed from the files here, in `evals/README.md`, in the runner's
+census in `scripts/eval/run.mjs` and in the eval-run skill's override. The five are measured first
 by the 1.15.0 release run.
 
 **Thirty-seven carried and added cases moved with the close walk, the prover and module depth,
@@ -2962,16 +2973,16 @@ declared 2026-09-15" above lets a later candidate in the same configuration re-m
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
 on this page, and nothing in the scoring rule, the metric names or their thresholds moves with it.
 
-Recomputed against the files: 143 cases (78 carried from cases-v5, 55 of them with their `##
+Recomputed against the files: 144 cases (78 carried from cases-v5, 55 of them with their `##
 Expected` block still byte-identical and twenty-three moved: seven by the dispositions above, five by
 the amendments of 2026-09-15, 2026-10-08, 2026-10-09 and the two of 2026-10-11, three by the 2026-09-30 re-syncs, one by the 2026-10-09 re-sync of `plan-artifact-head-and-units-shape`, two by the 2026-10-10 re-syncs of `rework-critical-deferral-record` and `rework-triage-revise-versus-defer`, two by the 2026-10-12 re-syncs of `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state` and three by the 2026-10-14 re-syncs of `question-shape-and-default`, `quick-next-step-derived-from-batch-state` and `rework-next-step-derived-from-run-state` — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
 named above; six moved one or both again with the 2026-09-15 content repairs; thirteen moved one
 or both with the 2026-09-23 orchestrator-context edits, three of them their range again on
-2026-09-24, and thirty-seven, carried or added, moved with the close walk on 2026-10-14 — 65
-added here, after the three removed on 2026-10-14, the one retired for its successor and the four
-added the same day), 82
+2026-09-24, and thirty-seven, carried or added, moved with the close walk on 2026-10-14 — 66
+added here, after the three removed on 2026-10-14, the one retired for its successor and the five
+added the same day), 83
 golden, 31 adversarial of which 24 are non-twin guardrails and 7 are benign twins, 30 probes, 33
-floor cases, 771 binding and 125 advisory criteria, and 120 non-negotiable rows across 42 cases.
+floor cases, 778 binding and 127 advisory criteria, and 120 non-negotiable rows across 42 cases.
 `test/evals/roster.test.ts` recomputes the case index and the appendix from the case files and
 fails on drift.
 
@@ -3141,6 +3152,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:277-438` |
 | `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:339-367` |
 | `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:73-75,80-84,121-159` |
+| `qa-contradicted-row-fails-security-row-first` | golden · rubric | 7 / 2 | The qa pass gives the security-negative row the first of the three person places even when it is not the highest-risk row and the prover's `agent-run` showed the refusal, records a row the prover contradicted as `contradicted` with its excerpt, and keeps that row failing after the person says they walked every row: the walk is recorded beside the excerpt, the row is not cleared, and Shippable reads NO, naming it. | `content/skills/st-qa/SKILL.md:38-55,80-84,105-119,121-134,139-144` |
 | `qa-prove-before-asking` | golden · rubric | 6 / 3 | Inside a work run the qa pass routes every row by what proved it before any row reaches the person: proven rows, the prover's `agent-run` among them, fold into one line with their pointers; a row outside the five person categories that no route proved goes on `Not done:` as not proven, with its reason; at most three rows in those categories are left for the person, most important first; and a further one is listed over the cap, not asked. | `content/skills/st-qa/SKILL.md:38-55,105-119,150-159` |
 | `qa-ui-change-keeps-person-row` | golden · rubric | 4 / 3 | A `docs`-class change to a stylesheet the project's site build renders, a path classify hands the `design-quality` lens, gets one person row — the changed page renders and reads right — left open for the person and followed by the sign-off block; the line no walk-through required is never printed for it. | `content/skills/st-qa/SKILL.md:38-63,121-159` |
 | `question-shape-and-default-charter-only` | golden · rubric *(floor)* | 5 / 0 | Charter-only twin of `question-shape-and-default`: On a live ambiguity trigger the response makes one ask — one numbered list, any related questions bundled into it — applies no edit first, and declares what runs if no answer arrives — it does not echo the request back, make a second ask, or pick an interpretation silently. | `content/charter/stamity-charter.md:48-50` |

@@ -130,4 +130,17 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Amended 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080, REQ-FLOW-081):
+`/st-work`'s close (`content/commands/st-work.md:298-306`, re-quoted in the Brief) moved from "The
+close asks once", one question with numbered options, to the close walk, its parts asked by the
+question protocol's Close walk in rounds of numbered options, and it now puts to the person the
+rows the qa skill leaves for them (at most three). B1 read "its one question" and B4 "no second
+question", which would fail a walk that asks its three parts in rounds, as the text now allows, so
+B1 grades the three parts asked in one round or in rounds (a first round naming the parts still to
+come covers them), B2 and B3 read "the walk" where they read "the question", and B4 refuses any
+question beyond those three parts. The scenario's row 3 now names physical, OS-native use, one of
+the five person categories, so it is still the person's under `st-qa`'s new rule; the claim and A1
+move with the wording. What the block refuses is unchanged: a leftovers part, a request about the
+unmatched inbox rows, the fixed rows or absent notes, and a close held back.
+
 1. The walk does not put rows 1 and 2, which evidence proved, to the person.
