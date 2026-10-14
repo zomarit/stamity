@@ -233,10 +233,10 @@ describe("main — inputHashes keys never carry the checkout location", () => {
       (row: { inputHashes: Record<string, string> }) => Object.keys(row.inputHashes).length > 0,
     );
     expect(rowsWithInputs.length, "at least one row carries page inputs").toBeGreaterThan(0);
-    // The page-bound rows are H2 and H3; the plugins lane added H4a–H4d on 2026-09-20, and those are
-    // bound to the route smoke rather than to a built page. The relativization property under test
-    // holds for EVERY row and is asserted for every row; only the `website/build/` prefix is
-    // specific to the rows this case was written for, so it is applied to those.
+    // The page-bound rows are H2 and H3. The relativization property under test holds for EVERY row
+    // and is asserted for every row; only the `website/build/` prefix is specific to the rows this
+    // case was written for, so it is applied to those. (The plugins lane's rows, bound to the route
+    // smoke rather than to a page, left with the plugin route in 1.15.0.)
     const pageRows = new Set(["H2", "H3a", "H3b", "H3c", "H3d"]);
     let pageKeys = 0;
     for (const row of rowsWithInputs) {
@@ -296,15 +296,13 @@ describe("main — inputHashes keys never carry the checkout location", () => {
 });
 
 /**
- * The plugins lane (`H4a`–`H4d` and `H5`), which needs a BUILT distribution the harness deliberately
- * does not build. Both cases below drive `main()` with no distribution at all, because that is the
- * state the rows must describe honestly: a release run that forgot `--dist` must not produce five
- * absent rows, and must certainly not produce five green ones. The lane's own measurements — the
- * route smoke and the upgrade-and-rollback walk against real client binaries — are proven in
- * `test/ci/pluginRoute.test.ts` and `test/ci/pluginLifecycle.test.ts`; what is under test here is the
- * row the harness writes when it cannot measure, and that each row is bound to ITS OWN instrument.
+ * TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "main — the
+ * plugins lane with nothing to measure" pinned the five plugin rows (`H4a`–`H4d`, `H5`) as not-run
+ * without a `--dist`, and as skipped under `--skip-plugins`. The rows, the lane and both options
+ * left with the plugin route, which 1.15.0 deletes, so the suite now pins their absence: a run
+ * writes the nine catalogue rows and no retired one, and the two options are unknown.
  */
-describe("main — the plugins lane with nothing to measure", () => {
+describe("main — no plugins lane", () => {
   const temps: string[] = [];
 
   afterEach(() => {
@@ -329,57 +327,40 @@ describe("main — the plugins lane with nothing to measure", () => {
     return join(dir, "evidence.json");
   }
 
-  async function runHarness(extra: string[]): Promise<{ rows: { row: string; status: string; reason: string; inputHashes: Record<string, string> }[] }> {
+  it("writes the nine catalogue rows and none of the retired plugin rows", async () => {
     // @ts-expect-error — native ESM contributor tool, outside the product package.
     const { main } = await import("../../scripts/qa/run.mjs");
-    return (await main([
-      "--site",
-      siteFixture(),
-      "--skip-browser",
-      "--skip-hooks",
-      "--sha",
-      "cccccccccccccccccccccccccccccccccccccccc",
-      "--out",
-      evidencePath(),
-      ...extra,
-    ])) as { rows: { row: string; status: string; reason: string; inputHashes: Record<string, string> }[] };
-  }
-
-  const ROUTE_ROWS = ["H4a", "H4b", "H4c", "H4d"];
-  const PLUGIN_ROWS = [...ROUTE_ROWS, "H5"];
-
-  it("writes every plugins row as not-run, naming the missing --dist, when none was passed", async () => {
-    const evidence = await runHarness([]);
-
-    for (const id of PLUGIN_ROWS) {
-      const row = evidence.rows.find((entry) => entry.row === id);
-      expect(row, `${id} is absent from the evidence`).toBeDefined();
-      expect(row?.status, id).toBe("not-run");
-      expect(row?.reason, id).toBe("no --dist directory: build the distribution and pass it");
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { RETIRED_ROWS } = await import("../../scripts/qa/form.mjs");
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    let evidence: { rows: { row: string }[] };
+    try {
+      evidence = (await main([
+        "--site",
+        siteFixture(),
+        "--skip-browser",
+        "--skip-hooks",
+        "--sha",
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "--out",
+        evidencePath(),
+      ])) as { rows: { row: string }[] };
+    } finally {
+      write.mockRestore();
     }
-    // Bound to the instrument that lives in this repository, so a row reopens when its own
-    // instrument moves rather than carrying a constant hash a signature could sit on forever — and
-    // the lifecycle row's instrument is NOT the route smoke, which is the distinction that would
-    // otherwise let a walk row be signed off against a file it never ran.
-    for (const id of ROUTE_ROWS) {
-      expect(Object.keys(evidence.rows.find((entry) => entry.row === id)?.inputHashes ?? {}), id).toEqual([
-        "scripts/plugin-route-smoke.mjs",
-      ]);
+    expect(evidence.rows.map((row) => row.row)).toEqual(["H1a", "H1b", "H1c", "H1d", "H2", "H3a", "H3b", "H3c", "H3d"]);
+    for (const id of Object.keys(RETIRED_ROWS as Record<string, string>)) {
+      expect(evidence.rows.some((row) => row.row === id), id).toBe(false);
     }
-    expect(Object.keys(evidence.rows.find((entry) => entry.row === "H5")?.inputHashes ?? {}).toSorted()).toEqual([
-      "scripts/plugin-lifecycle-fixture.mjs",
-      "test/ci/pluginLifecycle.test.ts",
-    ]);
   });
 
-  it("says the lane was skipped when --skip-plugins was passed, rather than blaming --dist", async () => {
-    const evidence = await runHarness(["--skip-plugins", "--dist", "website/build"]);
-
-    for (const id of PLUGIN_ROWS) {
-      const row = evidence.rows.find((entry) => entry.row === id);
-      expect(row?.status, id).toBe("not-run");
-      expect(row?.reason, id).toBe("the plugins lane was skipped (--skip-plugins)");
-    }
+  it("refuses the retired --dist and --skip-plugins options as unknown", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { parseArgs, USAGE } = await import("../../scripts/qa/run.mjs");
+    expect(() => parseArgs(["--skip-plugins"])).toThrow("Unknown option --skip-plugins");
+    expect(() => parseArgs(["--dist", "website/build"])).toThrow("Unknown option --dist");
+    expect(USAGE).not.toContain("--dist");
+    expect(USAGE).not.toContain("--skip-plugins");
   });
 });
 
@@ -496,17 +477,20 @@ describe("parseArgs — the human-answer options", () => {
     expect(options.acceptUnwalked).toEqual([]);
     expect(options.by).toBe("the maintainer");
     expect(options.on).toBe("2026-09-30");
-    expect(parseArgs(["--accept-unwalked", "H4b,,H5"]).acceptUnwalked).toEqual(["H4b", "H5"]);
+    // TEST CHANGE, justified (unit d3-ci-qa, as above): the ids are live rows now; `H4b` and `H5`
+    // left the form with the plugin route. The parsing under test is unchanged.
+    expect(parseArgs(["--accept-unwalked", "H1d,,H3a"]).acceptUnwalked).toEqual(["H1d", "H3a"]);
   });
 
   it("adds a repeated --walked or --accept-unwalked to the ids already given", async () => {
     // @ts-expect-error — native ESM contributor tool, outside the product package.
     const { parseArgs } = await import("../../scripts/qa/run.mjs");
 
-    const options = parseArgs(["--walked", "H1a", "--accept-unwalked", "H4b", "--walked", "H1b,H1c", "--accept-unwalked", "H5"]);
+    // TEST CHANGE, justified (unit d3-ci-qa, as above): live ids in place of `H4b` and `H5`.
+    const options = parseArgs(["--walked", "H1a", "--accept-unwalked", "H1d", "--walked", "H1b,H1c", "--accept-unwalked", "H3a"]);
 
     expect(options.walked).toEqual(["H1a", "H1b", "H1c"]);
-    expect(options.acceptUnwalked).toEqual(["H4b", "H5"]);
+    expect(options.acceptUnwalked).toEqual(["H1d", "H3a"]);
   });
 
   it("names the four options in the usage banner", async () => {
@@ -558,13 +542,18 @@ describe("main — human answers across two runs", () => {
     const { main } = await import("../../scripts/qa/run.mjs");
     const site = siteFixture();
     const out = evidencePath();
-    const base = ["--site", site, "--skip-browser", "--skip-hooks", "--skip-plugins", "--sha", "d".repeat(40), "--out", out];
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `--skip-plugins`
+    // leaves the command line and `H4b` the accepted ids, because the plugins lane and its rows left
+    // with the plugin route that 1.15.0 deletes; `H1c` (a hook row, open under `--skip-hooks`) takes
+    // `H4b`'s place. Nine rows: H1a walked, H1b and H1c accepted, H2 and H3a–H3d measured failed,
+    // one left open. Every property the case pinned is kept.
+    const base = ["--site", site, "--skip-browser", "--skip-hooks", "--sha", "d".repeat(40), "--out", out];
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     let first: AnsweredEvidence;
     let second: AnsweredEvidence;
     let printed: string;
     try {
-      first = (await main([...base, "--walked", "H1a", "--accept-unwalked", "H1b,H4b", "--by", "the maintainer", "--on", "2026-09-30"])) as AnsweredEvidence;
+      first = (await main([...base, "--walked", "H1a", "--accept-unwalked", "H1b,H1c", "--by", "the maintainer", "--on", "2026-09-30"])) as AnsweredEvidence;
       printed = write.mock.calls.map((call) => String(call[0])).join("");
       second = (await main(base)) as AnsweredEvidence;
     } finally {
@@ -572,12 +561,11 @@ describe("main — human answers across two runs", () => {
     }
     expect(answeredRow(first, "H1a")).toMatchObject({ status: "performed", performedAt: "2026-09-30" });
     expect(answeredRow(first, "H1b")).toMatchObject({ status: "accepted-unwalked", acceptedAt: "2026-09-30", acceptedBy: "the maintainer" });
-    expect(answeredRow(first, "H4b").status).toBe("accepted-unwalked");
-    // 14 rows: H1a walked, H1b and H4b accepted, H2 and H3a–H3d measured failed, 6 left open.
-    expect(printed).toContain("[qa] human answers: 1 performed, 2 accepted-unwalked, 6 open");
+    expect(answeredRow(first, "H1c").status).toBe("accepted-unwalked");
+    expect(printed).toContain("[qa] human answers: 1 performed, 2 accepted-unwalked, 1 open");
 
     expect(answeredRow(second, "H1a")).toMatchObject({ status: "performed", performedAt: "2026-09-30" });
-    for (const id of ["H1b", "H4b"]) {
+    for (const id of ["H1b", "H1c"]) {
       expect(answeredRow(second, id).status, id).toBe("unperformed");
       expect(answeredRow(second, id).reason, id).toContain("accepted-unwalked");
       expect(answeredRow(second, id).acceptedAt, id).toBeUndefined();
@@ -590,7 +578,8 @@ describe("main — human answers across two runs", () => {
     const out = evidencePath();
 
     await expect(
-      main(["--site", siteFixture(), "--skip-browser", "--skip-hooks", "--skip-plugins", "--sha", "e".repeat(40), "--out", out, "--walked", "H9", "--by", "the maintainer"]),
+      // TEST CHANGE, justified (unit d3-ci-qa, as above): `--skip-plugins` is no longer an option.
+      main(["--site", siteFixture(), "--skip-browser", "--skip-hooks", "--sha", "e".repeat(40), "--out", out, "--walked", "H9", "--by", "the maintainer"]),
     ).rejects.toThrow("row H9 is not in this evidence file");
     expect(existsSync(out)).toBe(false);
   });
@@ -601,7 +590,8 @@ describe("main — human answers across two runs", () => {
     const out = evidencePath();
 
     await expect(
-      main(["--site", siteFixture(), "--skip-browser", "--skip-hooks", "--skip-plugins", "--sha", "f".repeat(40), "--out", out, "--accept-unwalked", "H2", "--by", "the maintainer"]),
+      // TEST CHANGE, justified (unit d3-ci-qa, as above): `--skip-plugins` is no longer an option.
+      main(["--site", siteFixture(), "--skip-browser", "--skip-hooks", "--sha", "f".repeat(40), "--out", out, "--accept-unwalked", "H2", "--by", "the maintainer"]),
     ).rejects.toThrow("row H2 was measured failed by the harness; a measured row takes no human answer");
     expect(existsSync(out)).toBe(false);
   });

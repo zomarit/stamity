@@ -3,10 +3,10 @@
 //
 // Nine rows were carried through two releases as "UNPERFORMED", which is an honest record of a
 // walk-through nobody did and a useless one for deciding whether the next release needs it. This
-// module renders fourteen rows out of `.stamity/evidence/qa-<sha>.json` — the original nine, one per
-// client for the plugin route (`H4a`–`H4d`), and one for the upgrade-and-rollback walk across all
-// four clients (`H5`) — so each one arrives with the thing a typed form
-// never carries: what it was measured against. The rows the harness can measure end to end it
+// module renders those nine rows out of `.stamity/evidence/qa-<sha>.json`, so each one arrives with
+// the thing a typed form never carries: what it was measured against. The five plugin-route rows
+// (`H4a`–`H4d`, `H5`) left the form in 1.15.0 with the route they measured; an evidence file that
+// still carries them renders them under "Retired rows", never in the table. The rows the harness can measure end to end it
 // measures; the rest stay human, and a human row reads UNPERFORMED until somebody signs it — with
 // the row's input hash beside the signature, so the next run can tell whether that signature still
 // describes the tree. A person who signs a row off without walking it gets ACCEPTED UNWALKED, which
@@ -22,16 +22,13 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /**
- * The fourteen rows, in form order.
+ * The nine rows, in form order.
  *
- * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`, `H4a`–`H4d`, `H5`) and the split follows
- * what each row is measured BY: H1 is one row per client whose hook lane is exercised, H2 is the
- * accessibility tree and scanner pass over the built pages, H3 is one row per viewport/theme pair
- * of the keyboard journey, H4 is one row per client for the plugin route — install, discovery and
- * invocation of a built plugin root through that client's own commands — and H5 is the one row for
- * the upgrade-and-rollback walk, whose note sits beside its entry below. `lane` names which half
- * of the harness owns the row, and is what `run.mjs` dispatches on — a row nobody owns would be a
- * row nobody measures.
+ * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`) and the split follows what each row is
+ * measured BY: H1 is one row per client whose hook lane is exercised, H2 is the accessibility tree
+ * and scanner pass over the built pages, and H3 is one row per viewport/theme pair of the keyboard
+ * journey. `lane` names which half of the harness owns the row, and is what `run.mjs` dispatches
+ * on — a row nobody owns would be a row nobody measures.
  */
 export const QA_ROWS = [
   {
@@ -100,61 +97,25 @@ export const QA_ROWS = [
     title: 'Keyboard journey — 1440px, dark',
     proves: 'every focus stop is visible, reading order equals DOM order, and the table page answers the arrow keys or says why not',
   },
-  {
-    id: 'H4a',
-    lane: 'plugins',
-    client: 'claude',
-    title: 'Plugin route — install, discovery and invocation under Claude Code',
-    proves:
-      "the built root installs through the client's own route, lists `st-work` and `stamity-reviewer` where agents ride, and its `st-setup` command writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`",
-  },
-  {
-    id: 'H4b',
-    lane: 'plugins',
-    client: 'cursor',
-    title: 'Plugin route — install, discovery and invocation under Cursor',
-    proves:
-      "the built root installs through the client's own route, lists `st-work` and `stamity-reviewer` where agents ride, and its `st-setup` command writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`",
-  },
-  {
-    id: 'H4c',
-    lane: 'plugins',
-    client: 'copilot',
-    title: 'Plugin route — install, discovery and invocation under the Copilot CLI',
-    proves:
-      "the built root installs through the client's own route, lists `st-work` and `stamity-reviewer` where agents ride, and its `st-setup` command writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`",
-  },
-  {
-    id: 'H4d',
-    lane: 'plugins',
-    client: 'codex',
-    title: 'Plugin route — install, discovery and invocation under Codex',
-    // This container carries no command and no agent class, so the sentence its three siblings share
-    // would promise ids this root cannot hold: `st-work` rides as a command and `st-setup` is
-    // generated into one. What Codex carries is skills, and the setup route is the line its own
-    // README prints — which is what this row is a claim about.
-    proves:
-      'the built root installs through the marketplace route into the client\'s own cache, its carried skills are discovered under the form the root declares, and the setup line its README names writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`',
-  },
-  {
-    id: 'H5',
-    lane: 'plugins',
-    title: "Upgrade and rollback through each client's own route",
-    proves:
-      "installing the first fixture version, updating to the second and rolling back restores the first version's tree byte for byte, with `plugin status` compatible in all three states and the repository-owned files unchanged",
-    // The four routes, named here because they differ and the difference is what an operator has to
-    // plan around. Measured 2026-09-20; the row's own reason carries the route each client actually
-    // walked, out of the run, rather than out of this list.
-    routes: {
-      claude:
-        'reinstall — re-add the marketplace at the previous tag, `plugin install stamity@stamity --scope project`, then `plugin update stamity@stamity --scope project` completes it (there is no `plugin rollback` subcommand)',
-      copilot:
-        'tree replacement — a local marketplace loads live, so `plugin update` is a no-op and the version follows the directory',
-      codex: '`plugin remove stamity@stamity`, then marketplace add at the earlier tag and `plugin add`',
-      cursor: '`--plugin-dir` tree replacement — this client documents no install, update or rollback subcommand',
-    },
-  },
 ]
+
+/**
+ * The rows the form carried until 1.15.0, by id, with why each left.
+ *
+ * `H4a`–`H4d` proved the plugin route one client at a time and `H5` walked its upgrade and
+ * rollback; 1.15.0 deleted that route, so no run measures them again. An evidence file written
+ * before the cut still carries them, and the form lists them by id under "Retired rows" with the
+ * status they were recorded with, so the file renders whole and nobody reads a retired row as a
+ * row of this run. `bind.mjs` carries forward only the rows a run writes, so a signature on one of
+ * these is not carried to the next file.
+ */
+export const RETIRED_ROWS = {
+  H4a: 'retired in 1.15.0: the plugin route it measured under Claude Code is deleted',
+  H4b: 'retired in 1.15.0: the plugin route it measured under Cursor is deleted',
+  H4c: 'retired in 1.15.0: the plugin route it measured under the Copilot CLI is deleted',
+  H4d: 'retired in 1.15.0: the plugin route it measured under Codex is deleted',
+  H5: "retired in 1.15.0: the plugin route's upgrade-and-rollback walk is deleted with the route",
+}
 
 /** Markdown table cells are pipe-delimited, so a reason carrying one has to escape it. */
 function cell(text) {
@@ -240,6 +201,24 @@ export function renderForm(evidence) {
         `${row.automated === true ? 'yes' : 'no'} | ${cell(row.status)} | ${cell(humanCell(row))} | ` +
         `\`${shortHash(row.rowHash)}\` | ${cell(row.reason)} |`,
     )
+  }
+
+  // Rows an older evidence file still carries for a route 1.15.0 deleted. Listed by id with the
+  // status they were recorded with, after the table and outside it, so the form renders whole and
+  // a retired row never reads as a row of this run.
+  const retired = rows.filter((row) => Object.hasOwn(RETIRED_ROWS, row?.row))
+  if (retired.length > 0) {
+    lines.push('')
+    lines.push('## Retired rows')
+    lines.push('')
+    lines.push(
+      'This evidence file carries rows the form no longer has. Each is shown with the status it was ' +
+        'recorded with; no run measures it again, and the next run carries no signature forward for it.',
+    )
+    lines.push('')
+    for (const row of retired) {
+      lines.push(`- **${row.row}** — recorded \`${cell(row.status)}\`; ${RETIRED_ROWS[row.row]}.`)
+    }
   }
 
   lines.push('')

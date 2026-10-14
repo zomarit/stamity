@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, for the records job and the record set its CI section names. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, for the records job and the record set its CI section names, and against `.github/workflows/ci.yml`, for the APM and plugin route lanes it no longer runs. -->
 <!-- Re-open when: a check named below is added, renamed or removed in `.github/workflows/`, the
      required-approval count changes, the MAJOR/MINOR/PATCH bump rules change, what the private
      layer holds changes, or a trigger in the EU AI Act section fires. `test/docsPages.test.ts`
@@ -51,8 +51,7 @@ check has one stable name, so a required check does not rotate when the matrix d
 ### What `all-ci-checks` covers
 
 `all-ci-checks` is the aggregator job in `.github/workflows/ci.yml`, and it runs on every event.
-A full run passes when three lanes pass: the check matrix, the APM route lane, and the plugin
-route lane.
+A full run passes when the check matrix passes.
 
 The check matrix runs four legs: the pinned Node floor, the current LTS, and Windows in two
 shards, each shard running half of the test suite. Which step runs on which leg is not uniform.
@@ -71,22 +70,7 @@ shards, each shard running half of the test suite. Which step runs on which leg 
 - **The floor leg only** runs the tarball smoke: pack the tarball, install it, run the published
   shape. What it proves is a runtime claim about the oldest supported Node.
 
-The APM route lane installs this repository's generated APM package into a throwaway consumer and
-checks the deployed tree. [CONTRIBUTING.md](CONTRIBUTING.md) names the client versions it runs
-against.
-
-The plugin route lane builds the four client plugin roots the release builds, then asks the clients
-about them. What it proves is the credential-free half of that route: each root's structure, on every
-run, and then — on the clients whose CLI installs on the runner — each client's install, and the
-discovery legs a listing command can answer without an account. What it deliberately does not prove
-is the other half: discovery wherever the only listing of a plugin's ids is what a driven session
-prints, and every invocation leg. Both of those need that vendor's credential, which no
-merge-blocking job here holds, so they run nightly behind per-client secrets — a workflow armed but
-disabled at the repository until the maintainer enables it and sets them — and in the manual QA
-walk-through. A client CLI that fails to install leaves its own legs skipped with a notice naming it,
-rather than reddening the lane; a broken root is red.
-
-A change whose every path falls in a lane takes the `lanes` job in place of those three lanes.
+A change whose every path falls in a lane takes the `lanes` job in place of the check matrix.
 There are three lanes: `specs` (the spec), `learnings` (the recorded learnings) and `website` (the
 docs site and every other `docs/` path). A record is a path the `records` branch holds instead of
 `main`: the run records, the deferral inbox, handoffs, evidence, plans, and the eval runs,
@@ -96,8 +80,8 @@ generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. T
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
 typecheck. `scripts/ci/records-only.mjs` decides, and it reads the suites from the test-input map in
 the base commit's `.stamity/change-classes.json`, never from the change's own copy. Any path in no
-lane, an empty diff, a diff it cannot read, the weekly schedule and a manual run get the full three
-lanes. So does a change whose every path is in a lane when that map cannot answer: no valid map at
+lane, an empty diff, a diff it cannot read, the weekly schedule and a manual run get the full check
+matrix. So does a change whose every path is in a lane when that map cannot answer: no valid map at
 the base commit, a changed path no entry matches, or a matching entry that selects every test. On
 the full side the LTS leg also builds the docs site when the change touches a `website` path or no
 diff was read. [CONTRIBUTING.md](CONTRIBUTING.md) lists each lane's paths.

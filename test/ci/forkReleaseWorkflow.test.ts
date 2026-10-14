@@ -25,9 +25,12 @@ import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowEx
  *                       per-run token reaches a registry only when that registry IS GitHub
  *                       Packages — a lookalike host never gets it.
  *   the proofs          The tag, ancestry and identity proofs, RUN against scratch repositories.
- *   the publish steps   The npm step and the release step, RUN with `npm` and `gh` stubbed; the
- *                       distribution push, RUN against a scratch bare remote. The steps copied
- *                       from release.yml are held byte-equal to it, so a fix there reaches here.
+ *   the publish steps   The npm step and the release step, RUN with `npm` and `gh` stubbed. The
+ *                       steps copied from release.yml are held byte-equal to it, so a fix there
+ *                       reaches here.
+ *   npm only            Since 1.15.0 the fork release publishes the npm package and its GitHub
+ *                       release only: the plugin distribution and the APM refs left with those
+ *                       routes (run 2026-10-14_cli-native, unit d3-ci-qa).
  *
  * The bash cases do not run on Windows: GitHub runs these steps on ubuntu, and a Git-for-Windows
  * bash is a different interpreter from the one under test. The suite's other bash cases skip for
@@ -228,8 +231,10 @@ describe("fork-release.yml — the shape", () => {
       RELEASE_SOURCE.split("\n").map(usesLine).filter((pin) => pin !== undefined),
     );
     const pins = SOURCE.split("\n").map(usesLine).filter((pin) => pin !== undefined);
-    // Checkout, setup-node twice, upload twice, download twice.
-    expect(pins.length).toBe(7);
+    // Checkout, setup-node twice, one upload, one download. TEST CHANGE, justified (2026-10-14, run
+    // 2026-10-14_cli-native, unit d3-ci-qa): seven became five because the plugin distribution's
+    // upload and download left with the plugin route, which 1.15.0 deletes.
+    expect(pins.length).toBe(5);
     for (const pin of pins) expect(releasePins.has(pin), pin).toBe(true);
     for (const [job, name] of [
       ["gates", "Set up Node"],
@@ -350,21 +355,21 @@ describe("fork-release.yml — the trust split", () => {
     expect(secretsReadBy("publish")).toEqual(["GITHUB_TOKEN", "STAMITY_REGISTRY_TOKEN"]);
   });
 
-  it("checks nothing out in publish, and verifies both digests, the tarball's identity and the checksum files before the registry publish", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the plugin
+  // distribution's download, digest check, checksum-file check and branch push leave the step list
+  // with the plugin route, which 1.15.0 deletes. The property is kept for what remains: nothing is
+  // checked out, and the tarball's digest and identity are verified before the registry publish.
+  it("checks nothing out in publish, and verifies the tarball's digest and identity before the registry publish", () => {
     const steps = jobOf(WORKFLOW, "publish").steps;
     expect(steps.some((step) => (step.uses ?? "").startsWith("actions/checkout@"))).toBe(false);
     const names = steps.map((step) => step.name);
     expect(names).toEqual([
       "Refuse an unarmed destination",
       "Download release artifacts",
-      "Download plugin distribution",
       "Verify tarball digest",
-      "Verify plugin distribution digest",
       "Verify the tarball's identity",
-      "Verify plugin checksum files",
       "Set up Node",
       "Publish to the registry",
-      "Push plugin distribution",
       "Create GitHub release",
     ]);
     const setupNode = stepOf(WORKFLOW, "publish", "Set up Node");
@@ -442,9 +447,12 @@ describe("fork-release.yml — what it copies from release.yml stays equal to it
       "Dogfood check",
       "Tarball smoke (publish shape)",
       "Pack tarball",
-      "Build plugin runtime",
-      "Build plugin distribution",
     ];
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the ladder
+    // ends at the pack, and the "Generated manifests are current" step is gone. The plugin runtime
+    // and distribution builds, and the check that the APM package and plugin manifests were
+    // regenerated, left with the two routes 1.15.0 deletes; every remaining rung is still held
+    // equal to release.yml's, and no gates step may build or check either route again.
     expect(names.filter((name) => ladder.includes(name ?? ""))).toEqual(ladder);
     for (const name of ladder) {
       const fork = stepOf(WORKFLOW, "gates", name);
@@ -452,35 +460,31 @@ describe("fork-release.yml — what it copies from release.yml stays equal to it
       expect(fork.run, name).toBe(canonical.run);
       expect(fork.env, name).toEqual(canonical.env);
     }
-    const checks = runOf(WORKFLOW, "gates", "Generated manifests are current");
-    expect(checks).toContain("node scripts/generate-apm-package.mjs --check");
-    expect(checks).toContain("node scripts/generate-plugin-manifests.mjs --check");
+    expect(names).not.toContain("Generated manifests are current");
+    const gatesShell = jobOf(WORKFLOW, "gates").steps.map((step) => step.run ?? "").join("\n");
+    expect(gatesShell).not.toMatch(/plugin|apm/i);
     // The proofs come before anything is installed, built or packed.
     expect(names.indexOf("Prove the fork release")).toBeLessThan(names.indexOf("Install"));
   });
 
-  it("uploads both artifacts for seven days, hidden files included in the distribution", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): one artifact,
+  // not two. The plugin distribution's upload and download left with the plugin route, which
+  // 1.15.0 deletes; the tarball still crosses for seven days, and it is the only artifact that does.
+  it("uploads the tarball, and only the tarball, for seven days", () => {
     const tarball = stepOf(WORKFLOW, "gates", "Upload release tarball");
-    const plugins = stepOf(WORKFLOW, "gates", "Upload plugin distribution");
     expect(tarball.with).toMatchObject({ name: "fork-release-dist", path: "*.tgz", "retention-days": 7 });
-    expect(plugins.with).toMatchObject({
-      name: "fork-release-plugins",
-      path: "dist/plugins",
-      "include-hidden-files": true,
-      "retention-days": 7,
-    });
     expect(stepOf(WORKFLOW, "publish", "Download release artifacts").with?.["name"]).toBe("fork-release-dist");
-    expect(stepOf(WORKFLOW, "publish", "Download plugin distribution").with).toEqual({
-      name: "fork-release-plugins",
-      path: "plugins",
-    });
+    const artifactSteps = Object.values(WORKFLOW.jobs)
+      .flatMap((job) => job.steps)
+      .filter((step) => /^actions\/(upload|download)-artifact@/.test(step.uses ?? ""));
+    expect(artifactSteps.map((step) => step.with?.["name"])).toEqual(["fork-release-dist", "fork-release-dist"]);
   });
 
-  it("verifies digests and pushes the distribution with release.yml's own steps, byte for byte", () => {
+  // TEST CHANGE, justified (unit d3-ci-qa, as above): the plugin distribution's digest check and
+  // branch push left with the plugin route; the tarball's digest check is still release.yml's own.
+  it("verifies the tarball's digest with release.yml's own step, byte for byte", () => {
     for (const name of [
       "Verify tarball digest",
-      "Verify plugin distribution digest",
-      "Push plugin distribution",
     ]) {
       const fork = stepOf(WORKFLOW, "publish", name);
       const canonical = stepOf(RELEASE, "publish", name);
@@ -908,57 +912,9 @@ describe.skipIf(WINDOWS)("fork-release.yml — the tarball's identity, executed 
   });
 });
 
-/** A stand-in digest per archive name, and the `sha256sum -c` line the builder writes for it. */
-function digestOf(archive: string): string {
-  return createHash("sha256").update(archive).digest("hex");
-}
-function lineOf(archive: string): string {
-  return `${digestOf(archive)}  ${archive}\n`;
-}
-
-describe.skipIf(WINDOWS)("fork-release.yml — the plugin checksum files, executed", () => {
-  const CHECKSUMS = runOf(WORKFLOW, "publish", "Verify plugin checksum files");
-  const ARCHIVES = [`stamity-plugin-claude-${FORK_VERSION}.zip`, `stamity-plugin-codex-${FORK_VERSION}.zip`];
-
-  /** A downloaded distribution: release.json naming both archives, and the given checksum files. */
-  function checksums(files: Readonly<Record<string, string>>): { status: number | null; out: string } {
-    const dir = scratchDir("checksums");
-    mkdirSync(join(dir, "plugins"));
-    const packages = ARCHIVES.map((archive) => ({ archive, sha256: digestOf(archive) }));
-    writeFileSync(join(dir, "plugins", "release.json"), `${JSON.stringify({ packages })}\n`);
-    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, "plugins", name), body);
-    const result = spawnSync("bash", ["-c", CHECKSUMS], {
-      cwd: dir,
-      encoding: "utf8",
-      env: { ...process.env, PATH: childPath() },
-    });
-    return { status: result.status, out: `${result.stdout}${result.stderr}` };
-  }
-
-  const MATCHING = Object.fromEntries(ARCHIVES.map((archive) => [`${archive}.sha256`, lineOf(archive)]));
-
-  it("passes checksum files that state exactly the manifest's digests", () => {
-    const run = checksums(MATCHING);
-    expect(run.status, run.out).toBe(0);
-  });
-
-  it("refuses a checksum file whose digest is not the manifest's", () => {
-    const [first = ""] = ARCHIVES;
-    const run = checksums({ ...MATCHING, [`${first}.sha256`]: `${"0".repeat(64)}  ${first}\n` });
-    expect(run.status).toBe(1);
-    expect(run.out).toContain(`plugins/${first}.sha256 does not state the digest`);
-  });
-
-  it("refuses a checksum file the manifest does not name, and a missing one", () => {
-    const stray = checksums({ ...MATCHING, "extra.zip.sha256": lineOf("extra.zip") });
-    expect(stray.status).toBe(1);
-    expect(stray.out).toContain("plugins/extra.zip.sha256 is not named by the verified manifest");
-    const [first = "", second = ""] = ARCHIVES;
-    const missing = checksums({ [`${first}.sha256`]: lineOf(first) });
-    expect(missing.status).toBe(1);
-    expect(missing.out).toContain(`plugins/${second}.sha256 is missing`);
-  });
-});
+// REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "the plugin checksum files,
+// executed", three cases on the publish job's check of the plugin archives' `.sha256` files. The
+// step left with the plugin route, which 1.15.0 deletes.
 
 describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed with npm stubbed", () => {
   const PUBLISH = runOf(WORKFLOW, "publish", "Publish to the registry");
@@ -1027,16 +983,21 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed wi
   });
 });
 
+// TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the release
+// carries the tarball and its checksum only. The plugin archives, their checksums and
+// `release.json` left with the plugin route, which 1.15.0 deletes, so the cases that named them
+// now name the two npm assets, and the case that refused a release missing `release.json` is
+// replaced by one that proves a leftover `plugins/` tree is never attached.
 describe.skipIf(WINDOWS)("fork-release.yml — the GitHub release, executed with gh stubbed", () => {
   const RELEASE_STEP = runOf(WORKFLOW, "publish", "Create GitHub release");
   const TARBALL = `acme-corp-stamity-${FORK_VERSION}.tgz`;
   const ARCHIVE = `stamity-plugin-claude-${FORK_VERSION}.zip`;
   const SOURCE_SHA = "4e07408562bedb8b60ce05c1decfe3ad16b72230";
-  const ALL_ASSETS = [TARBALL, `${TARBALL}.sha256`, ARCHIVE, `${ARCHIVE}.sha256`, "release.json"];
+  const ALL_ASSETS = [TARBALL, `${TARBALL}.sha256`];
 
   function release(
     present: readonly string[] | null,
-    options: { readonly withoutManifest?: boolean } = {},
+    options: { readonly withLeftoverPlugins?: boolean } = {},
   ): { status: number | null; out: string; calls: readonly string[]; dir: string } {
     const dir = scratchDir("gh");
     const bin = join(dir, "bin");
@@ -1047,11 +1008,14 @@ describe.skipIf(WINDOWS)("fork-release.yml — the GitHub release, executed with
       "gh",
       'if [ "$1" = "release" ] && [ "$2" = "view" ]; then\n  if [ -f "$GH_PRESENT" ]; then cat "$GH_PRESENT"; exit 0; fi\n  echo "release not found" >&2; exit 1\nfi',
     );
-    mkdirSync(join(dir, "plugins"));
     writeFileSync(join(dir, TARBALL), "tarball\n");
-    writeFileSync(join(dir, "plugins", ARCHIVE), "archive\n");
-    writeFileSync(join(dir, "plugins", `${ARCHIVE}.sha256`), `digest  ${ARCHIVE}\n`);
-    if (options.withoutManifest !== true) writeFileSync(join(dir, "plugins", "release.json"), "{}\n");
+    if (options.withLeftoverPlugins === true) {
+      // What a 1.14 artifact layout would leave beside the tarball: a 1.15 release attaches none of it.
+      mkdirSync(join(dir, "plugins"));
+      writeFileSync(join(dir, "plugins", ARCHIVE), "archive\n");
+      writeFileSync(join(dir, "plugins", `${ARCHIVE}.sha256`), `digest  ${ARCHIVE}\n`);
+      writeFileSync(join(dir, "plugins", "release.json"), "{}\n");
+    }
     const presentPath = join(dir, "present");
     if (present !== null) writeFileSync(presentPath, `${present.join("\n")}\n`);
     const log = join(dir, "calls");
@@ -1071,19 +1035,28 @@ describe.skipIf(WINDOWS)("fork-release.yml — the GitHub release, executed with
     return { status: result.status, out: `${result.stdout}${result.stderr}`, calls: logOf(log), dir };
   }
 
-  it("creates the release on the existing tag with the tarball, every archive, every checksum and release.json", () => {
+  it("creates the release on the existing tag with the tarball and its checksum", () => {
     const run = release(null);
     expect(run.status, run.out).toBe(0);
     const create = run.calls.find((call) => call.startsWith("release create "));
     expect(create, run.calls.join("\n")).toBeDefined();
     const argv = create ?? "";
-    expect(argv.startsWith(`release create v${FORK_VERSION} ${TARBALL} ${TARBALL}.sha256 plugins/${ARCHIVE} plugins/${ARCHIVE}.sha256 plugins/release.json `)).toBe(true);
+    expect(argv.startsWith(`release create v${FORK_VERSION} ${TARBALL} ${TARBALL}.sha256 --title `)).toBe(true);
     expect(argv).toContain(`--target ${SOURCE_SHA}`);
     expect(argv).toContain("--verify-tag");
     expect(argv).toContain("no provenance and no attestation");
-    // The tarball's checksum is written in the `sha256sum -c` form the archives' use.
+    // The tarball's checksum is written in the `sha256sum -c` form.
     const digest = createHash("sha256").update("tarball\n").digest("hex");
     expect(readFileSync(join(run.dir, `${TARBALL}.sha256`), "utf8")).toBe(`${digest}  ${TARBALL}\n`);
+  });
+
+  it("attaches the npm assets only, even beside a leftover plugin tree", () => {
+    const run = release(null, { withLeftoverPlugins: true });
+    expect(run.status, run.out).toBe(0);
+    const create = run.calls.find((call) => call.startsWith("release create ")) ?? "";
+    expect(create.startsWith(`release create v${FORK_VERSION} ${TARBALL} ${TARBALL}.sha256 --title `)).toBe(true);
+    expect(create).not.toContain("plugins/");
+    expect(RELEASE_STEP).not.toMatch(/plugin/i);
   });
 
   it("does nothing on a re-run that finds every asset on the release", () => {
@@ -1094,120 +1067,14 @@ describe.skipIf(WINDOWS)("fork-release.yml — the GitHub release, executed with
   });
 
   it("uploads only what a partial earlier run left missing, and replaces nothing", () => {
-    const run = release(ALL_ASSETS.filter((name) => name !== "release.json"));
+    const run = release([TARBALL]);
     expect(run.status, run.out).toBe(0);
-    expect(run.calls.at(-1)).toBe(`release upload v${FORK_VERSION} plugins/release.json`);
+    expect(run.calls.at(-1)).toBe(`release upload v${FORK_VERSION} ${TARBALL}.sha256`);
     expect(run.calls.some((call) => call.includes("--clobber"))).toBe(false);
   });
-
-  it("refuses to create a release that would not carry release.json", () => {
-    const run = release(null, { withoutManifest: true });
-    expect(run.status).toBe(1);
-    expect(run.out).toContain("missing plugins/release.json");
-    expect(run.calls).toEqual([]);
-  });
 });
 
-describe.skipIf(WINDOWS)("fork-release.yml — the distribution push, executed against a scratch remote", () => {
-  const PUSH = runOf(WORKFLOW, "publish", "Push plugin distribution");
-  const BRANCH = "plugin-dist";
-  const TAG = `plugins/v${FORK_VERSION}`;
-  const SOURCE_SHA = "4e07408562bedb8b60ce05c1decfe3ad16b72230";
-  const TOKEN = "scratch-token";
-  const REMOTE_URL = `https://x-access-token:${TOKEN}@github.com/${FORK_REPOSITORY}.git`;
-  const MANIFEST = {
-    schemaVersion: 1,
-    version: FORK_VERSION,
-    sourceCommit: SOURCE_SHA,
-    // Fixed, so one release builds one commit however often the step runs.
-    sourceCommitDate: "2026-09-24T09:15:00+02:00",
-    distribution: { branch: BRANCH, tag: TAG, commit: null },
-    packages: [{ client: "claude", path: "claude", archive: `stamity-plugin-claude-${FORK_VERSION}.zip` }],
-  };
-
-  interface Scenario {
-    readonly dir: string;
-    readonly bare: string;
-    readonly env: Readonly<Record<string, string>>;
-  }
-
-  /** A staged `plugins/` tree, and a bare remote the step's https URL is rewritten to. */
-  function scenario(): Scenario {
-    const dir = scratchDir("push");
-    const bare = join(dir, "remote.git");
-    const configPath = join(dir, "gitconfig");
-    git(dir, "init", "--bare", "-q", bare);
-    writeFileSync(configPath, `[url "${bare}"]\n\tinsteadOf = ${REMOTE_URL}\n`);
-    return {
-      dir,
-      bare,
-      env: {
-        PATH: childPath(),
-        HOME: dir,
-        GIT_CONFIG_GLOBAL: configPath,
-        GIT_CONFIG_SYSTEM: "/dev/null",
-        GIT_TERMINAL_PROMPT: "0",
-        GITHUB_SHA: SOURCE_SHA,
-        GH_TOKEN: TOKEN,
-        REPOSITORY: FORK_REPOSITORY,
-        VERSION: FORK_VERSION,
-        BRANCH,
-        TAG,
-      },
-    };
-  }
-
-  function push(setup: Scenario, attempt: string): { status: number | null; out: string } {
-    const workdir = join(setup.dir, attempt);
-    mkdirSync(join(workdir, "plugins", ".claude-plugin"), { recursive: true });
-    writeFileSync(join(workdir, "plugins", "release.json"), `${JSON.stringify(MANIFEST, null, 2)}\n`);
-    writeFileSync(join(workdir, "plugins", `stamity-plugin-claude-${FORK_VERSION}.zip`), "archive bytes\n");
-    writeFileSync(join(workdir, "plugins", ".claude-plugin", "marketplace.json"), '{"name":"stamity"}\n');
-    const envPath = join(workdir, "github-env");
-    writeFileSync(envPath, "");
-    const result = spawnSync("bash", ["-c", PUSH], {
-      cwd: workdir,
-      encoding: "utf8",
-      env: { ...process.env, ...setup.env, GITHUB_ENV: envPath },
-    });
-    return { status: result.status, out: `${result.stdout}${result.stderr}` };
-  }
-
-  const refOf = (bare: string, ref: string): string =>
-    gitOut(bare, "for-each-ref", "--format=%(objectname)", ref);
-
-  it("creates the branch and the tag on the first run, and moves neither on a re-run", () => {
-    const setup = scenario();
-    const first = push(setup, "attempt-1");
-    expect(first.status, first.out).toBe(0);
-    const head = refOf(setup.bare, `refs/heads/${BRANCH}`);
-    expect(head).toMatch(/^[0-9a-f]{40}$/);
-    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(head);
-    expect(gitOut(setup.bare, "rev-list", "--count", head)).toBe("1");
-
-    const second = push(setup, "attempt-2");
-    expect(second.status, second.out).toBe(0);
-    expect(second.out).toContain("already points at");
-    expect(refOf(setup.bare, `refs/heads/${BRANCH}`)).toBe(head);
-    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(head);
-  });
-
-  it("refuses, and pushes nothing, when the tag already points elsewhere", () => {
-    const setup = scenario();
-    const other = join(setup.dir, "other");
-    mkdirSync(other);
-    git(other, "init", "-q", "-b", "main");
-    git(other, "config", "user.email", "ci@example.invalid");
-    git(other, "config", "user.name", "CI");
-    git(other, "commit", "-q", "--allow-empty", "-m", "another build");
-    git(other, "push", "-q", setup.bare, `HEAD:refs/tags/${TAG}`);
-    const poisoned = refOf(setup.bare, `refs/tags/${TAG}`);
-
-    const run = push(setup, "attempt-1");
-
-    expect(run.status).toBe(1);
-    expect(run.out).toContain("Refusing to move a published distribution tag");
-    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(poisoned);
-    expect(refOf(setup.bare, `refs/heads/${BRANCH}`)).toBe("");
-  });
-});
+// REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "the distribution push, executed
+// against a scratch remote", two cases that ran the plugin distribution's branch and tag push. The
+// step left with the plugin route, which 1.15.0 deletes; the `plugin-dist` branch and its
+// `plugins/v*` tags stay as frozen history that no workflow writes again.

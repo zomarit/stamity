@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { QA_ROWS, humanCell, renderForm } from "../../scripts/qa/form.mjs";
+import { QA_ROWS, RETIRED_ROWS, humanCell, renderForm } from "../../scripts/qa/form.mjs";
 
 /**
  * The form is the artifact a release decision reads. What it must never do is let a row that
@@ -15,8 +15,6 @@ interface CatalogueRow {
   client?: string;
   title: string;
   proves: string;
-  /** `H5` only: the route each client's own CLI actually offers, which is not one route. */
-  routes?: Record<string, string>;
 }
 
 const PAGE_INPUTS = {
@@ -114,6 +112,9 @@ const evidence = {
       inputHashes: PAGE_INPUTS,
       rowHash: "f5".repeat(32),
     },
+    // The four plugin-route rows an evidence file written before 1.15.0 still carries. TEST CHANGE,
+    // justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): kept in the fixture on
+    // purpose, now standing for an old evidence file; the form lists them as retired below.
     {
       row: "H4a",
       automated: true,
@@ -150,20 +151,18 @@ const evidence = {
 };
 
 describe("renderForm", () => {
-  it("renders all fourteen rows, in catalogue order", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): fourteen rows
+  // become nine. `H4a`–`H4d` (the plugin route, one per client) and `H5` (its upgrade-and-rollback
+  // walk) leave the catalogue with the plugin route, which 1.15.0 deletes; the nine left keep their
+  // ids and their order, which is the join key the form, the harness and the run record share.
+  it("renders all nine rows, in catalogue order", () => {
     const markdown = renderForm(evidence) as string;
 
     const ids = (QA_ROWS as CatalogueRow[]).map((row) => row.id);
-    // The plugin route added `H4a`–`H4d` on 2026-09-20, one per client, after `H3d`, and the
-    // upgrade-and-rollback walk added `H5` after them — the ids are the join key the form, the
-    // harness and the run record share, so their ORDER is pinned here rather than left to whatever
-    // order the catalogue happens to be written in.
     expect(ids).toEqual([
       "H1a", "H1b", "H1c", "H1d",
       "H2",
       "H3a", "H3b", "H3c", "H3d",
-      "H4a", "H4b", "H4c", "H4d",
-      "H5",
     ]);
     for (const id of ids) expect(markdown).toContain(`**${id}**`);
 
@@ -253,55 +252,57 @@ describe("renderForm", () => {
   });
 });
 
-describe("the plugin-route rows", () => {
-  it("names one client per row, all four of them, on the lane run.mjs dispatches", () => {
-    const plugins = (QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins" && row.client !== undefined);
-    expect(plugins.map((row) => row.id)).toEqual(["H4a", "H4b", "H4c", "H4d"]);
-    expect(plugins.map((row) => row.client)).toEqual(["claude", "cursor", "copilot", "codex"]);
-    for (const row of plugins) {
-      expect(row.title, row.id).toContain("Plugin route");
-      // Every row states what a pass would MEAN, and the instrument is the manifest the setup
-      // writes rather than anything a model said.
-      expect(row.proves, row.id).toContain(".stamity/manifest.json");
-      expect(row.proves, row.id).toContain("plugin-backed");
+// TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "the plugin-route
+// rows" pinned `H4a`–`H4d` and `H5` in the catalogue. They leave it with the plugin route, which
+// 1.15.0 deletes, so the three cases become the ones below: no catalogue row is on a plugins lane,
+// and an evidence file that still carries the old rows renders, listing them as retired.
+describe("the retired plugin-route rows", () => {
+  const RETIRED = ["H4a", "H4b", "H4c", "H4d", "H5"];
+
+  it("leaves no catalogue row on the plugins lane, and names each retired id", () => {
+    expect((QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins")).toEqual([]);
+    expect((QA_ROWS as CatalogueRow[]).filter((row) => RETIRED.includes(row.id))).toEqual([]);
+    expect(Object.keys(RETIRED_ROWS as Record<string, string>)).toEqual(RETIRED);
+  });
+
+  it("renders an evidence file that still carries H4a–H4d and H5, listing them as retired", () => {
+    const old = {
+      ...evidence,
+      rows: [
+        ...evidence.rows,
+        { row: "H5", automated: false, status: "performed", reason: "walked", inputHashes: {}, rowHash: "e5".repeat(32), performedAt: "2026-09-21", performedBy: "the maintainer" },
+      ],
+    };
+    let markdown = "";
+    expect(() => {
+      markdown = renderForm(old) as string;
+    }).not.toThrow();
+    // Not in the table: a retired row is no row of this form.
+    for (const id of RETIRED) expect(markdown, id).not.toContain(`| **${id}**`);
+    const at = markdown.indexOf("## Retired rows");
+    expect(at, "the form names no retired section").toBeGreaterThan(0);
+    const section = markdown.slice(at);
+    for (const id of RETIRED) {
+      const line = section.split("\n").find((entry) => entry.startsWith(`- **${id}**`)) ?? "";
+      expect(line, id).toContain("retired in 1.15.0");
     }
+    // The status it was recorded with reads as history, never as this run's pass or signature.
+    const failed = section.split("\n").find((entry) => entry.startsWith("- **H4c**")) ?? "";
+    expect(failed).toContain("recorded `failed`");
+    const performed = section.split("\n").find((entry) => entry.startsWith("- **H5**")) ?? "";
+    expect(performed).toContain("recorded `performed`");
+    expect(section).toContain("carries no signature forward");
+    // The input lists are the catalogue's alone.
+    expect(markdown).not.toContain("### H4a");
+    expect(markdown).not.toContain("dist/codex/stamity-plugin.json");
   });
 
-  it("carries the upgrade-and-rollback row once, with no client and a route named per client", () => {
-    const walk = (QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins" && row.client === undefined);
-    // ONE row, not four: the claim is about a version transition walked through every client, and
-    // four per-client rows could each pass while the transition went unmeasured where it mattered.
-    expect(walk.map((row) => row.id)).toEqual(["H5"]);
-    const row = walk[0]!;
-    expect(row.title).toBe("Upgrade and rollback through each client's own route");
-    // What a pass means, in the three parts the walk actually asserts.
-    expect(row.proves).toContain("byte for byte");
-    expect(row.proves).toContain("`plugin status` compatible in all three states");
-    expect(row.proves).toContain("repository-owned files unchanged");
-    // The four routes are not the same shape, and the row names which is which — a reader deciding
-    // whether to ship needs the one their own client uses.
-    expect(Object.keys(row.routes ?? {}).toSorted()).toEqual(["claude", "codex", "copilot", "cursor"]);
-    expect(row.routes?.["claude"]).toContain("--scope project");
-    expect(row.routes?.["copilot"]).toContain("tree replacement");
-    expect(row.routes?.["codex"]).toContain("plugin remove stamity@stamity");
-    expect(row.routes?.["cursor"]).toContain("--plugin-dir");
-  });
-
-  it("renders a measured plugin failure as a failure and a skipped leg as not-run", () => {
-    const markdown = renderForm(evidence) as string;
-
-    const failed = markdown.split("\n").find((line) => line.startsWith("| **H4c**")) ?? "";
-    expect(failed).toContain("| failed |");
-    expect(failed).not.toContain("UNPERFORMED");
-    expect(failed).toContain("nothing was deployed");
-
-    const notRun = markdown.split("\n").find((line) => line.startsWith("| **H4b**")) ?? "";
-    expect(notRun).toContain("| not-run |");
-    expect(notRun).toContain("UNPERFORMED");
-    expect(notRun).toContain("pass --invoke");
-
-    // The row is bound to the root it was measured against, under a logical label.
-    expect(markdown).toContain("- `dist/codex/stamity-plugin.json` — `" + "4a".repeat(32) + "`");
+  it("prints no retired section for an evidence file that carries none", () => {
+    const markdown = renderForm({
+      ...evidence,
+      rows: evidence.rows.filter((row) => !RETIRED.includes(row.row)),
+    }) as string;
+    expect(markdown).not.toContain("## Retired rows");
   });
 });
 

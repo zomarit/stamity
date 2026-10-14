@@ -9,7 +9,6 @@ These are historical observations of the preceding policy, not proof of the chan
 | Job | Process-associated destinations observed |
 |---|---|
 | gates, both runs | git: github.com; node: registry.npmjs.org, results-receiver.actions.githubusercontent.com, productionresultssa0.blob.core.windows.net |
-| apm-route, both runs | git: github.com; python: api.github.com, pypi.org, files.pythonhosted.org |
 | publish, release only | gh: api.github.com, uploads.github.com; node: registry.npmjs.org, results-receiver.actions.githubusercontent.com, productionresultssa0.blob.core.windows.net, fulcio.sigstore.dev, rekor.sigstore.dev, run-actions-2-azure-eastus.actions.githubusercontent.com |
 
 Runner-service traffic also contacted results-receiver. DNS pre-resolution is excluded
@@ -24,10 +23,8 @@ the single account contacted by these two runs. Recheck the metadata roster befo
 release; a newly required unlisted destination must fail closed pending review.
 
 Setup-node's Node download and GitHub manifest/CDN hosts remain for a cold runner. The
-APM job retains setup-python's documented raw manifest fallback. The publish job retains
-OIDC and Sigstore TUF endpoints, including paths a warmed cache may not contact.
-No npm or signing endpoints are added to the isolated APM job; no signing endpoints or
-publishing identity are added to the build job.
+publish job retains OIDC and Sigstore TUF endpoints, including paths a warmed cache may
+not contact. No signing endpoints or publishing identity are added to the build job.
 
 The [pinned hardener](https://github.com/step-security/harden-runner/tree/351661ca32ac09a36dc5ee2d536e3128f2a3c8ed)
 also manages its telemetry and GitHub runner/cache endpoints using the current service
@@ -36,45 +33,30 @@ only those hosts. [StepSecurity recommendations](https://docs.stepsecurity.io/ha
 aggregate observations across runs; they are evidence to review, not proof that an
 unobserved fallback can safely be removed.
 
-A changed-candidate `dry_run=true` rehearsal must exercise gates and apm-route. It cannot
-exercise the credential-bearing publish job. That path still requires the final release
-candidate, protected environment approval, immutable tag/version/ancestry proofs and
-digest-verified handoff. Record the actual rehearsal and publish run IDs in the candidate
-evidence; prior runs and a skipped job cannot close those proofs.
+A changed-candidate `dry_run=true` rehearsal must exercise gates. It cannot exercise the
+credential-bearing publish job. That path still requires the final release candidate,
+protected environment approval, immutable tag/version/ancestry proofs and digest-verified
+handoff. Record the actual rehearsal and publish run IDs in the candidate evidence; prior
+runs and a skipped job cannot close those proofs.
 
-## The plugin distribution's destinations
+## The provenance hosts
 
-Added 2026-09-20 with the plugin distribution the release now publishes. **No destination is
-added to any job by it**; what changes is how many things depend on the ones already listed, and
-that is the fact this section exists to record — a later edit that removes npm provenance would
-otherwise read these Sigstore hosts as removable with it.
+The publish job reaches the OIDC and Sigstore hosts for one consumer: the provenance
+attestation `npm publish --provenance` writes over trusted publishing. Each host is
+listed for it, and a later edit that drops npm provenance is the one that may remove them.
 
-| Step (publish job) | Destination | Already listed for |
-|---|---|---|
-| `Attest plugin archives` | `token.actions.githubusercontent.com` | the OIDC token `npm publish --provenance` already mints |
-| `Attest plugin archives` | `fulcio.sigstore.dev` | the signing certificate npm's provenance is issued under |
-| `Attest plugin archives` | `rekor.sigstore.dev` | the transparency log entry npm's provenance writes |
-| `Attest plugin archives` | `tuf-repo-cdn.sigstore.dev` | the Sigstore TUF root both clients verify against |
-| `Attest plugin archives` | `api.github.com` | `gh release create`; the attestation is persisted through the same API |
-| `Push plugin distribution` | `github.com` | the git remote `gh release create` already resolves |
-| `Download plugin distribution` | artifact storage (`results-receiver`, the twenty result accounts) | `Download release artifacts` |
+| Destination | What reaches it |
+|---|---|
+| `token.actions.githubusercontent.com` | the OIDC token the `id-token: write` grant mints for `npm publish` |
+| `fulcio.sigstore.dev` | the signing certificate npm's provenance is issued under |
+| `rekor.sigstore.dev` | the transparency log entry npm's provenance writes |
+| `tuf-repo-cdn.sigstore.dev` | the Sigstore TUF root the npm client verifies against |
 
-The attestation uses Sigstore's **public-good instance**, which is what
-[`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance) documents
-for a public repository; a private or internal repository would use GitHub's own Sigstore
-instance and a different set of hosts, which this repository never reaches.
-
-`egress-policy: block` is unchanged on all three jobs, so any of these going missing stops the
-release at the step rather than leaking past it. The `gates` job, which builds the distribution,
-holds no signing host and no token: it reaches `github.com` and `registry.npmjs.org` for the pack
-and the runtime install it already made, and nothing else.
-
-**What the rehearsal cannot prove, and why these rows carry no observed-run evidence.** A
-`dry_run=true` dispatch exercises `gates` and `apm-route` only — it builds the distribution and
-uploads it — and the rehearsal never reaches the publish job, which is where the attestation, the
-`plugin-dist` branch push and the tag live. So the observed-endpoint evidence for every row above
-lands at the FIRST REAL RELEASE and not before. Record that run's ID here beside the two above
-when it happens; until then these rows are the documented requirement, not an observation.
+Until 1.15.0 the release also published the plugin route's client roots and proved the APM
+route, in a third job with its own Python hosts. Both routes were deleted in 1.15.0: the job, its
+`pypi.org`, `files.pythonhosted.org` and `raw.githubusercontent.com` allowances, the
+archive attestation and the distribution branch push went with them, and no destination
+was added in their place.
 
 ## Dependency recheck
 

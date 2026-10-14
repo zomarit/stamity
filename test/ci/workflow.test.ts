@@ -82,9 +82,10 @@ interface WorkflowStep {
 }
 
 /**
- * A matrix row from either matrix job. `check` legs carry os/node/label; `apm-install` legs carry
- * apm/role, so every field is optional — one interface over two matrices, with each suite
- * asserting the whole row it expects rather than trusting the type to have narrowed it.
+ * A matrix row of the `check` job. Every field is optional because the legs differ in which flags
+ * they carry, and each suite asserts the whole row it expects rather than trusting the type.
+ * TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the `apm-install`
+ * matrix left with the APM route, so its `apm`, `role` and `expect_failure` fields went with it.
  */
 interface MatrixInclude {
   readonly os?: string;
@@ -94,9 +95,6 @@ interface MatrixInclude {
   readonly toolchain?: boolean;
   readonly tarball_smoke?: boolean;
   readonly shard?: string;
-  readonly apm?: string;
-  readonly role?: string;
-  readonly expect_failure?: boolean;
 }
 
 interface WorkflowJob {
@@ -153,18 +151,6 @@ function workflowNamed(file: string): LoadedWorkflow {
 const ci = workflowNamed("ci.yml");
 const docsSite = workflowNamed("docs-site.yml");
 const nightly = workflowNamed("nightly.yml");
-
-/**
- * The export loop's rows, as the shell spells them: the variable's name, the client's command name
- * (the word the absent-case notice carries) and the absolute path its installer owns. Shared by
- * ci.yml's plugin-route job and nightly.yml's headless lane, which pin the same body.
- */
-const EXPORT_TRIPLES = [
-  "CLAUDE claude $RUNNER_TEMP/claude/bin/claude",
-  "CURSOR agent $HOME/.local/bin/agent",
-  "COPILOT copilot $RUNNER_TEMP/copilot/bin/copilot",
-  "CODEX codex $RUNNER_TEMP/codex/bin/codex",
-] as const;
 const prChecks = workflowNamed("pr-checks.yml");
 const release = workflowNamed("release.yml");
 
@@ -296,7 +282,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the title's count
   // moves from nine to ten because the canonical `records` job joins after `lanes`; the `lanes` job
   // keeps its place, and every other lane is still pinned below.
-  it("keeps the ten lanes: the classifier, the proven-push reader, three gates, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the count moves
+  // from ten to eight because `apm-install` and `plugin-route` leave with the APM and plugin routes,
+  // which 1.15.0 deletes; `check` is the one heavy gate left, and every other lane is still pinned.
+  it("keeps the eight lanes: the classifier, the proven-push reader, the check matrix, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
     // CHANGED by plan 008 file 3, unit V1w: `plugin-route` joins the merge-blocking set, so this
     // list and the aggregator's `needs` below both move. It sits beside `apm-install` because the
     // two answer the same KIND of question — what a real consumer's tooling does with a published
@@ -314,8 +303,6 @@ describe("ci.yml — the merge-blocking gate", () => {
       "changes",
       "prove-pr",
       "check",
-      "apm-install",
-      "plugin-route",
       "lanes",
       "records",
       "supply-chain",
@@ -549,14 +536,12 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(run).toContain("node scripts/generate-docs.mjs");
     // Pack manifests run in --check mode in CI: verify-only, writes nothing.
     expect(run).toContain("node scripts/generate-pack-manifests.mjs --check");
-    // The four plugin/marketplace surfaces, same posture: a drifted manifest
-    // fails with the regeneration command rather than being rewritten by CI.
-    expect(run).toContain("node scripts/generate-plugin-manifests.mjs --check");
-    // The fifth published surface — `apm.yml` and the `.apm/` primitive tree —
-    // rides the same step and the same verify-only posture. It is the one whose
-    // FILE SET follows the corpus, so a retired artifact has to fail here
-    // rather than linger as a primitive nothing regenerates.
-    expect(run).toContain("node scripts/generate-apm-package.mjs --check");
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the plugin
+    // manifests and the APM package are no longer generated, because 1.15.0 deletes both routes, so
+    // their two `--check` lines leave the step. The assertion turns around: a generator that no
+    // longer exists must not be called, or the step fails on a missing script.
+    expect(run).not.toContain("generate-plugin-manifests");
+    expect(run).not.toContain("generate-apm-package");
     expect(run).toContain("git diff --exit-code");
     // `git diff --exit-code` ignores untracked files by design (gitignored coverage/ and dist/
     // output must not trip the gate); porcelain would not.
@@ -607,8 +592,7 @@ describe("ci.yml — the merge-blocking gate", () => {
 
     expect(aggregator.name).toBe("all-ci-checks");
     // `dependency-review` is advisory AND pull-request-only: requiring it would make every push
-    // wait on a job that never reports. `apm-install` runs on every trigger this workflow
-    // declares, so requiring it costs no push a wait on a job that will not report.
+    // wait on a job that never reports.
     // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): `changes` and
     // `records` join `needs`, because the aggregator now asserts which side of the records-only
     // split ran, and it can only read the result of a job it needs.
@@ -620,6 +604,11 @@ describe("ci.yml — the merge-blocking gate", () => {
     // `records_only`; both sides are still asserted, each naming what ran and what skipped.
     // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records` joins
     // `needs`, because the aggregator asserts its result outside the three shapes.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `apm-install`
+    // and `plugin-route` leave `needs` and the report, because 1.15.0 deletes the APM and plugin
+    // routes and both jobs with them. The branch ruleset requires `all-ci-checks` and
+    // `all-pr-checks` only, so no required context named the deleted jobs. Their assertions turn
+    // around below: the report must not read a job that no longer exists.
     expect(aggregator.needs).toEqual([
       "changes",
       "prove-pr",
@@ -627,8 +616,6 @@ describe("ci.yml — the merge-blocking gate", () => {
       "lanes",
       "records",
       "supply-chain",
-      "apm-install",
-      "plugin-route",
     ]);
     // `if: always()` is what makes it run after a FAILED dependency; without it the aggregator is
     // skipped, and a skipped required check reads as green.
@@ -637,14 +624,9 @@ describe("ci.yml — the merge-blocking gate", () => {
     // It must assert on the result rather than merely echo it: `needs` alone cannot express
     // "cancelled is not success".
     expect(report).toContain('test "${{ needs.check.result }}" = "success"');
-    // The APM route is merge-blocking on the same terms: a deployment that stopped happening is
-    // not something to read in a log afterwards.
-    expect(report).toContain('test "${{ needs.apm-install.result }}" = "success"');
-    // ADDED by plan 008 file 3, unit V1w. The plugin route is the third: a distribution no client
-    // can read is the same class of failure as a package that deploys nothing, and neither shows
-    // up in a generator's byte-diff. Naming it in `needs` is not enough — a job listed in `needs`
-    // that FAILED still lets the aggregator run under `always()`, so the result has to be tested.
-    expect(report).toContain('test "${{ needs.plugin-route.result }}" = "success"');
+    for (const retired of ["apm-install", "plugin-route"]) {
+      expect(report, `the report still reads the deleted ${retired} job`).not.toContain(`needs.${retired}`);
+    }
     // The advisory lane is reported, never required — it exists not to block.
     expect(report).toContain("needs.supply-chain.result");
     // ADDED by plan 013 file 3, unit sw06-records-only-ci-lane: both branches of the split are
@@ -652,7 +634,8 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(report).toContain('test "${{ needs.changes.result }}" = "success"');
     expect(report).toContain('if [ "${{ needs.changes.outputs.full }}" = "false" ]; then');
     expect(report).toContain('test "${{ needs.lanes.result }}" = "success"');
-    for (const heavy of ["check", "apm-install", "plugin-route"]) {
+    // TEST CHANGE, justified (unit d3-ci-qa, as above): `check` is the one heavy lane left.
+    for (const heavy of ["check"]) {
       expect(report).toContain(`test "\${{ needs.${heavy}.result }}" = "skipped"`);
     }
     expect(report).toContain('test "${{ needs.lanes.result }}" = "skipped"');
@@ -666,203 +649,9 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(stepOf(aggregator.steps, "Report").env).toEqual({ REPO: "${{ github.repository }}" });
   });
 
-  // ADDED by plan 008 file 3, unit V1w — the `plugin-route` lane. Its properties split by what
-  // each one costs: the job's shape, its privileges and its timeout are free to assert here; what
-  // a real client does with the distribution is what the lane itself measures on a runner, and no
-  // assertion in this file can stand in for that. So these pin the wiring — that the lane exists,
-  // that it blocks a merge, that it asks for no credential, and that the half which needs one runs
-  // in the nightly file instead.
-  describe("the plugin-route lane", () => {
-    const route = stepsOf(ci, "plugin-route");
-
-    it("is a merge-blocking lane that asks for no credential and no write grant", () => {
-      const job = jobOf(ci, "plugin-route");
-      expect(job["runs-on"]).toBe("ubuntu-latest");
-      // Least privilege, the same as every other job in this file: it reads a checkout and
-      // installs from public registries, and it has nothing to write anywhere.
-      expect(job.permissions).toEqual({ contents: "read" });
-      // A ceiling, not a hang: the job's own comment derives the number and names the measurement
-      // behind the half of it that is measured.
-      expect(job["timeout-minutes"]).toBeTypeOf("number");
-      expect(job["timeout-minutes"]).toBeGreaterThan(0);
-      // No secret reaches this job. That is the property that lets it be REQUIRED: a merge gate
-      // whose pass depended on a vendor credential would be red on every fork and every clone.
-      const body = [
-        JSON.stringify(job.env ?? {}),
-        ...route.map((step) => `${step.run ?? ""}${JSON.stringify(step.env ?? {})}`),
-      ].join("\n");
-      expect(body).not.toContain("secrets.");
-      // And it runs on every trigger the workflow declares, which is the second half of what makes
-      // requiring it safe (see the `dependency-review` reasoning above).
-      // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): the pin was "no
-      // `if:` at all". The lane now carries the records-only condition, which skips it ONLY when
-      // `changes` answered `true` — and then the aggregator requires it to read `skipped` and
-      // `records` to have passed. So the property is asserted by evaluation instead: the condition
-      // holds for every answer but `true`, on every trigger.
-      // TEST CHANGE, justified (2026-10-08, unit a1-proven-push): `prove-pr` joins `needs`, and the
-      // condition gains `!cancelled()`, `needs.changes.result == 'success'` and the proven-push
-      // clause, because a job whose need was skipped is itself skipped unless its `if` calls a
-      // status function. The property is the same: on every trigger, with `changes` green and no
-      // proven push, the lane runs for every records answer but `true`. The context now carries
-      // the two results the condition reads; the proven side is pinned in "the proven-push skip".
-      // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): the
-      // condition reads `full` in place of `records_only`; the lane runs for every answer but the
-      // literal `false`, so an absent answer is still full CI.
-      expect(job.needs).toEqual(["changes", "prove-pr"]);
-      for (const event_name of ["pull_request", "push", "schedule", "workflow_dispatch"]) {
-        const prove = event_name === "push" ? { result: "success", outputs: { proven: "false" } } : { result: "skipped", outputs: {} };
-        for (const full of ["true", ""]) {
-          const context = {
-            github: { event_name },
-            needs: { changes: { result: "success", outputs: { full } }, "prove-pr": prove },
-          };
-          expect(evaluateWorkflowExpression(job.if ?? "false", context), `${event_name}/${full}`).toBe(true);
-        }
-      }
-    });
-
-    it("builds the distribution the release builds, from the packed tarball", () => {
-      // A lane that built the roots a second way would prove a tree the release never ships, and
-      // the runtime has to come from the tarball because `npm pack` is the only thing that knows
-      // what `files` publishes.
-      const build = runOf(route, "Build the distribution");
-      expect(build).toContain("npm pack --pack-destination");
-      expect(build).toContain(
-        'node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime',
-      );
-      expect(build).toContain("node scripts/build-plugin-distribution.mjs");
-      expect(build).toContain("--runtime dist/plugin-runtime");
-      // Provenance is an INPUT, never a clock read — that is what makes two builds of one commit
-      // produce identical bytes.
-      expect(build).toContain('--source-commit "$GITHUB_SHA"');
-      expect(build).toContain('--source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"');
-      // The same lines release.yml runs, compared rather than described: a drift between the two
-      // is exactly the failure this assertion exists to catch.
-      const releaseBody = release.source;
-      for (const line of [
-        "node scripts/build-plugin-runtime.mjs --tarball",
-        "node scripts/build-plugin-distribution.mjs",
-        '--source-commit "$GITHUB_SHA"',
-      ]) {
-        expect(releaseBody, `release.yml must still run ${line}`).toContain(line);
-      }
-      // Under dist/, which is gitignored: an untracked plugin-runtime/ beside the checkout would
-      // enter `git ls-files --others`, the scan the leak gate itself runs.
-      expect(build).not.toMatch(/--out\s+plugin-runtime\b/);
-    });
-
-    it("installs each vendor CLI in its own step, and no install can redden the lane", () => {
-      // TEST CHANGE, justified (2026-09-22, prove/220): each npm install now lands under its own
-      // `$RUNNER_TEMP/<vendor>` prefix with `--ignore-scripts` — a global install wrote into the
-      // toolcache's bin directory, where `node` lives, and ran vendor lifecycle scripts because the
-      // project .npmrc's `ignore-scripts` is read in local mode only. The pin is the full line, so
-      // a prefix or the flag dropped from one vendor fails here.
-      const installs = [
-        ["Install the Claude Code CLI", 'npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code'],
-        ["Install the GitHub Copilot CLI", 'npm install -g --prefix "$RUNNER_TEMP/copilot" --ignore-scripts @github/copilot'],
-        ["Install the Codex CLI", 'npm install -g --prefix "$RUNNER_TEMP/codex" --ignore-scripts @openai/codex'],
-        // No first-party npm package exists for this one: the registry was queried on 2026-09-20
-        // for `cursor-agent`, `cursor-cli`, `@cursor/agent` and `@cursor/cli`, and the two that
-        // resolve are unrelated packages declaring no `bin`. The vendor shell installer is the
-        // supported route.
-        ["Install the Cursor agent CLI", "curl -fsS https://cursor.com/install | bash"],
-      ] as const;
-      for (const [name, command] of installs) {
-        const step = stepOf(route, name);
-        // One step per client, so the log names the vendor rather than a line number.
-        expect(step.run, name).toContain(command);
-        // An npm outage or a vendor installer change is a fact about the day the run happened,
-        // not about the diff. A merge gate that went red on it would teach the reader to wave the
-        // lane through, and the smoke's own contract turns a missing binary into a SKIPPED leg.
-        expect(step["continue-on-error"], name).toBe(true);
-        // The failure has to be VISIBLE, or a skipped leg and a passing one read alike.
-        expect(step.run, name).toContain("::notice title=");
-      }
-      // `@anthropic-ai/claude-code` is the one package whose CLI needs its lifecycle script:
-      // `postinstall: node install.cjs` copies the platform binary over the placeholder, and with
-      // scripts ignored `claude --version` exits 1 (measured 2026-09-22). So that one file is run
-      // by name, by the captured interpreter, and nothing else runs.
-      expect(runOf(route, "Install the Claude Code CLI")).toContain(
-        '"$STAMITY_NODE_BIN" "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"',
-      );
-      // TEST CHANGE, justified (2026-09-22, prove/220): the Cursor install step used to append
-      // `$HOME/.local/bin` to GITHUB_PATH for the steps after it. Nothing in this job touches PATH
-      // now — the export step reads each binary at its absolute path — and no step may start again.
-      for (const step of route) {
-        expect(step.run ?? "", `${step.name ?? "?"} must not extend PATH`).not.toContain("GITHUB_PATH");
-      }
-    });
-
-    it("exports each binary it can actually find, and runs the smoke WITHOUT --invoke", () => {
-      // `command -v` rather than the install steps' outputs: an install that reported success and
-      // put nothing on PATH is the same SKIPPED leg as one that failed, and this is where the two
-      // stop looking different.
-      const exports = runOf(route, "Export the client binaries");
-      // TEST CHANGE, justified (2026-09-22, prove/220): `command -v` was the PATH resolution the
-      // finding closed, so the step reads each binary at the absolute path its installer owns.
-      expect(exports).not.toContain("command -v");
-      expect(exports).toContain('if [ -x "$path" ]; then');
-      expect(exports).toContain('echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"');
-      // The four triples the loop walks, asserted as the shell spells them: the variable name is
-      // composed at run time, so the load-bearing literal is the list, not `STAMITY_X_BIN`. The
-      // middle field is the client's COMMAND name (the notice's word), the last its absolute path —
-      // the Cursor CLI installs a binary called `agent` into $HOME/.local/bin, and each npm CLI
-      // sits under the prefix its install step chose.
-      for (const triple of EXPORT_TRIPLES) {
-        expect(exports, `the loop must walk "${triple}"`).toContain(`"${triple}"`);
-      }
-
-      const smoke = runOf(route, "Plugin route smoke (no invocation legs)");
-      // The interpreter by the path captured before any install, under a PATH rebuilt without
-      // `$HOME/.local/bin` — the ubuntu image has it on the default PATH and the Cursor installer
-      // writes there.
-      expect(smoke).toContain('"$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs');
-      expect(smoke).toContain('export PATH="$(dirname "$STAMITY_NODE_BIN"):');
-      expect(smoke).not.toContain(".local/bin");
-      expect(smoke).toContain("--dist dist/plugins");
-      expect(smoke).toContain("--client claude,cursor,copilot,codex");
-      // THE property of this lane: the credential-bound legs do not run here. `--invoke` is what
-      // asks a client to answer a prompt, and this job holds no account to answer it with.
-      expect(smoke, "the CI lane must not drive an invocation leg").not.toContain("--invoke");
-      // Order: the smoke reads a tree and an environment that two earlier steps produce.
-      expect(indexOf(route, "Plugin route smoke (no invocation legs)")).toBeGreaterThan(
-        indexOf(route, "Export the client binaries"),
-      );
-      expect(indexOf(route, "Export the client binaries")).toBeGreaterThan(
-        indexOf(route, "Build the distribution"),
-      );
-      // And the interpreter is captured before the first vendor install: a capture after one would
-      // record whatever that install left on PATH.
-      const capture = runOf(route, "Capture the interpreter before any vendor install");
-      expect(capture).toContain('NODE_BIN="$(command -v node)"');
-      expect(capture).toContain('echo "STAMITY_NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"');
-      for (const name of ["Install the Claude Code CLI", "Install the GitHub Copilot CLI", "Install the Codex CLI", "Install the Cursor agent CLI"]) {
-        expect(indexOf(route, name), `${name} must follow the capture`).toBeGreaterThan(
-          indexOf(route, "Capture the interpreter before any vendor install"),
-        );
-      }
-    });
-
-    it("sends the invocation legs to the nightly file, and says so where a reader looks", () => {
-      // The split is the honest part of this lane, so it is pinned rather than trusted: the half
-      // that needs a credential runs in nightly.yml and the lane map says which half is which.
-      const nightlyDrive = runOf(
-        stepsOf(nightly, "headless-lane"),
-        "Headless target-tool drive (claude)",
-      );
-      expect(nightlyDrive).toContain('"$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs');
-      expect(nightlyDrive).toContain("--invoke");
-
-      const laneMap = ci.source.slice(0, ci.source.indexOf("\nname: CI"));
-      expect(laneMap).toContain("plugin-route");
-      // What it does NOT prove has to be in the map too, or the reader takes a structure check for
-      // a proven route. BOTH halves of that, since prove/118: the invocation legs AND the discovery
-      // reading that needs a transcript. A map naming only the first was the finding.
-      expect(laneMap).toContain("invocation leg");
-      expect(laneMap).toContain("TRANSCRIPT");
-      expect(laneMap).toContain("nightly.yml");
-    });
-  });
+  // REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the `plugin-route` lane's
+  // describe block, five cases pinning that job's wiring. The job left with the plugin route, which
+  // 1.15.0 deletes; "names no plugin or APM route" below asserts it does not come back.
 
   // ADDED by plan 013 file 3, unit sw06-records-only-ci-lane. A push or pull request whose every
   // changed path is a record takes a short lane in place of the three heavy ones. The risk is one
@@ -876,7 +665,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   // build and dogfood check (learnings) and the site build (website). Each case below keeps its
   // property and names the new job and output.
   describe("the lanes job", () => {
-    const HEAVY = ["check", "apm-install", "plugin-route"] as const;
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `apm-install`
+    // and `plugin-route` left with the routes 1.15.0 deletes, so `check` is the one heavy lane the
+    // split divides from `lanes`; every case below keeps its property over that one.
+    const HEAVY = ["check"] as const;
     const ANSWERS = ["true", "false", ""] as const;
     const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"] as const;
     // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records_only`
@@ -1150,7 +942,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   describe("the proven-push skip", () => {
     // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): the
     // `records` lane is the `lanes` job now, and the side each lane takes is read off `full`.
-    const GATED = ["check", "apm-install", "plugin-route", "lanes"] as const;
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the proven
+    // push now gates two lanes, `check` and `lanes`; `apm-install` and `plugin-route` left with the
+    // routes 1.15.0 deletes. A proven push still asserts both `skipped`.
+    const GATED = ["check", "lanes"] as const;
     const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"] as const;
 
     it("reads the pull request's run only on a push to main, with read grants and the sha as data", () => {
@@ -1187,7 +982,8 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(prove["continue-on-error"]).toBeUndefined();
     });
 
-    it("skips the four lanes exactly when a push is proven, and only with the classifier green", () => {
+    // TEST CHANGE, justified (unit d3-ci-qa, as `GATED` above): "four lanes" becomes "two lanes".
+    it("skips the two gated lanes exactly when a push is proven, and only with the classifier green", () => {
       // Every combination, including the ones no real run produces, against a rule written here
       // independently of the file: a lane runs only when `changes` succeeded, `prove-pr` succeeded
       // or was skipped, `proven` is not `true`, and the records answer picks this lane's side.
@@ -1264,14 +1060,9 @@ describe("ci.yml — the merge-blocking gate", () => {
       "tarball-smoke",
       "leak-gate",
       "all-ci-checks",
-      // The APM route lane, whose whole claim is that it reads a deployed tree rather than an
-      // exit code. A map that did not name it would leave the reader thinking the generated
-      // package's byte-diff is the only thing guarding that surface.
-      "apm-install",
-      // The client route into the four plugin roots. Named for the same reason as `apm-install`:
-      // without it the reader would take the generate-and-diff over the plugin manifests for proof
-      // that a client can read the distribution, which is a different claim.
-      "plugin-route",
+      // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `apm-install`
+      // and `plugin-route` left this list with the routes 1.15.0 deletes; the map must not name a
+      // lane that no longer runs, which the loop after this one asserts.
       // The pull-request gates live in a sibling file; a lane map that did not name them would
       // read as if this workflow were the whole merge gate.
       "pr-checks",
@@ -1294,6 +1085,9 @@ describe("ci.yml — the merge-blocking gate", () => {
       "scripts/ci/pr-proven.mjs",
     ]) {
       expect(laneMap, `lane map must name the running lane ${lane}`).toContain(lane);
+    }
+    for (const retired of ["apm-install", "plugin-route"]) {
+      expect(laneMap, `lane map still names the deleted lane ${retired}`).not.toContain(retired);
     }
     for (const gap of [
       "Secret scanning across HISTORY",
@@ -1342,8 +1136,12 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
   // `records`, and the body runs with `REPO` in its environment, as the step's `env:` gives it. Every
   // shape below models the canonical repository with `records` green, so each case and assertion
   // written before it is kept one for one; the records job's own cases follow at the end.
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `Results` loses
+  // `apm-install` and `plugin-route`, which left with the routes 1.15.0 deletes, and the loops over
+  // the heavy lanes run over `check` alone. Every shape and every assertion on `check`, `lanes`,
+  // `prove-pr`, `changes` and `records` is kept one for one.
   type Results = Readonly<
-    Record<"changes" | "prove-pr" | "check" | "lanes" | "records" | "supply-chain" | "apm-install" | "plugin-route", string>
+    Record<"changes" | "prove-pr" | "check" | "lanes" | "records" | "supply-chain", string>
   >;
 
   function render(results: Results, full: string, proven: string): string {
@@ -1375,8 +1173,6 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     lanes: "skipped",
     records: "success",
     "supply-chain": "failure",
-    "apm-install": "success",
-    "plugin-route": "success",
   };
   const SHORT: Results = {
     changes: "success",
@@ -1385,8 +1181,6 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     lanes: "success",
     records: "success",
     "supply-chain": "failure",
-    "apm-install": "skipped",
-    "plugin-route": "skipped",
   };
   /** A push to `main` whose tree a pull request proved: every gated lane skipped. */
   const PROVEN: Results = {
@@ -1396,10 +1190,8 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     lanes: "skipped",
     records: "success",
     "supply-chain": "failure",
-    "apm-install": "skipped",
-    "plugin-route": "skipped",
   };
-  const GATED = ["check", "apm-install", "plugin-route", "lanes"] as const;
+  const GATED = ["check", "lanes"] as const;
 
   it("passes a proven push with every gated lane skipped, with the advisory lane red", () => {
     expect(execute(PROVEN, "true", "true")).toBe(0);
@@ -1448,12 +1240,12 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     expect(execute(FULL, "")).toBe(0);
   });
 
-  it("fails a lanes answer unless the lanes job passed and the heavy three skipped", () => {
+  it("fails a lanes answer unless the lanes job passed and the heavy lane skipped", () => {
     expect(execute({ ...SHORT, lanes: "failure" }, "false")).not.toBe(0);
     expect(execute({ ...SHORT, lanes: "cancelled" }, "false")).not.toBe(0);
     // ledger review/96: a lanes job that never ran is no pass either.
     expect(execute({ ...SHORT, lanes: "skipped" }, "false")).not.toBe(0);
-    for (const heavy of ["check", "apm-install", "plugin-route"] as const) {
+    for (const heavy of ["check"] as const) {
       expect(execute({ ...SHORT, [heavy]: "success" }, "false"), heavy).not.toBe(0);
       expect(execute({ ...SHORT, [heavy]: "failure" }, "false"), heavy).not.toBe(0);
     }
@@ -1461,8 +1253,8 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     expect(execute(FULL, "false")).not.toBe(0);
   });
 
-  it("fails a full answer unless the heavy three passed and the lanes job skipped", () => {
-    for (const heavy of ["check", "apm-install", "plugin-route"] as const) {
+  it("fails a full answer unless the heavy lane passed and the lanes job skipped", () => {
+    for (const heavy of ["check"] as const) {
       expect(execute({ ...FULL, [heavy]: "failure" }, "true"), heavy).not.toBe(0);
       expect(execute({ ...FULL, [heavy]: "skipped" }, "true"), heavy).not.toBe(0);
       // ledger review/96: a cancelled heavy leg is red, as the `= success` test reads it.
@@ -1484,8 +1276,6 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
       lanes: "skipped",
       records: "success",
       "supply-chain": "success",
-      "apm-install": "skipped",
-      "plugin-route": "skipped",
     };
     expect(execute(skippedAll, "")).not.toBe(0);
     expect(execute({ ...FULL, changes: "cancelled" }, "true")).not.toBe(0);
@@ -1585,345 +1375,26 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     }
   });
 
-  it("arms the headless drive behind a credential check that exits 0 and says so", () => {
-    const steps = stepsOf(nightly, "headless-lane");
-    const creds = stepOf(steps, "Headless drive credentials");
-
-    expect(creds.id).toBe("creds");
-    // Read into an env var rather than compared inside an `if:`, so the absent case produces a
-    // notice a reader can find instead of a silently skipped step.
-    //
-    // CHANGED by plan 008 file 3, unit V1w: one secret became four, one per client, because the
-    // absent case is now per client rather than per lane — three configured and one missing has to
-    // read as three legs driven and one that said why it was not.
-    expect(Object.keys(creds.env ?? {}).toSorted()).toEqual([
-      "ANTHROPIC_API_KEY",
-      "CODEX_API_KEY",
-      "COPILOT_GITHUB_TOKEN",
-      "CURSOR_API_KEY",
+  // REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): seven cases on the headless
+  // lane's second half, the plugin route's invocation legs (the credential check, the per-client
+  // drive steps, the credential isolation between vendors, the verdict, the kept documents, the
+  // summary and the PATH addressing). That half drove the plugin distribution, which 1.15.0 deletes,
+  // so the steps and the four client secrets left with it. The case below holds what remains.
+  // ADDED (unit d3-ci-qa): the lane is the scratch-repo dogfood alone, and holds no credential.
+  it("runs the scratch-repo dogfood as the whole headless lane, holding no credential", () => {
+    const job = jobOf(nightly, "headless-lane");
+    expect(job.steps.map((step) => step.name)).toEqual([
+      "Checkout",
+      "Set up Node",
+      "Install",
+      "Build",
+      "Scratch-repo dogfood (all four clients)",
     ]);
-    // One notice per absent secret, naming the client whose leg did not run. The client name is
-    // interpolated by the shell, so what is pinned is the template plus the four client-to-variable
-    // pairs the loop walks — a pair the loop dropped is a client whose absent secret would produce
-    // no notice at all, which is the failure this whole shape exists to prevent.
-    expect(creds.run).toContain("::notice title=Invocation leg skipped (${client})::");
-    for (const pair of [
-      "claude ANTHROPIC_API_KEY",
-      "cursor CURSOR_API_KEY",
-      "copilot COPILOT_GITHUB_TOKEN",
-      "codex CODEX_API_KEY",
-    ]) {
-      expect(creds.run, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
-    }
-    // The secret VALUE is resolved by NAME through indirect expansion and only ever tested for
-    // emptiness — never passed as an argument, where it would be visible in the runner's process
-    // table, and never echoed.
-    expect(creds.run).toContain('${!var:-}');
-    expect(creds.run).toContain("enabled=false");
-    expect(creds.run).toContain("::notice title=Headless drive skipped::");
-    expect(creds.run).toContain("exit 0");
-    // The armed set is handed on as data, so the drive step limits `--client` to the clients whose
-    // credential is present rather than driving all four and failing three.
-    expect(creds.run).toContain('echo "clients=$clients" >> "$GITHUB_OUTPUT"');
-
-    // The summary step is the one still gated on the lane-wide switch, and it is evaluated both
-    // ways so the guard is proven to be the switch rather than decoration. `always() &&` is on it
-    // deliberately: a run whose legs FAILED is exactly the run whose summary must not go missing.
-    const condition = conditionOf(steps, "Headless drive summary");
-    expect(condition).toBe("always() && steps.creds.outputs.enabled == 'true'");
-    expect(
-      evaluateWorkflowExpression(condition, { steps: { creds: { outputs: { enabled: "false" } } } }),
-    ).toBe(false);
-    expect(
-      evaluateWorkflowExpression(condition, { steps: { creds: { outputs: { enabled: "true" } } } }),
-    ).toBe(true);
-  });
-
-  /** The four clients, their per-client drive step, and the ONE secret each one may hold. */
-  const INVOCATION_LEGS = [
-    ["claude", "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"],
-    ["cursor", "CURSOR_API_KEY", "CURSOR_API_KEY"],
-    ["copilot", "COPILOT_GITHUB_TOKEN", "COPILOT_GITHUB_TOKEN"],
-    // The one asymmetry, and it is deliberate: the SECRET is named for the client, the VARIABLE is
-    // the vendor's, and the two differ for codex alone.
-    ["codex", "OPENAI_API_KEY", "CODEX_API_KEY"],
-  ] as const;
-
-  // ADDED by plan 008 file 3, unit V1w. CHANGED from the assertion that pinned the drive step's
-  // "Headless drive not implemented" warning: the harness now exists, so the behaviour that
-  // assertion guarded — that a credentialed run reports honestly rather than pretending to measure
-  // — moved to the summary case below, which pins the one thing the harness still does NOT do.
-  it("drives the plugin route's invocation legs for exactly the credentialed clients", () => {
-    const steps = stepsOf(nightly, "headless-lane");
-
-    // The same four roots the release builds, from the packed tarball, with provenance as an input.
-    const build = runOf(steps, "Build the plugin distribution");
-    expect(build).toContain("npm pack --pack-destination");
-    expect(build).toContain("node scripts/build-plugin-runtime.mjs");
-    expect(build).toContain("node scripts/build-plugin-distribution.mjs");
-    expect(build).toContain('--source-commit "$GITHUB_SHA"');
-
-    // A binary the client CLI installed under a different name is the commonest way this lane would
-    // silently drive nothing — the Cursor CLI's command is `agent` — so the pair list is pinned the
-    // same way ci.yml's export step is, and the export is the `STAMITY_<CLIENT>_BIN` contract the
-    // smoke reads a binary path from.
-    const exports = runOf(steps, "Export the client binaries");
-    expect(exports).toContain('echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"');
-    for (const triple of EXPORT_TRIPLES) {
-      expect(exports, `the loop must walk "${triple}"`).toContain(`"${triple}"`);
-    }
-    // One body, two files: the executed case below runs ci.yml's copy, and this is what makes
-    // that execution stand for the nightly's too.
-    expect(exports).toBe(runOf(stepsOf(ci, "plugin-route"), "Export the client binaries"));
-
-    for (const [client, variable, secret] of INVOCATION_LEGS) {
-      const step = stepOf(steps, `Headless target-tool drive (${client})`);
-      const run = step.run ?? "";
-
-      // WITH `--invoke`, which is the whole reason this half cannot live in the merge gate, and
-      // scoped to the ONE client this step holds a credential for. The interpreter by the absolute
-      // path captured before the installs (prove/220), never `node` off PATH.
-      expect(step.id, client).toBe(`drive-${client}`);
-      expect(run, client).toContain('"$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs');
-      expect(run, client).not.toMatch(/(?<![\w"$/])node scripts\//);
-      expect(run, client).toContain(`--client ${client} --invoke`);
-      // A FAIL is a red nightly, which is this lane's purpose — so the smoke's exit status has to
-      // reach the step. `set -o pipefail` is what carries it through the `tee`.
-      expect(run, client).toContain("set -euo pipefail");
-      // Each leg reports its own result lines, so a lane with one failing client still shows what
-      // the other three did.
-      expect(run, client).toContain("$GITHUB_STEP_SUMMARY");
-      expect(run, client).toContain("^plugin-route: ");
-      // The secret reaches the client through the variable that client honours, measured from the
-      // binaries on 2026-09-20 rather than read off a page (the citations are at each step).
-      expect(step.env?.[variable], client).toBe(`\${{ secrets.${secret} }}`);
-    }
-  });
-
-  // ADDED by plan 008 file 3, unit V1w as the round-1 fix for the security lens's finding on this
-  // unit. The shape this replaced put all four secrets in ONE step whose body then ran three
-  // `npm install -g` lines and piped a vendor installer to bash, so a single compromised vendor
-  // release could read the other three vendors' credentials out of its own environment.
-  //
-  // Two independent properties close it, and both are pinned because either one alone is a shape
-  // someone can undo without noticing: nothing that executes third-party code runs in a step that
-  // holds a credential, and no drive step holds more than its own client's.
-  it("keeps every vendor's credential out of reach of every other vendor's code", () => {
-    const steps = stepsOf(nightly, "headless-lane");
-    const named = (name: string): number => indexOf(steps, name);
-
-    // Property one: the steps that run other people's code hold nothing, and they run BEFORE the
-    // first step that holds anything. Ordering is the stronger half of this — a step placed ahead
-    // of `creds` cannot read a credential whatever its `env:` later says.
-    const credsAt = named("Headless drive credentials");
-    expect(credsAt).toBeGreaterThan(0);
-    for (const name of [
-      "Capture the interpreter before any vendor install",
-      "Build the plugin distribution",
-      "Install the client CLIs",
-      "Export the client binaries",
-    ]) {
-      const step = stepOf(steps, name);
-      const body = `${step.run ?? ""}${JSON.stringify(step.env ?? {})}`;
-      expect(body, `${name} must reference no secret`).not.toContain("secrets.");
-      expect(named(name), `${name} must run before the credentials exist`).toBeLessThan(credsAt);
-    }
-    // The install lines specifically — the ones that execute a vendor's release — are in that
-    // secret-free step and nowhere else. TEST CHANGE, justified (2026-09-22, prove/220): the
-    // lines moved with the mechanism — each npm CLI under its own prefix with scripts ignored, and
-    // the one lifecycle script the claude CLI needs run by name; see the lane's block comment.
-    const installs = runOf(steps, "Install the client CLIs");
-    for (const line of [
-      'npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code',
-      '"$STAMITY_NODE_BIN" "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"',
-      'npm install -g --prefix "$RUNNER_TEMP/copilot" --ignore-scripts @github/copilot',
-      'npm install -g --prefix "$RUNNER_TEMP/codex" --ignore-scripts @openai/codex',
-      "curl -fsS https://cursor.com/install | bash",
-    ]) {
-      expect(installs, `${line} must live in the secret-free step`).toContain(line);
-      for (const [client] of INVOCATION_LEGS) {
-        expect(
-          stepOf(steps, `Headless target-tool drive (${client})`).run ?? "",
-          `${client}'s drive step must not install anything`,
-        ).not.toContain(line);
-      }
-    }
-
-    // Property one and a half: `creds` is the one step that holds all four credentials, so it is
-    // also the one step where an innocent-looking line reopens the whole finding — a single
-    // `npm install -g` added there would run a vendor's release with every key in its environment,
-    // and every assertion above would stay green because the installs are still in the secret-free
-    // step too. So `creds` is pinned SPAWN-FREE: it may branch, test and echo with bash builtins,
-    // and it may launch no process at all.
-    // Two things this match has to get right, and both were got wrong first. It reads only the
-    // EXECUTED lines, because the step's own comment explains that it resolves the variable through
-    // "bash indirect expansion" and a guard that forbids describing its mechanism is a guard
-    // someone deletes. And it matches on WORD BOUNDARIES rather than as substrings, because
-    // `set -euo pipefail` contains "pip".
-    const credsBody = runOf(steps, "Headless drive credentials")
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("#"))
-      .join("\n");
-    for (const spawn of [
-      "npm",
-      "npx",
-      "curl",
-      "wget",
-      "node",
-      "eval",
-      "docker",
-      "pip",
-      "git",
-      "bash",
-      "sh",
-      "python",
-    ]) {
-      expect(
-        credsBody,
-        `the credential step must spawn nothing: found "${spawn}"`,
-      ).not.toMatch(new RegExp(String.raw`(?<![\w./-])${spawn}(?![\w-])`));
-    }
-    // Regex-rot guard on the check above: the step must still be the one that DOES hold the four
-    // secrets, or "it spawns nothing" is a true statement about the wrong step.
-    expect(Object.keys(stepOf(steps, "Headless drive credentials").env ?? {}).toSorted()).toEqual([
-      "ANTHROPIC_API_KEY",
-      "CODEX_API_KEY",
-      "COPILOT_GITHUB_TOKEN",
-      "CURSOR_API_KEY",
-    ]);
-
-    // Property two: each drive step's `env:` names EXACTLY one secret — its own. `toEqual` on the
-    // key set, not a `toContain`, because the finding was an extra key rather than a missing one.
-    for (const [client, variable] of INVOCATION_LEGS) {
-      const step = stepOf(steps, `Headless target-tool drive (${client})`);
-      expect(Object.keys(step.env ?? {}), `${client} must hold one variable`).toEqual([variable]);
-      const others = INVOCATION_LEGS.filter(([id]) => id !== client);
-      for (const [otherClient, , otherSecret] of others) {
-        expect(
-          JSON.stringify(step.env ?? {}),
-          `${client} must not hold ${otherClient}'s secret`,
-        ).not.toContain(otherSecret);
-      }
-    }
-
-    // The guards, evaluated against every armed combination rather than trusted. `contains()` over
-    // the csv is only sound because the four names are mutually non-prefixing, and this is the
-    // assertion that keeps it sound: a fifth client whose name contained another's would fail here.
-    for (const armed of [
-      "claude",
-      "cursor,codex",
-      "claude,cursor,copilot,codex",
-      "copilot",
-      "codex",
-    ]) {
-      const context = { steps: { creds: { outputs: { clients: armed } } } };
-      for (const [client] of INVOCATION_LEGS) {
-        const guard = conditionOf(steps, `Headless target-tool drive (${client})`);
-        // TEST CHANGE, justified (2026-09-22, prove/223): a bare `contains()` carries the implicit
-        // `success()`, so one client's FAIL skipped every client after it. `!cancelled()` ahead of
-        // it runs each drive step whether or not a sibling failed, and still not after the run was
-        // cancelled — this workflow cancels in-progress runs on re-dispatch, and a model call on a
-        // cancelled run is spend for nothing, which is why it is not `always()`.
-        expect(guard, client).toBe(`!cancelled() && contains(steps.creds.outputs.clients, '${client}')`);
-        expect(
-          evaluateWorkflowExpression(guard, context),
-          `armed "${armed}" must ${armed.split(",").includes(client) ? "" : "not "}run ${client}`,
-        ).toBe(armed.split(",").includes(client));
-      }
-    }
-  });
-
-  it("says what the invocation legs did not measure, even when a leg failed", () => {
-    // The claim the retired "not implemented" warning used to carry, kept now that the harness
-    // exists: driving a client is not SCORING a run. The eval harness is still absent, and the
-    // summary has to say so where the person reading the run will see it.
-    const summary = stepOf(stepsOf(nightly, "headless-lane"), "Headless drive summary");
-    expect(summary.run).toContain("$GITHUB_STEP_SUMMARY");
-    expect((summary.run ?? "").toLowerCase()).toContain("eval harness");
-    // `always()` so a run whose legs failed is not the run whose caveat goes missing — that is
-    // exactly the run someone would otherwise read as a measurement.
-    expect(summary.if).toContain("always()");
-    expect(summary.env?.["CLIENTS"]).toBe("${{ steps.creds.outputs.clients }}");
-    // And it holds no credential: it reports, so it has no reason to.
-    expect(JSON.stringify(summary.env ?? {})).not.toContain("secrets.");
-    for (const { file, source } of [nightly]) {
-      expect(
-        source,
-        `${file}: the retired not-implemented warning must not come back`,
-      ).not.toContain("Headless drive not implemented");
-    }
-  });
-
-  // ADDED 2026-09-22 (prove/223): one client's FAIL used to skip the clients after it, so a red
-  // nightly reported one leg instead of four. Each drive step now runs under `!cancelled()`, and
-  // the job's verdict is one step at the end that reads every drive step's outcome.
-  it("runs every armed drive step whatever its siblings did, and one verdict step fails the job", () => {
-    const steps = stepsOf(nightly, "headless-lane");
-    const verdict = stepOf(steps, "Headless drive verdict");
-    expect(verdict.if).toBe("always() && steps.creds.outputs.enabled == 'true'");
-    // It reads all four outcomes by the drive steps' ids, and nothing else decides.
-    const outcomes = verdict.env?.["OUTCOMES"] ?? "";
-    for (const [client] of INVOCATION_LEGS) {
-      expect(outcomes, client).toContain(`${client}=\${{ steps.drive-${client}.outcome }}`);
-    }
-    expect(JSON.stringify(verdict.env ?? {})).not.toContain("secrets.");
-    expect(verdict.run).toContain("exit 1");
-    expect(verdict.run).toContain("::error title=Headless drive failed::");
-    // After every drive step and before the summary, so a failure it reports is one that happened.
-    const verdictAt = indexOf(steps, "Headless drive verdict");
-    for (const [client] of INVOCATION_LEGS) {
-      expect(indexOf(steps, `Headless target-tool drive (${client})`), client).toBeLessThan(verdictAt);
-    }
-    expect(indexOf(steps, "Headless drive summary")).toBeGreaterThan(verdictAt);
-  });
-
-  // ADDED 2026-09-22 (prove/225): the four --json documents were written to RUNNER_TEMP and
-  // nothing read or kept them, so a nightly's per-leg command, exit, version and transcript hash
-  // were gone with the job. Kept as an artifact, on the sha every other workflow pins this action
-  // to — never a floating tag.
-  it("keeps the invocation-leg documents as a short-lived artifact on the repository's pinned sha", () => {
-    const steps = stepsOf(nightly, "headless-lane");
-    const keep = stepOf(steps, "Keep the invocation-leg documents");
-    const pinned = /actions\/upload-artifact@([0-9a-f]{40}) # v[\d.]+/.exec(release.source)?.[1];
-    expect(pinned, "release.yml pins no upload-artifact sha to copy").toBeDefined();
-    expect(keep.uses).toBe(`actions/upload-artifact@${pinned ?? ""}`);
-    expect(keep.if).toBe("always() && steps.creds.outputs.enabled == 'true'");
-    expect(keep.with?.["path"]).toBe("${{ runner.temp }}/plugin-route-*.json");
-    expect(keep.with?.["name"]).toBe("plugin-route-invocation-legs");
-    expect(keep.with?.["retention-days"]).toBe(14);
-    // The documents come from the drive steps, so the upload sits after all of them.
-    for (const [client] of INVOCATION_LEGS) {
-      const run = runOf(steps, `Headless target-tool drive (${client})`);
-      expect(run, client).toContain(`--json "$RUNNER_TEMP/plugin-route-${client}.json"`);
-      expect(indexOf(steps, `Headless target-tool drive (${client})`), client).toBeLessThan(
-        indexOf(steps, "Keep the invocation-leg documents"),
-      );
-    }
-  });
-
-  // ADDED 2026-09-22 (prove/220): ordering alone left a hole — an installer that ran secret-free
-  // could still leave a binary on PATH for a credential step to resolve. Closed by addressing:
-  // the interpreter captured before any install, nothing appended to GITHUB_PATH, and every
-  // credential step invoking `node` and its client by absolute path under a rebuilt PATH.
-  it("has every credential step resolve nothing from a directory a vendor installer wrote", () => {
-    const steps = stepsOf(nightly, "headless-lane");
-    const capture = stepOf(steps, "Capture the interpreter before any vendor install");
-    expect(capture.run).toContain('NODE_BIN="$(command -v node)"');
-    expect(capture.run).toContain('echo "STAMITY_NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"');
-    expect(indexOf(steps, "Capture the interpreter before any vendor install")).toBeLessThan(
-      indexOf(steps, "Install the client CLIs"),
-    );
-    for (const step of steps) {
-      expect(step.run ?? "", `${step.name ?? "?"} must not extend PATH`).not.toContain("GITHUB_PATH");
-    }
-    for (const [client] of INVOCATION_LEGS) {
-      const run = runOf(steps, `Headless target-tool drive (${client})`);
-      expect(run, client).toContain('export PATH="$(dirname "$STAMITY_NODE_BIN"):');
-      expect(run, client).not.toContain(".local/bin");
-    }
-    // The block comment says what the ordering now closes and what it does not.
-    expect(nightly.source).toContain("What that still does not close");
-    expect(nightly.source).toContain("npm view <package> scripts");
+    expect(job.permissions).toEqual({ contents: "read" });
+    // The dogfood is what the lane is for; a step that drives a client needs an account, and the
+    // nightly holds none now.
+    expect(JSON.stringify(job), "the headless lane reads a secret").not.toContain("secrets.");
+    expect(nightly.source, "nightly.yml reads a secret").not.toContain("secrets.");
   });
 });
 
@@ -1963,150 +1434,10 @@ describe("nightly.yml — the canonical repository guard", () => {
 });
 
 
-/**
- * ADDED by plan 008 file 3, unit V1w — the plugin-route steps whose BEHAVIOUR is a decision.
- *
- * Every other assertion about these two workflows reads them as data, which is the right level for
- * a pin on step order or a privilege. It is the wrong level for these two steps: each one decides
- * which legs of the route run, and a loop that dropped a client, resolved the wrong variable, or
- * exited non-zero on the absent case would satisfy every substring check above while silently
- * driving nothing. So the shipping shell is EXECUTED here, the way `pr-checks.yml`'s DCO job is
- * executed below, with the same reasoning: only the inputs are substituted — the four secret
- * variables in one case and PATH in the other — and bash is the real one.
- *
- * Not run on Windows, for the reason the DCO suite states: a Git-for-Windows bash is a different
- * interpreter than the runner's, and these fixtures are POSIX paths and modes.
- */
-const SHELL_EXECUTABLE =
-  process.platform !== "win32" && spawnSync("bash", ["--version"]).status === 0;
-
-describe.skipIf(!SHELL_EXECUTABLE)("the plugin-route arming steps, executed", () => {
-  const root = mkdtempSync(join(tmpdir(), "stamity-plugin-route-"));
-  afterAll(() => rmSync(root, { recursive: true, force: true }));
-
-  const CREDS = runOf(stepsOf(nightly, "headless-lane"), "Headless drive credentials");
-  const EXPORTS = runOf(stepsOf(ci, "plugin-route"), "Export the client binaries");
-  const VERDICT = runOf(stepsOf(nightly, "headless-lane"), "Headless drive verdict");
-
-  /** Run one step body with a clean environment plus `env`, and read back what it wrote. */
-  function run(
-    body: string,
-    env: Readonly<Record<string, string>>,
-    channel: "GITHUB_OUTPUT" | "GITHUB_ENV",
-  ): { status: number | null; stdout: string; written: string } {
-    const dir = mkdtempSync(join(root, "run-"));
-    const file = join(dir, "channel");
-    writeFileSync(file, "");
-    const result = spawnSync("bash", ["-c", body], {
-      cwd: dir,
-      encoding: "utf8",
-      // A clean env, not `...process.env`: this machine exports three of the four
-      // STAMITY_<CLIENT>_BIN variables and a real ANTHROPIC_API_KEY may be present, either of
-      // which would make the absent-case cases pass for the wrong reason.
-      env: { LC_ALL: "C", PATH: "/usr/bin:/bin", [channel]: file, ...env },
-    });
-    return {
-      status: result.status,
-      stdout: result.stdout,
-      written: readFileSync(file, "utf8"),
-    };
-  }
-
-  it("arms exactly the clients whose secret is present, and exits 0 on the rest", () => {
-    // Two of four, so the csv has to be built rather than copied and the notices have to be
-    // selective — a pass here cannot come from "all" or from "none".
-    const result = run(
-      CREDS,
-      { ANTHROPIC_API_KEY: "sk-not-a-key", COPILOT_GITHUB_TOKEN: "ghp_not-a-token" },
-      "GITHUB_OUTPUT",
-    );
-
-    expect(result.status).toBe(0);
-    expect(result.written).toContain("enabled=true");
-    // The armed set, in the loop's order, and ONLY the armed set.
-    expect(result.written).toContain("clients=claude,copilot");
-    // One notice per absent secret, naming the client. The two armed clients get none: a notice
-    // for a leg that did run would be worse than no notice at all.
-    expect(result.stdout).toContain("::notice title=Invocation leg skipped (cursor)::");
-    expect(result.stdout).toContain("::notice title=Invocation leg skipped (codex)::");
-    expect(result.stdout).not.toContain("Invocation leg skipped (claude)");
-    expect(result.stdout).not.toContain("Invocation leg skipped (copilot)");
-    // Not the lane-wide skip: three legs ran.
-    expect(result.stdout).not.toContain("Headless drive skipped");
-    // And no secret value reaches the log. This is the assertion that would catch an `echo "$var"`
-    // added to the loop for debugging and left in.
-    expect(result.stdout).not.toContain("sk-not-a-key");
-    expect(result.stdout).not.toContain("ghp_not-a-token");
-  });
-
-  it("disarms the whole drive, with a notice and exit 0, when no secret is configured", () => {
-    // The repository's real state. It must be a NOTICE and a zero exit: a nightly that went red
-    // for holding no credential would be red every night, which is the same as no signal.
-    const result = run(CREDS, {}, "GITHUB_OUTPUT");
-
-    expect(result.status).toBe(0);
-    expect(result.written).toContain("enabled=false");
-    expect(result.written).not.toContain("enabled=true");
-    // No `clients=` output at all, so a drive step reached by a widened condition would have
-    // nothing to pass to `--client`.
-    expect(result.written).not.toContain("clients=");
-    expect(result.stdout).toContain("::notice title=Headless drive skipped::");
-    for (const client of ["claude", "cursor", "copilot", "codex"]) {
-      expect(result.stdout, `${client} must be named`).toContain(
-        `::notice title=Invocation leg skipped (${client})::`,
-      );
-    }
-  });
-
-  it("exports a binary path for every client it can find, and notices the ones it cannot", () => {
-    // Two of the four present, again so neither "all" nor "none" can pass. `agent` is the Cursor
-    // CLI's command name, and it is present here while `copilot` is not. TEST CHANGE, justified
-    // (2026-09-22, prove/220): the inputs are RUNNER_TEMP and HOME rather than PATH — the step
-    // reads each binary at the absolute path its installer owns, and a binary on PATH must NOT
-    // be found, which the empty PATH-free lookup below proves.
-    const temp = mkdtempSync(join(root, "runner-temp-"));
-    const home = mkdtempSync(join(root, "home-"));
-    for (const file of [join(temp, "claude", "bin", "claude"), join(home, ".local", "bin", "agent")]) {
-      mkdirSync(join(file, ".."), { recursive: true });
-      writeFileSync(file, "#!/bin/sh\nexit 0\n");
-      chmodSync(file, 0o755);
-    }
-    // A `copilot` on PATH that no install step placed: the old `command -v` would have exported it.
-    const stray = mkdtempSync(join(root, "stray-"));
-    writeFileSync(join(stray, "copilot"), "#!/bin/sh\nexit 0\n");
-    chmodSync(join(stray, "copilot"), 0o755);
-
-    const result = run(EXPORTS, { PATH: `${stray}${delimiter}/usr/bin:/bin`, RUNNER_TEMP: temp, HOME: home }, "GITHUB_ENV");
-
-    expect(result.status).toBe(0);
-    // The two present clients reach the smoke through the environment channel, at their real paths.
-    expect(result.written).toContain(`STAMITY_CLAUDE_BIN=${join(temp, "claude", "bin", "claude")}`);
-    expect(result.written).toContain(`STAMITY_CURSOR_BIN=${join(home, ".local", "bin", "agent")}`);
-    // The two absent ones are NOT exported — an empty variable would look set to the smoke.
-    expect(result.written).not.toContain("STAMITY_COPILOT_BIN");
-    expect(result.written).not.toContain("STAMITY_CODEX_BIN");
-    // And they are visible, which is the difference between a SKIPPED leg and a silent one.
-    expect(result.stdout).toContain("::notice title=Client binary absent (copilot)::");
-    expect(result.stdout).toContain("::notice title=Client binary absent (codex)::");
-    expect(result.stdout).not.toContain("Client binary absent (claude)");
-    expect(result.stdout).not.toContain("Client binary absent (agent)");
-  });
-
-  it("fails the verdict on any drive step that failed, naming it, and passes on success and skips", () => {
-    // The outcomes are GitHub's own words for a step: success, failure, cancelled, skipped.
-    const red = run(VERDICT, { OUTCOMES: "claude=success cursor=failure copilot=skipped codex=success" }, "GITHUB_OUTPUT");
-    expect(red.status).toBe(1);
-    expect(red.stdout).toContain("::error title=Headless drive failed::The invocation legs failed for: cursor.");
-    // Two failures are both named, in the order the steps ran.
-    const two = run(VERDICT, { OUTCOMES: "claude=failure cursor=skipped copilot=cancelled codex=success" }, "GITHUB_OUTPUT");
-    expect(two.status).toBe(1);
-    expect(two.stdout).toContain("failed for: claude,copilot.");
-    // A skipped client is a client with no credential, never a failure.
-    const green = run(VERDICT, { OUTCOMES: "claude=success cursor=skipped copilot=skipped codex=success" }, "GITHUB_OUTPUT");
-    expect(green.status).toBe(0);
-    expect(green.stdout).toContain("No armed drive step failed");
-  });
-});
+// REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "the plugin-route arming steps,
+// executed", four cases that ran the nightly's credential check, ci.yml's binary export and the
+// nightly's drive verdict under bash. All three steps left with the plugin route, which 1.15.0
+// deletes.
 
 // ── pr-checks.yml ────────────────────────────────────────────────────────────
 
@@ -2171,6 +1502,8 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the canonical
     // `records` job joins; it is a ci.yml job that reports on every event (skipped outside the
     // canonical repository), not a pr-checks one.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): `apm-install`
+    // and `plugin-route` leave with the routes 1.15.0 deletes; no pr-checks job joins.
     expect(jobOf(ci, "all-ci-checks").needs).toEqual([
       "changes",
       "prove-pr",
@@ -2178,8 +1511,6 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
       "lanes",
       "records",
       "supply-chain",
-      "apm-install",
-      "plugin-route",
     ]);
     expect(triggersOf(ci.workflow)).toContain("push");
     expect(triggersOf(prChecks.workflow)).not.toContain("push");
@@ -2850,7 +2181,8 @@ function repositoryContext(
 describe("canonical distribution destinations", () => {
   const jobs = [
     { label: "release gates", job: jobOf(release, "gates"), context: TAG_PUSH },
-    { label: "canonical APM", job: jobOf(release, "apm-route"), context: TAG_PUSH },
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the
+    // `apm-route` job left with the APM route, which 1.15.0 deletes, so its row goes.
     { label: "npm publication", job: jobOf(release, "publish"), context: TAG_PUSH },
     {
       label: "docs deployment",
@@ -2980,25 +2312,21 @@ const DISPATCH_SHAPES = TRIGGER_SHAPES.filter(
 
 describe("release.yml — the only publishing path", () => {
   const gates = jobOf(release, "gates");
-  const apmRoute = jobOf(release, "apm-route");
   const publish = jobOf(release, "publish");
   const gatesSteps = stepsOf(release, "gates");
-  const apmRouteSteps = stepsOf(release, "apm-route");
   const publishSteps = stepsOf(release, "publish");
 
   it("splits gates from publish, and adds a rehearsal job that cannot ship", () => {
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the
+    // `apm-route` job left with the APM route, which 1.15.0 deletes, so the job list loses it and
+    // `publish` needs `gates` alone. The split this case pins is unchanged: the job that runs
+    // third-party code holds no credential, and the one that holds it needs the gates.
     expect(Object.keys(release.workflow.jobs)).toEqual([
       "gates",
-      "apm-route",
       "publish",
       "dry-run-summary",
     ]);
-    // `apm-route` runs a third-party interpreter — pip's unpinned closure, then apm itself — so it
-    // is a job of its own rather than a step in the job that packs the shipping tarball: it holds
-    // no credential and has no path to the artifact. `publish` needs BOTH, which is what makes it
-    // a gate rather than a report.
-    expect(publish.needs).toEqual(["gates", "apm-route"]);
-    expect(apmRoute.needs, "the route smoke needs nothing from the build").toBeUndefined();
+    expect(publish.needs).toEqual(["gates"]);
     expect(jobOf(release, "dry-run-summary").needs).toBe("gates");
   });
 
@@ -3024,23 +2352,16 @@ describe("release.yml — the only publishing path", () => {
     expect(gates.permissions).toEqual({ contents: "read" });
     expect(Object.keys(gates.permissions ?? {})).not.toContain("id-token");
 
-    // Same for the route smoke, which runs an interpreter and a pip closure neither this
-    // repository nor its lockfile pins, and carries a timeout of its own.
-    expect(apmRoute.permissions).toEqual({ contents: "read" });
-    expect(apmRoute["timeout-minutes"]).toBeTypeOf("number");
-    expect(apmRoute["runs-on"]).toBe("ubuntu-latest");
-
     // TEST CHANGE, justified: the publish job's grant set moved when it began attesting the
-    // plugin archives. `attestations: write` persists the attestation and `artifact-metadata:
-    // write` creates its storage record — the two the attestation action's own README requires
-    // beside `id-token`. The property this case pins is unchanged and is asserted above: no job
-    // that runs third-party code holds any of them. The exact set, and the reason each member is
-    // there, is pinned in "attests the archives with a pinned action …" below.
+    // plugin archives, and it moves back now that it stops. TEST CHANGE, justified (2026-10-14, run
+    // 2026-10-14_cli-native, unit d3-ci-qa): 1.15.0 deletes the plugin route, so no archive is
+    // attested and `attestations: write` and `artifact-metadata: write`, which served only that
+    // attestation, leave. `contents: write` stays for `gh release create`, and `id-token: write`
+    // stays for npm's provenance over trusted publishing. The property this case pins is unchanged
+    // and is asserted above: no job that runs third-party code holds any write grant.
     expect(publish.permissions).toEqual({
       contents: "write",
       "id-token": "write",
-      attestations: "write",
-      "artifact-metadata": "write",
     });
     // The single approval point: environment protection rules are the platform-side control the
     // in-file ancestry probe cannot be.
@@ -3048,9 +2369,11 @@ describe("release.yml — the only publishing path", () => {
   });
 
   it("blocks egress on every job, from the first step, with an explicit allowlist", () => {
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the
+    // `apm-route` job left with the APM route, so two jobs are walked here; every assertion on
+    // `gates` and `publish` is kept, and the twenty result accounts now hold on both of them.
     for (const [label, steps] of [
       ["gates", gatesSteps],
-      ["apm-route", apmRouteSteps],
       ["publish", publishSteps],
     ] as const) {
       const harden = steps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"));
@@ -3061,58 +2384,50 @@ describe("release.yml — the only publishing path", () => {
       // Account roster replaces the old arbitrary-Azure wildcard. Every
       // currently documented result account is admitted, not one run's host.
       expect(allowlistOf(steps), label).not.toContain("*.blob.core.windows.net");
-      if (label !== "apm-route") {
-        for (let account = 0; account < 20; account += 1) {
-          expect(allowlistOf(steps), label).toContain(`productionresultssa${account}.blob.core.windows.net:443`);
-        }
+      for (let account = 0; account < 20; account += 1) {
+        expect(allowlistOf(steps), label).toContain(`productionresultssa${account}.blob.core.windows.net:443`);
       }
     }
 
-    // First step, before anything downloads or executes — in both jobs that run third-party code.
+    // First step, before anything downloads or executes, in the job that runs third-party code.
     // `publish` is the documented exception: its dispatch backstop opens no socket and reads no
     // file, and stopping a run that should not have started comes before installing a monitor.
     expect(gatesSteps[0]?.name).toBe("Harden runner");
-    expect(apmRouteSteps[0]?.name).toBe("Harden runner");
 
     // The gates job holds no token, so the OIDC and Sigstore hosts must not be reachable from it.
     const gatesAllow = allowlistOf(gatesSteps);
     expect(gatesAllow).toContain("registry.npmjs.org:443");
     expect(gatesAllow).not.toContain("token.actions.githubusercontent.com");
     expect(gatesAllow).not.toContain("sigstore.dev");
-    // And the three the APM route smoke needs are NOT reachable from the job that packs the
-    // tarball: that smoke runs a third-party interpreter, so it lives in `apm-route` and its
-    // hosts live with it. A host that drifted back here would be an interpreter's index opened
-    // up in the job that builds the shipping artifact.
+    // And no Python index is reachable from the job that packs the tarball: an interpreter's index
+    // opened up in the job that builds the shipping artifact is the adjacency this split exists to
+    // prevent.
     expect(gatesAllow).not.toContain("pypi.org");
     expect(gatesAllow).not.toContain("files.pythonhosted.org");
     expect(gatesAllow).not.toContain("raw.githubusercontent.com");
 
     // harden-runner fails CLOSED, so a host dropped from this list is a release that stops at the
     // step rather than a release that leaks.
-    const apmAllow = allowlistOf(apmRouteSteps);
-    expect(apmAllow).toContain("pypi.org:443");
-    expect(apmAllow).toContain("files.pythonhosted.org:443");
-    expect(apmAllow).toContain("raw.githubusercontent.com:443");
-    // It installs nothing from npm and mints nothing, so neither the registry nor the token hosts
-    // belong here either.
-    expect(apmAllow).not.toContain("registry.npmjs.org");
-    expect(apmAllow).not.toContain("token.actions.githubusercontent.com");
-    expect(apmAllow).not.toContain("sigstore.dev");
-
     const publishAllow = allowlistOf(publishSteps);
     expect(publishAllow).toContain("registry.npmjs.org:443");
     expect(publishAllow).toContain("token.actions.githubusercontent.com:443");
     expect(publishAllow).toContain("fulcio.sigstore.dev:443");
     expect(publishAllow).toContain("uploads.github.com:443");
 
-    // M5: the setup-python fallback host is listed by exactly one job in the whole directory, and
-    // it is the one that runs setup-python.
+    // M5: the setup-python fallback host is listed only by a job that runs setup-python. TEST
+    // CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the one such job,
+    // `release.yml:apm-route`, left with the APM route, so no job lists the host and none runs
+    // setup-python; a host that came back would be an allowance nothing needs.
     const rawHosts = ALL_JOBS.filter(([, , job]) =>
       (job.steps ?? []).some((step) =>
         String(step.with?.["allowed-endpoints"] ?? "").includes("raw.githubusercontent.com"),
       ),
     ).map(([file, id]) => `${file}:${id}`);
-    expect(rawHosts).toEqual(["release.yml:apm-route"]);
+    expect(rawHosts).toEqual([]);
+    const pythonJobs = ALL_JOBS.filter(([, , job]) =>
+      (job.steps ?? []).some((step) => (step.uses ?? "").startsWith("actions/setup-python@")),
+    ).map(([file, id]) => `${file}:${id}`);
+    expect(pythonJobs).toEqual([]);
   });
 
   it("runs the release proofs on every run that can publish, not only on a tag push", () => {
@@ -3180,11 +2495,11 @@ describe("release.yml — the only publishing path", () => {
     expect(runOf(gatesSteps, "Tarball smoke (publish shape)")).toBe("node scripts/tarball-smoke.mjs");
 
     // The interpreter stays out of this job. `python`, `pip` and a venv in the job that builds and
-    // packs the shipping tarball is exactly the adjacency `apm-route` exists to remove.
+    // packs the shipping tarball is an adjacency the release does not need.
     const gatesShell = gatesSteps.map((step) => step.run ?? "").join("\n");
     expect(gatesShell).not.toContain("apm-install-smoke");
     expect(gatesShell).not.toMatch(/\bpython\b|\bpip\b/);
-    expect(indexOf(gatesSteps, "Set up Python"), "setup-python belongs to apm-route").toBe(-1);
+    expect(indexOf(gatesSteps, "Set up Python"), "no release job runs setup-python").toBe(-1);
   });
 
   // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14; REQ-PROVE-025): the
@@ -3223,46 +2538,9 @@ describe("release.yml — the only publishing path", () => {
     ).toEqual([]);
   });
 
-  it("proves the published ROUTE in a job with no credential and no path to the artifact", () => {
-    // The published SHAPE is proven by the gates job's tarball smoke; this proves the published
-    // ROUTE, at the canonical remote and the exact shipping commit. A package whose bytes are
-    // right and whose resolver cannot reach it is the failure that put this job here.
-    //
-    // The remote, at this commit — not the working tree. An install from the checkout would prove
-    // the local files deploy and say nothing about whether the resolver can reach them.
-    const smoke = runOf(apmRouteSteps, "APM route smoke (canonical ref)");
-    expect(smoke).toContain("node scripts/apm-install-smoke.mjs");
-    expect(smoke).toContain('--source "zomarit/stamity#${SHA}"');
-    expect(smoke).toContain("--targets claude,copilot,cursor,codex");
-    // The sha reaches the shell through `env:`, like every other value in this file.
-    expect(stepOf(apmRouteSteps, "APM route smoke (canonical ref)").env?.["SHA"]).toBe(
-      "${{ github.sha }}",
-    );
-
-    // The interpreter is pinned the way the Node line is — a runner-image refresh must not move
-    // it — and to the same pin ci.yml's apm matrix already carries.
-    expect(stepOf(apmRouteSteps, "Set up Python").uses).toBe(
-      stepOf(stepsOf(ci, "apm-install"), "Set up Python").uses,
-    );
-    expect(stepOf(apmRouteSteps, "Set up Python").with?.["python-version"]).toBe("3.13");
-    expect(stepOf(apmRouteSteps, "Set up Node").uses).toBe(stepOf(gatesSteps, "Set up Node").uses);
-    expect(stepOf(apmRouteSteps, "Set up Node").with?.["node-version"]).toBe(
-      stepOf(gatesSteps, "Set up Node").with?.["node-version"],
-    );
-
-    // No path to the packed artifact: a shallow, credential-free checkout of the scripts, no
-    // build, no npm install, and nothing uploaded or downloaded between this job and any other.
-    const checkout = stepOf(apmRouteSteps, "Checkout");
-    expect(checkout.with?.["persist-credentials"]).toBe(false);
-    expect(checkout.with?.["fetch-depth"]).toBe(1);
-    for (const step of apmRouteSteps) {
-      expect((step.uses ?? "").includes("upload-artifact"), step.name).toBe(false);
-      expect((step.uses ?? "").includes("download-artifact"), step.name).toBe(false);
-    }
-    const routeShell = apmRouteSteps.map((step) => step.run ?? "").join("\n");
-    expect(routeShell).not.toMatch(/npm (ci|install|run build|pack)/);
-    expect(routeShell).not.toContain("dist/");
-  });
+  // REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "proves the published ROUTE in
+  // a job with no credential and no path to the artifact", the `apm-route` job's case. The job left
+  // with the APM route, which 1.15.0 deletes.
 
   it("hands the publish job a digest on a channel the artifact does not carry", () => {
     // A digest read from the same artifact it verifies is circular: the artifact attests itself.
@@ -3338,225 +2616,40 @@ describe("release.yml — the only publishing path", () => {
   });
 
 
-  // ── the plugin distribution: built in `gates`, published from `publish` ─────
-  //
-  // The fifth and sixth published surfaces ride the same release as the tarball: four plugin
-  // roots on an orphan branch, and their archives on the GitHub release. Everything below is one
-  // property in two halves — the job that runs third-party code BUILDS the tree and states its
-  // digest on the outputs channel, and the job that holds the credential PUBLISHES a tree whose
-  // digest it re-derived from that channel.
+  // REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): nine cases on the plugin
+  // distribution the release built in `gates` and published from `publish` (the runtime and
+  // distribution builds, the upload, the digest verification, the archive attestation, the orphan
+  // branch push, the manifest stamp, the release assets and the egress page's rows for them). The
+  // distribution left with the plugin route, which 1.15.0 deletes; the `plugin-dist` branch and its
+  // `plugins/v*` tags stay as frozen history and no workflow writes them again. The two cases below
+  // hold what the deletion must not open.
 
-  it("builds the plugin runtime and the distribution from the packed tarball, after the smoke", () => {
-    const pack = indexOf(gatesSteps, "Pack tarball");
-    const runtime = indexOf(gatesSteps, "Build plugin runtime");
-    const distribution = indexOf(gatesSteps, "Build plugin distribution");
-
-    // Both build steps read the tarball the pack step produced — the PUBLISHED shape, never the
-    // working tree — so neither can precede it, and both come after the smoke that proves that
-    // tarball installs at all.
-    expect(indexOf(gatesSteps, "Tarball smoke (publish shape)")).toBeLessThan(pack);
-    expect(pack).toBeLessThan(runtime);
-    expect(runtime).toBeLessThan(distribution);
-
-    expect(runOf(gatesSteps, "Build plugin runtime")).toContain(
-      'node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime',
-    );
-    // The tarball name reaches the shell through `env:`, like every other value in this file.
-    expect(stepOf(gatesSteps, "Build plugin runtime").env?.["TARBALL"]).toBe(
-      "${{ steps.pack.outputs.tarball }}",
-    );
-
-    const build = runOf(gatesSteps, "Build plugin distribution");
-    expect(build).toContain("node scripts/build-plugin-distribution.mjs");
-    expect(build).toContain("--out dist/plugins");
-    expect(build).toContain("--runtime dist/plugin-runtime");
-    // Provenance is an INPUT to that builder, never a clock read: the archives' entry timestamps
-    // and every manifest here are stamped from these two values, which is what makes two builds
-    // of one commit produce the same bytes — the property the digest check below rests on.
-    expect(build).toContain('--source-commit "$GITHUB_SHA"');
-    expect(build).toContain('--source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"');
-
-    // Both trees land under `dist/`, which is gitignored, rather than beside the checkout. An
-    // untracked `plugin-runtime/` in the workspace would enter `git ls-files --others` — which is
-    // the leak gate's own scan — and every tree-cleanliness check after it.
-    for (const step of ["Build plugin runtime", "Build plugin distribution"] as const) {
-      expect(runOf(gatesSteps, step), step).toMatch(/--out dist\//);
-      expect(runOf(gatesSteps, step), step).not.toMatch(/--out (?!dist\/)/);
+  // ADDED (unit d3-ci-qa; the unit's threat: a removed step leaves a job that publishes without the
+  // digest check). Every step of the publish job that ships or attaches a byte runs after the
+  // tarball's digest is verified against the gates job's output, and the job needs the gates job.
+  it("publishes nothing before the tarball's digest is verified against the gates output", () => {
+    expect(publish.needs).toEqual(["gates"]);
+    const verify = indexOf(publishSteps, "Verify tarball digest");
+    expect(verify).toBeGreaterThan(indexOf(publishSteps, "Download release artifacts"));
+    const shipping = publishSteps
+      .map((step, at) => ({ step, at }))
+      .filter(({ step }) => /\bnpm publish\b|\bgh release\b|\bgit push\b/.test(step.run ?? "") || (step.uses ?? "").startsWith("actions/attest-"));
+    expect(shipping.map(({ step }) => step.name)).toEqual(["Publish to npm with provenance", "Create GitHub release"]);
+    for (const { step, at } of shipping) {
+      expect(at, `${step.name ?? "?"} must follow the digest check`).toBeGreaterThan(verify);
     }
-    expect(release.source).toContain("git ls-files --others");
+    // The only artifact the job downloads is the one whose digest it verifies.
+    const downloads = publishSteps.filter((step) => (step.uses ?? "").startsWith("actions/download-artifact@"));
+    expect(downloads.map((step) => step.with?.["name"])).toEqual(["release-dist"]);
   });
 
-  it("uploads the distribution whole — dot directories and all — with its digest on the outputs channel", () => {
-    const upload = stepOf(gatesSteps, "Upload plugin distribution");
-    expect(upload.uses).toBe(stepOf(gatesSteps, "Upload release artifacts").uses);
-    expect(upload.with?.["name"]).toBe("release-plugins");
-    expect(upload.with?.["path"]).toBe("dist/plugins");
-    expect(upload.with?.["if-no-files-found"]).toBe("error");
-    // The same seven days, and for the same reason: this artifact also has to outlive the
-    // `npm-publish` environment's human approval, not just the run that produced it.
-    expect(upload.with?.["retention-days"]).toBe(7);
-    // EVERY catalog in this distribution lives in a DOT directory — `.claude-plugin/`,
-    // `.cursor-plugin/`, `.agents/plugins/`, `.github/plugin/` — and so does the APM primitive
-    // tree (`.apm/`). actions/upload-artifact drops hidden files unless told otherwise, so
-    // without this the branch would be pushed with every catalog missing and every gate green.
-    expect(upload.with?.["include-hidden-files"]).toBe(true);
-    expect(indexOf(gatesSteps, "Build plugin distribution")).toBeLessThan(
-      indexOf(gatesSteps, "Upload plugin distribution"),
-    );
-
-    // The digest travels on the job-output channel, exactly as the tarball's does: a digest read
-    // from inside the artifact it verifies attests itself.
-    expect(stepOf(gatesSteps, "Build plugin distribution").id).toBe("plugins");
-    for (const output of [
-      "plugins_manifest_sha256",
-      "plugins_branch",
-      "plugins_tag",
-      "plugins_archives",
-    ]) {
-      expect(gates.outputs?.[output], `the gates job must publish ${output}`).toBe(
-        `\${{ steps.plugins.outputs.${output} }}`,
-      );
-    }
-
-    // Branch, tag and archive names are READ OUT of the manifest the builder just wrote rather
-    // than spelled a second time here: `scripts/distribution-identity.mjs` owns those values, and
-    // a workflow that names `plugin-dist` itself is a second source of truth for them.
-    expect(runOf(gatesSteps, "Build plugin distribution")).toContain("dist/plugins/release.json");
-    const shell = [...gatesSteps, ...publishSteps]
-      .map((step) => step.run ?? "")
-      .join("\n")
-      // The builder's own file name carries the branch name as a substring; what must not appear
-      // is the VALUE, spelled by this workflow instead of read from the manifest.
-      .replaceAll("build-plugin-distribution.mjs", "<the builder>");
-    expect(shell, "the branch name belongs to the identity, not to this file").not.toContain(
-      "plugin-dist",
-    );
-    expect(shell, "and so does the tag pattern").not.toContain("plugins/v");
-  });
-
-  it("verifies the distribution against the gates output before anything is pushed", () => {
-    const download = stepOf(publishSteps, "Download plugin distribution");
-    expect(download.uses).toBe(stepOf(publishSteps, "Download release artifacts").uses);
-    expect(download.with?.["name"]).toBe("release-plugins");
-    expect(download.with?.["path"]).toBe("plugins");
-
-    const verify = runOf(publishSteps, "Verify plugin distribution digest");
-    expect(stepOf(publishSteps, "Verify plugin distribution digest").env?.["EXPECTED_SHA"]).toBe(
-      "${{ needs.gates.outputs.plugins_manifest_sha256 }}",
-    );
-    // An empty expected value fails closed here too: a missing output cannot read as a match.
-    expect(verify).toContain('[ -z "$EXPECTED_SHA" ]');
-    expect(verify).toContain("Refusing to publish");
-    // The manifest is the anchor the output covers, and every archive is then checked against the
-    // digests IT carries — so the whole tree hangs off a channel the artifact never travelled on.
-    expect(verify).toContain("packages");
-    // TEST CHANGE, justified: these two step-order assertions moved from "before the push" to
-    // "before the npm publish". The behaviour that moved is the ordering in the job, and the
-    // reason is what each half costs on failure — fetching and verifying can only REFUSE (a
-    // missing artifact, a digest that does not match), and refusing after npm had published
-    // would strand a registry version no re-run of this job can finish, since `npm publish`
-    // rejects the version it already shipped. The half that runs after the publish is the
-    // re-runnable one: the orphan commit is a pure function of the tree, so a second run
-    // rebuilds the same sha and moves no ref (proven in the executed suite below). The
-    // publish-side ordering of attest, push and stamp is unchanged and still pinned.
-    expect(indexOf(publishSteps, "Download plugin distribution")).toBeLessThan(
-      indexOf(publishSteps, "Verify plugin distribution digest"),
-    );
-    expect(indexOf(publishSteps, "Verify plugin distribution digest")).toBeLessThan(
-      indexOf(publishSteps, "Publish to npm with provenance"),
-    );
-  });
-
-  it("attests the archives with a pinned action and exactly the grants that action documents", () => {
-    const attest = stepOf(publishSteps, "Attest plugin archives");
-    expect(attest.uses).toMatch(/^actions\/attest-build-provenance@[0-9a-f]{40}$/);
-    // The pin policy in full, for the one action this unit adds: a full sha AND the exact version
-    // it resolves to, so a bump across a major cannot inherit a comment that still reads true.
-    expect(release.source).toContain(`uses: ${String(attest.uses)} # v4.2.2`);
-    expect(attest.with?.["subject-path"]).toBe("plugins/*.zip");
-
-    // `id-token` mints the Sigstore signing certificate, `attestations` persists the attestation,
-    // and `artifact-metadata` creates the artifact storage record — the three the action's own
-    // README requires. `contents: write` was already here for `gh release create` and now also
-    // pushes the distribution branch and its tag.
-    expect(publish.permissions).toEqual({
-      contents: "write",
-      "id-token": "write",
-      attestations: "write",
-      "artifact-metadata": "write",
-    });
-    expect(indexOf(publishSteps, "Verify plugin distribution digest")).toBeLessThan(
-      indexOf(publishSteps, "Attest plugin archives"),
-    );
-    expect(indexOf(publishSteps, "Attest plugin archives")).toBeLessThan(
-      indexOf(publishSteps, "Push plugin distribution"),
-    );
-  });
-
-  it("pushes one orphan commit and a tag no re-run can move", () => {
-    const step = stepOf(publishSteps, "Push plugin distribution");
-    const push = runOf(publishSteps, "Push plugin distribution");
-    expect(step.env?.["GH_TOKEN"]).toBe("${{ secrets.GITHUB_TOKEN }}");
-    expect(step.env?.["BRANCH"]).toBe("${{ needs.gates.outputs.plugins_branch }}");
-    expect(step.env?.["TAG"]).toBe("${{ needs.gates.outputs.plugins_tag }}");
-    expect(step.env?.["VERSION"]).toBe("${{ needs.gates.outputs.version }}");
-
-    expect(push).toContain("git init");
-    expect(push).toContain('git checkout -q --orphan "$BRANCH"');
-    expect(push).toContain("github-actions[bot]");
-    expect(push).toContain('git commit -q -m "plugins: v$VERSION from $GITHUB_SHA"');
-    // The branch head is REPLACED on every release by design — the tree is published whole, and a
-    // merge of two releases' catalogs would describe neither. Every prior release stays reachable
-    // through its own tag, which is why the TAG is the ref that fails closed rather than moving.
-    expect(push).toContain("git push --force");
-    expect(push).toContain("git ls-remote");
-    expect(push).toContain("Refusing to move a published distribution tag");
-    // After the npm publish: that is the release's irreversible step, and everything downstream
-    // of it is ordered against it rather than racing it.
-    expect(indexOf(publishSteps, "Publish to npm with provenance")).toBeLessThan(
-      indexOf(publishSteps, "Push plugin distribution"),
-    );
-  });
-
-  it("stamps the distribution commit into the release asset, never into the branch's own copy", () => {
-    const STAMP_STEP = "Stamp the release manifest with the distribution commit";
-    // The commit a tree lands on is the one fact the builder cannot know while it is building
-    // that tree, so `release.json` carries `distribution.commit: null` until it is pushed. The
-    // branch keeps that copy; the release ASSET is the stamped one, and the stamp runs after the
-    // push for the plain reason that the sha does not exist before it.
-    expect(indexOf(publishSteps, "Push plugin distribution")).toBeLessThan(
-      indexOf(publishSteps, STAMP_STEP),
-    );
-    expect(indexOf(publishSteps, STAMP_STEP)).toBeLessThan(
-      indexOf(publishSteps, "Create GitHub release"),
-    );
-    expect(runOf(publishSteps, "Push plugin distribution")).toContain(
-      'echo "PLUGINS_COMMIT=$DIST_COMMIT" >> "$GITHUB_ENV"',
-    );
-    expect(runOf(publishSteps, STAMP_STEP)).toContain("PLUGINS_COMMIT");
-  });
-
-  it("attaches the archives, their checksums and the manifest to the release", () => {
-    const create = runOf(publishSteps, "Create GitHub release");
-    for (const asset of ["plugins/*.zip", "plugins/*.sha256", "plugins/release.json"]) {
-      expect(create, `the release must carry ${asset}`).toContain(asset);
-    }
-    // Named as missing rather than skipped: a release that silently carried three of the four
-    // archives would be indistinguishable from a complete one on the release page.
-    expect(create).toContain("refusing to create a release that does not carry it");
-  });
-
-  it("documents the endpoints the attestation and the push reach, and what a rehearsal cannot prove", () => {
+  // ADDED (unit d3-ci-qa): the Sigstore hosts stay, because npm's provenance needs them, and the
+  // egress page says so now that it no longer has the plugin attestation to name.
+  it("keeps the provenance hosts on the publish job, and the egress page names no deleted route", () => {
     const page = readFileSync(join(REPO_ROOT, ".github", "release-egress.md"), "utf8");
-    const flowed = page.replaceAll(/\s+/g, " ");
     const publishAllow = allowlistOf(publishSteps);
-
-    // The attestation talks to the GitHub attestations API and to Sigstore's public-good
-    // instance. Every one of those hosts was already allowed for npm's own provenance, so this
-    // unit adds no destination — but the page has to say that the attestation NEEDS them, or a
-    // later edit that drops npm provenance would take the attestation's hosts with it.
     for (const host of [
-      "api.github.com",
+      "token.actions.githubusercontent.com",
       "fulcio.sigstore.dev",
       "rekor.sigstore.dev",
       "tuf-repo-cdn.sigstore.dev",
@@ -3564,21 +2657,12 @@ describe("release.yml — the only publishing path", () => {
       expect(publishAllow, `the publish job must reach ${host}`).toContain(`${host}:443`);
       expect(page, `release-egress.md must name ${host}`).toContain(host);
     }
-    // `github.com` carries the distribution branch and tag push, on the allowance
-    // `gh release create` already had. harden-runner stays fail-closed on every job.
-    expect(publishAllow).toContain("github.com:443");
+    expect(page).toContain("npm publish");
+    expect(page, "release-egress.md still lists the deleted apm-route job").not.toContain("apm-route");
+    expect(page, "release-egress.md still lists a plugin step").not.toMatch(/plugin (archives|distribution)/i);
     expect(
-      stepsOf(release, "publish").find((step) =>
-        (step.uses ?? "").startsWith("step-security/harden-runner@"),
-      )?.with?.["egress-policy"],
+      publishSteps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"))?.with?.["egress-policy"],
     ).toBe("block");
-    expect(page).toContain("plugin-dist");
-    // The honesty boundary this page exists for: a rehearsal cannot reach the publish job, so the
-    // observed-endpoint evidence for the attestation and the push lands only at the first real
-    // release. The page says that rather than implying these rows were observed.
-    expect(flowed, "release-egress.md must scope the rehearsal's evidence").toContain(
-      "rehearsal never reaches the publish job",
-    );
   });
 
   describe("a dry run cannot publish", () => {
@@ -3664,7 +2748,10 @@ describe("release.yml — the only publishing path", () => {
       //
       // TEST CHANGE, justified: the release now also publishes a plugin distribution — an orphan
       // branch, a tag and four archives — so the rehearsal has three more facts to name or it
-      // under-reports what a real run does. The field list grew; nothing was removed from it.
+      // under-reports what a real run does. TEST CHANGE, justified (2026-10-14, run
+      // 2026-10-14_cli-native, unit d3-ci-qa): 1.15.0 deletes the plugin route, so the release no
+      // longer publishes that distribution and the three facts leave; a rehearsal that named them
+      // would report a branch and archives a real run does not ship. The five npm facts stay.
       const report = summary.steps.map((step) => step.run ?? "").join("\n");
       for (const field of [
         "PACKAGE_NAME",
@@ -3672,22 +2759,12 @@ describe("release.yml — the only publishing path", () => {
         "TARBALL",
         "TARBALL_SHA256",
         "SBOM_PRESENT",
-        "PLUGINS_BRANCH",
-        "PLUGINS_TAG",
-        "PLUGINS_ARCHIVES",
       ]) {
         expect(report, `the summary must report ${field}`).toContain(field);
+        expect(summary.steps[0]?.env?.[field], `${field} must come from the gates job`).toMatch(/^\$\{\{ needs\.gates\.outputs\.\w+ \}\}$/);
       }
-      // The three new ones travel on the gates job's outputs, like every other value here.
-      for (const [name, output] of [
-        ["PLUGINS_BRANCH", "plugins_branch"],
-        ["PLUGINS_TAG", "plugins_tag"],
-        ["PLUGINS_ARCHIVES", "plugins_archives"],
-      ] as const) {
-        expect(summary.steps[0]?.env?.[name], `${name} must come from the gates job`).toBe(
-          `\${{ needs.gates.outputs.${output} }}`,
-        );
-      }
+      expect(report, "the summary still reports the deleted distribution").not.toMatch(/PLUGINS_|plugin/i);
+      expect(Object.keys(gates.outputs ?? {}).filter((key) => key.startsWith("plugins_"))).toEqual([]);
       expect(summary.permissions).toEqual({});
     });
   });
@@ -4106,309 +3183,14 @@ describe.skipIf(WINDOWS)("release.yml — the changelog extraction, executed", (
   });
 });
 
+// REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): "release.yml — the distribution
+// push and the stamp, executed", seven cases that ran the plugin distribution's push and manifest
+// stamp steps against a scratch bare remote. Both steps left with the plugin route, which 1.15.0
+// deletes; `fork-release.yml`'s copy of the push step left with it.
+
 // ── docs-site.yml ────────────────────────────────────────────────────────────
 
 /** A `workflow_dispatch` context for this workflow: main, and whatever the form supplied. */
-// ── release.yml: the distribution push and the manifest stamp, executed ──────
-
-/**
- * The two shell steps that publish the plugin distribution, RUN — the push against a scratch BARE
- * REMOTE, the stamp against a fixture manifest.
- *
- * Why running them rather than reading them. Both carry a property no substring match reaches.
- * The push must be IDEMPOTENT: a second run of the same release has to leave the branch and the
- * tag exactly where the first one left them, and a tag already naming another commit has to stop
- * the step rather than move a published pin. That is control flow plus git's own behaviour, and
- * the only way to know it holds is to run it twice and then run it against a poisoned remote. The
- * stamp must change exactly one field of a document a consumer reads as authoritative, and must
- * refuse a manifest that already carries a commit — which is what keeps the branch's copy (`null`)
- * and the release asset's copy (the sha) from ever being the same file by accident.
- *
- * The remote is reached through git's own `url.<base>.insteadOf` rewrite in a scratch global
- * config, so the step's script runs VERBATIM — the https remote it builds from `$GH_TOKEN` and
- * `$REPOSITORY` included — and git resolves it to a bare repository on disk. `GIT_CONFIG_SYSTEM`
- * and `HOME` are redirected with it, so a maintainer's own git config (signing, templates,
- * `init.defaultBranch`) cannot reach these runs.
- *
- * Not run on Windows, for the reason the two suites above are not: these are bash scripts GitHub
- * runs on ubuntu.
- */
-/** git, reading one value back out of a scratch repository. The sibling of `git` above. */
-function gitOut(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
-}
-
-describe.skipIf(WINDOWS)("release.yml — the distribution push and the stamp, executed", () => {
-  const root = mkdtempSync(join(tmpdir(), "stamity-plugin-dist-"));
-  afterAll(() => rmSync(root, { recursive: true, force: true }));
-
-  const publishStepsHere = stepsOf(release, "publish");
-  const PUSH = runOf(publishStepsHere, "Push plugin distribution");
-  const STAMP = runOf(
-    publishStepsHere,
-    "Stamp the release manifest with the distribution commit",
-  );
-
-  const VERSION = "1.9.0";
-  const BRANCH = "plugin-dist";
-  const TAG = `plugins/v${VERSION}`;
-  const SOURCE_SHA = "4e07408562bedb8b60ce05c1decfe3ad16b72230";
-  const TOKEN = "scratch-token";
-  const REPOSITORY = "zomarit/stamity";
-  const REMOTE_URL = `https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git`;
-
-  /** The one document both steps read, in the shape `scripts/plugins/releaseManifest.mjs` writes. */
-  const MANIFEST = {
-    schemaVersion: 1,
-    version: VERSION,
-    sourceCommit: SOURCE_SHA,
-    // A FIXED timestamp, and the reason the commit sha below is reproducible: the step stamps
-    // both git dates from this field, so one release builds one commit however often it runs.
-    sourceCommitDate: "2026-09-20T09:15:00+02:00",
-    distribution: { branch: BRANCH, tag: TAG, commit: null },
-    packages: [{ client: "claude", path: "claude", archive: `stamity-plugin-claude-${VERSION}.zip` }],
-  };
-
-  interface Scenario {
-    readonly dir: string;
-    readonly bare: string;
-    readonly env: Readonly<Record<string, string>>;
-  }
-
-  /**
-   * A stage directory holding `plugins/`, and a bare remote the step's https URL resolves to.
-   * `overrides` replace the step's inputs — what a rewritten manifest would have handed the
-   * gates job's outputs — without touching the staged tree.
-   */
-  function scenario(name: string, overrides: Readonly<Record<string, string>> = {}): Scenario {
-    const dir = join(root, name);
-    const bare = join(dir, "remote.git");
-    const configPath = join(dir, "gitconfig");
-    // A dot directory in the fixture on purpose: the step force-adds, so a `.gitignore` shipped
-    // by some dependency inside the bundled runtime cannot silently drop files from the commit.
-    mkdirSync(join(dir, "plugins", ".claude-plugin"), { recursive: true });
-    writeFileSync(join(dir, "plugins", "release.json"), `${JSON.stringify(MANIFEST, null, 2)}\n`);
-    writeFileSync(join(dir, "plugins", `stamity-plugin-claude-${VERSION}.zip`), "archive bytes\n");
-    writeFileSync(join(dir, "plugins", ".claude-plugin", "marketplace.json"), '{"name":"stamity"}\n');
-    git(dir, "init", "--bare", "-q", bare);
-    writeFileSync(configPath, `[url "${bare}"]\n\tinsteadOf = ${REMOTE_URL}\n`);
-    return {
-      dir,
-      bare,
-      env: {
-        PATH: `${dirname(process.execPath)}${delimiter}${process.env["PATH"] ?? ""}`,
-        HOME: dir,
-        GIT_CONFIG_GLOBAL: configPath,
-        GIT_CONFIG_SYSTEM: "/dev/null",
-        GIT_TERMINAL_PROMPT: "0",
-        GITHUB_SHA: SOURCE_SHA,
-        GH_TOKEN: TOKEN,
-        REPOSITORY,
-        VERSION,
-        BRANCH,
-        TAG,
-        ...overrides,
-      },
-    };
-  }
-
-  interface StepRun {
-    readonly status: number | null;
-    readonly out: string;
-    readonly stepEnv: string;
-  }
-
-  /** One run of the push step, from its own copy of the staged tree. */
-  function push(setup: Scenario, attempt: string): StepRun {
-    const workdir = join(setup.dir, attempt);
-    mkdirSync(join(workdir, "plugins", ".claude-plugin"), { recursive: true });
-    for (const relative of [
-      "release.json",
-      `stamity-plugin-claude-${VERSION}.zip`,
-      ".claude-plugin/marketplace.json",
-    ]) {
-      writeFileSync(
-        join(workdir, "plugins", relative),
-        readFileSync(join(setup.dir, "plugins", relative)),
-      );
-    }
-    const envPath = join(workdir, "github-env");
-    writeFileSync(envPath, "");
-    const result = spawnSync("bash", ["-c", PUSH], {
-      cwd: workdir,
-      encoding: "utf8",
-      env: { ...process.env, ...setup.env, GITHUB_ENV: envPath },
-    });
-    return {
-      status: result.status,
-      out: `${result.stdout}${result.stderr}`,
-      stepEnv: readFileSync(envPath, "utf8"),
-    };
-  }
-
-  const refOf = (bare: string, ref: string): string =>
-    gitOut(bare, "for-each-ref", "--format=%(objectname)", ref);
-
-  it("creates the branch and the tag from one orphan commit, hidden files included", () => {
-    const setup = scenario("first-push");
-    const run = push(setup, "attempt-1");
-
-    expect(run.status, run.out).toBe(0);
-    const head = refOf(setup.bare, `refs/heads/${BRANCH}`);
-    expect(head, "the branch must exist on the remote").toMatch(/^[0-9a-f]{40}$/);
-    // A lightweight tag on the same commit: `git ls-remote` answers the commit itself, which is
-    // what makes the idempotence comparison in the step a comparison of commits.
-    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(head);
-    // ORPHAN: one commit, no parent. A release's tree is published whole, so the branch carries
-    // no history to merge into and every prior release is reachable through its own tag.
-    expect(gitOut(setup.bare, "rev-list", "--count", head)).toBe("1");
-    expect(gitOut(setup.bare, "log", "-1", "--format=%an <%ae>", head)).toContain(
-      "github-actions[bot]",
-    );
-    expect(gitOut(setup.bare, "log", "-1", "--format=%s", head)).toBe(
-      `plugins: v${VERSION} from ${SOURCE_SHA}`,
-    );
-    const tree = gitOut(setup.bare, "ls-tree", "-r", "--name-only", head).split("\n");
-    expect(tree).toContain("release.json");
-    // The catalogs all live in dot directories; a commit that dropped them would still look
-    // complete from the release page.
-    expect(tree).toContain(".claude-plugin/marketplace.json");
-    // The commit the next step stamps into the release asset, handed on through the step env.
-    expect(run.stepEnv.trim()).toBe(`PLUGINS_COMMIT=${head}`);
-  });
-
-  it("moves neither ref on a second identical run", () => {
-    const setup = scenario("idempotent-push");
-    const first = push(setup, "attempt-1");
-    expect(first.status, first.out).toBe(0);
-    const head = refOf(setup.bare, `refs/heads/${BRANCH}`);
-
-    const second = push(setup, "attempt-2");
-
-    expect(second.status, second.out).toBe(0);
-    // Reproducible because both git dates are stamped from the manifest's source commit date
-    // rather than read from the clock: the same tree and message produce the same sha.
-    expect(refOf(setup.bare, `refs/heads/${BRANCH}`)).toBe(head);
-    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(head);
-    expect(second.out).toContain("already points at");
-  });
-
-  it("fails closed, and pushes nothing at all, when the tag already names another commit", () => {
-    const setup = scenario("poisoned-tag");
-    // A tag from some other build sitting on the release's tag name. Moving it would repoint a
-    // pin consumers already fetch, so the step must stop before it pushes anything.
-    const other = join(setup.dir, "other");
-    mkdirSync(other, { recursive: true });
-    git(other, "init", "-q", "-b", "main");
-    git(other, "config", "user.email", "ci@example.invalid");
-    git(other, "config", "user.name", "CI");
-    git(other, "commit", "-q", "--allow-empty", "-m", "another build");
-    git(other, "push", "-q", setup.bare, `HEAD:refs/tags/${TAG}`);
-    const poisoned = refOf(setup.bare, `refs/tags/${TAG}`);
-
-    const run = push(setup, "attempt-1");
-
-    expect(run.status).toBe(1);
-    expect(run.out).toContain("Refusing to move a published distribution tag");
-    expect(refOf(setup.bare, `refs/tags/${TAG}`), "the published tag must not move").toBe(poisoned);
-    expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "and nothing else may be pushed").toBe("");
-  });
-
-  it("refuses a tag outside the distribution namespace before it pushes anything", () => {
-    // SEC5-W1: the tag name reaches this job as a gates output read from a manifest written
-    // after third-party build code ran in that job's checkout. The shape — `<namespace>/v` and
-    // the version the gates job emitted — is what this job can check without spelling the name.
-    const setup = scenario("foreign-tag", { TAG: `v${VERSION}` });
-
-    const run = push(setup, "attempt-1");
-
-    expect(run.status).toBe(1);
-    expect(run.out).toContain("Refusing to publish under a tag");
-    expect(refOf(setup.bare, `refs/tags/v${VERSION}`), "nothing may be pushed").toBe("");
-    expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "nothing may be pushed").toBe("");
-  });
-
-  it("refuses to force-push over a branch whose head has a parent, leaving it untouched", () => {
-    // SEC5-W1: the branch name is the same kind of output. A rewritten manifest naming a source
-    // branch would have this job — the one holding the credential — replace that branch's head
-    // with an orphan. A distribution head has no parent; a source head does, and that is the
-    // check. The remote here holds `main`'s shape under the distribution branch's name.
-    const setup = scenario("branch-with-history");
-    const other = join(setup.dir, "other");
-    mkdirSync(other, { recursive: true });
-    git(other, "init", "-q", "-b", "main");
-    git(other, "config", "user.email", "ci@example.invalid");
-    git(other, "config", "user.name", "CI");
-    git(other, "commit", "-q", "--allow-empty", "-m", "first");
-    git(other, "commit", "-q", "--allow-empty", "-m", "second");
-    git(other, "push", "-q", setup.bare, `HEAD:refs/heads/${BRANCH}`);
-    const before = refOf(setup.bare, `refs/heads/${BRANCH}`);
-
-    const run = push(setup, "attempt-1");
-
-    expect(run.status).toBe(1);
-    expect(run.out).toContain(`${BRANCH}'s head ${before} has a parent`);
-    expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "the branch must not move").toBe(before);
-    expect(refOf(setup.bare, `refs/tags/${TAG}`), "and nothing else may be pushed").toBe("");
-  });
-
-  /** One run of the stamp step over a staged manifest, with the commit the push handed on. */
-  function stamp(name: string, commit: string, manifest: unknown = MANIFEST): StepRun {
-    const dir = join(root, name);
-    mkdirSync(join(dir, "plugins"), { recursive: true });
-    writeFileSync(join(dir, "plugins", "release.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-    const result = spawnSync("bash", ["-c", STAMP], {
-      cwd: dir,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        PATH: `${dirname(process.execPath)}${delimiter}${process.env["PATH"] ?? ""}`,
-        PLUGINS_COMMIT: commit,
-      },
-    });
-    return {
-      status: result.status,
-      out: `${result.stdout}${result.stderr}`,
-      stepEnv: readFileSync(join(dir, "plugins", "release.json"), "utf8"),
-    };
-  }
-
-  const DISTRIBUTION_COMMIT = "9f2c1b5d4e6a7f80b1c2d3e4f5a6b7c8d9e0f1a2";
-
-  it("writes the commit into the asset's manifest and changes nothing else about the document", () => {
-    const run = stamp("stamp-ok", DISTRIBUTION_COMMIT);
-
-    expect(run.status, run.out).toBe(0);
-    const stamped = JSON.parse(run.stepEnv) as { distribution: { commit: string } };
-    expect(stamped.distribution.commit).toBe(DISTRIBUTION_COMMIT);
-    // The same two-space document with a trailing newline the builder writes, and the same field
-    // order: a consumer diffing the asset against the branch's copy must see one line change.
-    expect(run.stepEnv).toBe(
-      `${JSON.stringify({ ...MANIFEST, distribution: { ...MANIFEST.distribution, commit: DISTRIBUTION_COMMIT } }, null, 2)}\n`,
-    );
-  });
-
-  it("refuses a manifest that already carries a distribution commit", () => {
-    // The branch's own copy is the one with `null`, and it is pushed BEFORE this step runs. A
-    // stamp that ran twice — or ran on a tree that was somehow already stamped — would mean the
-    // branch and the asset disagree about which commit the tree landed on.
-    const run = stamp("stamp-twice", DISTRIBUTION_COMMIT, {
-      ...MANIFEST,
-      distribution: { ...MANIFEST.distribution, commit: DISTRIBUTION_COMMIT },
-    });
-
-    expect(run.status).toBe(1);
-    expect(run.out).toContain("already carries");
-  });
-
-  it("refuses a distribution commit that is not a commit sha", () => {
-    const run = stamp("stamp-bad-commit", "HEAD");
-
-    expect(run.status).toBe(1);
-    expect(run.out).toContain("40-character");
-  });
-});
-
 const docsDispatch = (inputs: Readonly<Record<string, unknown>>): ExpressionContext => ({
   github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
   inputs,
@@ -4839,15 +3621,12 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
 
   it("reads only the secrets this repository knowingly holds", () => {
     // A closed list, so adding a secret is a decision recorded here rather than a line nobody
-    // reviews. GITHUB_TOKEN is the per-run token; ANTHROPIC_API_KEY arms the nightly headless
-    // lane and is absent by design, which that lane says out loud. ADDED by plan 008 file 3, unit
-    // V1w: CURSOR_API_KEY, COPILOT_GITHUB_TOKEN and CODEX_API_KEY arm the other three clients'
-    // invocation legs in the same lane, on the same terms — each absent one is a notice naming the
-    // leg that did not run, and none of them can reach a merge-blocking job, because the
-    // credential-free half of that route is what `plugin-route` in ci.yml gates on. The three
-    // names are a SECRET-side choice; the env-var each client actually honours is the vendor's and
-    // is cited at the drive step (`CURSOR_API_KEY` and `COPILOT_GITHUB_TOKEN` are the vendors' own
-    // spellings, while CODEX_API_KEY is mapped to `OPENAI_API_KEY` there). STAMITY_UPSTREAM_TOKEN is
+    // reviews. GITHUB_TOKEN is the per-run token. TEST CHANGE, justified (2026-10-14, run
+    // 2026-10-14_cli-native, unit d3-ci-qa): ANTHROPIC_API_KEY, CURSOR_API_KEY,
+    // COPILOT_GITHUB_TOKEN and CODEX_API_KEY leave the list. They armed the nightly headless lane's
+    // plugin-route invocation legs, which left with the plugin route that 1.15.0 deletes, so no
+    // workflow reads them; a client credential that came back would be a decision recorded here
+    // again. STAMITY_UPSTREAM_TOKEN is
     // read by the upstream lane's `publish` job alone, is absent here by design (this repository
     // is not a fork), and exists so a FORK can push a release that touches workflow files and
     // let the pull request's own CI start without the approval prompt — both limits of the
@@ -4863,10 +3642,6 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       ),
     );
     expect([...referenced].toSorted()).toEqual([
-      "ANTHROPIC_API_KEY",
-      "CODEX_API_KEY",
-      "COPILOT_GITHUB_TOKEN",
-      "CURSOR_API_KEY",
       "GITHUB_TOKEN",
       "STAMITY_REGISTRY_TOKEN",
       "STAMITY_UPSTREAM_TOKEN",
@@ -4915,7 +3690,8 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // on the named public candidate branch. packSigningRehearsal.test.ts pins that job's exact
     // read-plus-OIDC permissions and keeps its prepare/verify siblings at read only.
     // ADDED by plan 010, unit e1-fork-release-workflow: `fork-release.yml:publish` holds
-    // `contents: write` (the distribution branch, its tag and the GitHub release) and
+    // `contents: write` (the GitHub release; the distribution branch and its tag left with the
+    // plugin route in 1.15.0) and
     // `packages: write` (GitHub Packages), behind the probe's `armed` answer — never given in
     // this repository — and a `fork-release` environment. Its condition is evaluated over every
     // trigger shape in test/ci/forkReleaseWorkflow.test.ts.
@@ -4943,7 +3719,8 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // by the absolute path captured before any vendor install — `"$STAMITY_NODE_BIN" scripts/…` —
     // so the match admits that spelling beside the bare `node`. Nothing else is admitted: a script
     // reached any other way is a reference this guard would not see, which is the rot it exists
-    // to catch.
+    // to catch. (Those steps left with the plugin route in 1.15.0; the spelling stays admitted so a
+    // reference written that way is still checked rather than missed.)
     const referenced = ALL_STEPS.flatMap(([, , step]) =>
       Array.from(
         // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): the class
@@ -4960,13 +3737,10 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "scripts/generate-pack-manifests.mjs",
       "scripts/size-budget.mjs",
       "scripts/tarball-smoke.mjs",
-      "scripts/apm-install-smoke.mjs",
-      // ADDED by plan 008 file 3, unit V1w. This loop asserts the script is REFERENCED by some
-      // workflow step, which is a different question from whether it exists on disk — the loop
-      // below asks that one. So this entry is the guard that a merge-blocking lane still calls the
-      // plugin route smoke at all: delete the step and this fails, rename the script and the
-      // existence loop fails.
-      "scripts/plugin-route-smoke.mjs",
+      // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa):
+      // `scripts/apm-install-smoke.mjs` and `scripts/plugin-route-smoke.mjs` leave this list. No
+      // workflow step calls either now that 1.15.0 deletes both routes, and both scripts are
+      // deleted beside them; the loop after this one asserts no step calls a route script again.
       // ADDED by plan 013 file 3, unit sw06-records-only-ci-lane: the records-only classifier.
       "scripts/ci/records-only.mjs",
       // ADDED by unit a1-proven-push (2026-10-08): the proven-push reader.
@@ -4978,6 +3752,29 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     }
     for (const script of referenced) {
       expect(existsSync(join(REPO_ROOT, script)), `${script} must exist`).toBe(true);
+    }
+    for (const script of referenced) {
+      expect(script, "a workflow step still calls a deleted route script").not.toMatch(/plugin|apm/);
+    }
+  });
+
+  // ADDED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): 1.15.0 deletes the APM and
+  // plugin routes, so no workflow job, step, output or permission may name either one again. Read
+  // as data, the way GitHub reads it: a job id, a job or step name, a step id, a run body, an
+  // action input, an env value, an output or a permission key. Comments are not data and are not
+  // read here; the lane map's own case reads ci.yml's.
+  it("names no plugin or APM route in any job, step, output or permission", () => {
+    const ROUTE = /plugin|\bapm\b|apm-|attestations|artifact-metadata|setup-python/i;
+    let jobs = 0;
+    for (const [file, id, job] of ALL_JOBS) {
+      jobs += 1;
+      expect(id, `${file}:${id}`).not.toMatch(ROUTE);
+      expect(JSON.stringify(job), `${file}:${id}`).not.toMatch(ROUTE);
+    }
+    // Regex-rot guard: the walk read every job of the four files the deletion touched.
+    expect(jobs).toBeGreaterThan(10);
+    for (const file of ["ci.yml", "nightly.yml", "release.yml", "fork-release.yml"]) {
+      expect(ALL_JOBS.some(([jobFile]) => jobFile === file), file).toBe(true);
     }
   });
 

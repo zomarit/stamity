@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The QA harness: measures the fourteen form rows it can measure, binds all fourteen to the bytes
-// they were measured against, and writes one evidence file.
+// The QA harness: measures the nine form rows it can measure, binds all nine to the bytes they
+// were measured against, and writes one evidence file.
 //
 // WHAT THIS REPLACES. Nine rows of a manual walk-through have been carried to two releases reading
 // UNPERFORMED, which is honest and useless: nobody could tell which of them had gone stale and
@@ -18,17 +18,16 @@
 // `not-applicable` and says why, because a page with no grid contract cannot keep or break one.
 // Every status in the evidence file came from something that ran.
 //
-// WHAT IT BUILDS. Nothing. The caller builds the site (`cd website && npm run build`), the CLI
-// (`npm run build`) and the plugin distribution (`scripts/build-plugin-distribution.mjs`, passed as
-// `--dist`); this script reads all three. That split keeps the harness honest about staleness — it
-// hashes what is on disk and reports it, rather than regenerating inputs until they agree. A run
-// with no `--dist` is a run that measured no plugin route, and the five plugin rows — `H4a`–`H4d`
-// and `H5` — say exactly that.
+// WHAT IT BUILDS. Nothing. The caller builds the site (`cd website && npm run build`) and the CLI
+// (`npm run build`); this script reads both. That split keeps the harness honest about staleness —
+// it hashes what is on disk and reports it, rather than regenerating inputs until they agree. The
+// plugins lane, its five rows (`H4a`–`H4d`, `H5`) and its `--dist` and `--skip-plugins` options
+// left in 1.15.0 with the plugin route they measured.
 //
 // Usage:
 //   node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]
-//                           [--fixtures <dir>] [--dist <dir>] [--clients claude,codex,cursor,copilot]
-//                           [--skip-hooks] [--skip-browser] [--skip-plugins]
+//                           [--fixtures <dir>] [--clients claude,codex,cursor,copilot]
+//                           [--skip-hooks] [--skip-browser]
 //                           [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]
 //
 // A person's answers ride on the run that measures: `--walked` records the rows they walked as
@@ -45,7 +44,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { carryForward, hashFile, inputHashMap, recordHumanAnswers, rowHash } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
 import { exitDescription, runHookClients } from './hook-runs.mjs'
-import { runLifecycleWalk, runPluginClients } from './plugin-runs.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -145,27 +143,6 @@ const HOOK_INPUT_PATTERNS = {
   copilot: ['.github/hooks/stamity.json'],
 }
 
-/**
- * The one input an `H4` row is bound to when the plugin lane cannot run.
- *
- * A row bound to nothing has a constant hash, and a signature on it would never reopen however far
- * the instrument moved underneath it (the argument `hook-runs.mjs` makes for building its fixture
- * before probing for a binary). The smoke script is the part of the instrument that lives in this
- * repository, so every `H4` row carries it whether or not a distribution was passed.
- */
-const PLUGIN_SMOKE = 'scripts/plugin-route-smoke.mjs'
-
-/**
- * The instruments row `H5` is bound to when the walk did not run.
- *
- * A row that cannot be measured is still bound to something, or a signature on it would sit on a
- * constant hash forever; the two files here are the fixture builder and the suite that drives it, so
- * the row reopens when either moves. When the walk DOES run it returns its own input list, which
- * carries these two AND the fixture bytes it built — the suite hashes both, so a signature on a
- * measured row reopens when the instrument moves as well as when the corpus does.
- */
-const LIFECYCLE_INSTRUMENTS = ['scripts/plugin-lifecycle-fixture.mjs', 'test/ci/pluginLifecycle.test.ts']
-
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -185,9 +162,9 @@ const MIME = {
 /** The usage banner, so `--help` answers rather than sending the reader to the file. */
 export const USAGE =
   'Usage: node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]\n' +
-  '                               [--fixtures <dir>] [--dist <dir>]\n' +
+  '                               [--fixtures <dir>]\n' +
   '                               [--clients claude,codex,cursor,copilot]\n' +
-  '                               [--skip-hooks] [--skip-browser] [--skip-plugins]\n' +
+  '                               [--skip-hooks] [--skip-browser]\n' +
   '                               [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]'
 
 /**
@@ -198,13 +175,12 @@ function idList(value) {
   return (value ?? '').split(',').filter((id) => id !== '')
 }
 
-/** `--flag value` and `--flag` over argv. Deliberately small: this script takes thirteen options. */
+/** `--flag value` and `--flag` over argv. Deliberately small: this script takes eleven options. */
 export function parseArgs(argv) {
   const options = {
     clients: ['claude', 'codex', 'cursor', 'copilot'],
     skipHooks: false,
     skipBrowser: false,
-    skipPlugins: false,
     walked: [],
     acceptUnwalked: [],
   }
@@ -216,11 +192,9 @@ export function parseArgs(argv) {
     else if (arg === '--sha') { options.sha = next; i += 1 }
     else if (arg === '--out') { options.out = next; i += 1 }
     else if (arg === '--fixtures') { options.fixtures = next; i += 1 }
-    else if (arg === '--dist') { options.dist = next; i += 1 }
     else if (arg === '--clients') { options.clients = (next ?? '').split(',').filter((c) => c !== ''); i += 1 }
     else if (arg === '--skip-hooks') options.skipHooks = true
     else if (arg === '--skip-browser') options.skipBrowser = true
-    else if (arg === '--skip-plugins') options.skipPlugins = true
     else if (arg === '--walked') { options.walked.push(...idList(next)); i += 1 }
     else if (arg === '--accept-unwalked') { options.acceptUnwalked.push(...idList(next)); i += 1 }
     else if (arg === '--by') { options.by = next; i += 1 }
@@ -555,48 +529,6 @@ export async function main(argv) {
         ...(fixturesDir === undefined ? {} : { fixturesDir }),
       })
 
-  // The plugin lane needs a BUILT distribution, and this harness does not build one: a tree it had
-  // just made would be a tree it was reporting on rather than the tree under test (the same split
-  // the site and the CLI already follow). `--dist` is free to sit outside the repository — that is
-  // where `scripts/build-plugin-distribution.mjs` is normally pointed — because the row's labels are
-  // logical (`dist/<client>/…`), composed by the smoke and never from this argument.
-  const distDir = options.dist === undefined ? undefined : resolve(REPO_ROOT, options.dist)
-  // THE SMOKE OWNS ITS OWN SCRATCH, and this harness no longer hands it one.
-  //
-  // `--fixtures` used to be forwarded as the smoke's `--scratch`, which was wrong twice over: the
-  // smoke deliberately does NOT remove a scratch it was handed (so an operator debugging one
-  // client's install keeps the tree), and `--fixtures` is the hook lane's directory, whose contents
-  // this harness HASHES into `H1`'s inputs. Every plugins run therefore left a set of per-client
-  // install trees inside the directory another lane measures, one set per invocation. Given no
-  // `--scratch`, the smoke makes one under the OS temp directory and removes it itself
-  // (`scripts/plugin-route-smoke.mjs`, `ownScratch`) — one owner, one lifetime. The parameter below
-  // stays for an operator who passes a directory on purpose and wants to keep what lands in it.
-  const pluginResults =
-    options.skipPlugins || distDir === undefined
-      ? []
-      : await runPluginClients({
-          clients: options.clients,
-          repoRoot: REPO_ROOT,
-          distDir,
-        })
-  // The lifecycle walk (`H5`) is gated on the SAME two options as the route rows, and for the same
-  // reason: it reuses the distribution's own bundled runtime rather than packing this checkout again,
-  // so a run with no `--dist` has nothing to measure it against and says so instead of building one.
-  const lifecycleResult =
-    options.skipPlugins || distDir === undefined
-      ? undefined
-      : await runLifecycleWalk({
-          clients: options.clients,
-          repoRoot: REPO_ROOT,
-          distDir,
-        })
-  const smokeInputs = existsSync(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/')))
-    ? [{ path: PLUGIN_SMOKE, sha256: hashFile(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/'))) }]
-    : []
-  const lifecycleInstruments = LIFECYCLE_INSTRUMENTS.filter((path) => existsSync(join(REPO_ROOT, ...path.split('/')))).map(
-    (path) => ({ path, sha256: hashFile(join(REPO_ROOT, ...path.split('/'))) }),
-  )
-
   const rows = []
   for (const definition of QA_ROWS) {
     if (definition.lane === 'hooks') {
@@ -630,56 +562,6 @@ export async function main(argv) {
           inputs,
         }),
       )
-      continue
-    }
-
-    if (definition.lane === 'plugins') {
-      // Each row in this lane is bound to ITS OWN instrument: the route rows to the smoke, the
-      // lifecycle row to the fixture builder and the suite that drives it.
-      const laneInputs = definition.client === undefined ? lifecycleInstruments : smokeInputs
-      if (options.skipPlugins) {
-        rows.push(buildRow({ id: definition.id, status: 'not-run', reason: 'the plugins lane was skipped (--skip-plugins)', inputs: laneInputs }))
-        continue
-      }
-      if (distDir === undefined) {
-        rows.push(
-          buildRow({
-            id: definition.id,
-            status: 'not-run',
-            reason: 'no --dist directory: build the distribution and pass it',
-            inputs: laneInputs,
-          }),
-        )
-        continue
-      }
-      // The one plugins row with no client: the walk across all four at once.
-      if (definition.client === undefined) {
-        rows.push(
-          buildRow({
-            id: definition.id,
-            status: lifecycleResult?.status ?? 'not-run',
-            reason: lifecycleResult?.reason ?? 'the upgrade-and-rollback walk did not run',
-            inputs:
-              lifecycleResult?.inputs === undefined || lifecycleResult.inputs.length === 0
-                ? lifecycleInstruments
-                : lifecycleResult.inputs,
-          }),
-        )
-        continue
-      }
-      const result = pluginResults.find((row) => row.client === definition.client)
-      if (result === undefined) {
-        rows.push(
-          buildRow({
-            id: definition.id,
-            status: 'not-run',
-            reason: `client "${definition.client}" was not in --clients`,
-            inputs: laneInputs,
-          }),
-        )
-        continue
-      }
-      rows.push(buildRow({ id: definition.id, status: result.status, reason: result.reason, inputs: result.inputs ?? laneInputs }))
       continue
     }
 
