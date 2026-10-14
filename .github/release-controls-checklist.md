@@ -327,7 +327,7 @@ whose message names the records commit the release is gated on, as one line `rec
 (a tag named `origin/records` would win the short name). From the cut's `main` checkout:
 
 ```sh
-git fetch origin records
+git fetch origin +refs/heads/records:refs/remotes/origin/records
 records_sha=$(git rev-parse --verify 'refs/remotes/origin/records^{commit}')
 git tag -a vX.Y.Z -m "X.Y.Z" -m "records: $records_sha"
 git push origin vX.Y.Z

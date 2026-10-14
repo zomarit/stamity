@@ -47,8 +47,10 @@ const UNPORTABLE = [
 /** The plain-git repair a refusal names for a pair the records branch already holds, `<folder>` and `<old-spelling>` to fill. */
 // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit r1-release-machinery, inbox pr/9 and pr/10): the
 // printed worktree step spells the remote-tracking ref in full, since a tag named `origin/records` wins the short name.
+// TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, fix round 1, ledger review/48): the printed fetch
+// spells the records branch in full as well, since a tag named `records` on origin wins the short name's match.
 const REPAIR = [
-  "git fetch origin records",
+  "git fetch origin +refs/heads/records:refs/remotes/origin/records",
   "git worktree add --detach <folder> refs/remotes/origin/records",
   "git -C <folder> --literal-pathspecs rm -r --cached -- <old-spelling>",
   "git -C <folder> commit -q -m \"records: drop the old spelling\"",
@@ -622,6 +624,11 @@ describe("restore", { timeout: 60_000 }, () => {
     // a tag named `origin/records` on the commit before the pair; a step that spelled the ref short would check the
     // tag out, find no old spelling to drop, and fail, so the walk below proves every printed step names the branch.
     w.git(w.clone, "tag", "origin/records", upstream);
+    // ADDED (2026-10-14, run 2026-10-14_cli-native, fix round 1, ledger review/48): the remote-side twin. A tag named
+    // `records` on origin and this clone's remote-tracking ref left on the commit before the pair; a fetch that named
+    // the branch short would take the tag, leave the ref stale, and the worktree step would find no old spelling.
+    w.git(w.clone, "push", "-q", "origin", `${upstream}:refs/tags/records`);
+    w.git(w.clone, "update-ref", "refs/remotes/origin/records", upstream);
     // The prose ahead of the steps names the ref in full as well, where it says how to save a record first.
     expect(refused.lines[at]).toContain("git show refs/remotes/origin/records:<path>");
     // Each step run as printed, on this host's disk, the placeholders filled.
@@ -631,6 +638,8 @@ describe("restore", { timeout: 60_000 }, () => {
         .map((word) => (word === "<folder>" ? scratch : word === "<old-spelling>" ? ALPHA_UP : word));
       execFileSync("git", words.slice(1), { cwd: w.clone, env: w.env, stdio: "pipe" });
     }
+    // The origin tag goes again, so the reads of origin below name the branch alone.
+    w.git(w.origin, "tag", "-d", "records");
     const restored: Result = await records.restore(w.opts);
     expect(restored.code, restored.lines.join("\n")).toBe(0);
     const tree = w.tree("records");

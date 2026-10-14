@@ -3162,6 +3162,16 @@ describe("release-controls-checklist.md — the cut pins the records", () => {
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.filter((text) => /(?<![/\w])origin\/records/.test(text))).toEqual([]);
   });
+
+  // ADDED (2026-10-14, run 2026-10-14_cli-native, fix round 1, ledger review/48): the fetch ahead of the pin names the
+  // branch in full too; `git fetch origin records` takes a tag named `records` on origin and leaves the pin stale.
+  it("fetches the records branch by its full ref into its full remote-tracking ref", () => {
+    const fetches = [...checklist.matchAll(/```sh\n([\s\S]*?)```/g)]
+      .flatMap((match) => (match[1] ?? "").split("\n"))
+      .filter((line) => /\bgit fetch\b/.test(line) && /\brecords\b/.test(line));
+    expect(fetches.length).toBeGreaterThan(0);
+    expect(fetches.filter((line) => !line.includes("+refs/heads/records:refs/remotes/origin/records"))).toEqual([]);
+  });
 });
 
 // ── release.yml: the changelog extraction, executed ──────────────────────────

@@ -272,7 +272,8 @@ jobs:
       # `records:` line, and its value is exactly 40 lower-case hexadecimal characters; only then does
       # it reach a command. A refused value is never printed back, so nothing in a tag message reaches
       # the runner as a workflow command either. `records.mjs restore` then refuses a commit that is
-      # not in this checkout or that holds anything but records.
+      # not in this checkout or that holds anything but records. The annotated read relies on the pinned
+      # checkout keeping tag objects (it fetches tags ref to ref), so a refusal after a checkout bump points there.
       #
       # A rehearsal on a branch has no tag to read: the resolve step has already refused every run
       # that can publish from anything but a v* tag, so a run here on another ref publishes nothing,

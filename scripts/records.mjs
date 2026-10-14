@@ -257,7 +257,7 @@ const REPAIR = [
     'Drop it with plain git, from this checkout (on a disk that folds case too), <old-spelling> being the spelling you drop; ' +
     'a record only that spelling holds goes with it, so save it first (git show refs/remotes/origin/records:<path>) and publish it again under the spelling you keep:',
   ...[
-    'git fetch origin records',
+    'git fetch origin +refs/heads/records:refs/remotes/origin/records',
     'git worktree add --detach <folder> refs/remotes/origin/records',
     'git -C <folder> --literal-pathspecs rm -r --cached -- <old-spelling>',
     'git -C <folder> commit -q -m "records: drop the old spelling"',
