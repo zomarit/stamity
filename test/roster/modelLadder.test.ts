@@ -292,34 +292,49 @@ describe("the ladder table shipped in the work command", () => {
     // describes.
     // TEST CHANGE, justified (r3-ladder-sentence, REQ-LADDER-006): the anchor read "leaves
     // selection to the client's own default", the rule before the pick. The paragraph now states
-    // the pick's order (pin, the account's list, the shipped list, else no key), the escalation a
-    // per-call model cannot carry where the agent file's model outranks the call, and the
-    // refused-call fallback; the old sentence is asserted gone so the two rules cannot both ship.
+    // the resolver's whole order (the pin, re-picked when the account's saved list lacks it; the
+    // client's alias; the account's own list; the shipped list only when no list was read; else
+    // no key), the escalation a per-call model cannot carry where the agent file's model takes
+    // precedence, and the refused-call fallback; the old sentence is asserted gone so the two
+    // rules cannot both ship. Fix round 1 (review/102, review/103) added the re-pick and the alias
+    // rung to the sentence and to the behaviour checks below, and retired "outranks".
     // Wrapped lines are joined with one space above, so each sentence is matched whole and a
     // reflow of the paragraph does not fail it.
     expect(prose).toContain(
-      "A class resolves through its pin, then the account's own model list, then the shipped list; with none of these the key is left out.",
+      "A class resolves through its pin (re-picked when the account's saved list lacks it), then the client's alias, then the account's own model list, then, only when no list was read, the shipped list; with none of these the key is left out.",
     );
     expect(prose).not.toMatch(/leaves selection to the client's own default/);
     expect(prose).toContain(
-      "Where the agent file's model outranks the call's, a per-call escalation leaves it unchanged.",
+      "Where an agent file's model takes precedence over the call's, a per-call escalation leaves it unchanged.",
     );
+    // "Outranks" read as the ladder's strongest-to-cheapest rank, not precedence (review/103).
+    expect(prose).not.toMatch(/outranks/);
     expect(prose).toContain(
       "When a sub-agent call is refused with a list of models, take the class's first listed fallback, else the closest, and say so in one line.",
     );
     expect(prose).toMatch(/check effective dispatch\s+identity/);
     expect(prose).toMatch(/unresolved assignment/);
-    // The order the sentence states, rung by rung on one client, each rung answering differently
-    // so a reordering shows: the pin while the account lists it, then the account's own list (a
+    // The order the sentence states, rung by rung, each rung answering differently so a
+    // reordering shows. On a client that lists its account: the pin while the account lists it,
+    // the pin re-picked from the list when the list lacks it, then the account's own list (a
     // shipped candidate other than entry 0), then the shipped list's entry 0 with no list read.
+    // A saved list holding none of a class's candidates is unit e8's rung to test.
     const shipped = MODEL_PRIORITY.codex.standard.map((candidate) => candidate.id);
     const second = shipped[1];
     if (second === undefined) throw new Error("the shipped codex list needs two standard candidates");
     expect(
       resolveModelValue("standard", "codex", { standard: "pinned-id" }, {}, { listed: ["pinned-id", second] }),
     ).toBe("pinned-id");
+    expect(resolveModelValue("standard", "codex", { standard: "pinned-id" }, {}, { listed: [second] })).toBe(second);
     expect(resolveModelValue("standard", "codex", {}, {}, { listed: [second] })).toBe(second);
     expect(resolveModelValue("standard", "codex", {}, {}, {})).toBe(shipped[0]);
+    // The alias rung, on the client that publishes aliases: with no pin the class resolves to the
+    // alias, list or no list, so the key is written, not left out; a pin still comes first.
+    const alias = projection("claude").aliases.standard;
+    if (alias === undefined) throw new Error("the aliased client needs a `standard` alias");
+    expect(resolveModelValue("standard", "claude", {}, {}, {})).toBe(alias);
+    expect(resolveModelValue("standard", "claude", {}, {}, { listed: [second] })).toBe(alias);
+    expect(resolveModelValue("standard", "claude", { standard: "pinned-id" }, {}, {})).toBe("pinned-id");
     // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-006, REQ-LADDER-007): this loop
     // asserted the top class resolved on no client with no pin. Claude Code now maps it to its
     // documented `fable` alias and the pick resolves Copilot and Codex from the shipped list, so the
