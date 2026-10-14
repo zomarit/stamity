@@ -3,8 +3,10 @@
 //
 // Usage: node scripts/merge-ready-rate.mjs [--json] [--write]
 //        --json   prints the report object instead of the human summary.
-//        --write  freezes the report into evals/measurements/merge-ready-<today>.json,
-//                 which is what docs/measurements.md renders from. Refuses to
+//        --write  freezes the report into evals/measurements/merge-ready-<today>.json.
+//                 docs/measurements.md renders the snapshot MEASUREMENT_SNAPSHOT_PATH
+//                 pins, not this file, until the file is published to the records
+//                 branch and the pin moves (the hint --write prints). Refuses to
 //                 overwrite an existing snapshot.
 //
 // Thin by design, the way scripts/generate-docs.mjs is: every rule lives in

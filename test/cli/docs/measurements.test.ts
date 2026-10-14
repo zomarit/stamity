@@ -57,6 +57,7 @@ import {
 } from "../../../src/cli/docs/measurements.ts";
 import { LLMS_INDEX_SECTIONS } from "../../../src/cli/docs/llmsIndex.ts";
 import { EngineError } from "../../../src/types/errors.ts";
+import { canonical, canonicalOnly, repositoryRoute } from "../../support/identity.ts";
 
 /**
  * The gate on the measurements page and on the rule behind it.
@@ -495,10 +496,19 @@ describe("renderMeasurements — drift gate", () => {
       expect(snapshot.path.startsWith(`${SNAPSHOT_DIR}/`)).toBe(true);
       expect(snapshot.path).toBe(MEASUREMENT_SNAPSHOT_PATH);
       expect(page).toContain(`[\`${snapshot.path}\`](${RECORDS_BLOB_URL}${snapshot.path})`);
-      expect(page).toContain(SNAPSHOT_REFRESH_COMMAND);
-      expect(page).toContain(
-        "run record written after it is not on this page until the next refresh",
-      );
+      // TEST CHANGE, justified (2026-10-14, unit r2-measurements-page, review/15 of this run): the
+      // page said its snapshot was "committed beside this page" and refreshed by `--write` alone.
+      // It renders the pinned snapshot, which lives on `records`, so `--write` and a regenerate
+      // leave the page as it was. The pins now hold the three steps that move the figures, and
+      // the sentence's old claim is held absent. Read with line breaks folded to spaces, so the
+      // pins hold the wording rather than where the prose wraps.
+      const prose = page.replace(/\n/g, " ");
+      expect(prose).toContain("the frozen measurement this page pins; the snapshots live on the `records` branch");
+      expect(prose).toContain(`\`${SNAPSHOT_REFRESH_COMMAND}\` freezes a new snapshot`);
+      expect(prose).toContain("`node scripts/records.mjs commit -m <message>` publishes it");
+      expect(prose).toContain("the pin moves in the `main` commit that regenerates this page");
+      expect(prose).toContain("run record written after the pinned snapshot is not on this page until then");
+      expect(prose).not.toContain("committed beside this page");
     });
   });
 
@@ -2060,6 +2070,18 @@ describe("the measurement inputs", () => {
     expect(RECORDS_BLOB_URL.endsWith("/blob/records/")).toBe(true);
     expect(RECORDS_BLOB_URL).toMatch(/^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/records\/$/);
   });
+
+  // ADDED 2026-10-14, unit r2-measurements-page, review/12 of this run: the shape check above lets a
+  // wrong owner or repository through, and every expected link is built from the same constant, so
+  // nothing else would notice. The canonical checkout holds the exact value, derived from its own
+  // `package.json` route rather than spelled; a fork, whose route the source constant does not
+  // follow, skips it with its reason printed.
+  it.skipIf(!canonical().canonical)(
+    canonicalOnly("links records into this repository's own records branch"),
+    () => {
+      expect(RECORDS_BLOB_URL).toBe(`https://github.com/${repositoryRoute().slug}/blob/records/`);
+    },
+  );
 });
 
 /**

@@ -12,9 +12,11 @@ rendered. Every number below is computed from a committed artifact, so a claim h
 checked rather than believed.
 
 The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-13.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-13.json), the frozen
-measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
-(the release checklist's record-currency line); the snapshot named above is the input, and a
-run record written after it is not on this page until the next refresh.
+measurement this page pins; the snapshots live on the `records` branch. A release moves the
+figures in three steps (the release checklist's record-currency line): `node scripts/merge-ready-rate.mjs --write`
+freezes a new snapshot, `node scripts/records.mjs commit -m <message>` publishes it, and the pin
+moves in the `main` commit that regenerates this page. A run record written after the pinned
+snapshot is not on this page until then.
 
 ## Verified merge-ready rate
 
