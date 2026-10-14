@@ -1,6 +1,7 @@
 ---
 id: apm-canonical-distribution
-# A design document, authored outside the spec command, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, and excluded from the site build.
+# A design document, authored outside the spec command, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md).
 status: shipped-with-1.4.0
 obsolete_when: the getting-started page and the README carry the route and its client floor, and the mirror repository no longer exists
 ---
@@ -82,6 +83,13 @@ is accepted rather than worked around, because every workaround (a subdirectory 
 second repository, stripping tracked files) reintroduces the second copy this decision removes.
 If APM gains a package-side include list, the projection can adopt it in the generator.
 
+Amended 2026-10-14 (plan 014 file 2, run `2026-10-13_records-branch`): the "870 files and 19 MB" above were counted
+before the records left `main`. Since then the run records, the plans, the eval runs and the measurement snapshots live
+on the orphan `records` branch (REQ-PROVE-023 in `docs/specs/prove-behavior-and-value.md`), which a clone of `main` or
+of a `v*` tag does not carry, so the vendored tree holds the source, the tests, the current eval inputs and the site.
+Its size after the move is not measured: the plan's measurement of it was skipped, and no figure here replaces the
+older one. The vendored-tree note in `docs/getting-started.md:127-130` states no figure and is unchanged.
+
 ### The client floor, and why it cannot be enforced package-side
 
 The minimum tested client is **0.29.1**; the current stable, also tested, is **0.30.0**. No
@@ -130,7 +138,11 @@ symptom into a failure on its own.
   `a2-ci-lanes`; it read "on every change that is not records-only" and "A change whose every path
   is a record — under `.stamity/runs/`, `.stamity/handoffs/` or `docs/plans/`, or
   `.stamity/inbox.md` — skips `apm-install` beside `check` and `plugin-route`, and the `records`
-  job runs in their place", citing `.github/workflows/ci.yml:19-31` at `b855876a`.)
+  job runs in their place", citing `.github/workflows/ci.yml:19-31` at `b855876a`.
+  Amended 2026-10-14, plan 014 file 2, unit `r5-ci-records-job`: the records lane is retired (REQ-PROVE-031), so no
+  change is records-only and no job reads `records_only`. `apm-install` carries the lane and proven-push condition
+  alone (`.github/workflows/ci.yml:497-500` at `4d003d60`), and `ci.yml`'s `records` job runs beside it, never in its
+  place. The text above holds as written.)
 - REQ-APM-003 — `release.yml` runs the smoke against the canonical remote at the release SHA
   in its separate, credential-free `apm-route` job. That job runs independently of `gates`
   and cannot access its packed artifact; `publish` requires both jobs to pass. This is a
@@ -227,6 +239,8 @@ determinism, and a resolver smoke reading `.apm/` only proves delivery of that p
   verifies its supported deployed classes without a write credential or the npm artifact.
 - GIVEN a published canonical release WHEN its tag route is checked THEN the tag and
   lockfile resolve to the recorded release commit and installed-content checks pass.
+- GIVEN `ci.yml` THEN the `apm-install` job carries no records-only condition (REQ-APM-002's
+  amendment of 2026-10-14; `test/ci/workflow.test.ts`, the aggregator's `records_only` absence).
 
 ## Public and private downstream contract (2026-09-10)
 

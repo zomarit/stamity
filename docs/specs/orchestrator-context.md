@@ -1,7 +1,8 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
@@ -69,6 +70,15 @@ It re-pointed to that run's integration head `3415e721`, outside the Context sec
 REQ-CTX-005, which rounds before it had already moved off their text. Those citations read at `3415e721` wherever
 another paragraph of this preamble, or a line beside the citation, names an older head for them. Every other citation of those five files, outside the Context section,
 holds its text there, and the Context section's stay at `fed39ac`.
+
+On 2026-10-14 the spec merge of run `2026-10-13_records-branch` (plan 014 file 2, re-planned in that run) amended two of
+REQ-CTX-006's criteria, each marked "Amended 2026-10-14" and citing the branch head `4d003d60`: the ledgers are records
+now, read from disk by the records suite (`npm run test:records`), and the merge-ready equality is held over a
+synthetic fixture under `npm test`. The same day the records moved to the `records` branch (REQ-PROVE-023 in
+`docs/specs/prove-behavior-and-value.md`): every path in this file that names one of this repository's own records,
+under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`,
+`evals/measurements/` or `evals/reach/`, reads on that branch, and its citation keeps its text. A path of the run layout
+a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -1299,11 +1309,19 @@ command again whenever this section grows; do not count by eye.
 
 **REQ-CTX-006**
 
-- GIVEN `test/records/ledgers.test.ts` WHEN it validates every committed ledger THEN:
+- GIVEN the records restored by `node scripts/records.mjs restore` WHEN `npm run test:records`
+  validates every `ledger.jsonl` under `.stamity/runs/` on disk THEN:
   - it admits `report` (a string) and `decision_needed` (only the value `true`) beside
     `retired`;
   - it still refuses any other unknown field;
   - it still asserts exactly the states `open`, `fixed`, `deferred` and `rejected`.
+
+  (Amended 2026-10-14: it read "GIVEN `test/records/ledgers.test.ts` WHEN it validates every
+  committed ledger THEN:". The ledgers are records on the `records` branch, read from disk in
+  `test/records/ledgers.test.ts` after a restore, never through `git ls-files`; a run whose
+  `record.md` still reads `Status: in progress` in its first 15 lines is left out with one printed
+  line, and a closed run's `open` row still fails, as the fixtures in
+  `test/runs/ledgerGates.test.ts` hold.)
 - GIVEN a block holding one finding with `"decision_needed":true` and one with
   `"decision_needed":false` WHEN append runs THEN the first row carries
   `"decision_needed":true` and the second carries no `decision_needed` key.
@@ -1313,10 +1331,15 @@ command again whenever this section grows; do not count by eye.
 - GIVEN a changed-shape replay run holding a `decision_needed: true` row WHEN its transcript is
   read THEN the orchestrator's sign-off for that id precedes every fixer dispatch naming it.
   `judgment: reviewer`
-- GIVEN a ledger whose rows carry `report` and `decision_needed` WHEN
-  `src/cli/docs/measurements.ts` and `scripts/merge-ready-rate.mjs` read it THEN each reports
-  the same open-row count and the same rate it reports for the same rows with those two keys
-  removed.
+- GIVEN a synthetic run fixture whose ledger rows carry `report` and `decision_needed` WHEN
+  `computeMergeReadyRate` reads it under `npm test` THEN it reports the same open-row count and
+  the same rate it reports with those two keys removed. (Amended 2026-10-14: it read "GIVEN a
+  ledger whose rows carry `report` and `decision_needed` WHEN `src/cli/docs/measurements.ts` and
+  `scripts/merge-ready-rate.mjs` read it THEN each reports the same open-row count and the same
+  rate it reports for the same rows with those two keys removed". The script is a thin front end
+  over `computeMergeReadyRate`, and a fixture holds the equality with no record on disk:
+  `test/cli/docs/measurements.test.ts`, the describe "the merge-ready rate over ledger rows that
+  carry report and decision_needed".)
 
 **REQ-CTX-007**
 

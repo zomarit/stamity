@@ -1,6 +1,7 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.14.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -33,6 +34,8 @@ that names run `2026-10-08_maintainer-tooling` under REQ-PROVE-009, REQ-PROVE-01
 come from that run's spec deltas (plan 019 file 1), each taken from the latest unit or fixer report that states it
 and read against the integration head `47acb16e`; they shipped with 1.14.0. The ids REQ-PROVE-023 to 025 belong to
 `docs/plans/014-lean-repository-02.md`, which has not merged, so the ids here leave a gap; REQ-PROVE-026 to 029 are unallocated.
+(Amended 2026-10-14: that plan's second file merged its spec delta here, so REQ-PROVE-023 to 025 now stand at their
+reserved ids, below; REQ-PROVE-026 to 029 stay unallocated.)
 The amendment dated 2026-10-09 to REQ-PROVE-031 comes from the spec delta of run `2026-10-08_product-core` (plan 019
 file 2), unit `p2c-ci-lanes-from-map`, merged by its unit `p9-spec-merge`; it cites the integration head `90710ba5`
 and shipped with 1.14.0. The amendment dated 2026-10-09 to REQ-PROVE-009 comes from the same run's close (ledger
@@ -46,6 +49,14 @@ on run 46, comes from the same run; it cites the run files at `60f2e889` and shi
 2026-10-13 to REQ-PROVE-009 comes from run `2026-10-13_lean-repository` (plan 014 file 1), unit
 `f4-retire-superseded-eval-inputs`; it cites the tree at `7327f435`, as does the checklist citation in REQ-PROVE-020's
 first paragraph, repointed in the same run.
+REQ-PROVE-023 to REQ-PROVE-025, and the text dated 2026-10-14 under REQ-PROVE-009, REQ-PROVE-016, REQ-PROVE-017,
+REQ-PROVE-020, REQ-PROVE-021, REQ-PROVE-030, REQ-PROVE-031, REQ-PROVE-033 and REQ-PROVE-036, come from the spec delta
+of `docs/plans/014-lean-repository-02.md` (plan 014 file 2) as re-planned in run `2026-10-13_records-branch`, and from
+the deltas its units' reports declared, merged at that run's Prove phase. They cite the branch head `4d003d60`, where
+the records had left `main`; they ship with the next release. A sign-off named `S<n>` there is that night's, recorded
+in the "Sign-offs" section of `.stamity/runs/2026-10-13_lean-repository/record.md`. The records moved to the `records`
+branch the same day: every path in this file that names one of this repository's own records reads on that branch
+(REQ-PROVE-023), and a citation of one keeps its text.
 
 ## Intent
 
@@ -325,7 +336,10 @@ closing clause.)
   (`.github/release-controls-checklist.md:223-227`), and the CHANGELOG's `### Removed` bullet names the tag and its
   commit (`CHANGELOG.md:130-144`). The precedent is the replay's retirement, `CHANGELOG.md:1238-1242` and
   `docs/specs/orchestrator-context.md:634-641`.
-- **Proof:** the full gate and `test/evals/rubricCoreHash.test.ts`; docs (`evals/README.md`, the CHANGELOG).
+- **Proof:** the full gate and `test/records/rubricCoreHash.test.ts`, which `npm run test:records` runs (REQ-PROVE-025);
+  docs (`evals/README.md`, the CHANGELOG). (Amended 2026-10-14, plan 014 file 2, unit `r1b-records-suite-eval-cases`;
+  it read "`test/evals/rubricCoreHash.test.ts`", under the full gate. The file moved whole to the records suite because
+  it reads the newest run's `inputs.json` under `evals/runs/`, a record; `npm test` no longer runs it.)
 
 - GIVEN the repository WHEN the eval gates run THEN they resolve `SET-v7.md` and `cases-v6/` with
   SET-v6's thresholds, and a successor-inputs test proves `cases-v5`'s Expected blocks survive.
@@ -487,21 +501,34 @@ with it, pinned to `RENAME_RETRY_COUNT` (`…hooks/scripts.test.ts:2279`). The r
 
 ### REQ-PROVE-016 — Spec status gate
 
-A records test requires every `docs/specs/*.md` `status` to read `design`, `shipped` or
-`shipped-with-<semver>` and refuses `draft`; a spec named by a plan whose `stamp:` commit precedes the
-newest `v*` tag may not read `design` either (`test/records/specStatus.test.ts:47`). At `949bde9`
+A test requires every `docs/specs/*.md` `status` to read `design`, `shipped` or `shipped-with-<semver>`, and refuses
+`draft`. It reads `docs/specs/` alone and runs under `npm test`. A spec named by a plan whose `stamp:` commit precedes
+the newest `v*` tag may not read `design` either. That half reads `docs/plans/` from the restored records
+(REQ-PROVE-023) and runs in the records suite (REQ-PROVE-025). At `949bde9`
 `implementation-finish.md:3` is `draft`, and `workspace-surface.md:4`, `worktree-lane.md:4` and
 `overlay-layers.md:4` are `design` → `shipped-with-1.7.0` and three `shipped-with-1.1.0`.
 
-- GIVEN a spec reading `draft` WHEN the records test runs THEN it fails naming the file and the three
-  forms; one reading `design` that a pre-tag plan names fails naming the plan and the tag when it defines
-  no requirement id or a file under `test/` cites one of its ids, and passes while no test cites any.
+- GIVEN a spec reading `draft`, in a checkout with no `docs/plans/`, WHEN `npm test` runs THEN it fails naming the file
+  and the three forms. GIVEN a spec reading `design` that a pre-tag plan names WHEN `npm run test:records` runs THEN it
+  fails naming the plan and the tag when it defines no requirement id or a file under `test/` cites one of its ids, and
+  passes while no test cites any.
 
 Amended 2026-10-08 (run `2026-10-07_release-1-12-0`, unit `e3-spec-status-written-ahead`; cited at
 `ee2a0e3d`). A `design` spec a pre-tag plan names is flagged only when it defines no `REQ-<AREA>-<nnn>` id
 or a file under `test/` cites one of the ids it defines, both read from the tree, so a spec a plan wrote
 ahead of the release that builds it (`board-writes.md` at the 1.12.0 cut) keeps `design`
 (`test/records/specStatus.test.ts:190-232`, the tree's citations at `:288-304`).
+
+Amended 2026-10-14 (plan 014 file 2, unit `r1-records-suite`; cited at `4d003d60`). The paragraph's first sentence read
+"A records test requires every `docs/specs/*.md` `status` to read `design`, `shipped` or `shipped-with-<semver>` and
+refuses `draft`; a spec named by a plan whose `stamp:` commit precedes the newest `v*` tag may not read `design` either
+(`test/records/specStatus.test.ts:47`)", and the criterion ran both halves under "the records test". The plans are
+records now, so the gate splits along what it reads, and the "passes while no test cites any" clause of 2026-10-08 is
+kept. The vocabulary is `STATUS_VOCABULARY` (`test/support/specStatusRules.ts:24`), held over `docs/specs/` by "holds
+every spec's status to the declared vocabulary" (`test/authoring/specStatusRules.test.ts:47-54`), beside the fixture
+cases (a)–(h), all under `npm test`. The plans are read when the records file loads
+(`test/records/specStatus.test.ts:135-143`), and its shipped check, "leaves no spec reading `design` that a released
+plan shipped" (`:171-184`), runs in the records suite, over the tags and `main`'s history.
 
 ### REQ-PROVE-017 — Eval documentation currency
 
@@ -522,6 +549,28 @@ that the manual runner documented there runs the full set. Amended 2026-10-08 (r
 `2026-10-08_maintainer-tooling`, unit `c3-release-rules`): the checklist's eval line reads the
 change-aware rule of REQ-PROVE-033, and each per-release line names the trigger it runs on
 (REQ-PROVE-034).
+
+Amended 2026-10-14 (plan 014 file 2, unit `r7-remove-records-from-main` and its fix round; cited at `4d003d60`). The run
+artifacts now live on the `records` branch (REQ-PROVE-023), the route of record's protocol
+`evals/runs/2026-09-11-run-24/PROTOCOL.md` included. `evals/README.md`'s path table links that protocol as
+`https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-11-run-24/PROTOCOL.md` and the runs folder on the
+same branch, and the protocol row still names `stamity-claude-cli-v1` (`evals/README.md:34-35`); the page says a run's
+directory is written in the checkout and published to `records` with `node scripts/records.mjs commit` (`:518-520`,
+`:577-579`). The checklist's eval line has the release carry its composed artifact under `evals/runs/` on the `records`
+branch, published before the tag; the `main` commit that moves `evals/run-of-record.json` to that run follows the
+publish; and the release notes record `git rev-parse origin/records` at the cut and link the evidence at that commit, so
+a later push to `records` cannot change what the tag cites (`.github/release-controls-checklist.md:214-224`). Two eval
+inputs still say to commit `RESULTS.md` with the change that caused the run: step 6 of the eval-run skill and
+`evals/SET-v7.md`'s run-artifact contract. Editing either is a trigger of the release eval (REQ-PROVE-033), so their
+rewrite is deferred to the 1.15.0 release's preparation, whose release runs the full set anyway; until then `guard`
+refuses a run committed to `main`, and the checklist names the publish step.
+
+- GIVEN `evals/README.md` THEN its protocol row and its runs row link the `records` branch, the protocol row names
+  `stamity-claude-cli-v1`, AND the current-rubric row still equals the default profile's `rubric`
+  (`test/evals/readmeCurrency.test.ts`). GIVEN every link on `main`'s pages into the `records` branch THEN it names a
+  record file the branch holds (`test/records/docsPages.test.ts`, "resolves every records-branch link to a record file
+  the branch holds"). No test refuses a repo-relative record link on `evals/README.md` itself; that the page carries
+  none is `judgment: reviewer`.
 
 ### REQ-PROVE-018 — Hand pages re-attested
 
@@ -558,12 +607,15 @@ read date, no URL, the hand-page link policy admitting only this repository's Gi
 
 ### REQ-PROVE-020 — Measurement report
 
+> The records moved to the `records` branch on 2026-10-14. Every path below under `.stamity/runs/`, `.stamity/evidence/`,
+> `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/`
+> reads on that branch.
+
 `scripts/merge-ready-rate.mjs` computes the verified merge-ready rate from committed run records —
 denominator, numerator, exclusions by run id (a record reading in progress among them), merge evidence
 reported per run and never scored (`src/cli/docs/measurements.ts:258`, `:485-607`). `docs/measurements.md`
-(absent at `949bde9`) renders from the committed snapshot `evals/measurements/merge-ready-<date>.json` —
-5 of 7 at the first — refreshed per release by `node scripts/merge-ready-rate.mjs --write`
-(`.github/release-controls-checklist.md:322-328`), beside a committed npm-download snapshot labelled a
+(absent at `949bde9`) renders from the one snapshot `evals/measurements/merge-ready-<date>.json` that `main` pins —
+5 of 7 at the first — and a release moves the pin (amended 2026-10-14, below), beside an npm-download snapshot labelled a
 reach proxy; it enters roster, sidebar, `llms.txt` and the README map (`src/cli/docs/llmsIndex.ts:263-271`,
 `website/sidebars.ts:57`, `llms.txt:40`, `test/docsPages.test.ts:539-542`),
 and doctrine and getting-started link the run of record and the first-run proof lanes without touching
@@ -846,6 +898,70 @@ The note beside run 46 (`evals/runs/2026-10-12-run-46/NOTE.md`) says what its PA
 corrects its results file's closing sentence (`:433`) as run 45's note does. No requirement's
 normative sentence changes.
 
+Amended 2026-10-14 (plan 014 file 2, units `r2-measurements-page`, `r2b-measurements-cases` and `r3-hand-page-links`;
+cited at `4d003d60`). The first paragraph's second sentence read "`docs/measurements.md` (absent at `949bde9`) renders
+from the committed snapshot `evals/measurements/merge-ready-<date>.json` — 5 of 7 at the first — refreshed per release
+by `node scripts/merge-ready-rate.mjs --write` (`.github/release-controls-checklist.md:322-328`), beside a committed
+npm-download snapshot labelled a reach proxy". Since the records left `main`:
+
+`docs/measurements.md` stays on `main` as a generated page. Its inputs are named on `main` and live on the `records`
+branch (REQ-PROVE-023). There are four: the run of record's results file, named by `evals/run-of-record.json` through
+`readRunOfRecord`; the prior complete run's results file, which a composed run of record names in its
+`## 0. Composition` section; the reach snapshot, `REACH_SNAPSHOT_PATH`; and the merge-ready snapshot,
+`MEASUREMENT_SNAPSHOT_PATH`, which names one `evals/measurements/merge-ready-<date>.json` and replaces the
+newest-by-filename pick (`src/cli/docs/measurements.ts:97`, `:100`, `:111`; `measurementInputs`, `:1344-1357`;
+`readMeasurementSnapshot`, `:1181-1198`). A `NOTE.md` beside the run of record stays optional and is no input. A new
+snapshot on `records` changes nothing until `main` moves the pin.
+
+- **The release's three steps.** `node scripts/merge-ready-rate.mjs --write` freezes a snapshot in the checkout,
+  `node scripts/records.mjs commit -m <message>` publishes it, and the pin moves in the `main` commit that regenerates
+  the page, all before the tag. The page says so (`docs/measurements.md:14-19`, rendered from
+  `src/cli/docs/measurements.ts`), as do the script's header (`scripts/merge-ready-rate.mjs:6-10`) and the checklist's
+  record-currency line, which now cites `.github/release-controls-checklist.md:328-341`.
+- **No records, some records.** With none of the inputs on disk, `node scripts/generate-docs.mjs --page all` skips the
+  page with a notice naming the missing inputs and `node scripts/records.mjs restore`. With some but not all, or under
+  `--page measurements` with any missing, it exits 1 naming them, before any page is written
+  (`scripts/generate-docs.mjs:93-105`; `measurementsAction`, `src/cli/docs/measurements.ts:1372-1376`). A prior run
+  named but absent is a partial restore and is refused.
+- **Record links.** The page links each record as `https://github.com/zomarit/stamity/blob/records/<path>`
+  (`RECORDS_BLOB_URL`, `:117`), and a link into a `main` path stays relative. The record links on `README.md`,
+  `docs/doctrine.md` and `docs/enterprise-forks.md` take the same form.
+- **One composition link.** The page still words one composition link and refuses a run of record whose prior run is
+  itself composed, so run 45 stays the run of record until the next release's eval run replaces it (S11).
+- **Where the named cases live.** The cases this requirement names that read a real record moved, under their names,
+  to the records suite (REQ-PROVE-025). In `test/records/measurements.test.ts` these are "byte-matches the committed
+  page", "quotes the run of record's four metric scores as that run's results file states them", "renders the status
+  and the floor line a PASS or a FAIL results file states", "says on each metric line whether that metric missed its
+  declared threshold", "holds the tree's recorded exception to the run of record and to every miss it excuses", "says
+  how the run of record was measured: composed from the runs it names, or in full", and the describe "the page says why
+  its run of record happened". In `test/records/docsPages.test.ts` it is the describe "the eval run of record on the
+  hand pages", with its case "%s discloses a FAIL baseline behind the composed run of record". The describes "the
+  composed paragraph is derived from the two results files" and "a full run of record" stay in
+  `test/cli/docs/measurements.test.ts`, over synthetic results files of the same shapes rather than run 34's and run
+  35's. "tells a full run's results from a composed run's by the prior-run line" is deleted as the duplicate of "is
+  read off the composition section alone, and a broken section throws". "%s names the generator's run and release"
+  stays in `test/docsPages.test.ts`.
+
+- GIVEN `main` THEN `REACH_SNAPSHOT_PATH`, `MEASUREMENT_SNAPSHOT_PATH` and `RUN_OF_RECORD_FILE` each name exactly one
+  file, and `readMeasurementSnapshot` reads the pinned path; GIVEN another snapshot on disk and the pinned one absent
+  THEN it refuses, naming the pinned path and `node scripts/records.mjs restore`. Test evidence: in
+  `test/cli/docs/measurements.test.ts`, "reads the pinned snapshot only, and names it and the restore command when it
+  is absent" and "reads the pinned snapshot, not the newest file".
+- GIVEN the records restored and a later `merge-ready-<date>.json` added WHEN the page regenerates THEN
+  `docs/measurements.md` is byte-identical (the pinned read above; "byte-matches the committed page" in the records
+  suite).
+- GIVEN no record on disk WHEN `node scripts/generate-docs.mjs` runs THEN it exits 0, prints a notice naming the skipped
+  page and the missing inputs, and leaves `docs/measurements.md` unchanged. With `--page measurements`, or with only
+  some inputs present, it exits 1 naming the missing ones and writes nothing. Test evidence: the describe "the
+  measurement inputs" in `test/cli/docs/measurements.test.ts`, and, at the script level in a copy of the tree with no
+  record, `test/docsPages.test.ts`'s describe "the fork guide's lists in a checkout with no records".
+- GIVEN the page, `README.md`, `docs/doctrine.md` and `docs/enterprise-forks.md` THEN no repo-relative link points into
+  a record path, AND every link into the `records` branch names a record file it holds. Test evidence: in
+  `test/docsPages.test.ts`, the describe "record links on the pages that cite records" (`isRecordPath`, from
+  `scripts/records-paths.mjs`); in `test/records/docsPages.test.ts`, "resolves every records-branch link to a record
+  file the branch holds".
+- GIVEN the pinned inputs WHEN the page regenerates twice THEN the outputs are byte-identical.
+
 ### REQ-PROVE-021 — QA automation and binding
 
 A harness under `scripts/qa/` runs keyboard journeys at 375 and 1440 in both themes with
@@ -894,6 +1010,20 @@ performed row, the run that first recorded the walk included.
 - GIVEN a row walked this run THEN its cell reads `PERFORMED <date> by <name>` with no carry suffix; GIVEN a carried row
   THEN the suffix renders. Test evidence: `test/qa/form.test.ts`, `test/qa/bind.test.ts`.
 
+Amended 2026-10-14 (plan 014 file 2, unit `r7-remove-records-from-main`; cited at `4d003d60`). The first paragraph's
+"It writes `.stamity/evidence/qa-<sha>.json` beside the browser evidence (`…/browser-caec7fa.json`)" now reads: it writes
+`.stamity/evidence/qa-<sha>.json` at that path in the checkout. `main` does not track the path (REQ-PROVE-023): the
+exclude block `node scripts/records.mjs setup` writes hides it (`.stamity/evidence` is one of `RECORDS_PATHSPECS`,
+`scripts/records-paths.mjs:8-19`; the block, `scripts/records.mjs:202-211`). The file reaches the `records` branch only
+through `node scripts/records.mjs commit`, whose list is every file under the record paths that `main`'s `.gitignore`
+does not exclude (`scripts/records.mjs:470-472`), and there it sits beside the browser evidence,
+`.stamity/evidence/browser-caec7fa.json` on that branch.
+
+- GIVEN a harness run in a checkout prepared by `setup` THEN `git status --porcelain` lists no `.stamity/evidence/`
+  path. GIVEN `records.mjs commit --dry-run` THEN the built tree carries the new evidence file. Test evidence:
+  `test/ci/recordsScript.test.ts` holds both over the record paths in general (the `setup` case and the `commit` cases);
+  no case names an evidence file.
+
 ### REQ-PROVE-022 — Table headers associated on the docs site
 
 Every table header cell the site renders carries an explicit `scope`, or is associated through
@@ -904,6 +1034,267 @@ cell alone (`website/docusaurus.config.ts:186-188`).
 - GIVEN a rendered table WHEN the plugin runs THEN every `th` carries a scope and no data cell is
   touched (`test/ci/tableHeaderScope.test.ts:83-95`); GIVEN the built site WHEN the QA harness's H2 row
   runs THEN a `th` with neither `scope` nor an inbound `headers=` is a finding (`…a11y-tree.mjs:116-122`).
+
+### REQ-PROVE-023 — Records live on the `records` branch, and `main` tracks none
+
+Added 2026-10-14 (plan 014 file 2, its § A as re-planned in run `2026-10-13_records-branch`; cited at `4d003d60`).
+
+The repository's records live on an orphan branch `records`, at the same relative paths:
+
+- `.stamity/runs/**`, `.stamity/inbox.md`, `.stamity/handoffs/**` except `.stamity/handoffs/.gitkeep`, `.stamity/evidence/**`
+- `docs/plans/**`
+- `evals/runs/**`, `evals/measurements/**`, `evals/reach/**`
+- `evals/EVIDENCE-STORAGE.md`, `evals/ARCHIVE-MIGRATION-2026-09-15.json`
+
+`main` tracks none of them. `.stamity/learnings/**`, `.stamity/handoffs/.gitkeep` and `docs/specs/**` stay on `main`.
+History is not rewritten: each record's earlier history stays in `main`'s. One list holds the set, `RECORDS_PATHSPECS`
+and `KEEP_ON_MAIN` (`scripts/records-paths.mjs:8-22`), read by every verb of `scripts/records.mjs` (REQ-PROVE-024).
+
+- **The import.** The branch starts as one orphan commit holding those paths at the pull request's last commit before
+  the removal, plus four files from templates under `scripts/records/`, at its root: `README.md`, `.gitignore`,
+  `.gitattributes` and `.github/workflows/records.yml` (`scripts/records.mjs:65-70`, `:563-606`). It was made on
+  2026-10-14 from `c8cb301f`: 489 records and the four files, verified path for path (the run record of
+  `2026-10-13_records-branch`, its section "r6 — the records branch").
+- **The ruleset.** A ruleset on `refs/heads/records` blocks deletion and non-fast-forward pushes, with an empty bypass
+  list; a force push from a scratch clone was refused on 2026-10-14 (the same section).
+- **The maintainer's checkout.** Records stay ordinary files at their usual paths, hidden from `main`'s index by the
+  marked block `node scripts/records.mjs setup` writes to the common `.git/info/exclude` (`scripts/records.mjs:202-211`,
+  `:381-394`). `main`'s `.gitignore` gains no rule, and no symlink is used. A lane worktree shares that exclude file, so
+  lanes write no records (`CONTRIBUTING.md`, "Keep the records").
+- **A fork** has no records branch and publishes no records. `npm test` needs none. A contributor who wants them fetches
+  upstream's `records` under a local ref and passes it, `node scripts/records.mjs setup --ref <ref> --no-fetch`; plain
+  `setup` there refuses and names that route, never `init` (`scripts/records.mjs:99-102`, `:183`, `:613`).
+- **The guard** binds the canonical repository only: `ci.yml`'s `records` job runs `node scripts/records.mjs guard`
+  under `if: github.repository == 'zomarit/stamity'` (`.github/workflows/ci.yml:910-934`) and is skipped elsewhere.
+- **The test-input map** holds no record-path entry. The four record-path entries of `.stamity/change-classes.json` left
+  in the commit that untracked the records (S23), and the census guard's lane-path floor moved from 100 to 60: 77 lane
+  paths remain once the plans leave the `website` lane, and the guard still finds no gap
+  (`test/ci/testInputsGuard.test.ts:377-382`).
+
+- **Evidence:** the readers `main` names are `RUNS_DIR`, `SNAPSHOT_DIR`, `REACH_SNAPSHOT_PATH`, `RUN_OF_RECORD_FILE` and
+  `MEASUREMENT_SNAPSHOT_PATH` (`src/cli/docs/measurements.ts:88`, `:91`, `:97`, `:100`, `:111`); the records suite reads
+  the records from disk, never through `git ls-files` (REQ-PROVE-025); the lane classifier puts no record path in a lane
+  (`scripts/ci/records-only.mjs:39-51`).
+- **Expand/contract.** Expand: `records.mjs init` created the branch and `verify` proved blob identity, and CI's
+  `records` job and `release.yml` restore it (REQ-PROVE-025). Contract: the removal commit `074c11d8`, last in the same
+  pull request, untracked the 489 records and left them on disk. Rollback: revert the removal commit; the records come
+  back on `main` from history, and `guard` then fails CI, the signal to remove them again. The branch's ruleset and the
+  history keep every blob, so no step loses a record.
+- **Non-destructive adoption.** The records suite and the measurements page read the records after a restore
+  (REQ-PROVE-025, REQ-PROVE-020). The npm package carries `dist` alone (`package.json:41-43`), so it holds no record
+  before or after. A fork's next integrate deletes upstream's records from its tree, and one it edited meets a
+  modify/delete conflict it keeps by resolving in favour of its own file, as the CHANGELOG's `[Unreleased]` entry says.
+- **Proof:** `test/ci/recordsScript.test.ts` (`guard`, `verify`, `init`, the fork's `setup`), `test/ci/workflow.test.ts`
+  (the `records` job and its aggregator assertion), and the run record's two QA rows for the ruleset and the branch page.
+
+Criteria:
+- GIVEN `main` after the move WHEN `node scripts/records.mjs guard` runs THEN it exits 0. GIVEN a commit that adds
+  `.stamity/runs/x/record.md` THEN it exits 1 naming that path (`test/ci/recordsScript.test.ts`, "guard passes main
+  after the move…").
+- GIVEN the pre-removal sha WHEN `node scripts/records.mjs verify --base <sha>` runs THEN it exits 0, and every moved
+  path at `<sha>` has the same mode and blob on `origin/records`.
+- GIVEN `main` and `records` WHEN `git merge-base origin/main origin/records` runs THEN it exits 1, since the records
+  branch is an orphan. AND `9239379c` is an ancestor of `main`.
+- GIVEN `git diff 5284eaaa HEAD -- .gitignore` THEN the output is empty. AND `git ls-files` over the record pathspecs
+  prints only `.stamity/handoffs/.gitkeep`. AND `.stamity/learnings/` and `docs/specs/` are still tracked in `HEAD`.
+- GIVEN the ruleset read through `gh api repos/zomarit/stamity/rulesets/<id>` THEN it targets `refs/heads/records`,
+  carries the `deletion` and `non_fast_forward` rules, and has an empty bypass list. `judgment: maintainer`
+- GIVEN a repository other than `zomarit/stamity` WHEN CI runs THEN the `records` job is skipped, and `all-ci-checks`
+  requires `skipped` (`test/ci/workflow.test.ts`, the describe "the records job" and the executed aggregator).
+- GIVEN a fork's clone whose origin has no `records` branch WHEN `setup` runs THEN it exits 1 naming the `--ref` route
+  and no `init`, and the fork gains no branch; WHEN `setup --ref <upstream's records, fetched> --no-fetch` runs THEN it
+  restores the records and `git status` lists no record path (`test/ci/recordsScript.test.ts`, "in a fork with no
+  records branch, …").
+- GIVEN a checkout of `main` with no record on disk WHEN `npm run build && node dist/cli.js check` runs THEN it reports
+  no drift (S33; observed at `074c11d8` and at `f73b6086`, the run record's section "r7 — the records leave `main`").
+
+### REQ-PROVE-024 — `scripts/records.mjs` publishes and restores records without touching `main`
+
+Added 2026-10-14 (plan 014 file 2, its § A as re-planned in run `2026-10-13_records-branch`, with the sync rules of S20,
+S24–S26, S29, S32 and S34 and the fork route of the run's `r7` review; cited at `4d003d60`).
+
+Six verbs, each also a module function `async (options) → { code, lines }`, `publish` being the CLI's `commit`. Git runs
+through `execFileSync` with argument arrays, never a shell; a revision a caller supplies is resolved with
+`--end-of-options` before any other command sees it; no push is forced; `main`'s index is never written
+(`scripts/records.mjs:34-45`, `:119-149`). Exit codes: 0 done, 1 refused, 2 bad arguments (`:45`, `:622-651`).
+
+**The sync base.** Each checkout keeps the records commit it last restored, published or imported in a per-worktree
+ref, `refs/worktree/stamity/records-base`, that no fetch moves (`:29-32`, `:59`). It lets `restore` tell an unpublished
+edit from a stale copy, and lets `commit` refuse to publish a stale copy over another machine's change (S24).
+
+**The tree check.** A records tree holds the records and the four files `init` writes, and nothing else: no path folds
+to `main`'s placeholder; every file and folder name is portable — ASCII letters, digits, `.`, `_` and `-` only, not
+ending in `.`, not a Windows device name; and no two names, files or folders, are equal under case folding
+(`:73-92`, `casePairs` at `:234-242`, `refuseUnsafeTree` at `:268-280`; S29, S32, S34). `restore` runs it on the ref and
+`commit` on the tree it built, each before any write or push, `--force` and `--dry-run` included. A pair the branch
+already holds is refused with the plain-git repair printed, whose `git rm` takes a literal pathspec (`:245-258`).
+
+1. **`setup [--ref <ref>] [--no-fetch]`** writes the marked block of exclude entries, one per record pathspec, into the
+   common directory's `info/exclude`, replacing an earlier block in place so a second run is byte-identical, then runs
+   `restore` with the same ref and fetch (`:202-211`, `:381-394`).
+2. **`restore [--ref <ref>] [--no-fetch] [--force]`** writes the records of the ref, by default `origin/records`, into
+   the checkout (`:282-379`).
+   - It merges three ways against the sync base: a record changed only on the ref is written; one changed only on disk
+     is kept and listed as a pending edit; one changed on both refuses the run, listed, with nothing written. With no
+     sync base, a differing file refuses as before. `--force` takes the ref's copy of every differing record, a pending
+     edit included (`:292-313`, `:335-350`).
+   - A record the base holds and the ref does not was deleted there. Its copy here is deleted only when it is the
+     base's byte for byte, `--force` or not, so `restore` never deletes a file that holds unpublished bytes (S25, S26).
+     An edited copy refuses a plain run; under `--force` it is kept and named, with the warning that the next `commit`
+     publishes it again. A path the ref holds in another case, or `main`'s placeholder in any case, is never deleted
+     (`:314-332`).
+   - It never writes through a symlink and never deletes anything other than a record file in the way (`:333-334`);
+     mode `100755` round-trips (`:355`, `:358-361`); each record the base held and the disk lost is named as re-created
+     (`:364-372`). On success the sync base moves to the ref (`:363`).
+3. **`commit -m <message> [--dry-run] [--allow-deletions]`** builds a commit on the sync base from the records on disk,
+   gates that exact commit, then pushes it (`:448-528`).
+   - A run whose `record.md` carries the line `Status: in progress` in its first 15 lines is left out: its files are
+     not published, its copy on `records` is neither changed nor counted as a deletion, and one line per run names it,
+     on every outcome (`:430-446`, `:451-458`; S20).
+   - It fetches `origin/records` — a dry run into a scratch per-worktree ref, deleted after, so a dry run moves no ref —
+     and refuses, naming `restore`, when the checkout has no sync base or `origin/records` is not that base
+     (`:187-200`, `:465-469`).
+   - The file list is `main`'s `.gitignore`-filtered list of the record paths, `git ls-files -z --others --cached
+     --exclude-from=.gitignore`. It refuses symlinks, and refuses deletions unless `--allow-deletions` (`:470-486`).
+   - It builds through a separate index, so `main`'s index is never touched, and runs the tree check on the built tree
+     before the nothing-to-publish answer, the gates and the push (`:487-510`).
+   - It gates the exact commit through an injectable runner: the leak gate with `--root` and `repo-hygiene.mjs --repo
+     <scratch> --base <base>` on a scratch worktree of the commit, then the records suite through `node` and vitest's
+     own bin, with no shell and no npm, so Windows can publish (`:400-428`). The first failing gate refuses, naming
+     it, and nothing is pushed. `--dry-run` runs the gates and moves no ref (`:515-517`).
+   - It pushes without force. A non-fast-forward rejection refuses, naming `restore`. On success `origin/records` and
+     the sync base move, and a local `records` branch moves only by fast-forward, saying why when it stays
+     (`:518-540`).
+4. **`verify --base <sha> [--ref <ref>]`** proves every record path at `<sha>` carries the same mode and blob at the
+   ref, by default `origin/records`, naming each that differs (`:542-553`).
+5. **`guard [--ref <ref>]`** exits 1 naming each record path tracked at the ref, by default `HEAD` (`:555-561`).
+6. **`init --base <sha>`** runs once. It refuses when a `records` branch exists locally or on `origin`, and when the
+   records at `<sha>` hold an entry that is not a regular record file, a name that is not portable, or a case pair.
+   Then it builds the orphan commit from the records at `<sha>` and the four templates, verifies it and pushes it,
+   removing the local ref again if either fails, and sets the sync base (`:563-606`).
+
+- **Expand/contract.** A new script, with no earlier contract to migrate. Its consumers are CI's `records` job,
+  `release.yml`'s restore step and the branch's `records.yml` (REQ-PROVE-025), which pass `restore --force` with no
+  sync base, so the deletion pass and the sync-base rules never run there; the tree check does. Rollback: revert the
+  script with those consumers.
+- **Proof:** `test/ci/recordsScript.test.ts`, over a temporary bare `origin` reached through `file://` and its clones,
+  git running with no system or global configuration.
+
+Criteria:
+- GIVEN `setup` run twice THEN `.git/info/exclude` is byte-identical after the second run. AND `git status --porcelain`
+  lists no record path.
+- GIVEN a checkout with no sync base and a local record that differs from the ref WHEN `restore` runs THEN it exits 1
+  naming the file and writes nothing; with `--force` it overwrites. GIVEN a local file under the record paths that
+  neither the ref nor the sync base holds THEN it still exists after either run.
+- GIVEN a sync base, a record changed only on the ref, one changed only on disk and one changed on both WHEN `restore`
+  runs THEN it exits 1 listing the third and writes nothing; once the third matches a side, `restore` writes the first,
+  keeps the second, and the next `commit` publishes the second without reverting the first.
+- GIVEN a record another clone deleted and published WHEN `restore` runs THEN an unedited copy here is deleted and
+  listed, and an unpublished new file stays; an edited copy refuses a plain run, and under `--force` is kept and named.
+- GIVEN `commit` WHEN it runs THEN `main`'s `git diff --cached` is unchanged, and no ref other than `records`,
+  `origin/records` and the sync base moves.
+- GIVEN a symlink, a `calls/` payload or a `reports/` file among the records WHEN `commit` builds THEN the symlink
+  refuses the run (exit 1 naming it), and the other two are absent from the built tree.
+- GIVEN a record deleted on disk WHEN `commit` runs without `--allow-deletions` THEN it exits 1 naming the path.
+- GIVEN a built commit that the leak gate, the hygiene check or the records suite fails WHEN `commit` runs THEN nothing
+  is pushed and it exits 1 naming the gate. GIVEN `--dry-run` THEN the gates run and no ref moves, whether or not
+  `origin` moved.
+- GIVEN another clone published since this checkout's last sync, or a checkout that never synced, WHEN `commit` runs
+  THEN it exits 1 naming `restore`, calls no gate and moves no ref. GIVEN `origin/records` moved between the fetch and
+  the push THEN the rejected push exits 1 naming `restore`. No force push is attempted.
+- GIVEN a ref or a built tree holding a path outside the record set and the branch's own files, a name that is not
+  portable, or two names equal under case folding WHEN `restore` or `commit` runs THEN it exits 1 naming each, before
+  any write or push, forced or not.
+- GIVEN a run whose record reads `Status: in progress` beside a closed run WHEN `commit` runs THEN only the closed run
+  reaches the built tree, a published copy of the in-progress run is unchanged, and the output carries `left out
+  <path>: the run is still in progress`, with `--dry-run` as well.
+- GIVEN a blob that differs at one path WHEN `verify` runs THEN it exits 1 naming that path.
+- GIVEN a `records` branch that already exists locally or on the remote, or a base whose records hold a case pair or a
+  name that is not portable, WHEN `init` runs THEN it exits 1 and no ref moves.
+- GIVEN the CLI with an unknown verb or a missing `-m` THEN it exits 2 with the usage line.
+
+Test evidence: `test/ci/recordsScript.test.ts`, among its cases "merges three ways against the sync base…", "removes a
+record the other side deleted when this copy is the sync base's, and keeps an unpublished new file", "refuses a publish
+from a checkout behind origin, then publishes its own edit after restore without reverting the other's" and "leaves a
+run still in progress out…". The case that runs the real gates had met no Windows leg before the branch's first push
+(S33), so its Windows result is CI's.
+
+### REQ-PROVE-025 — The records suite runs apart from `npm test`, wherever records are restored
+
+Added 2026-10-14 (plan 014 file 2, its § A as re-planned in run `2026-10-13_records-branch`; its CI criterion restated
+because the classifier and its `changes` job stay; cited at `4d003d60`).
+
+Every case that reads a record runs in `test/records/` as `npm run test:records`, through `vitest.records.config.ts`
+(`package.json:58`; `vitest.records.config.ts:22-30`). Nine files hold them: `ledgers`, `inbox`, `specStatus`,
+`specPlanCoverage`, `rubricCoreHash`, `run27Repeats`, `evalRunInputs`, `measurements` and `docsPages`, each
+`test/records/<name>.test.ts`. The cases came from `test/records/ledgers.test.ts` and `test/records/specStatus.test.ts`,
+`test/runs/inboxStore.test.ts`, `test/authoring/specPlanCoverage.test.ts`, `test/cli/docs/measurements.test.ts`,
+`test/docsPages.test.ts`, `test/evals/rubricCoreHash.test.ts` and `test/evals/manualRunner.test.ts`, each moved under
+its name with a `TEST CHANGE, justified:` comment. A case that only borrowed a record as input stays in `npm test` over a
+synthetic fixture.
+
+How the suite behaves:
+- It reads the records at their usual repo-root paths after `records.mjs restore`, and enumerates them from disk, never
+  through `git ls-files`.
+- Its global setup fails the run before any case when no run ledger, plan, eval run folder or merge-ready snapshot is on
+  disk, naming `node scripts/records.mjs restore` and, for a fresh clone, `setup` (`test/support/recordsPresent.ts:20-66`).
+- A run whose `record.md` reads `Status: in progress` in its first 15 lines is left out of the ledger and `Ref:` checks,
+  with one printed line, so a run's legal write-ahead `open` row does not turn the suite red; a closed run's `open` row
+  still fails (`partitionByRunStatus` in `test/support/recordGates.ts`; S20).
+- `npm test` excludes `test/records/` and reads no record (`vitest.config.ts:138`, `:159`). The rules the record checks
+  apply live in `test/support/recordGates.ts` and `test/support/specStatusRules.ts`, and fixture cases drive them under
+  `npm test` (`test/runs/ledgerGates.test.ts`, `test/authoring/specStatusRules.test.ts`); the two `.gitignore` cases run
+  there in a temporary repository holding `main`'s `.gitignore`, so a checkout's exclude block cannot flip them.
+
+The suite runs in four places:
+1. `ci.yml`'s `records` job, in `zomarit/stamity` alone, on every trigger, with no `needs`: its input, `origin/records`,
+   is not part of the tree a pull request's run proved, so neither a proven push nor a failed classifier may skip it
+   (S10). It runs `guard`, `restore --ref origin/records --no-fetch --force`, `npm run test:records`, the leak gate with
+   `--root` over a detached worktree of `origin/records`, and the measurements page's drift check
+   (`.github/workflows/ci.yml:901-948`). `all-ci-checks` needs it and, outside its three shapes, asserts `success` in
+   `zomarit/stamity` and `skipped` elsewhere, the repository passed through `env:` (`:1062-1085`).
+2. `release.yml`'s `gates` job: "Restore the records" after `Install` and "Records suite" after `Test`, with no extra
+   fetch, its depth-0 checkout already holding `origin/records` (`.github/workflows/release.yml:283-300`).
+   `fork-release.yml` is unchanged.
+3. `.github/workflows/records.yml` on the `records` branch, on every push to it: it checks out `main` for the tools,
+   restores the pushed commit, and runs the records suite, the leak gate over a worktree of the pushed commit, the
+   hygiene check and the drift check (`scripts/records/workflow.yml:1-50`, the template `init` writes). It runs
+   `main`'s `scripts/records.mjs` and `test:records`, so the import commit's first run, before this change merged,
+   failed at its restore step by construction, and its success is read from a re-run after the merge (S33).
+4. The gate of `records.mjs commit` (REQ-PROVE-024).
+
+The lane classifier keeps its name, `scripts/ci/records-only.mjs`, and its `changes` job: it has three lanes and no
+`records` lane, and prints no `records_only` output. A record path that reaches `main` sits in no lane and runs the
+full matrix, beside the `records` job's `guard` (`scripts/ci/records-only.mjs:1-12`, `:39-51`; REQ-PROVE-031).
+
+- **Expand/contract.** Expand: the suite and its config landed beside `npm test` while the records were still tracked,
+  and the `records` job and `release.yml`'s two steps landed before the branch existed, so the branch was first pushed
+  for CI only after the records left `main`. Contract: the `records_only` output, which REQ-PROVE-031 kept for one
+  release, leaves with the classifier's `records` lane. Rollback: revert the change; the cases then run under
+  `npm test` again over the tracked records.
+- **Non-destructive adoption.** A fresh clone's `npm test` passes with no record. A change to a file the records suite
+  imports passes `npm test` and fails CI's merge-blocking `records` job unless `npm run test:records` ran after
+  `setup`; `CONTRIBUTING.md`'s "Keep the records" names those files.
+
+Criteria:
+- GIVEN a fresh clone of `main` with no record on disk WHEN `npm test` runs THEN it exits 0. WHEN `npm run test:records`
+  runs THEN it exits non-zero with a message naming `node scripts/records.mjs restore`.
+- GIVEN a checkout prepared by `records.mjs setup` WHEN `npm run test:records` runs THEN it exits 0, AND the ledger case
+  lists at least one `ledger.jsonl` under `.stamity/runs/`. WHEN `npm test` runs THEN it exits 0 too.
+- GIVEN `package.json` THEN a `test:records` script runs `vitest.records.config.ts`, AND `npm test` discovers no file
+  under `test/records/` on either platform (`test/ci/testScheduling.test.ts`, "keeps test/records out of the POSIX
+  default suite, every other file discovered once", and its win32 discovery case).
+- GIVEN `ci.yml` and `release.yml` THEN each restores `origin/records` before `npm run test:records`. AND the classifier
+  has no `records` lane and no `records_only` output. AND `all-ci-checks` requires `records` to read `success` in
+  `zomarit/stamity` and `skipped` elsewhere. AND `fork-release.yml` is byte-unchanged. Test evidence:
+  `test/ci/workflow.test.ts` (the describe "the records job", the executed aggregator's two records cases, the release
+  restore case) and `test/ci/recordsOnly.test.ts` ("the records lane, retired").
+- GIVEN a run in progress beside a closed run WHEN the record checks run THEN the in-progress run's ledger is left out
+  with one line and the closed run's `open` row still fails (`test/runs/ledgerGates.test.ts`, the describe "fixtures — a
+  run still in progress is left out of the gate").
+- GIVEN a push to `records`, once `main` carries the tools, WHEN `records.yml` runs THEN the leak gate, the hygiene check
+  and `npm run test:records` each run, and any failure is red. `judgment: maintainer` (the run's conclusion;
+  `test/ci/recordsScript.test.ts`, the describe "the branch templates", pins the steps).
 
 ### REQ-PROVE-030 — A push whose tree already passed as a pull request skips the test matrix
 
@@ -932,11 +1323,24 @@ Every push-only workflow runs as before.
   `pack-signing-rehearsal.yml` and `docs-site.yml` run as their own filters say. Test evidence:
   `test/ci/prProven.test.ts`; `test/ci/workflow.test.ts`'s "the proven-push skip" and its executed aggregator.
 
+Amended 2026-10-14 (plan 014 file 2, unit `r5b-ci-folds`; ledger `review/27` of run `2026-10-13_records-branch`; cited
+at `4d003d60`). The last not-proven bullet read "an `all-ci-checks` check run on the head from any other check suite (a
+second producer)". It now reads: an `all-ci-checks` check run on the head from a check suite that no `ci.yml`
+pull-request run on that head holds (a second producer). A head can carry more than one `ci.yml` pull-request run — a
+reopened pull request runs `ci.yml` again on the same head, in a new check suite — and every one of their suites is
+`ci.yml`'s own; the newest run's latest attempt alone decides (`scripts/ci/pr-proven.mjs:18-26`, `decide` at `:64-118`,
+the accepted suites at `:90-95`). Before, a reopened pull request's older suite made its merge push read unproven.
+
+- GIVEN two `ci.yml` pull-request runs on one head, each with its `all-ci-checks` check run, THEN the newest decides,
+  both ways, AND a third suite is still a second producer. Test evidence: `test/ci/prProven.test.ts`, "accepts every
+  ci.yml pull-request run's check suite on the head, the newest run deciding" and "proves a reopened pull request's
+  head from its newest ci.yml run, beside the older run's suite (row 104)".
+
 ### REQ-PROVE-031 — Website, spec and learnings changes take lanes
 
-`scripts/ci/records-only.mjs` classifies a change into lanes (`LANE_PATHS`): `records` (`.stamity/runs/**`,
-`.stamity/handoffs/**`, `.stamity/inbox.md`, `docs/plans/**`), `specs` (`docs/specs/**`), `learnings`
-(`.stamity/learnings/**`) and `website` (`website/**` and every other `docs/**` path). A change whose every path sits
+`scripts/ci/records-only.mjs` classifies a change into lanes (`LANE_PATHS`): `specs` (`docs/specs/**`), `learnings`
+(`.stamity/learnings/**`) and `website` (`website/**` and every other `docs/**` path); a record path is in no lane
+(amended 2026-10-14, below). A change whose every path sits
 in lanes runs the union of the suites the base commit's test-input map gives its paths (printed as the classifier's
 `suites` output, so the workflow spells no list; amended 2026-10-09, below) in one `lanes` job; the `website` lane also builds the docs site and runs the root typecheck, and the
 `learnings` lane builds the CLI and runs `node dist/cli.js check`, each build after the lane suites. A change touching
@@ -948,6 +1352,7 @@ empty diff runs the full matrix. `README.md` is not in a lane: it ships in the p
 
 **Expand/contract:** the classifier still prints `records_only`, which nothing in `ci.yml` reads; it leaves at the
 first release after this change merges, with the classifier's line that prints it (`ci.yml`'s `changes` outputs).
+Closed 2026-10-14: the output and its line are gone (amended 2026-10-14, below).
 
 Amended 2026-10-09 (run `2026-10-08_product-core`, unit `p2c-ci-lanes-from-map`; REQ-FLOW-062). `LANE_SUITES` and
 `RECORDS_SUITES` are gone: the lanes take their suites from the base commit's test-input map. `full=false` now also
@@ -959,7 +1364,8 @@ either reading of `\` as `selectTests` matches (`review/77`), still printed as t
 selects all tests, or a selected name a runner could misread runs the full matrix (`:132-139`, `:163-165`). The
 script loads `src/change/classify.ts` by Node's type stripping, with no install (`:30-38`;
 `.github/workflows/ci.yml:185-186`), and a change to the lane classifier's own code or its import closure runs the
-full matrix, since no lane holds those paths (`scripts/ci/records-only.mjs:61-66`; `review/8`). The workflow's
+full matrix, since no lane holds those paths (`scripts/ci/records-only.mjs:61-66` at `90710ba5`; `:47-51`
+at `4d003d60`, re-pointed 2026-10-14 once the records lane left; `review/8`). The workflow's
 comments name the base map as the one source of the lists (`.github/workflows/ci.yml:47-49`, `:766-768`,
 `:810-812`). It read "runs the union of their suites (`LANE_SUITES`, printed as the classifier's `suites` output, so
 the workflow spells no list)".
@@ -984,6 +1390,36 @@ the workflow spells no list)".
   with a path in no lane THEN the full matrix runs and its LTS leg builds the docs site inside the required result.
   GIVEN a website-lane change THEN the lanes job runs the root typecheck. Test evidence: `test/ci/recordsOnly.test.ts`;
   `test/ci/workflow.test.ts` (the describes "the lanes job" and "the aggregator's lane split, executed").
+
+Amended 2026-10-14 (plan 014 file 2, units `r5-ci-records-job` and `r5b-ci-folds`; cited at `4d003d60`). The first
+paragraph's lane list read "`records` (`.stamity/runs/**`, `.stamity/handoffs/**`, `.stamity/inbox.md`,
+`docs/plans/**`), `specs` (`docs/specs/**`), `learnings` (`.stamity/learnings/**`) and `website` (`website/**` and every
+other `docs/**` path)". The records live on the `records` branch now (REQ-PROVE-023), so the classifier keeps its file
+name and its `changes` job and has three lanes. `website` takes every `docs/**` path outside `docs/specs/`, so a plan
+falls in it by path, and a record location sits in no lane, so a record that reaches `main` runs the full matrix beside
+the `records` job's `guard` (`scripts/ci/records-only.mjs:1-12`, `LANE_PATHS` at `:39-51`). `RECORDS_PATHS`,
+`isRecordsPath`, the `records` lane and the `records_only` output are gone, and `changes` outputs `full`, `lanes`,
+`suites`, `site_build` and `cli_check` (`.github/workflows/ci.yml:176-181`). The base-map `git show` takes
+`--no-textconv`, as the classifier's other reads do. The `records` job runs beside every shape, a proven push included,
+and the aggregator asserts it outside the three (REQ-PROVE-025).
+
+The site builds once per pull request. The `check` job's LTS leg and the `lanes` job each run `docs-site.yml`'s two
+steps after their build: the `llms.txt` copy into the output, and the upload of `website/build` with
+`if-no-files-found: error`, under that build's own condition and a name of their own (`.github/workflows/ci.yml:465-479`,
+`:886-899`; S28). So `docs-site.yml`'s pull-request trigger keeps only the paths a site build reads that `site_build`
+never covers — `docs/specs/**`, `README.md` and its own file — while its push trigger keeps every path
+(`.github/workflows/docs-site.yml:22-33`, `:43-56`).
+
+- GIVEN `scripts/ci/records-only.mjs` THEN it exports no records list and no records predicate, AND a diff of a run
+  record, the inbox or a handoff alone reads full CI, AND a plan under `docs/plans/` reads the `website` lane with the
+  site build. Test evidence: `test/ci/recordsOnly.test.ts`, the describe "the records lane, retired".
+- GIVEN `ci.yml` THEN no job reads `records_only`, and the `changes` outputs are the five above (`test/ci/workflow.test.ts`,
+  its `OUTPUTS` pin and the aggregator's `records_only` absence).
+- GIVEN a pull request whose change touches the site WHEN `ci.yml` builds it THEN the same job copies `llms.txt` and
+  uploads the built site, failing on an empty output, AND `docs-site.yml`'s pull-request trigger holds exactly
+  `docs/specs/**`, `README.md` and its own path. Test evidence: `test/ci/workflow.test.ts`, "builds a pull request's
+  site once: in ci.yml for the site's paths, here only for the rest", and the `check` and `lanes` cases through its
+  helper `expectSiteHandback`.
 
 ### REQ-PROVE-032 — One file names the eval run of record
 
@@ -1024,6 +1460,13 @@ from those three sources and not chosen.
   FAIL run of record and the third-release or 30-day rule; GIVEN the `st-eval-run` skill and its emitted copy THEN each
   states SET-v7's rule in its words. Test evidence: `test/docsPages.test.ts`, its describe "the release eval follows
   what changed".
+
+Amended 2026-10-14 (plan 014 file 2, unit `r3-hand-page-links`): the describe "the release eval follows what changed"
+now stands in two files. Its three cases that read the run of record's `inputs.json` — "names every file the run of
+record hashes as an input…", "names every file a case's `source:` names…" and "names every model role and the client
+the run of record records" — moved to `test/records/docsPages.test.ts`, which `npm run test:records` runs, since that
+file is a record (REQ-PROVE-025); the trigger, runner-files, skill, roster, carried-form and per-release cases stay in
+`test/docsPages.test.ts`. The test evidence above read `test/docsPages.test.ts` alone.
 
 ### REQ-PROVE-034 — A patch takes the patch lane
 
@@ -1069,8 +1512,11 @@ configuration; on the public route it names the harness id.
 
 - GIVEN two recorded keys equal except a harness of `claude-code-cli 2.1.286` against `claude-code-cli 2.1.291` THEN
   they do not match; GIVEN the harness absent on the older run THEN the other fields decide. Test evidence:
-  `test/evals/manualRunner.test.ts`, "keys two client versions apart through the harness, and reads an unrecorded
-  harness as not compared".
+  `test/records/evalRunInputs.test.ts`, which `npm run test:records` runs, "keys two client versions apart through the
+  harness, and reads an unrecorded harness as not compared". (Amended 2026-10-14, plan 014 file 2, unit
+  `r1b-records-suite-eval-cases`; it read `test/evals/manualRunner.test.ts`. The case reads run 43's committed
+  `inputs.json`, a record, so it moved unchanged to the records suite; the synthetic comparator cases stay in
+  `test/evals/manualRunner.test.ts`.)
 
 ## Non-goals
 

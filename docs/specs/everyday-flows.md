@@ -1,6 +1,7 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
@@ -2819,7 +2820,8 @@ exists, it is the normative record for that requirement.
   - **Head code still routes its own CI** (`review/8`, standing since plan 019 file 1). `scripts/ci/records-only.mjs`
     and the `src/change/` modules it imports run from the pull request's head, so a change to that code decides its
     own CI routing. Bounded: those paths sit in no lane, so they answer full CI
-    (`scripts/ci/records-only.mjs:61-66`); the class file places them `security-sensitive`, so the lens reads any
+    (`scripts/ci/records-only.mjs:47-51`, `LANE_PATHS`, re-pointed 2026-10-14 to `4d003d60` from `:61-66`, where the
+    retired records lane had held it); the class file places them `security-sensitive`, so the lens reads any
     change to them (`.stamity/change-classes.json:8-12`); and the suites come from the base map. A change that
     rewrites the script to answer narrow is trusted until review reads it.
   - **A backslash in a git name** (`review/43`). Off Windows, a name such as `.stamity\overrides\x.md` is one

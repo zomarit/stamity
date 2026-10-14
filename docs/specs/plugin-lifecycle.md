@@ -1,6 +1,7 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -1093,6 +1094,7 @@ no requirement covers those two jobs.
 - GIVEN that guard evaluated with `github.repository` = `acme/stamity-private` THEN it reads false; with
   `zomarit/stamity` THEN true.
 
+**Superseded** on 2026-10-08 by the lanes amendment below, and on 2026-10-14 by the records amendment after it.
 Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md`, unit `sw06-records-only-ci-lane`, ledger
 `build/82`): "merge-blocking through `all-ci-checks`" holds on every change that is not records-only. A push or pull
 request whose every changed path is a record — under `.stamity/runs/`, `.stamity/handoffs/` or `docs/plans/`, or
@@ -1100,12 +1102,29 @@ request whose every changed path is a record — under `.stamity/runs/`, `.stami
 aggregator asserts which side ran, so a records-only pass never stands in for a full one
 (`.github/workflows/ci.yml:19-31` at `b855876a`).
 
+**Superseded 2026-10-14** by the amendment below, which restates it with the records lane retired.
 Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `a1-proven-push` and `a2-ci-lanes`): "merge-blocking
 through `all-ci-checks`" holds on every change that no lane covers and no proven push skips. A change whose every path
 sits in a lane skips `plugin-route` with `check` and `apm-install`, and the `lanes` job runs in their place; a push
 whose tree a pull request already proved skips all of them (REQ-PROVE-030, REQ-PROVE-031;
 `.github/workflows/ci.yml:19-68` at `47acb16e`). It replaces the reading "holds on every change that is not
 records-only".
+
+Amended 2026-10-14 (plan 014 file 2, re-planned in run `2026-10-13_records-branch`, unit `r5-ci-records-job`; cited at
+`4d003d60`). The records live on the `records` branch (REQ-PROVE-023), so `main` carries no record and no change is
+records-only. The lane classifier, `scripts/ci/records-only.mjs`, keeps its name and its `changes` job, with three lanes
+— `specs`, `learnings` and `website` — and no `records` lane and no `records_only` output; a record path that reaches
+`main` is in no lane and takes the full matrix (`scripts/ci/records-only.mjs:39-51`; REQ-PROVE-031). "Merge-blocking
+through `all-ci-checks`" holds on every change that no lane covers and no proven push skips: a lanes-only change skips
+`plugin-route` with `check` and `apm-install`, and the `lanes` job runs in their place; a proven push skips all four
+(`.github/workflows/ci.yml:607-610`, `:795-798`). `ci.yml`'s `records` job restores the records and runs the records
+suite in the canonical repository on every trigger, beside every shape and never in place of `plugin-route`; the
+aggregator needs it and asserts `success` in `zomarit/stamity` and `skipped` elsewhere (`:910-948`, `:1072`,
+`:1081-1085`; REQ-PROVE-025).
+
+- GIVEN `ci.yml` THEN no job reads `records_only`, AND `plugin-route`, `check` and `apm-install` carry no records-only
+  condition (`test/ci/workflow.test.ts`, its `OUTPUTS` pin of the classifier's outputs and the aggregator's
+  `records_only` absence).
 
 Amended 2026-09-26 (plan 010 file 1, units `e3-codex-remote-walk` and `e3-codex-install-ref`): the
 Codex route now runs against a remote source, and its install line carries a ref. On codex-cli
@@ -1352,9 +1371,22 @@ golden and one adversarial case for the generated `st-setup` command and at leas
 for plugin-mode invocation of a carried command, agent and skill under their namespaced forms,
 each with its `source:` range, rubric and threshold declared under `evals/SET-v7.md` before the run;
 `test/evals/coverage.test.ts` and `test/evals/locators.test.ts` exit 0 over the additions; the
-committed run artifact under `evals/runs/` records a per-metric score at or above its threshold for
-those cases; and a case that could not execute is recorded as blocked with its reason rather than
-scored.
+run artifact under `evals/runs/` on the `records` branch, named by `main`'s `evals/run-of-record.json`,
+records a per-metric score at or above its threshold for those cases; and a case that could not execute
+is recorded as blocked with its reason rather than scored.
+
+Amended 2026-10-14 (plan 014 file 2, unit `r7-remove-records-from-main`; cited at `4d003d60`). The clause read "the
+committed run artifact under `evals/runs/` records a per-metric score". The run artifacts left `main` for the `records`
+branch (REQ-PROVE-023); `main` names the run of record in `evals/run-of-record.json` (REQ-PROVE-032), and every
+`evals/runs/` path in this requirement reads on that branch. The release checklist's eval line has the release publish
+its artifact to `records` with `node scripts/records.mjs commit -m <message>` before the tag, move
+`evals/run-of-record.json` in a `main` commit after that publish, and record `git rev-parse origin/records` at the cut
+(`.github/release-controls-checklist.md:214-224`).
+
+- GIVEN the release eval run WHEN it is published THEN its artifact is committed to `records` by `records.mjs commit`,
+  AND `main`'s `evals/run-of-record.json` names its `RESULTS.md` as `path`. `judgment: maintainer` (a release step,
+  read at the cut; `test/docsPages.test.ts`'s "%s names the generator's run and release" holds the hand pages to the
+  file).
 
 As built (2026-09-21): the three cases landed under `evals/cases-v6/` and every count they touch moved
 with them. `st-setup-fresh-repository` (golden, rubric, 6 binding / 1 advisory) measures the clean

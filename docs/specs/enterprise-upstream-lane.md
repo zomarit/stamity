@@ -1,6 +1,7 @@
 ---
 id: enterprise-upstream-lane
 # A design document, authored outside the spec command and excluded from the site build.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md).
 status: shipped-with-1.4.0
 obsolete_when: the lane's behaviour moves into the CLI reference and the enterprise-forks guide carries every requirement below, or a decision cuts the surface
 ---
@@ -18,7 +19,8 @@ repositories.
 
 Every claim about existing behaviour below carries a `path:line` citation taken from the tree at `a42b45d` (the 1.3.0 head) at the time of writing.
 The amendments dated 2026-10-13 to REQ-UPSTREAM-002 and REQ-UPSTREAM-014 (run `2026-10-13_lean-repository`, plan 014 file 1, units `f2-lane-release-tags-only`
-and `f1-import-recipe`) cite the tree at `7327f435`. Citations are code spans rather than links: they address lines, which no link form can resolve.
+and `f1-import-recipe`) cite the tree at `7327f435`. The amendments dated 2026-10-14 to REQ-UPSTREAM-001 and REQ-UPSTREAM-007 (run `2026-10-13_records-branch`, plan 014 file 2,
+unit `r3-hand-page-links`) cite the tree at `4d003d60`. Citations are code spans rather than links: they address lines, which no link form can resolve.
 
 ## Intent
 
@@ -154,7 +156,7 @@ The fork declares its upstream in `.stamity/upstream.json` at the repository roo
     "node scripts/generate-plugin-manifests.mjs",
     "npm run build && node dist/cli.js sync"
   ],
-  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "docs/measurements.md", "llms.txt", "src/pack/catalogPins.ts"],
+  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"],
   "watch": ["content/charter/**", "src/types/core.ts"],
   "shadows": { "packs/acme/rules/acme-secrets.md": "content/rules/stamity-secrets.md" }
 }
@@ -165,6 +167,11 @@ The fork declares its upstream in `.stamity/upstream.json` at the repository roo
 then says so in words: *no gates configured — a clean merge proves nothing about behaviour*),
 `regenerate` empty, `generatedPaths` empty, `watch` empty, `shadows` empty. An unknown key,
 a non-object, or a `version` other than 1 is a config error (exit 2).
+
+(Amended 2026-10-14, plan 014 file 2, unit `r3-hand-page-links`: the example's `generatedPaths` listed
+`"docs/measurements.md"` after `"docs/capability-matrix.md"`. A fork holds no records, so `generate-docs.mjs` skips
+that page there and nothing regenerates it (REQ-UPSTREAM-007); the guide's example dropped it too,
+`docs/enterprise-forks.md:322-328`.)
 
 The verbs are `status`, `preview`, `integrate`, `continue`, `validate`, `abort`, and
 `help`. Every verb accepts `--json` (one JSON document on stdout, nothing else on stdout)
@@ -389,8 +396,20 @@ merged tree's own scripts with the caller's environment — the report says so o
 run — which is why the GitHub layer runs them in a job that holds no credential. The
 default list for this repository is written into the guide and mirrors
 `CONTRIBUTING.md`'s regeneration table less its two `--write` maintenance rows and its ignored
-`dist/plugins/` row, with `.stamity/manifest.json` and `docs/measurements.md` added because
-`sync` and plain `generate-docs.mjs` write them; the guide says which rows and why.
+`dist/plugins/` row, with `.stamity/manifest.json` added because `sync` writes it.
+`docs/measurements.md` is not listed: a fork holds no records, and `generate-docs.mjs --page all` skips that page there
+with a notice (REQ-PROVE-020 in `docs/specs/prove-behavior-and-value.md`); the guide says which rows and why.
+
+(Amended 2026-10-14, plan 014 file 2, unit `r3-hand-page-links`; cited at `4d003d60`. It read "with
+`.stamity/manifest.json` and `docs/measurements.md` added because `sync` and plain `generate-docs.mjs` write them". The
+guide's `generatedPaths` no longer lists the page, and its explanation says the page is skipped with a notice and left
+as committed (`docs/enterprise-forks.md:322-328`, `:341-342`).)
+
+- GIVEN a copy of the tree with no record WHEN the guide's regenerate list runs THEN `docs/measurements.md` is
+  byte-unchanged, AND no tracked path outside `generatedPaths` is reported, AND `docs/enterprise-forks.md` no longer
+  lists or justifies the page. Test evidence: `test/docsPages.test.ts`, the describe "the fork guide's lists in a
+  checkout with no records". It runs the guide's `node scripts/…` commands and names the two npm commands as not run,
+  so a write by the build-and-sync step in a records-free tree is outside it.
 
 ### REQ-UPSTREAM-008 — Drift a clean merge hides is reported
 

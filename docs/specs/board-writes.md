@@ -1,6 +1,7 @@
 ---
 id: board-writes
 # A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, and excluded from the site build.
+# The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: design
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
