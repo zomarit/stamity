@@ -248,6 +248,10 @@ Later answers the same morning, verbatim:
   2. "pr/9 and pr/10: the short ref `origin/records` remains in two commands a person runs (the release checklist's
      notes line, the printed repair steps). Where should they go?" → **"Schedule with security residuals
      (Recommended)"**
+- **11:53:35Z (the close's last question):** "About 14 review notes never became ledger rows (re-review notes, the
+  delta pass's left-out notes, S34's two notes on raw-push-only cases); none is a defect. What happens to them?" →
+  **"Drop them, counted (Recommended)"** — each report under `reports/` keeps its own count as `notes left out`, and
+  the notes stay there; nothing went to the inbox.
 
 ## The audit (22:08Z–22:13Z, read-only)
 
