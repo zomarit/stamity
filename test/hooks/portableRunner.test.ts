@@ -3,7 +3,13 @@ import { chmod, copyFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:f
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../../src/hooks/portableRunner.ts";
+import {
+  buildPortableHookRunner,
+  COPILOT_RUNTIME_TOOL_NAMES,
+  portableHookCommand,
+  PORTABLE_RUNNER_FILE,
+} from "../../src/hooks/portableRunner.ts";
+import { unionToolCategoryMap } from "../../src/hooks/scripts.ts";
 import type { HookInterchange } from "../../src/hooks/model.ts";
 import type { Tool } from "../../src/types/core.ts";
 
@@ -122,12 +128,80 @@ describe("portable native hook boundary", () => {
     expect(result.payload).not.toHaveProperty("agent_type");
   });
 
+  // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086): Copilot's runtime
+  // name `edit` now reaches the authored hook as the Claude name `Edit`, so the
+  // child's allow condition reads the restored name. The argument and path
+  // normalization this case pins is unchanged.
   it.each([true, false])("normalizes Copilot tool arguments (serialized: %s) and file paths for portable hooks", async (serialized) => {
-    const f = await fixture("copilot", 'import {readFileSync} from "node:fs"; const input = JSON.parse(readFileSync(0,"utf8")); process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision: input.tool_input.file_path === "src/app.ts" && input.tool_name === "edit" ? "allow" : "deny"}}));');
+    const f = await fixture("copilot", 'import {readFileSync} from "node:fs"; const input = JSON.parse(readFileSync(0,"utf8")); process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision: input.tool_input.file_path === "src/app.ts" && input.tool_name === "Edit" ? "allow" : "deny"}}));');
     const args = { filePath: "src/app.ts" };
     const result = execute(f, { toolName: "edit", toolArgs: serialized ? JSON.stringify(args) : args });
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout).permissionDecision).toBe("allow");
+  });
+
+  /** A child that denies with the `tool_name` it received as the reason, so the test reads what the hook saw. */
+  const ECHO_TOOL = 'import {readFileSync} from "node:fs"; const input = JSON.parse(readFileSync(0,"utf8")); process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:String(input.tool_name)}}));';
+
+  it.each(Object.entries(COPILOT_RUNTIME_TOOL_NAMES))("hands an authored hook Copilot's %s as the Claude name %s (REQ-FLOW-086)", async (runtime, claude) => {
+    const result = execute(await fixture("copilot", ECHO_TOOL), { toolName: runtime, toolArgs: {} });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ permissionDecision: "deny", permissionDecisionReason: claude });
+  });
+
+  it("hands a hook matched on Claude's legacy `Task` the name `Agent` for Copilot's `task` (build/58)", async () => {
+    const result = execute(await fixture("copilot", ECHO_TOOL, { matcher: "Task" }), { toolName: "task", toolArgs: {} });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).permissionDecisionReason).toBe("Agent");
+  });
+
+  it("passes a Copilot tool name with no Claude twin through unchanged, an inherited property name included", async () => {
+    const f = await fixture("copilot", ECHO_TOOL);
+    for (const name of ["powershell", "Bash", "constructor", "toString", "github-mcp-server/get_issue"]) {
+      const result = execute(f, { toolName: name, toolArgs: {} });
+      expect(result.status, `${name}: ${result.stderr}`).toBe(0);
+      expect(JSON.parse(result.stdout).permissionDecisionReason, name).toBe(name);
+    }
+  });
+
+  it("restores tool names on Copilot alone: Cursor and Codex hand the hook the name they were sent", async () => {
+    const cursor = execute(await fixture("cursor", ECHO_TOOL), { tool_name: "bash" });
+    expect(JSON.parse(cursor.stdout).user_message).toBe("bash");
+    const codex = execute(await fixture("codex", ECHO_TOOL), { tool_name: "bash" });
+    expect(JSON.parse(codex.stdout).hookSpecificOutput.permissionDecisionReason).toBe("bash");
+    // Only Copilot's runner carries the table at all.
+    expect(buildPortableHookRunner("cursor")).not.toContain("RUNTIME_TOOL_NAMES");
+    expect(buildPortableHookRunner("codex")).not.toContain("RUNTIME_TOOL_NAMES");
+    expect(buildPortableHookRunner("copilot")).toContain("RUNTIME_TOOL_NAMES");
+  });
+
+  it("lets the core guard place every mapped shell, edit, read and spawn call, and narrows no category it placed before", () => {
+    const categories = unionToolCategoryMap();
+    const categoryOf = (name: string): string | undefined => (Object.hasOwn(categories, name) ? categories[name] : undefined);
+    const expected: Record<string, string> = {
+      bash: "execute",
+      edit: "edit",
+      str_replace_editor: "edit",
+      apply_patch: "edit",
+      create: "edit",
+      view: "read",
+      grep: "read",
+      rg: "read",
+      glob: "read",
+      task: "spawn",
+    };
+    for (const [runtime, category] of Object.entries(expected)) {
+      expect(categoryOf(COPILOT_RUNTIME_TOOL_NAMES[runtime] ?? ""), runtime).toBe(category);
+    }
+    // Copilot's shell name was unknown to the guard before the mapping.
+    expect(categoryOf("bash")).toBeUndefined();
+    for (const [runtime, claude] of Object.entries(COPILOT_RUNTIME_TOOL_NAMES)) {
+      // A runtime name the guard already placed keeps its category through the mapping.
+      if (categoryOf(runtime) !== undefined) expect(categoryOf(claude), runtime).toBe(categoryOf(runtime));
+    }
+    // The question tool is in no category under either name, so the guard treats it as it did.
+    expect(categoryOf("ask_user")).toBeUndefined();
+    expect(categoryOf("AskUserQuestion")).toBeUndefined();
   });
 
   it.each(["cursor", "copilot", "codex"] as const)("%s rejects malformed output and input without echoing payload fragments", async (tool) => {

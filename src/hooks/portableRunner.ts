@@ -80,6 +80,33 @@ const STARTER_ANCHORS: Readonly<Partial<Record<Tool, { segments: readonly string
 });
 
 /**
+ * Copilot's runtime tool names, as a camelCase-keyed hooks file delivers them
+ * in `toolName`, mapped back to the Claude names the interchange speaks
+ * (REQ-FLOW-086). An authored hook keyed on `Bash` or `Edit` therefore reads
+ * the same `tool_name` on Copilot as on Claude Code, and the Copilot adapter
+ * translates authored matchers through the inverse of this one table
+ * (`../adapters/copilot.ts`). Several runtime names share one Claude name:
+ * Copilot edits a file through `edit`, `str_replace_editor` or `apply_patch`,
+ * and searches through `grep` or `rg`. A name not listed reaches the hook as
+ * Copilot sent it, so the core guard sees it exactly as before this table.
+ * The table is the plan's settled reading of the Copilot hooks reference
+ * (docs/plans/020-cli-native-02.md, 2026-10-14).
+ */
+export const COPILOT_RUNTIME_TOOL_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  bash: "Bash",
+  view: "Read",
+  create: "Write",
+  edit: "Edit",
+  str_replace_editor: "Edit",
+  apply_patch: "Edit",
+  grep: "Grep",
+  rg: "Grep",
+  glob: "Glob",
+  task: "Agent",
+  ask_user: "AskUserQuestion",
+});
+
+/**
  * The missing-script remedy a Cursor or Copilot starter names when its caller
  * passed no pinned call. Only a direct builder call without a CLI context
  * reaches it; every emission passes the pinned call.
@@ -204,8 +231,9 @@ const ROOT = resolve(HERE, "../../../..");
 // it is resolved.
 const PLUGIN_ROOT_REF = /^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}\\/(.+)$/;
 const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
-// PascalCase wire names. Codex reads this set natively and Copilot accepts it
-// as its matcher aliases; Cursor's adapter renames them at its own boundary.
+// The interchange's PascalCase event names, which every authored hook reads in
+// hook_event_name. Codex reads this set natively; the Cursor and Copilot
+// adapters key their hooks files camelCase at their own boundary.
 // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
 // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
 // https://cursor.com/docs/hooks (accessed 2026-09-17)
@@ -280,7 +308,13 @@ function main() {
   if (input.session_id === undefined && typeof payload.sessionId === "string") input.session_id = payload.sessionId;
   if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
   if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
-  if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
+  if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };${tool === "copilot" ? `
+  // Copilot's runtime tool names back to the Claude names authored hooks read
+  // (src/hooks/portableRunner.ts COPILOT_RUNTIME_TOOL_NAMES in the engine that
+  // wrote this file). An own-property read, so a name such as "constructor"
+  // maps to nothing; any name not listed passes through unchanged.
+  const RUNTIME_TOOL_NAMES = ${JSON.stringify(COPILOT_RUNTIME_TOOL_NAMES)};
+  if (typeof input.tool_name === "string" && Object.hasOwn(RUNTIME_TOOL_NAMES, input.tool_name)) input.tool_name = RUNTIME_TOOL_NAMES[input.tool_name];` : ""}
   // Resolved here, once: the row's script, and the directory the child runs in.
   // A plugin-rooted row's repository is the SESSION's working directory — the
   // four-level climb below locates the repository a runner was synced into, and

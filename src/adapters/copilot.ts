@@ -9,8 +9,13 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
-import { CLAUDE_EVENT_NAMES, type HookInterchange } from "../hooks/model.ts";
+import {
+  buildPortableHookRunner,
+  COPILOT_RUNTIME_TOOL_NAMES,
+  portableHookCommand,
+  PORTABLE_RUNNER_FILE,
+} from "../hooks/portableRunner.ts";
+import type { CanonicalHookEvent, HookInterchange } from "../hooks/model.ts";
 import {
   buildContentIndex,
   emittedIdFor,
@@ -288,8 +293,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       url: "https://code.visualstudio.com/docs/copilot/customization/prompt-files",
       accessDate: ACCESS_DATE,
     },
-    // Repository hook discovery, the entry keys `type`, `cwd`, `matcher` and
-    // `timeoutSec`, PascalCase matcher aliases, fail behavior, and the
+    // Repository hook discovery, the entry keys `type`, `bash`, `cwd`, `matcher` and
+    // `timeoutSec`, the camelCase event names, fail behavior, and the
     // sessionStart `additionalContext` injection the portable runner writes.
     { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-09-17" },
     // The `--reasoning-effort` levels (`low` through `max`), the fallback for
@@ -358,7 +363,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
-    return { outputs: rows, warnings: ["hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
+    return { outputs: rows, warnings: [...untranslatedMatcherWarnings(core.hooks.interchangeFor(TOOL)), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 
@@ -576,23 +581,28 @@ function effortLine(item: CatalogItem, efforts: EffortMap): string[] {
 }
 
 /**
- * The coding agent's setup workflow: checkout, then the dependency install this
- * repository's own package manager performs.
+ * The coding agent's setup workflow: checkout, Node, then the dependency
+ * install this repository's own package manager performs.
  *
- * Two lanes, decided by evidence rather than by assumption. A lockfile, a
- * Corepack pin, or a persisted JavaScript/TypeScript language selects the Node
- * lane and its exact install command — `npm ci` and its equivalents need a
- * lockfile, so their frozen forms are emitted only when one is actually there.
- * With no Node evidence at all the workflow checks out and stops, naming what
- * WAS detected in a comment: a fabricated install step for a stack the engine
- * cannot see would fail on the first agent run.
+ * Node is installed in every repository (REQ-FLOW-022): the hooks this engine
+ * writes for Copilot (`.github/hooks/stamity.json`) run on `node`, whatever
+ * the project itself is written in, and the agent's machine is not promised one.
+ *
+ * The install step has two lanes, decided by evidence rather than by
+ * assumption. A lockfile, a Corepack pin, or a persisted JavaScript/TypeScript
+ * language selects the Node lane and its exact install command — `npm ci` and
+ * its equivalents need a lockfile, so their frozen forms are emitted only when
+ * one is actually there. With no Node evidence at all no install step is
+ * written, and a comment names what WAS detected: a fabricated install step
+ * for a stack the engine cannot see would fail on the first agent run.
  *
  * The project's own pins decide the versions ({@link readSetupStepsPins}): the
  * Node version from `.nvmrc`, `.node-version` or `engines.node`, and each
  * action's ref from the first workflow of the project's own that uses it — a
  * SHA pin with its trailing comment included. Where the project names none,
- * an action is referenced by major version and Node by the current LTS. A
- * full-length commit SHA is the stronger supply-chain posture, and the emitted
+ * an action is referenced by its major tag ({@link DEFAULT_ACTION_REFS}) and
+ * Node by the current LTS. A full-length commit SHA is the stronger
+ * supply-chain posture, and the emitted
  * comment says so — but a SHA this engine cannot verify would be a fabricated
  * pin, which is worse than an honest tag.
  *
@@ -613,9 +623,10 @@ export function buildSetupSteps(
   const steps = isNode
     ? nodeSteps(packageManager, pins)
     : [
+        ...setupNodeStep(pins),
         "      # No Node toolchain was detected for this repository " +
           `(detected: ${named.length === 0 ? "nothing" : named.join(", ")}).`,
-        "      # The agent gets a checkout only: this generated file installs no runtime for that stack.",
+        "      # Node is here for the generated hooks; this file installs no dependencies for that stack.",
       ];
   const copied = [pins.checkout, pins.setupNode].flatMap((pin) => (pin === null ? [] : [pin.source]));
   const refNote =
@@ -653,9 +664,9 @@ export function buildSetupSteps(
   ].join("\n");
 }
 
-/** The Node lane's steps: toolchain setup, Corepack where the manager needs it, install. */
-function nodeSteps(packageManager: PackageManagerInfo, pins: SetupStepsPins): string[] {
-  const lines = [
+/** The `setup-node` step every lane writes: the project's Node pin, else the current LTS. */
+function setupNodeStep(pins: SetupStepsPins): string[] {
+  return [
     `      - uses: ${actionUse("setup-node", pins.setupNode)}`,
     "        with:",
     pins.node === null
@@ -663,6 +674,11 @@ function nodeSteps(packageManager: PackageManagerInfo, pins: SetupStepsPins): st
       : `          # From this project's ${pins.node.source}; each sync re-reads it.`,
     `          node-version: "${pins.node?.version ?? "lts/*"}"`,
   ];
+}
+
+/** The Node lane's steps: toolchain setup, Corepack where the manager needs it, install. */
+function nodeSteps(packageManager: PackageManagerInfo, pins: SetupStepsPins): string[] {
+  const lines = setupNodeStep(pins);
   if (packageManager.name === "pnpm" || packageManager.name === "yarn") {
     // Corepack ships with Node and provisions both; bun is not a Corepack manager.
     lines.push("      - run: corepack enable");
@@ -674,12 +690,20 @@ function nodeSteps(packageManager: PackageManagerInfo, pins: SetupStepsPins): st
   return lines;
 }
 
-/** The ref an action is used at when the project's own workflows name none. */
-const DEFAULT_ACTION_REF = "v5";
+/**
+ * The major tag each action is used at when the project's own workflows name
+ * none: GitHub's current majors, `actions/checkout@v6` and
+ * `actions/setup-node@v7` (the plan's decision D16, 2026-10-14). Per action,
+ * because the two release their majors apart.
+ */
+const DEFAULT_ACTION_REFS: Readonly<Record<"checkout" | "setup-node", string>> = Object.freeze({
+  checkout: "v6",
+  "setup-node": "v7",
+});
 
 /** `actions/<name>@<ref>`, with a copied pin's trailing comment kept. */
 function actionUse(name: "checkout" | "setup-node", pin: ActionPin | null): string {
-  if (pin === null) return `actions/${name}@${DEFAULT_ACTION_REF}`;
+  if (pin === null) return `actions/${name}@${DEFAULT_ACTION_REFS[name]}`;
   return `actions/${name}@${pin.ref}${pin.comment === null ? "" : ` # ${pin.comment}`}`;
 }
 
@@ -954,42 +978,130 @@ function yamlScalar(value: string): string {
 }
 
 /**
- * The event name's CASING selects the PAYLOAD FORMAT, not a cosmetic spelling.
+ * Canonical event → the camelCase event name this client keys
+ * `.github/hooks/*.json` by (REQ-FLOW-086).
  *
- * Measured against the hooks reference on 2026-09-20 (this comment previously
- * said PascalCase "selects canonical tool names and matcher aliases", which is
- * not what the page documents): a camelCase event name delivers camelCase
- * payload fields, while the PascalCase alias delivers the VS Code compatible
- * format — `hook_event_name`, `session_id`, and an ISO timestamp. Writing the
- * PascalCase key under `hooks` therefore chooses a wire format for every entry
- * under it.
+ * The event name's CASING selects the PAYLOAD FORMAT, not a cosmetic spelling:
+ * a camelCase name delivers camelCase payload fields (`toolName`, `toolArgs`,
+ * `sessionId`), while the PascalCase alias delivers the VS Code compatible
+ * format (hooks reference, casing re-read 2026-09-20). Every example for
+ * Copilot's cloud agent is camelCase, and that agent reads no
+ * `.claude/settings.json` hooks (the plan's decision D16, 2026-10-14), so the
+ * camelCase keys are the ones that reach it. Two names are not the mechanical
+ * rename: the prompt event is `userPromptSubmitted` and the end of the
+ * agent's turn is `agentStop`.
  *
- * Emitting `CLAUDE_EVENT_NAMES` here is safe on measured grounds rather than by
- * assumption. The portable runner normalizes the payload before any script
- * reads it — it injects `hook_event_name` and fills `session_id` from the
- * camelCase `sessionId` (`../hooks/portableRunner.ts`) — so the generated
- * scripts see the same fields under either casing. And the alias is not
- * universal: four vendor events (`notification`, `permissionRequest`,
- * `subagentStart`, `userPromptTransformed`) have no PascalCase alias on that
- * page at all, so a row on one of them can only ever be keyed camelCase.
+ * The portable runner turns the camelCase payload back into the interchange
+ * before any script reads it — `session_id`, `tool_name` (with the Claude tool
+ * name restored, {@link COPILOT_RUNTIME_TOOL_NAMES}), `tool_input`, and
+ * `hook_event_name` in its PascalCase spelling — so an authored hook reads the
+ * same fields here as on Claude Code.
+ *
+ * A literal table, as `CLAUDE_EVENT_NAMES` and Cursor's `EVENT_RENAME` are,
+ * so a canonical rename cannot silently change what gets emitted.
+ */
+export const COPILOT_EVENT_NAMES: Readonly<Record<CanonicalHookEvent, string>> = Object.freeze({
+  session_start: "sessionStart",
+  pre_tool_use: "preToolUse",
+  post_tool_use: "postToolUse",
+  user_prompt_submit: "userPromptSubmitted",
+  stop: "agentStop",
+  session_end: "sessionEnd",
+});
+
+/**
+ * Claude names a matcher may use that the runner never hands a hook, each with
+ * the name it does hand: `Task`, Claude Code's earlier name for its spawn tool,
+ * which the guard still places beside `Agent` (`../tools/translator.ts`). A
+ * matcher on `Task` therefore matches Copilot's `task`, whose hook then reads
+ * `Agent` (build/58).
+ */
+const CLAUDE_MATCHER_ALIASES: Readonly<Record<string, string>> = Object.freeze({ Task: "Agent" });
+
+/**
+ * Claude tool name → the Copilot runtime names it stands for: the inverse of
+ * the runner's {@link COPILOT_RUNTIME_TOOL_NAMES}, so the matcher a hook is
+ * keyed by and the `tool_name` it then reads come from one table, plus
+ * {@link CLAUDE_MATCHER_ALIASES}.
+ */
+const COPILOT_MATCHER_NAMES: ReadonlyMap<string, readonly string[]> = (() => {
+  const map = new Map<string, string[]>();
+  for (const [runtime, claude] of Object.entries(COPILOT_RUNTIME_TOOL_NAMES)) {
+    map.set(claude, [...(map.get(claude) ?? []), runtime]);
+  }
+  for (const [alias, claude] of Object.entries(CLAUDE_MATCHER_ALIASES)) map.set(alias, map.get(claude) ?? []);
+  return map;
+})();
+
+/** The runtime names themselves: an author who already wrote `bash` named a Copilot tool. */
+const COPILOT_RUNTIME_NAMES: ReadonlySet<string> = new Set(Object.keys(COPILOT_RUNTIME_TOOL_NAMES));
+
+/**
+ * An authored matcher in Copilot's runtime vocabulary (REQ-FLOW-086).
+ *
+ * The matcher is read as `|`-separated alternatives. Each alternative that is
+ * a Claude tool name becomes the runtime names it stands for (`Bash|Edit` →
+ * `bash|edit|str_replace_editor|apply_patch`); `*`, an empty matcher and a
+ * runtime name pass unchanged. Any other alternative (a regular expression, an
+ * MCP tool, a tool with no runtime twin) is kept as written and returned in
+ * `untranslated`, so the planner can say once that it may match nothing.
+ */
+export function translateCopilotMatcher(matcher: string): { matcher: string; untranslated: string[] } {
+  if (matcher === "" || matcher === "*") return { matcher, untranslated: [] };
+  const names: string[] = [];
+  const untranslated: string[] = [];
+  for (const alternative of matcher.split("|")) {
+    const runtime = COPILOT_MATCHER_NAMES.get(alternative);
+    if (runtime !== undefined) names.push(...runtime);
+    else {
+      names.push(alternative);
+      if (alternative !== "*" && !COPILOT_RUNTIME_NAMES.has(alternative)) untranslated.push(alternative);
+    }
+  }
+  return { matcher: [...new Set(names)].join("|"), untranslated: [...new Set(untranslated)] };
+}
+
+/**
+ * One warning per authored matcher alternative with no Copilot runtime twin,
+ * each named once however many rows carry it. Quoted through `JSON.stringify`,
+ * so a matcher from a hook file cannot put a line break into the report.
+ */
+export function untranslatedMatcherWarnings(rows: readonly HookInterchange[]): string[] {
+  const named = new Set<string>();
+  for (const row of rows) {
+    if (row.matcher === undefined) continue;
+    for (const alternative of translateCopilotMatcher(row.matcher).untranslated) named.add(alternative);
+  }
+  return [...named].map(
+    (alternative) =>
+      `hook matcher [copilot]: ${JSON.stringify(alternative)} names no Copilot runtime tool, so it is kept as written and may match no call there.`,
+  );
+}
+
+/**
+ * Copilot's repository hooks file, keyed by {@link COPILOT_EVENT_NAMES}.
  *
  * Every literal below is this client's wire vocabulary, read from the hooks
  * reference listed in {@link COPILOT_DIALECT_FACTS.citations}: the entry `type`
- * (`"command"`), the working directory key `cwd` (repository-relative, `"."`
- * being the repository root), the `matcher` key, and the seconds-valued
+ * (`"command"`), the `bash` command the cloud agent runs with `command` beside
+ * it for the other runners (one string in both: the walk-up starter reads the
+ * same under `sh` and `cmd`), the working directory key `cwd`
+ * (repository-relative, `"."` being the repository root), the `matcher` key in
+ * runtime tool names ({@link translateCopilotMatcher}), and the seconds-valued
  * `timeoutSec` this engine rounds the portable milliseconds up into.
  * https://docs.github.com/en/copilot/reference/hooks-reference (casing fact
- * re-read 2026-09-20; the `citations` entry above still carries the 2026-09-17
- * currency-pass date, which no claim here depends on)
+ * re-read 2026-09-20; the `bash` key and the camelCase keys from the plan's
+ * decision D16, 2026-10-14)
  */
 export function buildCopilotHooksJson(rows: readonly HookInterchange[], cli?: CliCallContext): string {
   // The walk-up starter (REQ-FLOW-084) names this pinned call when its runner is missing.
   const starter = cli === undefined ? {} : { syncCall: pinnedCliCall(cli.packageName, cli.version, "sync", cli) };
   const hooks: Record<string, object[]> = {};
   for (const row of rows) {
-    (hooks[CLAUDE_EVENT_NAMES[row.event]] ??= []).push({
-      type: "command", command: portableHookCommand("copilot", row, starter), cwd: ".",
-      ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
+    const command = portableHookCommand("copilot", row, starter);
+    (hooks[COPILOT_EVENT_NAMES[row.event]] ??= []).push({
+      type: "command", bash: command, command, cwd: ".",
+      ...(row.matcher === undefined ? {} : { matcher: translateCopilotMatcher(row.matcher).matcher }),
       ...(row.timeoutMs === undefined ? {} : { timeoutSec: Math.ceil(row.timeoutMs / 1000) }),
     });
   }

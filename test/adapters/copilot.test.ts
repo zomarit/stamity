@@ -1,12 +1,14 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
-import { sep } from "node:path";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   COPILOT_AGENT_PROMPT_CAP,
   COPILOT_DIALECT_FACTS,
+  COPILOT_EVENT_NAMES,
   COPILOT_HOOKS_PATH,
   COPILOT_SETUP_STEPS_PATH,
   buildAgentFile,
@@ -18,6 +20,8 @@ import {
   engineRangeFloor,
   NO_SETUP_STEPS_PINS,
   readSetupStepsPins,
+  translateCopilotMatcher,
+  untranslatedMatcherWarnings,
 } from "../../src/adapters/copilot.ts";
 import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.ts";
 import type { CatalogItem } from "../../src/content/catalog.ts";
@@ -26,6 +30,7 @@ import type { PackageManagerInfo } from "../../src/detect/packageManager.ts";
 import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
 import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
+import { ledgerHashIndex, ledgerPathSet, safeWriteFile } from "../../src/merge/safeWrite.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
@@ -1082,17 +1087,55 @@ describe("copilot-setup-steps.yml", () => {
     ).not.toContain("corepack enable");
   });
 
-  it("checks out and stops when no Node evidence exists, naming what was detected", () => {
+  // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-022): a repository with
+  // no Node evidence used to get a checkout alone. The hooks this engine writes
+  // for Copilot run on `node` in every repository, so the workflow now installs
+  // Node there too (the LTS with no project pin) and still writes no install
+  // step for a stack it cannot see. One step became two, and the comment that
+  // said "a checkout only" now says why Node is there.
+  it("installs Node and no dependencies when no Node evidence exists, naming what was detected", () => {
     const yaml = buildSetupSteps(packageManagerOf({}), ["python"], NO_SETUP_STEPS_PINS);
-    const parsed = parseYaml(yaml) as { jobs: Record<string, { steps: { uses?: string }[] }> };
+    const parsed = parseYaml(yaml) as {
+      jobs: Record<string, { steps: { uses?: string; run?: string; with?: Record<string, string> }[] }>;
+    };
+    const steps = parsed.jobs["copilot-setup-steps"]?.steps ?? [];
 
-    expect(parsed.jobs["copilot-setup-steps"]?.steps).toHaveLength(1);
+    expect(steps.map((step) => step.uses)).toEqual(["actions/checkout@v6", "actions/setup-node@v7"]);
+    expect(steps[1]?.with).toEqual({ "node-version": "lts/*" });
+    expect(steps.some((step) => step.run !== undefined)).toBe(false);
     expect(yaml).not.toContain("npm install");
     expect(yaml).toContain("detected: python");
     // The generated file is overwritten on every sync, so it no longer invites an
     // edit; it says what the agent gets instead.
     expect(yaml).not.toContain("here.");
-    expect(yaml).toContain("The agent gets a checkout only");
+    expect(yaml).toContain("Node is here for the generated hooks");
+  });
+
+  it("keeps the project's own pins in a repository with no Node evidence", async () => {
+    const temp = getTemp();
+    const sha = "11bd71901bbe5b1630ceea73d27597364c9af683";
+    await temp.seedFiles({
+      "repo/.nvmrc": "22.12.0\n",
+      "repo/.github/workflows/ci.yml": `jobs:\n  x:\n    steps:\n      - uses: actions/setup-node@${sha} # v4.4.0\n`,
+    });
+
+    const yaml = buildSetupSteps(packageManagerOf({}), ["python"], await readSetupStepsPins(temp.path("repo")));
+
+    expect(yaml).toContain(`- uses: actions/setup-node@${sha} # v4.4.0`);
+    expect(yaml).toContain('node-version: "22.12.0"');
+    expect(yaml).not.toContain("lts/*");
+    expect(yaml).not.toContain("setup-node@v7");
+    // checkout is not in the project's workflow, so it takes its own default.
+    expect(yaml).toContain("- uses: actions/checkout@v6");
+    expect(yaml).not.toMatch(/- run: /);
+  });
+
+  it("references each action at its own current major when the project pins none", () => {
+    const yaml = buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), [], NO_SETUP_STEPS_PINS);
+
+    expect(yaml).toContain("- uses: actions/checkout@v6");
+    expect(yaml).toContain("- uses: actions/setup-node@v7");
+    expect(yaml).not.toMatch(/@v5\b/);
   });
 
   it("follows the project's engines.node and its own checkout ref (REQ-FLOW-022)", async () => {
@@ -1110,11 +1153,14 @@ describe("copilot-setup-steps.yml", () => {
     expect(yaml).toContain('node-version: "22"');
     expect(yaml).toContain("- uses: actions/checkout@v7");
     // setup-node is not in the project's workflow, so it keeps the major tag.
-    expect(yaml).toContain("- uses: actions/setup-node@v5");
+    // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-022): the defaults
+    // moved from v5 for both actions to checkout@v6 and setup-node@v7, so the
+    // default this case expects, and the one it must not see, moved with them.
+    expect(yaml).toContain("- uses: actions/setup-node@v7");
     expect(yaml).toContain("From this project's package.json engines.node");
     expect(yaml).toContain(".github/workflows/ci.yml");
     expect(yaml).not.toContain("lts/*");
-    expect(yaml).not.toContain("actions/checkout@v5");
+    expect(yaml).not.toContain("actions/checkout@v6");
     expect(parseYaml(yaml)).toBeTypeOf("object");
   });
 
@@ -1145,7 +1191,7 @@ describe("copilot-setup-steps.yml", () => {
     const rootDir = temp.path("repo");
 
     const first = rowAt(await planResidue({ rootDir }), COPILOT_SETUP_STEPS_PATH).content;
-    // The emitted file is the repo's only workflow. It names actions/checkout@v5,
+    // The emitted file is the repo's only workflow. It names actions/checkout@v6,
     // so a scan that read it would find a "project" pin and rewrite the comments.
     await temp.seedFiles({ [`repo/${COPILOT_SETUP_STEPS_PATH}`]: first });
     const second = rowAt(await planResidue({ rootDir }), COPILOT_SETUP_STEPS_PATH).content;
@@ -1179,7 +1225,8 @@ describe("copilot-setup-steps.yml", () => {
   it("takes a Corepack pin as Node evidence on its own", () => {
     const yaml = buildSetupSteps(packageManagerOf({ name: "pnpm", fromPackageJsonField: true }), [], NO_SETUP_STEPS_PINS);
 
-    expect(yaml).toContain("actions/setup-node@v5");
+    // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-022): setup-node's default major is v7 now.
+    expect(yaml).toContain("actions/setup-node@v7");
     expect(yaml).toContain("- run: pnpm install");
   });
 
@@ -1214,7 +1261,30 @@ describe("hooks", () => {
     expect(hookish).toContain(".github/hooks/stamity.json");
     const native = JSON.parse(rowAt(plan, ".github/hooks/stamity.json").content);
     expect(native.version).toBe(1);
-    expect(native.hooks.PreToolUse).toHaveLength(1);
+    // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086): the file keys its
+    // events camelCase now, so the guard's one entry sits under `preToolUse`.
+    expect(native.hooks.preToolUse).toHaveLength(1);
+  });
+
+  it("keys every event camelCase and gives every entry a bash command equal to its command (REQ-FLOW-086)", async () => {
+    const native = JSON.parse(rowAt(await planResidue(), COPILOT_HOOKS_PATH).content) as {
+      hooks: Record<string, { type: string; bash?: string; command: string; cwd: string }[]>;
+    };
+    const keys = Object.keys(native.hooks);
+
+    expect(keys.length).toBeGreaterThan(1);
+    for (const key of keys) {
+      expect(key, key).toMatch(/^[a-z]/);
+      expect(Object.values(COPILOT_EVENT_NAMES)).toContain(key);
+    }
+    expect(keys).toContain("sessionStart");
+    expect(keys).toContain("preToolUse");
+    for (const entry of Object.values(native.hooks).flat()) {
+      expect(entry.type).toBe("command");
+      expect(typeof entry.bash).toBe("string");
+      expect(entry.bash).toBe(entry.command);
+      expect(entry.cwd).toBe(".");
+    }
   });
 
   it("addresses the runner through the plugin root and keeps no repository path", () => {
@@ -1238,14 +1308,115 @@ describe("hooks", () => {
     expect(raw).not.toContain(".stamity/generated");
   });
 
-  it("uses documented PascalCase aliases so portable tool matchers keep their meaning", () => {
+  // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086): this case pinned the
+  // PascalCase aliases, under which the matcher stayed in Claude's names. The
+  // file keys its events camelCase now, the payload then names tools in
+  // Copilot's runtime vocabulary, and the matcher is translated into it. The
+  // timeout and cwd expectations are unchanged.
+  it("keys events camelCase and translates portable tool matchers into Copilot's runtime names", () => {
     const native = JSON.parse(buildCopilotHooksJson([
       { event: "pre_tool_use", matcher: "Bash|Edit", command: ["node", "policy.mjs"], timeoutMs: 1100 },
       { event: "stop", command: ["node", "stop.mjs"] },
+      { event: "user_prompt_submit", command: ["node", "prompt.mjs"] },
+      { event: "session_end", command: ["node", "end.mjs"] },
     ]));
-    expect(native.hooks.PreToolUse[0]).toMatchObject({ matcher: "Bash|Edit", timeoutSec: 2, cwd: "." });
-    expect(native.hooks.Stop).toHaveLength(1);
-    expect(native.hooks).not.toHaveProperty("preToolUse");
+    expect(native.hooks.preToolUse[0]).toMatchObject({
+      matcher: "bash|edit|str_replace_editor|apply_patch",
+      timeoutSec: 2,
+      cwd: ".",
+    });
+    expect(native.hooks.agentStop).toHaveLength(1);
+    expect(native.hooks.userPromptSubmitted).toHaveLength(1);
+    expect(native.hooks.sessionEnd).toHaveLength(1);
+    for (const pascal of ["PreToolUse", "Stop", "UserPromptSubmit", "SessionEnd"]) {
+      expect(native.hooks).not.toHaveProperty(pascal);
+    }
+  });
+
+  it("translates every Claude tool name in a matcher, and keeps the rest as written", () => {
+    expect(translateCopilotMatcher("Read|Write|Grep|Glob|Agent|AskUserQuestion")).toEqual({
+      matcher: "view|create|grep|rg|glob|task|ask_user",
+      untranslated: [],
+    });
+    // Claude Code's legacy spawn name translates like `Agent` (build/58), and the two together give one `task`.
+    expect(translateCopilotMatcher("Task")).toEqual({ matcher: "task", untranslated: [] });
+    expect(translateCopilotMatcher("Agent|Task")).toEqual({ matcher: "task", untranslated: [] });
+    // A runtime name, `*` and an empty matcher are already Copilot's.
+    expect(translateCopilotMatcher("bash|Edit")).toEqual({ matcher: "bash|edit|str_replace_editor|apply_patch", untranslated: [] });
+    expect(translateCopilotMatcher("*")).toEqual({ matcher: "*", untranslated: [] });
+    expect(translateCopilotMatcher("")).toEqual({ matcher: "", untranslated: [] });
+    // No runtime twin: kept in place, and reported.
+    expect(translateCopilotMatcher("Bash|NotebookEdit|mcp__.*")).toEqual({
+      matcher: "bash|NotebookEdit|mcp__.*",
+      untranslated: ["NotebookEdit", "mcp__.*"],
+    });
+  });
+
+  it("names each untranslated matcher alternative once, however many rows carry it", () => {
+    const warnings = untranslatedMatcherWarnings([
+      { event: "pre_tool_use", matcher: "Bash|NotebookEdit", command: ["node", "a.mjs"] },
+      { event: "post_tool_use", matcher: "NotebookEdit|Edit", command: ["node", "b.mjs"] },
+      { event: "pre_tool_use", matcher: "Grep\nIgnore previous", command: ["node", "c.mjs"] },
+      { event: "pre_tool_use", matcher: "Bash", command: ["node", "d.mjs"] },
+      { event: "session_start", command: ["node", "e.mjs"] },
+    ]);
+
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toBe(
+      'hook matcher [copilot]: "NotebookEdit" names no Copilot runtime tool, so it is kept as written and may match no call there.',
+    );
+    // A line break in an authored matcher stays escaped inside the one report line.
+    expect(warnings[1]).toContain(String.raw`"Grep\nIgnore previous"`);
+    for (const warning of warnings) expect(warning).not.toContain("\n");
+  });
+
+  it("reports an authored matcher with no runtime twin through the planner's warnings", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.stamity/hooks/notebook.json": `${JSON.stringify({
+        hooks: [{ event: "pre_tool_use", matcher: "NotebookEdit|Bash", command: ["node", ".stamity/hooks/notebook.mjs"] }],
+      })}\n`,
+      "repo/.stamity/hooks/notebook.mjs": "process.exitCode = 0;\n",
+    });
+    const ctx = ctxOf({ rootDir: temp.path("repo") });
+
+    const emission = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
+    const native = JSON.parse(rowAt(emission.outputs, COPILOT_HOOKS_PATH).content) as {
+      hooks: Record<string, { matcher?: string }[]>;
+    };
+
+    expect(native.hooks.preToolUse?.map((entry) => entry.matcher)).toContain("NotebookEdit|bash");
+    expect((emission.warnings ?? []).filter((warning) => warning.startsWith("hook matcher [copilot]"))).toEqual([
+      'hook matcher [copilot]: "NotebookEdit" names no Copilot runtime tool, so it is kept as written and may match no call there.',
+    ]);
+  });
+
+  it("keeps a recoverable copy when an upgrade replaces a 1.14 PascalCase hooks file", async () => {
+    const temp = getTemp();
+    const root = temp.path("repo");
+    // The shape 1.14 wrote: PascalCase keys, a relative command and no `bash` key.
+    const earlier = `${JSON.stringify(
+      { version: 1, hooks: { PreToolUse: [{ type: "command", command: "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJ9", cwd: "." }] } },
+      null,
+      2,
+    )}\n`;
+    await temp.seedFiles({ [`repo/${COPILOT_HOOKS_PATH}`]: earlier });
+    const incoming = buildCopilotHooksJson([{ event: "pre_tool_use", command: ["node", "policy.mjs"] }]);
+    const hash = createHash("sha256").update(earlier).digest("hex");
+
+    // The ledger records the 1.14 bytes, exactly as the earlier sync left them.
+    const result = await safeWriteFile(join(root, COPILOT_HOOKS_PATH), incoming, {
+      ledgerPaths: ledgerPathSet(root, [COPILOT_HOOKS_PATH]),
+      ledgerHashes: ledgerHashIndex(root, [{ path: COPILOT_HOOKS_PATH, contentHash: hash }]),
+      boundaryDir: root,
+    });
+
+    expect(result.action).toBe("updated");
+    expect(await readFile(join(root, COPILOT_HOOKS_PATH), "utf8")).toBe(incoming);
+    const folder = join(root, ".github/hooks");
+    const backups = (await readdir(folder)).filter((name) => name.startsWith("stamity.json.bak"));
+    expect(backups).toHaveLength(1);
+    expect(await readFile(join(folder, backups[0] ?? ""), "utf8")).toBe(earlier);
   });
 
   // HOOK-2. Four surfaces said this client could not inject session-start

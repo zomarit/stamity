@@ -1241,8 +1241,11 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
     expect(leaves(cursor["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false]);
 
     const copilot = await renderedHooks("copilot");
-    expect(leaves(copilot["SessionStart"]).map((hook) => hook.timeoutSec)).toEqual([30, 30]);
-    expect(leaves(copilot["PreToolUse"]).map((hook) => Object.hasOwn(hook, "timeoutSec"))).toEqual([false]);
+    // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086, signed off as build/56):
+    // Copilot's hooks file keys its events camelCase now, so the two entries are read
+    // under `sessionStart` and `preToolUse`. The budgets asserted are unchanged.
+    expect(leaves(copilot["sessionStart"]).map((hook) => hook.timeoutSec)).toEqual([30, 30]);
+    expect(leaves(copilot["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeoutSec"))).toEqual([false]);
 
     const codex = await renderedHooks("codex");
     expect(leaves(codex["SessionStart"]).map((hook) => hook.timeout)).toEqual([30, 30]);
