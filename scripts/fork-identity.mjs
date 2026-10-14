@@ -31,8 +31,10 @@
 // It lives in `scripts/`, outside the `src/` boundary map, and imports nothing from `src/`.
 //
 // ORDER. Every target is computed and validated before anything is written: the candidate
-// manifest goes through `resolveDistributionIdentity`, so an identity the distribution scripts
-// would refuse is refused here first. Then a file that would change and has uncommitted edits
+// manifest goes through `resolveDistributionIdentity`, so a publisher or repository the identity
+// rules refuse is refused here first, and its notices (a leftover `stamity.distribution` block,
+// ignored since 1.15.0) are printed to stderr, never changing the exit code. Then a file that
+// would change and has uncommitted edits
 // stops the run before any write, because overwriting it would discard work nobody reviewed.
 // Then the writes, one temporary file and one rename each.
 
@@ -204,17 +206,18 @@ function retargetPreset(relPath, { locate, key, label, target }) {
   return { relPath, bytes, text: next, keys: [label] }
 }
 
-/** Every target file, computed and validated; nothing is written here. */
+/** Every target file, computed and validated, and the resolver's notices; nothing is written here. */
 function plan(options) {
   const manifest = readJson('package.json')
   const pkg = targetManifest(manifest.value, options)
+  let identity
   try {
-    resolveDistributionIdentity(pkg)
+    identity = resolveDistributionIdentity(pkg)
   } catch (error) {
     // The resolver's messages name the field and never echo a URL.
     throw new Refusal(`invalid identity: ${error instanceof Error ? error.message : String(error)}`)
   }
-  return [
+  const files = [
     {
       relPath: 'package.json',
       bytes: manifest.bytes,
@@ -231,6 +234,7 @@ function plan(options) {
       target: pkg.name,
     }),
   ]
+  return { files, notices: identity.notices }
 }
 
 /** The keys a changed file differs in; a file that differs only in bytes is a line-ending change. */
@@ -280,7 +284,9 @@ function main(args) {
   }
   const registry = parsed.registry === undefined ? undefined : requireCleanRegistry(parsed.registry)
 
-  const files = plan({ owner, repo, scope, registry })
+  const { files, notices } = plan({ owner, repo, scope, registry })
+  // The resolver's notices are fixed lines that echo no configured value.
+  for (const notice of notices) console.error(`fork-identity: ${notice}`)
   const changing = files.filter((file) => file.text !== file.bytes)
 
   if (parsed.check) {

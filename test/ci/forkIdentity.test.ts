@@ -147,25 +147,18 @@ describe("the identity the CLI and CI suites assert against", () => {
       // The registry-probe fixtures: a synthetic manifest and the percent-encoded name the
       // registry is asked for, neither read from this checkout.
       "test/cli/notice/updateNotice.test.ts": { name: 2, why: "pins the registry probe's encoded package name" },
-      // ── test/ci: stub runtimes and synthetic plugin documents ──
-      // Each is a `--runtime` stub or a capability/release document the suite writes itself;
-      // the product copies the stub's name through, so the assertion compares the fixture to
-      // the fixture and a fork's own name never enters it.
-      "test/ci/pluginDistribution.test.ts": { name: 3, why: "the stub runtime's package.json and RUNTIME.json, and the runtime block read back from it" },
-      "test/ci/pluginLifecycle.test.ts": { name: 2, why: "the stub runtime's package.json and RUNTIME.json" },
-      "test/ci/pluginPackages.test.ts": { name: 1, why: "the stub runtime's package.json" },
-      "test/ci/pluginPackages.claude.test.ts": { name: 1, why: "the stub runtime's package.json" },
-      "test/ci/pluginPackages.codex.test.ts": { name: 1, why: "the stub runtime's package.json" },
-      "test/ci/pluginPackages.copilot.test.ts": { name: 1, owner: 2, why: "the stub runtime's package.json, and a schema-refusal author fixture" },
-      "test/ci/pluginPackages.cursor.test.ts": { name: 1, why: "the stub runtime's package.json" },
-      "test/ci/pluginRoute.test.ts": { name: 2, why: "the stub runtime's package.json and RUNTIME.json" },
-      "test/ci/pluginModules.test.ts": { name: 3, why: "synthetic capability documents naming a companion package" },
-      "test/ci/pluginLocate.test.ts": { name: 1, why: "the companion name the locate fixtures install under" },
-      "test/ci/releaseManifest.test.ts": { name: 1, why: "a synthetic release manifest's runtime block" },
+      // TEST CHANGE, justified (plan 020 file 1, unit d5-scripts-trees): the eleven entries for the
+      // plugin route's stub runtimes and synthetic plugin documents (`pluginDistribution`,
+      // `pluginLifecycle`, the five `pluginPackages` suites, `pluginRoute`, `pluginModules`,
+      // `pluginLocate`) and `releaseManifest` left with their files, deleted with the route in
+      // 1.15.0. No literal moved into another file.
       // ── test/ci: the resolver fed a synthetic manifest ──
       // `pkg()` builds a manifest from a constant, never from this checkout, and the absent
       // `stamity.publisher` default IS the canonical owner in production.
-      "test/ci/distributionIdentity.test.ts": { route: 2, owner: 3, why: "a synthetic manifest's repository and the absent-publisher default" },
+      // TEST CHANGE, justified (plan 020 file 1, unit d5-scripts-trees): was `route: 2, owner: 3`.
+      // The suite was rewritten for the resolver's publisher half; it names the default owner once,
+      // as a constant, and builds its synthetic repository from that constant, not as a route.
+      "test/ci/distributionIdentity.test.ts": { owner: 1, why: "the absent-publisher default, from which the synthetic manifest's repository is built" },
       // ── test/ci: GitHub context and committed workflow text ──
       // The canonical repository guard the workflows carry, and the Actions context fed to
       // it. A committed file's text a rename does not touch; the fork guide leaves workflow
@@ -177,7 +170,10 @@ describe("the identity the CLI and CI suites assert against", () => {
       // TEST CHANGE (run 2026-10-13_records-branch, unit r5-ci-records-job): was `route: 16`. One
       // literal joins, the constant naming ci.yml's canonical records-job guard and the repository
       // its aggregator compares `$REPO` against; committed workflow text, unedited by a rename.
-      "test/ci/workflow.test.ts": { route: 17, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
+      // TEST CHANGE (plan 020 file 1, unit d5-scripts-trees, re-counting unit d3-ci-qa's edit): was
+      // `route: 17`. Two literals left with the APM and plugin route cases: the APM route smoke's
+      // canonical `--source` and the plugin distribution push's repository constant.
+      "test/ci/workflow.test.ts": { route: 15, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
       "test/ci/packSigningRehearsal.test.ts": { route: 4, why: "the rehearsal workflow's repository guard and its Actions environment fixture" },
       // ADDED by plan 010, unit e1-fork-release-workflow: the fork release workflow refuses the
       // canonical repository and the canonical package name, and its suite runs those guards
@@ -185,7 +181,8 @@ describe("the identity the CLI and CI suites assert against", () => {
       // alone, so the suite passes unedited on a renamed checkout.
       "test/ci/forkReleaseWorkflow.test.ts": { name: 1, route: 1, why: "the fork release workflow's canonical repository and package refusals" },
       // ── test/ci: synthetic records ──
-      "test/ci/apmInstall.test.ts": { route: 1, why: "a synthetic apm.lock.yaml written into the suite's own consumer" },
+      // TEST CHANGE (plan 020 file 1, unit d5-scripts-trees): `test/ci/apmInstall.test.ts`'s entry
+      // (`route: 1`, a synthetic apm.lock.yaml) left with the file, deleted with the APM route.
       "test/ci/evidenceSummary.test.ts": { route: 2, why: "a synthetic evidence pointer's source and archive URL" },
       "test/ci/repoHygiene.test.ts": { route: 2, why: "a synthetic evidence manifest's source and archive URL" },
       // ── this file ──

@@ -49,7 +49,7 @@ export function privateTempRoot(setupFile: string, base: string, pid: number): P
  * files it ran, plus the ones the split gives it. The slower shard is that run's critical path:
  *
  *   split (shard 1's serial files)          median critical path   slower shard
- *   pluginLifecycle + syncMcpOwnership      8.64 min               shard 1 in 7 of 12  <- this table
+ *   pluginLifecycle + syncMcpOwnership      8.64 min               shard 1 in 7 of 12  <- the table to 1.14.0
  *   installSmoke + syncMcpOwnership         8.64 min               shard 1 in 7 of 12
  *   installSmoke + crossClientGoldens       8.73 min               shard 1 in 7 of 12
  *   lane + crossClientGoldens               9.30 min               shard 1 in 11 of 12
@@ -59,9 +59,14 @@ export function privateTempRoot(setupFile: string, base: string, pid: number): P
  * review proposed. Whatever split is projected, the hash split of the other files moves by about
  * one file once these five are taken out, and vitest's per-file times leave out collect time. So
  * the gain is measured on CI's Windows legs (QA row 5 of that run).
+ *
+ * 2026-10-14 (plan 020 file 1, unit d5-scripts-trees): `test/ci/pluginLifecycle.test.ts` left the
+ * table and the serial group, deleted with the plugin route in 1.15.0, so shard 1 keeps one serial
+ * file and loses about 64s of serial time; the plugin suites that ran in the parallel group left
+ * both shards' hash split too. The placement below is kept unmeasured, not re-projected: the first
+ * CI run on the deletion's pull request re-measures both Windows legs before a row moves.
  */
 export const WINDOWS_SHARD_OF: Readonly<Record<string, 1 | 2>> = {
-  "test/ci/pluginLifecycle.test.ts": 1,
   "test/cli/commands/syncMcpOwnership.test.ts": 1,
   "test/upstream/lane.test.ts": 2,
   "test/pack/installSmoke.e2e.test.ts": 2,
@@ -113,6 +118,8 @@ const WINDOWS_PARALLEL_TEST_TIMEOUT_MS = 120_000;
  * https://vitest.dev/config/sequence.html#sequence-grouporder
  * 2026-10-08: the serialized group is split across the two Windows shards by
  * `WINDOWS_SHARD_OF`; every file in `heavy` needs a row there.
+ * 2026-10-14: the plugin-lifecycle fixture left the group, deleted with the
+ * plugin route in 1.15.0.
  */
 export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfig, "include" | "projects" | "sequence"> {
   if (platform !== "win32") return {};
@@ -121,7 +128,6 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
     "test/pack/installSmoke.e2e.test.ts",
     "test/cli/commands/syncMcpOwnership.test.ts",
     "test/emit/crossClientGoldens.test.ts",
-    "test/ci/pluginLifecycle.test.ts",
   ];
   return {
     // Inline projects inherit arrays by concatenation. An empty root include

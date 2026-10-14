@@ -35,8 +35,10 @@ async function testFilesOnDisk(): Promise<string[]> {
 /** A file of the records suite, which `npm run test:records` runs and `npm test` does not. */
 const isRecordsFile = (file: string): boolean => file.startsWith("test/records/");
 
+// TEST CHANGE, justified (plan 020 file 1, unit d5-scripts-trees): `test/ci/pluginLifecycle.test.ts`
+// left the serialized set, deleted with the plugin route in 1.15.0; the four that remain are pinned
+// exactly as before, and the cases below still hold discovery and both shards to the whole tree.
 const HEAVY = [
-  "test/ci/pluginLifecycle.test.ts",
   "test/cli/commands/syncMcpOwnership.test.ts",
   "test/emit/crossClientGoldens.test.ts",
   "test/pack/installSmoke.e2e.test.ts",
@@ -53,7 +55,7 @@ const HEAVY = [
 // Check Vitest's resolved projects and actual discovery: grouping must lose or
 // duplicate no test and must leave the remaining parallelism intact.
 describe("Windows fixture scheduling", () => {
-  it("isolates exactly the observed five suites without losing or repeating any test file", async () => {
+  it("isolates exactly the observed four suites without losing or repeating any test file", async () => {
     const runner = await createVitest(
       { watch: false, run: true, config: false, root: ROOT },
       { test: { ...config.test, ...fixtureScheduling("win32") } },
@@ -149,8 +151,10 @@ describe("Windows fixture scheduling", () => {
     // only counted, so a sequencer that inverted the table fails. The placement is the one the
     // projection beside WINDOWS_SHARD_OF (vitest.config.ts) chose on total shard time: lane on
     // shard 2, because shard 1 already carries about two minutes more of other work.
+    // TEST CHANGE, justified (plan 020 file 1, unit d5-scripts-trees): shard 1's pin drops the
+    // deleted plugin-lifecycle file and keeps the one serial file left on that shard.
     expect(first.filter((file) => HEAVY.includes(file)).toSorted(), "shard 1/2's serial files")
-      .toEqual(["test/ci/pluginLifecycle.test.ts", "test/cli/commands/syncMcpOwnership.test.ts"]);
+      .toEqual(["test/cli/commands/syncMcpOwnership.test.ts"]);
     expect(second.filter((file) => HEAVY.includes(file)).toSorted(), "shard 2/2's serial files")
       .toEqual(["test/emit/crossClientGoldens.test.ts", "test/pack/installSmoke.e2e.test.ts", "test/upstream/lane.test.ts"]);
   });

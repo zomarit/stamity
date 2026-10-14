@@ -778,10 +778,15 @@ describe("the restated figures are held to the artifacts they come from", () => 
   it("names first-run lanes the workflow actually declares", () => {
     const workflow = readFileSync(join(REPO_ROOT, CI_WORKFLOW_PATH), "utf-8");
     const page = renderedPage();
-    for (const lane of ["Tarball smoke (publish shape)", "apm-install", "Dogfood check"]) {
+    // TEST CHANGE, justified (plan 020 file 1, unit d5-scripts-trees): `apm-install` left the
+    // lanes. The job is deleted from the workflow with the APM route in 1.15.0, so the page may no
+    // longer name it as a lane, and the case now holds it to naming the job nowhere.
+    for (const lane of ["Tarball smoke (publish shape)", "Dogfood check"]) {
       expect(workflow, `${CI_WORKFLOW_PATH} declares no ${lane}`).toContain(lane);
       expect(page, `the page does not name ${lane}`).toContain(lane);
     }
+    expect(workflow, `${CI_WORKFLOW_PATH} still declares the apm-install job`).not.toContain("apm-install");
+    expect(page, "the page still names the deleted apm-install job").not.toContain("apm-install");
     expect(page).toContain(`(../${CI_WORKFLOW_PATH})`);
     expect(page).toContain(`(${RECORDS_BLOB_URL}${RUN_OF_RECORD_PATH})`);
   });

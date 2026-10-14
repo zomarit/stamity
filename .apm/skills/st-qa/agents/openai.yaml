@@ -1,4 +1,0 @@
-interface:
-  display_name: "Qa"
-  short_description: "Use the Stamity qa workflow"
-  default_prompt: "Use $st-qa for this repository."

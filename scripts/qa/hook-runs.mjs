@@ -89,9 +89,9 @@ function redactLane(text, { repoRoot, fixturesDir } = {}) {
  *   `2026.09.15-d2fe57e`), and `--trust` is not optional: without it the CLI exits 1 on the
  *   Workspace Trust prompt and never reaches the model, so the row would measure the prompt and not
  *   the hook. Measured 2026-09-20 against 2026.09.15-d2fe57e — `agent --help` on that build lists
- *   `-p, --print` and `--trust`, and the plugin-route leg at
- *   `test/ci/pluginPackages.cursor.test.ts:600-680` drives the same pair through to a model answer.
- *   The vendor reference is cursor.com/docs/cli/reference.
+ *   `-p, --print` and `--trust`, and the plugin-route leg (deleted with that route in 1.15.0)
+ *   drove the same pair through to a model answer. The vendor reference is
+ *   cursor.com/docs/cli/reference.
  *
  *   copilot — `-p <text>` is the documented non-interactive lane (`copilot --help` on GitHub
  *   Copilot CLI 1.0.85, read 2026-09-20, lists `-p, --prompt <text>`, `-s, --silent` and
@@ -164,8 +164,8 @@ export const CLIENT_RUNNERS = {
  * universally a zero-exit flag — so that case still counts, and the version string is what proves
  * it). Anything else is reported, never silently upgraded to a version.
  */
-// Imported by `scripts/plugin-route-smoke.mjs` as well as read here, so the subject is the shell-less
-// spawn rather than this one lane: two copies of a sentence are a pin that drifts.
+// Exported so `test/qa/hookRuns.test.ts` reads this sentence rather than a copy of it, so the subject
+// is the shell-less spawn rather than this one lane: two copies of a sentence are a pin that drifts.
 export const WINDOWS_PROBE_LIMIT =
   'a client spawned without a shell cannot be resolved from an npm `.cmd` shim on Windows; run on a POSIX host, or put the client\'s `.exe` on PATH'
 

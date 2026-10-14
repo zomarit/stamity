@@ -20,8 +20,9 @@ const { prepareNativeTypescriptCli } = bootstrap as {
   }) => boolean;
 };
 const SCRIPT = new URL("../../scripts/generate-docs.mjs", import.meta.url);
-const GENERATORS = ["generate-docs", "generate-capability-matrix", "generate-pack-manifests",
-  "generate-apm-package", "generate-plugin-manifests"];
+// TEST CHANGE, justified (plan 020 file 1, unit d5-scripts-trees): `generate-apm-package` and
+// `generate-plugin-manifests` left the list; both generators are deleted with their routes.
+const GENERATORS = ["generate-docs", "generate-capability-matrix", "generate-pack-manifests"];
 
 function fixture() {
   // Runtime injection is necessary to exercise unsupported Node states on a

@@ -10,13 +10,9 @@
 // the engine's atomic writer, so a run interrupted mid-write leaves the old
 // page intact rather than a half-page.
 //
-// One data set does NOT come from the engine, and it cannot: the four plugin
-// containers are declared by the emitter modules under scripts/plugins/clients/,
-// which are build-time modules that are never bundled into dist/. This script is
-// on the same side of that line as they are, so it reads them — through
-// ./plugin-container-facts.mjs — and passes the rows in. The suite that
-// byte-compares the committed page builds them through the same module, so the
-// page and its drift gate are one derivation.
+// Through 1.14.0 one data set came from outside the engine, the four plugin
+// containers; they left with the plugin route in 1.15.0, so every byte of the
+// page is now the engine's live render, the same one its drift gate compares.
 //
 // The renderer is TypeScript and there is no build step here on purpose — a
 // generator that needs `npm run build` first goes stale the moment someone
@@ -54,19 +50,14 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     outArg = args[i]
   }
 
-  const { CAPABILITY_MATRIX_DOC_PATH, LIVE_CAPABILITY_INPUTS, renderCapabilityMatrixFrom } =
-    await import('../src/emit/capabilityMatrix.ts')
+  const { CAPABILITY_MATRIX_DOC_PATH, renderCapabilityMatrix } = await import('../src/emit/capabilityMatrix.ts')
   const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
-  const { buildPluginContainerFacts } = await import('./plugin-container-facts.mjs')
 
   const target = outArg === null ? resolve(ROOT, CAPABILITY_MATRIX_DOC_PATH) : resolve(outArg)
 
   try {
     // Rendering first keeps a failed citation check from truncating the page.
-    const page = renderCapabilityMatrixFrom({
-      ...LIVE_CAPABILITY_INPUTS,
-      plugins: buildPluginContainerFacts(),
-    })
+    const page = renderCapabilityMatrix()
     await atomicWriteFile(target, page)
     console.log(`Wrote ${target}`)
   } catch (err) {

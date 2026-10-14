@@ -178,7 +178,6 @@ export default [
     // copy included, which any non-Claude client selection writes).
     files: [
       ".claude/skills/st-verify/scripts/*.mjs",
-      ".apm/skills/st-verify/scripts/*.mjs",
       ".agents/skills/st-verify/scripts/*.mjs",
     ],
     linterOptions: { reportUnusedDisableDirectives: "off" },
