@@ -5,11 +5,11 @@
  *
  * Two readers, one implementation. `../check.ts` turns these answers into the
  * `plugin-runtime` and `plugin-duplicates` doctor rows, with the severity split
- * REQ-PLUGIN-019 prescribes; `./status.ts` reports the same facts as data under
- * `stamity plugin status`. Both were written from the same requirement, and a
- * second implementation of either probe would let `check` and `status` disagree
- * about a repository neither of them changed — the one failure mode a
- * diagnostic pair cannot afford.
+ * REQ-PLUGIN-019 prescribes; `./status.ts` reported the same facts as data
+ * under `stamity plugin status` until that verb left in 1.15.0. Both were
+ * written from the same requirement, and a second implementation of either
+ * probe would let `check` and `status` disagree about a repository neither of
+ * them changed — the one failure mode a diagnostic pair cannot afford.
  *
  * This module DESCRIBES and never judges. There is no `warn`, no `fail` and no
  * exit code here: the probe says what it found and names what it could not do,
@@ -35,7 +35,6 @@ import { parse as parseYaml } from "yaml";
 import { CLAUDE_SETTINGS_PATH } from "../../../adapters/claude.ts";
 import { buildContentIndex, emittedIdFor } from "../../../content/catalog.ts";
 import { HOOKS_GENERATED_DIR } from "../../../emit/hooksInfra.ts";
-import { PLUGIN_ROOT_VARIABLES } from "../../../plugins/capabilityFile.ts";
 import { findPackageRoot } from "../../../shared/paths.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import {
@@ -64,6 +63,19 @@ const PLUGIN_LOCATOR_TIMEOUT_MS = 5_000;
 
 /** The locator every plugin root ships, relative to that root. */
 const PLUGIN_LOCATOR_PATH = "runtime/locate.mjs";
+
+/**
+ * The environment variables a client sets to name its installed plugin root,
+ * in the order they are consulted. Moved here in 1.15.0 from the capability
+ * reader, which left with the `stamity plugin` verb; this module and its
+ * `plugin-runtime` row leave with the install mode (plan 020 file 1, unit d7).
+ */
+const PLUGIN_ROOT_VARIABLES = [
+  "CLAUDE_PLUGIN_ROOT",
+  "CURSOR_PLUGIN_ROOT",
+  "PLUGIN_ROOT",
+  "COPILOT_PLUGIN_ROOT",
+] as const;
 
 /** The first root variable this environment names, or `undefined` for none. */
 export function pluginRootVariable(

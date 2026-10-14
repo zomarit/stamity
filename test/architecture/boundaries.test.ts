@@ -614,52 +614,16 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // names. The module header states the same refusal at the call site.
   "src/cli/commands/workspace.ts": { unit: "w-u1", wave: 15 },
   // The shared plugin probe (pl-c4): the locator spawn and the duplicate scan
-  // `check.ts` reads for its two plugin rows and `plugin status` reads for the
-  // same facts as data. Wave 14, one below `check.ts`, which is what makes that
-  // cross-unit import legal — and its true depth besides: nothing it calls sits
-  // above the wave-13 kit.
+  // `check.ts` reads for its two plugin rows. Wave 14, one below `check.ts`,
+  // which is what makes that cross-unit import legal — and its true depth
+  // besides: nothing it calls sits above the wave-13 kit.
   //
-  // The plugin lane's CLI half, filed under ONE unit id for the reason the
-  // layering rule itself states: an edge is legal within a unit or strictly
-  // down a wave, and these four sit at their true depths with real edges
-  // between them at the same wave — the verb imports the setup engine, the
-  // report imports the probe. Authorship, which the unit column cannot carry
-  // twice: C6 wrote `plugin/setup.ts` and the capability reader below, C4 wrote
-  // the verb, the report and the probe (the probe by extraction from
-  // `check.ts`, whose two plugin rows read it). Splitting them back into two
-  // unit ids would report the verb's own call into its engine as a violation.
-  //
-  // Wave 15 for `workspace.ts`'s own reason — they drive the wave-14 init
-  // planner and writer — except the probe, which drives nothing above wave 13
-  // and sits at 14 so `check.ts` (wave 15, unit p2-15) can import it. The
-  // engine half of the lane sits far below at wave 2; see the plugin-lane note
-  // after the docs rows.
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d6-verb): the
+  // `stamity plugin` verb, its setup engine, its status report and the
+  // capability reader at wave 2 (pl-c6) left with the plugin route, so their
+  // four rows went with the files; this row stays until unit d7 deletes the
+  // probe with the install mode.
   "src/cli/commands/plugin/probe.ts": { unit: "pl-c4", wave: 14 },
-  "src/cli/commands/plugin/setup.ts": { unit: "pl-c4", wave: 15 },
-  "src/cli/commands/plugin/status.ts": { unit: "pl-c4", wave: 15 },
-  "src/cli/commands/plugin.ts": { unit: "pl-c4", wave: 15 },
-  // ---- package 15 file 2 (008-plugin-lifecycle-02): the plugin lane ----
-  // ONE unit split across the two LAYERS, which is the shape the architecture
-  // forced rather than a bookkeeping choice.
-  //
-  // The capability reader sits at its true depth: it reads a JSON document
-  // through the wave-1 strict parser and names its classes off the wave-1
-  // manifest vocabulary, and nothing below it. Wave 2 is also what lets the
-  // composition root (wave 12) wire it — the registry sits ABOVE every module
-  // it holds, so wave 12 is the registry's ceiling for membership, and an
-  // engine module planned above it could not be a registry entry at all.
-  //
-  // The setup engine has no legal depth in the ENGINE layer: composing init's
-  // planning and write halves is the whole of what it does, and those are
-  // `src/cli/**` at wave 14, so an engine home is a `no-cli` violation in the
-  // value imports and the type imports alike. Wave 15 in the CLI layer is its
-  // true depth, for the reason `src/cli/commands/workspace.ts` states two rows
-  // above: a module whose job is to drive a wave-14 command engine sits one
-  // layer over it. Its verb (`src/cli/commands/plugin.ts`, unit C4) lands at
-  // wave 15 beside it and is its first production caller — which is also what
-  // gives this reader a production caller at all, through the verb and the
-  // setup engine's direct import of `carriedClasses`.
-  "src/plugins/capabilityFile.ts": { unit: "pl-c6", wave: 2 },
   // wave 16 (P2 wave 3) — program assembly
   "src/cli.ts": { unit: "p2-16", wave: 16 },
 

@@ -1,13 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { access, cp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-// @ts-expect-error — the capability emitter ships as a plain .mjs module with no type
-// declarations (it runs under bare Node in the plugin generator). Imported rather than
-// restated so every fixture root below is a document the REAL writer produced — the same
-// reason `test/cli/commands/plugin.test.ts` gives for the same import.
-import { buildCapabilityFile } from "../../scripts/plugins/capability.mjs";
 import { COMMANDS } from "../../src/cli.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import type { PackContentClass } from "../../src/pack/manifest.ts";
@@ -18,9 +12,8 @@ import {
   receiptRelPath,
   serializeReceipt,
 } from "../../src/pack/receipt.ts";
-import { CAPABILITY_FILE, CARRIABLE_CLASSES } from "../../src/plugins/capabilityFile.ts";
 import type { Tool } from "../../src/types/core.ts";
-import { packOwner, PLUGIN_OWNED_CLASSES, type LedgerEntry } from "../../src/types/manifest.ts";
+import { packOwner, type LedgerEntry } from "../../src/types/manifest.ts";
 import { runInProcess, type InProcessResult } from "../support/inProcess.ts";
 import { treeDigest } from "../support/packFixtures.ts";
 import { seedGitRepo } from "../support/repoFixtures.ts";
@@ -40,11 +33,12 @@ import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * - C: defect 2 — the Codex skills-list cap counts touchpoint rows Codex never shows
  *   its model, and its refusal does not name the pack that pushed the list over.
  * - D: defect 3 — in plugin-backed mode a pack skill never reaches the client, and
- *   `check` has no row for an installed pack that reaches no client.
+ *   `check` has no row for an installed pack that reaches no client. Retired in
+ *   1.15.0 with the plugin-backed mode; the group's place below says why.
  * - E: defect 4 — an overlay on a pack skill is reported, then ignored.
  *
  * No mocks: nothing here is stubbed. Speed comes from building one template
- * repository per (mode, client set) on first use and copying it per case, so a
+ * repository per client set on first use and copying it per case, so a
  * case pays for its own verbs only.
  */
 
@@ -57,12 +51,7 @@ const CLIENT_SETS: readonly (readonly Tool[])[] = [
   ["claude", "cursor", "copilot", "codex"],
 ];
 
-/** This checkout's own package name and version, read rather than spelled. */
-const PACKAGE = JSON.parse(
-  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-) as { name: string; version: string };
-
-/** A case may build its template first: an init or plugin setup plus its own verbs. */
+/** A case may build its template first: an init plus its own verbs. */
 const CASE_TIMEOUT = 90_000;
 
 let suite: TempDirHandle;
@@ -151,95 +140,27 @@ function addPack(repo: string, packDir: string): Promise<CliResult> {
   return cli(repo, ["add", packDir, "--allow-untrusted", "-y"]);
 }
 
-/**
- * A generated plugin root: the real writer's capability document for `client`
- * at this engine's version, carrying exactly the classes that client's container
- * can carry (`CARRIABLE_CLASSES`, rules never), plus a locator that answers
- * `--print` — built as in `test/cli/commands/plugin.test.ts`.
- */
-async function pluginRoot(dir: string, client: Tool): Promise<string> {
-  await mkdir(join(dir, "runtime"), { recursive: true });
-  const file: unknown = buildCapabilityFile({
-    client,
-    version: PACKAGE.version,
-    sourceCommit: "a".repeat(40),
-    invocation: { commands: "/stamity:<id>" },
-    clientFloor: {
-      version: "2.1.224",
-      citation: {
-        url: "https://code.claude.com/docs/en/plugin-marketplaces",
-        accessDate: "2026-09-17",
-      },
-    },
-    prerequisites: { node: ">=22.22.2", git: "optional" },
-    classes: {
-      ...(Object.fromEntries(
-        PLUGIN_OWNED_CLASSES.map((cls) => [
-          cls,
-          cls !== "rule" && CARRIABLE_CLASSES[client].includes(cls)
-            ? { status: "carried", count: cls === "hooks" ? 4 : 10 }
-            : { status: "repository-owned", reason: `this container has no ${cls} surface` },
-        ]),
-      ) as Record<string, unknown>),
-      mcp: {
-        status: "repository-owned",
-        reason: "server selection and credential references are the repository's",
-      },
-    },
-    runtime: { companion: { package: PACKAGE.name, compatible: `^${PACKAGE.version}` } },
-  });
-  await writeFile(join(dir, CAPABILITY_FILE), `${JSON.stringify(file, null, 2)}\n`, "utf8");
-  const report = {
-    project: ".",
-    runtime: {
-      kind: "bundled",
-      path: `${dir}/runtime/dist/cli.js`,
-      version: PACKAGE.version,
-      refusal: null,
-    },
-    node: { version: process.versions.node, floor: "22.22.2", ok: true },
-  };
-  await writeFile(
-    join(dir, "runtime", "locate.mjs"),
-    `process.stdout.write(${JSON.stringify(`${JSON.stringify(report, null, 2)}\n`)});\n`,
-    "utf8",
-  );
-  return dir;
-}
-
-type Mode = "generated" | "plugin";
-
 const templates = new Map<string, Promise<string>>();
 
-/** Sets one template repository up: `init` (generated) or `plugin setup` (plugin). */
-async function buildTemplate(key: string, mode: Mode, tools: readonly Tool[]): Promise<string> {
+// TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d6-verb): the template took a
+// mode, `init` (generated) or `plugin setup` (plugin); the plugin verb left in 1.15.0, so
+// `init` is the one setup and the mode parameter went. Every remaining case was generated.
+/** Sets one template repository up with `init`. */
+async function buildTemplate(key: string, tools: readonly Tool[]): Promise<string> {
   const repo = suite.path("templates", key);
   await mkdir(repo, { recursive: true });
   await seedGitRepo(repo);
-  let setup: CliResult;
-  if (mode === "generated") {
-    setup = await cli(repo, ["init", "-y", "--tools", tools.join(",")]);
-  } else {
-    const roots = await Promise.all(
-      tools.map((tool) => pluginRoot(suite.path("roots", key, tool), tool)),
-    );
-    setup = await cli(repo, [
-      "plugin",
-      "setup",
-      ...roots.flatMap((root) => ["--plugin-root", root]),
-      "-y",
-    ]);
-  }
+  const setup = await cli(repo, ["init", "-y", "--tools", tools.join(",")]);
   if (setup.code !== 0) throw new Error(`template ${key} failed to set up: ${said(setup)}`);
   return repo;
 }
 
 /** A fresh copy of the (once-built) template repository for one case. */
-async function freshRepo(mode: Mode, tools: readonly Tool[]): Promise<string> {
-  const key = `${mode}-${tools.join("-")}`;
+async function freshRepo(tools: readonly Tool[]): Promise<string> {
+  const key = tools.join("-");
   let pending = templates.get(key);
   if (pending === undefined) {
-    pending = buildTemplate(key, mode, tools);
+    pending = buildTemplate(key, tools);
     templates.set(key, pending);
   }
   const source = await pending;
@@ -247,15 +168,6 @@ async function freshRepo(mode: Mode, tools: readonly Tool[]): Promise<string> {
   const repo = suite.path("cases", String(caseCounter));
   await cp(source, repo, { recursive: true });
   return repo;
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -386,13 +298,6 @@ const DRILL_PACK: Record<string, string> = {
   ),
 };
 
-/** Where each client of a set reads a skill directory from. */
-function skillDirsFor(tools: readonly Tool[]): string[] {
-  return [
-    ...new Set(tools.map((tool) => (tool === "claude" ? ".claude/skills" : ".agents/skills"))),
-  ];
-}
-
 const SETS = CLIENT_SETS.map((tools) => [tools.join(","), tools] as const);
 
 // ── A: the reported regression ─────────────────────────────────────────────
@@ -401,7 +306,7 @@ describe("A — the reported regression: add ops, then sync, on Cursor and Codex
   it.each([["cursor"], ["codex"]] as const)(
     "tools=%s: sync and check both exit 0 after `add ops -y`",
     async (tool) => {
-      const repo = await freshRepo("generated", [tool]);
+      const repo = await freshRepo([tool]);
 
       const added = await cli(repo, ["add", "ops", "-y"]);
       expect(added.code, `fixture: add ops must install on ${tool} — ${said(added)}`).toBe(0);
@@ -429,7 +334,7 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
     it(
       "B1: add refuses a pack whose command and skill both emit st-drill, and writes nothing",
       async () => {
-        const repo = await freshRepo("generated", tools);
+        const repo = await freshRepo(tools);
         const pack = await writePack("acme-demo", DRILL_PACK);
         const before = await treeDigest(repo);
 
@@ -458,7 +363,7 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
     it(
       "B5: sync refuses a clash an earlier engine already installed, naming both owners and clean --pack",
       async () => {
-        const repo = await freshRepo("generated", tools);
+        const repo = await freshRepo(tools);
         await installBypassingAdd(repo, "acme-demo", DRILL_PACK);
         const precheck = await cli(repo, ["check", "--json"]);
         expect(
@@ -494,7 +399,7 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
   it(
     "B2 (tools=cursor): add refuses a pack command `verify` — it emits st-verify, a core skill",
     async () => {
-      const repo = await freshRepo("generated", ["cursor"]);
+      const repo = await freshRepo(["cursor"]);
       const pack = await writePack("acme-demo", {
         "commands/st-verify.md": artifact("verify", "command", "Verifies the acme demo."),
       });
@@ -516,7 +421,7 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
   it(
     "B3 (tools=cursor): add refuses a pack skill `work` — it emits st-work, a core command",
     async () => {
-      const repo = await freshRepo("generated", ["cursor"]);
+      const repo = await freshRepo(["cursor"]);
       const pack = await writePack("acme-demo", {
         "skills/st-work/SKILL.md": artifact("work", "skill", "Acme work steps."),
       });
@@ -538,7 +443,7 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
   it(
     "B4 (tools=cursor): acme-two's skill `shared` is refused against acme-one's command `shared`",
     async () => {
-      const repo = await freshRepo("generated", ["cursor"]);
+      const repo = await freshRepo(["cursor"]);
       const first = await writePack("acme-one", {
         "commands/st-shared.md": artifact("shared", "command", "The acme-one shared command."),
       });
@@ -575,7 +480,7 @@ describe("C — defect 2 (Codex skills list): count only the rows Codex shows it
     it(
       "C1: a commands-only pack past the core's headroom still syncs — command rows are never shown",
       async () => {
-        const repo = await freshRepo("generated", tools);
+        const repo = await freshRepo(tools);
         // Five commands at 360 characters add about 1,880 characters of touchpoint
         // rows: past the core's headroom under 8,000 while touchpoints count (the
         // core measured 5,570 shown + 1,339 touchpoint characters on 2026-10-03),
@@ -604,7 +509,7 @@ describe("C — defect 2 (Codex skills list): count only the rows Codex shows it
     it(
       "C2: a skills pack that pushes the shown rows past 8,000 is refused, naming the pack and the size",
       async () => {
-        const repo = await freshRepo("generated", tools);
+        const repo = await freshRepo(tools);
         // Four skills at 900 characters (each under 1,000) add about 3,670 shown
         // characters to the core's 5,570: over 8,000 under either way of counting.
         const files = Object.fromEntries(
@@ -636,105 +541,14 @@ describe("C — defect 2 (Codex skills list): count only the rows Codex shows it
   });
 });
 
-// ── D: defect 3, plugin mode ───────────────────────────────────────────────
+// ── D: defect 3, plugin mode — retired ─────────────────────────────────────
 
-/**
- * D2's "reaches no client" pack per client set. Claude, Cursor and Copilot: a
- * command-only pack, because those plugins carry the command class. Codex's
- * plugin carries only skills and hooks (commands, agents and rules stay the
- * repository's there, so a command pack DOES reach Codex), and a skill pack is
- * exactly what D1 says must reach it — so Codex, and all four together, use a
- * hooks-only pack: every plugin carries hooks, and sync already reports pack
- * hook rows as not wired into a client whose hooks come from its plugin.
- */
-function unreachablePack(tools: readonly Tool[]): { shape: string; files: Record<string, string> } {
-  if (tools.includes("codex")) {
-    return {
-      shape: "hooks-only pack",
-      files: {
-        "hooks/hooks.json": `${JSON.stringify(
-          {
-            hooks: [
-              {
-                event: "pre_tool_use",
-                matcher: "Bash",
-                command: ["node", ".stamity/hooks/acme-probe.mjs", "--acme-sentinel"],
-                timeoutMs: 2500,
-              },
-            ],
-          },
-          null,
-          2,
-        )}\n`,
-      },
-    };
-  }
-  return {
-    shape: "command-only pack",
-    files: { "commands/st-acme-cmd.md": artifact("acme-cmd", "command", "Runs the acme check.") },
-  };
-}
-
-describe("D — defect 3 (plugin mode): pack skills reach the client; a pack reaching none is flagged", () => {
-  describe.each(SETS)("tools=%s", (_, tools) => {
-    it(
-      "D1: after add and sync, the pack skill's SKILL.md is where the client reads skills",
-      async () => {
-        const repo = await freshRepo("plugin", tools);
-        const pack = await writePack("acme-demo", {
-          "skills/st-acme-skill/SKILL.md": artifact("acme-skill", "skill", "The acme demo skill."),
-        });
-        const added = await addPack(repo, pack);
-        expect(added.code, `fixture: the skill pack must install — ${said(added)}`).toBe(0);
-
-        const synced = await cli(repo, ["sync"]);
-        expect(synced.code, `fixture: sync must succeed — ${said(synced)}`).toBe(0);
-
-        const expected = skillDirsFor(tools).map((dir) => `${dir}/st-acme-skill/SKILL.md`);
-        const present = await Promise.all(
-          expected.map((path) => exists(join(repo, ...path.split("/")))),
-        );
-        expect(
-          expected.filter((_path, index) => present[index] !== true),
-          `defect 3 (plugin mode): an installed pack skill must reach a plugin-backed ${tools.join(",")} setup, yet sync exited 0 without writing it — ${said(synced)}`,
-        ).toEqual([]);
-      },
-      CASE_TIMEOUT,
-    );
-
-    it(
-      `D2: check fails with a pack-reach row for an installed pack that reaches no client (${unreachablePack(tools).shape})`,
-      async () => {
-        const repo = await freshRepo("plugin", tools);
-        // The repo-committed script a pack hook must name (the launcher allow-list
-        // refuses a hook whose script does not exist); inert for the command shape.
-        await mkdir(join(repo, ".stamity", "hooks"), { recursive: true });
-        await writeFile(join(repo, ".stamity", "hooks", "acme-probe.mjs"), "process.exit(0)\n");
-        const added = await addPack(repo, await writePack("acme-demo", unreachablePack(tools).files));
-        expect(added.code, `fixture: the pack must install — ${said(added)}`).toBe(0);
-        const synced = await cli(repo, ["sync"]);
-        expect(synced.code, `fixture: sync must succeed — ${said(synced)}`).toBe(0);
-
-        const checked = await cli(repo, ["check", "--json"]);
-
-        const rows = rowsWithId(parseJson(checked.stdout), "pack-reach");
-        expect(
-          rows.map((row) => row.status),
-          `defect 3 (plugin mode): check must carry a failing pack-reach row for acme-demo, which reaches no client — ${said(checked)}`,
-        ).toEqual(["fail"]);
-        expect(
-          rows[0]?.detail ?? "",
-          "defect 3 (plugin mode): the pack-reach row must name the pack",
-        ).toContain("acme-demo");
-        expect(
-          checked.code,
-          `defect 3 (plugin mode): check must exit non-zero for an installed pack that reaches no client — ${said(checked)}`,
-        ).not.toBe(0);
-      },
-      CASE_TIMEOUT,
-    );
-  });
-});
+// TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d6-verb): group D set
+// its template repositories up through `stamity plugin setup`, a verb 1.15.0 deleted
+// with the plugin route and the plugin-backed install mode (REQ-PLUGIN-047). Its two
+// cases (a pack skill reaching a plugin-backed client; the pack-reach row for a pack
+// that reaches no client) have no setup path left, so the group went with the verb.
+// Generated mode, which groups A, B, C and E drive, never took the plugin branches.
 
 // ── E: defect 4, an overlay on a pack skill ────────────────────────────────
 
@@ -745,7 +559,7 @@ describe("E — defect 4 (overlay on a pack skill): refused loudly by sync and v
     it(
       "sync and validate exit non-zero, naming the overlay's path and the pack skill",
       async () => {
-        const repo = await freshRepo("generated", tools);
+        const repo = await freshRepo(tools);
         const added = await addPack(
           repo,
           await writePack("acme-demo", {

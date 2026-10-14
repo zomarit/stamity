@@ -123,8 +123,6 @@
         "test/cli/commands/initApply.test.ts",
         "test/cli/commands/initPanel.test.ts",
         "test/cli/commands/initPlan.test.ts",
-        "test/cli/commands/plugin.test.ts",
-        "test/cli/commands/pluginSetup.test.ts",
         "test/cli/commands/syncEngine.test.ts",
         "test/cli/commands/workspace.test.ts",
         "test/cli/commands/worktree.test.ts",

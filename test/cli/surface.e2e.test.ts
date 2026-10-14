@@ -43,6 +43,12 @@ const packageJson = createRequire(import.meta.url)("../../package.json") as { ve
  * through all three — exact list equality, help order, the hidden verbs last —
  * and only the enumerated surface moved, because the surface itself grew a
  * command rather than an assertion being loosened.
+ *
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d6-verb): `plugin`
+ * left the list, and the counts below moved from ten advertised and fourteen
+ * registered to nine and thirteen, because 1.15.0 deleted the plugin route and
+ * its verb (REQ-PLUGIN-047). The assertions keep their shape; the surface
+ * shrank by one command, and the removed verb's exit 2 is pinned below.
  */
 const ADVERTISED = [
   "init",
@@ -53,7 +59,6 @@ const ADVERTISED = [
   "config",
   "workspace",
   "worktree",
-  "plugin",
   "clean",
 ] as const;
 
@@ -72,9 +77,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 14 uniquely-named commands in help order, the hidden four last", () => {
+  it("registers exactly 13 uniquely-named commands in help order, the hidden four last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(14);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(13);
     expect(HIDDEN).toHaveLength(4);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
@@ -103,7 +108,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 10 advertised commands and none of the four plumbing verbs", async () => {
+  it("--help lists exactly the 9 advertised commands and none of the four plumbing verbs", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -146,6 +151,19 @@ describe("advertised surface (child process)", () => {
     expect(result.code).toBe(2);
     expect(result.stderr).toContain("unknown command");
     expect(result.stderr).toContain("--help for usage");
+  });
+
+  // The `plugin` verb left in 1.15.0 with the plugin route (REQ-PLUGIN-047): a user
+  // script still calling it meets the unknown-command error, which names `--help`.
+  it.each([
+    ["plugin", "status"],
+    ["plugin", "setup"],
+  ])("exits 2 on the removed verb `%s %s` as an unknown command, pointing at --help", async (...argv) => {
+    const result = await getFixture().run(argv);
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("unknown command 'plugin'");
+    expect(result.stderr).toContain("stamity --help for usage");
   });
 
   it("exits 2 on an unknown flag of a known command", async () => {
