@@ -67,8 +67,9 @@ rows, and the verdict go into the mode-chosen line. `--state=greenfield` or
 Bounded interview: **one** clarification round, at most five questions, each
 with numbered options and a declared default. Anything still open after that
 round ships as a `[NEEDS CLARIFICATION]` marker in the spec — it does not buy a
-second round. The output is the PRD core: intent, personas, requirements with
-acceptance criteria, risk list, test plan.
+second round. The one exception is the close walk under Return contract, which
+asks about each marker still open before the close prints. The output is the PRD
+core: intent, personas, requirements with acceptance criteria, risk list, test plan.
 
 The spec format below closes at seven sections, so every one of those outputs
 is named a home rather than assumed one, and the two records that are decisions
@@ -85,7 +86,7 @@ rather than requirements land outside the spec file:
 
 An empty repo with no code and no answers still produces a spec: one
 requirement per stated intent, everything else marked. The interview stops at
-the round boundary, not when the questions run out.
+the round boundary, not when the questions run out; only the close walk asks again.
 
 ### Brownfield posture
 
@@ -300,7 +301,12 @@ Every run closes with:
 That close prints after the run has walked each open `[NEEDS CLARIFICATION]`
 marker, each unconfirmed T2 or T3 proposal and each census gap by the
 `stamity-question-protocol` rule's Close walk, and nothing prints after it;
-`check` records each answer and writes nothing.
+`check` records each answer and writes nothing. In `create`, `extract` and `sync`
+the answers are written before the close prints: `spec-author` replaces each
+decided marker with its answer in the requirement and records the question, the
+answer and the date in an ADR stub under `docs/adr/`, as the interview's resolved
+clarifications are; a confirmed proposal merges as its tier says; a marker left
+undecided stays in the spec and is listed under Open markers.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:

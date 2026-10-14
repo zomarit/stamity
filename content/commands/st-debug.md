@@ -214,9 +214,10 @@ and reaches the same transition as a switch the user makes.
 | The symptom turns out to be a question, not a defect | `/st-ask` | the symptom rewritten as the question |
 | The defect arrived as review feedback on delivered work | `/st-rework` | the diagnosis as a triage input |
 
-Before the closing report, the run walks each regression clause with no test, any instrumentation
-held under a capture-later agreement and each surviving hypothesis by the `stamity-question-protocol`
-rule's Close walk.
+Before the closing report, the run walks each regression clause with no test and each surviving
+hypothesis by the `stamity-question-protocol` rule's Close walk. Instrumentation held under a
+capture-later agreement was decided at step 3: the report lists it with that agreement, and the walk
+does not ask about it again.
 
 The closing report ends on one recommended next step, derived from this run's own state and not
 from the table above: a regression clause with no test makes writing it the step; instrumentation

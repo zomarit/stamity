@@ -361,13 +361,24 @@ describe("light trio — the closing next step", () => {
     expect(text).toContain("derived from this batch's own state");
     expect(text).toContain("not from the table above");
     // Named states: refused or deferred items, a `saved` content item, a pre-existing failure.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f5-touchpoints-a, fix round 1 on
+    // review/31): the step now follows the close walk's answers. Carrying a refused or deferred
+    // item, and naming a pre-existing failure, were the step whatever the walk decided, so a
+    // person who chose "leave it on `Not done:`" was told to carry it a line later. Those two
+    // pins move to the carried / not-carried pair below; the `saved` pin and the none-of-those
+    // pin are unchanged.
+    expect(text).toContain("derived from this batch's own state and the walk's answers");
     expect(text).toContain(
-      "a refused or deferred item makes carrying that list to `/st-work` the step",
+      "an item or failure the walk carried makes the switch to `/st-work` with that list the step",
     );
+    // A carry never prints after the report: the switch is the report's next step.
+    expect(text).toContain("the switch follows the report, which still prints last");
+    expect(text).toContain("one it did not carry stays on `Not done:` and is not the step");
+    expect(text).not.toContain("a refused or deferred item makes carrying that list to `/st-work` the step");
+    expect(text).not.toContain("a pre-existing failure left alone makes naming it the step");
     expect(text).toContain(
       "item reported `saved` makes the `stamity sync` run that publishes it the step",
     );
-    expect(text).toContain("a pre-existing failure left alone makes naming it the step");
     expect(text).toContain("A batch with none of those says so in the line");
   });
 
@@ -450,11 +461,17 @@ describe("light trio — the close walk (REQ-FLOW-080)", () => {
     const paragraphs = paragraphsOf(await load("commands/st-debug.md"));
     const walk = paragraphs.at(-2) ?? "";
 
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f5-touchpoints-a, fix round 1 on
+    // review/30): held instrumentation leaves the walk. It was decided by the person's explicit
+    // yes at step 3, and this file's only default for that question is "strip now", so a re-ask
+    // left unanswered at the close would strip what the person agreed to keep. It is listed with
+    // its agreement instead, and the next step keeps its strip-at-the-window's-end pin above.
     expect(walk).toBe(
-      "Before the closing report, the run walks each regression clause with no test, any instrumentation " +
-        "held under a capture-later agreement and each surviving hypothesis " +
+      "Before the closing report, the run walks each regression clause with no test and each surviving " +
+        "hypothesis " +
         CLOSE_WALK_POINTER +
-        ".",
+        ". Instrumentation held under a capture-later agreement was decided at step 3: the report lists " +
+        "it with that agreement, and the walk does not ask about it again.",
     );
     // The report and its one next step stay the body's last block.
     expect(paragraphs.at(-1)).toMatch(/^The closing report ends on one recommended next step/);

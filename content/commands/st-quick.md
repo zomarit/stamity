@@ -222,10 +222,11 @@ Before the report, the batch walks each refused or deferred item and each pre-ex
 alone by the `stamity-question-protocol` rule's Close walk, with two options: carry it to `/st-work`
 now, or leave it on `Not done:`.
 
-The report closes on one recommended next step, derived from this batch's own state and not from
-the table above: a refused or deferred item makes carrying that list to `/st-work` the step; an
-item reported `saved` makes the `stamity sync` run that publishes it the step; a pre-existing
-failure left alone makes naming it the step. A batch with none of those says so in the line.
+The report closes on one recommended next step, derived from this batch's own state and the walk's
+answers, not from the table above: an item or failure the walk carried makes the switch to
+`/st-work` with that list the step, and the switch follows the report, which still prints last; one
+it did not carry stays on `Not done:` and is not the step; an item reported `saved` makes the
+`stamity sync` run that publishes it the step. A batch with none of those says so in the line.
 
 This lane appends no inbox row. What a batch cannot finish escalates to `/st-work` by the
 Escalation table above, and that run's close asks about what is left.

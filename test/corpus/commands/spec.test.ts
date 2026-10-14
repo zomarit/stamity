@@ -348,6 +348,17 @@ describe("/st-spec — design decisions carried as text", () => {
       "Close walk, and nothing prints after it; `check` records each answer and writes nothing.";
 
     expect(contract).toContain(walk);
+    // review/28 (fix round 1): in the writing modes an answer has a destination, written before
+    // the close prints, and an undecided marker stays marked, so a marked spec is still never
+    // handed to `/st-work` on the strength of a question nobody answered.
+    const flatContract = contract.replace(/\s+/g, " ");
+    expect(flatContract).toContain(
+      "In `create`, `extract` and `sync` the answers are written before the close prints: `spec-author` " +
+        "replaces each decided marker with its answer in the requirement and records the question, the " +
+        "answer and the date in an ADR stub under `docs/adr/`, as the interview's resolved clarifications " +
+        "are; a confirmed proposal merges as its tier says; a marker left undecided stays in the spec and " +
+        "is listed under Open markers.",
+    );
     // After the close's list, whose last item is the next step, and before the separate
     // pre-write question `create` asks.
     expect(contract.indexOf("Next step — derived from this run's own state")).toBeLessThan(contract.indexOf(walk));
@@ -382,6 +393,14 @@ describe("/st-spec — edge cases the design names", () => {
     // An empty repo still produces a spec rather than an endless interview.
     expect(text).toMatch(/empty repo with no code and no answers still produces a spec/i);
     expect(text).toMatch(/interview stops at the round boundary/i);
+    // review/28 (fix round 1): the close walk (REQ-FLOW-080) asks about open markers, so the
+    // one-round rule names it as its only exception rather than contradicting it.
+    const flat = text.replace(/\s+/g, " ");
+    expect(flat).toContain(
+      "The one exception is the close walk under Return contract, which asks about each marker still " +
+        "open before the close prints.",
+    );
+    expect(flat).toContain("not when the questions run out; only the close walk asks again.");
   });
 
   it("refuses bulk backfill and requires an explicitly named scope", async () => {
