@@ -1,0 +1,14 @@
+[
+  {
+    "name": "signing-alias-red.log",
+    "rawSha256": "f4c36b22ddbaead8774ff88d38a54e0f347e844d441c37533113d6723f68932c",
+    "publishedSha256": "575c2432f586fc642be261ac4af884b26a773faccebef88f788a3c6d34befaa3",
+    "transformation": "Remove trailing blank lines only; raw stdout retained separately without alteration."
+  },
+  {
+    "name": "signing-alias-green.log",
+    "rawSha256": "5a7a42d2e2aaa43c531e6241034e10925bb48ec27bdaf9c1e7b469baa684a94a",
+    "publishedSha256": "b66412962262131a2c97d0aceb62cf98d37eee97ab4900e2115287c52aa2643c",
+    "transformation": "Remove trailing blank lines only; raw stdout retained separately without alteration."
+  }
+]

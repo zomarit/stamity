@@ -1,0 +1,7 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github><owner>/stamity-plugins-mirror//renovate/plugins.json",
+    "github><owner>/stamity-plugins-mirror//renovate/companion.json"
+  ]
+}

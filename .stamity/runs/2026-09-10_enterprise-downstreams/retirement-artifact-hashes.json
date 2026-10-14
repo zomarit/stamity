@@ -1,0 +1,85 @@
+{
+  "testedCommit": "23d4b17134accb85dccbb313171e6e9c256c593a",
+  "files": [
+    {
+      "path": "REPORT.md",
+      "bytes": 2794,
+      "sha256": "cc423f4b34d3d316225558b0c664db5310328b591bc09a82202a1635ddf64ce5"
+    },
+    {
+      "path": "checkout-final-status.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "checkout-green.log",
+      "bytes": 182,
+      "sha256": "330542614f37c0e25a9c2526b5950b7282f7f7b01e6c3e144b90b8045f897475"
+    },
+    {
+      "path": "checkout-red.log",
+      "bytes": 92,
+      "sha256": "d6c02343fc964ce456145e924e4784df7b1ed43ed840b31e75cc592b830b06ac"
+    },
+    {
+      "path": "clone.log",
+      "bytes": 74,
+      "sha256": "0ed4c3e6b5319e9784a38415eabf344ad73f0b27ce9befb7742f4f940f02f0d5"
+    },
+    {
+      "path": "commands.json",
+      "bytes": 2956,
+      "sha256": "0a4d7ac590c46eccca506d80956ef3527c02247f18f73565747d644f1dc63188"
+    },
+    {
+      "path": "diff-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "install.log",
+      "bytes": 26,
+      "sha256": "a5b94ed81728611d9ccbc97581083196313af52efc8798dc9a29b1c315a6043d"
+    },
+    {
+      "path": "ledger-after.jsonl",
+      "bytes": 12028,
+      "sha256": "4d8a1d4aa46de4796417e66d6b55b15b234089a3157210b18e39f1b1fe6e5903"
+    },
+    {
+      "path": "ledger-before.jsonl",
+      "bytes": 11520,
+      "sha256": "8ee68209fa2bc50491196a5f1c124df43826fcd24cab3445f3efa37aa381805b"
+    },
+    {
+      "path": "preservation.json",
+      "bytes": 1176,
+      "sha256": "831553cf74de49fe1d26cec16fcbe714fb6e1aeeb9d4181a02688ecc1cdb7297"
+    },
+    {
+      "path": "records-and-leak-green.log",
+      "bytes": 197,
+      "sha256": "e8dad6c188a8b6df72e7afa242636fa3e42f6a931aec7342d4fd36793315db74"
+    },
+    {
+      "path": "records-red.log",
+      "bytes": 1168,
+      "sha256": "138b3867a34dffe5e8c25a3a2df23ed82691aa1dbbad3f83d69411ae8ee3f6ce"
+    },
+    {
+      "path": "result.json",
+      "bytes": 395,
+      "sha256": "f027f877973432af84f54181efd068bfe214690475910d81addcbd8c71231056"
+    },
+    {
+      "path": "source-binding.json",
+      "bytes": 1429,
+      "sha256": "991490eddc5a430b887d8c76064125e0eb35a80fc136ca219d2d427411703f62"
+    },
+    {
+      "path": "verify-retirement.py",
+      "bytes": 5166,
+      "sha256": "b440de3b89a4185da16f9a5256d334b38bd00ff12a33b642c6a81250d87fdf5f"
+    }
+  ]
+}

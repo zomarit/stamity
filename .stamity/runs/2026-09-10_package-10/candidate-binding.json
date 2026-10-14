@@ -1,0 +1,41 @@
+{
+  "implementationCommit": "4e649f8a703021a3c0e4e057c258942b2330220f",
+  "sourceDigest": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+  "inputCount": 1071,
+  "inputManifestSha256": "65aa44c44240a605dc82c3e9b627a792d6f398be530c6bb26b5702a91fa4e695",
+  "allCommittedInputsMatch": true,
+  "browserBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6",
+  "browserRenderInputsMatch": true,
+  "bindingRule": "Every inventoried source file matches the implementation commit. Subsequent current-run/browser/eval receipts are evidence only; any product-input change requires affected verification.",
+  "repairedCandidate": {
+    "commit": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+    "sourceDigest": "5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d",
+    "verifiedInputCount": 1075,
+    "manifestSha256": "99715d29786545f22032e85a56dc60357ca9ca23a22279b25f5989671fcfdd36",
+    "allCommittedInputsMatch": true,
+    "renderInputCount": 54,
+    "allRenderInputsMatch": true,
+    "browserBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6",
+    "evalRun12InputCount": 196,
+    "allEvalRun12InputsMatch": true,
+    "evalBoundary": "Run12 remains the original BLOCKED request on4e649f8. No live measurement was performed on either candidate; unchanged input hashes do not convert an unavailable run into a score.",
+    "verifiedAt": "2026-09-10T22:29:47.328154+00:00"
+  },
+  "windowsSchedulingCandidate": {
+    "parentCommit": "f7d3f95a7dac26c702c17b3e19ffd9c691e5d2cb",
+    "sourceDigest": "2dd850b73c4a2e03a4511d95394749633e4b9749faf4c8dcdfdfd01e1a01ec2c",
+    "verifiedInputCount": 1076,
+    "manifestSha256": "f1b6e5328b3d524e9ffb40a460ecedf15af1cc6547061e8883c1cadf32ca0d95",
+    "allWorkingInputsMatch": true,
+    "changedSourceInputs": [
+      "vitest.config.ts",
+      "test/ci/testScheduling.test.ts",
+      "test/support/cliHarness.ts"
+    ],
+    "runtimePackageInputsUnchanged": true,
+    "bindingRule": "This source-input snapshot identifies the reviewed scheduling candidate without a self-referential commit ID. Verify each input against the final committed PR head; the PR description and completed platform receipts identify that commit. This field does not assert unrun platform checks.",
+    "sourceReview": "windows-scheduling-review.md",
+    "evalBoundary": "All original run12 inputs and results remain unchanged; no new live admission, calibration or score is supplied.",
+    "verifiedAt": "2026-09-10T23:08:20.192905+00:00"
+  }
+}

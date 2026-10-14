@@ -1,0 +1,52 @@
+{
+  "testedCommit": "23d4b17134accb85dccbb313171e6e9c256c593a",
+  "groups": {
+    "product": {
+      "baseline": "0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b",
+      "paths": [
+        "src",
+        "content",
+        "scripts",
+        ".github/workflows",
+        "package.json",
+        "package-lock.json",
+        "tsdown.config.ts",
+        "vitest.config.ts",
+        ".apm",
+        ".claude",
+        ".claude-plugin",
+        "apm.yml",
+        "AGENTS.md"
+      ],
+      "changedPaths": [],
+      "identicalGitTreeEntries": true,
+      "treeListingSha256": "b9b259795e5d6d05a9e48570180b9010c68f1e78aab00fa45b33d6e25e590cc7"
+    },
+    "site": {
+      "baseline": "caec7fac5e45d82ad1b766c30affd3696829c690",
+      "paths": [
+        "website",
+        "docs",
+        "README.md",
+        "llms.txt",
+        "llms-full.txt"
+      ],
+      "changedPaths": [],
+      "identicalGitTreeEntries": true,
+      "treeListingSha256": "310e4dfd8bbd9fd538d580c425d540c917ec748a0003052aeaae7114a0556f2f"
+    },
+    "evalGradedInputs": {
+      "baseline": "0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b",
+      "paths": [
+        "content",
+        "evals/cases",
+        "evals/SET-v4.md",
+        "evals/MODEL-PROFILES-v1.md",
+        "evals/rubric-v4.md"
+      ],
+      "changedPaths": [],
+      "identicalGitTreeEntries": true,
+      "treeListingSha256": "c56f7bcfb8b7d2c8c25c6c24672e1088cb8940d71503a52359a2a3a390bf3a92"
+    }
+  }
+}

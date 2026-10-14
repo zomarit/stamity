@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "adapterVersion": "stamity-terminal-export-v1",
+  "runId": "2026-09-11-run-14",
+  "candidate": "cae3fcdb9f76429144294d0f0bdebd541cd8b831",
+  "frozenStateSha256": "ea93bd013a2a8bb7a38533f187ddb3626adbf89f334a749c80c669d0515c82df",
+  "exactOutputReviewSha256": "7600102ac04d4786a4f3a5e17350e686a6a4d1f330ccb525f1810b977ad4241c",
+  "terminalAt": "2026-09-11T13:47:52.783Z",
+  "status": "BLOCKED",
+  "scope": "Disclosure repair only. Evaluation state, admitted grades, labels, counts and input bindings are unchanged.",
+  "invocationLimitation": "Checked input files are prepared tasks. The discrepancy is driver-reported; encrypted routing does not independently attest actual sent plaintext.",
+  "provenanceLimitation": "Local trace locations, agent paths and raw native records remain private. Hashes identify retained originals.",
+  "diagnosticOmissions": [
+    {
+      "taskName": "r14_call_00004_a2",
+      "transcriptSha256": "1c65d963d56cbb620dca3950f41f2ece6f8912f09b31862d1fed56388e0dcd1e",
+      "discrepancyReceiptSha256": "6a8d1f3f04d9b607711c08133be43d9c1bd46be68034984c22fd6cbf38f1588e",
+      "decision": "omit-private",
+      "reason": "Exact diagnostic output retained privately; invalid, ungraded and nonretryable.",
+      "preparedTaskSha256": "c2a99e3d8934ea8ac46f0e3a32492409eb1a845d43bb3b41db98e6f5ba9095e4",
+      "driverReportedTaskSha256": "4a70fe3ee0cf9cd5a805d43b598e7e06e6828d53c4d65b00c3272140fe7d8cb9",
+      "nativePlaintextVerification": "unavailable-native-encrypted"
+    }
+  ]
+}

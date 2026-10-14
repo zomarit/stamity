@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-11-run-13",
+  "candidate": "bc7b9f9bcb7fd5a5dd625ed8ee1a9dab0867a5ba",
+  "stateRevision": 10,
+  "stateSha256": "7aaf5490f8280e15bd785c40e9c6a358aea4cd28a2c3dd207254442fa2d9a3ad",
+  "taskName": "r13_call_00004_a1",
+  "fixtureId": "C4",
+  "queueStatus": "reserved",
+  "knownChildCreated": true,
+  "queueBinding": "not bound; the frozen helper has no transition recording this diagnostic",
+  "gradeStatus": "not graded or admitted",
+  "terminalRunBlock": "calibration-C3-mismatch",
+  "preparedPublicInput": "calls/r13_call_00004_a1.input.txt",
+  "preparedTaskSha256": "94c83c38477dee69991b46c61b3ac0a133fcb0576879892bc3bd82132a542d65",
+  "preparedInputMeaning": "Exact prepared message only; it is not evidence of the exact dispatched plaintext.",
+  "driverReportedSentPlaintextSha256": "33a08fcc92470e1c2a5436ea46cbac3882ceb440d8dd2848d6265f8258da41d8",
+  "knownDriverReportedOmission": {
+    "bytes": 210,
+    "encoding": "UTF-8",
+    "originalOffsetUnit": "UTF-16-code-units",
+    "start": 5840,
+    "end": 6046,
+    "sha256": "afbedb9d1fff2c325adedc859b2296528d34b058a7f7f3cec0949afccd4ad6eb"
+  },
+  "nativePlaintextVerification": "unavailable-native-encrypted",
+  "actualNativeTaskSha256": null,
+  "evidenceBasis": "Driver testimony identifies the omitted paragraph. The prepared-minus-omitted reconstruction and hashes are independently checked; encrypted native records do not independently reveal the sent plaintext.",
+  "privateEvidenceHashes": {
+    "diagnosticReceiptSha256": "3c9ac44a73495c067d96fb8aea527e02bb661eeba13d5d349cfb8676c503afb2",
+    "childRawSha256": "17bb6e009c2768150b3777686841ecf3f9501d344f2cc2f4e20aa7425c74b26a",
+    "parentExcerptSha256": "8eef33c5d4f238a609fb3bc0cfb38fd1a98a92cd6937173b4d77ff1d275ecf94",
+    "terminalInventorySha256": "dd50ac3903159b1c61d97913fbea5ad7818b18c98d804cbdcf713c31f0b48203"
+  },
+  "publicOmissions": [
+    "actual native raw trace",
+    "ambient instructions and local paths",
+    "internal reasoning",
+    "optional visible output",
+    "driver-reported sent-message reconstruction"
+  ],
+  "notGraded": true,
+  "replacementCalls": 0,
+  "disclosureOnly": true
+}

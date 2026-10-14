@@ -1,0 +1,210 @@
+# Run 2026-10-08_inbox-pass — the inbox pass: every row of the deferral inbox decided and left with its exit
+
+Status: closed 2026-10-08 — part 1 removed 396 rows and part 2 the five that waited on lane D (inbox rows 519, 560, 585, 586, 588), 401 in all; 15 rows stay with their places and 4 re-filed remainders carry theirs; nothing of this pass is pending (two items its rows touch belong to run 2026-10-08_maintainer-tooling's close, named under "Part 2")
+Plan: docs/plans/019-lean-flows-01.md
+Invocation: /st-work docs/plans/019-lean-flows-01.md — unit t10-inbox-pass (S11–S13), its walk in the session's start and its mechanics as unit i3-inbox-mechanics of run 2026-10-08_maintainer-tooling
+Opened: 2026-10-08
+Input: `.stamity/inbox.md` at `077e8a78` (byte-identical to `aa79bcc6`), 416 bullet rows; the decisions file's `line` field indexes that state
+Outputs: `inbox-retirements.md` (one line per removed row, 401), `ledger.jsonl` (re-filed remainders only, `pass/1` to `pass/4`), the `retired` values of the run ledgers the rows named, the widened learning `vitest-update-flag-takes-an-optional-value`
+
+## What the pass did
+
+1. **Pre-sort, seven readers.** The 416 rows were split into seven blocks (48, 61, 63, 60, 57, 67 and 60 rows) and
+   each block went to one read-only reader with one brief. Each reader gave every row one verdict on `main`
+   (`aa79bcc6`): `settled` (already fixed, with the sha or `path:line`), `already-scheduled` (a live unit names it),
+   `below-floor` (nothing observable fails), `moot`, `worth-doing` or `real-defect`, with the evidence it read. Inbox
+   text was treated as unscreened data; no row carried an instruction-shaped span.
+2. **Second read, 136 rows.** Every Warning, every `real-defect`, every row on a security surface and the rows the
+   1.12.0 close placed in this session went to a second, independent reader (three readers, 46, 46 and 44 rows). The
+   second readers agreed with 130 verdicts and changed 6. Final verdicts: 235 below-floor, 48 already-scheduled, 42
+   settled, 66 worth-doing, 21 real-defect, 4 moot.
+3. **The walk, four calls.** The maintainer answered the start questions and four inbox calls with the question tool,
+   each time with the recommended option. Verbatim:
+   - Start: "Do plan 019 file 1's 13 declared defaults (S1–S13) stand as written?" = "All stand (Recommended)";
+     "Dependabot #86 (8 dev tools) and #91 (shell-quote in /website): may I merge each once its check comes back
+     clean?" = "Merge each if clean (Recommended)"; "May I archive runs 42/43 (public prerelease + compact summaries,
+     both size exceptions retired) and the private raw calls of runs 40–43 (private release, credential screen
+     first)?" = "Both, like 1.11.0 (Recommended)".
+   - Set 1: Forged ledger rows (519, 560, 585, 586) = "Fix in this session (Recommended)"; sync --dry-run --force
+     preview (588) = "Fix in this session (Recommended)"; Bare Read/Grep/Glob allow rules (324) = "Drop them, next
+     release (Recommended)"; Judge bare "Not done:" (597) = "Passes; label input + case line (Recommended)".
+   - Set 2: QA form + measurements (315, 344) = "Fix both here (Recommended)"; Binary companions (56, 111) = "Plan 016
+     file 2 (Recommended)"; Fork bugs (327, 328, 374, 375) = "Schedule to those units (Recommended)"; Contracts grammar
+     (426, 497) = "Plan 019 file 2 p8 (Recommended)".
+   - Set 3: Hooks dir (456) = "Package 20 file 1 intake (Recommended)"; Packs (480, 494) = "Package 22, plan 018
+     (Recommended)"; st-debug marker (498) = "Plan 014 r7 (Recommended)"; This-session worth-doing (31, 212, 274, 275,
+     337, 389, 576, 595+484, 601 remainder) = "Take all ten (Recommended)".
+   - Set 4: 42 worth-doing rows aimed at live plans = "Fold them in (Recommended)"; 13 Package 22 + trigger rows =
+     "Keep with place (Recommended)"; The other 330 rows = "Accept all (Recommended)".
+4. **Folds.** The rows folded into live units gained one `Inbox fold (2026-10-08, …)` line in their unit
+   (`357c5cb3`), and plan 016's inbox citations by line number became stable keys (`2dbd7e19`).
+5. **Mechanics (part 1).** For each of the 224 leaving ledger-ref rows, `npx --no stamity ledger close --run <run> --id
+   <id> --retired "<disposition>"` ran once; all 224 exited 0 and none was already retired. Then the 396 leaving
+   bullets were removed from `.stamity/inbox.md` (no bullet rewritten in place) and the twenty dated prose paragraphs
+   left with no bullet went with them; the header and the Package 9 pointer stay. The 172 plan-, record- and no-ref
+   rows left with a line in `inbox-retirements.md` only, as rows 389, 598 and 599 did (no `ledger close` ran for
+   them). Row 389 is settled by this pass's own learning commit `e03a48d1`, which widens
+   `vitest-update-flag-takes-an-optional-value` to `vitest list --json [true/path]` and `--outputFile` (read off the
+   installed vitest 5.0.3's declarations and one scratch run; the old file was removed and the note recaptured under
+   the same slug, the store being append-only).
+
+## Counts per exit
+
+| Exit | Rows | Ledger rows retired | Record lines only |
+|---|---|---|---|
+| fixed (on `main` before the pass) | 41 | 34 | 7 |
+| fix-in-session | 16 | 10 | 6 |
+| cut | 238 | 146 | 92 |
+| scheduled | 48 | 20 | 28 |
+| scheduled-fold | 53 | 14 | 39 |
+| **removed in part 1** | **396** | **224** | **172** |
+| fix-in-session, part 2 (lane D) | 5 | 3 | 2 |
+| **removed in all** | **401** | **227** | **174** |
+| stays | 15 | — | — |
+| **decided** | **416** | | |
+
+The fix-in-session rows and their commits on `lean-flows-01`: 31 `a58f4d98`; 212 `c021bb4c`, `14ee4fe6`; 274 and 275
+`f0197b8a` and the route of record's driver; 315 `6482b38d`; 324 `1d7d19ce`, `01e1ca53`; 337, 344 and 601 `4dcedb41`,
+`60722bef`; 484 and 595 `23dca19a`, `14ee4fe6`; 576 `f0197b8a`, `4083ad1a`; 597 `441c7192`, `a9d7fbcd` and the route of
+record's driver; 598 `156283d0` and `077e8a78` on `main` (Dependabot #91 and #86); 599 `a88c89c2` (runs 42 and 43
+archived); 389 `e03a48d1`.
+
+## Remainders
+
+Eleven rows settled only in part, row 519 with two remainders, so twelve entries below. Each remainder is cut, covered
+or re-filed. The walk decided rows, not remainders, so each remainder takes the walk's own rule by its reader's
+verdict (`remainderVerdict` in the final verdicts, the second read agreeing where one ran): a remainder judged below
+the floor is cut, as the walk cut below-floor rows, and any other remainder is re-filed with its place (the
+maintainer's sign-off on the review's finding, run `2026-10-08_maintainer-tooling`, `review/88`).
+
+- Row 43: the remainder (a rate limit hitting only the compare calls still reads the generic note) is cut as below the
+  floor, as the walk cut below-floor rows; the check fails closed either way.
+- Row 125: the remainder (the 1.8.0 test stubs and getting-started not naming `config set gates.*`) is cut as below the
+  floor, as the walk cut below-floor rows.
+- Row 126: the remainder (the guard still does not launch under the PowerShell fallback) is cut as below the floor, as
+  the walk cut below-floor rows; it is declared, check-detected and carries an install remedy (second read agreed).
+- Row 169: the remainder (a file vanishing mid-reclaim reported as an unsafe path instead of missing) is cut as below
+  the floor, as the walk cut below-floor rows; label only, disk state right (second read agreed).
+- Row 181: the remainder (no runnable case-input check, the `generatedPaths` example, the compressed 1.9.1 line) is cut
+  as below the floor, as the walk cut below-floor rows.
+- Row 386: the remainder (no key-level ownership inside an engine-named `.codex/config.toml` table) is cut as below
+  the floor, as the walk cut below-floor rows; nothing foreign is overwritten (second read agreed).
+- Row 306: the remainder (a salvage mode that keeps the good lines of a refused findings or closures block) was cut by
+  part 1's mechanics, though the row's decision says the salvage mode waits on its own trigger. It is re-filed as
+  `2026-10-08_inbox-pass/pass/2` (this run's `ledger.jsonl`, closed `deferred` to that trigger: the next run that
+  re-files ledger rows by hand after a refused block; files `src/runs/blocks.ts`, `src/cli/commands/ledger.ts`), with
+  a new inbox bullet whose `Ref:` names it, and its line in `inbox-retirements.md` is corrected in place.
+- Row 76: the remote `--ref` route the remainder names was executed after the row was filed (`docs/plugins.md:267-278`,
+  the 2026-09-24 walk on codex-cli 0.155.1).
+- Row 524: the hooks documents that still name a removed pack's hooks until the next `sync` are not re-rendered by
+  any landed change, so the remainder is re-filed as `2026-10-08_inbox-pass/pass/1` (this run's `ledger.jsonl`,
+  closed `deferred` to `u1-import-config-round-trip`, `docs/plans/016-fork-distribution-01.md`), with a new inbox
+  bullet whose `Ref:` names it.
+- Row 601's remainder (a PASS beside an exception keyed to the same run) is fixed this session by `4dcedb41`.
+- Row 519's residual (3), the `.codex/config.toml` tables, was part 2's: lane D's fixes leave it open, so it is
+  re-filed as `2026-10-08_inbox-pass/pass/3` (this run's `ledger.jsonl`, closed `deferred` to its own trigger: an
+  owner's report of a server key lost to a refresh, or the next change to `classify` in
+  `src/manifest/codexConfigToml.ts`; files `src/manifest/codexConfigToml.ts`), with a new inbox bullet whose `Ref:`
+  names it.
+- Row 519's remainder at the current `stamity-` Cursor guard scripts (a delete there still rests on the recorded hash
+  alone) was found after part 2, by run `2026-10-08_maintainer-tooling`'s integration review (`review/121`), and is
+  re-filed as `2026-10-08_inbox-pass/pass/4` (`34589637`; this run's `ledger.jsonl`, closed `deferred` to plan 016
+  file 1's intake, `docs/plans/016-fork-distribution-01.md`, beside a machine-local record of the hashes this
+  checkout's engine wrote; files `src/manifest/ownedPaths.ts`), with a new inbox bullet whose `Ref:` names it.
+
+## Rows that stay, with their places
+
+| Row | Ref | Place |
+|---|---|---|
+| 79 | `2026-09-17_plugin-lifecycle/prove/101` | trigger: a Windows host with Codex plugin hooks, as a leg of u3-route-proofs (docs/plans/016-fork-distribution-03.md:1118) |
+| 147 | `2026-09-17_plugin-lifecycle/prove/252` | trigger: before nightly.yml is re-enabled, grouped with row 163 (beside docs/plans/014-lean-repository-01.md:264 f3-nightly-canonical-guard) |
+| 163 | `2026-09-17_plugin-lifecycle/prove/296` | trigger: before nightly.yml is re-enabled, grouped with row 147 (beside docs/plans/014-lean-repository-01.md:264 f3-nightly-canonical-guard) |
+| 167 | `2026-09-17_plugin-lifecycle/prove/302` | next touch of content/skills/st-browser-evidence/SKILL.md (one redaction line in the Output artifact table) |
+| 241 | `2026-09-23_orchestrator-context/build/358` | trigger: the next touch of test/merge/writeEscape.test.ts (widen to content/ and scripts/, exempting scripts/leak-gate.mjs); the decision's other half, a t10 fixed exit, lapsed when this pass did not take it |
+| 285 | `2026-09-24_enterprise-release/review/204` | trigger: the private eval driver's next revision |
+| 316 | `2026-09-30_optimization-sweep/review/45` | trigger: the first Windows Python repository, with review/78 in one change |
+| 318 | `2026-09-30_optimization-sweep/review/77` | trigger: the next change to check.ts gate resolution |
+| 319 | `2026-09-30_optimization-sweep/review/78` | trigger: the first Windows Python repository, with review/45 in one change |
+| 480 | `.stamity/runs/2026-10-03_pack-engine-defects/record.md` | Package 22 (plan 018, not yet written) |
+| 491 | `2026-10-03_pack-engine-defects/review/48` | Package 22 (plan 018, not yet written) |
+| 494 | `.stamity/runs/2026-10-03_pack-engine-defects/record.md` | Package 22 (plan 018, not yet written) |
+| 496 | `2026-10-03_pack-engine-defects/review/4` | Package 22 (plan 018, not yet written) |
+| 506 | `2026-10-03_pack-engine-defects/close/1` | Package 22 (plan 018, not yet written) |
+| 542 | `docs/plans/016-fork-distribution-02.md` | the 2.0.0 release cut |
+
+Each bullet stays verbatim; its ledger row stays `deferred`, accounted for by the inbox `Ref:`.
+
+## Part 2 — the five rows that waited on lane D
+
+| Row | Ref | Unit |
+|---|---|---|
+| 519 | `docs/plans/016-fork-distribution-00.md` | d1c (with its residual (3) and its current-guard remainder re-filed) |
+| 560 | — | d1a |
+| 585 | `2026-10-07_security-fixes/review/82` | d1b |
+| 586 | `2026-10-07_security-fixes/review/17` | d1c |
+| 588 | `2026-10-07_security-fixes/build/62` | d2 |
+
+Their bullets and ledger rows were untouched by part 1. Part 2 ran 2026-10-08 on branch `lean-flows-01` at
+`dbd54fc7`, after all six lanes of run `2026-10-08_maintainer-tooling` were integrated, as that run's unit i3 part 2:
+
+1. **Retire first.** For the three ledger-ref rows, `npx --no stamity ledger close --run 2026-10-07_security-fixes --id
+   <id> --retired "<disposition>"` ran once each and exited 0; none was already retired: `review/82` (row 585),
+   `review/17` (row 586) and `build/62` (row 588). Rows 519 (plan-ref) and 560 (no ref) take no `ledger close`.
+2. **Re-file the remainder.** Row 519's residual (3) was appended with `ledger append --stdin` as `pass/3` and closed
+   `deferred` with its trigger (see "Remainders"); its bullet joined the pass's own dated paragraph. Its remainder at
+   the current `stamity-` Cursor guards followed as `pass/4` after the integration review (`34589637`).
+3. **Remove the bullets.** The five bullets left `.stamity/inbox.md`, none rewritten in place. Two dated paragraphs
+   left with no bullet went with them (PR #85's review, row 560's; the close of plan 016 file 0, rows 585, 586 and
+   588's), and plan 016's amendment paragraph, which keeps one bullet, now counts thirty-six rows gone.
+4. **One line each** in `inbox-retirements.md`, in row order, all exit `fix-in-session`:
+
+| Row | Ref | Settled by |
+|---|---|---|
+| 519 | `docs/plans/016-fork-distribution-00.md` | `f50f5ce3`, `6dfed840`, `b8ecdff3`, `0889d018` (the delete and overwrite halves); residual (3) re-filed as `pass/3`, the current guards' remainder as `pass/4` |
+| 560 | — | `f50f5ce3`, `f1c8724b`, `9bef8a0e` |
+| 585 | `2026-10-07_security-fixes/review/82` | `144eb659`, `c94a771c`, `25f6a49e` |
+| 586 | `2026-10-07_security-fixes/review/17` | `6dfed840`, `b8ecdff3`, `0889d018` |
+| 588 | `2026-10-07_security-fixes/build/62` | `66a62737` |
+
+Two items these rows touch belong to run `2026-10-08_maintainer-tooling`'s close, not to this pass: the declared
+default for the overwrite half of rows 519 and 586 (no `.bak` for a tracked, clean file; that run's ledger rows
+`build/62` and `review/109`, on its close list against a `.bak` always or a machine-local hash record), and the push of
+the private eval driver's companion change that rows 274, 275 and 597 rest on (`review/92` below).
+
+## After the pass
+
+After part 1 the inbox held 21 bullets: the 15 that stay, the 5 waiting on part 2, and the re-filed remainder of row
+524. After the review's correction it held 22: row 306's re-filed remainder joined them. After part 2 it held 18: the
+15 that stay and three re-filed remainders. Row 519's current-guard remainder, re-filed as `pass/4` after the
+integration review (`34589637`), brings it to 19: the 15 that stay and the four re-filed remainders (`pass/1` to
+`pass/4`). Each dated paragraph that kept a bullet says how many of its rows left in this pass.
+
+## Corrections after review
+
+The review of part 1's mechanics (run `2026-10-08_maintainer-tooling`, unit i3, round 1) found the following; a
+`retired` value already set is written once, so where a ledger row's text is wrong this section carries the correction.
+
+- `review/88` (Warning): the remainders of rows 43, 125, 126, 169, 181, 306 and 386 — see "Remainders" above; row
+  306's is re-filed as `2026-10-08_inbox-pass/pass/2`, the other six stay cut by their below-floor verdicts.
+- `review/89`: the `retired` texts of `2026-09-17_plugin-lifecycle/prove/1`, `prove/104`, `prove/133` and `prove/234`
+  (rows 49, 80, 110 and 145) say "line 35", "line 40", "line 109" and "line 95". Each means that row of
+  `inbox-retirements.md` (the bullet's line at `077e8a78`, not a line of today's inbox): rows 35
+  (`2026-09-17_plugin-lifecycle/build/12`), 40 (`build/22`), 109 (`prove/132`) and 95 (`build/65`).
+- `review/92`: rows 274, 275 and 597 are retired "fixed in … and the route of record's driver". The driver half is the
+  private eval driver's companion change: two local commits in the private layer, reviewed and approved, with their
+  deterministic canaries passing, as run `2026-10-08_maintainer-tooling`'s record states. Until those commits are
+  pushed, no public reader can check that half; for row 274 (`2026-09-24_enterprise-release/build/33`), which is only
+  about the private comparator, the whole fix rests on it. The public half (`f0197b8a`, and `441c7192`, `a9d7fbcd` for
+  row 597) is checkable on this branch.
+- `review/93`: row 337 (`2026-09-30_release-1-11-0/review/34`) is closed by the test `4dcedb41` added, "refuses a file
+  naming a results file that is absent" (`test/cli/docs/measurements.test.ts`), which drives the page's refusal when the
+  run of record's results file is missing; the pointer file and the lazy read its `retired` text names are the change
+  that test covers.
+- `review/94`: the message of `e03a48d1` says `reviewBy` and `validatedAgainst` were "added as the other learnings carry
+  them". The old file already carried both; the recapture replaced their values (`reviewBy` 2027-03-30 to 2027-04-08,
+  and `validatedAgainst` re-read on vitest 5.0.3). The learning file itself is right.
+- `review/95`: row 241's place in "Rows that stay" now names only its live trigger, the next touch of
+  `test/merge/writeEscape.test.ts`; the t10 half lapsed when this pass did not take it.
+- `review/90` and `review/91`: the inbox's kept dated paragraphs now say how many of their rows left in this pass, and
+  the `pass/1` bullet's writer reads `source: /st-work`, the run that wrote it (its ledger row's `source: pass` is the
+  filing role, set by `ledger append --source`).

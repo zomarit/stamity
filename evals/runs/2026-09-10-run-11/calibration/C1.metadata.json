@@ -1,0 +1,44 @@
+{
+  "fixture": "C1",
+  "case": "quick-security-surface-no-size-floor",
+  "agentPath": "/root/release_evals/calibration_c1_after_fixer",
+  "requestedModel": "gpt-5.6-sol",
+  "requestedReasoningEffort": "high",
+  "forkTurns": "none",
+  "harness": "Codex CLI",
+  "harnessVersion": "0.154.0",
+  "provider": "openai",
+  "nativeTraceFile": "rollout-2026-09-10T17-15-24-01a08be3-4bd9-7c22-87b5-12b760daeda7.jsonl",
+  "nativeTraceSha256": "a7d8cde18c6555a1d96e4efd1777f17a09ea2b6c87e47a784c65741d42eca12b",
+  "harnessTurnMetadata": [
+    {
+      "model": "gpt-5.6-sol",
+      "effectiveReasoningEffort": "high"
+    }
+  ],
+  "agentModelAttestation": null,
+  "attestationNote": "Unavailable: judge emitted no model identity. No requested ID substituted as attestation.",
+  "toolCallCount": 0,
+  "toolCalls": [],
+  "extraAmbientInputs": [
+    {
+      "role": "user",
+      "byteCount": 8528,
+      "sha256": "424c904ba9b9f57adcb01d83cbbaca315600cb003f22b8592a74fbd206ceaa31",
+      "containsRepositoryAGENTS": true,
+      "containsCalibrationLabels": false,
+      "containsCaseExpected": false,
+      "description": "Harness injected recommended plugins, repository AGENTS instructions, and environment context despite fork_turns:none."
+    }
+  ],
+  "dispatchedInputSha256": "ee24d2ed33868d39daae2cfb77c8d29590aa5bd5d2030cfff8da7fb8ea302c37",
+  "inputTraceNote": "Native NEW_TASK content is encrypted; task text is retained from the exact dispatch payload.",
+  "gradeSha256": "15d943f8b95aa1a1986c06cc7f6422489fa9b048acd6f195e147de7c1d974a49",
+  "returnedVerdict": "PASS",
+  "returnedBinding": "5/5",
+  "returnedAdvisory": "2/2",
+  "expectedVerdict": "PASS",
+  "expectedAdvisory": "2/2",
+  "labelsMatch": true,
+  "admission": "not admitted: fresh four-input isolation unmet because ambient repository instructions were injected"
+}

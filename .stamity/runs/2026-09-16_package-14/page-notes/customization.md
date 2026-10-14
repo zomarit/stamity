@@ -1,0 +1,7 @@
+# docs/customization.md (slug `customization`)
+
+Page kind: HOW-TO (author an override; author an overlay; use the two authoring paths; remove one) plus REFERENCE (where an override lives per class; the lean-line thresholds; what a skill override carries; shadowing rules; the fork layer's place in precedence). Its reader is the operator who wants stamity's output to say something different in their repository without editing a bundled file.
+
+Pins (binding): the two tables restated from `src/content/userContent.ts` are parsed by shape — `CLASS_LAYOUT` rows must show each class's override path in the exact form `.stamity/overrides/<dir>/<id>/SKILL.md` or `.stamity/overrides/<dir>/<id>.md` as the test composes it; `LEAN_LINE_THRESHOLDS` rows must read exactly `| <class> | <limit> |` (two columns, no extra column). Keep both tables' column shapes; put any explanation in prose around them, not in extra columns. Frontmatter `title: Customization` equals the H1. The save gate is one gate (`src/content/userContent.ts`), the overlay merge lives in `src/content/catalog.ts`; the `stamity-creator` agent is one of the two authoring paths — verify what the other is (`stamity validate`? a hand-placed file?) from the code before you write it.
+
+Cut: the history of how validation used to overlap; keep every rule that holds today. Sources: `src/content/userContent.ts`, `src/content/catalog.ts`, `content/agents/stamity-creator.md`, `src/cli/commands/validate.ts`, `docs/cli-reference.md`, `docs/enterprise-forks.md` only to link the fork layer's page (do not restate it).

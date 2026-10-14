@@ -1,0 +1,16 @@
+{
+  "candidate_sha": "caec7fac5e45d82ad1b766c30affd3696829c690",
+  "prior_verified_candidate": "da7d8a76bad16eec38cf734a5bfeb01d0c419d38",
+  "run10_sha": "a42b45d357ef8819a585652c1a6e417c593263ef",
+  "date": "2026-09-10",
+  "compared_paths": [
+    "content",
+    "evals/cases-v4",
+    "evals/rubric-v4.md"
+  ],
+  "changed_paths": [],
+  "corpus_tree": "3adad2f34631d144d56378b3b1815e05b4fac29c",
+  "inherited_input_comparison_sha256": "87048edb38ddf3f36099d7657b0c2de8836160d0bda9e42f6bd94f38e58e5655",
+  "prior_extension_sha256": "92504d7718707d2dfcad28859e4bc01a778ae1f05bfe59d0fe9891a5c8cbca2e",
+  "result": "Previously compared corpus, complete case Briefs/binding criteria and retained rubric inputs remain unchanged. The user-approved release-only reuse retains run10 failed floors and legacy limitations; run11 remains unadmitted."
+}

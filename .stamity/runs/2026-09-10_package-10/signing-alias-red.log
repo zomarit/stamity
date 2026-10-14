@@ -1,0 +1,253 @@
+
+ RUN  v5.0.0 /Users/denismasatovic/Projects/zomarit/stamity
+
+ ❯ test/pack/sign.test.ts (22 tests | 10 failed) 296ms
+   ❯ pack author signing (22)
+     × refuses portable manifest/content alias PACK.JSON before signing and preserves source bytes 18ms
+     × refuses portable manifest/content alias ./pack.json before signing and preserves source bytes 15ms
+     × refuses portable manifest/content alias pack.json. before signing and preserves source bytes 15ms
+     × refuses portable manifest/content alias pack.json  before signing and preserves source bytes 12ms
+     × refuses portable manifest/content alias RULES/example.md before signing and preserves source bytes 14ms
+     × refuses portable manifest/content alias Rules/new.json before signing and preserves source bytes 12ms
+     × refuses a case alias of root integrity metadata before signing 14ms
+     × refuses a bundle ancestor symlink back to the manifest before signing 13ms
+     × refuses a bundle ancestor redirected into content before signing 14ms
+     × refuses a previously real bundle ancestor replaced during signing 13ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses portable manifest/content alias PACK.JSON before signing and preserves source bytes
+AssertionError: promise resolved "{ bundlePath: 'PACK.JSON', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "PACK.JSON",
+  }
+
+ ❯ test/pack/sign.test.ts:128:44
+    126|       const { pack } = await seed(path); const fixture = cryptoFixture…
+    127|       const originalManifest = await readFile(join(pack, "pack.json"));
+    128|       await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                            ^
+    129|       expect(fixture.signFn).not.toHaveBeenCalled();
+    130|       expect(await readFile(join(pack, "pack.json"))).toEqual(original…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses portable manifest/content alias ./pack.json before signing and preserves source bytes
+AssertionError: promise resolved "{ bundlePath: './pack.json', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "./pack.json",
+  }
+
+ ❯ test/pack/sign.test.ts:128:44
+    126|       const { pack } = await seed(path); const fixture = cryptoFixture…
+    127|       const originalManifest = await readFile(join(pack, "pack.json"));
+    128|       await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                            ^
+    129|       expect(fixture.signFn).not.toHaveBeenCalled();
+    130|       expect(await readFile(join(pack, "pack.json"))).toEqual(original…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses portable manifest/content alias pack.json. before signing and preserves source bytes
+AssertionError: promise resolved "{ bundlePath: 'pack.json.', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "pack.json.",
+  }
+
+ ❯ test/pack/sign.test.ts:128:44
+    126|       const { pack } = await seed(path); const fixture = cryptoFixture…
+    127|       const originalManifest = await readFile(join(pack, "pack.json"));
+    128|       await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                            ^
+    129|       expect(fixture.signFn).not.toHaveBeenCalled();
+    130|       expect(await readFile(join(pack, "pack.json"))).toEqual(original…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses portable manifest/content alias pack.json  before signing and preserves source bytes
+AssertionError: promise resolved "{ bundlePath: 'pack.json ', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "pack.json ",
+  }
+
+ ❯ test/pack/sign.test.ts:128:44
+    126|       const { pack } = await seed(path); const fixture = cryptoFixture…
+    127|       const originalManifest = await readFile(join(pack, "pack.json"));
+    128|       await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                            ^
+    129|       expect(fixture.signFn).not.toHaveBeenCalled();
+    130|       expect(await readFile(join(pack, "pack.json"))).toEqual(original…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses portable manifest/content alias RULES/example.md before signing and preserves source bytes
+AssertionError: promise resolved "{ bundlePath: 'RULES/example.md', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "RULES/example.md",
+  }
+
+ ❯ test/pack/sign.test.ts:128:44
+    126|       const { pack } = await seed(path); const fixture = cryptoFixture…
+    127|       const originalManifest = await readFile(join(pack, "pack.json"));
+    128|       await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                            ^
+    129|       expect(fixture.signFn).not.toHaveBeenCalled();
+    130|       expect(await readFile(join(pack, "pack.json"))).toEqual(original…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses portable manifest/content alias Rules/new.json before signing and preserves source bytes
+AssertionError: promise resolved "{ bundlePath: 'Rules/new.json', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "Rules/new.json",
+  }
+
+ ❯ test/pack/sign.test.ts:128:44
+    126|       const { pack } = await seed(path); const fixture = cryptoFixture…
+    127|       const originalManifest = await readFile(join(pack, "pack.json"));
+    128|       await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                            ^
+    129|       expect(fixture.signFn).not.toHaveBeenCalled();
+    130|       expect(await readFile(join(pack, "pack.json"))).toEqual(original…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses a case alias of root integrity metadata before signing
+AssertionError: promise resolved "{ bundlePath: 'README.MD', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "21491300a246579ef3ef8658ac72a34719ebb73b043f01e642b5f85d15452c1b",
++   "bundlePath": "README.MD",
+  }
+
+ ❯ test/pack/sign.test.ts:141:42
+    139|     await writeFile(join(pack, "pack.json"), JSON.stringify(updated));
+    140|     const originalManifest = await readFile(join(pack, "pack.json"));
+    141|     await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                          ^
+    142|     expect(fixture.signFn).not.toHaveBeenCalled();
+    143|     expect(await readFile(join(pack, "readme.md"), "utf8")).toBe("Prot…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses a bundle ancestor symlink back to the manifest before signing
+AssertionError: promise resolved "{ …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "signatures/pack.json",
+  }
+
+ ❯ test/pack/sign.test.ts:151:42
+    149|     await symlink(".", join(pack, "signatures"));
+    150|     const originalManifest = await readFile(join(pack, "pack.json"));
+    151|     await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                          ^
+    152|     expect(fixture.signFn).not.toHaveBeenCalled();
+    153|     expect(await readFile(join(pack, "pack.json"))).toEqual(originalMa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses a bundle ancestor redirected into content before signing
+AssertionError: promise resolved "{ …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "signatures/example.md",
+  }
+
+ ❯ test/pack/sign.test.ts:161:42
+    159|     await symlink("rules", join(pack, "signatures"));
+    160|     const originalManifest = await readFile(join(pack, "pack.json"));
+    161|     await expect(signPack(pack, fixture)).rejects.toThrow();
+       |                                          ^
+    162|     expect(fixture.signFn).not.toHaveBeenCalled();
+    163|     expect(await readFile(join(pack, "pack.json"))).toEqual(originalMa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  test/pack/sign.test.ts > pack author signing > refuses a previously real bundle ancestor replaced during signing
+AssertionError: promise resolved "{ …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "aggregateSha": "15e8d2374e1daaf477e4fb48d10f2ce933d70b29e36b296278df648aa4c810e8",
++   "bundlePath": "signatures/pack.json",
+  }
+
+ ❯ test/pack/sign.test.ts:186:57
+    184|       return bundle;
+    185|     };
+    186|     await expect(signPack(pack, { ...fixture, signFn })).rejects.toThr…
+       |                                                         ^
+    187|     expect(fixture.signFn).toHaveBeenCalledOnce();
+    188|     expect(await readFile(join(pack, "pack.json"))).toEqual(originalMa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 12 passed (22)
+   Start at  23:12:14
+   Duration  664ms (tests 51%, transform 37%, import 12%)

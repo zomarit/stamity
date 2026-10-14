@@ -1,0 +1,572 @@
+{
+  "run10_sha": "a42b45d357ef8819a585652c1a6e417c593263ef",
+  "candidate_sha": "96c4e76119e026736fca258b50d9101081adbc93",
+  "authorization": "Maintainer explicitly selected release-only reuse of run 10 on 2026-09-10, retaining recorded limitations.",
+  "corpus_tree": "3adad2f34631d144d56378b3b1815e05b4fac29c",
+  "corpus_equal": true,
+  "case_count": 69,
+  "comparison": "Compare exact tracked bytes before the first ### Advisory criteria heading; this includes metadata, complete Brief, Expected introduction and binding criteria. Also compare full files and retained rubric-v4.",
+  "retained_rubric_v4_sha256": "a49982ff7f3a324530e1eaded112fca987bcc551b2e6cc8ddfb9f6647967dc8d",
+  "retained_rubric_v4_equal": true,
+  "whole_case_files_equal": 68,
+  "cases": [
+    {
+      "path": "evals/cases-v4/adversarial/ask-read-only-under-approval-pressure.md",
+      "run10_file_sha256": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+      "candidate_file_sha256": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+      "brief_and_binding_prefix_sha256": "56bfdaefff6108b0b64ae88d9810f6d497acec2c29ed2841ce7bb9303944d3bf",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/benign-optional-step-skipped-proceeds.md",
+      "run10_file_sha256": "8ebc6f76959da40eabb874a8656e1ad99fe962a362ee8a63421ec37c086a4e93",
+      "candidate_file_sha256": "8ebc6f76959da40eabb874a8656e1ad99fe962a362ee8a63421ec37c086a4e93",
+      "brief_and_binding_prefix_sha256": "d588f7df0894c32891a72391b3cff68e63339090a04de4ba01c4c0260bf41833",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/benign-small-change-quick-proceeds.md",
+      "run10_file_sha256": "da68c9300da0267b694b8dd31ee468f2a5100903f52362fb5bce412e705f3b74",
+      "candidate_file_sha256": "da68c9300da0267b694b8dd31ee468f2a5100903f52362fb5bce412e705f3b74",
+      "brief_and_binding_prefix_sha256": "97813dda83c929118e75500c691bf24d229df7131bb66c24e7f6f5a16d83be21",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/benign-state-note-not-screened.md",
+      "run10_file_sha256": "4a47ac8e708aedee650f64ed95b1b1997b0d07b29d128a67a865eb02e08b4ee5",
+      "candidate_file_sha256": "4a47ac8e708aedee650f64ed95b1b1997b0d07b29d128a67a865eb02e08b4ee5",
+      "brief_and_binding_prefix_sha256": "31beecd1d0152b1dcc0053dd87cb8be6e60ea9a0ab33280650ab56a65d79da02",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/benign-tool-result-used-as-data.md",
+      "run10_file_sha256": "8ddd05471b3b2ce7e32f8568c3526436b956b99057861704bee56ce728801c20",
+      "candidate_file_sha256": "8ddd05471b3b2ce7e32f8568c3526436b956b99057861704bee56ce728801c20",
+      "brief_and_binding_prefix_sha256": "e42f79767f0a115f69a8740130830440782073d6c3899d20751c6dbbfddcca76",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/charter-floor-relaxation-refused.md",
+      "run10_file_sha256": "db1312c4f1ab39a7cd89fbae18035989abaa655bc88b880f02b96f1aa1c672ee",
+      "candidate_file_sha256": "db1312c4f1ab39a7cd89fbae18035989abaa655bc88b880f02b96f1aa1c672ee",
+      "brief_and_binding_prefix_sha256": "41fe8f1f9c184c8b3d9c3d51a3da0bcd9ca2a561305ad1ca93f20f5fdad99f14",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/learnings-instruction-span-rewritten.md",
+      "run10_file_sha256": "a95f6104df4a71f847c276055ee8661b5b6f0436f620dffb45ea1716253e5529",
+      "candidate_file_sha256": "a95f6104df4a71f847c276055ee8661b5b6f0436f620dffb45ea1716253e5529",
+      "brief_and_binding_prefix_sha256": "57e3c7459297eb8fcc01b4f02515058656d6f139887492bf4349f903060b56ab",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/mcp-tool-result-directive-is-data.md",
+      "run10_file_sha256": "47693d1b5b97a86a4be7b8a965894df7dbc03bef5fa81978c59f06c922c67282",
+      "candidate_file_sha256": "47693d1b5b97a86a4be7b8a965894df7dbc03bef5fa81978c59f06c922c67282",
+      "brief_and_binding_prefix_sha256": "8ebfbe1951cfd8cbdf901ad416909facc72145b51c014de7a3b713a26a85d588",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/orchestrator-inline-edit-under-pressure.md",
+      "run10_file_sha256": "b11924774a083a34ccd0edbc1d26786b802e991e0ece5990bca8a68db03ad4e8",
+      "candidate_file_sha256": "b11924774a083a34ccd0edbc1d26786b802e991e0ece5990bca8a68db03ad4e8",
+      "brief_and_binding_prefix_sha256": "380132e9bc080ce27ba161a6ce3035281b1e426be093d08df669f8b93d6d8dc2",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/pr-comment-ingress-screen.md",
+      "run10_file_sha256": "556fe91313d71ac888469f2e7456630699cd4e6053ce7f98f969a6c84f7951f4",
+      "candidate_file_sha256": "556fe91313d71ac888469f2e7456630699cd4e6053ce7f98f969a6c84f7951f4",
+      "brief_and_binding_prefix_sha256": "438517f9864e1ec22c4bd5e7c15bcbf94146fbe912cbd8ee6b1ea525c3353694",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/quick-refusal-under-social-pressure.md",
+      "run10_file_sha256": "76bad79eb97ab2a6daf04dd003a71729e1cf43f695a9b3b65b2183e1deaae6fb",
+      "candidate_file_sha256": "76bad79eb97ab2a6daf04dd003a71729e1cf43f695a9b3b65b2183e1deaae6fb",
+      "brief_and_binding_prefix_sha256": "e285f4bc45929b2001432ece01ee83048380ad35d07949cb7ceace5e14487a47",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/repo-content-directive-is-data.md",
+      "run10_file_sha256": "d31c3d3de813ab4a1f9b81603268abfb37e95c8278459fe72fe36c4ee2294506",
+      "candidate_file_sha256": "d31c3d3de813ab4a1f9b81603268abfb37e95c8278459fe72fe36c4ee2294506",
+      "brief_and_binding_prefix_sha256": "4c489a6a2704012dcc7fc933558fb659c51b2a803f2ecce35c693e1dafe61836",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/screening-hit-not-echoed.md",
+      "run10_file_sha256": "c4f73271d4aeb2d36b1c13fc88bdaa8cae4d3b9ab04f978d201350e0208841a2",
+      "candidate_file_sha256": "c4f73271d4aeb2d36b1c13fc88bdaa8cae4d3b9ab04f978d201350e0208841a2",
+      "brief_and_binding_prefix_sha256": "bee1cc43a35030e8081160215a1196f12c2c214a42840451d187060065522de7",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/security-agent-no-write-under-pressure.md",
+      "run10_file_sha256": "d1de51a60d4067bbd0421d2fa303b84104720fedbdaab60d4ac851cc9d799268",
+      "candidate_file_sha256": "d1de51a60d4067bbd0421d2fa303b84104720fedbdaab60d4ac851cc9d799268",
+      "brief_and_binding_prefix_sha256": "d6b1f83603bb308d4b95ecaaacd2a9cd96c0f7b3ece3eee7fe1bb9e33db253cf",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/security-content-exempt-from-truncation.md",
+      "run10_file_sha256": "b8e2f791b301a929a53ecc3d146f6c42c94f2b2182842352f51713be8cd7f87c",
+      "candidate_file_sha256": "b8e2f791b301a929a53ecc3d146f6c42c94f2b2182842352f51713be8cd7f87c",
+      "brief_and_binding_prefix_sha256": "72640c2ab920f0420693b7e248dfa31954dbc9265343200b1225d7ed84559795",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/adversarial/state-text-directive-not-executed.md",
+      "run10_file_sha256": "5e6a838e420bddbc239c8c8c048015e9738b760b1cbfc8bf761d15e002fdb493",
+      "candidate_file_sha256": "5e6a838e420bddbc239c8c8c048015e9738b760b1cbfc8bf761d15e002fdb493",
+      "brief_and_binding_prefix_sha256": "cdf5b54d54e2959d0196328ea7bf324807a42a2e32013f651bf3b0d544305bb5",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-creator-return-contract.md",
+      "run10_file_sha256": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+      "candidate_file_sha256": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+      "brief_and_binding_prefix_sha256": "dc7494ff90bdfc64722b3d8673459bcc210cb73d993687edda28636a36538296",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-design-quality-return-contract.md",
+      "run10_file_sha256": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+      "candidate_file_sha256": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+      "brief_and_binding_prefix_sha256": "2635ee973a87d4fbd7471b7dbcb9e3b6257e0bc2c6ff5bddd7ed8d90f3ab98e4",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-fixer-return-contract.md",
+      "run10_file_sha256": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+      "candidate_file_sha256": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+      "brief_and_binding_prefix_sha256": "1933a326050f1f7dc15781cec3bf76708a878de66b866abc517ccd1afd7f0769",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-implementer-return-contract.md",
+      "run10_file_sha256": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+      "candidate_file_sha256": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+      "brief_and_binding_prefix_sha256": "564cf84888ed11bc32dcf199fe8b3f152c07bb7019765e4a2c29e4db837e0dfe",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-performance-return-contract.md",
+      "run10_file_sha256": "43baac32d0524b1570b2011f0373c4beef3504d3fe2eb0f38d70419a84ebf96f",
+      "candidate_file_sha256": "43baac32d0524b1570b2011f0373c4beef3504d3fe2eb0f38d70419a84ebf96f",
+      "brief_and_binding_prefix_sha256": "ca1d72e9254184b4ae2e9f68323b466f71d1571a06d8faeabc6f4026b4f10989",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-researcher-return-contract.md",
+      "run10_file_sha256": "4aaa3986186e082752fc8280f99a826b889dd2b7f987af6431ca829ec9dd3469",
+      "candidate_file_sha256": "4aaa3986186e082752fc8280f99a826b889dd2b7f987af6431ca829ec9dd3469",
+      "brief_and_binding_prefix_sha256": "195a81c610a56bb5cb3fbe98211fa02b86ba92900a4a95be78788f1b697b0ebd",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-reviewer-return-contract.md",
+      "run10_file_sha256": "c6f370f5411ec5ce2a8ade830b72200faf0a392a9464b9f62126c6bc88f105a8",
+      "candidate_file_sha256": "c6f370f5411ec5ce2a8ade830b72200faf0a392a9464b9f62126c6bc88f105a8",
+      "brief_and_binding_prefix_sha256": "384859b91037efadff8a6c6de540044509242937428a326e01740f2110bc28d9",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-security-return-contract.md",
+      "run10_file_sha256": "c83f7b791517cff181ac5e1326bcbf4fb4b24693538ce822ed561d95d01bbf71",
+      "candidate_file_sha256": "c83f7b791517cff181ac5e1326bcbf4fb4b24693538ce822ed561d95d01bbf71",
+      "brief_and_binding_prefix_sha256": "60f8604c68762f3a72f43afdbd4e0588fbd866995238b0966eff32d91ed356b4",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-spec-author-return-contract.md",
+      "run10_file_sha256": "6ee5de6d4cfe14722f30c6905911477ac3077c2514050a9d0b542f0d3a715d0a",
+      "candidate_file_sha256": "6ee5de6d4cfe14722f30c6905911477ac3077c2514050a9d0b542f0d3a715d0a",
+      "brief_and_binding_prefix_sha256": "4b4cc6b716e7f57bd737ede3eef7d0d1db3a408d90597c0e55b40e8d4360fa8f",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/agent-test-runner-return-contract.md",
+      "run10_file_sha256": "368cef5e1c1a6154bba942c4d1c14fd33b580a191e4cf6a67bbc91b8efda4b2e",
+      "candidate_file_sha256": "368cef5e1c1a6154bba942c4d1c14fd33b580a191e4cf6a67bbc91b8efda4b2e",
+      "brief_and_binding_prefix_sha256": "f96fc1feeb8dc606d5dfceb63574d8b8910d299fedbc5c5ea15774f5a36d0b17",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/ask-citation-discipline.md",
+      "run10_file_sha256": "9cfc82a774a4f535783d7cc8cea94422f1b4119f9259f4664e3ad850d3a2567b",
+      "candidate_file_sha256": "9cfc82a774a4f535783d7cc8cea94422f1b4119f9259f4664e3ad850d3a2567b",
+      "brief_and_binding_prefix_sha256": "55fbb74c15b8ae3855a00507948d5728a2ee33a0418baa22c85117dd36d8c045",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/ask-next-step-derived-from-run-state.md",
+      "run10_file_sha256": "fbd02494e3efa5497bc94727229fdd1688aee1d3deb485ea18d29ea6de24ae48",
+      "candidate_file_sha256": "fbd02494e3efa5497bc94727229fdd1688aee1d3deb485ea18d29ea6de24ae48",
+      "brief_and_binding_prefix_sha256": "889c3bb81e34a6903aa5642f20becd17eb9ee7eb6d5055d7d1721b56639e33f4",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/ask-refuses-mid-answer-change.md",
+      "run10_file_sha256": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+      "candidate_file_sha256": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+      "brief_and_binding_prefix_sha256": "90951a9a29463e5efdd46d599c7686e2cae538ce00171215562e6525d67a9d17",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/board-write-back-four-channels.md",
+      "run10_file_sha256": "aa5532aa24d4437c244d18c49b12b84de15fb2c6c333e5158f9e96ab7861ada6",
+      "candidate_file_sha256": "aa5532aa24d4437c244d18c49b12b84de15fb2c6c333e5158f9e96ab7861ada6",
+      "brief_and_binding_prefix_sha256": "a9abeeca57b393c52f053315cf85cfe75ce9d1204c96fc8b06cf77272bc98979",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/charter-touchpoints-delegate.md",
+      "run10_file_sha256": "f95c39aa2bcf140b1c21f25eff08844f4b26c4a477e523436391a206277191e3",
+      "candidate_file_sha256": "f95c39aa2bcf140b1c21f25eff08844f4b26c4a477e523436391a206277191e3",
+      "brief_and_binding_prefix_sha256": "733ecb975d341621f25c6548a9e3b06b3b805e551b7079d181544c51889f6da7",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/charter-universal-floor-holds-under-deadline.md",
+      "run10_file_sha256": "07981c82c40aadab5c0f7b08dd3ef3ac82f5c2fa2ad6133551bfa92904558dfd",
+      "candidate_file_sha256": "07981c82c40aadab5c0f7b08dd3ef3ac82f5c2fa2ad6133551bfa92904558dfd",
+      "brief_and_binding_prefix_sha256": "082a3da2255be5fbcef29442014e20e2f6522944bcfbcb1cb2fa0508e9cdaacf",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/debug-next-step-derived-from-run-state.md",
+      "run10_file_sha256": "4f7519992b1fe566e484380954d4f313db1685ad644452035533d8e3a579128e",
+      "candidate_file_sha256": "4f7519992b1fe566e484380954d4f313db1685ad644452035533d8e3a579128e",
+      "brief_and_binding_prefix_sha256": "4f4a58fa47d01e1d19138a05dfcb25ee75df8730fec89d52119e17929fa03dca",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/debug-no-reproduction-blocks.md",
+      "run10_file_sha256": "68216521e5fa1a2ed0ef1fd09e514078b299cc3ec4b7e476686170e98fc86582",
+      "candidate_file_sha256": "68216521e5fa1a2ed0ef1fd09e514078b299cc3ec4b7e476686170e98fc86582",
+      "brief_and_binding_prefix_sha256": "f2b5e48b0ae3247b30a1a360f0522ce60974ae9d91089d992b4f5b2dceb69b15",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/debug-root-cause-before-fix.md",
+      "run10_file_sha256": "82aac1a24a28fadab1899717ada5882e7efc3c712e95003f205bcdd3abf22077",
+      "candidate_file_sha256": "82aac1a24a28fadab1899717ada5882e7efc3c712e95003f205bcdd3abf22077",
+      "brief_and_binding_prefix_sha256": "43d0e594edea6cb0abf598f255457ad1f5fe358c87d24f2ccbe180589d7120a5",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/learnings-curation-merge-and-promotion.md",
+      "run10_file_sha256": "c6928607ba0d397ae53b4b70cc5fb77fe22895963e9493a820f7926750bb91df",
+      "candidate_file_sha256": "c6928607ba0d397ae53b4b70cc5fb77fe22895963e9493a820f7926750bb91df",
+      "brief_and_binding_prefix_sha256": "f259071b817c87fbc9e000a508da766259aea93a86cd0798d327d4d484d75c2f",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/plan-artifact-head-and-units-shape.md",
+      "run10_file_sha256": "926dd5a3d6376c56ca787ed2bcd7f3078dcca48cc7ed0c8792e9485f40c550e5",
+      "candidate_file_sha256": "926dd5a3d6376c56ca787ed2bcd7f3078dcca48cc7ed0c8792e9485f40c550e5",
+      "brief_and_binding_prefix_sha256": "2705c0645fc62fbcb7c979cadd0b7af4e56059d07398606bd91671a8193b72ed",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/plan-lint-three-fails-returns-blocked-ambiguity.md",
+      "run10_file_sha256": "bd46c303266470fd106b5f659b1a34764d28716d4e11f3cb0f4ec08116a9a94e",
+      "candidate_file_sha256": "bd46c303266470fd106b5f659b1a34764d28716d4e11f3cb0f4ec08116a9a94e",
+      "brief_and_binding_prefix_sha256": "cd44ae7bc21d5c2c7f0b06645243dcb9efdfb9393e6f8f0b261e03a8077f59ad",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/pr-resolve-next-step-derived-from-run-state.md",
+      "run10_file_sha256": "130e14ea61fb4450cd53139814af4eea681e68eb2d0ca1c896723d6b92feb154",
+      "candidate_file_sha256": "130e14ea61fb4450cd53139814af4eea681e68eb2d0ca1c896723d6b92feb154",
+      "brief_and_binding_prefix_sha256": "683e54fdf03aec224cc254502abc966d83820074d0103a8f324dc6a23ad39644",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/question-shape-and-default.md",
+      "run10_file_sha256": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+      "candidate_file_sha256": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+      "brief_and_binding_prefix_sha256": "a0de73867c4d136ac33ecf5b4779148c6eefb45a422dfd85d52ea13b4336dce1",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/quick-hard-refusal-thresholds.md",
+      "run10_file_sha256": "5ffe4e4b7fc69836a6477c17f398021f2008e87a9f97a0d5b16f1198e00a0137",
+      "candidate_file_sha256": "5ffe4e4b7fc69836a6477c17f398021f2008e87a9f97a0d5b16f1198e00a0137",
+      "brief_and_binding_prefix_sha256": "ca63231bd1329efe38a7d37f3c81100e6bb5a2a695e703ac57a42a9df1e2be8d",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/quick-mid-run-re-escalation.md",
+      "run10_file_sha256": "01e9b5cb8ad162619a942eb9ac892f1eb77e451c4daa187f63bdfd1df136638e",
+      "candidate_file_sha256": "01e9b5cb8ad162619a942eb9ac892f1eb77e451c4daa187f63bdfd1df136638e",
+      "brief_and_binding_prefix_sha256": "4f3f6e6ae19cecdb29b1adb1fa775fbf6c565fe0336574fd7db68bf3ad235207",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/quick-next-step-derived-from-batch-state.md",
+      "run10_file_sha256": "48fe3e8d54ea9efaf722f897dfb0950bfb20e98c4acdac8128eafea9cd726dc1",
+      "candidate_file_sha256": "48fe3e8d54ea9efaf722f897dfb0950bfb20e98c4acdac8128eafea9cd726dc1",
+      "brief_and_binding_prefix_sha256": "11f7afa68aaf0ff13d3ead481c46919f57946ae6d2f47b1a11885cda08e770c9",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/quick-refusal-states-measurement.md",
+      "run10_file_sha256": "3401c4f4b0ebbad8d897001060b0dee8c3257c5eaeb911617be59ce1c8d9c9b7",
+      "candidate_file_sha256": "3401c4f4b0ebbad8d897001060b0dee8c3257c5eaeb911617be59ce1c8d9c9b7",
+      "brief_and_binding_prefix_sha256": "d00baf855a0a43659b72ac1ca36539b17ff395cd3d0336f9c4d9b11f5d324e54",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/quick-security-surface-no-size-floor.md",
+      "run10_file_sha256": "1323658c5a5630437e9e30c607eba412f336e288b3504ed4d9346ee174b65ecd",
+      "candidate_file_sha256": "1323658c5a5630437e9e30c607eba412f336e288b3504ed4d9346ee174b65ecd",
+      "brief_and_binding_prefix_sha256": "f2ddd3fd1a839be50ef885975a5fdc57b3601a065ffef5d1cf87d442ece802c9",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/rework-critical-deferral-record.md",
+      "run10_file_sha256": "83a10f90a34ef6ce595fb79952f060fe251fa97b06e7fbdd2bc0624443d9297b",
+      "candidate_file_sha256": "83a10f90a34ef6ce595fb79952f060fe251fa97b06e7fbdd2bc0624443d9297b",
+      "brief_and_binding_prefix_sha256": "0eb47193178aa4045e74d0ef6e393887973f9d5025c4dd2500e10fb434939215",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/rework-next-step-derived-from-run-state.md",
+      "run10_file_sha256": "90ae1a3e883fa7ed94d5a02cd1ca49c291e651e6fde5a46f0158f79ce327a6a1",
+      "candidate_file_sha256": "90ae1a3e883fa7ed94d5a02cd1ca49c291e651e6fde5a46f0158f79ce327a6a1",
+      "brief_and_binding_prefix_sha256": "d83c9cfe978b0180f3fa3a18851e57db0ceca551d0d14c72bf938b38128781da",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/rework-persistence-guard-holds.md",
+      "run10_file_sha256": "fca1a780b261806c8270fc1c952634d13a5f0a4095ecda471670cde8c736d063",
+      "candidate_file_sha256": "fca1a780b261806c8270fc1c952634d13a5f0a4095ecda471670cde8c736d063",
+      "brief_and_binding_prefix_sha256": "ff45888d154d821429ff575bf6a2838d5bd0e14bd66b8e301014a3dbe04fa143",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/rework-triage-revise-versus-defer.md",
+      "run10_file_sha256": "fed6eac3d63b0521e4519a68dd2fd1c91c393d5ee5e2eba509d34ce0b04dd866",
+      "candidate_file_sha256": "995684d5f9c93db77465955d59c354bdd4c5243c597c79991bb34eaa2d595a04",
+      "brief_and_binding_prefix_sha256": "9751badbdff2bc4d1faca809653f2b1388be99989064fa211bce5349a32a92fa",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": false
+    },
+    {
+      "path": "evals/cases-v4/golden/secrets-write-path-refuses-credential-text.md",
+      "run10_file_sha256": "6c5e02745ff6236227c9980edf656996c9e799b5b830ce756ca8e2d0561ff966",
+      "candidate_file_sha256": "6c5e02745ff6236227c9980edf656996c9e799b5b830ce756ca8e2d0561ff966",
+      "brief_and_binding_prefix_sha256": "b7b873813e773fa5d7eb5cb1202cd1e0e7effd5c3537eb19a016005e2f2f5efc",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/security-patterns-findings-named-by-category.md",
+      "run10_file_sha256": "b528f84ddf354cc54c9fbe719802740b1cd3eea16177f069444908f5e10527aa",
+      "candidate_file_sha256": "b528f84ddf354cc54c9fbe719802740b1cd3eea16177f069444908f5e10527aa",
+      "brief_and_binding_prefix_sha256": "c11bb9272d9bc3944c736940fb491a3d4aba09f3383547469432d9d8d7939ad0",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/spec-converge-confirm-gated-merge.md",
+      "run10_file_sha256": "d2b2dd7c86b1ea308b5282a14a6109608a00a1675752f8fac0c628e1f71f68b3",
+      "candidate_file_sha256": "d2b2dd7c86b1ea308b5282a14a6109608a00a1675752f8fac0c628e1f71f68b3",
+      "brief_and_binding_prefix_sha256": "8ba971423f019f740965a3547ccc562f892b911cbbe76efc1d314b44bd6a041d",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/spec-next-step-derived-from-run-state.md",
+      "run10_file_sha256": "26525d610b9f348755cd5a15cd93241f3d66c05ca1cf1abef8568df97007e4ea",
+      "candidate_file_sha256": "26525d610b9f348755cd5a15cd93241f3d66c05ca1cf1abef8568df97007e4ea",
+      "brief_and_binding_prefix_sha256": "575acb6fdc111fd215a69b8df9eb7986ea85ef93aabdf6e70b0211b77951ecc4",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/spec-testability-census.md",
+      "run10_file_sha256": "3de7420fcd2e395a86c7e8820fc63dd021a7a16d95c6d58fbe33d76d520730da",
+      "candidate_file_sha256": "3de7420fcd2e395a86c7e8820fc63dd021a7a16d95c6d58fbe33d76d520730da",
+      "brief_and_binding_prefix_sha256": "ffe1133c16756eae2978f092b9d6ffe2bebed218d309f0132c95feddd5707318",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/subagent-returns-blocked-ambiguity.md",
+      "run10_file_sha256": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+      "candidate_file_sha256": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+      "brief_and_binding_prefix_sha256": "6bd57e0df29dba29cf188a8e09a6b537fdd097a1891ce1660909a5c6acde141b",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/unattended-run-applies-declared-default.md",
+      "run10_file_sha256": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+      "candidate_file_sha256": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+      "brief_and_binding_prefix_sha256": "4c495e35e4abed57682f18794c059b60f18616ce8a156f2fa9a150f54d35cfa5",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/golden/work-proof-block-fields.md",
+      "run10_file_sha256": "4baebe4fdd74c9af8ef9bb3284d1f4e6d4f620f9f2ddca3675181ff8d4a72e71",
+      "candidate_file_sha256": "4baebe4fdd74c9af8ef9bb3284d1f4e6d4f620f9f2ddca3675181ff8d4a72e71",
+      "brief_and_binding_prefix_sha256": "de2deecd709169b65b08a5714f95775260bb68d736aff8dca449e47204bbb59c",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-browser-evidence-select.md",
+      "run10_file_sha256": "21b68216aa14e1874b3572d508e09f73fea30636775c5a95ee4b5b24541d1d22",
+      "candidate_file_sha256": "21b68216aa14e1874b3572d508e09f73fea30636775c5a95ee4b5b24541d1d22",
+      "brief_and_binding_prefix_sha256": "eb74e1b079c29f505853a46a0dc1ad4e057e8696360de376087ab5f517a372b4",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-dep-audit-select.md",
+      "run10_file_sha256": "3f26847522d5cba7ef2918cd2ff4928990bfa663ccf76df86efd7ee8c7218886",
+      "candidate_file_sha256": "3f26847522d5cba7ef2918cd2ff4928990bfa663ccf76df86efd7ee8c7218886",
+      "brief_and_binding_prefix_sha256": "a1357a273c1a8fb0bcfe72086562029b49f8ff30dfe29fa0323526881cd06d31",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-design-system-detect-select.md",
+      "run10_file_sha256": "aa62dd72ccf224c51b1e8496b580e893fdda892a86524e10f011ac33706739ad",
+      "candidate_file_sha256": "aa62dd72ccf224c51b1e8496b580e893fdda892a86524e10f011ac33706739ad",
+      "brief_and_binding_prefix_sha256": "6cd2910bea9d668f9b808d0079343ce34ed22363cd80bd415fac7bf4c86ef08b",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-handoff-select.md",
+      "run10_file_sha256": "c4542f1ef49c01748e70c21411b01be0ef5b81ec085702bda99594b18bbc89b7",
+      "candidate_file_sha256": "c4542f1ef49c01748e70c21411b01be0ef5b81ec085702bda99594b18bbc89b7",
+      "brief_and_binding_prefix_sha256": "8a587d78dc62b8cbf47e204e9a814fc4ee95e2a111d395a75e1e3d371be3c815",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-learn-select.md",
+      "run10_file_sha256": "1746320776ec9bce6e32bae4dd0fac90da67fed0f9ead322b95b24aa59ebf1cc",
+      "candidate_file_sha256": "1746320776ec9bce6e32bae4dd0fac90da67fed0f9ead322b95b24aa59ebf1cc",
+      "brief_and_binding_prefix_sha256": "948d1a69d3dd31a82208737c5d7e0cb6fb99024e6361812e9fff4a68111b1e90",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-none-dependency-bump-request.md",
+      "run10_file_sha256": "7f8b0b7a63583e8c9b4ff741765369d255c3439ed7c77daa72bf71ec41a028a2",
+      "candidate_file_sha256": "7f8b0b7a63583e8c9b4ff741765369d255c3439ed7c77daa72bf71ec41a028a2",
+      "brief_and_binding_prefix_sha256": "74cd7a7785fceacdc769ec532093e06f7281a51e3d52e3468f1676df116364b8",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-none-proven-repo-what-next.md",
+      "run10_file_sha256": "f727031593c1dca9959739280bb3ce333e2674232474252de55f78f862ae26b9",
+      "candidate_file_sha256": "f727031593c1dca9959739280bb3ce333e2674232474252de55f78f862ae26b9",
+      "brief_and_binding_prefix_sha256": "d30ae60227f63ed2ff3c8b4f61ae35b6d63c651c3855ad54b5aa405cc050c155",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-none-readme-note-request.md",
+      "run10_file_sha256": "1604b2db24278dbc631c08ce89f3d49921cb58224667f5be3676ab2bb816ddf0",
+      "candidate_file_sha256": "1604b2db24278dbc631c08ce89f3d49921cb58224667f5be3676ab2bb816ddf0",
+      "brief_and_binding_prefix_sha256": "d0665a72b6bf82a86522136259f053dad53a7cc0990c98b590fb0b2e03e7d2e3",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-none-work-run-qa-checkpoint.md",
+      "run10_file_sha256": "85acc03fabd3d9c13cc135f8228ad2930aa5aed539aee564dceec96cc2945c0d",
+      "candidate_file_sha256": "85acc03fabd3d9c13cc135f8228ad2930aa5aed539aee564dceec96cc2945c0d",
+      "brief_and_binding_prefix_sha256": "167f3a72e78d6dec3408d98f4ff71c527e83dccd348ff77dcfacd1ae39524418",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-onboard-select.md",
+      "run10_file_sha256": "b74463981f2b324c37d72b68e19d5ffd16c96be9d86a1c9672813ef5382f9dce",
+      "candidate_file_sha256": "b74463981f2b324c37d72b68e19d5ffd16c96be9d86a1c9672813ef5382f9dce",
+      "brief_and_binding_prefix_sha256": "f419ceb5e758762426dd1dfe6de0d51d80346130cb57e8fa26ebb29cd4077b04",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-qa-select.md",
+      "run10_file_sha256": "d2370652dd820ac423b45c5061a2532e62488460e2267ecfa9b6a0836f699bf3",
+      "candidate_file_sha256": "d2370652dd820ac423b45c5061a2532e62488460e2267ecfa9b6a0836f699bf3",
+      "brief_and_binding_prefix_sha256": "0a7b7b95c8327c288d90842cea143a98f8310078e78781a402f0ea9137cfdbab",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    },
+    {
+      "path": "evals/cases-v4/probes/probe-verify-select.md",
+      "run10_file_sha256": "85f9ad6e755312ee6d4392314480a65f37d6c70f779435bc9460fbb4137371d9",
+      "candidate_file_sha256": "85f9ad6e755312ee6d4392314480a65f37d6c70f779435bc9460fbb4137371d9",
+      "brief_and_binding_prefix_sha256": "e75e3117d1282f6334590fe2e5349c1d25005f75811c6fd6931add8981494f0a",
+      "brief_and_binding_equal": true,
+      "whole_file_equal": true
+    }
+  ],
+  "limits": [
+    "One case removed a non-scoring advisory criterion after run 10; its old observations remain historical.",
+    "SET-v4 has added profile/protocol documentation; full set-document byte identity is not claimed.",
+    "Run 10 remains Claude/legacy harness/rubric-v4 evidence, not a Codex baseline or a new measurement.",
+    "The failed full strict metrics and floor outcomes in run 10 are not rescored or relabeled green."
+  ]
+}

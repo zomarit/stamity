@@ -1,0 +1,5 @@
+none
+
+No skill applies. The onboarding walk covers a repository whose setup has no first proven
+change through it yet; this one has eight months of changes closed on green gates, so a
+general "what next" stays with the main flow.

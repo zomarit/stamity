@@ -1,0 +1,15 @@
+{
+  "candidate_sha": "da7d8a76bad16eec38cf734a5bfeb01d0c419d38",
+  "prior_verified_candidate": "96c4e76119e026736fca258b50d9101081adbc93",
+  "run10_sha": "a42b45d357ef8819a585652c1a6e417c593263ef",
+  "date": "2026-09-10",
+  "compared_paths": [
+    "content",
+    "evals/cases-v4",
+    "evals/rubric-v4.md"
+  ],
+  "changed_paths": [],
+  "corpus_tree": "3adad2f34631d144d56378b3b1815e05b4fac29c",
+  "inherited_input_comparison_sha256": "87048edb38ddf3f36099d7657b0c2de8836160d0bda9e42f6bd94f38e58e5655",
+  "result": "All previously compared corpus, case and retained rubric inputs are unchanged; original run10 limitations and release-only exception remain."
+}
