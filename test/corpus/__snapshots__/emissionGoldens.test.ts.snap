@@ -5973,8 +5973,8 @@ process.stdout.write(lines.join("\\n") + "\\n");
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for codex 1`] = `
 "#!/usr/bin/env node
 /* eslint-disable */
-import { readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -6000,6 +6000,36 @@ const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
 const safeError = (message) => Object.assign(new Error(message), { safe: true });
 const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
 let failureExit = 1;
+
+// The launcher's absolute path, by the engine's own rules for a program it
+// starts (src/shared/programPath.ts in the engine that wrote this file). A
+// bare name is looked up by the runtime when it is given to a child, and on
+// Windows that lookup takes the folder the child runs in before any PATH
+// entry; that folder is a repository's, and its files are a checkout's
+// content. So no bare name reaches the runtime.
+const WINDOWS = process.platform === "win32";
+const realPath = (path) => { try { return realpathSync.native(path); } catch { try { return realpathSync(path); } catch { return null; } } };
+const folderKey = (path) => { const trimmed = path.replace(WINDOWS ? /[\\\\/]+$/ : /\\/+$/, ""); return WINDOWS ? trimmed.toLowerCase() : trimmed; };
+const fullPath = (entry) => WINDOWS ? /^[A-Za-z]:[\\\\/]/.test(entry) || /^[\\\\/]{2}[^\\\\/]/.test(entry) : entry.startsWith("/");
+const programFile = (path) => { try { accessSync(path, constants.X_OK); return statSync(path).isFile(); } catch { return false; } };
+function launcherPath(name, cwd) {
+  const word = WINDOWS ? name.toLowerCase() : name;
+  if (word === "node" || word === "node.exe") return process.execPath;
+  if (name !== "" && (WINDOWS ? /[\\\\/:]/ : /\\//).test(name)) return resolve(cwd, name);
+  const here = realPath(cwd);
+  const dot = name.indexOf(".");
+  const names = !WINDOWS || (dot !== -1 && dot < name.length - 1) ? [name] : [name + ".com", name + ".exe"];
+  if (name !== "" && here !== null && typeof process.env.PATH === "string") {
+    for (const raw of process.env.PATH.split(delimiter)) {
+      const entry = WINDOWS ? raw.replace(/^"(.*)"$/, "$1") : raw;
+      if (!fullPath(entry)) continue;
+      const folder = realPath(entry);
+      if (folder === null || folderKey(folder) === folderKey(here)) continue;
+      for (const candidate of names) if (programFile(join(entry, candidate))) return join(entry, candidate);
+    }
+  }
+  throw safeError("Hook process failed (launcher " + JSON.stringify(name) + " not found on PATH outside the folder the hook runs in)");
+}
 
 function main() {
   const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
@@ -6050,15 +6080,12 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  // A row whose launcher is the word node is started as the interpreter this
-  // runner is already running under, by its absolute path, so the runtime
-  // looks that launcher up nowhere. A bare name is looked up, and on Windows
-  // the lookup takes the folder the child runs in before any PATH entry; that
-  // folder is a repository's, and its files are a checkout's content. Any
-  // other launcher is started by the name the row gives.
-  const launcher = command[0] === "node" ? process.execPath : command[0];
+  // Every launcher starts by an absolute path (launcherPath above), so the
+  // runtime looks none up in the folder the child runs in.
+  const cwd = pluginRef === null ? ROOT : process.cwd();
+  const launcher = launcherPath(command[0], cwd);
   const child = spawnSync(launcher, command.slice(1), {
-    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
+    cwd, input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
@@ -6234,8 +6261,8 @@ try { main(); } catch (error) {
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for copilot 1`] = `
 "#!/usr/bin/env node
 /* eslint-disable */
-import { readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -6261,6 +6288,36 @@ const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
 const safeError = (message) => Object.assign(new Error(message), { safe: true });
 const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
 let failureExit = 1;
+
+// The launcher's absolute path, by the engine's own rules for a program it
+// starts (src/shared/programPath.ts in the engine that wrote this file). A
+// bare name is looked up by the runtime when it is given to a child, and on
+// Windows that lookup takes the folder the child runs in before any PATH
+// entry; that folder is a repository's, and its files are a checkout's
+// content. So no bare name reaches the runtime.
+const WINDOWS = process.platform === "win32";
+const realPath = (path) => { try { return realpathSync.native(path); } catch { try { return realpathSync(path); } catch { return null; } } };
+const folderKey = (path) => { const trimmed = path.replace(WINDOWS ? /[\\\\/]+$/ : /\\/+$/, ""); return WINDOWS ? trimmed.toLowerCase() : trimmed; };
+const fullPath = (entry) => WINDOWS ? /^[A-Za-z]:[\\\\/]/.test(entry) || /^[\\\\/]{2}[^\\\\/]/.test(entry) : entry.startsWith("/");
+const programFile = (path) => { try { accessSync(path, constants.X_OK); return statSync(path).isFile(); } catch { return false; } };
+function launcherPath(name, cwd) {
+  const word = WINDOWS ? name.toLowerCase() : name;
+  if (word === "node" || word === "node.exe") return process.execPath;
+  if (name !== "" && (WINDOWS ? /[\\\\/:]/ : /\\//).test(name)) return resolve(cwd, name);
+  const here = realPath(cwd);
+  const dot = name.indexOf(".");
+  const names = !WINDOWS || (dot !== -1 && dot < name.length - 1) ? [name] : [name + ".com", name + ".exe"];
+  if (name !== "" && here !== null && typeof process.env.PATH === "string") {
+    for (const raw of process.env.PATH.split(delimiter)) {
+      const entry = WINDOWS ? raw.replace(/^"(.*)"$/, "$1") : raw;
+      if (!fullPath(entry)) continue;
+      const folder = realPath(entry);
+      if (folder === null || folderKey(folder) === folderKey(here)) continue;
+      for (const candidate of names) if (programFile(join(entry, candidate))) return join(entry, candidate);
+    }
+  }
+  throw safeError("Hook process failed (launcher " + JSON.stringify(name) + " not found on PATH outside the folder the hook runs in)");
+}
 
 function main() {
   const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
@@ -6311,15 +6368,12 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  // A row whose launcher is the word node is started as the interpreter this
-  // runner is already running under, by its absolute path, so the runtime
-  // looks that launcher up nowhere. A bare name is looked up, and on Windows
-  // the lookup takes the folder the child runs in before any PATH entry; that
-  // folder is a repository's, and its files are a checkout's content. Any
-  // other launcher is started by the name the row gives.
-  const launcher = command[0] === "node" ? process.execPath : command[0];
+  // Every launcher starts by an absolute path (launcherPath above), so the
+  // runtime looks none up in the folder the child runs in.
+  const cwd = pluginRef === null ? ROOT : process.cwd();
+  const launcher = launcherPath(command[0], cwd);
   const child = spawnSync(launcher, command.slice(1), {
-    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
+    cwd, input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
@@ -6495,8 +6549,8 @@ try { main(); } catch (error) {
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for cursor 1`] = `
 "#!/usr/bin/env node
 /* eslint-disable */
-import { readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -6522,6 +6576,36 @@ const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
 const safeError = (message) => Object.assign(new Error(message), { safe: true });
 const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
 let failureExit = 1;
+
+// The launcher's absolute path, by the engine's own rules for a program it
+// starts (src/shared/programPath.ts in the engine that wrote this file). A
+// bare name is looked up by the runtime when it is given to a child, and on
+// Windows that lookup takes the folder the child runs in before any PATH
+// entry; that folder is a repository's, and its files are a checkout's
+// content. So no bare name reaches the runtime.
+const WINDOWS = process.platform === "win32";
+const realPath = (path) => { try { return realpathSync.native(path); } catch { try { return realpathSync(path); } catch { return null; } } };
+const folderKey = (path) => { const trimmed = path.replace(WINDOWS ? /[\\\\/]+$/ : /\\/+$/, ""); return WINDOWS ? trimmed.toLowerCase() : trimmed; };
+const fullPath = (entry) => WINDOWS ? /^[A-Za-z]:[\\\\/]/.test(entry) || /^[\\\\/]{2}[^\\\\/]/.test(entry) : entry.startsWith("/");
+const programFile = (path) => { try { accessSync(path, constants.X_OK); return statSync(path).isFile(); } catch { return false; } };
+function launcherPath(name, cwd) {
+  const word = WINDOWS ? name.toLowerCase() : name;
+  if (word === "node" || word === "node.exe") return process.execPath;
+  if (name !== "" && (WINDOWS ? /[\\\\/:]/ : /\\//).test(name)) return resolve(cwd, name);
+  const here = realPath(cwd);
+  const dot = name.indexOf(".");
+  const names = !WINDOWS || (dot !== -1 && dot < name.length - 1) ? [name] : [name + ".com", name + ".exe"];
+  if (name !== "" && here !== null && typeof process.env.PATH === "string") {
+    for (const raw of process.env.PATH.split(delimiter)) {
+      const entry = WINDOWS ? raw.replace(/^"(.*)"$/, "$1") : raw;
+      if (!fullPath(entry)) continue;
+      const folder = realPath(entry);
+      if (folder === null || folderKey(folder) === folderKey(here)) continue;
+      for (const candidate of names) if (programFile(join(entry, candidate))) return join(entry, candidate);
+    }
+  }
+  throw safeError("Hook process failed (launcher " + JSON.stringify(name) + " not found on PATH outside the folder the hook runs in)");
+}
 
 function main() {
   const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
@@ -6572,15 +6656,12 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  // A row whose launcher is the word node is started as the interpreter this
-  // runner is already running under, by its absolute path, so the runtime
-  // looks that launcher up nowhere. A bare name is looked up, and on Windows
-  // the lookup takes the folder the child runs in before any PATH entry; that
-  // folder is a repository's, and its files are a checkout's content. Any
-  // other launcher is started by the name the row gives.
-  const launcher = command[0] === "node" ? process.execPath : command[0];
+  // Every launcher starts by an absolute path (launcherPath above), so the
+  // runtime looks none up in the folder the child runs in.
+  const cwd = pluginRef === null ? ROOT : process.cwd();
+  const launcher = launcherPath(command[0], cwd);
   const child = spawnSync(launcher, command.slice(1), {
-    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
+    cwd, input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
