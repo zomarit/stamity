@@ -2515,12 +2515,22 @@ describe("release.yml — the only publishing path", () => {
     // TEST CHANGE, justified (run 2026-10-13_records-branch, ledger pr/5): both commands spell the ref in full, since
     // the depth-0 checkout fetches every tag and a tag named `origin/records` would shadow the short name; the log
     // line keeps the short name.
-    expect(restore.run).toBe([
-      "node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force",
-      "records_commit=$(git rev-parse --verify 'refs/remotes/origin/records^{commit}')",
-      "echo \"Restored the records commit $records_commit (origin/records)\"",
-      "",
-    ].join("\n"));
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit r1-release-machinery; REQ-PROVE-023, inbox
+    // close/1): a v* tag run no longer restores the branch as it stands when the run starts; it restores the commit
+    // the tag's `records:` line pins, read in the shell and refused unless it is 40 lower-case hexadecimal characters.
+    // A rehearsal on a branch has no tag and keeps the branch restore. Both keep `--no-fetch --force`; the step's
+    // control flow is executed against scratch tags in "release.yml — the records pin, executed" below.
+    const run = restore.run ?? "";
+    expect(run).toContain("git tag -l --format='%(contents)' \"$TAG\"");
+    expect(run).toContain("^[0-9a-f]{40}$");
+    expect(run).toContain('node scripts/records.mjs restore --ref "$RECORDS_SHA" --no-fetch --force');
+    expect(run).toContain("node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force");
+    expect(run).toContain("refs/tags/v*)");
+    expect(
+      run.split("\n").filter((line) => line.includes("scripts/records.mjs restore")).every((line) => line.includes("--no-fetch --force")),
+      "every restore keeps --no-fetch --force",
+    ).toBe(true);
+    expect(run, "the step reads no short `origin/records` ref").not.toMatch(/(?<![/\w])origin\/records/);
     expect(restore.run, "a `${{ }}` value inside a run: is a template injection").not.toContain("${{");
     expect(runOf(gatesSteps, "Records suite")).toBe("npm run test:records");
     expect(indexOf(gatesSteps, "Restore the records")).toBe(indexOf(gatesSteps, "Install") + 1);
@@ -2948,6 +2958,209 @@ describe.skipIf(WINDOWS)("release.yml — the release proofs, executed", () => {
 
     expect(run.status).toBe(1);
     expect(run.out).toContain("refs/remotes/origin/main is not present");
+  });
+});
+
+// ── release.yml: the records pin, executed ───────────────────────────────────
+
+/**
+ * ADDED (2026-10-14, run 2026-10-14_cli-native, unit r1-release-machinery; REQ-PROVE-023, inbox close/1, pr/9, pr/10).
+ * The `Restore the records` step, RUN, against scratch repositories holding annotated and lightweight
+ * tags. A v* tag run restores exactly the records commit its tag's `records:` line pins, read in the
+ * shell; a line that is absent, doubled, or anything but 40 lower-case hexadecimal characters stops
+ * the step before any command runs, shell text in it included. A rehearsal on a branch restores the
+ * records branch by its full ref. Not run on Windows, for the reason the suite above gives.
+ */
+describe.skipIf(WINDOWS)("release.yml — the records pin, executed", () => {
+  const root = mkdtempSync(join(tmpdir(), "stamity-release-records-pin-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const RESTORE = runOf(stepsOf(release, "gates"), "Restore the records");
+  const CALLS = "restore-calls.jsonl";
+  const PWNED = "pwned";
+
+  interface PinRepo {
+    readonly dir: string;
+    /** The records commit a cut recorded. */
+    readonly pinned: string;
+    /** The records branch's tip when the run starts: a later publish moved it past the pinned commit. */
+    readonly tip: string;
+  }
+
+  let built: PinRepo | undefined;
+
+  /**
+   * A checkout shaped like the release's: `main`, and the records branch's history under
+   * `refs/remotes/origin/records`, its tip one publish past the commit the cut pinned. `scripts/records.mjs`
+   * here is a stand-in that writes the arguments it was handed and nothing else. Stubbed because the
+   * subject is the shell around it, what it reads from the tag, what it refuses and the argv it passes;
+   * the real `restore --ref <sha> --no-fetch --force`, a pinned commit holding a non-record path refused
+   * included, runs in test/ci/recordsScript.test.ts against a records-branch world this repository cannot cheaply build here.
+   */
+  function pinRepo(): PinRepo {
+    if (built !== undefined) return built;
+    const dir = join(root, "checkout");
+    mkdirSync(join(dir, "scripts"), { recursive: true });
+    git(dir, "init", "-q", "-b", "main");
+    git(dir, "config", "user.email", "ci@example.invalid");
+    git(dir, "config", "user.name", "CI");
+    writeFileSync(
+      join(dir, "scripts", "records.mjs"),
+      "import { appendFileSync } from 'node:fs'\nappendFileSync('restore-calls.jsonl', `${JSON.stringify(process.argv.slice(2))}\\n`)\n",
+    );
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "root");
+    git(dir, "checkout", "-q", "--orphan", "records");
+    git(dir, "commit", "-q", "--allow-empty", "-m", "records at the cut");
+    const pinned = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    git(dir, "commit", "-q", "--allow-empty", "-m", "records published after the cut");
+    const tip = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    git(dir, "update-ref", "refs/remotes/origin/records", tip);
+    git(dir, "checkout", "-q", "main");
+    git(dir, "branch", "-q", "-D", "records");
+    // A tag named `origin/records` on main's commit: a step that spelled the short name would read it.
+    git(dir, "tag", "origin/records", "main");
+    built = { dir, pinned, tip };
+    return built;
+  }
+
+  /** An annotated tag carrying `message`, or a lightweight one on a commit whose message it is. */
+  function tag(name: string, message: string, options: { readonly lightweight?: boolean } = {}): void {
+    const { dir } = pinRepo();
+    if (options.lightweight === true) {
+      git(dir, "commit", "-q", "--allow-empty", "-m", message);
+      git(dir, "tag", name);
+      git(dir, "reset", "-q", "--hard", "HEAD~1");
+    } else {
+      git(dir, "tag", "-a", name, "-m", message);
+    }
+  }
+
+  interface RestoreRun {
+    readonly status: number | null;
+    readonly out: string;
+    readonly calls: readonly (readonly string[])[];
+    readonly pwned: boolean;
+  }
+
+  function restore(ref: string): RestoreRun {
+    const { dir } = pinRepo();
+    rmSync(join(dir, CALLS), { force: true });
+    rmSync(join(dir, PWNED), { force: true });
+    const result = spawnSync("bash", ["-c", RESTORE], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        // The step calls `node` by name; the runner has it on PATH and so must this child.
+        PATH: `${dirname(process.execPath)}${delimiter}${process.env["PATH"] ?? ""}`,
+        GITHUB_REF: ref,
+      },
+    });
+    const calls = existsSync(join(dir, CALLS))
+      ? readFileSync(join(dir, CALLS), "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line) as string[])
+      : [];
+    return { status: result.status, out: `${result.stdout}${result.stderr}`, calls, pwned: existsSync(join(dir, PWNED)) };
+  }
+
+  it("restores exactly the commit the tag pins, not the branch tip the run finds, keeping --no-fetch --force", () => {
+    const { pinned, tip } = pinRepo();
+    expect(pinned).not.toBe(tip);
+    tag("v1.0.0", `1.0.0\n\nrecords: ${pinned}`);
+    const run = restore("refs/tags/v1.0.0");
+
+    expect(run.status, run.out).toBe(0);
+    expect(run.calls).toEqual([["restore", "--ref", pinned, "--no-fetch", "--force"]]);
+    expect(run.out).toContain(`Restored the records commit ${pinned}`);
+    expect(run.out).not.toContain(tip);
+  });
+
+  it("refuses a tag whose message carries no records: line, before restoring anything", () => {
+    tag("v1.0.1", "1.0.1");
+    const run = restore("refs/tags/v1.0.1");
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("records:");
+    expect(run.calls).toEqual([]);
+  });
+
+  it("refuses a tag carrying two records: lines rather than choosing one", () => {
+    const { pinned, tip } = pinRepo();
+    tag("v1.0.2", `1.0.2\n\nrecords: ${pinned}\nrecords: ${tip}`);
+    const run = restore("refs/tags/v1.0.2");
+
+    expect(run.status).toBe(1);
+    expect(run.calls).toEqual([]);
+  });
+
+  it("refuses a lightweight tag, whose contents are its commit's message, even one naming a well-formed commit", () => {
+    const { pinned } = pinRepo();
+    tag("v1.0.3", `1.0.3\n\nrecords: ${pinned}`, { lightweight: true });
+    const run = restore("refs/tags/v1.0.3");
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("not an annotated tag");
+    expect(run.calls).toEqual([]);
+  });
+
+  it.each([
+    ["upper-case hexadecimal", (sha: string) => sha.toUpperCase()],
+    ["39 characters", (sha: string) => sha.slice(1)],
+    ["41 characters", (sha: string) => `${sha}0`],
+    ["no space after the colon", (sha: string) => `:${sha}`],
+    ["a command substitution", () => `$(touch ${PWNED})`],
+    ["a well-formed commit followed by a command", (sha: string) => `${sha}; touch ${PWNED}`],
+    ["a well-formed commit with a backtick command after it", (sha: string) => `${sha}\`touch ${PWNED}\``],
+  ])("refuses a records: value that is %s, running nothing it carries", (label, value) => {
+    const { pinned } = pinRepo();
+    const name = `v2.0.${label.length}-${label.replace(/[^a-z0-9]+/gi, "-")}`;
+    const raw = value(pinned);
+    tag(name, `2.0.0\n\n${raw.startsWith(":") ? `records${raw}` : `records: ${raw}`}`);
+    const run = restore(`refs/tags/${name}`);
+
+    expect(run.status, run.out).toBe(1);
+    expect(run.out).toContain("40 lower-case hexadecimal characters");
+    expect(run.calls).toEqual([]);
+    expect(run.pwned, "shell text in the tag message ran").toBe(false);
+    // The refused value is never printed back, so a line in it cannot reach the runner as a workflow command.
+    expect(run.out).not.toContain(raw);
+  });
+
+  it("restores the records branch by its full ref on a rehearsal from a branch, which has no tag to pin it", () => {
+    const { tip } = pinRepo();
+    const run = restore("refs/heads/feature/x");
+
+    expect(run.status, run.out).toBe(0);
+    expect(run.calls).toEqual([["restore", "--ref", "refs/remotes/origin/records", "--no-fetch", "--force"]]);
+    // The `origin/records` tag on main's commit stands in for nothing: the commit printed is the branch's.
+    expect(run.out).toContain(`Restored the records commit ${tip}`);
+  });
+});
+
+// ── release-controls-checklist.md: the cut writes the pin ────────────────────
+
+/**
+ * ADDED (2026-10-14, run 2026-10-14_cli-native, unit r1-release-machinery; REQ-PROVE-023, inbox pr/9, pr/10). The
+ * release restores what the tag's `records:` line names, so the checklist's cut writes that line, and every git
+ * command the checklist prints names the records branch by its full ref, since a tag named `origin/records` wins
+ * the short name's lookup.
+ */
+describe("release-controls-checklist.md — the cut pins the records", () => {
+  const checklist = readFileSync(join(REPO_ROOT, ".github", "release-controls-checklist.md"), "utf8");
+
+  it("writes the records commit into the annotated tag as records: <sha>, read from the full ref", () => {
+    expect(checklist).toContain("git rev-parse --verify 'refs/remotes/origin/records^{commit}'");
+    expect(checklist).toMatch(/git tag -a vX\.Y\.Z -m "X\.Y\.Z" -m "records: \$records_sha"/);
+    expect(checklist).toContain("Restore the records");
+  });
+
+  it("spells no short origin/records ref in a command", () => {
+    const commands = [
+      ...[...checklist.matchAll(/`([^`\n]+)`/g)].map((match) => match[1] ?? ""),
+      ...[...checklist.matchAll(/```sh\n([\s\S]*?)```/g)].flatMap((match) => (match[1] ?? "").split("\n")),
+    ].filter((text) => /\bgit\b/.test(text));
+    expect(commands.length).toBeGreaterThan(0);
+    expect(commands.filter((text) => /(?<![/\w])origin\/records/.test(text))).toEqual([]);
   });
 });
 

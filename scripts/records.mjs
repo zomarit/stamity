@@ -255,10 +255,10 @@ function casePairs(paths) {
 const REPAIR = [
   'The records branch already holds this, so neither restore, which refuses it, nor commit, which needs a checkout synced to it, can drop it. ' +
     'Drop it with plain git, from this checkout (on a disk that folds case too), <old-spelling> being the spelling you drop; ' +
-    'a record only that spelling holds goes with it, so save it first (git show origin/records:<path>) and publish it again under the spelling you keep:',
+    'a record only that spelling holds goes with it, so save it first (git show refs/remotes/origin/records:<path>) and publish it again under the spelling you keep:',
   ...[
     'git fetch origin records',
-    'git worktree add --detach <folder> origin/records',
+    'git worktree add --detach <folder> refs/remotes/origin/records',
     'git -C <folder> --literal-pathspecs rm -r --cached -- <old-spelling>',
     'git -C <folder> commit -q -m "records: drop the old spelling"',
     'git -C <folder> push origin HEAD:refs/heads/records',

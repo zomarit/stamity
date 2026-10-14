@@ -45,9 +45,11 @@ const UNPORTABLE = [
   "docs/plans/Lpt9.log.md", "docs/plans/a*.md", "docs/plans/b.", "docs/plans/old./c.md",
 ];
 /** The plain-git repair a refusal names for a pair the records branch already holds, `<folder>` and `<old-spelling>` to fill. */
+// TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit r1-release-machinery, inbox pr/9 and pr/10): the
+// printed worktree step spells the remote-tracking ref in full, since a tag named `origin/records` wins the short name.
 const REPAIR = [
   "git fetch origin records",
-  "git worktree add --detach <folder> origin/records",
+  "git worktree add --detach <folder> refs/remotes/origin/records",
   "git -C <folder> --literal-pathspecs rm -r --cached -- <old-spelling>",
   "git -C <folder> commit -q -m \"records: drop the old spelling\"",
   "git -C <folder> push origin HEAD:refs/heads/records",
@@ -616,6 +618,12 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(at, refused.lines.join("\n")).toBeGreaterThan(-1);
     const steps = refused.lines.slice(at + 1).map((line) => line.trim());
     expect(steps).toEqual(REPAIR);
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit r1-release-machinery, inbox pr/9 and pr/10):
+    // a tag named `origin/records` on the commit before the pair; a step that spelled the ref short would check the
+    // tag out, find no old spelling to drop, and fail, so the walk below proves every printed step names the branch.
+    w.git(w.clone, "tag", "origin/records", upstream);
+    // The prose ahead of the steps names the ref in full as well, where it says how to save a record first.
+    expect(refused.lines[at]).toContain("git show refs/remotes/origin/records:<path>");
     // Each step run as printed, on this host's disk, the placeholders filled.
     const scratch = join(w.dir, "repair");
     for (const step of steps.slice(0, -1)) {

@@ -258,18 +258,56 @@ jobs:
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
         run: npm ci
 
-      # The records live on the `records` branch, which the depth-0 checkout above already fetched
-      # into refs/remotes/origin/records; the restore reads that ref and fetches nothing, for the
-      # reason the resolve step gives (no credential survives the checkout). The records suite and
-      # the leak gate below then read them at their usual paths. The step prints the records commit
-      # it restored, so the run's log names the evidence this release was gated on; a ref that does
-      # not resolve fails the step. Both commands spell the ref in full: the checkout fetched every
-      # tag, and a tag named `origin/records` would win the short name's lookup.
+      # The records live on the `records` branch, whose history the depth-0 checkout above already
+      # fetched into refs/remotes/origin/records; the restore fetches nothing, for the reason the
+      # resolve step gives (no credential survives the checkout). The records suite and the leak gate
+      # below then read them at their usual paths, and the step prints the records commit it
+      # restored, so the run's log names the evidence this release was gated on.
+      #
+      # THE PIN. A v* tag run restores exactly the records commit the cut recorded, not the branch as
+      # it stands when this run starts, which any later records publish moves. The release checklist's
+      # cut writes it into the annotated tag's message as one line, `records: <sha>`. The line is read
+      # here, in the shell, never through a `${{ }}` expression, and refused unless the tag is
+      # annotated (a lightweight tag's contents are its commit's message), carries exactly one
+      # `records:` line, and its value is exactly 40 lower-case hexadecimal characters; only then does
+      # it reach a command. A refused value is never printed back, so nothing in a tag message reaches
+      # the runner as a workflow command either. `records.mjs restore` then refuses a commit that is
+      # not in this checkout or that holds anything but records.
+      #
+      # A rehearsal on a branch has no tag to read: the resolve step has already refused every run
+      # that can publish from anything but a v* tag, so a run here on another ref publishes nothing,
+      # and it restores the branch's tip and says so. Every ref is spelled in full: the checkout
+      # fetched every tag, and a tag named `origin/records` would win the short name's lookup.
       - name: Restore the records
         run: |
-          node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force
-          records_commit=$(git rev-parse --verify 'refs/remotes/origin/records^{commit}')
-          echo "Restored the records commit $records_commit (origin/records)"
+          set -euo pipefail
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              TAG="${GITHUB_REF#refs/tags/}"
+              if [ "$(git tag -l --format='%(objecttype)' "$TAG")" != "tag" ]; then
+                echo "::error::$TAG is not an annotated tag in this checkout, so it carries no records: line. Cut the release with the annotated tag the release checklist writes, whose message names the records commit as records: <sha>."
+                exit 1
+              fi
+              TAG_MESSAGE="$(git tag -l --format='%(contents)' "$TAG")"
+              PIN_LINES="$(printf '%s\n' "$TAG_MESSAGE" | grep -c '^records:' || true)"
+              if [ "$PIN_LINES" != "1" ]; then
+                echo "::error::Tag $TAG carries $PIN_LINES records: lines, and a release needs exactly one, records: <sha>, naming the records commit the cut recorded. Refusing to gate the release on whatever records the run finds."
+                exit 1
+              fi
+              RECORDS_SHA="$(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^records: //p')"
+              if ! [[ "$RECORDS_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "::error::Tag $TAG's records: line is not records: followed by 40 lower-case hexadecimal characters. Refusing to use it; the value is not printed."
+                exit 1
+              fi
+              node scripts/records.mjs restore --ref "$RECORDS_SHA" --no-fetch --force
+              echo "Restored the records commit $RECORDS_SHA, pinned by tag $TAG"
+              ;;
+            *)
+              node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force
+              records_commit=$(git rev-parse --verify 'refs/remotes/origin/records^{commit}')
+              echo "Restored the records commit $records_commit, the records branch's tip: a rehearsal on $GITHUB_REF has no tag to pin it"
+              ;;
+          esac
 
       - name: Verify lockfile is in sync
         run: git diff --exit-code package-lock.json
