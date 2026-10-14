@@ -1107,6 +1107,21 @@ describe("readManifest / writeManifest", () => {
     expect(persisted["plugin"]).toEqual(plugin);
   });
 
+  it.each(["__proto__", "constructor"])(
+    "refuses a 1.0.0 file whose pins carry a %s class key, never dropping it on migration",
+    async (key) => {
+      const root = getRoot().dir;
+      // Spliced into the text: an object literal's `__proto__` sets a prototype, not a key,
+      // while `JSON.parse` (the reader's path) keeps it as an own key.
+      const text = JSON.stringify({ ...fullManifest(), version: "1.0.0", models: { pins: { standard: "Y" } } })
+        .replace('"pins":{', `"pins":{"${key}":"x",`);
+      await seedManifest(root, text);
+
+      const error = await rejects(() => readManifest(root), "CONFIG_ERROR");
+      expect(error.message).toContain(`\`models.pins.${key}\` names unknown model class`);
+    },
+  );
+
   it("names a 1.0.0 pin that is not a string on read, never dropping it", async () => {
     const root = getRoot().dir;
     await seedManifest(

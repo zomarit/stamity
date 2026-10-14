@@ -900,6 +900,19 @@ describe("config — the model ladder's nine keys", () => {
     expect(get.stdout).toContain(`${key}  gpt-6-astra`);
   });
 
+  it("keeps a class's per-client pins when `model.<class>` writes the every-client key (REQ-LADDER-005)", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, {
+      tools: ["claude", "cursor"],
+      models: { pins: { standard: { cursor: "X", all: "Y" } } },
+    });
+
+    const set = await run(handle, ["set", "model.standard", "Z"]);
+
+    expect(set.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.pins?.standard).toEqual({ cursor: "X", all: "Z" });
+  });
+
   it("resolves a pinned row to exactly what the adapter will write for that client", async () => {
     const handle = tempDir();
     await seedManifest(handle, { tools: ["cursor"] });

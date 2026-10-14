@@ -118,10 +118,15 @@ export const PER_CLIENT_PINS_STEP: ManifestMigration = {
     const next: Record<string, unknown> = { ...raw, version: "2.0.0" };
     const models = raw.models;
     if (!isPlainObject(models) || !isPlainObject(models.pins)) return next;
-    const pins: Record<string, unknown> = {};
-    for (const [modelClass, pin] of Object.entries(models.pins)) {
-      pins[modelClass] = typeof pin === "string" ? { all: pin } : pin;
-    }
+    // `Object.fromEntries` defines every key as an own property. An assignment loop
+    // would hand a `__proto__` class key to the prototype setter, hiding it from
+    // validation and dropping it on the next write.
+    const pins = Object.fromEntries(
+      Object.entries(models.pins).map(([modelClass, pin]) => [
+        modelClass,
+        typeof pin === "string" ? { all: pin } : pin,
+      ]),
+    );
     next.models = { ...models, pins };
     return next;
   },
