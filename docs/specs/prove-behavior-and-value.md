@@ -923,8 +923,8 @@ snapshot on `records` changes nothing until `main` moves the pin.
   `--page measurements` with any missing, it exits 1 naming them, before any page is written
   (`scripts/generate-docs.mjs:93-105`; `measurementsAction`, `src/cli/docs/measurements.ts:1372-1376`). A prior run
   named but absent is a partial restore and is refused.
-- **Record links.** The page links each record as `https://github.com/zomarit/stamity/blob/records/<path>`
-  (`RECORDS_BLOB_URL`, `:117`), and a link into a `main` path stays relative. The record links on `README.md`,
+- **Record links.** The page links each record as `RECORDS_BLOB_URL` (`:117`) followed by the record's path, an
+  absolute link to `blob/records/<path>` on this repository, and a link into a `main` path stays relative. The record links on `README.md`,
   `docs/doctrine.md` and `docs/enterprise-forks.md` take the same form.
 - **One composition link.** The page still words one composition link and refuses a run of record whose prior run is
   itself composed, so run 45 stays the run of record until the next release's eval run replaces it (S11).
