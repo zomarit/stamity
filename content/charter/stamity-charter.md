@@ -45,16 +45,16 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call bundling related
-   questions, or one numbered list where a client has none), numbered options, a declared default-if-no-response,
-   rounds until none is undecided, no second request in the same turn; sub-agents return `BLOCKED_AMBIGUITY`.
+2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
+   else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
+   second request in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the gates `gate classify` names exit 0 (all if it did not run).
    Anything less ships with a `Not done:` list naming each open gap.
 5. **Learnings first.** Read `.stamity/learnings/` before project-specific work, only through the session-start
-   banner or, where no hook ran, `node .stamity/generated/hooks/*/stamity-session-start.mjs` with stdin from
-   `/dev/null`, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with an empty
+   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an

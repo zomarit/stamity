@@ -330,7 +330,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // so no line count moved (the version line and the amended date keep their
 // widths). The same +232 lands in the charter-alone figure below and in
 // ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_595;
+// 5_595 -> 5_610 on 2026-10-14, the f2 fix round (review/11, review/13):
+// invariant 2 restores "Sub-agents do not ask" and "naming the readings" inside
+// its three lines, and invariant 5 names the script by its client folder, run
+// with an empty stdin, inside its three, +15 bytes. 1.3.0 is unreleased, so the
+// same version carries the words. The same +15 lands below and in
+// ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_610;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -363,7 +369,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_595;
 // +35 as above.
 // 5_363 -> 5_595 on 2026-10-14, unit f2-protocol-charter: invariants 2 and 5
 // (invariants 1.3.0), the same +232 as above.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_595;
+// 5_595 -> 5_610 on 2026-10-14, the f2 fix round (review/11, review/13): the
+// same +15 as above.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_610;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -397,7 +405,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_595;
 // item 5 of the same rule at the file's widest line, same words.
 // 25_504 -> 25_736 on 2026-10-14, unit f2-protocol-charter: the charter half of
 // the override carries invariants 2 and 5's +232 bytes (invariants 1.3.0).
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_736;
+// 25_736 -> 25_751 on 2026-10-14, the f2 fix round (review/11, review/13): the
+// charter half of the override carries the same +15 bytes.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_751;
 
 /**
  * The composite always-on line count one client pays for a plan under a

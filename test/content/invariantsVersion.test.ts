@@ -59,7 +59,13 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // invariant 5 reads learnings only through the session-start screen, with the script run on
   // stdin from `/dev/null` where no hook ran. Invariant 6 is rewrapped with its words unchanged,
   // which pays for the sixth line. The 1.2.0 row above stays as the record.
-  "1.3.0": "8a51f3dd06363505950d343fc4b7a75f13441a04de9d9423936c3fcbd6ad483a",
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 3, the f2 fix round, `review/11`,
+  // `review/13`): an in-version text fix, 8a51f3dd… -> 19d2cb52…. Invariant 2 restores the 1.2.0
+  // floor clauses "Sub-agents do not ask" and "naming the readings", and invariant 5 names the
+  // script as `hooks/<client>/` run with an empty stdin instead of a glob and `/dev/null`. No
+  // release or tag carries the earlier 1.3.0 text (it landed on this unreleased branch), so no
+  // repository ran it and this row moves instead of a 1.3.1, as the 1.2.0 row did.
+  "1.3.0": "19d2cb52f02a1f02831fa28432a86f2f32245bbc73e789b5b8a823f63501e960",
 };
 
 /** The rendered version line, template form and emitted form alike. */

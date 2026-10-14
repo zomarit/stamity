@@ -524,6 +524,10 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
     // (subagent-returns-blocked-ambiguity) and :51-56,68-69 (unattended-run-applies-declared-
     // default). The walk is appended after Gates and the Gates bullet is reworded in place, so
     // those ranges hold the bytes they held at 1.2.0; a move here moves those cases' ranges.
+    // TEST CHANGE, justified (2026-10-14, the f2 fix round, review/12): Floor item 6's first line
+    // now reads "One ask per turn, with related questions bundled into", the Gates bullet's unit,
+    // so the hash moves 54688c0a… -> c1a3e77c…. No line moves and every anchor holds; the bytes
+    // of :38-46 change, so question-shape-and-default's quoted block is re-quoted by unit f9.
     const lines = (await load(RELPATH)).raw.split("\n");
     const ranges: ReadonlyArray<readonly [number, number, string]> = [
       [22, 25, "1. **Ambiguous scope**"],
@@ -538,7 +542,7 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
     }
     const quoted = ranges.map(([first, last]) => lines.slice(first - 1, last).join("\n")).join("\n---\n");
     expect(createHash("sha256").update(quoted).digest("hex")).toBe(
-      "54688c0a45a29c0b57c43f894b74af726f25bd1473763a62cf822e44173cf151",
+      "c1a3e77cfb6b1788fe213e0d57f6d7fae5d5ad89588383c89e98cae0a70b1804",
     );
   });
 });

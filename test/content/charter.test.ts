@@ -303,13 +303,22 @@ describe("corpus charter", () => {
 
     expect(two.lines).toHaveLength(3);
     expect(two.text).toContain("one ask per turn");
-    expect(two.text).toContain("one question-tool call bundling related questions");
-    expect(two.text).toContain("or one numbered list where a client has none");
+    // TEST CHANGE, justified (2026-10-14, the f2 fix round, review/11): the two pins below read
+    // "bundling related questions" and "or one numbered list where a client has none", and the
+    // sub-agent pin read "sub-agents return `BLOCKED_AMBIGUITY`". That wording had dropped the
+    // 1.2.0 floor clauses "Sub-agents do not ask" and "naming the readings"; restoring them inside
+    // the same three lines rewords the ask's two forms, and both forms are still pinned.
+    expect(two.text).toContain("one question-tool call of related questions");
+    expect(two.text).toContain("else one numbered list");
     expect(two.text).toContain("numbered options");
     expect(two.text).toContain("a declared default-if-no-response");
     expect(two.text).toContain("rounds until none is undecided");
     expect(two.text).toContain("no second request in the same turn");
-    expect(two.text).toContain("sub-agents return `BLOCKED_AMBIGUITY`");
+    // The 1.2.0 sentence, byte for byte: a blocked sub-agent carries the readings the parent's
+    // ambiguity gate turns into its question.
+    expect(two.text).toContain(
+      "Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.",
+    );
     // The 1.2.0 wording asked exactly one question, which a walk in rounds contradicts.
     expect(two.text).not.toMatch(/exactly one/);
   });
@@ -321,9 +330,14 @@ describe("corpus charter", () => {
     expect(five.lines).toHaveLength(3);
     expect(five.text).toContain("Read `.stamity/learnings/` before project-specific work");
     expect(five.text).toContain("only through the session-start banner");
+    // TEST CHANGE, justified (2026-10-14, the f2 fix round, review/13): the pin read a glob
+    // (`hooks/*/`) and stdin from `/dev/null`, which PowerShell and cmd cannot run. The command
+    // now names the client folder and an empty stdin, which every shell can supply.
     expect(five.text).toContain(
-      "where no hook ran, `node .stamity/generated/hooks/*/stamity-session-start.mjs` with stdin from `/dev/null`",
+      "where no hook ran, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with an empty stdin",
     );
+    expect(five.text).not.toContain("/dev/null");
+    expect(five.text).not.toContain("hooks/*/");
     expect(five.text).toContain("opening only the files it lists as loaded");
     expect(five.text).toContain("repeating a recorded failure is a process defect");
   });

@@ -36,7 +36,7 @@ With none of the five live and the safer option reversible, take it, say so in
 one line, and continue. Echoing the request back as a question ("so caching
 should be added?") spends the same turn and resolves nothing.
 
-6. **Ask shape.** One question per turn, with related sub-questions bundled into
+6. **Ask shape.** One ask per turn, with related questions bundled into
    it. Two to four numbered options, each carrying a one-line trade-off: one
    option is not a choice, and five signals the design was never narrowed. Every
    question declares which option runs if no answer arrives, and names the
