@@ -162,9 +162,13 @@ describe("the scope-registry option", () => {
     expect(pinnedCliCall("@acme/stamity", "1.12.0", "learn capture", { registry: REGISTRY })).toBe(
       "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 learn capture",
     );
+    // TEST CHANGE (plan 020 file 2, e10-cloud-docs-matrix, build/73): a `-y` fallback says what it
+    // fetches from; a named registry is "the registry it names". The `--no` hint above fetches
+    // nothing and carries no clause, and stays pinned unchanged.
     expect(cliCallHint("@acme/stamity", "1.12.0", "check", { registry: REGISTRY })).toBe(
       "`stamity check` where the CLI is installed, else " +
-        "`npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 check`",
+        "`npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 check`, " +
+        "which needs the registry it names",
     );
   });
 

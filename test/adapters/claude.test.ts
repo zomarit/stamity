@@ -12,6 +12,7 @@ import {
   CLAUDE_SKILLS_DIR,
   claudeResiduePlanner,
 } from "../../src/adapters/claude.ts";
+import { buildHooksJson as buildCodexHooksJson } from "../../src/adapters/codex.ts";
 import { ENGINE_PERMISSION_ROWS } from "../../src/manifest/claudeSettings.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
 import { parseFrontmatter } from "../../src/content/frontmatter.ts";
@@ -31,6 +32,8 @@ import {
   REVIEW_GATE_STATE_FILE,
   buildReviewGateScript,
 } from "../../src/hooks/scripts.ts";
+import { executedScript } from "../../src/manifest/coOwnedJson.ts";
+import { isKnownCodexHooksDescription } from "../../src/manifest/hookDocuments.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { extractCustomContent } from "../../src/merge/managedBlocks.ts";
 import { resolveAgentGrant } from "../../src/roster/agentGrants.ts";
@@ -116,10 +119,14 @@ const PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
  * the guard's OWN block, so the message must not ride along with a real
  * refusal — exit 2 is exactly when the client hands stderr to the model.
  */
+// TEST CHANGE (plan 020 file 2, e10-cloud-docs-matrix, D21): the repair's fallback now says what it
+// depends on, ", which needs the npm registry" — a cloud sandbox with no route to the registry fails
+// the npx call for a reason the call does not show. The tail's shape and classification are unchanged.
 const GUARD_TAIL =
   "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
   "echo 'stamity: the pre-tool-use guard could not run; run " +
-  "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`' >&2; exit 2; }";
+  "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`, " +
+  "which needs the npm registry' >&2; exit 2; }";
 
 /**
  * The one sentence the tail prints, and the one a legitimate refusal must not carry.
@@ -130,9 +137,10 @@ const GUARD_TAIL =
  * A bare `stamity sync` fails on the documented npx setup, which installs no
  * binary. Same tail, same classification; only the remedy's spelling moved.
  */
+// TEST CHANGE (e10-cloud-docs-matrix): the registry clause, as GUARD_TAIL.
 const GUARD_REPAIR_LINE =
   "the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, " +
-  "else `npx -y @zomarit/stamity@0.0.0-test sync`";
+  "else `npx -y @zomarit/stamity@0.0.0-test sync`, which needs the npm registry";
 
 /**
  * The generated hook script commands, as the settings transform renders them.
@@ -155,8 +163,10 @@ const HOOK_COMMANDS = {
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs" ' +
     '|| { s=$?; [ "$s" -eq 2 ] && exit 2; ' +
     // TEST CHANGE (sw26-engine-cli-call-form): the repair's pinned spelling, as GUARD_REPAIR_LINE.
+    // TEST CHANGE (e10-cloud-docs-matrix): the registry clause, as GUARD_TAIL.
     "echo 'stamity: the pre-tool-use guard could not run; run " +
-    "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`' >&2; exit 2; }",
+    "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`, " +
+    "which needs the npm registry' >&2; exit 2; }",
   tamper:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"',
   reviewGate:
@@ -1391,6 +1401,47 @@ describe("the project-directory anchor", () => {
     // are its author's — both keep the client's non-blocking reading.
     expect(settings.hooks["SessionStart"]?.every((entry) => !entry.hooks[0]!.command.includes("exit 2"))).toBe(true);
     expect(settings.hooks["PreToolUse"]?.[1]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
+  });
+
+  /**
+   * The repair's registry clause (D21) and the two patterns that own the engine's entries. The
+   * co-owned settings reader takes a guard command as the engine's only while its tail matches
+   * `GUARD_TAIL` (`src/manifest/coOwnedJson.ts`), which admits no single quote inside the echo;
+   * the Codex hooks description is recognised with its check hint normalised by `CHECK_HINT`
+   * (`src/manifest/hookDocuments.ts`), which admits no parenthesis. A clause that broke either
+   * would make `sync` keep the stale entry beside the new one. Three CLI shapes, because the clause
+   * differs: the npm registry, a fork's named registry, and `npx --no`, which fetches nothing.
+   */
+  it("says what the fallback needs, in a tail both owner patterns still read", async () => {
+    const guardOf = async (cli: Partial<EmissionContext>): Promise<string> => {
+      const ctx = { ...(await ctxOf({ selection: EMPTY_SELECTION })), ...cli };
+      const core = await buildCoreEmissionPlan(ctx);
+      const settings = settingsOf((await claudeResiduePlanner.planResidue(core, ctx)).outputs);
+      return settings.hooks["PreToolUse"]?.[0]?.hooks[0]?.command ?? "";
+    };
+    const canonical = await guardOf({});
+    const fork = await guardOf({ packageName: "@acme/stamity", npmRegistry: "https://npm.acme.example/" });
+    const unpublished = await guardOf({ packageName: "@acme/stamity", npmChannel: false });
+
+    expect(canonical).toBe(HOOK_COMMANDS.guard);
+    expect(fork).toContain(
+      "else `npx -y --@acme:registry=https://npm.acme.example/ @acme/stamity@0.0.0-test sync`, " +
+        "which needs the registry it names' >&2",
+    );
+    expect(unpublished).toContain("else `npx --no @acme/stamity@0.0.0-test sync`' >&2");
+    expect(unpublished).not.toContain("which needs");
+    for (const command of [canonical, fork, unpublished]) {
+      expect(executedScript(command), command).toBe(GUARD_RELATIVE);
+    }
+    // Control: the same command with a quote inside the echo is not the engine's any more.
+    expect(executedScript(canonical.replace("which needs", "which can't"))).toBeNull();
+
+    const codex = await buildCoreEmissionPlan(await ctxOf({ selection: EMPTY_SELECTION, tools: ["codex"] }));
+    const description = (JSON.parse(buildCodexHooksJson(codex, { packageName: "@zomarit/stamity", version: ENGINE_VERSION })) as {
+      description: string;
+    }).description;
+    expect(description).toContain("check`, which needs the npm registry) is the control");
+    expect(isKnownCodexHooksDescription(description)).toBe(true);
   });
 
   it("anchors a script committed at the repository root, which carries no separator", async () => {

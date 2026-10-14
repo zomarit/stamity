@@ -13,7 +13,8 @@ import {
   renderCapabilityMatrixFrom,
   type RevisitTrigger,
 } from "../../src/emit/capabilityMatrix.ts";
-import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
+import { CLIENT_CLOUD_FACTS, CLIENT_HOOK_GUARANTEES, type ClientCloudFact } from "../../src/hooks/model.ts";
+import { buildSessionStartScript } from "../../src/hooks/scripts.ts";
 import { ADAPTER_ALLOWLIST_COVERAGE } from "../../src/tools/translator.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -102,6 +103,18 @@ const triggerFor = (when: string): RevisitTrigger => {
   const trigger = REVISIT_TRIGGERS.find((row) => row.when === when);
   if (trigger === undefined) throw new Error(`no revisit trigger named ${when}`);
   return trigger;
+};
+
+/** Live inputs with the cloud table replaced — the same derive rule. */
+const withCloud = (rows: readonly ClientCloudFact[]): typeof LIVE_CAPABILITY_INPUTS => ({
+  ...LIVE_CAPABILITY_INPUTS,
+  cloud: rows,
+});
+
+const cloudFact = (tool: Tool, subject: string): ClientCloudFact => {
+  const row = CLIENT_CLOUD_FACTS.find((fact) => fact.tool === tool && fact.subject === subject);
+  if (row === undefined) throw new Error(`no ${tool} cloud fact named ${subject}`);
+  return row;
 };
 
 /** The currency table's rows, one per declared trigger. */
@@ -564,15 +577,23 @@ describe("the 2026-09-30 client currency pass", () => {
     // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): Copilot's list gained a sixth
     // page, the CLI command reference, read 2026-10-10 for the effort scale and the
     // `--no-custom-instructions` flag. The five dates the pass left where they were are unchanged.
+    // TEST CHANGE, justified (plan 020 file 2, e8-copilot-codex-claude-pins, build/64; moved by
+    // e10-cloud-docs-matrix, which owns this file): e8 re-read Copilot's hooks reference on
+    // 2026-10-14 (the fifth date, 2026-09-17 before) and cited two new pages read that day, the VS
+    // Code custom-agents page and the cloud agent's model page; it re-read Codex's subagents page
+    // on 2026-10-14 for the model precedence (the first date, 2026-09-10 before). Every date the
+    // 2026-09-30 pass left where it was and no later unit re-read is still held as it was.
     expect(datesOf("copilot")).toEqual([
       "2026-09-10",
       "2026-09-10",
       "2026-09-10",
       "2026-09-10",
-      "2026-09-17",
+      "2026-10-14",
       "2026-10-10",
+      "2026-10-14",
+      "2026-10-14",
     ]);
-    expect(datesOf("codex")).toEqual(["2026-09-10", "2026-09-17", "2026-09-15", "2026-09-10"]);
+    expect(datesOf("codex")).toEqual(["2026-10-14", "2026-09-17", "2026-09-15", "2026-09-10"]);
     expect(datesOf("cursor")).toEqual(["2026-09-10", "2026-09-10", "2026-09-17", "2026-09-10", "2026-09-10"]);
   });
 
@@ -581,12 +602,19 @@ describe("the 2026-09-30 client currency pass", () => {
   // "not emitted … this engine does not write it yet". The engine writes the key now
   // (REQ-LADDER-004), so the row is held to "emitted", its scale and its sources. The two release
   // versions and the refuted "publishes no effort key" wording are pinned as before.
+  // TEST CHANGE, justified (e8-copilot-codex-claude-pins, build/64; moved by e10-cloud-docs-matrix):
+  // e8 added the live run that proved the key, Copilot CLI 1.0.89 on 2026-10-11, and where its
+  // record lives. Every other word of the row is held as before, the cloud agent's undocumented
+  // handling included.
   it("states that Copilot agents carry `reasoning-effort`, on what scale and from which sources", () => {
     const value = capOf("copilot", "effort-axis");
     expect(value).toBe(
       "emitted — `reasoning-effort: <level>` per agent, on the scale `low` … `max` (Copilot CLI " +
         "reference, accessed 2026-10-10; the key in the 1.0.89 loader and its changelog, 1.0.66 and " +
-        "1.0.88); a level the model does not offer is reported and falls back to the session's; the " +
+        "1.0.88); a live run on Copilot CLI 1.0.89 (2026-10-11) loaded an agent carrying " +
+        "`reasoning-effort: high` and its sub-agent ran at that level " +
+        "(`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2); a level " +
+        "the model does not offer is reported and falls back to the session's; the " +
         "cloud agent's handling of the key is undocumented (custom-agents configuration page, " +
         "accessed 2026-10-10)",
     );
@@ -612,6 +640,147 @@ describe("the 2026-09-30 client currency pass", () => {
     expect(value).toContain("unmeasured");
     // The claim the 0.155.1 run refuted: that the project file's key is what is read.
     expect(value).not.toMatch(/measurably read|measured .* to flip the feature/);
+  });
+});
+
+/**
+ * REQ-FLOW-085 and REQ-FLOW-086, the documentation half (plan 020 file 2, e10-cloud-docs-matrix):
+ * one dated table says what each vendor's cloud runs of the repository's hooks, the matrix renders
+ * it as a column and a section, and the session start's cloud lines are held equal to it, so a
+ * cloud fact has one place to be wrong in.
+ */
+describe("the cloud column and the Cloud sessions section", () => {
+  const page = renderCapabilityMatrix();
+  const rows = tableRows(section(page, "## Cloud sessions"));
+
+  it("renders every cloud fact once, with its page and the date it was read", () => {
+    // Non-degenerate: every client has rows, and all three statuses occur.
+    for (const tool of TOOLS) {
+      expect(CLIENT_CLOUD_FACTS.filter((fact) => fact.tool === tool).length, tool).toBeGreaterThan(0);
+    }
+    expect(new Set(CLIENT_CLOUD_FACTS.map((fact) => fact.status))).toEqual(
+      new Set(["documented", "not documented", "unverified"]),
+    );
+    expect(rows).toHaveLength(CLIENT_CLOUD_FACTS.length);
+    for (const fact of CLIENT_CLOUD_FACTS) {
+      const row = rows.find((line) => cells(line)[0] === `\`${fact.tool}\`` && cells(line)[1] === fact.subject);
+      expect(row, `${fact.tool} ${fact.subject}`).toBeDefined();
+      const [, , text, printed, status, source] = cells(row ?? "");
+      expect(text).toBe(fact.fact);
+      expect(printed).toBe(fact.sessionStart ?? "—");
+      expect(source).toMatch(/^<https:\/\/\S+> — accessed \d{4}-\d{2}-\d{2}$/);
+      expect(source).toBe(`<${fact.citation.url}> — accessed ${fact.citation.accessDate}`);
+      // A silent page is dated like a statement: "not documented, read <date>", never a guess.
+      expect(status).toBe(
+        fact.status === "not documented" ? `not documented, read ${fact.citation.accessDate}` : fact.status,
+      );
+    }
+  });
+
+  it("gives every client a dated cloud cell in the glance table", () => {
+    const glance = tableRows(section(page, "## Coverage at a glance"));
+    expect(page).toContain("| In the vendor's cloud |");
+    for (const tool of TOOLS) {
+      const fact = CLIENT_CLOUD_FACTS.filter((row) => row.tool === tool && row.glance !== undefined);
+      expect(fact, tool).toHaveLength(1);
+      const row = glance.find((line) => cells(line)[0] === `\`${tool}\``) ?? "";
+      expect(cells(row)[6]).toBe(`${fact[0]?.glance} — read ${fact[0]?.citation.accessDate}`);
+    }
+  });
+
+  it("says plainly which clouds run which hooks", () => {
+    expect(cloudFact("codex", "Project hooks").status).toBe("not documented");
+    expect(cloudFact("codex", "Project hooks").fact).toContain("assume none run");
+    expect(cloudFact("codex", "Project hooks").fact).toContain("sandbox is the enforcement");
+    expect(cloudFact("claude", "Project hooks").fact).toContain(
+      "A session with several repositories loads no repository's hooks",
+    );
+    expect(cloudFact("copilot", "Default branch").fact).toContain("present on the repository's default branch");
+    expect(cloudFact("copilot", "Project hooks").fact).toContain("in the cloned repository");
+    expect(cloudFact("cursor", "Project hooks").fact).toContain(
+      "except `sessionStart`, `sessionEnd` and the MCP hooks",
+    );
+  });
+
+  it("records the open Copilot path-argument question as unverified, not as a claim", () => {
+    const row = cloudFact("copilot", "Tool arguments");
+    expect(row.status).toBe("unverified");
+    expect(row.fact).toContain("`filePath`");
+    expect(row.fact).toContain("`path`");
+    expect(row.fact).toContain("raised in review on 2026-10-14");
+    expect(row.citation.url).toBe("https://docs.github.com/en/copilot/reference/hooks-reference");
+  });
+
+  it("holds the session start's cloud lines equal to the table's, marker and order included", () => {
+    const block = /^const SESSIONS = \[\n([\s\S]*?)\n\];$/m.exec(buildSessionStartScript())?.[1] ?? "";
+    const sessions = block
+      .split("\n")
+      .map((line) => JSON.parse(line.trim().replace(/,$/, "")) as { vars: string[]; lines: string[] });
+    const MARKERS: Readonly<Record<string, Tool>> = {
+      CLAUDE_CODE_REMOTE: "claude",
+      COPILOT_AGENT_PROMPT: "copilot",
+      CURSOR_AGENT_SOCKET: "cursor",
+    };
+    const clientSessions = sessions.filter((session) => MARKERS[session.vars[0] ?? ""] !== undefined);
+    expect(clientSessions).toHaveLength(3);
+    for (const session of clientSessions) {
+      const marker = session.vars[0] ?? "";
+      const tool = MARKERS[marker] as Tool;
+      expect(session.lines, tool).toEqual(
+        CLIENT_CLOUD_FACTS.filter((row) => row.tool === tool && row.sessionStart !== undefined).map(
+          (row) => row.sessionStart,
+        ),
+      );
+      expect(cloudFact(tool, "Session marker").fact).toContain(`\`${marker}\``);
+    }
+    // Codex Cloud documents no project hook, so no session start runs there to print a line.
+    expect(CLIENT_CLOUD_FACTS.some((row) => row.tool === "codex" && row.sessionStart !== undefined)).toBe(false);
+  });
+
+  it("is cited by the two guides that state a cloud fact", () => {
+    // The guides link pages, not fragments (the docs suite resolves every link as a file), so the
+    // citation is the page link and the section's own heading named beside it.
+    expect(page.split("\n")).toContain("## Cloud sessions");
+    for (const guide of ["docs/customization.md", "docs/troubleshooting.md"]) {
+      expect(readFileSync(join(REPO_ROOT, guide), "utf-8").replace(/\s+/g, " "), guide).toContain(
+        "[capability matrix](capability-matrix.md) under Cloud sessions",
+      );
+    }
+  });
+
+  it("refuses a cloud fact for an unsupported client, or one left blank", () => {
+    const first = CLIENT_CLOUD_FACTS[0]!;
+    expect(() => renderCapabilityMatrixFrom(withCloud([...CLIENT_CLOUD_FACTS, { ...first, tool: "windsurf" as Tool }])))
+      .toThrowError(/`windsurf`, which is not a supported client/);
+    expect(() => renderCapabilityMatrixFrom(withCloud([{ ...first, fact: "  " }, ...CLIENT_CLOUD_FACTS.slice(1)])))
+      .toThrowError(/no subject or no fact/);
+  });
+
+  it("refuses an undated or unsourced cloud fact, naming it", () => {
+    const first = CLIENT_CLOUD_FACTS[0]!;
+    const rest = CLIENT_CLOUD_FACTS.slice(1);
+    const call = (citation: ClientCloudFact["citation"]): string =>
+      renderCapabilityMatrixFrom(withCloud([{ ...first, citation }, ...rest]));
+    expect(() => call({ url: " ", accessDate: "2026-10-15" })).toThrowError(EngineError);
+    expect(() => call({ url: " ", accessDate: "2026-10-15" })).toThrowError(/`claude` cloud fact "Project hooks" declares a citation with no URL/);
+    expect(() => call({ url: first.citation.url, accessDate: "October 2026" })).toThrowError(/ISO calendar date/);
+  });
+
+  it("refuses a repeated fact, a second glance row, and a client with none", () => {
+    const plain = CLIENT_CLOUD_FACTS.find((row) => row.glance === undefined)!;
+    expect(() => renderCapabilityMatrixFrom(withCloud([...CLIENT_CLOUD_FACTS, plain]))).toThrowError(/declared twice/);
+
+    const codexGlance = cloudFact("codex", "Project hooks");
+    expect(() =>
+      renderCapabilityMatrixFrom(withCloud([...CLIENT_CLOUD_FACTS, { ...codexGlance, subject: "Again" }])),
+    ).toThrowError(/gives `codex` two glance rows/);
+
+    const noCursorGlance = CLIENT_CLOUD_FACTS.map((row) => {
+      if (row.tool !== "cursor" || row.glance === undefined) return row;
+      const { glance: _dropped, ...rest } = row;
+      return rest;
+    });
+    expect(() => renderCapabilityMatrixFrom(withCloud(noCursorGlance))).toThrowError(/no glance row for `cursor`/);
   });
 });
 

@@ -6,7 +6,8 @@
  * disagree with no signal at all — the page keeps reading as true. Here every
  * cell is a projection of a code constant: the four residue planners'
  * {@link AdapterDialectFacts}, the shared `CLIENT_HOOK_GUARANTEES` ladder the
- * emitters read, `ADAPTER_ALLOWLIST_COVERAGE` from the tool translator, and the
+ * emitters read, the dated `CLIENT_CLOUD_FACTS` table of what each vendor's
+ * cloud runs, `ADAPTER_ALLOWLIST_COVERAGE` from the tool translator, and the
  * always-on ratchet pins from `../content/charter.ts`
  * ({@link AlwaysOnDisclosure}).
  * The committed {@link CAPABILITY_MATRIX_DOC_PATH} is rewritten by
@@ -60,7 +61,12 @@ import {
   DESCRIPTION_PULL_TOOLS,
   RULE_APPENDIX_TOOLS,
 } from "../content/charter.ts";
-import { CLIENT_HOOK_GUARANTEES, type ClientHookGuarantee } from "../hooks/model.ts";
+import {
+  CLIENT_CLOUD_FACTS,
+  CLIENT_HOOK_GUARANTEES,
+  type ClientCloudFact,
+  type ClientHookGuarantee,
+} from "../hooks/model.ts";
 import {
   ADAPTER_ALLOWLIST_COVERAGE,
   buildAllowlistCoverageTable,
@@ -96,6 +102,12 @@ export interface CapabilityMatrixInputs {
   readonly facts: readonly AdapterDialectFacts[];
   /** Rendered row-for-row, in ITS order — the table is a strength ladder. */
   readonly guarantees: readonly ClientHookGuarantee[];
+  /**
+   * What each client's vendor cloud runs, one dated row per fact. Rendered as
+   * the glance table's cloud column (each client's one `glance` row) and as
+   * the Cloud sessions section (every row, in declared order).
+   */
+  readonly cloud: readonly ClientCloudFact[];
   /**
    * Per-client allowlist enforcement. Checked for client coverage here, but
    * the rows are rendered by the translator's own `buildAllowlistCoverageTable`
@@ -338,6 +350,7 @@ export const LIVE_CAPABILITY_INPUTS: CapabilityMatrixInputs = {
     codexResiduePlanner.facts,
   ],
   guarantees: CLIENT_HOOK_GUARANTEES,
+  cloud: CLIENT_CLOUD_FACTS,
   coverage: ADAPTER_ALLOWLIST_COVERAGE,
   triggers: REVISIT_TRIGGERS,
   alwaysOn: LIVE_ALWAYS_ON,
@@ -378,17 +391,59 @@ function requireCitations(facts: AdapterDialectFacts): void {
         `would state undated facts. Add at least one { url, accessDate } to its dialect facts.`,
     );
   }
-  for (const citation of facts.citations) {
-    if (citation.url.trim() === "") {
-      fail(`The \`${facts.tool}\` adapter declares a citation with no URL.`);
-    }
-    if (!ISO_DATE.test(citation.accessDate)) {
-      fail(
-        `The \`${facts.tool}\` citation ${citation.url} carries access date ` +
-          `"${citation.accessDate}", which is not an ISO calendar date (YYYY-MM-DD).`,
-      );
-    }
+  for (const citation of facts.citations) requireDatedSource(`The \`${facts.tool}\` adapter`, citation);
+}
+
+/**
+ * A citation's URL is present and its access date an ISO date, or `label` names
+ * the fault. One check for the dialect facts' sources and the cloud table's.
+ */
+function requireDatedSource(label: string, citation: { url: string; accessDate: string }): void {
+  if (citation.url.trim() === "") fail(`${label} declares a citation with no URL.`);
+  if (!ISO_DATE.test(citation.accessDate)) {
+    fail(
+      `${label} cites ${citation.url} with access date "${citation.accessDate}", which is not an ` +
+        `ISO calendar date (YYYY-MM-DD).`,
+    );
   }
+}
+
+/**
+ * Validate the cloud table and return each client's glance cell: its one
+ * `glance` row's summary with the date that row's page was read. A client with
+ * no glance row would leave its cloud cell blank, and two would make the cell's
+ * choice an accident of order; an undated row is the recollection
+ * {@link requireCitations} refuses for the dialect facts.
+ */
+function resolveCloudGlance(cloud: readonly ClientCloudFact[]): Readonly<Record<Tool, string>> {
+  const glance: Partial<Record<Tool, string>> = {};
+  const subjects = new Set<string>();
+  for (const row of cloud) {
+    if (!VALID_TOOLS.has(row.tool)) {
+      fail(`The cloud-facts table declares \`${row.tool}\`, which is not a supported client.`);
+    }
+    const label = `The \`${row.tool}\` cloud fact "${row.subject}"`;
+    if (row.subject.trim() === "" || row.fact.trim() === "") {
+      fail(`A \`${row.tool}\` cloud fact declares no subject or no fact, so its row would render blank.`);
+    }
+    // A client id holds no colon, so the pair reads back one way.
+    const key = `${row.tool}:${row.subject}`;
+    if (subjects.has(key)) fail(`${label} is declared twice.`);
+    subjects.add(key);
+    requireDatedSource(label, row.citation);
+    if (row.glance === undefined) continue;
+    if (glance[row.tool] !== undefined) fail(`The cloud-facts table gives \`${row.tool}\` two glance rows.`);
+    glance[row.tool] = `${row.glance} — read ${row.citation.accessDate}`;
+  }
+  const missing = TOOLS.filter((tool) => glance[tool] === undefined);
+  if (missing.length > 0) {
+    fail(
+      `The cloud-facts table carries no glance row for ${missing.map((t) => `\`${t}\``).join(", ")}, ` +
+        `so the cloud column would state nothing for it.`,
+    );
+  }
+  // Every client was just shown to hold a cell.
+  return glance as Record<Tool, string>;
 }
 
 /**
@@ -603,6 +658,7 @@ function blockingExitCell(guarantee: ClientHookGuarantee): string {
 function glanceSection(
   ordered: readonly AdapterDialectFacts[],
   guarantees: readonly ClientHookGuarantee[],
+  cloud: Readonly<Record<Tool, string>>,
 ): string[] {
   const rows = ordered.map((facts) => [
     code(facts.tool),
@@ -611,6 +667,7 @@ function glanceSection(
     hooksConfigCell(facts),
     enforcementCell(guarantees.find((row) => row.tool === facts.tool)),
     code(facts.mcpDialect),
+    cloud[facts.tool],
   ]);
   return [
     "## Coverage at a glance",
@@ -623,6 +680,7 @@ function glanceSection(
         "Hook config",
         "Hook enforcement",
         "MCP dialect",
+        "In the vendor's cloud",
       ],
       rows,
     ),
@@ -686,6 +744,41 @@ function guaranteeSection(guarantees: readonly ClientHookGuarantee[]): string[] 
         blockingExitCell(row),
         row.notes,
       ]),
+    ),
+  ];
+}
+
+/** `not documented` carries its read date, so the absence is dated as a statement is. */
+function cloudStatusCell(row: ClientCloudFact): string {
+  return row.status === "not documented" ? `not documented, read ${row.citation.accessDate}` : row.status;
+}
+
+function cloudSection(cloud: readonly ClientCloudFact[]): string[] {
+  return [
+    "## Cloud sessions",
+    "",
+    ...paragraph(
+      "What each client's vendor-hosted session runs of this setup's hooks, and what it does not " +
+        "enforce there, one dated fact a row. The session-start hook names a detected cloud " +
+        "session and prints the session line each of that client's rows carries. A row marked `not documented` " +
+        "states the assumption made where the cited page is silent; one marked `unverified` " +
+        "names the part no page read on its date supports.",
+    ),
+    "",
+    ...table(
+      ["Client", "Subject", "Fact", "Session start prints", "Status", "Source"],
+      TOOLS.flatMap((tool) =>
+        cloud
+          .filter((row) => row.tool === tool)
+          .map((row) => [
+            code(row.tool),
+            row.subject,
+            row.fact,
+            row.sessionStart === undefined ? "—" : row.sessionStart,
+            cloudStatusCell(row),
+            `<${row.citation.url}> — accessed ${row.citation.accessDate}`,
+          ]),
+      ),
     ),
   ];
 }
@@ -910,6 +1003,7 @@ function coverageSection(coverage: readonly AdapterAllowlistCoverage[]): string[
  *
  * Throws `EngineError` (`ADAPTER_ERROR`) when a data set does not cover the
  * clients exactly once, when a client's facts carry no dated citation, when a
+ * cloud fact is undated, blank or repeated or a client has no one glance row, when a
  * revisit trigger is half-stated or watches a client with no facts here, or when
  * the always-on disclosure is missing a client's ceiling or carries the two
  * shared-byte figures the wrong way round.
@@ -927,6 +1021,7 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     return facts;
   });
   const dated = resolveTriggers(inputs.triggers, ordered);
+  const cloudGlance = resolveCloudGlance(inputs.cloud);
   requireAlwaysOnFigures(inputs.alwaysOn);
 
   const lines = [
@@ -944,9 +1039,10 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     "# Client capability matrix",
     "",
     "Every cell below renders from code: the dialect facts each client's residue planner",
-    "declares, the hook-guarantee ladder the emitters read, and the tool-allowlist coverage the",
-    "translator applies. A test re-renders this page and byte-compares this file, so it cannot",
-    "be hand-edited and cannot lag a change to those declarations.",
+    "declares, the hook-guarantee ladder the emitters read, the dated table of what each vendor's",
+    "cloud runs, and the tool-allowlist coverage the translator applies. A test re-renders this",
+    "page and byte-compares this file, so it cannot be hand-edited and cannot lag a change to",
+    "those declarations.",
     "",
     "That is the whole of the guarantee, and its edges are worth stating. The byte-compare pins",
     "this page to what the adapters DECLARE. It does not pin a declaration to what an adapter",
@@ -960,7 +1056,7 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     "is the currency report. The named conditions that re-open a decision are at the foot of the",
     "page, under Currency and revisit triggers.",
     "",
-    ...glanceSection(ordered, inputs.guarantees),
+    ...glanceSection(ordered, inputs.guarantees, cloudGlance),
     "",
     ...alwaysOnSection(inputs.alwaysOn),
     "",
@@ -968,6 +1064,8 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     "",
     ...ordered.flatMap((facts) => clientSection(facts).concat("")),
     ...guaranteeSection(inputs.guarantees),
+    "",
+    ...cloudSection(inputs.cloud),
     "",
     ...coverageSection(inputs.coverage),
     "",

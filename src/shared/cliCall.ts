@@ -192,7 +192,7 @@ export function pinnedCliCall(
 
 /**
  * The CLI call as a hint a person or an agent reads:
- * `` `stamity <verb>` where the CLI is installed, else `npx -y <package>@<version> <verb>` ``.
+ * `` `stamity <verb>` where the CLI is installed, else `npx -y <package>@<version> <verb>`, which needs the npm registry ``.
  *
  * For prose inside generated files — hook messages, guard refusals, the notes a
  * client configuration document carries — where the reader may well have the
@@ -200,6 +200,15 @@ export function pinnedCliCall(
  * rides beside it, so the hint still runs on the documented `npx` setup, which
  * installs no binary. The bare verb is admitted in generated text only inside
  * this sentence. Throws as {@link pinnedCliPrefix} does.
+ *
+ * The closing clause says what the fallback depends on, because a sandbox with
+ * no route to a registry (a cloud agent's firewall, say) fails the `npx` call
+ * for a reason the call itself does not show: `-y` fetches from the npm
+ * registry, or from the registry a fork's scope names. `--no` fetches nothing,
+ * so that call carries no clause. The sentence holds no parenthesis and no
+ * single quote: the Claude guard's tail echoes it inside single quotes
+ * (`GUARD_TAIL`, `../manifest/coOwnedJson.ts`) and the Codex hooks
+ * description wraps it in parentheses (`CHECK_HINT`, `../manifest/hookDocuments.ts`).
  *
  * The backticks are part of the sentence. A caller that embeds it where a
  * backtick is shell syntax (a double-quoted `node -e` program, say) takes
@@ -211,5 +220,7 @@ export function cliCallHint(
   verb: string,
   opts: CliCallOptions = {},
 ): string {
-  return `\`stamity ${verb}\` where the CLI is installed, else \`${pinnedCliCall(packageName, version, verb, opts)}\``;
+  const call = `\`stamity ${verb}\` where the CLI is installed, else \`${pinnedCliCall(packageName, version, verb, opts)}\``;
+  if (opts.npmChannel === false) return call;
+  return `${call}, which needs ${opts.registry === undefined ? "the npm registry" : "the registry it names"}`;
 }

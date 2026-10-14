@@ -935,9 +935,12 @@ describe("the session start names a cloud or CI session (REQ-FLOW-085)", () => {
     "- An ask answer is read as deny.",
     "- Hooks run only from the default branch.",
   ];
+  // TEST CHANGE (e10-cloud-docs-matrix, build/75): "The MCP guard does not run." is gone. Cursor's
+  // hooks page (read 2026-10-15) says `beforeMCPExecution` does not run in Cursor-hosted cloud
+  // agents and says nothing of self-hosted workers, which are the only Cursor sessions this line
+  // prints in; the fact stays in CLIENT_CLOUD_FACTS as an unverified row with no session line.
   const CURSOR_WORKER = [
     "Session: a self-hosted Cursor worker.",
-    "- The MCP guard does not run.",
     "- subagentStart is skipped in a first or read-only turn.",
   ];
   const CI_RUN = ["Session: a CI run.", "- No person answers; declared defaults apply."];
@@ -1956,10 +1959,13 @@ describe("buildConfigTamperNoticeScript", () => {
       // named as the installed form and the pinned npx call the planner hands in;
       // a bare `stamity check` fails on the documented npx setup. Every other
       // byte of the line is unchanged and still pinned.
+      // TEST CHANGE (plan 020 file 2, e10-cloud-docs-matrix, build/73 and build/74): the hint now
+      // ends ", which needs the npm registry", so the sentence names the purpose first and the call
+      // last, where the clause ends it instead of running into "to diff". Same words otherwise.
       expect(result.stdout, JSON.stringify(input)).toBe(
-        "stamity: agent configuration is generated and managed. Run `stamity check` where the CLI is " +
-          "installed, else `npx -y @zomarit/stamity@1.0.0-golden check` to diff the on-disk files against " +
-          "the engine's own output.\n",
+        "stamity: agent configuration is generated and managed. To diff the on-disk files against " +
+          "the engine's own output, run `stamity check` where the CLI is installed, else " +
+          "`npx -y @zomarit/stamity@1.0.0-golden check`, which needs the npm registry.\n",
       );
     }
   });

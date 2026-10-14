@@ -121,6 +121,217 @@ export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
 ];
 
 /**
+ * How a vendor page stands behind one cloud fact.
+ *
+ * - `documented`     — the cited page states it, read on the access date.
+ * - `not documented` — the cited page, read on the access date, says nothing on
+ *   it; the fact states the assumption this engine makes in its absence.
+ * - `unverified`     — part of the fact rests on no page read on the access
+ *   date (an earlier reading, or a question a review raised); the fact names
+ *   which part.
+ */
+export type CloudFactStatus = "documented" | "not documented" | "unverified";
+
+/** One dated fact about a client's vendor-hosted (cloud) session. */
+export interface ClientCloudFact {
+  readonly tool: Tool;
+  /** A short label, unique within the client's rows. */
+  readonly subject: string;
+  readonly fact: string;
+  readonly status: CloudFactStatus;
+  /** The page the fact was read from, and when. */
+  readonly citation: { url: string; accessDate: string };
+  /**
+   * The one-line summary the capability matrix's glance table shows for this
+   * client. Exactly one row per client carries it.
+   */
+  readonly glance?: string;
+  /**
+   * The line the session-start hook prints for this fact in that client's cloud
+   * session, when it prints one (REQ-FLOW-085). `test/emit/capabilityMatrix.test.ts`
+   * holds the emitted script's lines equal to these, in this order.
+   */
+  readonly sessionStart?: string;
+}
+
+/**
+ * What each client's vendor cloud runs of a repository's hooks, and what it
+ * does not enforce there: the one table every other place that states a cloud
+ * fact reads or cites. The capability matrix renders it as its cloud column and
+ * section; `docs/customization.md` and `docs/troubleshooting.md` cite that
+ * section; the session-start hook's cloud lines are held equal to the
+ * `sessionStart` fields by test. Copilot's cloud model pick stays a dialect cap
+ * of its adapter (`cloud-model`), which this table does not restate.
+ *
+ * Each row carries the page it was read from and the date. A page that says
+ * nothing on a point is a `not documented` row stating the assumption made in
+ * its absence, never a guess presented as the vendor's word.
+ */
+export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
+  {
+    tool: "claude",
+    subject: "Project hooks",
+    fact:
+      "Claude Code on the web runs the hooks in the clone's `.claude/settings.json` in a session " +
+      "with one repository. A session with several repositories loads no repository's hooks, and " +
+      "user-level `~/.claude/settings.json` hooks stay on the operator's machine.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
+    glance: "repository hooks run in a one-repository session; none with several repositories",
+  },
+  {
+    tool: "claude",
+    subject: "Session marker",
+    fact: "`CLAUDE_CODE_REMOTE` is `true` in the session VM and never `true` locally.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "claude",
+    subject: "GitHub access",
+    fact:
+      "The GitHub proxy refuses GraphQL with a 403, so `gh pr`, `gh issue` and Projects v2 fail; " +
+      "`gh api` over REST works.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
+    sessionStart: "GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.",
+  },
+  {
+    tool: "claude",
+    subject: "Session state",
+    fact:
+      "A reclaimed VM is rebuilt fresh when the session reopens, so state the hooks wrote there, " +
+      "the review gate's round counter included, does not carry over.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
+    sessionStart: "The review-gate counter resets with the VM.",
+  },
+  {
+    tool: "copilot",
+    subject: "Project hooks",
+    fact:
+      "The cloud agent loads hooks from `.github/hooks/*.json` in the cloned repository, the only " +
+      "hook configuration its sandbox holds by default, and honours only `bash` (or `command`) " +
+      "entries. `sessionStart` fires once per job.",
+    status: "documented",
+    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
+    glance: "repository hooks run, loaded from the clone, only when on the default branch",
+  },
+  {
+    tool: "copilot",
+    subject: "Session marker",
+    fact: "`COPILOT_AGENT_PROMPT` holds the prompt the cloud agent's job was invoked with.",
+    status: "documented",
+    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "copilot",
+    subject: "Hook timeouts",
+    fact: "A timed-out hook fails open on every event, `preToolUse` included.",
+    status: "documented",
+    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
+    sessionStart: "A preToolUse hook that times out fails open.",
+  },
+  {
+    tool: "copilot",
+    subject: "Ask decisions",
+    fact: "A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer.",
+    status: "documented",
+    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
+    sessionStart: "An ask answer is read as deny.",
+  },
+  {
+    tool: "copilot",
+    subject: "Default branch",
+    fact:
+      "The cloud agent uses a hooks file only when it is present on the repository's default branch.",
+    status: "documented",
+    citation: {
+      url: "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks",
+      accessDate: "2026-10-15",
+    },
+    sessionStart: "Hooks run only from the default branch.",
+  },
+  {
+    tool: "copilot",
+    subject: "Tool arguments",
+    fact:
+      "`toolArgs` is typed `unknown`, and the page names no argument of `edit`, `create` or `view`. " +
+      "The hook runner turns a `filePath` argument into `file_path`; if these tools name it `path` " +
+      "(a question raised in review on 2026-10-14), an authored hook reading `file_path` finds none, " +
+      "in the CLI and the cloud agent alike.",
+    status: "unverified",
+    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "cursor",
+    subject: "Project hooks",
+    fact:
+      "Cursor's cloud agents run the command hooks in the repository's `.cursor/hooks.json`, except " +
+      "`sessionStart`, `sessionEnd` and the MCP hooks; user-level hooks are not available there.",
+    status: "documented",
+    citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
+    glance: "repository hooks run, without `sessionStart`, `sessionEnd` or the MCP hooks",
+  },
+  {
+    tool: "cursor",
+    subject: "Self-hosted workers",
+    fact:
+      "Pool and My Machines workers run the same command-based project hooks, and `sessionStart` and " +
+      "`sessionEnd` fire when a session claims and releases the worker.",
+    status: "documented",
+    citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "cursor",
+    subject: "Session marker",
+    fact:
+      "`CURSOR_AGENT_SOCKET` marks a self-hosted worker's session, as the research behind " +
+      "`docs/plans/020-cli-native-02.md` found on 2026-10-14; the self-hosted page names no such variable.",
+    status: "not documented",
+    citation: { url: "https://cursor.com/docs/cloud-agent/self-hosted", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "cursor",
+    subject: "MCP hooks",
+    fact:
+      "`beforeMCPExecution` does not run in Cursor-hosted cloud agents. Whether it runs on a " +
+      "self-hosted worker the page does not say, so the session start there claims nothing about it.",
+    status: "unverified",
+    citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "cursor",
+    subject: "Read-only turns",
+    fact:
+      "No hook runs during a cloud agent's early read-only turns, `subagentStart` included. The page " +
+      "says so of cloud agents and not separately of self-hosted workers.",
+    status: "unverified",
+    citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
+    sessionStart: "subagentStart is skipped in a first or read-only turn.",
+  },
+  {
+    tool: "codex",
+    subject: "Project hooks",
+    fact:
+      "The Codex Cloud page documents no project hooks, so assume none run there: the task's " +
+      "sandbox is the enforcement.",
+    status: "not documented",
+    citation: { url: "https://learn.chatgpt.com/docs/cloud", accessDate: "2026-10-15" },
+    glance: "no project hooks documented; assume none run",
+  },
+  {
+    tool: "codex",
+    subject: "Cloud orchestration",
+    fact:
+      "The hooks page says command hooks and hooks from local configuration are not supported under " +
+      "cloud orchestration (its Work Cloud section), and names no Codex Cloud behaviour.",
+    status: "documented",
+    citation: { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-10-15" },
+  },
+];
+
+/**
  * One event a single client fires and the portable vocabulary deliberately
  * does not carry.
  *

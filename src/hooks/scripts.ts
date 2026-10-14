@@ -33,7 +33,12 @@ import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../t
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import { UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { cliCallHint } from "../shared/cliCall.ts";
-import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } from "./model.ts";
+import {
+  CLIENT_CLOUD_FACTS,
+  CLIENT_HOOK_GUARANTEES,
+  type CanonicalHookEvent,
+  type HookFailMode,
+} from "./model.ts";
 
 /**
  * The three core hook scripts plus one work-scoped extension, as generated text.
@@ -646,13 +651,19 @@ export interface SessionStartScriptOptions {
   layout?: HookScriptLayout;
 }
 
+/** The lines a client's cloud session prints: its `sessionStart` rows in {@link CLIENT_CLOUD_FACTS}, in order. */
+function cloudSessionLines(tool: Tool): string[] {
+  return CLIENT_CLOUD_FACTS.flatMap((row) => (row.tool === tool && row.sessionStart !== undefined ? [row.sessionStart] : []));
+}
+
 /**
  * The cloud and CI sessions the session start names (REQ-FLOW-085), in priority
  * order, each with what it does not enforce there. A marker counts when it is set
  * to a value other than "", "false" and "0" (and to `equals` where given); its
  * value is never printed, so a marker cannot carry text into the session. Cursor
  * is a self-hosted worker only: a managed Cursor VM runs no session-start hook.
- * Vendor facts per plan 020 file 2, read 2026-10-14.
+ * A client's lines are read from {@link CLIENT_CLOUD_FACTS}, where each carries
+ * its vendor page and access date; the CI line is this engine's own behaviour.
  */
 const CLOUD_SESSIONS: readonly {
   name: string;
@@ -664,24 +675,17 @@ const CLOUD_SESSIONS: readonly {
     name: "a Claude Code cloud session",
     vars: ["CLAUDE_CODE_REMOTE"],
     equals: "true",
-    lines: [
-      "GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.",
-      "The review-gate counter resets with the VM.",
-    ],
+    lines: cloudSessionLines("claude"),
   },
   {
     name: "a Copilot cloud agent session",
     vars: ["COPILOT_AGENT_PROMPT"],
-    lines: [
-      "A preToolUse hook that times out fails open.",
-      "An ask answer is read as deny.",
-      "Hooks run only from the default branch.",
-    ],
+    lines: cloudSessionLines("copilot"),
   },
   {
     name: "a self-hosted Cursor worker",
     vars: ["CURSOR_AGENT_SOCKET"],
-    lines: ["The MCP guard does not run.", "subagentStart is skipped in a first or read-only turn."],
+    lines: cloudSessionLines("cursor"),
   },
   { name: "a CI run", vars: ["CI", "GITHUB_ACTIONS"], lines: ["No person answers; declared defaults apply."] },
 ];
@@ -2003,11 +2007,11 @@ const changed = clean(
 const lines =
   changed === ""
     ? [
-        "stamity: agent configuration is generated and managed. Run " + CHECK_CALL + " to diff the on-disk files against the engine's own output.",
+        "stamity: agent configuration is generated and managed. To diff the on-disk files against the engine's own output, run " + CHECK_CALL + ".",
       ]
     : [
         "stamity: agent configuration changed — " + changed + ".",
-        "That file is generated and managed. Run " + CHECK_CALL + " to diff it against the engine's own output before trusting the change.",
+        "That file is generated and managed. Before trusting the change, diff it against the engine's own output: run " + CHECK_CALL + ".",
       ];
 
 process.stdout.write(lines.join("\\n") + "\\n");

@@ -395,9 +395,12 @@ describe("hooks.json — native command strings and trust controls", () => {
     // TEST CHANGE (sw26-engine-cli-call-form, G3): the control is named as the
     // installed verb and the pinned npx call; this file is inside the trust
     // hash, so the pinned version re-asks for approval after an upgrade.
+    // TEST CHANGE (plan 020 file 2, e10-cloud-docs-matrix, build/73): the hint ends ", which needs
+    // the npm registry", inside the same parentheses, which CHECK_HINT still normalises, so a
+    // description this release writes is still recognised as the engine's.
     expect(description).toContain(
       "so the check verb (`stamity check` where the CLI is installed, else " +
-        "`npx -y @zomarit/stamity@1.0.0-golden check`) is the control",
+        "`npx -y @zomarit/stamity@1.0.0-golden check`, which needs the npm registry) is the control",
     );
     expect(description).not.toContain("\n");
   });

@@ -386,6 +386,26 @@ never loaded. A run with the project trusted in your home `~/.codex/config.toml`
 Treat a Codex hook as enforcement in the interactive client, and as nothing measured in the headless
 one.
 
+### A hook never runs in a cloud session
+
+A vendor's cloud runs only the hooks it documents. Each fact below is dated, with its source, in the
+[capability matrix](capability-matrix.md) under Cloud sessions.
+
+- Codex: Codex cloud documents no project hooks, so assume none run there. Its sandbox is the
+  enforcement.
+- Claude Code: a cloud session with several repositories loads no repository hooks, so neither the
+  guard nor the session start runs there. With one repository it runs the clone's
+  `.claude/settings.json`.
+- Copilot: the cloud agent uses hooks only when the file is on the default branch, and loads them
+  from the clone, so a branch that adds or changes `.github/hooks/stamity.json` does not run its own
+  copy.
+- Cursor: its hosted cloud agents run no `sessionStart`, `sessionEnd` or MCP hook, and no hook at all
+  during their early read-only turns. A self-hosted worker runs `sessionStart` when a session claims
+  it.
+
+Where a session start does run, it names the detected cloud or CI session and the guards not
+enforced there.
+
 ### Claude Code blocks every tool call with "the pre-tool-use guard could not run"
 
 That line is the guard failing CLOSED, and it says the guard could not LAUNCH — not that a call was
@@ -399,13 +419,15 @@ The emitted command anchors the script on the client's own project root and turn
 launch into a block:
 
 ```json
-"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@<version> sync`' >&2; exit 2; }"
+"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@<version> sync`, which needs the npm registry' >&2; exit 2; }"
 ```
 
 `<version>` is the stamity version the setup was generated with, and a renamed fork's package stands
-in place of `@zomarit/stamity`. A fork no registry serves prints `npx --no` in place of `npx -y`.
-A fork that names its registry prints `--@<scope>:registry=<url>` between `npx -y` and the
-package, so a machine without that scope mapping still fetches the fork's build.
+in place of `@zomarit/stamity`. A fork no registry serves prints `npx --no` in place of `npx -y`,
+and no registry clause, because that call fetches nothing. A fork that names its registry prints
+`--@<scope>:registry=<url>` between `npx -y` and the package, so a machine without that scope
+mapping still fetches the fork's build, and its clause reads "which needs the registry it names". A
+sandbox with no route to that registry, as a cloud session can be, fails the `npx` call.
 
 Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
 has not synced, or the file was deleted by hand:

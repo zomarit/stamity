@@ -428,7 +428,17 @@ manual permission review.
 Copilot CLI and cloud repository hooks register at `.github/hooks/stamity.json`. Tool-hook denial
 and errors block, but timeouts remain fail-open. Its session-start output is injected as
 additionalContext (the GitHub Copilot hooks reference, read 2026-09-17), so the learning index
-reaches the session. Copilot cloud reads hook configuration from the default branch.
+reaches the session.
+
+A vendor's cloud runs only the hooks it documents. Copilot's cloud agent uses hooks only when the
+file is on the default branch, and loads them from the clone. A Claude Code cloud session with
+several repositories loads no repository hooks; with one repository it runs the clone's
+`.claude/settings.json`. Cursor's hosted cloud agents run the repository's hooks except
+`sessionStart`, `sessionEnd` and the MCP hooks, and none during their early read-only turns; a
+self-hosted worker runs `sessionStart` when a session claims it. Codex cloud documents
+no project hooks, so assume none run: its sandbox is the enforcement. The session-start hook names a
+detected cloud or CI session and what is not enforced there. Each of these facts is dated, with its
+source, in the [capability matrix](capability-matrix.md) under Cloud sessions.
 
 Codex hooks use command strings and native `/hooks` trust review, and that review is the last of
 three gates. First `features.hooks = true` in `.codex/config.toml`, which stamity emits; codex-cli

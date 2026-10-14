@@ -48,16 +48,22 @@ function bareCalls(path: string, content: string): string[] {
 }
 
 describe("cliCallHint", () => {
+  // TEST CHANGE (plan 020 file 2, e10-cloud-docs-matrix, build/73): the `-y` fallback ends
+  // ", which needs the npm registry" (D21), so a sandbox with no registry route reads why it fails.
+  // The scan's HINT_SENTENCE still admits the sentence; the case below proves it.
   it("names the installed verb and the pinned fallback in one sentence", () => {
     expect(cliCallHint("@zomarit/stamity", "1.11.0", "check")).toBe(
-      "`stamity check` where the CLI is installed, else `npx -y @zomarit/stamity@1.11.0 check`",
+      "`stamity check` where the CLI is installed, else `npx -y @zomarit/stamity@1.11.0 check`, " +
+        "which needs the npm registry",
     );
   });
 
   it("pins a fork's own package and passes a multi-word tail through", () => {
     const hint = cliCallHint("@acme/stamity", "1.8.0", "config mcp add <id>");
+    // TEST CHANGE (e10-cloud-docs-matrix, build/73): the registry clause, as above.
     expect(hint).toBe(
-      "`stamity config mcp add <id>` where the CLI is installed, else `npx -y @acme/stamity@1.8.0 config mcp add <id>`",
+      "`stamity config mcp add <id>` where the CLI is installed, else `npx -y @acme/stamity@1.8.0 config mcp add <id>`, " +
+        "which needs the npm registry",
     );
     expect(hint).toContain(pinnedCliCall("@acme/stamity", "1.8.0", "config mcp add <id>"));
   });

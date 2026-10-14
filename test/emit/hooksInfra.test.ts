@@ -1238,7 +1238,10 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
   it("renders Cursor's sessionStart as timeout 30, Copilot's as timeoutSec 30 and Codex's as timeout 30, with no budget on the guard", async () => {
     const cursor = await renderedHooks("cursor");
     expect(leaves(cursor["sessionStart"]).map((hook) => hook.timeout)).toEqual([30, 30]);
-    expect(leaves(cursor["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false]);
+    // TEST CHANGE (plan 020 file 2, e10-cloud-docs-matrix, build/77): Cursor's `preToolUse` holds two
+    // leaves since e7-cursor-pins, the guard and the model-fill hook on `Task`; neither carries a
+    // budget, which is the property this line pins.
+    expect(leaves(cursor["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false, false]);
 
     const copilot = await renderedHooks("copilot");
     // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086, signed off as build/56):

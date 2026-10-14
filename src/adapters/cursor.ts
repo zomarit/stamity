@@ -1183,9 +1183,9 @@ if (agentId === "") {
     'Blocked the spawn of "' +
       agentId +
       '": no agent with that id ships in this setup, so it holds no tool policy. ' +
-      "Re-run " + SYNC_CALL + " if the roster changed, or spawn one of: " +
+      "Spawn one of: " +
       [...ROSTER].join(", ") +
-      ".",
+      ". If the roster changed, re-run " + SYNC_CALL + ".",
   );
 } else {
   // Out of scope, or rostered. The spawn proceeds and the verdict says so.
