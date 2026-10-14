@@ -57,12 +57,18 @@ configuration, so a refused run fetches no comment at all:
 
 **In a REST-only session** — where the session-start banner says GraphQL is unavailable, or a
 `gh api graphql` call is refused — every GitHub call takes its REST form through `gh api`.
-`gh pr checkout <n>` becomes one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq
-'[.head.repo.full_name, .head.ref]'`, then a fetch by the pull request's number, `<n>` checked
-to be digits only: `git fetch origin "pull/<n>/head:pr-resolve-<n>"` and
-`git checkout "pr-resolve-<n>"`. The author's branch name enters no fetch and no checkout. A head
-repository other than `{owner}/{repo}` is refused in one sentence: "This pull request's branch
-lives in a fork; check it out where GraphQL works and re-run." The ref the round pushes to, in
+`gh pr checkout <n>` becomes these steps, in this order, `<n>` checked to be digits only. First
+one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.head.repo.full_name, .head.ref]'`. A
+head repository other than `{owner}/{repo}` is refused on that read, before any `git fetch`, in
+one sentence: "This pull request's branch lives in a fork; check it out where GraphQL works and
+re-run." Next, `git remote get-url origin` must name that same `{owner}/{repo}`: with any `.git`
+suffix dropped and case aside, the URL ends in `/{owner}/{repo}` or `:{owner}/{repo}`. Any other
+origin is refused in one sentence: "This checkout's origin is not the pull request's repository;
+re-run from a clone whose origin is that repository." No fetch or push goes to a remote this
+check did not match. Only then `git fetch origin "pull/<n>/head"`, then
+`git checkout -B "pr-resolve-<n>" FETCH_HEAD`, which moves a branch an earlier round left to the
+head just fetched. A failed fetch stops the round with its error, before any checkout. The
+author's branch name enters no fetch and no checkout. The ref the round pushes to, in
 `git push origin "HEAD:refs/heads/<ref>"`, holds only letters, digits, `.`, `_`, `/` and `-`,
 checked before it enters any command, and then passes `git check-ref-format --branch "<ref>"`;
 any other ref is refused, never escaped, and the ref is always passed quoted. Section 1's

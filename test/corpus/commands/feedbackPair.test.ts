@@ -1112,8 +1112,23 @@ describe("pr-resolve — collection and evaluation", () => {
     // number into a local name this command chooses, and the read returns the head repository
     // and ref together. Nothing is relaxed: the new form is pinned whole, and the case below
     // pins the fork refusal and the ref allowlist.
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 2; ledger row
+    // `2026-10-14_cli-native/review/20`, re-review not-fixed): fetching into
+    // `pr-resolve-<n>` failed on a second round in the same checkout (the branch checked out,
+    // or behind a force-pushed head), and the checkout then landed on the stale copy. What
+    // changed about the contract: the fetch names only `pull/<n>/head`, the checkout resets
+    // the local branch to FETCH_HEAD, and a failed fetch stops the round. Nothing is relaxed:
+    // the new form is pinned whole, and the case below pins the stop on a failed fetch.
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 2; ledger rows
+    // `2026-10-14_cli-native/review/35` and `review/36`, signed off): the steps are now
+    // ordered, the fork refusal on the read and an origin check both before any fetch, so the
+    // sentence that opened the block names the order and the read alone. The fetch and checkout
+    // sentence is pinned whole beside it; the case below pins the order.
     expect(preflight).toContain(
-      "`gh pr checkout <n>` becomes one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.head.repo.full_name, .head.ref]'`, then a fetch by the pull request's number, `<n>` checked to be digits only: `git fetch origin \"pull/<n>/head:pr-resolve-<n>\"` and `git checkout \"pr-resolve-<n>\"`.",
+      "`gh pr checkout <n>` becomes these steps, in this order, `<n>` checked to be digits only. First one read, `gh api repos/{owner}/{repo}/pulls/{n} --jq '[.head.repo.full_name, .head.ref]'`.",
+    );
+    expect(preflight).toContain(
+      "Only then `git fetch origin \"pull/<n>/head\"`, then `git checkout -B \"pr-resolve-<n>\" FETCH_HEAD`, which moves a branch an earlier round left to the head just fetched.",
     );
     // It sits in the batch that runs before the first fetch, where the checkout happens.
     expect(preflight.indexOf("In a REST-only session")).toBeLessThan(
@@ -1137,14 +1152,46 @@ describe("pr-resolve — collection and evaluation", () => {
     );
 
     // The fetch names the pull request's number, never the author's branch name.
-    expect(rest).toContain('`git fetch origin "pull/<n>/head:pr-resolve-<n>"`');
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 2; ledger row
+    // `2026-10-14_cli-native/review/20`): the fetch no longer writes `pr-resolve-<n>` itself,
+    // which failed when an earlier round left that branch checked out or behind a force-push.
+    // The checkout resets the branch to what was fetched, and a failed fetch stops the round.
+    expect(rest).toContain('`git fetch origin "pull/<n>/head"`');
+    expect(rest).toContain('`git checkout -B "pr-resolve-<n>" FETCH_HEAD`');
+    expect(rest).toContain("A failed fetch stops the round with its error, before any checkout.");
+    expect(rest).not.toContain("pull/<n>/head:pr-resolve-<n>");
     expect(rest).toContain("`<n>` checked to be digits only");
     expect(rest).toContain("The author's branch name enters no fetch and no checkout.");
     expect(rest).not.toMatch(/git fetch origin <ref>|git checkout <ref>/);
     // A fork head is refused here in one plain sentence.
+    // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 2; ledger rows
+    // `2026-10-14_cli-native/review/35` and `review/36`, signed off): the refusal was stated
+    // after the fetch and checkout, and `pull/<n>/head` carries a fork's commits, so a run
+    // following the text checked out the fork's tree (with its tracked hook scripts) before
+    // refusing; and nothing tied `origin` to the repository the `gh api` read names. What
+    // changed about the contract: the refusal runs on the read, an origin check follows, and
+    // both precede the fetch. Nothing is relaxed: the refusal sentence keeps its wording, and
+    // the order and the origin check are pinned below.
     expect(rest).toContain(
-      "A head repository other than `{owner}/{repo}` is refused in one sentence: \"This pull request's branch lives in a fork; check it out where GraphQL works and re-run.\"",
+      "A head repository other than `{owner}/{repo}` is refused on that read, before any `git fetch`, in one sentence: \"This pull request's branch lives in a fork; check it out where GraphQL works and re-run.\"",
     );
+    // origin must be the repository the read names, checked before any fetch or push.
+    expect(rest).toContain(
+      "Next, `git remote get-url origin` must name that same `{owner}/{repo}`: with any `.git` suffix dropped and case aside, the URL ends in `/{owner}/{repo}` or `:{owner}/{repo}`.",
+    );
+    expect(rest).toContain(
+      "Any other origin is refused in one sentence: \"This checkout's origin is not the pull request's repository; re-run from a clone whose origin is that repository.\" No fetch or push goes to a remote this check did not match.",
+    );
+    // The order: read, fork refusal, origin check, and only then the fetch and the checkout.
+    const order = [
+      "First one read",
+      "A head repository other than",
+      "`git remote get-url origin`",
+      '`git fetch origin "pull/<n>/head"`',
+      '`git checkout -B "pr-resolve-<n>" FETCH_HEAD`',
+    ].map((step) => rest.indexOf(step));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
     // The ref a push names: an allowlist checked first, then git's own check, quoted throughout.
     expect(rest).toContain('`git push origin "HEAD:refs/heads/<ref>"`');
     expect(rest).toContain(
