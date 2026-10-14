@@ -39,8 +39,8 @@ const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
 const SESSIONS = [
   {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
-  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only from the default branch."]},
-  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":["The MCP guard does not run.","subagentStart is skipped in a first or read-only turn."]},
+  {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded."]},
+  {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":[]},
   {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
 ];
 const INVISIBLE = new RegExp("(?:[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u115F-\\u1160\\u17B4-\\u17B5\\u180B-\\u180F\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0\\uFFF0-\\uFFFB]|\\uD804\\uDCBD|\\uD804\\uDCCD|\\uD80D[\\uDC30-\\uDC3F]|\\uD82F[\\uDCA0-\\uDCA3]|\\uD834[\\uDD73-\\uDD7A]|\\uDB40[\\uDC80-\\uDFFF]|[\\uDB41-\\uDB43][\\uDC00-\\uDFFF])", "g");

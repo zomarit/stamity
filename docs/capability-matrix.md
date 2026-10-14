@@ -7,9 +7,10 @@ title: Client capability matrix
 # Client capability matrix
 
 Every cell below renders from code: the dialect facts each client's residue planner
-declares, the hook-guarantee ladder the emitters read, and the tool-allowlist coverage the
-translator applies. A test re-renders this page and byte-compares this file, so it cannot
-be hand-edited and cannot lag a change to those declarations.
+declares, the hook-guarantee ladder the emitters read, the dated table of what each vendor's
+cloud runs, and the tool-allowlist coverage the translator applies. A test re-renders this
+page and byte-compares this file, so it cannot be hand-edited and cannot lag a change to
+those declarations.
 
 That is the whole of the guarantee, and its edges are worth stating. The byte-compare pins
 this page to what the adapters DECLARE. It does not pin a declaration to what an adapter
@@ -25,12 +26,12 @@ page, under Currency and revisit triggers.
 
 ## Coverage at a glance
 
-| Client | Entry file | Reads `.agents/skills/` | Hook config | Hook enforcement | MCP dialect |
-|---|---|---|---|---|---|
-| `claude` | `CLAUDE.md` | no | `.claude/settings.json` | `fail-closed` — blocks on exit `2` | `claude-json` |
-| `cursor` | none — `AGENTS.md` is native | yes | `.cursor/hooks.json` | `opt-in-fail-closed` — blocks on exit `2` | `cursor-json` |
-| `copilot` | none — `AGENTS.md` is native | yes | `.github/hooks/stamity.json` | `fail-closed` — blocks on exit `2` | `vscode-json` |
-| `codex` | none — `AGENTS.md` is native | yes | `.codex/hooks.json` | `fail-closed` — blocks on exit `2` | `codex-toml` |
+| Client | Entry file | Reads `.agents/skills/` | Hook config | Hook enforcement | MCP dialect | In the vendor's cloud |
+|---|---|---|---|---|---|---|
+| `claude` | `CLAUDE.md` | no | `.claude/settings.json` | `fail-closed` — blocks on exit `2` | `claude-json` | repository hooks run in a one-repository session; none with several repositories — read 2026-10-15 |
+| `cursor` | none — `AGENTS.md` is native | yes | `.cursor/hooks.json` | `opt-in-fail-closed` — blocks on exit `2` | `cursor-json` | repository hooks run, without `sessionStart`, `sessionEnd` or the MCP hooks — read 2026-10-15 |
+| `copilot` | none — `AGENTS.md` is native | yes | `.github/hooks/stamity.json` | `fail-closed` — blocks on exit `2` | `vscode-json` | repository hooks run, loaded from the clone, only when on the default branch — read 2026-10-15 |
+| `codex` | none — `AGENTS.md` is native | yes | `.codex/hooks.json` | `fail-closed` — blocks on exit `2` | `codex-toml` | no project hooks documented; assume none run — read 2026-10-15 |
 
 ## Always-on cost by client
 
@@ -112,7 +113,7 @@ scripts/generate-capability-matrix.mjs` after a corpus change.
 | Fact | Declared value |
 |---|---|
 | Rule shape | `.claude/rules/<id>.md` with frontmatter `paths:` — a YAML glob list, matched when Claude reads a file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot |
-| Agent format | `.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt |
+| Agent format | `.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json` |
 | Hook config | `.claude/settings.json` |
 | Reads `.agents/skills/` | no |
 | MCP dialect | `claude-json` |
@@ -143,7 +144,7 @@ Sources:
 | Fact | Declared value |
 |---|---|
 | Rule shape | `.cursor/rules/<id>.mdc` — `description` plus `globs` as an unquoted comma-separated list, the vendor's separator (its own example puts a space after the comma; the no-spaces form is this engine's choice — cursor.com/docs/context/rules, accessed 2026-09-30); `alwaysApply: false` on every emitted rule |
-| Agent format | `.cursor/agents/<id>.md` — `description`, `model` (the operator's pinned id for the role's class, carrying this client's `[effort=…]` parameter; the key is omitted entirely when no pin names one, so the client applies its own default rather than the engine restating it), `readonly` |
+| Agent format | `.cursor/agents/<id>.md` — `description`, `model` (the role's class model: the operator's pin, else the first shipped candidate the account's saved model list holds, at the class's effort variant; a pin that is not a listed variant carries this client's `[effort=…]` parameter. It is a default, not a hard limit; Stamity carries it on the dispatch and by a hook — the touchpoints pass the class model from `.stamity/generated/models/cursor.json` (the same model id, without an engine-added `[effort=…]` group) on each sub-agent call, and a `preToolUse` hook on `Task` fills it into a Stamity call that names none (`updated_input`; cursor.com/docs/agent/subagents and cursor.com/docs/hooks, accessed 2026-10-14). With no pin and no saved list the key is omitted entirely, so the client applies its own default rather than the engine guessing an id the account may not offer), `readonly` |
 | Hook config | `.cursor/hooks.json` |
 | Reads `.agents/skills/` | yes |
 | MCP dialect | `cursor-json` |
@@ -160,7 +161,7 @@ Declared caps:
 | `user hook enforcement` | explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts, and no output counts as one of those failures (cursor.com/docs/hooks, accessed 2026-09-17), so a row that decides nothing is emitted as an explicit allow. Session-start and session-end responses cannot block |
 | `MCP tool surface` | servers expose tools through mcp.json; the current contract documents no fixed per-session tool-count cap |
 | `workdir guard` | not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release |
-| `effort-scale` | minimal, low, medium, high, xhigh, max, ultra: pass-through — parameter ids and values vary by model (cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model value as `[effort=<level>]` and this client parses the group rather than ruling on the value, so nothing is narrowed here: a level the chosen model does not offer is the model's to reject, and no key is emitted at all until a model id is pinned |
+| `effort-scale` | minimal, low, medium, high, xhigh, max, ultra: pass-through — parameter ids and values vary by model (cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model value as `[effort=<level>]` and this client parses the group rather than ruling on the value, so nothing is narrowed here: a level the chosen model does not offer is the model's to reject. No group follows an id that already names its effort variant (one on the account's list, or one ending on an effort word), and no key is emitted at all until a model id is pinned or picked from the account's list |
 
 Sources:
 
@@ -175,7 +176,7 @@ Sources:
 | Fact | Declared value |
 |---|---|
 | Rule shape | `.github/instructions/<id>.instructions.md` with `applyTo:` — ONE glob string, patterns comma-separated, never a YAML list |
-| Agent format | `.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` only under an operator pin, `reasoning-effort:` at the declared class's level) over a markdown prompt |
+| Agent format | `.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` the class model's display name as `<name> (copilot)` where the shipped list gives one (whether any reader takes it on a `target: github-copilot` agent is unverified), `models:` the class's CLI ids in priority order whenever the class resolves — the operator's pin, else the first shipped candidate the account's saved list holds, else, only when no list was read, the shipped list's first entry; a saved list holding none of the class's candidates writes neither key — `reasoning-effort:` at the declared class's level) over a markdown prompt; the class-to-model map at `.stamity/generated/models/copilot.json` |
 | Hook config | `.github/hooks/stamity.json` |
 | Reads `.agents/skills/` | yes |
 | MCP dialect | `vscode-json` |
@@ -188,8 +189,10 @@ Declared caps:
 | `agent-prompt-chars` | 30000 |
 | `charter-budget` | ~2 pages; AGENTS.md is native, so no mirror is emitted |
 | `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin. With Codex or Cursor selected beside it, the same nine also ship in `.agents/skills/` with `disable-model-invocation: true`, a tree this client reads, so they list twice for the operator: Copilot CLI 1.0.89 shows them as project skills (`copilot skill list`) beside the prompt files, and keeps them out of the model's own skills list (measured 2026-09-30) |
-| `effort-axis` | emitted — `reasoning-effort: <level>` per agent, on the scale `low` … `max` (Copilot CLI reference, accessed 2026-10-10; the key in the 1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a level the model does not offer is reported and falls back to the session's; the cloud agent's handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10) |
-| `sub-agent-instructions` | emitted — `include-custom-instructions: true` on every agent (Copilot CLI changelog 1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`; `--no-custom-instructions` overrides it (Copilot CLI command reference, accessed 2026-10-10; unverified on 1.0.89, where no live run passed the flag); the cloud agent's handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10) |
+| `effort-axis` | emitted — `reasoning-effort: <level>` per agent, on the scale `low` … `max` (Copilot CLI reference, accessed 2026-10-10; the key in the 1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a live run on Copilot CLI 1.0.89 (2026-10-11) loaded an agent carrying `reasoning-effort: high` and its sub-agent ran at that level (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2); a level the model does not offer is reported and falls back to the session's; the cloud agent's handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10) |
+| `sub-agent-instructions` | emitted — `include-custom-instructions: true` on every agent (Copilot CLI changelog 1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`, and a live run on 1.0.89 (2026-10-11) with the key emitted loaded it: the sub-agent quoted the charter's version line (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2); `--no-custom-instructions` overrides it (Copilot CLI command reference, accessed 2026-10-10; unverified on 1.0.89, where no live run passed the flag); the cloud agent's handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10) |
+| `model-pick` | emitted — `models: [<id>, …]` per agent whenever the class resolves, the class's CLI ids in priority order: the runtime uses the first one the plan can access, falls back to the session's model when none resolves, and `models` overrides `model`; under an Auto session model a sub-agent inherits the resolved session model whatever the file says (Copilot CLI command reference, read 2026-10-14). That behaviour is the reference's claim: no live run has loaded an agent carrying `models` or `model`, and which CLI version's loader takes `models` is unchecked. No `modelPolicy` is written, so a `/subagents` override still wins. `model:` carries the display name in the qualified `<name> (copilot)` form VS Code's custom-agents page documents (read 2026-10-14), only where the shipped list gives one; whether VS Code reads it on these agents is unverified, since every one sets `target: github-copilot`. A pin typed as a display name is not written, and `sync` warns. The class-to-model map at `.stamity/generated/models/copilot.json` holds the same ids |
+| `cloud-model` | the task's model picker decides — the cloud agent runs on the model picked when the task is assigned or started, and on Auto where no picker is offered; its model page names no custom-agent model key, so the agent file's `model` and `models` are not documented to bind there (cloud agent model page, read 2026-10-14) |
 | `hook-enforcement` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `deny-gate` | Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry. |
 | `rule-activation` | glob only; no description-pull mode, so an agent-requested rule emits applyTo: "**" |
@@ -203,15 +206,17 @@ Sources:
 - <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment> — accessed 2026-09-10
 - <https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide> — accessed 2026-09-10
 - <https://code.visualstudio.com/docs/copilot/customization/prompt-files> — accessed 2026-09-10
-- <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-09-17
+- <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-14
 - <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference> — accessed 2026-10-10
+- <https://code.visualstudio.com/docs/agent-customization/custom-agents> — accessed 2026-10-14
+- <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model> — accessed 2026-10-14
 
 ### `codex`
 
 | Fact | Declared value |
 |---|---|
 | Rule shape | no glob-scoped rule layer; conditional rules down-convert into nested AGENTS.md files and a Codex-only root AGENTS.override.md, which this client reads instead of the shared AGENTS.md (documented lossy — upstream gap: open codex#34002) |
-| Agent format | TOML subagent definitions under .codex/agents/ |
+| Agent format | TOML subagent definitions under .codex/agents/ — `model` whenever the class resolves (the operator's pin, else the first shipped candidate the account's saved `codex debug models` list holds, else, only when no list was read, the shipped list's first entry; a saved list holding none of the class's candidates writes none) and `model_reasoning_effort` at the class's level; a value in the file takes precedence over the spawn's and the parent's (subagents page, accessed 2026-10-14); the class-to-model map at `.stamity/generated/models/codex.json` |
 | Hook config | `.codex/hooks.json` |
 | Reads `.agents/skills/` | yes |
 | MCP dialect | `codex-toml` |
@@ -226,10 +231,11 @@ Declared caps:
 | `per-agent tool allowlist` | no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction. |
 | `command-surface` | `.agents/skills/st-<id>/SKILL.md`, invoked as `$st-<id>` — the nine touchpoint bodies ship as shared skills, one file each, read by Cursor too, each with an `agents/openai.yaml` companion carrying `policy.allow_implicit_invocation: false`. Measured on codex-cli 0.155.1 (2026-09-30): `$st-work` loads the touchpoint. Whether a plain ask can still start one is unmeasured. Custom prompts are not used: they live in the user's Codex home directory, not the repository, and are deprecated in favour of skills |
 | `effort-scale` | low, medium, high, xhigh, max, ultra — the levels this client's `model_reasoning_effort` key accepts; the available levels depend on the model and client (learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-10-10). This is the only supported client documenting `ultra`. The reference no longer lists `minimal`; this client's parser still takes it, so `minimal` is accepted and written as `low`, with a disclosure |
+| `model-escalation` | a per-call escalation does not change the model of a role whose agent file carries `model` — a value in the file takes precedence over the spawn's, the `[agents]` default's and the parent's, for `model` and `model_reasoning_effort` alike, so such a role runs on its file's model whatever model the call names (learn.chatgpt.com/docs/agent-configuration/subagents, read 2026-10-14). A file carries `model` whenever its class resolves: the operator's pin, else the first shipped candidate the account's saved list holds, else, only when no list was read, the shipped list's first entry; a saved list holding none of the class's candidates writes no `model`, and neither does an agent that declares no ladder class, and there the spawn's model, else the parent's, applies, so an escalation does bind. Escalating a role whose file carries `model` means pinning its class (`stamity config set model.<class>.codex <id>`) and re-syncing |
 
 Sources:
 
-- <https://learn.chatgpt.com/docs/agent-configuration/subagents> — accessed 2026-09-10
+- <https://learn.chatgpt.com/docs/agent-configuration/subagents> — accessed 2026-10-14
 - <https://learn.chatgpt.com/docs/hooks> — accessed 2026-09-17
 - <https://learn.chatgpt.com/docs/config-file/config-reference> — accessed 2026-09-15
 - <https://learn.chatgpt.com/docs/custom-prompts> — accessed 2026-09-10
@@ -247,6 +253,34 @@ and the emitted guards cannot disagree. Rows keep the ladder order: strongest fi
 | `copilot` | `fail-closed` | `2` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `cursor` | `opt-in-fail-closed` | `2` | Exit 2 denies the action. failClosed opts supported events into denial on hook errors and timeouts; the identity-free core role guard remains telemetry. |
 
+## Cloud sessions
+
+What each client's vendor-hosted session runs of this setup's hooks, and what it does not
+enforce there, one dated fact a row. The session-start hook names a detected cloud session and
+prints the session line each of that client's rows carries. A row marked `not documented`
+states the assumption made where the cited page is silent; one marked `unverified` names the
+part no page read on its date supports.
+
+| Client | Subject | Fact | Session start prints | Status | Source |
+|---|---|---|---|---|---|
+| `claude` | Project hooks | Claude Code on the web runs the hooks in the clone's `.claude/settings.json` in a session with one repository. A session with several repositories loads no repository's hooks, and user-level `~/.claude/settings.json` hooks stay on the operator's machine. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
+| `claude` | Session marker | `CLAUDE_CODE_REMOTE` is `true` in the session VM and never `true` locally. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
+| `claude` | GitHub access | The GitHub proxy refuses GraphQL with a 403, so `gh pr`, `gh issue` and Projects v2 fail; `gh api` over REST works. | GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
+| `claude` | Session state | A reclaimed VM is rebuilt fresh when the session reopens, so state the hooks wrote there, the review gate's round counter included, does not carry over. | The review-gate counter resets with the VM. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
+| `cursor` | Project hooks | Cursor's cloud agents run the command hooks in the repository's `.cursor/hooks.json`, except `sessionStart`, `sessionEnd` and the MCP hooks; user-level hooks are not available there. | — | documented | <https://cursor.com/docs/hooks> — accessed 2026-10-15 |
+| `cursor` | Self-hosted workers | Pool and My Machines workers run the same command-based project hooks, and `sessionStart` and `sessionEnd` fire when a session claims and releases the worker. | — | documented | <https://cursor.com/docs/hooks> — accessed 2026-10-15 |
+| `cursor` | Session marker | `CURSOR_AGENT_SOCKET` marks a self-hosted worker's session, as the research behind `docs/plans/020-cli-native-02.md` found on 2026-10-14; the self-hosted page names no such variable. | — | unverified | <https://cursor.com/docs/cloud-agent/self-hosted> — accessed 2026-10-15 |
+| `cursor` | MCP hooks | `beforeMCPExecution` does not run in Cursor-hosted cloud agents. Whether it runs on a self-hosted worker the page does not say, so the session start there claims nothing about it. | — | unverified | <https://cursor.com/docs/hooks> — accessed 2026-10-15 |
+| `cursor` | Read-only turns | No hook runs during a cloud agent's early read-only turns, `subagentStart` included. The page says so of cloud agents and not separately of self-hosted workers, so the session start there claims nothing about it. | — | unverified | <https://cursor.com/docs/hooks> — accessed 2026-10-15 |
+| `copilot` | Project hooks | The cloud agent loads hooks from `.github/hooks/*.json` in the cloned repository, the only hook configuration its sandbox holds by default, and honours only `bash` (or `command`) entries. `sessionStart` fires once per job. | — | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 |
+| `copilot` | Session marker | `COPILOT_AGENT_PROMPT` holds the prompt the cloud agent's job was invoked with. | — | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 |
+| `copilot` | Hook timeouts | A timed-out hook fails open on every event, `preToolUse` included. | A preToolUse hook that times out fails open. | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 |
+| `copilot` | Ask decisions | A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer. | An ask answer is read as deny. | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 |
+| `copilot` | Default branch | The cloud agent uses a hooks file only when it is present on the repository's default branch. | Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded. | documented | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks> — accessed 2026-10-15 |
+| `copilot` | Tool arguments | `toolArgs` is typed `unknown`, and the page names no argument of `edit`, `create` or `view`. The hook runner turns a `filePath` argument into `file_path`; if these tools name it `path` (a question raised in review on 2026-10-14), an authored hook reading `file_path` finds none, in the CLI and the cloud agent alike. | — | unverified | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 |
+| `codex` | Project hooks | The Codex Cloud page documents no project hooks, so assume none run there: the task's sandbox is the enforcement. | — | not documented, read 2026-10-15 | <https://learn.chatgpt.com/docs/cloud> — accessed 2026-10-15 |
+| `codex` | Cloud orchestration | The hooks page says command hooks and hooks from local configuration are not supported under cloud orchestration (its Work Cloud section), and names no Codex Cloud behaviour. | — | documented | <https://learn.chatgpt.com/docs/hooks> — accessed 2026-10-15 |
+
 ## Agent tool-allowlist enforcement coverage
 
 How far each client can actually hold an agent to its granted tools. Where a client
@@ -255,7 +289,7 @@ operator as a restriction that is not there. 4 clients, one row each:
 
 | Client | Mechanism | Strength |
 |---|---|---|
-| `claude` | `tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write` in the repository layout, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there; the four verdict roles and the spec-author also carry `Bash` in the repository layout, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell`; a plugin install renders no `Bash` for them | hard |
+| `claude` | `tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; the four verdict roles and the spec-author also carry `Bash`, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell` | hard |
 | `cursor` | `readonly:` boolean — blocks file edits and state-changing shell commands, but cannot name individual tools, so network and delegation grants are unexpressed; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; for read-only git a verdict role relies on the client itself, because `readonly: true` blocks state-changing shell commands and names no read-only subcommand list | soft |
 | `copilot` | `tools:` alias list where `[]` grants nothing; tool-level only, with no sub-tool (per-shell-command) granularity; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; no verdict role gets `execute`, since nothing here can limit a shell to read-only git, so the brief must carry the diff | hard |
 | `codex` | no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; their role sentence permits read-only git (log, show, diff, rev-list, merge-base) inside the `read-only` sandbox, as prose only | soft (provisional) |

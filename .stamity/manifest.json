@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.14.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-14T21:28:12.529Z",
+  "updatedAt": "2026-10-14T23:21:32.235Z",
   "tools": [
     "claude"
   ],
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "f20acf1a520bdd84f10abebf6844a63718d318b0edc29788f6cdd854b474c573",
+      "contentHash": "8283e093c314bb0a79059b609c43f55d7c12b06b6c57385c7600633d36a49002",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -274,7 +274,7 @@
             "588865d5395a500b52bcee89672997464979560bc96ad2f543ea5996dd3a80f9"
           ],
           "/hooks/PreToolUse": [
-            "0046cb346ea9b22a3679ae9fac97c93903693850b9ae9ac7def71cd7dafacc9a"
+            "c4a25f163b9388cfd01e173c70e62ff1e8fdbcb5b48ed95bacd72cd15a6a6758"
           ],
           "/hooks/SessionStart": [
             "bb394fc4a890f086038cb792f485b5d9c294eb1ce696c4d83f9cd251980a39ae",
@@ -288,7 +288,7 @@
           ]
         }
       },
-      "contentHash": "28d7cccc0dbe47429702c2b8b2e2a007e0cdd643504b1ae75db7cfaaa864043b",
+      "contentHash": "d680db37bb12369076558dcd5faebde7bd088594391c1cb1553335b214d9aa37",
       "path": ".claude/settings.json"
     },
     {
@@ -337,7 +337,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "5796da497f60e521b734f6233249721c0217a0587c2c7cdb834ea4a86e8223f9",
+      "contentHash": "22ea899d99c3f1e3095ba3b2438a9441537a50e9c3ef176176376ec61c508eeb",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -372,7 +372,7 @@
       "adapter": "claude",
       "artifactId": "onboard",
       "artifactType": "skill",
-      "contentHash": "5c90f15bbc4cd0c7ba9b9b7469154d246653426245db62a598b4440ceeea85e6",
+      "contentHash": "239d0c5a6721373eb04d41a4f94175cf12b133eae262b030f514dd8defe4afe9",
       "path": ".claude/skills/st-onboard/SKILL.md"
     },
     {
@@ -498,7 +498,7 @@
       "adapter": "claude",
       "artifactId": "question-protocol",
       "artifactType": "rule",
-      "contentHash": "3f6abe68a805b0a1de9705f50009463e959311813173c2e5557042652f6e0066",
+      "contentHash": "9e17479ca6f54630e4b7eaf562e1c76a9c92a2b143d62cdd6500fe36a99dd135",
       "path": ".claude/skills/stamity-question-protocol/SKILL.md"
     },
     {
@@ -512,7 +512,7 @@
       "adapter": "claude",
       "artifactId": "stamity-config-tamper-notice",
       "artifactType": "infra",
-      "contentHash": "3cd71e8e154f36b3fa583fc73456aa8075f0f83e5469e94a8e0bfd47d556d8bc",
+      "contentHash": "471acf16303b3e10d72a20dc09c01b088ca84d1b7ff3305c56d6f2eaa29c1e3e",
       "path": ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"
     },
     {
@@ -533,8 +533,15 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419",
+      "contentHash": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "claude-model-map",
+      "artifactType": "infra",
+      "contentHash": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280",
+      "path": ".stamity/generated/models/claude.json"
     },
     {
       "adapter": "claude",

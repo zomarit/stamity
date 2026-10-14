@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 const MAX_PATH_CHARS = 200;
 
 /** How the check verb is named: the installed form and the pinned fallback. */
-const CHECK_CALL = "`stamity check` where the CLI is installed, else `npx -y @zomarit/stamity@1.14.0 check`";
+const CHECK_CALL = "`stamity check` where the CLI is installed, else `npx -y @zomarit/stamity@1.14.0 check`, which needs the npm registry";
 
 function readPayload() {
   let raw = "";
@@ -61,11 +61,11 @@ const changed = clean(
 const lines =
   changed === ""
     ? [
-        "stamity: agent configuration is generated and managed. Run " + CHECK_CALL + " to diff the on-disk files against the engine's own output.",
+        "stamity: agent configuration is generated and managed. To diff the on-disk files against the engine's own output, run " + CHECK_CALL + ".",
       ]
     : [
         "stamity: agent configuration changed — " + changed + ".",
-        "That file is generated and managed. Run " + CHECK_CALL + " to diff it against the engine's own output before trusting the change.",
+        "That file is generated and managed. Before trusting the change, diff it against the engine's own output: run " + CHECK_CALL + ".",
       ];
 
 process.stdout.write(lines.join("\n") + "\n");

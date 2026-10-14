@@ -348,14 +348,14 @@ Ruled out:
 
 - A grant through the `edit` category. On Claude it also brings `Edit` and `NotebookEdit`
   (`src/tools/translator.ts:71`). On Cursor, Copilot and Codex, where the guard has no agent
-  identity, it would widen the verdict roles to full edit (`docs/capability-matrix.md:259-261`).
+  identity, it would widen the verdict roles to full edit (`docs/capability-matrix.md:293-295`).
 
 Amended 2026-09-30 (plan 013 file 2, unit `sw05-read-only-git-grants`; the census's S4). The four verdict rows, and
 the spec-author's, also carry `readOnlyGit: true` (REQ-CTX-017; `src/roster/agentPolicies.ts:101-111`). The policy
 document keeps its schema id, `stamity/agent-tool-policies/v1`, and gains the key on those rows only. On Claude Code
 the five roles' `tools:` lines carry `Bash` in the repository layout, and the generated guard admits it for read-only
 git alone: a verdict role's non-git `Bash` is refused as `GIT_COMMAND_DENIED`, no longer as `CATEGORY_DENIED`
-(`src/hooks/scripts.ts:1501-1507`). A plugin install renders no `Bash` for them (`docs/capability-matrix.md:271`; the
+(`src/hooks/scripts.ts:1501-1507`). A plugin install renders no `Bash` for them (`docs/capability-matrix.md:292`; the
 plugin install: route retired 1.15.0). A
 row derived for a user-authored agent drops the key, as it drops `writePaths` (`src/tools/allowlist.ts:628-631`). The
 Write-path rules above, the plugin degradation and the ruling on the `edit` category stand. On Cursor, Copilot and
@@ -992,7 +992,7 @@ Added 2026-09-30 (plan 013 file 2, units `work-verdict-brief`, `sw05-verdict-rol
 - **The grant.** The reviewer, security, performance, design-quality and spec-author roles get read-only git: `log`,
   `show`, `diff`, `rev-list` and `merge-base` (`READ_ONLY_GIT_SUBCOMMANDS`, `src/roster/agentPolicies.ts:141-147`), set
   on their roster rows as `readOnlyGit: true` (`:101-111`). Each client grants it through its own mechanism, and a
-  client with no way to hold the line declares the gap (the parity row above; `docs/capability-matrix.md:271-274`).
+  client with no way to hold the line declares the gap (the parity row above; `docs/capability-matrix.md:292-295`).
 - **The guard.** On Claude Code in the repository layout, the generated pre-tool-use guard admits `Bash` for such a
   role only when the command is at most 1,024 characters, uses no shell syntax (no quote, `;`, `|`, `&`, `$`,
   backtick, redirect, glob, brace or newline), reads `git` followed directly by one of the five subcommands — so no
@@ -1023,7 +1023,7 @@ As built, where the delta differed: the guard also refuses `--show-signature`, `
 option before the subcommand, beside the delta's `--output`, `-c` and `--ext-diff`; the body's wording is "the
 implementer's or fixer's account", where the delta's criterion said "no implementer report or digest is passed"
 (ledger `build/35`). On Cursor the role relies on `readonly: true`; on Copilot no verdict role gets `execute`; on
-Codex the grant is prose inside the `read-only` sandbox (`docs/capability-matrix.md:272-274`).
+Codex the grant is prose inside the `read-only` sandbox (`docs/capability-matrix.md:293-295`).
 
 Amended 2026-10-15 (plan 020 file 2, unit `e12-translator`, folding ledger row `build/32` of run `2026-10-14_cli-native`;
 read at its commit `ecf11a74`). The capability matrix's Claude allow-list coverage row states the grants with no layout

@@ -29,7 +29,7 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`' >&2; exit 2; }"
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       },
@@ -123,7 +123,7 @@ args = ["-y", "mcp-remote@0.1.16", "https://api.githubcopilot.com/mcp/", "--head
 env_vars = ["GITHUB_PAT"]
 ",
   ".codex/hooks.json": "{
-  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so the check verb (\`stamity check\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden check\`) is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so the check verb (\`stamity check\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden check\`, which needs the npm registry) is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
   "hooks": {
     "SessionStart": [
       {
@@ -190,6 +190,10 @@ env_vars = ["GITHUB_PAT"]
         "timeout": 5,
         "matcher": "Bash",
         "failClosed": true
+      },
+      {
+        "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;for(;;){if(fs.existsSync(p.join(d,'.cursor','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/cursor/stamity-model-pins.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jdXJzb3Ivc3RhbWl0eS1tb2RlbC1waW5zLm1qcyJdfQ",
+        "matcher": "Task"
       }
     ],
     "subagentStart": [
@@ -236,8 +240,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = "mcp__";
-const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
-const MCP_ADD_CALL = "\`stamity config mcp add <id>\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden config mcp add <id>\`";
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry";
+const MCP_ADD_CALL = "\`stamity config mcp add <id>\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden config mcp add <id>\`, which needs the npm registry";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -370,7 +374,7 @@ if (allowed.size === 0 && faults.length > 0) {
     "Blocked every MCP call: this setup configured no MCP servers, so there is " +
       "no allowlist to match against. Add one with " +
       MCP_ADD_CALL +
-      " and re-run " +
+      ". Then re-run " +
       SYNC_CALL +
       ".",
   );
@@ -393,7 +397,7 @@ if (allowed.size === 0 && faults.length > 0) {
       identity +
       '": it is absent from the resolved .cursor/mcp.json set. Add it with ' +
       MCP_ADD_CALL +
-      " and re-run " +
+      ". Then re-run " +
       SYNC_CALL +
       ".",
   );
@@ -441,7 +445,7 @@ const ROSTER = new Set([
   "stamity-spec-author",
   "stamity-test-runner"
 ]);
-const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -502,9 +506,9 @@ if (agentId === "") {
     'Blocked the spawn of "' +
       agentId +
       '": no agent with that id ships in this setup, so it holds no tool policy. ' +
-      "Re-run " + SYNC_CALL + " if the roster changed, or spawn one of: " +
+      "Spawn one of: " +
       [...ROSTER].join(", ") +
-      ".",
+      ". If the roster changed, re-run " + SYNC_CALL + ".",
   );
 } else {
   // Out of scope, or rostered. The spawn proceeds and the verdict says so.
@@ -534,31 +538,35 @@ if (agentId === "") {
   ".github/hooks/stamity.json": "{
   "version": 1,
   "hooks": {
-    "SessionStart": [
+    "sessionStart": [
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
         "cwd": ".",
         "timeoutSec": 30
       },
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
         "cwd": ".",
         "timeoutSec": 30
       }
     ],
-    "PreToolUse": [
+    "preToolUse": [
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb3BpbG90L3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb3BpbG90L3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ",
         "cwd": "."
       },
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
         "cwd": ".",
-        "matcher": "Bash",
+        "matcher": "bash",
         "timeoutSec": 5
       }
     ]
@@ -587,8 +595,8 @@ jobs:
       contents: read
     steps:
       # Pin these to a full-length commit SHA for a stricter supply-chain posture.
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
         with:
           # No .nvmrc, .node-version or engines.node pin was found, so the current LTS.
           node-version: "lts/*"
@@ -612,6 +620,154 @@ jobs:
         "GITHUB_PAT": "\${GITHUB_PAT}"
       }
     }
+  }
+}
+",
+  ".stamity/generated/models/claude.json": "{
+  "classes": {
+    "frontier": {
+      "model": "fable",
+      "fallbacks": []
+    },
+    "advanced": {
+      "model": "opus",
+      "fallbacks": []
+    },
+    "standard": {
+      "model": "sonnet",
+      "fallbacks": []
+    },
+    "economy": {
+      "model": "haiku",
+      "fallbacks": []
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
+  }
+}
+",
+  ".stamity/generated/models/codex.json": "{
+  "classes": {
+    "frontier": {
+      "model": "gpt-6-astra",
+      "fallbacks": [
+        "gpt-6-sol"
+      ]
+    },
+    "advanced": {
+      "model": "gpt-6-astra",
+      "fallbacks": [
+        "gpt-6-sol"
+      ]
+    },
+    "standard": {
+      "model": "gpt-6-sol",
+      "fallbacks": [
+        "gpt-5.6-terra"
+      ]
+    },
+    "economy": {
+      "model": "gpt-6-luna",
+      "fallbacks": [
+        "gpt-5.6-luna"
+      ]
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
+  }
+}
+",
+  ".stamity/generated/models/copilot.json": "{
+  "classes": {
+    "frontier": {
+      "model": "claude-fable-5.1",
+      "fallbacks": [
+        "claude-opus-5.5",
+        "gpt-6-astra"
+      ]
+    },
+    "advanced": {
+      "model": "claude-opus-5.5",
+      "fallbacks": [
+        "gpt-6-astra",
+        "claude-opus-5"
+      ]
+    },
+    "standard": {
+      "model": "claude-sonnet-5",
+      "fallbacks": [
+        "gpt-6-sol",
+        "gpt-5.6-terra"
+      ]
+    },
+    "economy": {
+      "model": "claude-haiku-4.5",
+      "fallbacks": [
+        "gpt-6-luna",
+        "gpt-5.4-mini"
+      ]
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
+  }
+}
+",
+  ".stamity/generated/models/cursor.json": "{
+  "classes": {
+    "frontier": {
+      "fallbacks": []
+    },
+    "advanced": {
+      "fallbacks": []
+    },
+    "standard": {
+      "fallbacks": []
+    },
+    "economy": {
+      "fallbacks": []
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
   }
 }
 ",
@@ -1309,7 +1465,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-handoff/agents/openai.yaml": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc 150 bytes",
   ".agents/skills/st-learn/SKILL.md": "431515797389c0284630fb56dc70d32527919fde735cad1ae749d36144e7ebf8 6810 bytes",
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
-  ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "27682cda2d5a7fe81bbc32ff41663e82dba8180de6fc8f4fa2b3221d1fe4dc79 10045 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".agents/skills/st-plan/SKILL.md": "ddf4d53ff91bc02fc1b13e727051316fafd101551a7b51a1292d2197d3407638 29317 bytes",
   ".agents/skills/st-plan/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
@@ -1336,14 +1492,14 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
-  ".agents/skills/st-work/SKILL.md": "0b2c8f7b45bd27d07e2fdec37785ee4df435d902f320743fdeaf99d7fcaadcff 36005 bytes",
+  ".agents/skills/st-work/SKILL.md": "cd4485614f68af896b48b070c49a3d1e3b2e79d73c9d1169ec0aff04e118e890 36096 bytes",
   ".agents/skills/st-work/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "363b77130b2b94bcac9753a0827a47960d115bf8859f9db50d4d16c86339af0a 4453 bytes",
   ".agents/skills/stamity-api-versioning/SKILL.md": "8507a775bed6e7f74093ce36780d491d32cd8275260f20f028795ab6a2446b6d 5350 bytes",
   ".agents/skills/stamity-contract-census/SKILL.md": "c1a8da7803ccf7805f24066dce1c6f42719849d1a569901235bb15fc5e1dbe0c 4068 bytes",
   ".agents/skills/stamity-learnings-schema/SKILL.md": "b9248a64b6e9db928a182556b22e9ff5576f201db4739d14df7fceac103f73f7 2973 bytes",
   ".agents/skills/stamity-migrations/SKILL.md": "8d9a063921ac4fc23dfb0d06dd776e43c9177cc9556c1710501c84599cb51031 5116 bytes",
-  ".agents/skills/stamity-question-protocol/SKILL.md": "cc31b2ad9c5292fc95da10bfdc8f042c8ca96dd41a98f81cf7951ee75a22689e 6386 bytes",
+  ".agents/skills/stamity-question-protocol/SKILL.md": "941b6bc4b82de4372d0f59db9a4d50dd249cccf50f0eddaa334ed36c064abee7 7047 bytes",
   ".agents/skills/stamity-resilience/SKILL.md": "f8e992ecde476af92d78512fef9707d6bcd9920f04520ff9c1fd27eb9afabb49 5312 bytes",
   ".agents/skills/stamity-testing/SKILL.md": "8fd553e97c1b8ea982bb5eed9006b70d2b77e315989d24cd2cb8e2aad33ec9ce 4515 bytes",
   ".agents/skills/stamity-ui-states/SKILL.md": "f153f44c19f24518dbd9eec7ebfbcb2723793ca96b88fd51afb7c93097d9bf62 4767 bytes",
@@ -1365,7 +1521,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/commands/st-quick.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
   ".claude/commands/st-rework.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
   ".claude/commands/st-spec.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
-  ".claude/commands/st-work.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
+  ".claude/commands/st-work.md": "f42600d4c9678f04137bff7dd1e8216122c2412c34d53d896afd9762dd30b833 36051 bytes",
   ".claude/rules/stamity-api-versioning.md": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391 5080 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
   ".claude/rules/stamity-injection-screening.md": "b2e787a49c12892c04a16ba0f7b2124d97d5c1aa9c76afc053ea2b25d7e553bc 7760 bytes",
@@ -1376,7 +1532,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "4c761f607b3d10d68c7dd852645518a35e75ff21ef6bc915375e935fc6bcfee8 1984 bytes",
+  ".claude/settings.json": "f7be0fc9bf75b7d2ca8b9433bcd2b36576c1891e4df6ed3b6aa369906ac80b44 2014 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
@@ -1387,7 +1543,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-handoff/agents/openai.yaml": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc 150 bytes",
   ".claude/skills/st-learn/SKILL.md": "431515797389c0284630fb56dc70d32527919fde735cad1ae749d36144e7ebf8 6810 bytes",
   ".claude/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
-  ".claude/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
+  ".claude/skills/st-onboard/SKILL.md": "27682cda2d5a7fe81bbc32ff41663e82dba8180de6fc8f4fa2b3221d1fe4dc79 10045 bytes",
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".claude/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
@@ -1405,19 +1561,19 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
   ".claude/skills/stamity-ai-evals/SKILL.md": "363b77130b2b94bcac9753a0827a47960d115bf8859f9db50d4d16c86339af0a 4453 bytes",
-  ".claude/skills/stamity-question-protocol/SKILL.md": "cc31b2ad9c5292fc95da10bfdc8f042c8ca96dd41a98f81cf7951ee75a22689e 6386 bytes",
-  ".codex/agents/stamity-creator.toml": "b4696a752d25b0f46292d7c1673cec9dab3ed602cdccd3b4d090e47c1cabf9a2 14611 bytes",
-  ".codex/agents/stamity-design-quality.toml": "5714f3d90667cc9e6bd1031a49fdb8439480cebb9ea2488f9d090653e0c54ae0 12770 bytes",
-  ".codex/agents/stamity-fixer.toml": "83b7667af6e359268c77471161227de1cfcee46698481f557f0b1bbfc83a3b06 11320 bytes",
-  ".codex/agents/stamity-implementer.toml": "1ea4080c15384615525b662fa6e58d5ae175c5cafe7830c81eb3eb1f640e80be 10787 bytes",
-  ".codex/agents/stamity-performance.toml": "da8811a16ce9fcaf4c26b210bf2d4e38316d4bda367282fc7a6794325a50caf8 14744 bytes",
-  ".codex/agents/stamity-researcher.toml": "10a96c8f7d565a6d5b249925e9da79d03f8807bf883f207d3dd64b0fff475828 9049 bytes",
-  ".codex/agents/stamity-reviewer.toml": "e7033032507211bc635d1baaaf391a6bdd62735633163ec53e1b1a32392b3a17 16609 bytes",
-  ".codex/agents/stamity-security.toml": "662ebb89e42d325c28ecaa4cd9120ca8b843f786a8d1d960a4790f8669d918fc 13743 bytes",
-  ".codex/agents/stamity-spec-author.toml": "18301283ac47ea3891d4b7b4c88a4d1226ed0b3837e6e9822a7261c38d0ec8ed 12973 bytes",
-  ".codex/agents/stamity-test-runner.toml": "d7762b27fa16b2a7d11903e7a43313f57c9aaa9516046fccd529bcafaca402e9 12597 bytes",
+  ".claude/skills/stamity-question-protocol/SKILL.md": "941b6bc4b82de4372d0f59db9a4d50dd249cccf50f0eddaa334ed36c064abee7 7047 bytes",
+  ".codex/agents/stamity-creator.toml": "2c2fb1c1e08a32ea5ef5b6a846d87cef5b1fc5f3a4ebad96834c38fd336d0898 14631 bytes",
+  ".codex/agents/stamity-design-quality.toml": "2c29932a0fc737207b467c256b3e186a7bc0ae5177529ecddb5069177032b200 12792 bytes",
+  ".codex/agents/stamity-fixer.toml": "7f704fe21cfb021c516063fa9a8f0e06edc2e305b3b2c7f56fac74654caf9e26 11340 bytes",
+  ".codex/agents/stamity-implementer.toml": "8c7b14e11b08fb59cee9deb4573e497f27526fef20ed1407140d87006e2b5266 10809 bytes",
+  ".codex/agents/stamity-performance.toml": "844d1c271cc1f8ccf3e86a5fa48eca2cae20810a4a13485f46a6c32b65108c91 14764 bytes",
+  ".codex/agents/stamity-researcher.toml": "c1902d9241e21cf964f5a2172c13b9bc8f2d021b5dd5dfd3251c0273e4d066a8 9069 bytes",
+  ".codex/agents/stamity-reviewer.toml": "058e086f4f893efaf588ad4ebd434963bd41ca09c23fe2b926d6f8b9f9d9b591 16631 bytes",
+  ".codex/agents/stamity-security.toml": "35188e2daef6d993aa57673704412b310c4a2aadf6aed83fafdf3410d8e1be51 13765 bytes",
+  ".codex/agents/stamity-spec-author.toml": "b59c6cbcf36a44ed6207015f4359d05db8d21b621d08d2b10986cc0397a2a56f 12995 bytes",
+  ".codex/agents/stamity-test-runner.toml": "f7dd020c45db84c108a213e400f864a209305cde9ca7aba364dc26076fbc9e75 12618 bytes",
   ".codex/config.toml": "f52750a2e71d25d0a5a870124136e44ed0639f96aeab3a3390b2f21b3a5408cb 3072 bytes",
-  ".codex/hooks.json": "d928729cf95e643258b688adcb2565e12dfe6825de0f77e83a20cca20b4d3293 8753 bytes",
+  ".codex/hooks.json": "50094d34d910907a6ba00f73933c5b7c4b1e0b9758c59420b6b053b9ec2ae594 8783 bytes",
   ".cursor/agents/stamity-creator.md": "90965555162a44819fd86df5e48245471aede3610e1d37cc88e1f705be9e67d3 13887 bytes",
   ".cursor/agents/stamity-design-quality.md": "291a2e555222f71cac92033322580ac2a5d5af510a67ba3e7b47f261eb47f413 11972 bytes",
   ".cursor/agents/stamity-fixer.md": "47b682a7ffed5188495647a7c0417909f0c43db46181f888aff7df375b430491 10573 bytes",
@@ -1428,9 +1584,9 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
   ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
-  ".cursor/hooks.json": "8b80690128eb8ffa0c475e5050d4dd711091b898c6c0d3d3d0be3d3c687db652 5988 bytes",
-  ".cursor/hooks/stamity-mcp-guard.mjs": "ff6ede2e8ee71868f15447783aadd980e0b4ea1b53a1d0ca76f18578b356935e 7645 bytes",
-  ".cursor/hooks/stamity-subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
+  ".cursor/hooks.json": "6a2ae1e03f96f3e6d4d3b048e4791b6b5ef62a8ad50dfea9de8c064a787410c2 6955 bytes",
+  ".cursor/hooks/stamity-mcp-guard.mjs": "4873bee27c2b1ae2aab8ca1b407a6e4e9cd03a0c27a08503e7313206c86389fc 7709 bytes",
+  ".cursor/hooks/stamity-subagent-guard.mjs": "0f13561fa2415119ded74fda648edffc38fde84e4cd29b98ccf5180abfd4d9df 3761 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
   ".cursor/rules/stamity-ai-evals.mdc": "402253ef486f95a09da3f1d9fd1ee4147b90db1e742566fbd5c38f6170d6938b 4148 bytes",
   ".cursor/rules/stamity-api-versioning.mdc": "5f582c602434db96d06f806d24bc6e5b4c0b28542dba322c08c0b10db6aaa34f 5083 bytes",
@@ -1438,23 +1594,23 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/rules/stamity-injection-screening.mdc": "846521a2e7804e5c2ec897b2853873ebd8dd522c29f47d84280f843d9335d5e4 7775 bytes",
   ".cursor/rules/stamity-learnings-schema.mdc": "f28d98e76d473b4a4eb43b10873d6f7c81e72e0ca93e2a0f5709c24bce67edab 2658 bytes",
   ".cursor/rules/stamity-migrations.mdc": "c717d57d0d70a45e178138832e65d51537a0dd8b0e84bbf4bd0cfcf0b574f0ed 4824 bytes",
-  ".cursor/rules/stamity-question-protocol.mdc": "f4044657f92492a1f8d33df356aa072803c0607fa299a142f9810b4815c6c3eb 5309 bytes",
+  ".cursor/rules/stamity-question-protocol.mdc": "70ff7c5a9b50ab78350ec0e85d7e3c18d844d6bb8db359e61e021f0125560254 5469 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
   ".cursor/rules/stamity-testing.mdc": "b1e6ccf40fbc412f50906738e91daba2852e6c893ee201d43c1408397cef3a78 4250 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "3c80c0c1f3d61d337020b6b9a1de0da33ff4d9aed77d6194c345c50e8e2b9028 4510 bytes",
-  ".github/agents/stamity-creator.agent.md": "1ce9d08655dccd923468b3e4f8c1a4658a0958b51309d2809b62ea88df229af7 14027 bytes",
-  ".github/agents/stamity-design-quality.agent.md": "79e60cd90df62650ae7e4afe6f15b678062f611318d4393ad2c88c92bb9b9130 12094 bytes",
-  ".github/agents/stamity-fixer.agent.md": "23095bc67e956a1d7194490ebbcabd9c69b0ddfc9d675066c8ae7301965c806b 10722 bytes",
-  ".github/agents/stamity-implementer.agent.md": "fa6bdbe8d225a1258ad3844caa1ffe517aed18a4a8cb7c58d2e277f421d108dc 10183 bytes",
-  ".github/agents/stamity-performance.agent.md": "3e1aa08fbfa0a4997623e9a7eb4467dd1a9ab39d9554a7f40077b8e9fe42a8ad 14071 bytes",
-  ".github/agents/stamity-researcher.agent.md": "152341d3b770c156dcbc53b02e1ed84b8ba03fb49af430ff4f92b705484bde6e 8470 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "0cf06073e46c0b33707bce07ca7dac2d2b275749f692c23b9c5efc9a60538249 15939 bytes",
-  ".github/agents/stamity-security.agent.md": "bf085ca84b4664a1ea7766bd03009ba5e3a65b26f130031ca20fd882591a9adc 13073 bytes",
-  ".github/agents/stamity-spec-author.agent.md": "5c60d74d20769005ba16187611c2d1541f140ba9f99a206842d38dda8e893e26 12269 bytes",
-  ".github/agents/stamity-test-runner.agent.md": "1f5cc042b58d1d824a55b5bf441bb369cf8a82904628e2aa3e70a84b33a63e08 12011 bytes",
-  ".github/hooks/stamity.json": "e9d17d6fc457060420ab327b88c29ac63ce1c247962321de106b40afa528408c 3929 bytes",
+  ".github/agents/stamity-creator.agent.md": "1a627819fb71ac4e4dfa7f74c7863704e3a63b32ca6aca725e3948f3bb8fd682 14120 bytes",
+  ".github/agents/stamity-design-quality.agent.md": "573cb803cb10bd0ca2a892e4ec8903d0d3fa821a40b1d4469362a0a21e10bf62 12189 bytes",
+  ".github/agents/stamity-fixer.agent.md": "a80b50da77731cd6090d0c109b072dbc924337956a3018d96b5c961f0287d490 10815 bytes",
+  ".github/agents/stamity-implementer.agent.md": "fee0b79f07a6a11f8ad5c38bb5becdac5d3401c67cee063cf295ea13e90bb5cb 10278 bytes",
+  ".github/agents/stamity-performance.agent.md": "4851cbbc3facdba2eb57d511bdf0b3b8d2548e498089491730092a3822aae26b 14164 bytes",
+  ".github/agents/stamity-researcher.agent.md": "d6676d000f54b3f3740e9250737f8b9a77df6612bbda5a071fae69f229a842aa 8563 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "a45a6181f9c11c80f97314631cda68b336e54b484ee6184a63eb10300a4bb69a 16034 bytes",
+  ".github/agents/stamity-security.agent.md": "94a635f7803cf708cfb3e78ed15ef5702477bf4795efde98515d4c25446a41df 13168 bytes",
+  ".github/agents/stamity-spec-author.agent.md": "87e6dded19b395635b8b25c48febd5a2bfccf0e516b398d30b7cb93f59c6dbb1 12364 bytes",
+  ".github/agents/stamity-test-runner.agent.md": "6a6bf7a4f2ad452f96377fd20af17ad75841f2aa81d67c6cfb41c1f6bf740a59 12106 bytes",
+  ".github/hooks/stamity.json": "8ddd7674a2afc909350e34b960a7ccce82962e9b2257de09815c2f331043fb22 7400 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
   ".github/instructions/stamity-injection-screening.instructions.md": "4948e4ff01b4aab8ed072f52340aa9fd9a96cd3df9242f352975545719200ee9 7760 bytes",
@@ -1473,33 +1629,38 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/prompts/st-quick.prompt.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
   ".github/prompts/st-rework.prompt.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
   ".github/prompts/st-spec.prompt.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
-  ".github/prompts/st-work.prompt.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
+  ".github/prompts/st-work.prompt.md": "f42600d4c9678f04137bff7dd1e8216122c2412c34d53d896afd9762dd30b833 36051 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
-  ".github/workflows/copilot-setup-steps.yml": "deb31212a939b4204646d43bbec9557e5c02514f4b5266889477f781c83cc033 880 bytes",
+  ".github/workflows/copilot-setup-steps.yml": "03c39c1ca98f3c05c9d80e33d7ca16ddcaec879e705b971bd7af8ae565c1a84e 880 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
-  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
+  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60 20833 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7 40761 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
-  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
-  ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "1eb21a65f381c1dc319ac6b51b0dbe173051c089ba1df77be2e390aba6d1cfe9 20030 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "4ee7b1893891881d7d06d0c4648ada8c3df015c774a25100b798bfc1ad1fdaff 20094 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
-  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
-  ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "58690b9ca0aca8737a59b6f7e760f55d2e3f4f89727afdd5918293b4468cb5e7 20032 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "0eeb857cea9384d550adf87cdd175a2a7dadd67952948716b4f89ce2555e9891 20781 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
-  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
-  ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "9a963e386cc8757ae08cc270c20e24ccf2806f4c9462af7ae4b51d8689e4fa69 20031 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "3c7ed35796a22642f0d1a297338598fdbd6f312d88427bbeddef4520d2f0e2fa 3769 bytes",
+  ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "d209299bcc8c1ddad3fb38c79866b25e6acd367fa957146e314f74366ab45d40 20095 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
+  ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
+  ".stamity/generated/models/copilot.json": "cdbd36f534d2f4a5b4f3c2edfe11cfa48651f7131ba25969992d1794512b0378 953 bytes",
+  ".stamity/generated/models/cursor.json": "6e108834236741075e1d082bba6be814bc0bf04642622c860a6b7e43c348bdbd 601 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a2e20d475bdc4b97a3640481dc9cbcd528b2f326a0642fc8d99b3aa057f2bdcf 80774 bytes",
+  ".stamity/manifest.json": "41acbe2ff432f19e4b16fe010eac6c805fc66199d62d69a6de566a0b754348a2 82142 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
@@ -1549,7 +1710,7 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`' >&2; exit 2; }"
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       },
@@ -1615,6 +1776,39 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
         "GITHUB_PAT": "\${GITHUB_PAT}"
       }
     }
+  }
+}
+",
+  ".stamity/generated/models/claude.json": "{
+  "classes": {
+    "frontier": {
+      "model": "fable",
+      "fallbacks": []
+    },
+    "advanced": {
+      "model": "opus",
+      "fallbacks": []
+    },
+    "standard": {
+      "model": "sonnet",
+      "fallbacks": []
+    },
+    "economy": {
+      "model": "haiku",
+      "fallbacks": []
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
   }
 }
 ",
@@ -1730,7 +1924,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/commands/st-quick.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
   ".claude/commands/st-rework.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
   ".claude/commands/st-spec.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
-  ".claude/commands/st-work.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
+  ".claude/commands/st-work.md": "f42600d4c9678f04137bff7dd1e8216122c2412c34d53d896afd9762dd30b833 36051 bytes",
   ".claude/rules/stamity-api-versioning.md": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391 5080 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
   ".claude/rules/stamity-injection-screening.md": "b2e787a49c12892c04a16ba0f7b2124d97d5c1aa9c76afc053ea2b25d7e553bc 7760 bytes",
@@ -1741,7 +1935,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "4c761f607b3d10d68c7dd852645518a35e75ff21ef6bc915375e935fc6bcfee8 1984 bytes",
+  ".claude/settings.json": "f7be0fc9bf75b7d2ca8b9433bcd2b36576c1891e4df6ed3b6aa369906ac80b44 2014 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
@@ -1752,7 +1946,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-handoff/agents/openai.yaml": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc 150 bytes",
   ".claude/skills/st-learn/SKILL.md": "431515797389c0284630fb56dc70d32527919fde735cad1ae749d36144e7ebf8 6810 bytes",
   ".claude/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
-  ".claude/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
+  ".claude/skills/st-onboard/SKILL.md": "27682cda2d5a7fe81bbc32ff41663e82dba8180de6fc8f4fa2b3221d1fe4dc79 10045 bytes",
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".claude/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
@@ -1770,20 +1964,21 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
   ".claude/skills/stamity-ai-evals/SKILL.md": "803c4a405842094e687a311c73b7754089cdd50496b0427080cd59a63fc17968 4423 bytes",
-  ".claude/skills/stamity-question-protocol/SKILL.md": "3f6abe68a805b0a1de9705f50009463e959311813173c2e5557042652f6e0066 6356 bytes",
+  ".claude/skills/stamity-question-protocol/SKILL.md": "9e17479ca6f54630e4b7eaf562e1c76a9c92a2b143d62cdd6500fe36a99dd135 7017 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
-  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
+  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60 20833 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7 40761 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "0715927690c833c0f2847d4b515af6f4a5ec5ea8d92195d402adb059e71f6ff3 19286 bytes",
+  ".stamity/manifest.json": "59e4175e76a697253afcfb489e59ab799b0d762c49527130b60aec1a5d502bb1 19540 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -1846,7 +2041,7 @@ args = ["-y", "mcp-remote@0.1.16", "https://api.githubcopilot.com/mcp/", "--head
 env_vars = ["GITHUB_PAT"]
 ",
   ".codex/hooks.json": "{
-  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so the check verb (\`stamity check\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden check\`) is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so the check verb (\`stamity check\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden check\`, which needs the npm registry) is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
   "hooks": {
     "SessionStart": [
       {
@@ -1888,6 +2083,47 @@ env_vars = ["GITHUB_PAT"]
         ]
       }
     ]
+  }
+}
+",
+  ".stamity/generated/models/codex.json": "{
+  "classes": {
+    "frontier": {
+      "model": "gpt-6-astra",
+      "fallbacks": [
+        "gpt-6-sol"
+      ]
+    },
+    "advanced": {
+      "model": "gpt-6-astra",
+      "fallbacks": [
+        "gpt-6-sol"
+      ]
+    },
+    "standard": {
+      "model": "gpt-6-sol",
+      "fallbacks": [
+        "gpt-5.6-terra"
+      ]
+    },
+    "economy": {
+      "model": "gpt-6-luna",
+      "fallbacks": [
+        "gpt-5.6-luna"
+      ]
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
   }
 }
 ",
@@ -2543,7 +2779,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-handoff/agents/openai.yaml": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc 150 bytes",
   ".agents/skills/st-learn/SKILL.md": "431515797389c0284630fb56dc70d32527919fde735cad1ae749d36144e7ebf8 6810 bytes",
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
-  ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "27682cda2d5a7fe81bbc32ff41663e82dba8180de6fc8f4fa2b3221d1fe4dc79 10045 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".agents/skills/st-plan/SKILL.md": "ddf4d53ff91bc02fc1b13e727051316fafd101551a7b51a1292d2197d3407638 29317 bytes",
   ".agents/skills/st-plan/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
@@ -2570,41 +2806,42 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
-  ".agents/skills/st-work/SKILL.md": "0b2c8f7b45bd27d07e2fdec37785ee4df435d902f320743fdeaf99d7fcaadcff 36005 bytes",
+  ".agents/skills/st-work/SKILL.md": "cd4485614f68af896b48b070c49a3d1e3b2e79d73c9d1169ec0aff04e118e890 36096 bytes",
   ".agents/skills/st-work/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "61ef9ffd3b0bd66c5c3e96772d2e48dad450f0d8365b1c1fab7987eb24f1818a 4422 bytes",
   ".agents/skills/stamity-api-versioning/SKILL.md": "8507a775bed6e7f74093ce36780d491d32cd8275260f20f028795ab6a2446b6d 5350 bytes",
   ".agents/skills/stamity-contract-census/SKILL.md": "c1a8da7803ccf7805f24066dce1c6f42719849d1a569901235bb15fc5e1dbe0c 4068 bytes",
   ".agents/skills/stamity-learnings-schema/SKILL.md": "b9248a64b6e9db928a182556b22e9ff5576f201db4739d14df7fceac103f73f7 2973 bytes",
   ".agents/skills/stamity-migrations/SKILL.md": "8d9a063921ac4fc23dfb0d06dd776e43c9177cc9556c1710501c84599cb51031 5116 bytes",
-  ".agents/skills/stamity-question-protocol/SKILL.md": "c97fcbd708782434a5d8ea501ef062bc7d4fe1dad2c38ea4bb402d54c0587fd3 6355 bytes",
+  ".agents/skills/stamity-question-protocol/SKILL.md": "82cbbf7a7484fc0017b144136442b8c9d07da9a87e3ac1f1e539a865d4d3509d 7016 bytes",
   ".agents/skills/stamity-resilience/SKILL.md": "f8e992ecde476af92d78512fef9707d6bcd9920f04520ff9c1fd27eb9afabb49 5312 bytes",
   ".agents/skills/stamity-testing/SKILL.md": "8fd553e97c1b8ea982bb5eed9006b70d2b77e315989d24cd2cb8e2aad33ec9ce 4515 bytes",
   ".agents/skills/stamity-ui-states/SKILL.md": "f153f44c19f24518dbd9eec7ebfbcb2723793ca96b88fd51afb7c93097d9bf62 4767 bytes",
-  ".codex/agents/stamity-creator.toml": "b4696a752d25b0f46292d7c1673cec9dab3ed602cdccd3b4d090e47c1cabf9a2 14611 bytes",
-  ".codex/agents/stamity-design-quality.toml": "5714f3d90667cc9e6bd1031a49fdb8439480cebb9ea2488f9d090653e0c54ae0 12770 bytes",
-  ".codex/agents/stamity-fixer.toml": "83b7667af6e359268c77471161227de1cfcee46698481f557f0b1bbfc83a3b06 11320 bytes",
-  ".codex/agents/stamity-implementer.toml": "1ea4080c15384615525b662fa6e58d5ae175c5cafe7830c81eb3eb1f640e80be 10787 bytes",
-  ".codex/agents/stamity-performance.toml": "da8811a16ce9fcaf4c26b210bf2d4e38316d4bda367282fc7a6794325a50caf8 14744 bytes",
-  ".codex/agents/stamity-researcher.toml": "10a96c8f7d565a6d5b249925e9da79d03f8807bf883f207d3dd64b0fff475828 9049 bytes",
-  ".codex/agents/stamity-reviewer.toml": "e7033032507211bc635d1baaaf391a6bdd62735633163ec53e1b1a32392b3a17 16609 bytes",
-  ".codex/agents/stamity-security.toml": "662ebb89e42d325c28ecaa4cd9120ca8b843f786a8d1d960a4790f8669d918fc 13743 bytes",
-  ".codex/agents/stamity-spec-author.toml": "18301283ac47ea3891d4b7b4c88a4d1226ed0b3837e6e9822a7261c38d0ec8ed 12973 bytes",
-  ".codex/agents/stamity-test-runner.toml": "d7762b27fa16b2a7d11903e7a43313f57c9aaa9516046fccd529bcafaca402e9 12597 bytes",
+  ".codex/agents/stamity-creator.toml": "2c2fb1c1e08a32ea5ef5b6a846d87cef5b1fc5f3a4ebad96834c38fd336d0898 14631 bytes",
+  ".codex/agents/stamity-design-quality.toml": "2c29932a0fc737207b467c256b3e186a7bc0ae5177529ecddb5069177032b200 12792 bytes",
+  ".codex/agents/stamity-fixer.toml": "7f704fe21cfb021c516063fa9a8f0e06edc2e305b3b2c7f56fac74654caf9e26 11340 bytes",
+  ".codex/agents/stamity-implementer.toml": "8c7b14e11b08fb59cee9deb4573e497f27526fef20ed1407140d87006e2b5266 10809 bytes",
+  ".codex/agents/stamity-performance.toml": "844d1c271cc1f8ccf3e86a5fa48eca2cae20810a4a13485f46a6c32b65108c91 14764 bytes",
+  ".codex/agents/stamity-researcher.toml": "c1902d9241e21cf964f5a2172c13b9bc8f2d021b5dd5dfd3251c0273e4d066a8 9069 bytes",
+  ".codex/agents/stamity-reviewer.toml": "058e086f4f893efaf588ad4ebd434963bd41ca09c23fe2b926d6f8b9f9d9b591 16631 bytes",
+  ".codex/agents/stamity-security.toml": "35188e2daef6d993aa57673704412b310c4a2aadf6aed83fafdf3410d8e1be51 13765 bytes",
+  ".codex/agents/stamity-spec-author.toml": "b59c6cbcf36a44ed6207015f4359d05db8d21b621d08d2b10986cc0397a2a56f 12995 bytes",
+  ".codex/agents/stamity-test-runner.toml": "f7dd020c45db84c108a213e400f864a209305cde9ca7aba364dc26076fbc9e75 12618 bytes",
   ".codex/config.toml": "f52750a2e71d25d0a5a870124136e44ed0639f96aeab3a3390b2f21b3a5408cb 3072 bytes",
-  ".codex/hooks.json": "d928729cf95e643258b688adcb2565e12dfe6825de0f77e83a20cca20b4d3293 8753 bytes",
+  ".codex/hooks.json": "50094d34d910907a6ba00f73933c5b7c4b1e0b9758c59420b6b053b9ec2ae594 8783 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
-  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
-  ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "1eb21a65f381c1dc319ac6b51b0dbe173051c089ba1df77be2e390aba6d1cfe9 20030 bytes",
+  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "4ee7b1893891881d7d06d0c4648ada8c3df015c774a25100b798bfc1ad1fdaff 20094 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6c3e246f8d7b18a9220f7712b981134d8aa9f0fb025f8ecdc6384c836429e5f9 21208 bytes",
+  ".stamity/manifest.json": "6886617b9c0370f1a914c32f9fd59c86b57b96f99ace26285547d98f6040a75d 21459 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "AGENTS.override.md": "eca44193582b28c038ae4cea7603b3dd543a430160065599354fd5c0273cea6d 25751 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -2627,31 +2864,35 @@ exports[`emitted tree for copilot > matches the residue-document golden byte for
   ".github/hooks/stamity.json": "{
   "version": 1,
   "hooks": {
-    "SessionStart": [
+    "sessionStart": [
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
         "cwd": ".",
         "timeoutSec": 30
       },
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
         "cwd": ".",
         "timeoutSec": 30
       }
     ],
-    "PreToolUse": [
+    "preToolUse": [
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb3BpbG90L3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb3BpbG90L3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ",
         "cwd": "."
       },
       {
         "type": "command",
+        "bash": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.github','hooks','stamity.json'))){const f=p.join(d,'.stamity/generated/hooks/copilot/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .github/hooks/stamity.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
         "cwd": ".",
-        "matcher": "Bash",
+        "matcher": "bash",
         "timeoutSec": 5
       }
     ]
@@ -2680,13 +2921,58 @@ jobs:
       contents: read
     steps:
       # Pin these to a full-length commit SHA for a stricter supply-chain posture.
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
         with:
           # No .nvmrc, .node-version or engines.node pin was found, so the current LTS.
           node-version: "lts/*"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+",
+  ".stamity/generated/models/copilot.json": "{
+  "classes": {
+    "frontier": {
+      "model": "claude-fable-5.1",
+      "fallbacks": [
+        "claude-opus-5.5",
+        "gpt-6-astra"
+      ]
+    },
+    "advanced": {
+      "model": "claude-opus-5.5",
+      "fallbacks": [
+        "gpt-6-astra",
+        "claude-opus-5"
+      ]
+    },
+    "standard": {
+      "model": "claude-sonnet-5",
+      "fallbacks": [
+        "gpt-6-sol",
+        "gpt-5.6-terra"
+      ]
+    },
+    "economy": {
+      "model": "claude-haiku-4.5",
+      "fallbacks": [
+        "gpt-6-luna",
+        "gpt-5.4-mini"
+      ]
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
+  }
+}
 ",
   ".stamity/mcp/copilot-repo-settings.env": "# GitHub Copilot coding agent — MCP configuration, one entry per selected server.
 # Paste each value into repository Settings → Copilot → MCP servers.
@@ -2826,7 +3112,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-handoff/agents/openai.yaml": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc 150 bytes",
   ".agents/skills/st-learn/SKILL.md": "431515797389c0284630fb56dc70d32527919fde735cad1ae749d36144e7ebf8 6810 bytes",
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
-  ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "27682cda2d5a7fe81bbc32ff41663e82dba8180de6fc8f4fa2b3221d1fe4dc79 10045 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".agents/skills/st-qa/SKILL.md": "923a36ff376f899c7830965e4d075f344db0318271eac5216653781915992245 9932 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
@@ -2844,18 +3130,18 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "a32464ef1140e8ef067d2247cd8edc2e4a7c326fb31d866ddb85f61123f11b96 4424 bytes",
-  ".agents/skills/stamity-question-protocol/SKILL.md": "ba4d9d29bc5b9379efc302344d6053d89cf08cc466159460f6f27fa4e1b9c8cd 6357 bytes",
-  ".github/agents/stamity-creator.agent.md": "1ce9d08655dccd923468b3e4f8c1a4658a0958b51309d2809b62ea88df229af7 14027 bytes",
-  ".github/agents/stamity-design-quality.agent.md": "79e60cd90df62650ae7e4afe6f15b678062f611318d4393ad2c88c92bb9b9130 12094 bytes",
-  ".github/agents/stamity-fixer.agent.md": "23095bc67e956a1d7194490ebbcabd9c69b0ddfc9d675066c8ae7301965c806b 10722 bytes",
-  ".github/agents/stamity-implementer.agent.md": "fa6bdbe8d225a1258ad3844caa1ffe517aed18a4a8cb7c58d2e277f421d108dc 10183 bytes",
-  ".github/agents/stamity-performance.agent.md": "3e1aa08fbfa0a4997623e9a7eb4467dd1a9ab39d9554a7f40077b8e9fe42a8ad 14071 bytes",
-  ".github/agents/stamity-researcher.agent.md": "152341d3b770c156dcbc53b02e1ed84b8ba03fb49af430ff4f92b705484bde6e 8470 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "0cf06073e46c0b33707bce07ca7dac2d2b275749f692c23b9c5efc9a60538249 15939 bytes",
-  ".github/agents/stamity-security.agent.md": "bf085ca84b4664a1ea7766bd03009ba5e3a65b26f130031ca20fd882591a9adc 13073 bytes",
-  ".github/agents/stamity-spec-author.agent.md": "5c60d74d20769005ba16187611c2d1541f140ba9f99a206842d38dda8e893e26 12269 bytes",
-  ".github/agents/stamity-test-runner.agent.md": "1f5cc042b58d1d824a55b5bf441bb369cf8a82904628e2aa3e70a84b33a63e08 12011 bytes",
-  ".github/hooks/stamity.json": "e9d17d6fc457060420ab327b88c29ac63ce1c247962321de106b40afa528408c 3929 bytes",
+  ".agents/skills/stamity-question-protocol/SKILL.md": "b197686d57f3d873c8848251e7a6e858fc691efcec8240a6f4820bb9d286d137 7018 bytes",
+  ".github/agents/stamity-creator.agent.md": "1a627819fb71ac4e4dfa7f74c7863704e3a63b32ca6aca725e3948f3bb8fd682 14120 bytes",
+  ".github/agents/stamity-design-quality.agent.md": "573cb803cb10bd0ca2a892e4ec8903d0d3fa821a40b1d4469362a0a21e10bf62 12189 bytes",
+  ".github/agents/stamity-fixer.agent.md": "a80b50da77731cd6090d0c109b072dbc924337956a3018d96b5c961f0287d490 10815 bytes",
+  ".github/agents/stamity-implementer.agent.md": "fee0b79f07a6a11f8ad5c38bb5becdac5d3401c67cee063cf295ea13e90bb5cb 10278 bytes",
+  ".github/agents/stamity-performance.agent.md": "4851cbbc3facdba2eb57d511bdf0b3b8d2548e498089491730092a3822aae26b 14164 bytes",
+  ".github/agents/stamity-researcher.agent.md": "d6676d000f54b3f3740e9250737f8b9a77df6612bbda5a071fae69f229a842aa 8563 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "a45a6181f9c11c80f97314631cda68b336e54b484ee6184a63eb10300a4bb69a 16034 bytes",
+  ".github/agents/stamity-security.agent.md": "94a635f7803cf708cfb3e78ed15ef5702477bf4795efde98515d4c25446a41df 13168 bytes",
+  ".github/agents/stamity-spec-author.agent.md": "87e6dded19b395635b8b25c48febd5a2bfccf0e516b398d30b7cb93f59c6dbb1 12364 bytes",
+  ".github/agents/stamity-test-runner.agent.md": "6a6bf7a4f2ad452f96377fd20af17ad75841f2aa81d67c6cfb41c1f6bf740a59 12106 bytes",
+  ".github/hooks/stamity.json": "8ddd7674a2afc909350e34b960a7ccce82962e9b2257de09815c2f331043fb22 7400 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
   ".github/instructions/stamity-injection-screening.instructions.md": "4948e4ff01b4aab8ed072f52340aa9fd9a96cd3df9242f352975545719200ee9 7760 bytes",
@@ -2874,20 +3160,21 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/prompts/st-quick.prompt.md": "50ba010d9ec57f7a5dba8d7bd2515cb1751767bc619ba275ce715567e1b8f83c 15179 bytes",
   ".github/prompts/st-rework.prompt.md": "8d3b658a7abc1d5695acb38cc5b85ec45ac31bed45edcc2b9e5e46d9c90ab486 21398 bytes",
   ".github/prompts/st-spec.prompt.md": "afa8f0c4d2513547af57db286c0dee23c569f5933f46f70ec72405f47cd0c65f 18785 bytes",
-  ".github/prompts/st-work.prompt.md": "42a89717745c39674849d63709fe3d03be46b9a80b5383208473ba09afe81089 35960 bytes",
+  ".github/prompts/st-work.prompt.md": "f42600d4c9678f04137bff7dd1e8216122c2412c34d53d896afd9762dd30b833 36051 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
-  ".github/workflows/copilot-setup-steps.yml": "deb31212a939b4204646d43bbec9557e5c02514f4b5266889477f781c83cc033 880 bytes",
+  ".github/workflows/copilot-setup-steps.yml": "03c39c1ca98f3c05c9d80e33d7ca16ddcaec879e705b971bd7af8ae565c1a84e 880 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
-  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
-  ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "58690b9ca0aca8737a59b6f7e760f55d2e3f4f89727afdd5918293b4468cb5e7 20032 bytes",
+  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "0eeb857cea9384d550adf87cdd175a2a7dadd67952948716b4f89ce2555e9891 20781 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/models/copilot.json": "cdbd36f534d2f4a5b4f3c2edfe11cfa48651f7131ba25969992d1794512b0378 953 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "cf74eff12d0dbabacf458dac5d21047bbf36982ff0f8d71015b59dbdbfdfdc79 19055 bytes",
+  ".stamity/manifest.json": "6c5ddec5fdd52e4fe705024bbbbd5224d0377228bf607d537d396fb132c47697 19312 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
@@ -2928,6 +3215,10 @@ exports[`emitted tree for cursor > matches the residue-document golden byte for 
         "timeout": 5,
         "matcher": "Bash",
         "failClosed": true
+      },
+      {
+        "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;for(;;){if(fs.existsSync(p.join(d,'.cursor','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/cursor/stamity-model-pins.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jdXJzb3Ivc3RhbWl0eS1tb2RlbC1waW5zLm1qcyJdfQ",
+        "matcher": "Task"
       }
     ],
     "subagentStart": [
@@ -2974,8 +3265,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = "mcp__";
-const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
-const MCP_ADD_CALL = "\`stamity config mcp add <id>\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden config mcp add <id>\`";
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry";
+const MCP_ADD_CALL = "\`stamity config mcp add <id>\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden config mcp add <id>\`, which needs the npm registry";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -3108,7 +3399,7 @@ if (allowed.size === 0 && faults.length > 0) {
     "Blocked every MCP call: this setup configured no MCP servers, so there is " +
       "no allowlist to match against. Add one with " +
       MCP_ADD_CALL +
-      " and re-run " +
+      ". Then re-run " +
       SYNC_CALL +
       ".",
   );
@@ -3131,7 +3422,7 @@ if (allowed.size === 0 && faults.length > 0) {
       identity +
       '": it is absent from the resolved .cursor/mcp.json set. Add it with ' +
       MCP_ADD_CALL +
-      " and re-run " +
+      ". Then re-run " +
       SYNC_CALL +
       ".",
   );
@@ -3179,7 +3470,7 @@ const ROSTER = new Set([
   "stamity-spec-author",
   "stamity-test-runner"
 ]);
-const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -3240,9 +3531,9 @@ if (agentId === "") {
     'Blocked the spawn of "' +
       agentId +
       '": no agent with that id ships in this setup, so it holds no tool policy. ' +
-      "Re-run " + SYNC_CALL + " if the roster changed, or spawn one of: " +
+      "Spawn one of: " +
       [...ROSTER].join(", ") +
-      ".",
+      ". If the roster changed, re-run " + SYNC_CALL + ".",
   );
 } else {
   // Out of scope, or rostered. The spawn proceeds and the verdict says so.
@@ -3266,6 +3557,35 @@ if (agentId === "") {
         "GITHUB_PAT": "\${env:GITHUB_PAT}"
       }
     }
+  }
+}
+",
+  ".stamity/generated/models/cursor.json": "{
+  "classes": {
+    "frontier": {
+      "fallbacks": []
+    },
+    "advanced": {
+      "fallbacks": []
+    },
+    "standard": {
+      "fallbacks": []
+    },
+    "economy": {
+      "fallbacks": []
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
   }
 }
 ",
@@ -3375,7 +3695,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-handoff/agents/openai.yaml": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc 150 bytes",
   ".agents/skills/st-learn/SKILL.md": "431515797389c0284630fb56dc70d32527919fde735cad1ae749d36144e7ebf8 6810 bytes",
   ".agents/skills/st-learn/agents/openai.yaml": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5 144 bytes",
-  ".agents/skills/st-onboard/SKILL.md": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "27682cda2d5a7fe81bbc32ff41663e82dba8180de6fc8f4fa2b3221d1fe4dc79 10045 bytes",
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".agents/skills/st-plan/SKILL.md": "ddf4d53ff91bc02fc1b13e727051316fafd101551a7b51a1292d2197d3407638 29317 bytes",
   ".agents/skills/st-plan/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
@@ -3402,7 +3722,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250 17916 bytes",
-  ".agents/skills/st-work/SKILL.md": "0b2c8f7b45bd27d07e2fdec37785ee4df435d902f320743fdeaf99d7fcaadcff 36005 bytes",
+  ".agents/skills/st-work/SKILL.md": "cd4485614f68af896b48b070c49a3d1e3b2e79d73c9d1169ec0aff04e118e890 36096 bytes",
   ".agents/skills/st-work/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".cursor/agents/stamity-creator.md": "90965555162a44819fd86df5e48245471aede3610e1d37cc88e1f705be9e67d3 13887 bytes",
   ".cursor/agents/stamity-design-quality.md": "291a2e555222f71cac92033322580ac2a5d5af510a67ba3e7b47f261eb47f413 11972 bytes",
@@ -3414,9 +3734,9 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
   ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
-  ".cursor/hooks.json": "8b80690128eb8ffa0c475e5050d4dd711091b898c6c0d3d3d0be3d3c687db652 5988 bytes",
-  ".cursor/hooks/stamity-mcp-guard.mjs": "ff6ede2e8ee71868f15447783aadd980e0b4ea1b53a1d0ca76f18578b356935e 7645 bytes",
-  ".cursor/hooks/stamity-subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
+  ".cursor/hooks.json": "6a2ae1e03f96f3e6d4d3b048e4791b6b5ef62a8ad50dfea9de8c064a787410c2 6955 bytes",
+  ".cursor/hooks/stamity-mcp-guard.mjs": "4873bee27c2b1ae2aab8ca1b407a6e4e9cd03a0c27a08503e7313206c86389fc 7709 bytes",
+  ".cursor/hooks/stamity-subagent-guard.mjs": "0f13561fa2415119ded74fda648edffc38fde84e4cd29b98ccf5180abfd4d9df 3761 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
   ".cursor/rules/stamity-ai-evals.mdc": "402253ef486f95a09da3f1d9fd1ee4147b90db1e742566fbd5c38f6170d6938b 4148 bytes",
   ".cursor/rules/stamity-api-versioning.mdc": "5f582c602434db96d06f806d24bc6e5b4c0b28542dba322c08c0b10db6aaa34f 5083 bytes",
@@ -3424,7 +3744,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/rules/stamity-injection-screening.mdc": "846521a2e7804e5c2ec897b2853873ebd8dd522c29f47d84280f843d9335d5e4 7775 bytes",
   ".cursor/rules/stamity-learnings-schema.mdc": "f28d98e76d473b4a4eb43b10873d6f7c81e72e0ca93e2a0f5709c24bce67edab 2658 bytes",
   ".cursor/rules/stamity-migrations.mdc": "c717d57d0d70a45e178138832e65d51537a0dd8b0e84bbf4bd0cfcf0b574f0ed 4824 bytes",
-  ".cursor/rules/stamity-question-protocol.mdc": "f4044657f92492a1f8d33df356aa072803c0607fa299a142f9810b4815c6c3eb 5309 bytes",
+  ".cursor/rules/stamity-question-protocol.mdc": "70ff7c5a9b50ab78350ec0e85d7e3c18d844d6bb8db359e61e021f0125560254 5469 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
@@ -3433,15 +3753,17 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
-  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
-  ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "9a963e386cc8757ae08cc270c20e24ccf2806f4c9462af7ae4b51d8689e4fa69 20031 bytes",
+  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "3c7ed35796a22642f0d1a297338598fdbd6f312d88427bbeddef4520d2f0e2fa 3769 bytes",
+  ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "d209299bcc8c1ddad3fb38c79866b25e6acd367fa957146e314f74366ab45d40 20095 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "7dc1899db1c624e457d4c94f0a401d4c2bf44d2cd29e58de9404d134f30f6419 48781 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "4b410959a090d0de93626ad3857527c3ac478e5f3b619ea943bc692871811f2c 48753 bytes",
+  ".stamity/generated/models/cursor.json": "6e108834236741075e1d082bba6be814bc0bf04642622c860a6b7e43c348bdbd 601 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "857c0b4c7d07c693ecece4f28d595d24b46385c52dab34a84cc4032ae3c12f65 21863 bytes",
+  ".stamity/manifest.json": "222f7852f5c17891403a0242c0e7c81d2b6128dbbf38cd7324361a01f4da72db 22469 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

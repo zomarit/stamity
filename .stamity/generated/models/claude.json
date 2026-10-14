@@ -1,0 +1,32 @@
+{
+  "classes": {
+    "frontier": {
+      "model": "fable",
+      "fallbacks": []
+    },
+    "advanced": {
+      "model": "opus",
+      "fallbacks": []
+    },
+    "standard": {
+      "model": "sonnet",
+      "fallbacks": []
+    },
+    "economy": {
+      "model": "haiku",
+      "fallbacks": []
+    }
+  },
+  "roles": {
+    "stamity-creator": "standard",
+    "stamity-design-quality": "advanced",
+    "stamity-fixer": "standard",
+    "stamity-implementer": "advanced",
+    "stamity-performance": "standard",
+    "stamity-researcher": "standard",
+    "stamity-reviewer": "advanced",
+    "stamity-security": "advanced",
+    "stamity-spec-author": "advanced",
+    "stamity-test-runner": "economy"
+  }
+}
