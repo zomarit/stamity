@@ -756,11 +756,35 @@ describe("st-board — platform reference table", () => {
     }
     expect(cli).toContain("Projects boards are unavailable in a REST-only session");
     // An unattached repository's 403 is not a missing board.
-    expect(cli).toContain("a 403 there is reported as `not attached to this session`, never as a missing board");
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3 unit f4, review round 1, `review/17`):
+    // this pin read "a 403 there is reported as `not attached to this session`". What changed
+    // about the contract: the plan's edge case scopes that reading to a repository the session did
+    // not attach, and the permission read also answers 403 to an account without push access, as
+    // a rate limit does, so a read-only collaborator was told to attach an attached repository.
+    expect(cli).toContain(
+      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone is a failed write check naming missing push access, and one whose message names a rate limit is reported as a rate limit",
+    );
+    expect(cli).not.toContain("a 403 there is reported as");
+    // review/16: the REST list returns open issues only, 30 to a page, pull requests included, so
+    // `fill`'s marker match (open and closed) missed closed or later-page items.
+    expect(cli).toContain(
+      "a listing reads `gh api 'repos/<owner>/<repo>/issues?state=all&per_page=100' --paginate`, since the REST list returns open issues only, 30 to a page, with pull requests among them, and an entry carrying a `pull_request` key is left out",
+    );
     expect(fill).toContain(
       "in a REST-only session, `gh api repos/<owner>/<repo>/labels --paginate --jq '.[].name'`",
     );
     expect(setup).toContain("In a REST-only session (the GitHub row) a Projects link is refused.");
+  });
+
+  // Added 2026-10-14 (REQ-LADDER-007, plan 020 file 3 unit f4, review round 1, `review/15`): the
+  // command spawns a researcher and named no model for it, so `fill` and `pickup` researchers ran
+  // on the client's default whatever the class, and a refused call had no fallback.
+  it("passes each spawn the class's model from the client's map, with the refusal fallback (REQ-LADDER-007)", async () => {
+    const modes = flat(section((await board()).parsed.body, "Modes"));
+
+    expect(modes).toContain(
+      "Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.",
+    );
   });
 
   it("names the linked repository on every gh issue and api write, never the checkout's default (REQ-BOARD-007)", async () => {
@@ -1493,7 +1517,7 @@ describe("st-board — sources, signals, and the inbox", () => {
     const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
     const leftovers = inboxBullet(inbox, "Leftovers at a close");
     const stop =
-      "Stop, at a run's close that asks this question, fixes nothing and otherwise handles rows as no answer does: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled, and nothing is fixed, merged or committed; another ask's own `stop`, as at a plan handoff, keeps its meaning.";
+      "Stop, at a run's close that asks this question, fixes nothing and otherwise handles rows as no answer does: each leftover from the run's own ledger closes `deferred` and is appended tagged `decision-waiting` with `when: next attended close`, each inbox row stays as it is, each is listed on `Not done:` and counted as scheduled, and nothing is fixed, merged or committed; answers given in an earlier round of the walk stand as already applied, and only the rows still undecided take this handling; another ask's own `stop`, as at a plan handoff, keeps its meaning.";
     expect(leftovers).toContain(stop);
 
     // After the rule it borrows from, and before the block's closing floor.
