@@ -1490,8 +1490,11 @@ describe("/st-work — Prove", () => {
     // applies the five categories or the cap, and no line of this command dispatched it. What moved:
     // step 1 names the prover the qa skill asks this run to dispatch, and the rows that skill leaves
     // for the person, at most three with the security-negative row; the old wording is asserted gone.
+    // TEST CHANGE, justified (2026-10-14, fixer round 2; 2026-10-14_cli-native/review/61, signed
+    // off): the summary now carries a `contradicted` row's excerpt, so the person sees the run that
+    // contradicted the row; the proof block's QA line carries it too.
     expect(qa).toContain(
-      "1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for the person, at most three with the security-negative row, each with a check a person can run in under a minute.",
+      "1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for the person, at most three with the security-negative row, each with a check a person can run in under a minute, a `contradicted` one with its excerpt.",
     );
     expect(qa).not.toContain("only the rows it leaves for a person");
     expect(qa).not.toContain("each observable behavior this change added or altered");
@@ -1505,6 +1508,7 @@ describe("/st-work — Prove", () => {
       "QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers;",
     );
     expect(proof).toContain("each row not proven or over the cap with its reason");
+    expect(proof).toContain("each `contradicted` row with its excerpt");
   });
 
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {

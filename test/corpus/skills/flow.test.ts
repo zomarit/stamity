@@ -890,6 +890,13 @@ describe("qa — the human checkpoint", () => {
     expect(autoProve).toContain(
       "with the runner's command and outcome beside it — or from the prover's `agent-run`: the two forms the table accepts.",
     );
+    // Added 2026-10-14 (fixer round 2 of f7-prove-before-asking; 2026-10-14_cli-native/review/61,
+    // signed off): a route that ran and contradicted Expected is its own state, its redacted excerpt
+    // carried with the row to the person or to `Not done:`.
+    expect(text).toContain("`contradicted` with the prover's redacted excerpt");
+    expect(autoProve).toContain(
+      "a route whose output contradicts `Expected` records `contradicted`, its excerpt going with the row to the person or to `Not done:`.",
+    );
     // Rule 2 sends an unproven row by category, never scoring it a pass.
     expect(autoProve).toContain(
       "an unproven row is the person's when it is in one of the five categories, and otherwise goes on `Not done:`",
@@ -935,8 +942,15 @@ describe("qa — the human checkpoint", () => {
     // accepted-unwalked", which an H row listed over the cap (neither walked, proven nor
     // accepted-unwalked) satisfied. What moved: YES needs every H row walked or proven, which still
     // holds an accepted-unwalked H row back; the old wording is asserted gone.
+    // TEST CHANGE, justified (2026-10-14, fixer round 2; 2026-10-14_cli-native/review/61, signed
+    // off): a walked reply could clear an H row a prover run had contradicted. What moved: YES also
+    // needs no H row standing `contradicted`.
     expect(text).toContain(
-      "Shippable: YES / NO / not signed. YES only once every H row is walked or proven; otherwise NO, naming the open H row.",
+      "Shippable: YES / NO / not signed. YES only once every H row is walked or proven and none stands `contradicted`; otherwise NO, naming the open H row.",
+    );
+    // A contradicted row is failing; a walk is recorded beside its excerpt and never clears it.
+    expect(text).toContain(
+      "A `contradicted` row is failing: a walk is recorded beside its excerpt and does not clear it, and only a later run showing `Expected` does.",
     );
     expect(text).not.toContain("YES only with no H row accepted-unwalked");
     // REQ-FLOW-018 item 3 (build/46): a carried row names the record its acceptance came from.
@@ -999,7 +1013,10 @@ describe("qa — the human checkpoint", () => {
     );
     expect(handback).not.toContain("one close question");
     // The rows the prover left unproven or over the cap travel back with their reasons.
-    expect(handback).toContain("the rows not proven or over the cap, each with its reason");
+    // TEST CHANGE, justified (2026-10-14, fixer round 2 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/61): the pin read "the rows not proven or over the cap"; a
+    // contradicted row now travels back as a state of its own.
+    expect(handback).toContain("the rows not proven, contradicted or over the cap, each with its reason");
   });
 });
 

@@ -275,8 +275,8 @@ package with an install script, any other lockfile format, a parse failure, or a
 
 The mandatory closing checkpoint, human-facing, at every intensity:
 
-1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows
-   that skill leaves for the person, at most three with the security-negative row, each with a check a person can run in under a minute.
+1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for
+   the person, at most three with the security-negative row, each with a check a person can run in under a minute, a `contradicted` one with its excerpt.
 2. Invoke the qa skill by name for the guided pass, handing it the class and
    lenses `gate classify` named (`unclear` when none ran). The step belongs to
    the command already running, not to a trigger match: a request arriving
@@ -316,7 +316,7 @@ it; machine- and human-readable, it doubles as an audit record:
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
 - QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
-  or over the cap with its reason; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
+  or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
 - decisions trace — every gate decision, ASK outcome, and deferral with its
   rationale
 - artifacts touched — path + owning sub-agent

@@ -495,8 +495,25 @@ describe("test-runner — row proving", () => {
     // route cannot pass a row an earlier run contradicted; only a route that cannot run falls through.
     expect(proving).toContain("stopping at the first that runs");
     expect(proving).not.toContain("stopping at the first that proves it");
+    // TEST CHANGE, justified (2026-10-14, fixer round 2 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/61, signed off): the pin read "the row is `not proven` with that
+    // route's excerpt". What moved: a route that ran and contradicted the row's Expected is its own
+    // state, `contradicted`, apart from a route that could not run, so the hand-off keeps the run
+    // that saw the defect; an `unknown` exit code still reads `not proven`.
     expect(proving).toContain(
-      "A route that ran and showed anything else ends that row's ladder: the row is `not proven` with that route's excerpt, and no later route is tried for it. Only a route that cannot run falls through to the next.",
+      "A route that ran and showed anything else ends that row's ladder: the row is `contradicted` with that route's excerpt, or `not proven` where the exit code reads `unknown`, and no later route is tried for it. Only a route that cannot run falls through to the next.",
+    );
+    expect(proving).toContain("`contradicted · <command> · exit <n> · <output path>`");
+    expect(proving).toContain("the line carries that output's excerpt");
+    expect(proving).toContain(
+      "`not proven: <reason>`: no route runnable, or the route that ran left its exit code `unknown`.",
+    );
+    expect(proving).not.toContain("the row is `not proven` with that route's excerpt");
+    // Added 2026-10-14 (fixer round 2 of f7-prove-before-asking; 2026-10-14_cli-native/review/60):
+    // passing output read through a present sign-in is saved too, so redaction covers every route
+    // output, not only a failure excerpt, and the digest names the rows it redacted.
+    expect(proving).toContain(
+      "Every route output this role saves or returns inline, passing or not, has a value shaped like a credential replaced with `[redacted]`, as the excerpt rules redact a failure excerpt, and the digest's `security:` line names each row whose output was redacted.",
     );
 
     // The two output forms, word for word as the qa skill reads them.
@@ -546,9 +563,15 @@ describe("test-runner — row proving", () => {
     expect(proving).toContain(
       "The headless-session route runs only in the client's read-only permission mode, and never on a client that has none.",
     );
+    // TEST CHANGE, justified (2026-10-14, fixer round 2 of f7-prove-before-asking;
+    // 2026-10-14_cli-native/review/59): the pin read "...and a step that would write beyond it is
+    // not run", a guess made from step text before the run. What moved: the steps run with the
+    // user-level write locations pointed into the scratch directory, and a step that cannot be
+    // confined that way is a route that cannot run; the old wording is asserted gone.
     expect(proving).toContain(
-      "A row's own steps run in a scratch directory, and a step that would write beyond it is not run.",
+      "A row's own steps run in a scratch directory, with the user-level write locations (the home directory and the config-directory variables a program reads) pointed into it. A step that cannot be confined that way (an absolute path outside the scratch directory, a step that needs the real home, a remote write) is a route that cannot run.",
     );
+    expect(proving).not.toContain("a step that would write beyond it is not run");
     expect(proving).toContain(
       "A route a guard stops counts as one that cannot run: the row falls through to the next route, and with none left it is `not proven` naming the guard.",
     );
