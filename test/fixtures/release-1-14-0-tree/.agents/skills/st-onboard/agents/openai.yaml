@@ -1,0 +1,4 @@
+interface:
+  display_name: "Onboard"
+  short_description: "Use the Stamity onboard workflow"
+  default_prompt: "Use $st-onboard for this repository."

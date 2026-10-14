@@ -1,0 +1,4 @@
+.env.mcp
+.stamity/review-gate.json
+.stamity/review-gate.json.lock
+.stamity/review-gate.json.tmp-*

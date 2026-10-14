@@ -1,0 +1,65 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.14.0 sync`' >&2; exit 2; }"
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

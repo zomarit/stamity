@@ -1,0 +1,3 @@
+<!-- STAMITY:BEGIN v1.14.0 -->
+@AGENTS.md
+<!-- STAMITY:END -->

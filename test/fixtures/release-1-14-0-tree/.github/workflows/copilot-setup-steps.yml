@@ -1,0 +1,28 @@
+name: Copilot Setup Steps
+
+# Prepares the environment the GitHub Copilot coding agent works in. The agent runs
+# the job named `copilot-setup-steps` below and nothing else in this file.
+# Generated — edits are overwritten on the next sync.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Pin these to a full-length commit SHA for a stricter supply-chain posture.
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          # No .nvmrc, .node-version or engines.node pin was found, so the current LTS.
+          node-version: "lts/*"
+      - run: npm install

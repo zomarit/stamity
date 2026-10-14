@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktc2Vzc2lvbi1zdGFydC5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+        "timeout": 30
+      },
+      {
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY29uZmlnLXRhbXBlci1ub3RpY2UubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
+        "timeout": 30
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jdXJzb3Ivc3RhbWl0eS1wcmUtdG9vbC11c2UtZ3VhcmQubWpzIl19"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "node .cursor/hooks/stamity-subagent-guard.mjs",
+        "failClosed": true
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "node .cursor/hooks/stamity-mcp-guard.mjs",
+        "failClosed": true
+      }
+    ]
+  }
+}
