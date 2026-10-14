@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CURSOR_AGENTS_DIR,
@@ -29,6 +30,7 @@ import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.t
 import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
 import { CANONICAL_HOOK_EVENTS, type HookInterchange } from "../../src/hooks/model.ts";
 import { IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS } from "../../src/hooks/scripts.ts";
+import { walkUpStarterScript } from "../../src/manifest/hookDocuments.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
@@ -903,6 +905,11 @@ interface HooksDocument {
 const parseHooks = (raw: string): HooksDocument => JSON.parse(raw) as HooksDocument;
 const childArgv = (command: string): string[] => JSON.parse(Buffer.from(command.split(" ").at(-1)!, "base64url").toString()).command as string[];
 const childCommand = (command: string): string => childArgv(command).join(" ");
+/** The root-relative script a command's walk-up starter runs (REQ-FLOW-084), or `null` when it is no starter. */
+const startedScript = (command: string): string | null => walkUpStarterScript("cursor", command);
+/** Each entry as the script its starter runs and whether it blocks: what a guard entry's identity is. */
+const startedEntries = (entries: readonly { command: string; failClosed?: boolean }[] | undefined) =>
+  (entries ?? []).map((entry) => ({ script: startedScript(entry.command), failClosed: entry.failClosed }));
 
 /**
  * Every agent-hook event this client documents, transcribed from
@@ -999,11 +1006,15 @@ describe("`.cursor/hooks.json`", () => {
     // An observation is not a gate: the session rows stay advisory.
     for (const entry of sessionStart) expect(entry.failClosed).toBeUndefined();
 
-    expect(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn]).toEqual([
-      { command: `node ${SUBAGENT_GUARD_PATH}`, failClosed: true },
+    // TEST CHANGE, justified (plan 020 file 2, unit e5-hook-starter, REQ-FLOW-084):
+    // the guards ran as `node <guard>`, relative to the session's working
+    // directory; they now run through the walk-up starter, so each entry is
+    // compared by the script that starter runs and its blocking flag.
+    expect(startedEntries(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn])).toEqual([
+      { script: SUBAGENT_GUARD_PATH, failClosed: true },
     ]);
-    expect(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution]).toEqual([
-      { command: `node ${MCP_GUARD_PATH}`, failClosed: true },
+    expect(startedEntries(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution])).toEqual([
+      { script: MCP_GUARD_PATH, failClosed: true },
     ]);
   });
 
@@ -1043,8 +1054,10 @@ describe("`.cursor/hooks.json`", () => {
     const blocking = Object.values(doc.hooks)
       .flat()
       .filter((entry) => entry.failClosed === true)
-      .map((entry) => entry.command);
-    expect(blocking).toEqual([`node ${SUBAGENT_GUARD_PATH}`, `node ${MCP_GUARD_PATH}`]);
+      .map((entry) => startedScript(entry.command));
+    // TEST CHANGE, justified (unit e5-hook-starter, REQ-FLOW-084): read by the
+    // script each guard's walk-up starter runs, no longer by a relative command.
+    expect(blocking).toEqual([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]);
 
     // The single fact both the guard's body and the matrix row are derived
     // from. If this client ever starts naming the calling agent in its
@@ -1105,7 +1118,9 @@ describe("`.cursor/hooks.json`", () => {
     const rows: HookInterchange[] = [
       { event: "stop", command: ["node", ".stamity/hooks/my hook.mjs"], matcher: "git push", timeoutMs: 5000 },
     ];
-    const doc = parseHooks(buildHooksJson(rows));
+    // TEST CHANGE, justified (unit e5-hook-starter): the builder takes the pinned
+    // CLI context its walk-up starters name; the assertions are unchanged.
+    const doc = parseHooks(buildHooksJson(rows, CLI_PIN));
 
     const entry = doc.hooks[EVENT_RENAME.stop]![0]!;
     expect(childArgv(entry.command)).toEqual(rows[0]!.command);
@@ -1113,7 +1128,8 @@ describe("`.cursor/hooks.json`", () => {
   });
 
   it("emits the config, and both guards, with no rows to wire", async () => {
-    const rows = parseHooks(buildHooksJson([]));
+    // TEST CHANGE, justified (unit e5-hook-starter): the builder takes the pinned CLI context.
+    const rows = parseHooks(buildHooksJson([], CLI_PIN));
     expect(Object.keys(rows.hooks)).toEqual([
       CURSOR_GUARD_EVENTS.subagentSpawn,
       CURSOR_GUARD_EVENTS.mcpExecution,
@@ -1141,17 +1157,62 @@ describe("`.cursor/hooks.json`", () => {
     expect(LEGACY_CURSOR_GUARD_PATHS).toEqual([".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/mcp-guard.mjs"]);
 
     const doc = parseHooks(contentAt(plan, P.hooksConfig));
-    expect(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn]).toEqual([
-      { command: "node .cursor/hooks/stamity-subagent-guard.mjs", failClosed: true },
+    // TEST CHANGE, justified (unit e5-hook-starter, REQ-FLOW-084): each guard
+    // runs through the walk-up starter, compared by the script it runs.
+    expect(startedEntries(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn])).toEqual([
+      { script: ".cursor/hooks/stamity-subagent-guard.mjs", failClosed: true },
     ]);
-    expect(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution]).toEqual([
-      { command: "node .cursor/hooks/stamity-mcp-guard.mjs", failClosed: true },
+    expect(startedEntries(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution])).toEqual([
+      { script: ".cursor/hooks/stamity-mcp-guard.mjs", failClosed: true },
     ]);
     expect([CURSOR_GUARD_EVENTS.subagentSpawn, CURSOR_GUARD_EVENTS.mcpExecution]).toEqual([
       "subagentStart",
       "beforeMCPExecution",
     ]);
     for (const legacy of LEGACY_CURSOR_GUARD_PATHS) expect(contentAt(plan, P.hooksConfig)).not.toContain(legacy);
+  });
+
+  // REQ-FLOW-084: every command finds the folder holding `.cursor/hooks.json`,
+  // so none depends on the folder the session started in.
+  it("runs every entry, both guards included, through the walk-up starter naming the setup's pinned sync call", async () => {
+    const doc = parseHooks(contentAt(await planFor(await seedCorpus()), P.hooksConfig));
+    const entries = Object.values(doc.hooks).flat();
+    expect(entries.length).toBeGreaterThan(2);
+    for (const entry of entries) {
+      expect(startedScript(entry.command), entry.command).not.toBeNull();
+      expect(entry.command).toContain(`; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync'`);
+    }
+  });
+
+  it("runs a guard from a subfolder exactly as from the root, and refuses naming the sync call when the guard is missing", async () => {
+    const plan = await planFor(await seedCorpus());
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.cursor/hooks.json": contentAt(plan, P.hooksConfig),
+      [`repo/${MCP_GUARD_PATH}`]: contentAt(plan, MCP_GUARD_PATH),
+      "repo/sub/deeper/.keep": "",
+    });
+    const command = parseHooks(contentAt(plan, P.hooksConfig)).hooks[CURSOR_GUARD_EVENTS.mcpExecution]![0]!.command;
+    // An MCP call naming no configured server: the guard refuses it, which is a
+    // verdict only the guard itself can write.
+    const payload = JSON.stringify({ server: "stamity-unknown-server", tool_name: "x", tool_input: {} });
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["CURSOR_PROJECT_DIR"];
+    const runFrom = (cwd: string) => spawnSync(command, { cwd, env, shell: true, input: payload, encoding: "utf8" });
+
+    const atRoot = runFrom(temp.path("repo"));
+    const below = runFrom(temp.path("repo", "sub", "deeper"));
+
+    expect(atRoot.stdout, atRoot.stderr).not.toBe("");
+    expect({ status: below.status, stdout: below.stdout }).toEqual({ status: atRoot.status, stdout: atRoot.stdout });
+
+    await rm(temp.path("repo", ...MCP_GUARD_PATH.split("/")));
+    const missing = runFrom(temp.path("repo", "sub", "deeper"));
+    // failClosed: Cursor counts the failed hook as a refusal of the call.
+    expect(missing.status).toBe(1);
+    expect(missing.stderr).toBe(
+      `Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync`,
+    );
   });
 });
 

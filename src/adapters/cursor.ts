@@ -50,7 +50,7 @@ import {
   type EffortMap,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
-import { cliCallHint } from "../shared/cliCall.ts";
+import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCursorReadonlyFrontmatter,
@@ -494,7 +494,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
       },
       {
         path: CURSOR_HOOKS_CONFIG_PATH,
-        content: buildHooksJson(core.hooks.interchangeFor("cursor"), ctx.facts.hookScriptsRoot),
+        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.hooksConfig, artifactType: "infra" },
       },
     );
@@ -777,11 +777,18 @@ interface CursorHookEntry {
  * gate event admits a row, and the row still has to be able to mean it. The one
  * row that cannot on this client is the core pre-tool-use guard — see
  * {@link CORE_GUARD_REACHES_VERDICT}.
+ *
+ * Every repository command is the walk-up starter (`portableHookCommand`,
+ * REQ-FLOW-084): it finds the folder holding `.cursor/hooks.json` from wherever
+ * the session started, so a hook runs the same from a subfolder as from the
+ * root. `cli` pins the sync call the starter names when its script is missing.
  */
 export function buildHooksJson(
   rows: readonly HookInterchange[],
+  cli: CliCallContext,
   hookScriptsRoot?: string,
 ): string {
+  const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync", cli);
   const events: Record<string, CursorHookEntry[]> = {};
   // The core's rows already carry the client's view of their own scripts. These
   // two do not: they are placed AND wired by this adapter, so their commands are
@@ -799,7 +806,7 @@ export function buildHooksJson(
       // serialized key order, so `command, matcher?, failClosed?` stays fixed
       // and the emitted bytes are stable. Absent optionals are never written,
       // so an omitted key is absent rather than present-and-undefined.
-      const entry: CursorHookEntry = { command: portableHookCommand("cursor", row) };
+      const entry: CursorHookEntry = { command: portableHookCommand("cursor", row, { syncCall }) };
       if (row.timeoutMs !== undefined) entry.timeout = Math.ceil(row.timeoutMs / 1000);
       if (row.matcher !== undefined) entry.matcher = row.matcher;
       if (rowOptsIntoBlocking(event, row, hookScriptsRoot)) entry.failClosed = true;
@@ -810,13 +817,17 @@ export function buildHooksJson(
   // Both guards opt into blocking: an allowlist that logs and proceeds is not
   // an allowlist. Each fails open internally on an ambiguity it cannot judge —
   // announced on stderr, never silently — so the residual fail-closed surface is
-  // a crashed or timed-out script, not a guess.
-  events[CURSOR_GUARD_EVENTS.subagentSpawn] = [
-    { command: shellCommand(["node", guard(SUBAGENT_GUARD_PATH)]), failClosed: true },
-  ];
-  events[CURSOR_GUARD_EVENTS.mcpExecution] = [
-    { command: shellCommand(["node", guard(MCP_GUARD_PATH)]), failClosed: true },
-  ];
+  // a crashed or timed-out script, not a guess. In a repository each runs
+  // through the same walk-up starter as the rows above, so a session started
+  // in a subfolder still reaches it; with the script missing the starter exits
+  // 1 naming the sync call, which `failClosed` turns into a refusal. The row
+  // it carries names the guard; the guard reads its payload and no argument.
+  const guardCommand = (file: string): string =>
+    hookScriptsRoot === undefined
+      ? portableHookCommand("cursor", { event: "pre_tool_use", command: ["node", file] }, { syncCall, script: file })
+      : shellCommand(["node", guard(file)]);
+  events[CURSOR_GUARD_EVENTS.subagentSpawn] = [{ command: guardCommand(SUBAGENT_GUARD_PATH), failClosed: true }];
+  events[CURSOR_GUARD_EVENTS.mcpExecution] = [{ command: guardCommand(MCP_GUARD_PATH), failClosed: true }];
 
   return `${JSON.stringify({ version: 1, hooks: events }, null, 2)}\n`;
 }

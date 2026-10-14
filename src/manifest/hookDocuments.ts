@@ -18,11 +18,12 @@
  *
  * THE BOUND (S11, narrowed in the safe direction as the settings lane is): an
  * engine entry leaves without a backup only when the script it EXECUTES is the
- * engine's — on Cursor the program's first argument under
- * `.stamity/generated/hooks/cursor/`, a guard path, or an installed pack's
- * `.stamity/packs/<id>/` (`./coOwnedJson.ts::executedScript`); on Codex every
- * inner command is the engine's `node -e` starter, which runs only the runner
- * beside the trusted `.codex/hooks.json`, or (≤1.6.0) an argv naming a script
+ * engine's — on Cursor the engine's walk-up starter running the runner or a
+ * guard (1.15.0 on, {@link walkUpStarterScript}), or (up to 1.14) the program's
+ * first argument under `.stamity/generated/hooks/cursor/`, a guard path, or an
+ * installed pack's `.stamity/packs/<id>/` (`./coOwnedJson.ts::executedScript`);
+ * on Codex every inner command is the engine's `node -e` starter, which runs
+ * only the runner beside the trusted `.codex/hooks.json`, or (≤1.6.0) an argv naming a script
  * under `.stamity/generated/hooks/codex/` or executing one under an installed
  * pack's folder (`./coOwnedJson.ts::argvExecutedScript`). The pack folder is
  * the settings lane's bound too (`./coOwnedJson.ts::commandRunsStateScript`):
@@ -225,12 +226,17 @@ export interface CursorHooksSpecOptions {
   guardPaths: readonly string[];
 }
 
+/** The portable runner on Cursor, the script a 1.15.0 starter runs for every row it wires. */
+const CURSOR_RUNNER = `${CURSOR_SCRIPTS}stamity-portable-hook.mjs`;
+
 /**
  * What the engine writes into `.cursor/hooks.json`: each entry of a
  * `hooks.<event>` array, and `version`. An entry is recognised when its
  * command names the engine's Cursor scripts or a guard; it is in the bound
- * when the script it executes is one of them, or lies in an installed pack's
- * folder.
+ * when it is the engine's walk-up starter running the runner or a guard
+ * ({@link walkUpStarterScript}, 1.15.0 on), or when the script it executes
+ * (the relative commands up to 1.14) is one of them, or lies in an installed
+ * pack's folder.
  */
 export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
   const guards = new Set(opts.guardPaths);
@@ -245,6 +251,9 @@ export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
         },
         inBound: (element) => {
           const command = cursorCommand(element);
+          const started = command === null ? null : walkUpStarterScript("cursor", command);
+          // A starter runs only what the engine wires through one: never a pack's script.
+          if (started !== null) return started === CURSOR_RUNNER || guards.has(started);
           const script = command === null ? null : executedScript(command);
           // `executedScript` refuses an empty segment, so a path under the folder names a file in it.
           return script !== null && (script.startsWith(CURSOR_SCRIPTS) || guards.has(script) || isPackScriptPath(script));
@@ -263,8 +272,11 @@ export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
 /** Codex's generated hook scripts: the portable runner and, before 1.7.0, each core script. */
 const CODEX_SCRIPTS = `${HOOKS_GENERATED_DIR}/codex/`;
 
+/** The opening every starter shares, each client's included: the modules, and the walk's first folder. */
+const STARTER_OPEN = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();`;
+
 /** The `node -e` program body every Codex starter shares up to where the releases differ. */
-const STARTER_REQUIRES = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){`;
+const STARTER_REQUIRES = `${STARTER_OPEN}for(;;){`;
 const STARTER_RUN = `const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}`;
 const STARTER_WALK = `const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}`;
 const RUNNER_JOIN = `const f=p.join(d,'${CODEX_SCRIPTS}stamity-portable-hook.mjs');`;
@@ -288,12 +300,69 @@ const STARTER_CALL = /^[A-Za-z0-9@/._~+ :=-]+$/;
 /** The base64url row every starter command ends with. */
 const ENCODED_ROW = /^[A-Za-z0-9_-]+$/;
 
-/** True for a Codex command string that is one of the engine's starters followed by its encoded row. */
-function isEngineStarter(command: string): boolean {
+/** A script a starter runs: plain root-relative segments, none `.` or `..` (`../hooks/portableRunner.ts`'s). */
+const STARTER_SCRIPT = /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+
+/** The body of a `node -e "<body>" <row>` command, or `null` when `command` is not one whose row is base64url. */
+function starterBody(command: string): string | null {
   const open = 'node -e "';
   const close = command.lastIndexOf('" ');
-  if (!command.startsWith(open) || close === -1 || !ENCODED_ROW.test(command.slice(close + 2))) return false;
-  const body = command.slice(open.length, close);
+  if (!command.startsWith(open) || close === -1 || !ENCODED_ROW.test(command.slice(close + 2))) return null;
+  return command.slice(open.length, close);
+}
+
+// ── Cursor's and Copilot's walk-up starters (1.15.0 on) ──────────────────
+
+/** Where Cursor's and Copilot's starters end: Codex's 1.9.0 tail, its streams spelled `[0,1,2]`. */
+const WALK_UP_TAIL = STARTER_BESIDE_TRUST_TAIL.replace("{stdio:'inherit'}", "{stdio:[0,1,2]}");
+
+/**
+ * Each client's walk-up starter as data (REQ-FLOW-084; `../hooks/portableRunner.ts`'s
+ * `STARTER_ANCHORS`, which this earlier-wave module cannot import — a test
+ * holds the two equal by round trip): the anchor file's segments as the
+ * program spells them, the path its remedy names, and the program text that
+ * moves the walk's first folder (Cursor's `CURSOR_PROJECT_DIR`). Both spell
+ * the inherited streams `[0,1,2]` where Codex's starter says `'inherit'`.
+ *
+ * Up to 1.14, Cursor's commands were relative — `node <runner> <row>` and
+ * `node <guard>` — and Copilot's `node <runner> <row>`. Those earlier
+ * renderings stay recognised by the path they execute
+ * (`./coOwnedJson.ts::executedScript`), so a file a 1.14 sync wrote keeps its
+ * entries the engine's and the first sync on 1.15 replaces them in place.
+ */
+const WALK_UP_STARTERS: Readonly<Record<"cursor" | "copilot", { anchor: string; shown: string; seed: string }>> = Object.freeze({
+  cursor: {
+    anchor: "'.cursor','hooks.json'",
+    shown: ".cursor/hooks.json",
+    seed: "const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;",
+  },
+  copilot: { anchor: "'.github','hooks','stamity.json'", shown: ".github/hooks/stamity.json", seed: "" },
+});
+
+/**
+ * The root-relative script `command` runs when it is `client`'s walk-up
+ * starter followed by its encoded row, the sync call it names of the starter's
+ * plain characters and the script of {@link STARTER_SCRIPT}'s; `null` for any
+ * other command, an edited starter and another client's starter included.
+ */
+export function walkUpStarterScript(client: "cursor" | "copilot", command: string): string | null {
+  const body = starterBody(command);
+  if (body === null) return null;
+  const { anchor, shown, seed } = WALK_UP_STARTERS[client];
+  const head = `${STARTER_OPEN}${seed}for(;;){if(fs.existsSync(p.join(d,${anchor}))){const f=p.join(d,'`;
+  const middle = `');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside ${shown}; run `;
+  if (!body.startsWith(head) || !body.endsWith(WALK_UP_TAIL)) return null;
+  const inner = body.slice(head.length, body.length - WALK_UP_TAIL.length);
+  const at = inner.indexOf(middle);
+  if (at === -1) return null;
+  const script = inner.slice(0, at);
+  return STARTER_SCRIPT.test(script) && STARTER_CALL.test(inner.slice(at + middle.length)) ? script : null;
+}
+
+/** True for a Codex command string that is one of the engine's starters followed by its encoded row. */
+function isEngineStarter(command: string): boolean {
+  const body = starterBody(command);
+  if (body === null) return false;
   if (body === STARTER_WALK_TO_RUNNER) return true;
   if (!body.startsWith(STARTER_BESIDE_TRUST_HEAD) || !body.endsWith(STARTER_BESIDE_TRUST_TAIL)) return false;
   return STARTER_CALL.test(body.slice(STARTER_BESIDE_TRUST_HEAD.length, body.length - STARTER_BESIDE_TRUST_TAIL.length));
@@ -508,8 +577,13 @@ export function directHookRendering(client: "cursor" | "codex", rows: readonly D
   return { hooks };
 }
 
-/** The portable runner's command prefix on Cursor; its one argument is the encoded row. */
-const CURSOR_RUNNER_COMMAND = `node ${CURSOR_SCRIPTS}stamity-portable-hook.mjs `;
+/** The portable runner's command prefix on Cursor up to 1.14; its one argument is the encoded row. */
+const CURSOR_RUNNER_COMMAND = `node ${CURSOR_RUNNER} `;
+
+/** True for a Cursor command that runs the portable runner: 1.15.0's starter, or the relative command up to 1.14. */
+function runsCursorRunner(command: string): boolean {
+  return command.startsWith(CURSOR_RUNNER_COMMAND) || walkUpStarterScript("cursor", command) === CURSOR_RUNNER;
+}
 
 /** The row a runner command's trailing base64url argument encodes, or `null` when it carries none this can read. */
 function encodedRow(command: string): DirectHookRow | null {
@@ -535,7 +609,7 @@ function encodedRow(command: string): DirectHookRow | null {
 /**
  * The rows the engine's current rendering of a hooks document wires through
  * the portable runner, in its order: each Cursor entry, and each inner hook of
- * a Codex group, whose command is the runner's (`CURSOR_RUNNER_COMMAND`, or a
+ * a Codex group, whose command is the runner's ({@link runsCursorRunner}, or a
  * Codex starter) — the definitions it renders now, which
  * {@link directHookRendering} re-renders as 1.6.0 did.
  */
@@ -552,7 +626,7 @@ function runnerRows(rendering: Record<string, unknown>): DirectHookRow[] {
     if (!Array.isArray(elements)) continue;
     for (const element of elements) {
       if (!isPlainObject(element)) continue;
-      read(element["command"], (text) => text.startsWith(CURSOR_RUNNER_COMMAND));
+      read(element["command"], runsCursorRunner);
       for (const hook of innerHooks(element) ?? []) read(isPlainObject(hook) ? hook["command"] : undefined, isEngineStarter);
     }
   }

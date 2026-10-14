@@ -16,6 +16,7 @@ import {
   isKnownCodexHooksDescription,
   isKnownCodexHooksStamity,
   referencedHookScripts,
+  walkUpStarterScript,
 } from "../../src/manifest/hookDocuments.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../src/types/markers.ts";
@@ -50,6 +51,15 @@ const RELEASE_ONE_SIX = JSON.parse(readFileSync(join(import.meta.dirname, "fixtu
 >;
 
 const row = (event: HookInterchange["event"], script: string): HookInterchange => ({ event, command: ["node", script] });
+
+/**
+ * The pinned CLI context Cursor's builder takes (REQ-FLOW-084): its walk-up
+ * starters name the sync call it pins.
+ * TEST CHANGE, justified (plan 020 file 2, unit e5-hook-starter): every
+ * `buildHooksJson(rows)` call below now passes it; nothing it asserts moved.
+ */
+const CLI = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+const SYNC_CALL = "npx -y @zomarit/stamity@1.0.0-golden sync";
 
 /** A script in an installed pack's folder, which the bound proves by path as the settings lane's does (review/69). */
 const PACK_SCRIPT = `${STATE_DIR}/packs/acme__ops/tools/gate.mjs`;
@@ -123,7 +133,7 @@ describe("cursorHookDefects", () => {
   });
 
   it("finds none in the engine's own rendering", () => {
-    const rendered = JSON.parse(buildHooksJson([row("session_start", `${HOOKS_GENERATED_DIR}/cursor/s.mjs`)]));
+    const rendered = JSON.parse(buildHooksJson([row("session_start", `${HOOKS_GENERATED_DIR}/cursor/s.mjs`)], CLI));
     expect(cursorHookDefects(rendered)).toEqual([]);
   });
 
@@ -216,6 +226,101 @@ describe("cursorHooksSpec", () => {
       expect(cursorElement.recognise(entry)).toBe(true);
       expect(cursorElement.inBound(entry)).toBe(true);
     }
+  });
+
+  // REQ-FLOW-084: 1.15.0 renders every entry, guards included, as the walk-up
+  // starter; 1.14's relative commands stay recognised as an earlier rendering.
+  describe("the walk-up starter (1.15.0 on)", () => {
+    const RUNNER = `${HOOKS_GENERATED_DIR}/cursor/stamity-portable-hook.mjs`;
+    const started = (script: string, syncCall: string | undefined = SYNC_CALL, tool: "cursor" | "copilot" = "cursor"): string =>
+      portableHookCommand(tool, row("pre_tool_use", script), { ...(syncCall === undefined ? {} : { syncCall }), ...(script === RUNNER ? {} : { script }) });
+    const forkCall = "npx -y --@acme:registry=https://npm.acme.example/ @acme/stamity@2.0.0 sync";
+
+    it("recognises and bounds the starter running the runner or either guard, whatever pinned call it names", () => {
+      const rendered = JSON.parse(buildHooksJson([row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`)], CLI)) as {
+        hooks: Record<string, { command: string }[]>;
+      };
+      const commands = Object.values(rendered.hooks).flat().map((entry) => entry.command);
+      expect(commands).toHaveLength(3);
+      for (const command of [...commands, started(RUNNER, forkCall), started(SUBAGENT_GUARD_PATH, undefined), started(MCP_GUARD_PATH, "stamity sync")]) {
+        expect(walkUpStarterScript("cursor", command), command).not.toBeNull();
+        expect(cursorElement.recognise({ command, failClosed: true }), command).toBe(true);
+        expect(cursorElement.inBound({ command, failClosed: true }), command).toBe(true);
+      }
+    });
+
+    it("bounds no starter running another script, edited, or another client's", () => {
+      const good = started(RUNNER);
+      const cases = [
+        started(".stamity/hooks/mine.mjs"),
+        started(PACK_SCRIPT),
+        started(`${HOOKS_GENERATED_DIR}/claude/stamity-portable-hook.mjs`),
+        started(RUNNER, SYNC_CALL, "copilot"),
+        good.replace("Stamity hook script missing", "Stamity hook gone"),
+        good.replace("process.exitCode=1;break;}const r=", "process.exitCode=2;break;}const r="),
+        good.replace(`run ${SYNC_CALL}`, `run ${SYNC_CALL}';evil();'`),
+        good.replace(RUNNER, `${HOOKS_GENERATED_DIR}/cursor/../../../x.mjs`),
+        good.replace("const e=process.env.CURSOR_PROJECT_DIR;", "const e=process.env.HOME;"),
+        good.slice(0, good.lastIndexOf('" ')),
+        `${good}!`,
+      ];
+      for (const command of cases) {
+        expect(walkUpStarterScript("cursor", command) === RUNNER || walkUpStarterScript("cursor", command) === SUBAGENT_GUARD_PATH, command).toBe(false);
+        expect(cursorElement.inBound({ command }), command).toBe(false);
+      }
+    });
+
+    it("reads each client's starter by its own anchor, the renderer's output round trip", () => {
+      expect(walkUpStarterScript("cursor", started(SUBAGENT_GUARD_PATH))).toBe(SUBAGENT_GUARD_PATH);
+      expect(walkUpStarterScript("copilot", started(".stamity/generated/hooks/copilot/stamity-portable-hook.mjs", SYNC_CALL, "copilot"))).toBe(
+        ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs",
+      );
+      expect(walkUpStarterScript("copilot", started(RUNNER))).toBeNull();
+      expect(walkUpStarterScript("cursor", starter(SYNC_CALL))).toBeNull();
+      expect(walkUpStarterScript("cursor", `node ${RUNNER} ${encoded({ event: "stop", command: ["node", "x.mjs"] })}`)).toBeNull();
+    });
+
+    it("replaces a 1.14 file's relative entries with the starters in place, keeping an owner's entry and taking no backup", () => {
+      const rows = [row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`), row("pre_tool_use", ".stamity/hooks/gate.mjs")];
+      const emitted = buildHooksJson(rows, CLI);
+      const current = JSON.parse(emitted) as { version: number; hooks: Record<string, { command: string; failClosed?: boolean }[]> };
+      // What 1.14 rendered for the same rows: `node <runner> <row>`, and `node <guard>`.
+      const relative = (command: string): string => {
+        const script = walkUpStarterScript("cursor", command)!;
+        return script === RUNNER ? `node ${RUNNER} ${command.slice(command.lastIndexOf(" ") + 1)}` : `node ${script}`;
+      };
+      const owner = { command: "node scripts/fmt.mjs" };
+      const oneFourteen = {
+        version: 1,
+        hooks: Object.fromEntries(
+          Object.entries(current.hooks).map(([event, entries]) => [
+            event,
+            event === "sessionStart"
+              ? [owner, ...entries.map((entry) => ({ ...entry, command: relative(entry.command) }))]
+              : entries.map((entry) => ({ ...entry, command: relative(entry.command) })),
+          ]),
+        ),
+      };
+      const existing = `${JSON.stringify(oneFourteen, null, 2)}\n`;
+      const record = {
+        elements: Object.fromEntries(
+          Object.entries(oneFourteen.hooks).map(([event, entries]) => [`/hooks/${event}`, entries.filter((entry) => entry !== owner).map((entry) => memberHash(entry))]),
+        ),
+        members: { "/version": memberHash(1) },
+      };
+
+      // A 1.14 ledger records each engine entry by hash (a ≤1.11.0 one, which does not, is the legacy lane above).
+      const plan = planCoOwnedJson("/r/.cursor/hooks.json", emitted, existing, cursor, { owned: true, legacy: false, record });
+      expect(plan.backup).toBeNull();
+      expect(plan.result.warning).toBeUndefined();
+      const written = JSON.parse(plan.content as string) as typeof current;
+      // The owner's entry keeps its place ahead of the engine's, which are the starters now.
+      expect(written.hooks["sessionStart"]).toEqual([owner, ...(current.hooks["sessionStart"] ?? [])]);
+      for (const event of Object.keys(current.hooks).filter((key) => key !== "sessionStart")) {
+        expect(written.hooks[event], event).toEqual(current.hooks[event]);
+      }
+      expect(plan.content).not.toContain(`"node ${RUNNER} `);
+    });
   });
 
   it("recognises but does not bound an entry that only names an engine script as an argument", () => {
@@ -482,7 +587,7 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
   });
 
   it("is each spec's earlier rendering: the rows the runner's entries encode, re-rendered, and nothing else", () => {
-    const cursorRendering = JSON.parse(buildHooksJson([user as HookInterchange, row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`)]));
+    const cursorRendering = JSON.parse(buildHooksJson([user as HookInterchange, row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`)], CLI));
     expect(cursor.earlier?.(cursorRendering)).toEqual(directHookRendering("cursor", [user]));
     const startedUser = portableHookCommand("codex", user as HookInterchange, { syncCall: "stamity sync" });
     const codexRendering = { hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: startedUser, commandWindows: startedUser }] }] } };
@@ -540,7 +645,7 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
   });
 
   it("proves a 1.6.0 direct entry the engine's under a legacy row, through the planner and the reducer; an owner's differing entry stays", () => {
-    const emitted = buildHooksJson([user as HookInterchange]);
+    const emitted = buildHooksJson([user as HookInterchange], CLI);
     const lookalike = { command: "node .stamity/hooks/guard.mjs", matcher: "Edit", failClosed: true };
     const direct = { command: "node .stamity/hooks/guard.mjs", matcher: "Bash", failClosed: true };
     const existing = `${JSON.stringify({ version: 1, hooks: { preToolUse: [direct, lookalike] } }, null, 2)}\n`;
@@ -565,7 +670,7 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
 describe("referencedHookScripts", () => {
   it("over each client's rendering: the runner, each core script inside the encoded rows and, on Cursor, both guards", () => {
     const core = [row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`), row("pre_tool_use", ".stamity/hooks/guard.mjs")];
-    const cursorText = buildHooksJson(core);
+    const cursorText = buildHooksJson(core, CLI);
     expect([...referencedHookScripts(cursorText)].toSorted()).toEqual(
       [
         `${HOOKS_GENERATED_DIR}/cursor/stamity-portable-hook.mjs`,
@@ -641,7 +746,7 @@ describe("hookScriptReader", () => {
 
   it("says a text runs a script it names, encoded or plain, reading each text once", () => {
     const script = `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`;
-    const text = buildHooksJson([row("session_start", script)]);
+    const text = buildHooksJson([row("session_start", script)], CLI);
     expect(reader.runs(text, script)).toBe(true);
     expect(reader.runs(text, MCP_GUARD_PATH)).toBe(true);
     expect(reader.runs(text, `${HOOKS_GENERATED_DIR}/cursor/other.mjs`)).toBe(false);
@@ -652,7 +757,7 @@ describe("hookScriptReader", () => {
   it("parses each of two kept documents once while the sweep alternates between them (review/80)", () => {
     const fresh = hookScriptReader(GUARDS);
     const script = `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`;
-    const cursorDoc = buildHooksJson([row("session_start", script)]);
+    const cursorDoc = buildHooksJson([row("session_start", script)], CLI);
     const other = '{"hooks":{"x":[{"command":"node .stamity/hooks/mine.mjs"}]}}';
     const parse = vi.spyOn(JSON, "parse");
     try {

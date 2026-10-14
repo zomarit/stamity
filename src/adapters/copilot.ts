@@ -34,6 +34,7 @@ import {
   substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CliCallContext,
 } from "../emit/substitution.ts";
 import { CLIENT_HOOK_GUARANTEES } from "../hooks/model.ts";
 import type { McpEmission } from "../mcp/emit.ts";
@@ -50,6 +51,7 @@ import {
   type EffortMap,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
+import { pinnedCliCall } from "../shared/cliCall.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCopilotToolsFrontmatter,
@@ -346,7 +348,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
       }
     });
 
-    rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL)), owner: owner("copilot-hooks", "infra") });
+    rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL), cliCallContextOf(ctx)), owner: owner("copilot-hooks", "infra") });
     rows.push({ path: `.stamity/generated/hooks/copilot/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("copilot"), owner: owner("copilot-portable-hook", "infra") });
     rows.push({
       path: COPILOT_SETUP_STEPS_PATH,
@@ -980,11 +982,13 @@ function yamlScalar(value: string): string {
  * re-read 2026-09-20; the `citations` entry above still carries the 2026-09-17
  * currency-pass date, which no claim here depends on)
  */
-export function buildCopilotHooksJson(rows: readonly HookInterchange[]): string {
+export function buildCopilotHooksJson(rows: readonly HookInterchange[], cli?: CliCallContext): string {
+  // The walk-up starter (REQ-FLOW-084) names this pinned call when its runner is missing.
+  const starter = cli === undefined ? {} : { syncCall: pinnedCliCall(cli.packageName, cli.version, "sync", cli) };
   const hooks: Record<string, object[]> = {};
   for (const row of rows) {
     (hooks[CLAUDE_EVENT_NAMES[row.event]] ??= []).push({
-      type: "command", command: portableHookCommand("copilot", row), cwd: ".",
+      type: "command", command: portableHookCommand("copilot", row, starter), cwd: ".",
       ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
       ...(row.timeoutMs === undefined ? {} : { timeoutSec: Math.ceil(row.timeoutMs / 1000) }),
     });

@@ -243,7 +243,10 @@ describe("portable native hook boundary", () => {
     for (const syncCall of ['npx -y "x" sync', "npx -y $(touch pwned) sync", "npx -y `id` sync", "npx -y %PATH% sync"]) {
       expect(() => portableHookCommand("codex", hook, { syncCall }), syncCall).toThrow(/pinned sync call/);
     }
-    // The other clients never render the starter, so they need no call.
+    // TEST CHANGE, justified (plan 020 file 2, unit e5-hook-starter, REQ-FLOW-084):
+    // the comment said the other clients never render the starter. Cursor and
+    // Copilot now do, and without a pinned call their starter names the sync
+    // verb rather than refusing; the assertion itself is unchanged.
     expect(portableHookCommand("cursor", hook)).toContain(".stamity/generated/hooks/cursor/");
   });
 
@@ -467,6 +470,139 @@ describe("portable native hook boundary", () => {
   });
 });
 
+/**
+ * REQ-FLOW-084: Cursor's and Copilot's hook commands find the project root by
+ * their own hook file, as Codex's do, so a session started in a subfolder runs
+ * each hook as one started at the root. Up to 1.14 they were the relative
+ * `node .stamity/generated/hooks/<client>/stamity-portable-hook.mjs <row>`,
+ * which from a subfolder names a file that is not there. Each command runs
+ * through the platform's shell (`sh`, or `cmd` on Windows), as the clients run it.
+ */
+describe("the walk-up starter on Cursor and Copilot", () => {
+  const ANCHORS = { cursor: [".cursor", "hooks.json"], copilot: [".github", "hooks", "stamity.json"] } as const;
+  const DENY = (reason: string) => output({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } });
+
+  /** The fixture above plus the client's anchor file, which is what the starter looks for. */
+  async function anchored(tool: "cursor" | "copilot", body: string) {
+    const f = await fixture(tool, body);
+    await mkdir(join(f.root, ...ANCHORS[tool].slice(0, -1)), { recursive: true });
+    await writeFile(join(f.root, ...ANCHORS[tool]), "{}\n");
+    return f;
+  }
+
+  /** The host's environment without Cursor's root variable, plus `extra`. */
+  function envWith(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["CURSOR_PROJECT_DIR"];
+    return Object.assign(env, extra);
+  }
+
+  function runShell(command: string, cwd: string, env: NodeJS.ProcessEnv = envWith()) {
+    return spawnSync(command, { cwd, env, shell: true, input: JSON.stringify({ toolName: "bash", toolArgs: { command: "pwd" } }), encoding: "utf8" });
+  }
+
+  it.each(["cursor", "copilot"] as const)("%s runs the hook from repo/sub/deeper exactly as from the root", async (tool) => {
+    const f = await anchored(tool, DENY("from the root"));
+    const deeper = join(f.root, "sub", "deeper");
+    await mkdir(deeper, { recursive: true });
+    const command = portableHookCommand(tool, f.hook, SYNC);
+
+    const atRoot = runShell(command, f.root);
+    const below = runShell(command, deeper);
+
+    expect(atRoot.status, atRoot.stderr).toBe(0);
+    const verdict = JSON.parse(atRoot.stdout);
+    expect(tool === "cursor" ? verdict.user_message : verdict.permissionDecisionReason).toBe("from the root");
+    expect({ status: below.status, stdout: below.stdout, stderr: below.stderr }).toEqual({ status: atRoot.status, stdout: atRoot.stdout, stderr: atRoot.stderr });
+  });
+
+  it("takes Cursor's reported root over a nearer .cursor/hooks.json, and walks up from the working directory without it", async () => {
+    // The threat case: `sub/` holds its own anchor and a decoy runner whose
+    // child answers differently. A session started in `sub/` with
+    // CURSOR_PROJECT_DIR naming the root runs the root's runner.
+    const f = await anchored("cursor", DENY("from the root"));
+    const sub = join(f.root, "sub");
+    const decoy = join(sub, ".stamity", "generated", "hooks", "cursor");
+    await mkdir(decoy, { recursive: true });
+    await mkdir(join(sub, ".cursor"), { recursive: true });
+    await writeFile(join(sub, ".cursor", "hooks.json"), "{}\n");
+    await writeFile(join(decoy, PORTABLE_RUNNER_FILE), buildPortableHookRunner("cursor"));
+    await writeFile(join(sub, "check.mjs"), DENY("from the decoy"));
+    const command = portableHookCommand("cursor", f.hook, SYNC);
+
+    const reported = runShell(command, sub, envWith({ CURSOR_PROJECT_DIR: f.root }));
+    expect(reported.status, reported.stderr).toBe(0);
+    expect(JSON.parse(reported.stdout).user_message).toBe("from the root");
+
+    // Without the variable the nearest anchor is the root the walk finds.
+    const walked = runShell(command, sub);
+    expect(JSON.parse(walked.stdout).user_message).toBe("from the decoy");
+
+    // A variable naming a folder without the anchor is passed over for the walk.
+    const elsewhere = await mkdtemp(join(tmpdir(), "stamity-hook-elsewhere-"));
+    roots.push(elsewhere);
+    await mkdir(join(f.root, "x"), { recursive: true });
+    const fromX = runShell(command, join(f.root, "x"), envWith({ CURSOR_PROJECT_DIR: elsewhere }));
+    expect(fromX.status, fromX.stderr).toBe(0);
+    expect(JSON.parse(fromX.stdout).user_message).toBe("from the root");
+  });
+
+  it.each([
+    ["cursor", ".cursor/hooks.json"],
+    ["copilot", ".github/hooks/stamity.json"],
+  ] as const)("%s exits 1 naming the pinned sync call when the runner beside %s is missing", async (tool, anchor) => {
+    const f = await anchored(tool, DENY("unused"));
+    await rm(f.script);
+    const deeper = join(f.root, "sub");
+    await mkdir(deeper, { recursive: true });
+
+    const result = runShell(portableHookCommand(tool, f.hook, SYNC), deeper);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe(`Stamity hook script missing beside ${anchor}; run ${SYNC.syncCall}`);
+  });
+
+  it.each(["cursor", "copilot"] as const)("%s refuses rather than guessing when no anchor is above the session directory", async (tool) => {
+    const f = await fixture(tool, DENY("unused"));
+    const result = runShell(portableHookCommand(tool, f.hook, SYNC), f.root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe("Stamity hook project root not found");
+  });
+
+  it("runs a given script through the same walk, as Cursor's guards do", async () => {
+    const f = await anchored("cursor", "");
+    const guard = ".cursor/hooks/stamity-test-guard.mjs";
+    await mkdir(join(f.root, ".cursor", "hooks"), { recursive: true });
+    await writeFile(join(f.root, ...guard.split("/")), 'process.stdout.write(JSON.stringify({ permission: "deny", user_message: "guard ran at " + process.argv.length }));');
+    const deeper = join(f.root, "sub", "deeper");
+    await mkdir(deeper, { recursive: true });
+    const command = portableHookCommand("cursor", { event: "pre_tool_use", command: ["node", guard] }, { ...SYNC, script: guard });
+
+    const result = runShell(command, deeper);
+
+    expect(result.status, result.stderr).toBe(0);
+    // The guard ran, not the runner: argv is node, the guard and the encoded row.
+    expect(JSON.parse(result.stdout)).toEqual({ permission: "deny", user_message: "guard ran at 3" });
+  });
+
+  it("refuses to render a script or a sync call carrying shell or program syntax", () => {
+    const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
+    for (const script of ["../x.mjs", "a/./b.mjs", "/abs/x.mjs", "a'b.mjs", "a b.mjs", "$x.mjs", "a\\b.mjs", ""]) {
+      expect(() => portableHookCommand("cursor", hook, { ...SYNC, script }), script).toThrow(/root-relative path/);
+    }
+    for (const syncCall of ['npx -y "x" sync', "npx -y $(touch pwned) sync", "npx -y %PATH% sync"]) {
+      expect(() => portableHookCommand("copilot", hook, { syncCall }), syncCall).toThrow(/pinned sync call/);
+    }
+    // No `$`, backtick, `%`, backslash or inner double quote: the program reads the same under sh and cmd.
+    for (const tool of ["cursor", "copilot"] as const) {
+      const body = /^node -e "(.*)" [A-Za-z0-9_-]+$/s.exec(portableHookCommand(tool, hook, SYNC))?.[1];
+      expect(body, tool).toBeDefined();
+      expect(body).not.toMatch(/[$`%\\"]/);
+    }
+  });
+});
+
 describe("plugin-rooted rows", () => {
   const ROOT_VAR = "STAMITY_TEST_PLUGIN_ROOT";
   const REF = `\${${ROOT_VAR}}/hooks`;
@@ -632,7 +768,13 @@ describe("plugin-rooted rows", () => {
  * `node` is started as the interpreter the runner itself runs under, by its
  * absolute path, so the runtime looks that launcher up nowhere: not on `PATH`,
  * and not in the folder the child runs in, which is a repository folder. Any
- * other launcher is started by the name the row gives, as before.
+ * other launcher is started by the absolute path the engine's own `PATH` walk
+ * finds, which never takes that folder (REQ-PLUGIN-005).
+ *
+ * TEST CHANGE, justified (plan 020 file 2, unit e5-hook-starter): the last
+ * sentence said any other launcher was started by its name, as before. The
+ * runner now resolves it first; the cases below that pinned the old boundary
+ * keep their assertions, and their wording follows the behaviour.
  *
  * The child in these cases reports the interpreter that ran it, and each case
  * compares that with the interpreter running this suite, by real path on both
@@ -716,8 +858,62 @@ describe("which program a row's launcher starts", () => {
     expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
   });
 
+  // REQ-PLUGIN-005: `node.exe` is node spelled another way, on every host; on
+  // Windows any letter case of either is too. Up to 1.14 only the exact word
+  // `node` started the interpreter by its absolute path.
+  it.each(["cursor", "copilot", "codex"] as const)("%s starts a `node.exe` launcher as the interpreter the runner runs under", async (tool) => {
+    const f = await fixture(tool, REPORT, { command: ["node.exe", "check.mjs"] });
+
+    const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(await emptyFolder()) });
+
+    expect(result.stderr).not.toContain("Hook process failed");
+    expect(result.status, result.stderr).toBe(0);
+    expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
+  });
+
+  it.runIf(WINDOWS).each(["Node", "NODE.EXE", "Node.Exe"])("starts a `%s` launcher on Windows as the interpreter the runner runs under", async (launcher) => {
+    const f = await fixture("copilot", REPORT, { command: [launcher, "check.mjs"] });
+
+    const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(await emptyFolder()) });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(await interpreterOf(result.stderr)).toBe(await realpath(process.execPath));
+  });
+
+  it("fails a hook whose launcher no accepted PATH entry holds, naming the launcher", async () => {
+    const f = await fixture("copilot", REPORT, { command: ["stamity-absent-launcher", "check.mjs"] });
+
+    const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(await emptyFolder()) });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain('Hook process failed (launcher "stamity-absent-launcher" not found on PATH');
+  });
+
   describe.skipIf(WINDOWS)("on a POSIX host whose PATH names the folder the child runs in", () => {
     const HOST_NODE = dirname(process.execPath);
+
+    // REQ-PLUGIN-005: a launcher other than node is found by the engine's own
+    // walk, which never takes the folder the child runs in, however PATH names it.
+    it.each([
+      ["an empty entry", (_root: string, bin: string) => `${delimiter}${bin}`],
+      ["a relative entry", (_root: string, bin: string) => `.${delimiter}${bin}`],
+      ["the folder's full path", (root: string, bin: string) => `${root}${delimiter}${bin}`],
+    ] as const)("starts no file of another launcher's name at the repository root, by %s", async (_name, pathFor) => {
+      const f = await fixture("copilot", "", { command: ["stamity-test-launcher", "check.mjs"] });
+      const root = await realpath(f.root);
+      await writeFile(join(root, "stamity-test-launcher"), STAND_IN);
+      await chmod(join(root, "stamity-test-launcher"), 0o755);
+      const bin = await emptyFolder();
+      await writeFile(join(bin, "stamity-test-launcher"), "#!/bin/sh\necho path-launcher-started >&2\nexit 0\n");
+      await chmod(join(bin, "stamity-test-launcher"), 0o755);
+
+      const result = run(f.script, f.hook, { cwd: tmpdir(), env: envWithPath(pathFor(root, bin)) });
+
+      expect(result.stderr).not.toContain("stand-in-started");
+      expect(result.stderr).toContain("path-launcher-started");
+      expect(result.status, result.stderr).toBe(0);
+    });
 
     it.each([
       ["an empty entry", () => `${delimiter}${HOST_NODE}`],
@@ -751,9 +947,11 @@ describe("which program a row's launcher starts", () => {
     });
 
     // The boundary of the change, held so it cannot widen or narrow unseen: a
-    // launcher that is not the word `node` is still started by the name the
-    // row gives and found on PATH by the runtime.
-    it("still starts any other launcher by the name the row gives, found on PATH", async () => {
+    // launcher that is not the word `node` is still found on PATH.
+    // TEST CHANGE, justified (unit e5-hook-starter, REQ-PLUGIN-005): it is found
+    // by the runner's walk and started by that absolute path, no longer by the
+    // runtime under the bare name; title and comment follow, assertions unchanged.
+    it("still starts any other launcher found on PATH", async () => {
       const f = await fixture("copilot", "", { command: ["stamity-test-launcher", "check.mjs"] });
       const bin = await emptyFolder();
       await writeFile(join(bin, "stamity-test-launcher"), STAND_IN);
@@ -784,6 +982,21 @@ describe("which program a row's launcher starts", () => {
       const interpreter = await interpreterOf(result.stderr);
       expect(interpreter).not.toBe(await realpath(planted));
       expect(interpreter).toBe(await realpath(process.execPath));
+    });
+
+    // REQ-PLUGIN-005: the residual 1.14.0 named, closed. Another launcher's
+    // `.exe` at the repository root is not started in place of the PATH walk's
+    // answer; with no entry holding one, the hook fails naming the launcher.
+    it("starts no other launcher's .exe at the repository root", async () => {
+      const f = await fixture("copilot", REPORT, { command: ["stamity-test-launcher", "check.mjs"] });
+      const planted = join(f.root, "stamity-test-launcher.exe");
+      await copyFile(process.execPath, planted);
+
+      const result = run(f.script, f.hook, { cwd: tmpdir(), env: { ...process.env } });
+
+      expect(await interpreterOf(result.stderr)).toBeNull();
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('launcher "stamity-test-launcher" not found on PATH');
     });
 
     it("starts no node.exe in the session's folder, for a plugin-rooted row", async () => {

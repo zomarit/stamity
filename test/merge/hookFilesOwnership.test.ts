@@ -16,6 +16,7 @@ import {
 } from "../../src/content/contentRoot.ts";
 import { engineRenderingsFor, sha256, type EmissionPlanFor } from "../../src/cli/engine/emissionWrite.ts";
 import { createApp } from "../../src/index.ts";
+import { walkUpStarterScript } from "../../src/manifest/hookDocuments.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import { trustedInfraPaths } from "../../src/manifest/ledger.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
@@ -169,6 +170,32 @@ async function selectTools(root: string, tools: readonly Tool[]): Promise<void> 
   await writeManifest(root, { ...manifest, tools: [...tools] }, { now: T1 });
 }
 
+/**
+ * `command` as every release up to 1.14 spelled a Cursor entry: the walk-up
+ * starter 1.15.0 writes (REQ-FLOW-084) read back as `node <runner> <row>` or
+ * `node <guard>`; any other command as it stands.
+ */
+function relativeCommand(command: string): string {
+  const script = walkUpStarterScript("cursor", command);
+  if (script === null) return command;
+  return script === CURSOR_RUNNER ? `node ${script} ${command.slice(command.lastIndexOf(" ") + 1)}` : `node ${script}`;
+}
+
+/** Cursor hook entries with each command as {@link relativeCommand} spells it. */
+function relativeEntries(entries: readonly unknown[] | undefined): unknown[] | undefined {
+  return entries?.map((entry) => {
+    const command = (entry as { command?: unknown }).command;
+    return typeof command === "string" ? { ...(entry as object), command: relativeCommand(command) } : entry;
+  });
+}
+
+/** A `.cursor/hooks.json` text with every engine entry respelled as 1.14 wrote it. */
+function asRelativeCommands(text: string): string {
+  const doc = JSON.parse(text) as { hooks: Record<string, unknown[]> };
+  for (const [event, entries] of Object.entries(doc.hooks)) doc.hooks[event] = relativeEntries(entries) ?? entries;
+  return `${JSON.stringify(doc, null, 2)}\n`;
+}
+
 // ── Cursor ─────────────────────────────────────────────────────
 
 describe(".cursor/hooks.json owned entry by entry", () => {
@@ -254,6 +281,49 @@ describe(".cursor/hooks.json owned entry by entry", () => {
     expect(entry?.detail).toContain("version");
     expect(entry?.detail).not.toContain("--force");
     expect(await readText(root, CURSOR_HOOKS)).toBe(before);
+  });
+
+  // REQ-FLOW-084: 1.14 wrote relative commands (`node <runner> <row>`, `node
+  // <guard>`), which the first 1.15 sync replaces with the walk-up starters.
+  it("a 1.14 setup with an owner entry between the engine's: sync -y replaces the engine's entries in place, keeps the owner's, and takes no .bak", async () => {
+    const root = await freshRepo();
+    await init(root, ["cursor"]);
+    const current = await readDoc(root, CURSOR_HOOKS);
+    // The file and the ledger as a 1.14 sync left them: each engine entry relative, recorded by its hash.
+    const oneFourteen = JSON.parse(asRelativeCommands(await readText(root, CURSOR_HOOKS))) as { hooks: Record<string, unknown[]> };
+    const rehash = new Map<string, string>();
+    for (const [event, entries] of Object.entries(current["hooks"] as Record<string, unknown[]>)) {
+      entries.forEach((entry, index) => rehash.set(memberHash(entry), memberHash(oneFourteen.hooks[event]?.[index])));
+    }
+    expect([...rehash].every(([now, then]) => now !== then)).toBe(true);
+    await writeDoc(root, CURSOR_HOOKS, oneFourteen);
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    const ledger = manifest.ledger.map((row) => {
+      const elements = row.coOwned?.elements;
+      if (row.path !== CURSOR_HOOKS || elements === undefined) return row;
+      const moved = Object.fromEntries(Object.entries(elements).map(([pointer, hashes]) => [pointer, hashes.map((hash) => rehash.get(hash) ?? hash)]));
+      return { ...row, coOwned: { ...row.coOwned, elements: moved } };
+    });
+    await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+    await recordAsWritten(root, CURSOR_HOOKS);
+    // An owner's entry between the engine's two session-start rows.
+    const sessionStart = oneFourteen.hooks["sessionStart"] ?? [];
+    expect(sessionStart.length).toBeGreaterThan(1);
+    await writeDoc(root, CURSOR_HOOKS, { ...relative, hooks: { ...oneFourteen.hooks, sessionStart: [sessionStart[0], OWNER_CURSOR_ENTRY, ...sessionStart.slice(1)] } });
+
+    const { report } = await sync(root);
+
+    expect(rowOf(report.wrote, CURSOR_HOOKS).action).toBe("updated");
+    const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>;
+    const currentHooks = current["hooks"] as Record<string, unknown[]>;
+    // The engine's rows are one block at the first engine row's index (S14): the owner's entry follows it.
+    expect(hooks["sessionStart"]).toEqual([...(currentHooks["sessionStart"] ?? []), OWNER_CURSOR_ENTRY]);
+    for (const event of Object.keys(currentHooks).filter((key) => key !== "sessionStart")) expect(hooks[event], event).toEqual(currentHooks[event]);
+    expect(await readText(root, CURSOR_HOOKS)).not.toContain(`"node ${CURSOR_RUNNER} `);
+    expect(await backups(root)).toEqual([]);
+    const check = await runInProcess([checkCommand], ["check"], { cwd: root });
+    expect(check.code, check.stdout + check.stderr).toBe(0);
   });
 
   it("Cursor deselected with an owner entry: the engine's entries leave, the file keeps version and the owner entry, and the guards go", async () => {
@@ -506,7 +576,14 @@ describe("a --registry fork's hook documents are the engine's by the calls it re
       expect(body).toContain(`${boundCall(PREVIOUS)} sync`);
     }
     await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
-    const expected = await readDoc(root, CURSOR_HOOKS);
+    // TEST CHANGE, justified (plan 020 file 2, unit e5-hook-starter, REQ-FLOW-084):
+    // each engine entry is now a walk-up starter naming the pinned sync call, as
+    // Codex's are, so the upgrade moves that call to the running version; the
+    // document is otherwise the one before the sync, the owner's entry included.
+    const expected = JSON.parse(
+      JSON.stringify(await readDoc(root, CURSOR_HOOKS)).replaceAll(`${boundCall(PREVIOUS)} sync`, `${boundCall(ENGINE_VERSION)} sync`),
+    ) as unknown;
+    expect(JSON.stringify(expected)).toContain(`${boundCall(ENGINE_VERSION)} sync`);
 
     await forkSync(root);
     const first = await readText(root, CURSOR_HOOKS);
@@ -928,7 +1005,10 @@ async function setUpByReleaseOneEleven(sub = "repo", ownerEntry = false, shape: 
   await init(root, ["cursor"]);
   await moveGuardsToOldNames(root, shape.guards ?? releaseOneElevenGuards());
   await recordCursorAgents(root, shape.agents ?? []);
-  await writeFile(abs(root, CURSOR_HOOKS), respellGuards(await readText(root, CURSOR_HOOKS)), "utf8");
+  // TEST CHANGE, justified (unit e5-hook-starter, REQ-FLOW-084): 1.11.0 wrote
+  // relative commands, which the running engine renders as walk-up starters
+  // now, so they are respelled as 1.11.0 wrote them before the guards' names are.
+  await writeFile(abs(root, CURSOR_HOOKS), respellGuards(asRelativeCommands(await readText(root, CURSOR_HOOKS))), "utf8");
   await asReleaseOneEleven(root);
   await recordAsWritten(root, CURSOR_HOOKS);
   if (ownerEntry) await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
@@ -978,12 +1058,17 @@ async function moveGuardsToOldNames(root: string, guards: ReadonlyMap<string, st
   await writeManifest(root, { ...manifest, ledger }, { now: T1 });
 }
 
-/** The script each guard entry of `.cursor/hooks.json` runs, by event. */
+/**
+ * The script each guard entry of `.cursor/hooks.json` runs, by event.
+ * TEST CHANGE, justified (unit e5-hook-starter, REQ-FLOW-084): a walk-up
+ * starter reads as `node <guard>`, the command 1.14 wrote for it
+ * ({@link relativeCommand}), so each case keeps naming its scripts as before.
+ */
 async function guardCommands(root: string): Promise<Record<string, unknown>> {
   const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, { command?: string }[]>;
   return {
-    subagentStart: hooks["subagentStart"]?.map((entry) => entry.command),
-    beforeMCPExecution: hooks["beforeMCPExecution"]?.map((entry) => entry.command),
+    subagentStart: hooks["subagentStart"]?.map((entry) => (entry.command === undefined ? undefined : relativeCommand(entry.command))),
+    beforeMCPExecution: hooks["beforeMCPExecution"]?.map((entry) => (entry.command === undefined ? undefined : relativeCommand(entry.command))),
   };
 }
 
@@ -1029,7 +1114,8 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
 
     await sync(synced);
 
-    expect(((await readDoc(synced, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeMCPExecution"]).toEqual([
+    // TEST CHANGE, justified (unit e5-hook-starter): the engine's entry is the walk-up starter, read as `node <guard>`.
+    expect(relativeEntries(((await readDoc(synced, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeMCPExecution"])).toEqual([
       { command: `node ${MCP_GUARD_PATH}`, failClosed: true },
       own,
     ]);
@@ -1058,8 +1144,12 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
 
     expect((await readdir(abs(root, ".cursor/hooks"))).toSorted()).toEqual(["stamity-mcp-guard.mjs", "stamity-subagent-guard.mjs"]);
     const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>;
-    expect(hooks["subagentStart"]).toEqual([{ command: "node .cursor/hooks/stamity-subagent-guard.mjs", failClosed: true }]);
-    expect(hooks["beforeMCPExecution"]).toEqual([{ command: "node .cursor/hooks/stamity-mcp-guard.mjs", failClosed: true }]);
+    // TEST CHANGE, justified (unit e5-hook-starter, REQ-FLOW-084): each guard
+    // runs through the walk-up starter, so it is read by the script that runs.
+    const started = (entries: unknown[] | undefined) =>
+      entries?.map((entry) => ({ script: walkUpStarterScript("cursor", (entry as { command: string }).command), failClosed: (entry as { failClosed?: boolean }).failClosed }));
+    expect(started(hooks["subagentStart"])).toEqual([{ script: ".cursor/hooks/stamity-subagent-guard.mjs", failClosed: true }]);
+    expect(started(hooks["beforeMCPExecution"])).toEqual([{ script: ".cursor/hooks/stamity-mcp-guard.mjs", failClosed: true }]);
   });
 
   it("a 1.11.0 setup: sync -y writes the new guards, rewires .cursor/hooks.json, deletes both old names by hash proof with no .bak, and check then exits 0", async () => {
@@ -1165,7 +1255,8 @@ describe("the Cursor guards carry the stamity- prefix, and the first sync after 
 
     const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>;
     expect(hooks["afterFileEdit"]).toEqual([copied]);
-    expect(hooks["beforeMCPExecution"]).toEqual([{ command: `node ${MCP_GUARD_PATH}`, failClosed: true }]);
+    // TEST CHANGE, justified (unit e5-hook-starter): the engine's entry is the walk-up starter, read as `node <guard>`.
+    expect(relativeEntries(hooks["beforeMCPExecution"])).toEqual([{ command: `node ${MCP_GUARD_PATH}`, failClosed: true }]);
   });
 
   it("a 1.11.0 setup whose old MCP guard was edited by hand: sync -y keeps it byte for byte and the sync report names it", async () => {

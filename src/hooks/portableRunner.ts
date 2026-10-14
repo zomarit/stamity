@@ -38,22 +38,81 @@ export const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,
 const STARTER_SAFE_CALL = /^[A-Za-z0-9@/._~+:= -]+$/;
 
 /**
+ * A root-relative script path a starter may run: plain segments of the
+ * characters every engine-written hook path uses, none of them `.` or `..`. It
+ * lands inside a single-quoted JavaScript string in a double-quoted `node -e`
+ * argument, so a quote, `$`, `%`, a backtick or a backslash would be syntax.
+ */
+const STARTER_SAFE_SCRIPT = /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+
+/**
+ * What a client's walk-up starter looks for (REQ-FLOW-084): the path segments
+ * of the file that marks the project root, and the program text that picks the
+ * folder the walk starts in, which is the working directory unless `seed`
+ * moves it. Claude Code has no starter: its commands are anchored on the root
+ * variable the client sets (`../adapters/claude.ts`).
+ *
+ * - Codex: `.codex/hooks.json`, the file Codex keys its trust to. Unchanged
+ *   since 1.9.0, so its bytes, and the trust Codex recorded for them, hold.
+ * - Cursor: `.cursor/hooks.json`. The walk starts at `CURSOR_PROJECT_DIR` when
+ *   that folder holds the anchor: the plan's read of cursor.com/docs/hooks on
+ *   2026-10-14 has Cursor report the project root to every hook in it. A nearer
+ *   `sub/.cursor/hooks.json` cannot then supply the runner for a session
+ *   started in `sub/`. Unset, or naming a folder without the anchor, the walk
+ *   starts at the working directory.
+ * - Copilot: `.github/hooks/stamity.json`, the file this engine writes; its
+ *   entries carry `cwd: "."`, and the walk starts wherever that put the hook.
+ *
+ * `stdio` is how the script's streams reach the client. Codex keeps the
+ * `'inherit'` its trusted bytes carry; Cursor and Copilot spell the same three
+ * inherited descriptors `[0,1,2]`, so the Cursor residue keeps clear of the
+ * word `inherit`, which there would read as a model value
+ * (`test/adapters/cursor.test.ts`).
+ */
+const STARTER_ANCHORS: Readonly<Partial<Record<Tool, { segments: readonly string[]; seed: string; stdio: string }>>> = Object.freeze({
+  codex: { segments: [".codex", "hooks.json"], seed: "", stdio: "'inherit'" },
+  cursor: {
+    segments: [".cursor", "hooks.json"],
+    seed: "const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;",
+    stdio: "[0,1,2]",
+  },
+  copilot: { segments: [".github", "hooks", "stamity.json"], seed: "", stdio: "[0,1,2]" },
+});
+
+/**
+ * The missing-script remedy a Cursor or Copilot starter names when its caller
+ * passed no pinned call. Only a direct builder call without a CLI context
+ * reaches it; every emission passes the pinned call.
+ */
+const UNPINNED_SYNC_REMEDY = "the sync verb";
+
+/**
  * Shell syntax appears only at the native boundary, never in the child argv.
  *
- * `opts.syncCall` is the pinned call the Codex starter names when the hook
- * script is missing (`pinnedCliCall(<package>, <version>, "sync")`). Codex is
- * the one client whose rendering carries it, and it is required there: the
- * starter lives in `.codex/hooks.json`, and a bare `stamity sync` in the file
- * Codex keys its trust to would send the operator at a binary the documented
- * `npx` setup never installs. Throws `VALIDATION_ERROR` for a Codex row without
- * it, or with a character outside {@link STARTER_SAFE_CALL}.
+ * On Codex, Cursor and Copilot the command is a walk-up starter, a static
+ * `node -e` program that finds the project root by the client's anchor file
+ * ({@link STARTER_ANCHORS}) and runs `opts.script` there — the portable runner
+ * unless given, a root-relative path ({@link STARTER_SAFE_SCRIPT}) otherwise —
+ * with the base64url row as its argument. So a session started below the root
+ * runs the hook as one started at it (REQ-FLOW-084). The program reads the same
+ * under `sh` and `cmd`: no `$`, backtick, `%`, backslash or double quote.
+ *
+ * `opts.syncCall` is the pinned call the starter names when the script is
+ * missing (`pinnedCliCall(<package>, <version>, "sync")`). It is required on
+ * Codex: the starter lives in `.codex/hooks.json`, and a bare `stamity sync` in
+ * the file Codex keys its trust to would send the operator at a binary the
+ * documented `npx` setup never installs. Cursor's and Copilot's adapters pass it
+ * too; without it their starter names {@link UNPINNED_SYNC_REMEDY}. Throws
+ * `VALIDATION_ERROR` for a Codex row without it, for a call with a character
+ * outside {@link STARTER_SAFE_CALL}, or for a script outside
+ * {@link STARTER_SAFE_SCRIPT}.
  */
 export function portableHookCommand(
   tool: Tool,
   row: HookInterchange,
-  opts: { syncCall?: string } = {},
+  opts: { syncCall?: string; script?: string } = {},
 ): string {
-  const path = `.stamity/generated/hooks/${tool}/${PORTABLE_RUNNER_FILE}`;
+  const path = opts.script ?? `.stamity/generated/hooks/${tool}/${PORTABLE_RUNNER_FILE}`;
   const data = Buffer.from(JSON.stringify(row)).toString("base64url");
   // A row whose script is addressed through a client's plugin root variable is
   // a PLUGIN row: the variable names the vendor container's own `hooks/`
@@ -78,7 +137,8 @@ export function portableHookCommand(
     // unquoted literal the runner resolves itself.
     return `node "${script.slice(0, lastSlash)}/${PORTABLE_RUNNER_FILE}" ${data}`;
   }
-  if (tool !== "codex") return `node ${path} ${data}`;
+  const anchor = STARTER_ANCHORS[tool];
+  if (anchor === undefined) return `node ${path} ${data}`;
   // Codex records trust against the hash of `.codex/hooks.json` alone, and the
   // scripts it points at live in the agent-writable workspace:
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17). The project is
@@ -86,17 +146,27 @@ export function portableHookCommand(
   // that HOLDS `.codex/hooks.json` and run the script beside it. Resolving the
   // nearest `.stamity/generated/hooks/codex/` above the session cwd instead
   // would let an unrelated nearer checkout supply the executable for this
-  // project's trusted definition.
-  // This static Node program contains no shell expansions. Its one variable
-  // part is the pinned sync call, held to {@link STARTER_SAFE_CALL} first.
-  const syncCall = opts.syncCall;
+  // project's trusted definition. Cursor and Copilot take the same walk to
+  // their own hook file, so a session started below the root finds the runner
+  // (REQ-FLOW-084), where the relative `node <path>` of 1.14 did not.
+  // This static Node program contains no shell expansions. Its variable parts
+  // are the script, held to {@link STARTER_SAFE_SCRIPT}, and the pinned sync
+  // call, held to {@link STARTER_SAFE_CALL}.
+  if (!STARTER_SAFE_SCRIPT.test(path)) {
+    throw new EngineError(`The hook starter runs a root-relative path of plain characters; got ${JSON.stringify(path)}.`, {
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const syncCall = opts.syncCall ?? (tool === "codex" ? undefined : UNPINNED_SYNC_REMEDY);
   if (syncCall === undefined || !STARTER_SAFE_CALL.test(syncCall)) {
     throw new EngineError(
-      `The Codex hook starter needs a pinned sync call of plain characters; got ${JSON.stringify(syncCall)}.`,
+      `The ${tool === "codex" ? "Codex" : tool === "cursor" ? "Cursor" : "Copilot"} hook starter needs a pinned sync call of plain characters; got ${JSON.stringify(syncCall)}.`,
       { code: "VALIDATION_ERROR" },
     );
   }
-  const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run ${syncCall}');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}`;
+  const segments = anchor.segments.map((segment) => `'${segment}'`).join(",");
+  const shown = anchor.segments.join("/");
+  const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();${anchor.seed}for(;;){if(fs.existsSync(p.join(d,${segments}))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside ${shown}; run ${syncCall}');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:${anchor.stdio}});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}`;
   return `node -e "${starter}" ${data}`;
 }
 
@@ -105,18 +175,22 @@ export function portableHookCommand(
  * agent identity is fabricated. Unknown output fields are diagnosed by name;
  * their values never enter diagnostics. Executed with shell:false on all OSes.
  *
- * The runner is a standalone script that imports `node:` modules alone, so it
- * cannot take the walk `../shared/programPath.ts` gives the engine's own
- * starts. For a row whose launcher is the word `node`, which every core hook
- * row is, it needs none: it starts `process.execPath`, the interpreter it is
- * running under, and no lookup by name takes place. A row that names any
- * other launcher is started by that name and found by the runtime's rules.
+ * The runner starts every launcher by an absolute path (REQ-PLUGIN-005). A
+ * row whose launcher is `node` or `node.exe` (any letter case on Windows),
+ * which every core hook row is, starts `process.execPath`, the interpreter it
+ * is running under. A launcher spelled as a path is resolved against the
+ * folder the child runs in. Any other bare name is looked up by the walk
+ * `../shared/programPath.ts` gives the engine's own starts, inlined because
+ * the runner is a standalone script that imports `node:` modules alone: only
+ * `PATH` entries that are full paths, never one whose real path is the folder
+ * the child runs in, and on Windows the name with `.com`, then `.exe`. A name
+ * that walk does not find starts nothing, and the hook fails naming it.
  */
 export function buildPortableHookRunner(tool: Tool): string {
   return `#!/usr/bin/env node
 ${GENERATED_SCRIPT_LINT_DIRECTIVE}
-import { readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -142,6 +216,36 @@ const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
 const safeError = (message) => Object.assign(new Error(message), { safe: true });
 const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
 let failureExit = 1;
+
+// The launcher's absolute path, by the engine's own rules for a program it
+// starts (src/shared/programPath.ts in the engine that wrote this file). A
+// bare name is looked up by the runtime when it is given to a child, and on
+// Windows that lookup takes the folder the child runs in before any PATH
+// entry; that folder is a repository's, and its files are a checkout's
+// content. So no bare name reaches the runtime.
+const WINDOWS = process.platform === "win32";
+const realPath = (path) => { try { return realpathSync.native(path); } catch { try { return realpathSync(path); } catch { return null; } } };
+const folderKey = (path) => { const trimmed = path.replace(WINDOWS ? /[\\\\/]+$/ : /\\/+$/, ""); return WINDOWS ? trimmed.toLowerCase() : trimmed; };
+const fullPath = (entry) => WINDOWS ? /^[A-Za-z]:[\\\\/]/.test(entry) || /^[\\\\/]{2}[^\\\\/]/.test(entry) : entry.startsWith("/");
+const programFile = (path) => { try { accessSync(path, constants.X_OK); return statSync(path).isFile(); } catch { return false; } };
+function launcherPath(name, cwd) {
+  const word = WINDOWS ? name.toLowerCase() : name;
+  if (word === "node" || word === "node.exe") return process.execPath;
+  if (name !== "" && (WINDOWS ? /[\\\\/:]/ : /\\//).test(name)) return resolve(cwd, name);
+  const here = realPath(cwd);
+  const dot = name.indexOf(".");
+  const names = !WINDOWS || (dot !== -1 && dot < name.length - 1) ? [name] : [name + ".com", name + ".exe"];
+  if (name !== "" && here !== null && typeof process.env.PATH === "string") {
+    for (const raw of process.env.PATH.split(delimiter)) {
+      const entry = WINDOWS ? raw.replace(/^"(.*)"$/, "$1") : raw;
+      if (!fullPath(entry)) continue;
+      const folder = realPath(entry);
+      if (folder === null || folderKey(folder) === folderKey(here)) continue;
+      for (const candidate of names) if (programFile(join(entry, candidate))) return join(entry, candidate);
+    }
+  }
+  throw safeError("Hook process failed (launcher " + JSON.stringify(name) + " not found on PATH outside the folder the hook runs in)");
+}
 
 function main() {
   const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
@@ -192,15 +296,12 @@ function main() {
       ? join(supplied, ...pluginRef[2].split("/"))
       : join(HERE, basename(command[1]));
   }
-  // A row whose launcher is the word node is started as the interpreter this
-  // runner is already running under, by its absolute path, so the runtime
-  // looks that launcher up nowhere. A bare name is looked up, and on Windows
-  // the lookup takes the folder the child runs in before any PATH entry; that
-  // folder is a repository's, and its files are a checkout's content. Any
-  // other launcher is started by the name the row gives.
-  const launcher = command[0] === "node" ? process.execPath : command[0];
+  // Every launcher starts by an absolute path (launcherPath above), so the
+  // runtime looks none up in the folder the child runs in.
+  const cwd = pluginRef === null ? ROOT : process.cwd();
+  const launcher = launcherPath(command[0], cwd);
   const child = spawnSync(launcher, command.slice(1), {
-    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
+    cwd, input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
