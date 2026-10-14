@@ -46,6 +46,7 @@ import { RUNTIME_AGENT_IDS } from "../roster/agentPolicies.ts";
 import { modelMapPath, pickModel } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  EFFORT_PLACEHOLDER,
   MODEL_LADDER,
   isModelClass,
   nearestExpressibleEffort,
@@ -61,7 +62,7 @@ import {
   toCursorReadonlyFrontmatter,
 } from "../tools/translator.ts";
 import type { AdapterOutput } from "../types/content.ts";
-import type { ModelClass } from "../types/core.ts";
+import type { EffortLevel, ModelClass } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE } from "../types/markers.ts";
 
@@ -329,7 +330,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
   hooksConfigPath: CURSOR_HOOKS_CONFIG_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.cursor/agents/<id>.md` — `description`, `model` (the role's class model: the operator's pin, else the first shipped candidate the account's saved model list holds, at the class's effort variant; a pin that is not a listed variant carries this client's `[effort=…]` parameter. It is a default, not a hard limit; Stamity carries it on the dispatch and by a hook — the touchpoints pass the class model from `.stamity/generated/models/cursor.json` on each sub-agent call, and a `preToolUse` hook on `Task` fills it into a Stamity call that names none (`updated_input`; cursor.com/docs/agent/subagents and cursor.com/docs/hooks, accessed 2026-10-14). With no pin and no saved list the key is omitted entirely, so the client applies its own default rather than the engine guessing an id the account may not offer), `readonly`",
+    "`.cursor/agents/<id>.md` — `description`, `model` (the role's class model: the operator's pin, else the first shipped candidate the account's saved model list holds, at the class's effort variant; a pin that is not a listed variant carries this client's `[effort=…]` parameter. It is a default, not a hard limit; Stamity carries it on the dispatch and by a hook — the touchpoints pass the class model from `.stamity/generated/models/cursor.json` (the same model id, without an engine-added `[effort=…]` group) on each sub-agent call, and a `preToolUse` hook on `Task` fills it into a Stamity call that names none (`updated_input`; cursor.com/docs/agent/subagents and cursor.com/docs/hooks, accessed 2026-10-14). With no pin and no saved list the key is omitted entirely, so the client applies its own default rather than the engine guessing an id the account may not offer), `readonly`",
   mcpDialect: "cursor-json",
   entryFile: null,
   caps: [
@@ -816,9 +817,16 @@ export interface CursorModelMap {
  * `model` on each sub-agent call, and the one {@link buildModelPinsHookScript}
  * builds in. Every ladder class is present in the ladder's order, `frontier`
  * included although no agent file declares it, because a flow escalates a role
- * to it on the call. `model` is what {@link buildCursorAgent} writes for the
- * class, so a file and a call never disagree; with no pin and no saved list it
- * is absent and the class reads `{ "fallbacks": [] }`. `fallbacks` are the
+ * to it on the call.
+ *
+ * `model` is what a `Task` call can pass: an id the account lists, or the
+ * operator's pin exactly as typed — never a bracket group the engine added.
+ * {@link buildCursorAgent} writes the same model id, so a file and a call never
+ * disagree on the model; the file may add `[effort=…]` to a pin that is not a
+ * listed variant, a form Cursor documents for agent files only
+ * (cursor.com/docs/agent/subagents, read 2026-10-14), so the map leaves it
+ * out (review/100). With no pin and no saved list `model` is absent and the
+ * class reads `{ "fallbacks": [] }`. `fallbacks` are the
  * class's other shipped candidates the list holds, in priority order, for a
  * call the client refuses. `roles` maps each emitted agent's runtime id to the
  * class its frontmatter declares, sorted by id so the bytes are stable.
@@ -831,10 +839,10 @@ export function buildCursorModelMap(
 ): CursorModelMap {
   const classes = {} as Record<ModelClass, CursorModelMapClass>;
   for (const { modelClass, defaultEffort } of MODEL_LADDER) {
-    const model = resolveModelValue(modelClass, "cursor", pins, efforts, pick);
     // The level the resolver looked for the variant at: the operator's, else
     // the ladder's, on this client's scale.
     const effort = nearestExpressibleEffort(efforts[modelClass] ?? defaultEffort, "cursor");
+    const model = callableModel(resolveModelValue(modelClass, "cursor", pins, efforts, pick), pins[modelClass], effort);
     const picked = pickModel("cursor", modelClass, effort, pick.listed);
     const candidates = picked === undefined ? [] : [picked.id, ...picked.fallbacks];
     classes[modelClass] = {
@@ -848,6 +856,21 @@ export function buildCursorModelMap(
     if (modelClass !== undefined) sorted[id] = modelClass;
   }
   return { classes, roles: sorted };
+}
+
+/**
+ * The agent file's model `value` without the `[effort=…]` group the engine
+ * appended to it, or `value` itself when the engine appended none. The
+ * resolver appends the group only to a value with no bracket of its own, so a
+ * value equal to the operator's `pin` as typed is kept whole: a group there is
+ * the operator's, not the engine's.
+ */
+function callableModel(value: string | undefined, pin: string | undefined, effort: EffortLevel | undefined): string | undefined {
+  const template = CLIENT_MODEL_PROJECTION.cursor.effortTemplate;
+  if (value === undefined || value === pin?.trim() || template === null || effort === undefined) return value;
+  const added = template.replace(EFFORT_PLACEHOLDER, effort);
+  const base = value.slice(0, value.length - added.length);
+  return value.endsWith(added) && !base.includes("[") ? base : value;
 }
 
 // ── Hooks ────────────────────────────────────────────────────────
@@ -892,7 +915,10 @@ interface CursorHookEntry {
  * `opts.modelPins` appends the model-fill hook ({@link MODEL_PINS_HOOK_PATH})
  * to `preToolUse`, after the planned rows, matched to `Task` and never
  * `failClosed`: it rewrites a call's input and decides nothing, so a crash or a
- * timeout lets the call through on the model it named. It runs through the
+ * timeout lets the call through on the model it named (cursor.com/docs/hooks,
+ * read 2026-10-14: without `failClosed` a crash, a timeout, a non-zero exit or
+ * no output lets the call through; invalid JSON on stdout blocks it, which is
+ * why the script answers valid JSON on every path it controls). It runs through the
  * starter directly, not through the portable runner, which drops Cursor's
  * `updated_input` (`../hooks/portableRunner.ts`). The residue planner sets it;
  * a direct call without it renders the document as before the hook existed.

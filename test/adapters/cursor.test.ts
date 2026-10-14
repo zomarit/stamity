@@ -762,7 +762,7 @@ describe("`.cursor/agents` definitions", () => {
       expect(modelLines(kept, P.reviewer)).toEqual(["model: gpt-5.6-sol-high"]);
     });
 
-    it("writes the class-to-model map every agent file agrees with, each emitted role mapped to its class", async () => {
+    it("writes the class-to-model map whose model id every agent file names, each emitted role mapped to its class", async () => {
       const plan = await planFor(await seedCorpus(), { agents: ["reviewer", "implementer", "drifter"], listed });
       const mapRow = byPath(plan).get(".stamity/generated/models/cursor.json");
       expect(mapRow?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-model-map", artifactType: "infra" });
@@ -778,9 +778,40 @@ describe("`.cursor/agents` definitions", () => {
         economy: { model: "claude-haiku-5-5-low", fallbacks: [] },
       });
       expect(map.roles).toEqual({ "stamity-drifter": "standard", "stamity-implementer": "advanced", "stamity-reviewer": "advanced" });
+      // TEST CHANGE, justified (review/100, plan 020 file 2, unit e7-cursor-pins): what a file
+      // and a call share is the model id; an agent file may add the engine's `[effort=…]` group,
+      // which the map leaves out (the case below). A listed id carries none, so here the
+      // two lines are still equal.
       for (const [role, modelClass] of Object.entries(map.roles)) {
         expect(modelLines(plan, `${CURSOR_AGENTS_DIR}/${role}.md`), role).toEqual([`model: ${map.classes[modelClass]?.model}`]);
       }
+    });
+
+    // review/100: a Task call takes a model the account lists, or the operator's
+    // pin as typed; Cursor documents the bracket group for agent files only.
+    it("keeps the engine's effort group in the agent file and out of the map, with no saved list", async () => {
+      const plan = await planFor(await seedCorpus(), { agents: ["reviewer", "drifter"], pins: { advanced: { cursor: "composer-2" } } });
+      const map = JSON.parse(contentAt(plan, ".stamity/generated/models/cursor.json")) as {
+        classes: Record<string, { model?: string; fallbacks: string[] }>;
+      };
+
+      expect(modelLines(plan, P.reviewer)).toEqual(["model: composer-2[effort=high]"]);
+      expect(map.classes["advanced"]).toEqual({ model: "composer-2", fallbacks: [] });
+      // No pin and no list: neither the file nor the map names a model.
+      expect(modelLines(plan, P.drifter)).toEqual([]);
+      expect(map.classes["standard"]).toEqual({ fallbacks: [] });
+
+      // A group the operator typed is the pin as typed, so the map keeps it whole.
+      const typed = await planFor(await seedCorpus(), { pins: { advanced: { cursor: "composer-2[effort=low]" } }, efforts: { advanced: "low" } });
+      const typedMap = JSON.parse(contentAt(typed, ".stamity/generated/models/cursor.json")) as { classes: Record<string, { model?: string }> };
+      expect(modelLines(typed, P.reviewer)).toEqual(["model: composer-2[effort=low]"]);
+      expect(typedMap.classes["advanced"]?.model).toBe("composer-2[effort=low]");
+
+      // A family pin the list holds by its variants: the file adds the group, the map keeps the pin.
+      const family = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "claude-opus-5-5" } } });
+      const familyMap = JSON.parse(contentAt(family, ".stamity/generated/models/cursor.json")) as { classes: Record<string, { model?: string }> };
+      expect(modelLines(family, P.reviewer)).toEqual(["model: claude-opus-5-5[effort=high]"]);
+      expect(familyMap.classes["advanced"]?.model).toBe("claude-opus-5-5");
     });
 
     it("drops the chosen model from its own fallbacks when a pin wins", async () => {

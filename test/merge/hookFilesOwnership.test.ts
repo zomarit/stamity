@@ -49,6 +49,8 @@ const CURSOR_HOOKS = ".cursor/hooks.json";
 const CODEX_HOOKS = ".codex/hooks.json";
 const CURSOR_RUNNER = `${HOOKS_GENERATED_DIR}/cursor/stamity-portable-hook.mjs`;
 const CODEX_RUNNER = `${HOOKS_GENERATED_DIR}/codex/stamity-portable-hook.mjs`;
+/** Cursor's model-fill hook, an engine entry first written by 1.15 (REQ-LADDER-007). */
+const MODEL_FILL = `${HOOKS_GENERATED_DIR}/cursor/stamity-model-pins.mjs`;
 
 /** An owner's own Cursor hook, as the plan's criterion writes it. */
 const OWNER_CURSOR_ENTRY = { command: "node scripts/fmt.mjs" };
@@ -292,9 +294,21 @@ describe(".cursor/hooks.json owned entry by entry", () => {
     // The file and the ledger as a 1.14 sync left them: each engine entry relative, recorded by its hash.
     const oneFourteen = JSON.parse(asRelativeCommands(await readText(root, CURSOR_HOOKS))) as { hooks: Record<string, unknown[]> };
     const rehash = new Map<string, string>();
+    // TEST CHANGE, justified (review/101, plan 020 file 2, unit e7-cursor-pins): the
+    // model-fill entry is 1.15's own, so the 1.14 file and ledger are built without
+    // it — derived from today's rendering they held an entry 1.14 never wrote, and the
+    // sync replaced it where a real upgrade has to add it. Its hash is dropped from
+    // the record with it; every other engine entry is respelled as before.
+    const unwritten = new Set<string>();
     for (const [event, entries] of Object.entries(current["hooks"] as Record<string, unknown[]>)) {
-      entries.forEach((entry, index) => rehash.set(memberHash(entry), memberHash(oneFourteen.hooks[event]?.[index])));
+      entries.forEach((entry, index) => {
+        if (JSON.stringify(entry).includes(MODEL_FILL)) unwritten.add(memberHash(entry));
+        else rehash.set(memberHash(entry), memberHash(oneFourteen.hooks[event]?.[index]));
+      });
+      oneFourteen.hooks[event] = (oneFourteen.hooks[event] ?? []).filter((entry) => !JSON.stringify(entry).includes(MODEL_FILL));
     }
+    expect(unwritten.size).toBe(1);
+    expect(JSON.stringify(oneFourteen)).not.toContain(MODEL_FILL);
     expect([...rehash].every(([now, then]) => now !== then)).toBe(true);
     await writeDoc(root, CURSOR_HOOKS, oneFourteen);
     const manifest = await readManifest(root);
@@ -302,7 +316,9 @@ describe(".cursor/hooks.json owned entry by entry", () => {
     const ledger = manifest.ledger.map((row) => {
       const elements = row.coOwned?.elements;
       if (row.path !== CURSOR_HOOKS || elements === undefined) return row;
-      const moved = Object.fromEntries(Object.entries(elements).map(([pointer, hashes]) => [pointer, hashes.map((hash) => rehash.get(hash) ?? hash)]));
+      const moved = Object.fromEntries(
+        Object.entries(elements).map(([pointer, hashes]) => [pointer, hashes.filter((hash) => !unwritten.has(hash)).map((hash) => rehash.get(hash) ?? hash)]),
+      );
       return { ...row, coOwned: { ...row.coOwned, elements: moved } };
     });
     await writeManifest(root, { ...manifest, ledger }, { now: T1 });
@@ -325,6 +341,9 @@ describe(".cursor/hooks.json owned entry by entry", () => {
     // The engine's rows are one block at the first engine row's index (S14): the owner's entry follows it.
     expect(hooks["sessionStart"]).toEqual([...(currentHooks["sessionStart"] ?? []), OWNER_CURSOR_ENTRY]);
     for (const event of Object.keys(currentHooks).filter((key) => key !== "sessionStart")) expect(hooks[event], event).toEqual(currentHooks[event]);
+    // The upgrade added the model-fill entry 1.14 never wrote, once, last on its event.
+    expect((hooks["preToolUse"] ?? []).filter((entry) => JSON.stringify(entry).includes(MODEL_FILL))).toHaveLength(1);
+    expect(JSON.stringify(hooks["preToolUse"]?.at(-1))).toContain(MODEL_FILL);
     expect(await readText(root, CURSOR_HOOKS)).not.toContain(`"node ${CURSOR_RUNNER} `);
     expect(await backups(root)).toEqual([]);
     const check = await runInProcess([checkCommand], ["check"], { cwd: root });
@@ -592,7 +611,7 @@ describe("a --registry fork's hook documents are the engine's by the calls it re
     // TEST CHANGE, justified (review/84, plan 020 file 2, unit e7-cursor-pins):
     // the model-fill hook's entry is among the starters the upgrade moves, so
     // the no-.bak assertion below covers it (REQ-FLOW-037's bound).
-    expect(JSON.stringify(expected)).toContain(`${HOOKS_GENERATED_DIR}/cursor/stamity-model-pins.mjs`);
+    expect(JSON.stringify(expected)).toContain(MODEL_FILL);
 
     await forkSync(root);
     const first = await readText(root, CURSOR_HOOKS);

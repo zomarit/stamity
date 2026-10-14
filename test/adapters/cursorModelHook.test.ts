@@ -187,6 +187,18 @@ describe("the model-fill hook on Cursor's Task calls", () => {
     expect({ status: below.status, stdout: below.stdout }).toEqual({ status: atRoot.status, stdout: atRoot.stdout });
   });
 
+  // review/100: the hook carries the pin as typed, never the agent file's effort group.
+  it("fills a Cursor pin without the agent file's effort group when no list was read", async () => {
+    const rows = await residue({ pins: { advanced: { cursor: "composer-2" } } });
+    expect(contentAt(rows, ".cursor/agents/stamity-reviewer.md")).toMatch(/^model: composer-2\[effort=high\]$/m);
+    const root = await seedRepo(rows);
+    const input = { subagent_type: "stamity-reviewer", prompt: "Review the range." };
+
+    const answer = run(modelPinsEntry(rows).command, root, taskPayload(input));
+    expect(answer.status, answer.stderr).toBe(0);
+    expect(JSON.parse(answer.stdout)).toEqual({ permission: "allow", updated_input: { ...input, model: "composer-2" } });
+  });
+
   it("is wired on preToolUse for Task only, never fail-closed", async () => {
     const entry = modelPinsEntry(await residue(LISTED_MODELS));
     expect(entry.matcher).toBe("Task");
