@@ -737,6 +737,32 @@ describe("st-board — platform reference table", () => {
     expect(access).toMatch(/with no `gh`, the link is read-only, naming the missing check/);
   });
 
+  it("works a REST-only session in REST forms and refuses a Projects board there (REQ-FLOW-087)", async () => {
+    const body = (await board()).parsed.body;
+    const cli = flat(tables(section(body, "Platform reference table"))[0]?.rows[0]?.[2] ?? "");
+    const fill = flat(section(section(body, "Modes"), "fill — intake to items", "###"));
+    const setup = flat(section(section(body, "Modes"), "setup — wiring", "###"));
+
+    // The condition is named by what the session shows, never by a client (invariant 17).
+    expect(cli).toContain(
+      "in a REST-only session (the session-start banner says GraphQL is unavailable, or a `gh api graphql` call is refused), every call takes its REST form",
+    );
+    for (const form of [
+      "`gh api repos/<owner>/<repo>/issues…` for issues and their comments",
+      "`gh api repos/<owner>/<repo>/labels`",
+      "`gh api repos/<owner>/<repo>/pulls/<n>`",
+    ]) {
+      expect(cli).toContain(form);
+    }
+    expect(cli).toContain("Projects boards are unavailable in a REST-only session");
+    // An unattached repository's 403 is not a missing board.
+    expect(cli).toContain("a 403 there is reported as `not attached to this session`, never as a missing board");
+    expect(fill).toContain(
+      "in a REST-only session, `gh api repos/<owner>/<repo>/labels --paginate --jq '.[].name'`",
+    );
+    expect(setup).toContain("In a REST-only session (the GitHub row) a Projects link is refused.");
+  });
+
   it("names the linked repository on every gh issue and api write, never the checkout's default (REQ-BOARD-007)", async () => {
     const text = section((await board()).parsed.body, "Platform reference table");
     const cli = tables(text)[0]?.rows[0]?.[2] ?? "";
@@ -1307,9 +1333,14 @@ describe("st-board — sources, signals, and the inbox", () => {
     const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
     const retirers = inboxBullet(inbox, "Retirers");
 
+    // TEST CHANGE, justified (2026-10-14, REQ-FLOW-080): the pin read "a row its one question
+    // dropped". What changed about the contract: the close no longer asks one question; it walks
+    // each leftover through the question protocol's Close walk, in rounds, so the retirer names
+    // the walk. The retirer set and the three decisions it retires are unchanged.
     expect(retirers).toMatch(
-      /each removing a row its own change fixed, by the Removal rule below; `\/st-work`'s close also removes a row its one question dropped, placed elsewhere or re-dated\.$/,
+      /each removing a row its own change fixed, by the Removal rule below; `\/st-work`'s close also removes a row its close walk dropped, placed elsewhere or re-dated\.$/,
     );
+    expect(retirers).not.toContain("one question");
     expect(new Set([...retirers.matchAll(/`\/(st-[a-z-]+)`/g)].map((match) => match[1]))).toEqual(
       new Set(["st-work", "st-quick"]),
     );
@@ -1332,8 +1363,20 @@ describe("st-board — sources, signals, and the inbox", () => {
       "Leftovers",
     ]);
 
+    // TEST CHANGE, justified (2026-10-14, REQ-FLOW-080, REQ-FLOW-074): the first pin read "a run's
+    // close asks once about every leftover". What changed about the contract: the close walks each
+    // leftover through the client's question tool, in rounds, by the question protocol's Close
+    // walk, so the bullet points there. The pin "`L2 fix; drop L1: <reason>; show L3`" leaves the
+    // list below: that one-line answer form batched every row into one reply, while the protocol's
+    // plain-text fallback asks one leftover per turn (REQ-FLOW-080), so a client with no question
+    // tool met two instructions; the bullet now points at the fallback instead (ruled 2026-10-14).
+    expect(leftovers).not.toContain("asks once");
+    expect(leftovers).not.toContain("`L2 fix; drop L1: <reason>; show L3`");
+    expect(leftovers).toContain(
+      "Each question offers its row's options, the recommended one first: fix now, schedule or drop, `show` on a note, or stop, every leftover row on `Not done:`; a client with no question tool takes the protocol's plain-text fallback.",
+    );
     for (const phrase of [
-      "a run's close asks once about every leftover",
+      "a run's close walks every leftover (`stamity-question-protocol`'s Close walk):",
       "every inbox row tagged `decision-waiting`, listed first",
       "each ledger row neither fixed nor rejected, Minor rows included",
       "each inbox row its change touched but did not fix or whose `by:` day has come",
@@ -1342,7 +1385,6 @@ describe("st-board — sources, signals, and the inbox", () => {
       "Critical and Warning first and never pre-set to drop",
       "`Notes (<p>): drop`",
       "Any other inbox row's answer applies by the Removal rule.",
-      "`L2 fix; drop L1: <reason>; show L3`",
       "or stop, every leftover row on `Not done:`",
       "offered only while the review cap leaves a round and outside the files of an open person QA row",
       "`fix-now failed: <gate or finding>` in its description",
@@ -1535,6 +1577,10 @@ describe("st-board — sources, signals, and the inbox", () => {
     // the block also carries the preview's answer.
     expect(text).toMatch(/`writes` — every write made, with its item id and event id, and the preview's answer/);
     expect(text).toMatch(/`handoff` — the payload passed to `\/st-work`/);
+    // REQ-FLOW-080: the run's own `open` items are walked before the block, which prints last.
+    expect(text).toContain(
+      "Every run walks its `open` items (`stamity-question-protocol`'s Close walk), then returns one block, last:",
+    );
   });
 
   it("closes with a next step derived from the run's own state", async () => {
