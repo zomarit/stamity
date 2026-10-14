@@ -286,21 +286,45 @@ describe("the ladder table shipped in the work command", () => {
     // The third claim, and the one a reader has nowhere else to learn: this
     // paragraph is the only shipped prose stating where a class GOES. Text
     // promising the two keys on every emitted file would misdescribe the rule
-    // the resolvers are built on — an unresolvable class omits the key so the
-    // client's own default applies. Anchored, then answered against the
-    // resolvers, so the clause can neither drift back to the stronger claim nor
-    // outlive the behaviour it describes.
-    expect(prose).toMatch(
-      /leaves selection to the client's own default/,
+    // the resolvers are built on — a class that resolves through nothing omits
+    // the key. Anchored, then answered against the resolvers, so the clause can
+    // neither drift back to the stronger claim nor outlive the behaviour it
+    // describes.
+    // TEST CHANGE, justified (r3-ladder-sentence, REQ-LADDER-006): the anchor read "leaves
+    // selection to the client's own default", the rule before the pick. The paragraph now states
+    // the pick's order (pin, the account's list, the shipped list, else no key), the escalation a
+    // per-call model cannot carry where the agent file's model outranks the call, and the
+    // refused-call fallback; the old sentence is asserted gone so the two rules cannot both ship.
+    // Wrapped lines are joined with one space above, so each sentence is matched whole and a
+    // reflow of the paragraph does not fail it.
+    expect(prose).toContain(
+      "A class resolves through its pin, then the account's own model list, then the shipped list; with none of these the key is left out.",
+    );
+    expect(prose).not.toMatch(/leaves selection to the client's own default/);
+    expect(prose).toContain(
+      "Where the agent file's model outranks the call's, a per-call escalation leaves it unchanged.",
+    );
+    expect(prose).toContain(
+      "When a sub-agent call is refused with a list of models, take the class's first listed fallback, else the closest, and say so in one line.",
     );
     expect(prose).toMatch(/check effective dispatch\s+identity/);
     expect(prose).toMatch(/unresolved assignment/);
+    // The order the sentence states, rung by rung on one client, each rung answering differently
+    // so a reordering shows: the pin while the account lists it, then the account's own list (a
+    // shipped candidate other than entry 0), then the shipped list's entry 0 with no list read.
+    const shipped = MODEL_PRIORITY.codex.standard.map((candidate) => candidate.id);
+    const second = shipped[1];
+    if (second === undefined) throw new Error("the shipped codex list needs two standard candidates");
+    expect(
+      resolveModelValue("standard", "codex", { standard: "pinned-id" }, {}, { listed: ["pinned-id", second] }),
+    ).toBe("pinned-id");
+    expect(resolveModelValue("standard", "codex", {}, {}, { listed: [second] })).toBe(second);
+    expect(resolveModelValue("standard", "codex", {}, {}, {})).toBe(shipped[0]);
     // TEST CHANGE, justified (e2-model-defaults-lister, REQ-LADDER-006, REQ-LADDER-007): this loop
     // asserted the top class resolved on no client with no pin. Claude Code now maps it to its
     // documented `fable` alias and the pick resolves Copilot and Codex from the shipped list, so the
     // omission the sentence promises is measured where it still happens: Cursor with no account
-    // list and no pin, on every class. The wording anchors above are unchanged; file 4's `r3`
-    // rewords the shipped paragraph.
+    // list and no pin, on every class.
     for (const modelClass of MODEL_CLASSES) {
       expect(resolveModelValue(modelClass, "cursor", {}, {}, {}), modelClass).toBeUndefined();
     }

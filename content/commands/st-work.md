@@ -459,14 +459,14 @@ are prompt-carried only. The enforcement is uneven by construction.
 
 ### Model ladder
 
-Four classes, assigned per role. Class names only — concrete model ids live in per-client config,
-and `stamity config` is where an operator pins a model. A role's class is declared once, in that
-role's own agent definition, and the engine projects that one declaration into the `model` and
-`effort` keys wherever the client has a field the class resolves into; the emitted client
-capability disclosure names those carriers and any missing control. A class without a supported
-model name or operator pin leaves selection to the client's own default. A class expresses intent,
-not a verified resolved model: after substitution, check effective dispatch identity before
-asserting the role ran at the required class, and report an unresolved assignment.
+Four classes, assigned per role; an operator pins a model with `stamity config`. A role's class is
+declared once, in that role's own agent definition, and the engine projects it into the client's `model`
+and `effort` fields; the emitted capability disclosure names any missing control. A class resolves
+through its pin, then the account's own model list, then the shipped list; with none of these the key is
+left out. Where the agent file's model outranks the call's, a per-call escalation leaves it unchanged.
+When a sub-agent call is refused with a list of models, take the class's first listed fallback, else the
+closest, and say so in one line. A class is intent, not a verified model: check effective dispatch
+identity before asserting the role ran at its class, and report an unresolved assignment.
 
 The table below restates those declarations; it does not decide them. When a row and an agent file
 disagree, the agent file is the truth and the row is the stale side — report the row rather than
