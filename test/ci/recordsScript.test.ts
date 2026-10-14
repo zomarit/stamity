@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -353,6 +353,30 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(readFileSync(join(w.clone, GITKEEP), "utf8")).toBe("");
   });
 
+  it("refuses, before any write, a records commit holding two paths equal under case folding, naming both spellings", async () => {
+    const w = world();
+    const shouted = "docs/plans/001-Alpha.md";
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const before = w.synced(w.clone);
+    const crafted = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, upstream\n")},${PLAN}`);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, the other spelling\n")},${shouted}`);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# results, upstream\n")},${RUN}/RESULTS.md`);
+    });
+    for (const force of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
+      const result: Result = await records.restore({ ...w.opts, ref: crafted, fetch: false, force });
+      expect(result.code, `${String(force)}: ${result.lines.join("\n")}`).toBe(1);
+      expect(result.lines[0]).toContain("equal under case folding");
+      expect(result.lines[0]).toContain("the old spelling");
+      expect(result.lines).toContain(`${shouted} and ${PLAN}`);
+      expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+      expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results\n");
+      expect(w.synced(w.clone)).toBe(before);
+    }
+    expect(readdirSync(join(w.clone, "docs/plans"))).toEqual(["001-alpha.md"]);
+  });
+
   it.skipIf(!POSIX)("refuses a symlinked folder or file in place of a record deleted on the other side, forced or not, deleting nothing", async () => {
     const w = world();
     const b = await w.machine("b");
@@ -482,6 +506,63 @@ describe("commit", { timeout: 60_000 }, () => {
     expect(w.refs(w.origin)).toBe(before.origin);
     expect(w.refs(fresh)).toBe(before.fresh);
     expect(w.git(w.origin, "show", `records:${PLAN}`)).toBe("# plan");
+  });
+
+  it("refuses both spellings of a record the records branch renamed only in case, pushing nothing, and publishes once the old spelling is gone", async () => {
+    const w = world();
+    const renamed = "docs/plans/001-Alpha.md";
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const oid = w.git(w.clone, "rev-parse", `${upstream}:${PLAN}`);
+    const rename = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--force-remove", "--", PLAN);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${oid},${renamed}`);
+    });
+    w.git(w.clone, "push", "-q", "origin", `${rename}:refs/heads/records`);
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    // The old spelling is still on disk: the one file where the disk folds case, a second file where it does not.
+    expect(existsSync(join(w.clone, PLAN))).toBe(true);
+    const before = { clone: w.refs(w.clone), origin: w.refs(w.origin) };
+    const gates = passing();
+    for (const dryRun of [false, true]) {
+      // oxlint-disable-next-line no-await-in-loop -- each publish reads the checkout the previous one left
+      const refused: Result = await records.publish({ ...w.opts, message: "m", dryRun, runGates: gates.run });
+      expect(refused.code, `${String(dryRun)}: ${refused.lines.join("\n")}`).toBe(1);
+      expect(refused.lines[0]).toContain("equal under case folding");
+      expect(refused.lines[0]).toContain("nothing was pushed");
+      expect(refused.lines[0]).toContain("the old spelling");
+      expect(refused.lines).toContain(`${renamed} and ${PLAN}`);
+    }
+    expect(gates.calls).toHaveLength(0);
+    expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+    // The old spelling deleted (where the disk folds case, the record's one file) and the record written under the branch's spelling.
+    rmSync(join(w.clone, PLAN));
+    w.write(w.clone, renamed, "# plan, revised\n");
+    const published: Result = await records.publish({ ...w.opts, message: "m", runGates: gates.run });
+    expect(published.code, published.lines.join("\n")).toBe(0);
+    expect(published.lines.filter((line) => line.includes("docs/plans/"))).toEqual([`M ${renamed}`]);
+    expect(w.tree("records")).not.toContain(PLAN);
+    expect(w.git(w.origin, "show", `records:${renamed}`)).toBe("# plan, revised");
+  });
+
+  it("refuses a case variant of the placeholder main keeps, naming it, and pushes nothing", async () => {
+    const w = world();
+    const shouting = GITKEEP.replace(".gitkeep", ".GITKEEP");
+    // Main's placeholder leaves its index and the disk, so that where the disk folds case too the variant is a file of its own that commit lists.
+    w.git(w.clone, "rm", "-q", "--cached", "--", GITKEEP);
+    rmSync(join(w.clone, GITKEEP));
+    w.write(w.clone, shouting, "");
+    w.write(w.clone, PLAN, "# plan, revised\n");
+    const before = { clone: w.refs(w.clone), origin: w.refs(w.origin) };
+    const gates = passing();
+    const refused: Result = await records.publish({ ...w.opts, message: "m", runGates: gates.run });
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines[0]).toContain("neither records nor the branch's own files");
+    expect(refused.lines[0]).toContain("nothing was pushed");
+    expect(refused.lines).toContain(shouting);
+    expect(gates.calls).toHaveLength(0);
+    expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+    expect(w.tree("records")).not.toContain(shouting);
   });
 
   it("moves no ref on --dry-run when origin moved, and names restore", async () => {
@@ -707,7 +788,7 @@ describe("the branch templates", () => {
   it("tells a reader how to restore and publish, and that a run in progress is left out", () => {
     const readme = template(README);
     for (const text of ["node scripts/records.mjs setup", "node scripts/records.mjs commit -m", "never forced",
-      "cannot be deleted", "Status: in progress", "deleted on the branch", "publishes it again", "nothing but records"])
+      "cannot be deleted", "Status: in progress", "deleted on the branch", "publishes it again", "nothing but records", "differ only in case", "`commit` refuses to build one"])
       expect(readme).toContain(text);
   });
 });

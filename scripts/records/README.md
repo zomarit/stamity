@@ -28,8 +28,9 @@ nothing, when a record changed on both sides. A record deleted on the branch is 
 checkout only when your copy is the one you last synced, `--force` or not; if you edited it since,
 `restore` refuses the same way, and `--force` keeps it and names it: your next `commit`
 publishes it again unless you remove it. A record the branch renamed only in case is never deleted
-from your checkout.
+from your checkout, and `commit` refuses, naming both spellings, until you delete the old one.
 
 This branch holds nothing but records and its own four files (this README, `.gitignore`,
-`.gitattributes` and `.github/workflows/records.yml`). `restore` refuses a commit that holds
-anything else, writing nothing, so the records checks fail on such a push.
+`.gitattributes` and `.github/workflows/records.yml`), and no two paths that differ only in case.
+`restore` refuses a commit that breaks either rule, writing nothing, so the records checks fail on
+such a push, and `commit` refuses to build one.

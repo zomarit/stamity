@@ -13,11 +13,13 @@
 //                                           is kept, one changed on both refuses the run; one
 //                                           deleted on <ref> is deleted here only if unedited; a
 //                                           <ref> holding anything but records and the branch's
-//                                           own files is refused before any write
+//                                           own files, or two paths equal under case folding, is
+//                                           refused before any write
 //   commit -m <message> [--dry-run] [--allow-deletions]
 //                                           build a commit on the sync base from the records on
 //                                           disk, gate that exact commit, then push it; refuses
-//                                           when origin/records is not the sync base
+//                                           when origin/records is not the sync base, and a tree
+//                                           `restore` would refuse, before any gate
 //   verify --base <sha> [--ref <ref>]       every record path at <sha> has the same blob at <ref>
 //   guard [--ref <ref>]                     refuse any record path tracked at <ref> (HEAD)
 //   init --base <sha>                       create the branch once, from the records at <sha>
@@ -199,15 +201,30 @@ function blockedParent(ctx, path) {
   return null
 }
 
+/**
+ * A records tree holds the records and the files `init` writes, nothing else (main's placeholder in
+ * any case included), and no two paths equal under case folding, which a disk that folds case
+ * writes as one file. `restore` refuses a ref, and `commit` the tree it built, that breaks either
+ * rule; `holds` and `outcome` word the refusal for the verb, `fix` says how to drop an old spelling.
+ */
+function refuseUnsafeTree(ctx, oid, { holds, outcome, fix }) {
+  const paths = splitZ(ctx.git(['ls-tree', '-r', '-z', '--full-tree', '--name-only', oid]))
+  const stray = paths.filter((path) => !BRANCH_FILES.has(path) && (!isRecordPath(path) || KEPT_FOLDED.has(folded(path))))
+  const spellings = new Map()
+  for (const path of paths) spellings.set(folded(path), [...(spellings.get(folded(path)) ?? []), path])
+  const pairs = [...spellings.values()].filter((group) => group.length > 1).map((group) => group.toSorted().join(' and '))
+  const lines = [
+    ...(stray.length === 0 ? [] : [`refused: ${holds} paths that are neither records nor the branch's own files (${[...BRANCH_FILES].join(', ')}); ${outcome}:`, ...stray]),
+    ...(pairs.length === 0 ? [] : [`refused: ${holds} paths equal under case folding, which a disk that folds case writes as one file; ${outcome}. ${fix}:`, ...pairs]),
+  ]
+  if (lines.length > 0) stop(1, lines)
+}
+
 function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false }) {
   if (fetch) fetchRecords(ctx)
   const oid = requireCommit(ctx, ref, 'fetch the records branch, or run `init` once')
-  // A records commit holds the records and the files `init` writes, nothing else: one pushed
-  // without this script that carries more is refused before any write, so the records job fails on it.
-  const stray = splitZ(ctx.git(['ls-tree', '-r', '-z', '--full-tree', '--name-only', oid]))
-    .filter((path) => !BRANCH_FILES.has(path) && (!isRecordPath(path) || KEPT_FOLDED.has(folded(path))))
-  if (stray.length > 0)
-    stop(1, [`refused: ${ref} holds paths that are neither records nor the branch's own files (${[...BRANCH_FILES].join(', ')}); nothing was written:`, ...stray])
+  // One pushed without this script that breaks the tree rule is refused before any write, so the records job fails on it.
+  refuseUnsafeTree(ctx, oid, { holds: `${ref} holds`, outcome: 'nothing was written', fix: 'Delete the old spelling of each on the records branch and commit again' })
   const rows = lsTree(ctx, oid)
   const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
   if (unsupported.length > 0) stop(1, [`refused: ${ref} holds entries restore does not write (only regular files under the record paths):`, ...unsupported])
@@ -295,7 +312,7 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
       ...pending.map(({ row }) => `kept ${row.path}: a local edit not yet published`),
       ...edited.map((path) => `kept ${path}: deleted on ${ref} and edited here; the next \`commit\` publishes it again unless you remove it`),
       ...renamed.map(({ path, spelled }) => `kept ${path}: ${ref} holds it as ${spelled}; rename this copy to that name (where the disk folds case) ` +
-        'or remove it (where the two names are two files), or the next `commit` publishes it under this name too'),
+        'or remove it (where the two names are two files); the next `commit` refuses until you do'),
     ],
   }
 }
@@ -422,6 +439,11 @@ async function publishIn(ctx, { message, dryRun, allowDeletions, runGates, held 
   } finally {
     rmSync(index, { force: true })
   }
+  // Never publish what every later `restore`, and the records job, would refuse.
+  refuseUnsafeTree(ctx, tree, {
+    holds: 'the commit would hold', outcome: 'nothing was pushed',
+    fix: 'Delete the old spelling of each (where the disk folds case, rename the file to the spelling you keep instead) and commit again',
+  })
   if (tree === ctx.git(['rev-parse', `${base}^{tree}`]).trim()) return { code: 0, lines: ['nothing to publish: the records on disk equal origin/records'] }
   const commit = ctx.git(['commit-tree', tree, '-p', base, '-m', message]).trim()
   const status = splitZ(ctx.git(['diff-tree', '-r', '-z', '--no-renames', '--name-status', base, commit]))
