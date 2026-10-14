@@ -213,6 +213,47 @@ function conditionOf(steps: readonly WorkflowStep[], name: string): string {
   return stepOf(steps, name).if ?? "";
 }
 
+/**
+ * ADDED (run 2026-10-13_records-branch, unit r5b-ci-folds, review/26 signed off as S28): a site
+ * build in ci.yml also does the two things docs-site.yml's build does after `npm run build`. It
+ * copies `llms.txt` into the output, and it uploads the output, failing when the output is empty.
+ * So a website pull request keeps both checks before the merge, and a reviewer has the built
+ * bytes to download. Same commands and the same pin as docs-site.yml, under the build step's own
+ * condition, right after it. Returns the artifact name the job uploads under.
+ */
+function expectSiteHandback(steps: readonly WorkflowStep[]): string {
+  const site = stepsOf(docsSite, "build");
+  const names = ["Build the site", "Serve llms.txt at the site root", "Upload the built site"];
+  const at = indexOf(steps, "Build the site");
+  expect(at, "the job builds the site").toBeGreaterThanOrEqual(0);
+  expect(steps.slice(at, at + names.length).map((step) => step.name)).toEqual(names);
+  const condition = conditionOf(steps, "Build the site");
+  for (const name of names) expect(conditionOf(steps, name), name).toBe(condition);
+  const serve = stepOf(steps, "Serve llms.txt at the site root") as WorkflowStep & {
+    readonly "working-directory"?: string;
+  };
+  expect(serve.run).toBe(runOf(site, "Serve llms.txt at the site root"));
+  expect(serve.run).not.toContain("${{");
+  expect(serve["working-directory"], "the copy runs from the repository root").toBeUndefined();
+  const upload = stepOf(steps, "Upload the built site");
+  const source = stepOf(site, "Upload the built site");
+  expect(upload.run).toBeUndefined();
+  expect(upload.uses).toBe(source.uses);
+  expect(upload.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/);
+  const name = String(upload.with?.["name"] ?? "");
+  expect(name, "the artifact is named").not.toBe("");
+  expect(upload.with).toEqual({ ...source.with, name });
+  expect(upload.with).toMatchObject({ path: "website/build", "if-no-files-found": "error", "retention-days": 7 });
+  // No two uploads in one ci.yml run share a name: upload-artifact refuses a second artifact
+  // under a name the run already holds.
+  const uploads = Object.values(ci.workflow.jobs)
+    .flatMap((job) => job.steps)
+    .filter((step) => (step.uses ?? "").startsWith("actions/upload-artifact@"))
+    .map((step) => String(step.with?.["name"] ?? ""));
+  expect(new Set(uploads).size, uploads.join(", ")).toBe(uploads.length);
+  return name;
+}
+
 /** The egress allowlist a job's harden-runner step declares, or `""` when it declares none. */
 function allowlistOf(steps: readonly WorkflowStep[]): string {
   return String(
@@ -409,8 +450,13 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(step["working-directory"], name).toBe("website");
     }
     expect(runOf(check, "Install the site")).toBe("npm ci --ignore-scripts");
+    // TEST CHANGE, justified (run 2026-10-13_records-branch, unit r5b-ci-folds, review/26 signed
+    // off as S28): the llms.txt copy and the upload follow the build, as in docs-site.yml, so the
+    // leg's last steps are five, not three; the build steps keep their place before them.
+    const handback = ["Serve llms.txt at the site root", "Upload the built site"] as const;
+    expect(expectSiteHandback(check)).toBe("docs-site-check");
     // Last, after every gate the leg runs, so no gate reads the site's install or build output.
-    expect(check.slice(-names.length).map((step) => step.name)).toEqual([...names]);
+    expect(check.slice(-(names.length + handback.length)).map((step) => step.name)).toEqual([...names, ...handback]);
     // Evaluated per leg: the LTS leg builds the site on `true`, and on an absent answer (the full
     // side fails closed); `false` builds nothing, and no other leg ever builds it.
     for (const site_build of ["true", "false", ""]) {
@@ -947,6 +993,9 @@ describe("ci.yml — the merge-blocking gate", () => {
         expect(source["working-directory"], from).toBe("website");
       }
       expect(runOf(steps, "Install the site")).toBe("npm ci --ignore-scripts");
+      // ADDED (run 2026-10-13_records-branch, unit r5b-ci-folds, review/26 signed off as S28): the
+      // llms.txt copy and the upload follow the build, as in docs-site.yml.
+      expect(expectSiteHandback(steps)).toBe("docs-site-lanes");
       // ADDED (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes, review/37 signed
       // off as a gap): the website lane also runs the root typecheck, because a website file feeds
       // it (test/ci/tableHeaderScope.test.ts imports website/src/rehype/tableHeaderScope.mjs) and a
@@ -954,6 +1003,8 @@ describe("ci.yml — the merge-blocking gate", () => {
       // (test/ci/recordsOnly.test.ts pins `siteBuild` to the website lane on every lanes answer).
       expect(stepOf(steps, "Typecheck")).toMatchObject({ if: siteBuild, run: runOf(check, "Typecheck") });
       // The whole step list, in order, so a gate dropped from the short lane fails here by name.
+      // TEST CHANGE, justified (run 2026-10-13_records-branch, unit r5b-ci-folds, review/26 signed
+      // off as S28): the list gains the llms.txt copy and the upload after the site build.
       expect(steps.map((step) => step.name)).toEqual([
         "Checkout",
         "Set up Node",
@@ -968,6 +1019,8 @@ describe("ci.yml — the merge-blocking gate", () => {
         "Set up Node for the site",
         "Install the site",
         "Build the site",
+        "Serve llms.txt at the site root",
+        "Upload the built site",
       ]);
       // Every unconditional step stays build-free: only the four guarded steps above build.
       for (const step of steps) {

@@ -462,6 +462,22 @@ jobs:
         working-directory: website
         run: npm run build
 
+      # docs-site.yml's two steps after its build, so a pull request's one site build still proves
+      # the llms.txt copy and an output to upload (`if-no-files-found: error`), and leaves the bytes
+      # to inspect. Named per job, so no two uploads in one run of this file share a name.
+      - name: Serve llms.txt at the site root
+        if: matrix.toolchain && needs.changes.outputs.site_build != 'false'
+        run: cp llms.txt website/build/llms.txt
+
+      - name: Upload the built site
+        if: matrix.toolchain && needs.changes.outputs.site_build != 'false'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-site-check
+          path: website/build
+          if-no-files-found: error
+          retention-days: 7
+
   # The regression gate on the APM route, and the one lane in this file that reads a DEPLOYED
   # TREE rather than a command's exit code.
   #
@@ -866,6 +882,21 @@ jobs:
         if: needs.changes.outputs.site_build == 'true'
         working-directory: website
         run: npm run build
+
+      # docs-site.yml's two steps after its build, as on the `check` job's LTS leg, under this
+      # job's own artifact name.
+      - name: Serve llms.txt at the site root
+        if: needs.changes.outputs.site_build == 'true'
+        run: cp llms.txt website/build/llms.txt
+
+      - name: Upload the built site
+        if: needs.changes.outputs.site_build == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-site-lanes
+          path: website/build
+          if-no-files-found: error
+          retention-days: 7
 
   # The records, which live on the `records` branch and so on no side of the lane split. It runs in
   # the canonical repository alone (a fork has no records branch), on every trigger, and needs no
