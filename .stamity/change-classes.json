@@ -144,6 +144,7 @@
         "test/emit/noBareCliCall.test.ts",
         "test/emit/planner.test.ts",
         "test/emit/substitution.test.ts",
+        "test/emit/upgradeFrom1140.e2e.test.ts",
         "test/manifest/ledger.test.ts",
         "test/manifest/manifest.test.ts",
         "test/manifest/ownedPaths.test.ts",

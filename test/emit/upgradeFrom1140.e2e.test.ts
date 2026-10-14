@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it, type TestContext } from "vitest";
@@ -23,19 +23,29 @@ import { seedGitRepo } from "../support/repoFixtures.ts";
  * it would sit inside this repository's own typecheck and dead-code scopes as an orphan. The
  * fixture is LF on every checkout (`.gitattributes`), which the recorded content hashes need.
  *
- * One encoding, undone on copy: each of the tree's twenty `.mjs` files is stored as
- * `<name>.mjs.fixture`, bytes untouched. Under `test/` a `.mjs` file is a test source to the
- * test-input census (`test/ci/testInputsGuard.test.ts`), and the 1.14.0 session-start hook holds a
- * regex literal past that guard's 200-character bound, which fails it; the linters would also read
- * shipped hook bytes as this repository's source. {@link upgradeFixture} renames them back before
- * the commit, so `sync` meets the tree exactly as 1.14.0 wrote it.
+ * Two encodings, both undone on copy, neither touching a byte inside a file. Each stores names with
+ * the suffix `.fixture`:
+ *   - the tree's twenty `.mjs` files, as `<name>.mjs.fixture`. Under `test/` a `.mjs` file is a test
+ *     source to the test-input census (`test/ci/testInputsGuard.test.ts`), and the 1.14.0
+ *     session-start hook holds a regex literal past that guard's 200-character bound, which fails
+ *     it; the linters would also read shipped hook bytes as this repository's source.
+ *   - every file and folder a client loads as instructions ({@link ENCODED_ROOTS}: the three charter
+ *     files and the five client folders). Under their own names they would be a second, live
+ *     charter inside this repository: a client that discovers nested instruction files — a
+ *     subfolder's `CLAUDE.md` or `AGENTS.md`, nested rules or skills — would load the 1.14.0
+ *     setup's gates beside this repository's own while an agent works on this file.
+ * {@link upgradeFixture} renames both back in the scratch copy, checks both counts and refuses any
+ * `.fixture` name left over, so `sync` meets the tree exactly as 1.14.0 wrote it.
  *
  * What the cases hold, and nothing about the manifest's own shape beyond its ledger's `path`s and
  * the held `plugin` block: the manifest generation moves in this package (a migration on read), and
  * the claims here are the upgrade's, not a schema's.
- *   - `sync` exits 0; every path the 1.14.0 ledger recorded either is still owned after it (rewritten
- *     or confirmed under the owner rules) or was reclaimed; every other file the tree held — the
- *     user's — keeps its bytes; any file `sync` adds is one the new ledger owns.
+ *   - `sync` exits 0; every path the 1.14.0 ledger recorded is still on disk and still owned after it
+ *     (rewritten or confirmed under the owner rules), unless {@link EXPECTED_RECLAIMS} names it with
+ *     its reason; every other file the tree held — the user's — keeps its bytes; any file `sync`
+ *     adds is one the new ledger owns.
+ *   - the user content an operator adds to the co-owned files after a 1.14.0 init
+ *     ({@link JSON_USER_CONTENT}, {@link TEXT_USER_CONTENT}) survives both syncs byte for byte.
  *   - a second `sync` moves no byte: the one permitted difference is the manifest's `updatedAt`, the
  *     write clock `sync` stamps on every run (the same allowance the dist dogfood journey makes).
  *   - `check` exits 0 on the upgraded tree, its `plugin-duplicates` row `pass`.
@@ -52,11 +62,83 @@ const CASE_TIMEOUT_MS = 240_000;
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/release-1-14-0-tree", import.meta.url));
 
-/** The suffix the fixture's `.mjs` files are stored under (see the header). */
+/** The suffix every encoded fixture name is stored under (see the header). */
 const STORED_SUFFIX = ".fixture";
 
 /** How many `.mjs` files the released 1.14.0 four-client tree holds. */
 const STORED_SCRIPT_COUNT = 20;
+
+/** The instruction files and client folders stored encoded at the fixture's root (see the header). */
+const ENCODED_ROOTS: readonly string[] = [
+  ".agents",
+  ".claude",
+  ".codex",
+  ".cursor",
+  ".github",
+  "AGENTS.md",
+  "AGENTS.override.md",
+  "CLAUDE.md",
+];
+
+/**
+ * The 1.14.0-owned paths this engine is expected to delete on the upgrade, each with why. Empty:
+ * this engine retires no artifact a CLI-mode 1.14.0 setup emitted, so every path that tree owned
+ * must still be on disk and owned after `sync`. An engine that drops an artifact on purpose names
+ * its path here, with the reason, in the change that drops it; any other missing path (a client's
+ * tree, the charter, a guard hook) fails the case.
+ */
+const EXPECTED_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>();
+
+/**
+ * One user element inside a co-owned JSON file, as an operator adds it after a 1.14.0 init:
+ * `element` is pushed onto the array at `at`, `member` sets the key `at` ends with. The
+ * engine writes these files with two-space JSON, so {@link jsonSpan} gives the element's exact text.
+ */
+interface JsonUserContent {
+  path: string;
+  at: readonly string[];
+  shape: "element" | "member";
+  value: unknown;
+}
+
+/** One user hook entry or key per co-owned JSON file the 1.14.0 ledger records. */
+const JSON_USER_CONTENT: readonly JsonUserContent[] = [
+  {
+    path: ".claude/settings.json",
+    at: ["hooks", "PreToolUse"],
+    shape: "element",
+    value: { matcher: "Bash", hooks: [{ type: "command", command: "echo team-hook" }] },
+  },
+  {
+    path: ".claude/settings.json",
+    at: ["permissions"],
+    shape: "member",
+    value: { allow: ["Bash(npm test)"] },
+  },
+  {
+    path: ".codex/hooks.json",
+    at: ["hooks", "PreToolUse"],
+    shape: "element",
+    value: { matcher: "Bash", hooks: [{ type: "command", command: "echo team-hook" }] },
+  },
+  {
+    path: ".cursor/hooks.json",
+    at: ["hooks", "preToolUse"],
+    shape: "element",
+    value: { command: "echo team-hook" },
+  },
+];
+
+/**
+ * User text appended to the files the engine shares with the operator by text: a table of the
+ * operator's own in the co-owned `.codex/config.toml`, a line after the managed block of
+ * the Claude bridge, and an ignore line beside the ones init added.
+ */
+const TEXT_USER_CONTENT: readonly { path: string; text: string }[] = [
+  { path: ".codex/config.toml", text: '\n[profiles.team]\nmodel = "team-model"\n' },
+  { path: "CLAUDE.md", text: "\nTeam notes sit below the managed block.\n" },
+  { path: ".gitignore", text: "team-cache/\n" },
+];
 
 /** Repo-relative manifest path; structural, never imported from src/ (cliHarness lane discipline). */
 const MANIFEST_REL = ".stamity/manifest.json";
@@ -124,20 +206,98 @@ function withoutClock(manifest: ObservedManifest): Record<string, unknown> {
   return rest;
 }
 
-/** Renames every `<name>.mjs.fixture` under `dir` back to `<name>.mjs`; returns how many. */
-async function restoreStoredScripts(dir: string): Promise<number> {
+/**
+ * Undoes both encodings in the scratch copy at `dir`: every `<name>.mjs.fixture` back to
+ * `<name>.mjs`, then each of {@link ENCODED_ROOTS} back to its own name. Throws when a count is off
+ * or any `.fixture` name is left, so a fixture edited out of step with this list cannot pass.
+ */
+async function restoreEncodedNames(dir: string): Promise<void> {
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
-  const stored = entries
+  const scripts = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(`.mjs${STORED_SUFFIX}`))
     .map((entry) => join(entry.parentPath, entry.name));
-  await Promise.all(stored.map((path) => rename(path, path.slice(0, -STORED_SUFFIX.length))));
-  return stored.length;
+  if (scripts.length !== STORED_SCRIPT_COUNT) {
+    throw new Error(`expected ${STORED_SCRIPT_COUNT} stored .mjs files in the fixture, found ${scripts.length}`);
+  }
+  await Promise.all(scripts.map((path) => rename(path, path.slice(0, -STORED_SUFFIX.length))));
+  // Renamed after the scripts, whose paths run through these folders.
+  await Promise.all(
+    ENCODED_ROOTS.map((name) => rename(join(dir, `${name}${STORED_SUFFIX}`), join(dir, name))),
+  );
+  const leftover = (await readdir(dir, { recursive: true })).filter((path) =>
+    path.endsWith(STORED_SUFFIX),
+  );
+  if (leftover.length > 0) throw new Error(`encoded names left in the copy: ${leftover.join(", ")}`);
+}
+
+/** Splits a repo-relative POSIX path into segments for `join`. */
+function inRepo(repoDir: string, path: string): string {
+  return join(repoDir, ...path.split("/"));
+}
+
+/** Re-indents every line after the first by `width` spaces. */
+function indented(text: string, width: number): string {
+  return text.split("\n").join(`\n${" ".repeat(width)}`);
 }
 
 /**
- * A fresh pseudo-home fixture holding a copy of the 1.14.0 tree, its scripts renamed back,
- * committed. `edit` runs on the copy before the commit. A missing git binary skips the case; any
- * other failure cleans up and throws.
+ * The exact text a user JSON element occupies in a two-space JSON file: an array element under
+ * `at` sits one level below it, and a member is its key and value at the depth of `at`'s end.
+ */
+function jsonSpan(content: JsonUserContent): string {
+  const body = JSON.stringify(content.value, null, 2);
+  if (content.shape === "element") return indented(body, 2 * (content.at.length + 1));
+  const key = content.at.at(-1) ?? "";
+  return `${JSON.stringify(key)}: ${indented(body, 2 * content.at.length)}`;
+}
+
+/** How many times `span` occurs in `text`. */
+function occurrences(text: string, span: string): number {
+  return text.split(span).length - 1;
+}
+
+/** Adds every user element and line to the restored 1.14.0 tree, as an operator would. */
+async function seedUserContent(repoDir: string): Promise<void> {
+  // Sequential: two entries edit one file.
+  for (const content of JSON_USER_CONTENT) {
+    const file = inRepo(repoDir, content.path);
+    // oxlint-disable-next-line no-await-in-loop -- each edit reads the previous one's write
+    const doc = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+    let parent: Record<string, unknown> = doc;
+    for (const key of content.at.slice(0, -1)) parent = parent[key] as Record<string, unknown>;
+    const last = content.at.at(-1) ?? "";
+    if (content.shape === "element") (parent[last] as unknown[]).push(content.value);
+    else parent[last] = content.value;
+    // oxlint-disable-next-line no-await-in-loop -- each edit reads the previous one's write
+    await writeFile(file, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  }
+  for (const { path, text } of TEXT_USER_CONTENT) {
+    // oxlint-disable-next-line no-await-in-loop -- one file at a time keeps the seeding readable
+    await appendFile(inRepo(repoDir, path), text, "utf8");
+  }
+}
+
+/** Every seeded user span, present exactly once, byte for byte; `when` names the moment. */
+async function expectUserContent(repoDir: string, when: string): Promise<void> {
+  for (const content of JSON_USER_CONTENT) {
+    // oxlint-disable-next-line no-await-in-loop -- a handful of small reads, asserted in order
+    const text = await readFile(inRepo(repoDir, content.path), "utf8");
+    expect(
+      occurrences(text, jsonSpan(content)),
+      `${when}: the user's ${content.at.join(".")} entry in ${content.path}`,
+    ).toBe(1);
+  }
+  for (const { path, text: span } of TEXT_USER_CONTENT) {
+    // oxlint-disable-next-line no-await-in-loop -- a handful of small reads, asserted in order
+    const text = await readFile(inRepo(repoDir, path), "utf8");
+    expect(occurrences(text, span), `${when}: the user's text in ${path}`).toBe(1);
+  }
+}
+
+/**
+ * A fresh pseudo-home fixture holding a copy of the 1.14.0 tree, its names restored, committed.
+ * `edit` runs on the copy before the commit. A missing git binary skips the case; any other failure
+ * cleans up and throws.
  */
 async function upgradeFixture(
   ctx: TestContext,
@@ -146,10 +306,7 @@ async function upgradeFixture(
   const fixture = await makeCliFixture({ entry: "dist" });
   try {
     await cp(FIXTURE_DIR, fixture.repoDir, { recursive: true });
-    const restored = await restoreStoredScripts(fixture.repoDir);
-    if (restored !== STORED_SCRIPT_COUNT) {
-      throw new Error(`expected ${STORED_SCRIPT_COUNT} stored .mjs files in the fixture, found ${restored}`);
-    }
+    await restoreEncodedNames(fixture.repoDir);
     if (edit !== undefined) await edit(fixture.repoDir);
     await seedGitRepo(fixture.repoDir);
   } catch (error) {
@@ -173,11 +330,13 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
     await ensureDistBuilt();
   }, CASE_TIMEOUT_MS);
 
-  it("syncs under the owner rules, a second sync moves no byte, and check exits 0", {
+  it("syncs under the owner rules, keeps the user's content, a second sync moves no byte, and check exits 0", {
     timeout: CASE_TIMEOUT_MS,
   }, async (ctx) => {
-    const fixture = await upgradeFixture(ctx);
+    const fixture = await upgradeFixture(ctx, seedUserContent);
     try {
+      // The spans are what the seeding wrote, so a later miss is the sync's and not the formula's.
+      await expectUserContent(fixture.repoDir, "before sync");
       const before = await treeHashMap(fixture.repoDir);
       const ownedBefore = ledgerPaths(await readManifest(fixture.repoDir));
       // The fixture is the four-client tree, not an empty one: the walk below has work to do.
@@ -212,6 +371,10 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
       // engine files, and the tree holds user files whose bytes the walk above held still.
       expect(rewritten.length).toBeGreaterThan(0);
       expect(userFiles.length).toBeGreaterThan(0);
+      // A missing owned path passes only when it is named, with its reason, as an expected reclaim.
+      expect(reclaimed.toSorted(), "1.14.0-owned paths sync deleted").toEqual(
+        [...EXPECTED_RECLAIMS.keys()].toSorted(),
+      );
       for (const path of reclaimed) {
         expect(ownedAfter.has(path), `${path} was reclaimed yet is still in the ledger`).toBe(false);
       }
@@ -219,9 +382,11 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
         if (before.has(path) || path === MANIFEST_REL) continue;
         expect(ownedAfter.has(path), `sync created ${path}, which no ledger row owns`).toBe(true);
       }
+      await expectUserContent(fixture.repoDir, "after the first sync");
 
       const second = await fixture.run(["sync"]);
       expect(second.code, `second sync failed:\n${second.stdout}\n${second.stderr}`).toBe(0);
+      await expectUserContent(fixture.repoDir, "after the second sync");
       const afterSecond = await treeHashMap(fixture.repoDir);
       expect([...afterSecond.keys()].toSorted()).toEqual([...afterFirst.keys()].toSorted());
       for (const [path, hash] of afterFirst) {
