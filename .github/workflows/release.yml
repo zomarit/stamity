@@ -280,6 +280,13 @@ jobs:
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
         run: npm ci
 
+      # The records live on the `records` branch, which the depth-0 checkout above already fetched
+      # into refs/remotes/origin/records; the restore reads that ref and fetches nothing, for the
+      # reason the resolve step gives (no credential survives the checkout). The records suite and
+      # the leak gate below then read them at their usual paths.
+      - name: Restore the records
+        run: node scripts/records.mjs restore --ref origin/records --no-fetch --force
+
       - name: Verify lockfile is in sync
         run: git diff --exit-code package-lock.json
 
@@ -288,6 +295,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Records suite
+        run: npm run test:records
 
       - name: Leak gate
         run: npm run gate

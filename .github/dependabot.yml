@@ -84,3 +84,17 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+
+  # The `records` branch carries one workflow of its own (`.github/workflows/records.yml`, which only
+  # a push to that branch runs), pinned like the ones above. Dependabot reads the default branch
+  # unless an entry names another, so without this entry those pins would never be bumped. Same
+  # cadence, same prefix and the same comment rule; the bump lands on `records` and is checked by
+  # that workflow's own run.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: records
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope

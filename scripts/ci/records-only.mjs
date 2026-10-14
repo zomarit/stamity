@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// The CI lane classifier: records, specs, learnings and website (`LANE_PATHS`). The file keeps the
-// name it had when records were its only lane, so no reference moves. Importing it performs no I/O.
+// The CI lane classifier: specs, learnings and website (`LANE_PATHS`). The file keeps the name it
+// had when records were its only lane, so no reference moves; the records lane itself is retired,
+// since the records live on the `records` branch and ci.yml's `records` job restores and checks
+// them on every change. Importing it performs no I/O.
 //
 //   node scripts/ci/records-only.mjs --base <sha>
 //
-// Prints six `key=value` lines — `full`, `lanes` (a JSON array), `suites` (space-joined),
-// `site_build`, `cli_check` and `records_only` — and appends the same lines to `$GITHUB_OUTPUT`
-// when the runner provides one. The reason goes to stderr, so the job log says WHY a change got
+// Prints five `key=value` lines — `full`, `lanes` (a JSON array), `suites` (space-joined),
+// `site_build` and `cli_check` — and appends the same lines to `$GITHUB_OUTPUT` when the runner
+// provides one. The reason goes to stderr, so the job log says WHY a change got
 // the lanes job or the full matrix.
 //
 // It fails closed. `full=false` needs all of: a push or pull_request event (read from
@@ -20,10 +22,7 @@
 // one path in no lane, no map or a refused one at the base, a path no entry matches — is
 // `full=true`, which is full CI. `site_build=true` whenever the diff touches a
 // website path, on a full answer too (the full side's LTS leg builds the site then), and whenever
-// the diff could not be read; an empty diff builds no site. `records_only=true` still means every
-// path is a record; it is derived from the lanes, nothing in ci.yml reads it, and it is kept for
-// one release for any reader of the old output: remove it at the first release after this change
-// merges.
+// the diff could not be read; an empty diff builds no site.
 // Exit 2 is reserved for an argument this script does not know, so a typo in the workflow is red
 // rather than quietly full.
 //
@@ -38,28 +37,14 @@ import { pathToFileURL } from 'node:url'
 import { CLASS_FILE, matchGlob, parseClassFile, testEntryError } from '../../src/change/classify.ts'
 
 /**
- * The record locations: run records, the deferral inbox, handoffs, and plans. What they share is
- * that no build, no emitted file and no published byte reads them; the suites that DO read the
- * committed copies are the ones the base commit's test-input map lists for them, which the records
- * lane runs instead of the full matrix. `.stamity/learnings/` is deliberately absent: it feeds the
- * session hook and the troubleshooting count, so it is its own lane, which also builds the CLI and
- * runs its `check`.
- */
-export const RECORDS_PATHS = Object.freeze([
-  '.stamity/runs/**',
-  '.stamity/inbox.md',
-  '.stamity/handoffs/**',
-  'docs/plans/**',
-])
-
-/**
  * Each lane's paths. A path takes the first lane whose pattern holds it, in this key order, so a
- * `docs/` path under `plans/` is a record, under `specs/` a spec, and anywhere else website. A
- * `/**` pattern holds the paths strictly beneath its folder; any other pattern is one exact path.
- * `README.md` is in no lane: it ships in the npm tarball.
+ * `docs/` path under `specs/` is a spec and anywhere else website. A `/**` pattern holds the paths
+ * strictly beneath its folder; any other pattern is one exact path. `README.md` is in no lane: it
+ * ships in the npm tarball. A record location (`.stamity/runs/`, `.stamity/inbox.md`,
+ * `.stamity/handoffs/`) is in no lane either: the records lane is retired, so a record that still
+ * reaches `main` runs the full matrix, beside the `records` job's own guard against it.
  */
 export const LANE_PATHS = Object.freeze({
-  records: RECORDS_PATHS,
   specs: Object.freeze(['docs/specs/**']),
   learnings: Object.freeze(['.stamity/learnings/**']),
   website: Object.freeze(['website/**', 'docs/**']),
@@ -70,7 +55,7 @@ const DIFF_EVENTS = new Set(['push', 'pull_request'])
 
 /**
  * The engine's state-scaffold keep file. `sync` plans it and `stamity check` re-proves it drift-clean,
- * and the dogfood check does not run on the records lane — so a change to one is never a record.
+ * and only the learnings lane runs the dogfood check — so a change to one is in no lane.
  */
 const KEEP_FILE = '.gitkeep'
 
@@ -85,11 +70,6 @@ function holds(pattern, path) {
 function outsideEveryLane(path) {
   const segments = path.split('/')
   return segments.includes('..') || segments.includes('.') || segments.at(-1) === KEEP_FILE
-}
-
-/** True when `path` (repository-relative, `/`-separated, as git prints it) is a record. */
-export function isRecordsPath(path) {
-  return !outsideEveryLane(path) && RECORDS_PATHS.some(pattern => holds(pattern, path))
 }
 
 /** The lane `path` falls in, or null when it falls in none (full CI). */
@@ -107,7 +87,7 @@ export function laneOf(path) {
  * because a site change no required job builds is the failure this answer exists to prevent.
  */
 function fullCi(reason, siteBuild) {
-  return { full: true, lanes: [], suites: [], siteBuild, cliCheck: false, recordsOnly: false, reason }
+  return { full: true, lanes: [], suites: [], siteBuild, cliCheck: false, reason }
 }
 
 /**
@@ -142,9 +122,9 @@ function suitesFromMap(paths, map) {
 }
 
 /**
- * The classification, with no I/O: `{ full, lanes, suites, siteBuild, cliCheck, recordsOnly,
- * reason }`. `map` is the base commit's parsed `testInputs`, or `null` when it has none or a
- * refused one; `null` and an absent `map` are full CI. `lanes` is sorted; `suites` is the sorted
+ * The classification, with no I/O: `{ full, lanes, suites, siteBuild, cliCheck, reason }`. `map`
+ * is the base commit's parsed `testInputs`, or `null` when it has none or a refused one; `null`
+ * and an absent `map` are full CI. `lanes` is sorted; `suites` is the sorted
  * union of every map entry a changed path matches, each suite once.
  */
 export function decide({ event, base, paths, map = null }) {
@@ -171,12 +151,11 @@ export function decide({ event, base, paths, map = null }) {
     suites,
     siteBuild: hit.has('website'),
     cliCheck: hit.has('learnings'),
-    recordsOnly: lanes.length === 1 && lanes[0] === 'records',
     reason: `all ${paths.length} changed path(s) fall in the lanes ${lanes.join(', ')}`,
   }
 }
 
-/** The six output lines, in the order the workflow maps them. */
+/** The five output lines, in the order the workflow maps them. */
 function outputLines(decision) {
   return [
     `full=${decision.full}`,
@@ -184,7 +163,6 @@ function outputLines(decision) {
     `suites=${decision.suites.join(' ')}`,
     `site_build=${decision.siteBuild}`,
     `cli_check=${decision.cliCheck}`,
-    `records_only=${decision.recordsOnly}`,
   ].join('\n') + '\n'
 }
 
@@ -217,7 +195,7 @@ function changedPaths(base, cwd) {
 function loadBaseMap(base, cwd = process.cwd()) {
   let text
   try {
-    text = execFileSync('git', ['show', `${base}:${CLASS_FILE}`], {
+    text = execFileSync('git', ['show', '--no-textconv', `${base}:${CLASS_FILE}`], {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],

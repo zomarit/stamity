@@ -115,14 +115,21 @@ suite between them. Beside the six steps you already ran, it adds six things:
   notice, never a red lane; a broken root is red.
 
 A change whose every path falls in a lane takes the `lanes` job instead of those three.
-`node scripts/ci/records-only.mjs` decides; its name is older than three of its four lanes. The
-lanes, the engine's `.gitkeep` excepted at every location:
+`node scripts/ci/records-only.mjs` decides; its name is older than its three lanes. The lanes, the
+engine's `.gitkeep` excepted at every location:
 
-- `records`: run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
-  `.stamity/handoffs/`, and plans under `docs/plans/`.
 - `specs`: the spec under `docs/specs/`.
 - `learnings`: `.stamity/learnings/`.
-- `website`: `website/` and every other path under `docs/`.
+- `website`: `website/` and every other path under `docs/`, plans under `docs/plans/` included.
+
+A record (run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
+`.stamity/handoffs/`) is in no lane, so a change to one runs the full side. The records belong on
+the `records` branch, and the `records` job checks them there. It runs on every change, beside
+whichever side ran, in this repository only, and it is merge-blocking here. It runs
+`node scripts/records.mjs guard`, which refuses a record tracked on the commit, restores the records
+from `origin/records` with `node scripts/records.mjs restore`, and then runs `npm run test:records`,
+the leak gate over a worktree of that branch, and the measurements page's drift check. A fork has
+no records branch, so there the job is skipped.
 
 The job runs the suites that read the lanes the change fell in, the generate-and-diff step, the
 leak gate and, on pull requests, the hygiene scan. Those suites come from the test-input map, the
@@ -142,12 +149,13 @@ site, last, when the change touches a `website` path or no diff was read.
 A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed
 commit's tree is the head tree of a pull request whose latest `ci.yml` pull-request run passed
 `all-ci-checks`. When it is, the check matrix, the two route lanes and the `lanes` job all skip:
-that tree was already proven. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
+that tree was already proven; the `records` job still runs. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
 answers not proven rather than failing a job, so the push runs the `lanes` job or the full side, as
 `records-only.mjs` decides for its diff. The skip reaches only `ci.yml`:
 `pack-signing-rehearsal.yml` and `docs-site.yml` still run on a push whose paths match their own
 filters. `all-ci-checks` asserts which of the three shapes ran, a proven push, the `lanes` job or
-the full side, so neither short answer reads as a full pass.
+the full side, so neither short answer reads as a full pass. It also asserts the `records` job:
+passed in this repository, skipped in a fork.
 
 Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
 `STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`

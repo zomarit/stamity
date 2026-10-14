@@ -19,12 +19,10 @@ import { selectTests, type TestInputEntry } from "../../src/change/testInputs.ts
 // @ts-expect-error — import-safe native ESM CI helper, outside the product package.
 import * as lanesModule from "../../scripts/ci/records-only.mjs";
 
-const { decide, isRecordsPath, LANE_PATHS, laneOf, RECORDS_PATHS } = lanesModule as Record<string, unknown>;
+const { decide, LANE_PATHS, laneOf } = lanesModule as Record<string, unknown>;
 
 // Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own inbox.
 const INBOX = [".stamity", "inbox.md"].join("/");
-// Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own handoffs keep file.
-const HANDOFFS_KEEP = [".stamity/handoffs", ".gitkeep"].join("/");
 
 /**
  * The CI lane classifier, `scripts/ci/records-only.mjs` (the file name predates the other lanes).
@@ -32,10 +30,11 @@ const HANDOFFS_KEEP = [".stamity/handoffs", ".gitkeep"].join("/");
  * What it guards is one direction of one mistake: a change that touches code must never be
  * classified into a lane, because that classification skips the three heavy jobs. So every
  * near-miss here is asserted to read `full`, and a lane is asserted only for diffs made of that
- * lane's paths alone. The records answer (`recordsOnly`, the `records_only` output) is kept for
- * one release and still means "every path is a record". The CLI half runs against real scratch
- * repositories, because the property that matters — what `git diff` lists — is not visible to
- * the pure half.
+ * lane's paths alone. The records lane and its `records_only` output are retired (run
+ * 2026-10-13_records-branch, unit r5-ci-records-job): the records move to their own branch, and CI's
+ * `records` job restores and checks them there, so a record path is in no lane. The CLI half runs
+ * against real scratch repositories, because the property that matters — what `git diff` lists —
+ * is not visible to the pure half.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -48,7 +47,6 @@ interface Decision {
   readonly suites: readonly string[];
   readonly siteBuild: boolean;
   readonly cliCheck: boolean;
-  readonly recordsOnly: boolean;
   readonly reason: string;
 }
 interface DecideInput {
@@ -59,7 +57,6 @@ interface DecideInput {
   map?: readonly TestInputEntry[] | null | undefined;
 }
 const decideRaw = decide as (input: DecideInput) => Decision;
-const isRecords = isRecordsPath as (path: string) => boolean;
 const laneOfTyped = laneOf as (path: string) => string | null;
 const lanePaths = LANE_PATHS as Readonly<Record<string, readonly string[]>>;
 
@@ -89,19 +86,24 @@ function mapSelection(paths: readonly string[]): string[] {
 }
 
 /**
- * The floor: the suites `LANE_SUITES` (with `RECORDS_SUITES` as the records lane) listed on
- * 2026-10-08, the last day the classifier spelled them. The map may add to a lane, never drop one.
+ * The floor: the suites `LANE_SUITES` listed on 2026-10-08, the last day the classifier spelled
+ * them. The map may add to a lane, never drop one.
+ *
+ * TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the
+ * records lane and its floor are retired, and the specs floor drops `test/records` and
+ * `test/records/specStatus.test.ts`. The default suite no longer runs `test/records/**`; CI's
+ * `records` job runs the whole records suite on every change instead, and the spec-status
+ * vocabulary case moved to `test/authoring/specStatusRules.test.ts`, which the floor gains.
  */
-const RECORDS_FLOOR: readonly string[] = [
-  "test/records",
-  "test/docsPages.test.ts",
-  "test/cli/docs/measurements.test.ts",
-  "test/authoring/specPlanCoverage.test.ts",
-  "test/ci/leakGate.test.ts",
-];
 const LANE_FLOOR: Readonly<Record<string, readonly string[]>> = {
-  records: RECORDS_FLOOR,
-  specs: [...RECORDS_FLOOR, "test/records/specStatus.test.ts", "test/ci/docsRoster.test.ts"],
+  specs: [
+    "test/docsPages.test.ts",
+    "test/cli/docs/measurements.test.ts",
+    "test/authoring/specPlanCoverage.test.ts",
+    "test/authoring/specStatusRules.test.ts",
+    "test/ci/leakGate.test.ts",
+    "test/ci/docsRoster.test.ts",
+  ],
   learnings: ["test/learnings/repoLearnings.test.ts", "test/ci/leakGate.test.ts"],
   website: [
     "test/ci/docsSite.test.ts",
@@ -141,148 +143,114 @@ function outputsOf(stdout: string): Record<string, string> {
   );
 }
 
-describe("the records list", () => {
-  it("is the four record locations and nothing else", () => {
-    expect(RECORDS_PATHS).toEqual([
-      // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every record.
-      [".stamity/runs", "**"].join("/"),
-      INBOX,
-      [".stamity/handoffs", "**"].join("/"),
-      ["docs/plans", "**"].join("/"),
-    ]);
+// TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the
+// describe "the records list" pinned `RECORDS_PATHS`, `isRecordsPath` and the records lane's suites.
+// The lane is retired: the records move to the `records` branch, and CI's `records` job restores
+// them and runs the records suite on every change, so this describe pins the retirement instead —
+// no records export, and a record path in no lane, which is full CI.
+describe("the records lane, retired", () => {
+  it("exports no records list and no records predicate", () => {
+    expect(lanesModule).not.toHaveProperty("RECORDS_PATHS");
+    expect(lanesModule).not.toHaveProperty("isRecordsPath");
+    expect(lanesModule).not.toHaveProperty("RECORDS_SUITES");
+    expect(Object.keys(lanePaths)).not.toContain("records");
   });
 
-  it("matches a file in each record location", () => {
+  it("puts a run record, the inbox and a handoff in no lane, so a diff of them alone is full CI", () => {
     for (const path of [
       ".stamity/runs/2026-09-30_x/record.md",
       ".stamity/runs/2026-09-30_x/reports/u1-implementer-r1.md",
       INBOX,
       ".stamity/handoffs/archive/2026-09-22_note_8457c.md",
-      "docs/plans/013-optimization-sweep-03.md",
     ]) {
-      expect(isRecords(path), path).toBe(true);
+      expect(laneOfTyped(path), path).toBeNull();
+      for (const event of ["push", "pull_request"]) {
+        const decision = decideTyped({ event, base: SHA, paths: [path] });
+        expect(decision, `${event} ${path}`).toEqual({
+          full: true,
+          lanes: [],
+          suites: [],
+          siteBuild: false,
+          cliCheck: false,
+          reason: expect.stringContaining(path),
+        });
+      }
     }
   });
 
-  it("refuses every near miss, the learnings and the engine-written keep file", () => {
-    for (const path of [
-      // The learnings feed the session hook and the troubleshooting count: not a record.
-      ".stamity/learnings/some-finding.md",
-      // Engine-emitted state scaffold, planned by sync and re-proven by the dogfood check.
-      HANDOFFS_KEEP,
-      ".stamity/runs/.gitkeep",
-      // Prefix look-alikes.
-      ".stamity/runsX/record.md",
-      ".stamity/runs",
-      ".stamity/inbox.md.bak",
-      ".stamity/inbox.mdx",
-      "docs/plans",
-      "docs/plans-old/001.md",
-      "docs/specs/everyday-flows.md",
-      ".stamity/manifest.json",
-      "src/cli.ts",
-      // Case differs: git paths are case-exact, and the lane fails closed.
-      ".Stamity/runs/x.md",
-      // A segment that walks back out of the record location.
-      ".stamity/runs/../../src/cli.ts",
-    ]) {
-      expect(isRecords(path), path).toBe(false);
-    }
-  });
-
-  it("names the suites that read the committed records, and each exists", () => {
-    // Confirmed at build (2026-09-30) by reading which suites open the REAL repository-root
-    // copies of the four locations: the ledgers and the spec-status walk (test/records), the
-    // measurements page rendered from the committed runs, the plan-coverage check over two real
-    // plans, and the two leak-gate runs over the whole tree (docsPages and leakGate). The
-    // leak-gate evasion and hygiene suites run on scratch trees and are not in the list.
-    // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
-    // `RECORDS_SUITES` left the classifier; the records suites are what the census map gives the
-    // four record locations. The pinned list moved here as `RECORDS_FLOOR`, which the map's answer
-    // for each location must hold, and the answer is the census's own records suites.
-    expect(lanesModule).not.toHaveProperty("RECORDS_SUITES");
-    for (const pattern of RECORDS_PATHS as readonly string[]) {
-      const path = sampleUnder(pattern);
-      const decision = decideTyped({ event: "pull_request", base: SHA, paths: [path] });
-      expect(decision, path).toMatchObject({ full: false, lanes: ["records"], recordsOnly: true });
-      expect(decision.suites, path).toEqual(expect.arrayContaining([...RECORDS_FLOOR]));
-      expect(decision.suites, path).toEqual(mapSelection([path]));
-      for (const suite of decision.suites) expect(existsSync(join(REPO_ROOT, suite)), suite).toBe(true);
-    }
+  it("puts a plan under docs/plans on the website lane, with the site build", () => {
+    const path = "docs/plans/013-optimization-sweep-03.md";
+    expect(laneOfTyped(path)).toBe("website");
+    expect(decideTyped({ event: "pull_request", base: SHA, paths: [path] })).toMatchObject({
+      full: false,
+      lanes: ["website"],
+      suites: mapSelection([path]),
+      siteBuild: true,
+      cliCheck: false,
+    });
   });
 });
 
+// TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): these
+// cases read `recordsOnly` over record paths. That answer is retired with the records lane, so each
+// case now reads `full` over a spec path, the narrowest lane left, and keeps its event, base and
+// diff inputs one for one; the records-only "reads true" case is the retirement above.
 describe("decide — the pure classification", () => {
-  it("reads true for a push or pull request whose every path is a record", () => {
-    for (const event of ["push", "pull_request"]) {
-      const decision = decideTyped({
-        event,
-        base: SHA,
-        paths: [".stamity/runs/x/record.md", "docs/plans/013-x.md", INBOX],
-      });
-      expect(decision.recordsOnly, event).toBe(true);
-    }
-  });
+  const SPEC = "docs/specs/everyday-flows.md";
 
-  it("reads false the moment one path is not a record", () => {
+  it("reads full the moment one path is in no lane", () => {
     const decision = decideTyped({
       event: "push",
       base: SHA,
-      paths: [".stamity/runs/x/record.md", "src/cli.ts"],
+      paths: [SPEC, "src/cli.ts"],
     });
     // TEST CHANGE, justified (2026-10-08, unit a2-ci-lanes): the decision carries the lane answer
-    // beside `recordsOnly` (`full`, `lanes`, `suites`, `siteBuild`, `cliCheck`), so the whole
-    // object is pinned to the full-CI answer instead of the two keys it used to have.
+    // (`full`, `lanes`, `suites`, `siteBuild`, `cliCheck`), so the whole object is pinned to the
+    // full-CI answer instead of the two keys it used to have.
     expect(decision).toEqual({
       full: true,
       lanes: [],
       suites: [],
       siteBuild: false,
       cliCheck: false,
-      recordsOnly: false,
       reason: expect.stringContaining("src/cli.ts"),
     });
   });
 
-  it("reads false for a learnings change", () => {
-    expect(
-      decideTyped({ event: "push", base: SHA, paths: [".stamity/learnings/x.md"] }).recordsOnly,
-    ).toBe(false);
-  });
-
-  it("reads false with no base to compare against", () => {
+  it("reads full with no base to compare against", () => {
     for (const base of [undefined, "", "0".repeat(40), "0000000", "not-a-sha", "--output=/tmp/x"]) {
-      const decision = decideTyped({ event: "push", base, paths: [".stamity/runs/x/record.md"] });
-      expect(decision.recordsOnly, String(base)).toBe(false);
+      const decision = decideTyped({ event: "push", base, paths: [SPEC] });
+      expect(decision.full, String(base)).toBe(true);
     }
+    expect(decideTyped({ event: "push", base: SHA, paths: [SPEC] }).full).toBe(false);
   });
 
-  it("reads false on the schedule, a dispatch, or an event it does not know", () => {
+  it("reads full on the schedule, a dispatch, or an event it does not know", () => {
     for (const event of ["schedule", "workflow_dispatch", "merge_group", "", undefined]) {
-      const decision = decideTyped({ event, base: SHA, paths: [".stamity/runs/x/record.md"] });
-      expect(decision.recordsOnly, String(event)).toBe(false);
+      const decision = decideTyped({ event, base: SHA, paths: [SPEC] });
+      expect(decision.full, String(event)).toBe(true);
     }
   });
 
-  it("reads false for an empty diff, since nothing proves the change is a record", () => {
-    expect(decideTyped({ event: "push", base: SHA, paths: [] }).recordsOnly).toBe(false);
+  it("reads full for an empty diff, since nothing proves the change is in a lane", () => {
+    expect(decideTyped({ event: "push", base: SHA, paths: [] }).full).toBe(true);
   });
 });
 
 // ADDED by run 2026-10-08_maintainer-tooling, unit a2-ci-lanes: the website, spec and learnings
 // lanes beside the records lane. Same direction of risk as above: a path no lane names is full CI.
-describe("the lanes — website, specs and learnings beside the records", () => {
-  const ALL_LANES = ["records", "specs", "learnings", "website"];
+// TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the records lane is
+// retired, so three lanes are left and every records sample below moves to one of them.
+describe("the lanes — website, specs and learnings", () => {
+  const ALL_LANES = ["specs", "learnings", "website"];
   const SAMPLE: Readonly<Record<string, string>> = {
-    records: ".stamity/runs/x/record.md",
     specs: "docs/specs/everyday-flows.md",
     learnings: ".stamity/learnings/some-finding.md",
     website: "website/package-lock.json",
   };
 
-  it("names four lanes, the records lane's paths unchanged", () => {
+  it("names three lanes", () => {
     expect(Object.keys(lanePaths)).toEqual(ALL_LANES);
-    expect(lanePaths["records"]).toEqual(RECORDS_PATHS);
     // Fixture data kept out of the test-input census: the globs are built at run time, as literals they name every lane file.
     expect(lanePaths["specs"]).toEqual([["docs/specs", "**"].join("/")]);
     expect(lanePaths["learnings"]).toEqual([[".stamity/learnings", "**"].join("/")]);
@@ -330,29 +298,29 @@ describe("the lanes — website, specs and learnings beside the records", () => 
         suites: mapSelection([path]),
         siteBuild: lane === "website",
         cliCheck: lane === "learnings",
-        recordsOnly: lane === "records",
       });
     }
   });
 
-  it("runs the union of two lanes' suites with no suite twice, and is records-only on neither", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the
+  // second lane of the pair was `records`; it is `learnings`, and the records-only answer is retired.
+  it("runs the union of two lanes' suites with no suite twice", () => {
     const decision = decideTyped({
       event: "push",
       base: SHA,
-      paths: ["docs/specs/x.md", ".stamity/runs/r/record.md"],
+      paths: ["docs/specs/x.md", ".stamity/learnings/x.md"],
     });
     expect(decision.full).toBe(false);
-    expect(decision.lanes).toEqual(["records", "specs"]);
+    expect(decision.lanes).toEqual(["learnings", "specs"]);
     // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
     // the union was `LANE_SUITES.specs`, which carried every records suite; it is now the union of
     // every census entry either path matches, the selection `selectTests` makes for the two.
-    expect(decision.suites).toEqual(mapSelection(["docs/specs/x.md", ".stamity/runs/r/record.md"]));
-    expect(decision.suites).toEqual(expect.arrayContaining([...(LANE_FLOOR["specs"] ?? []), ...RECORDS_FLOOR]));
+    expect(decision.suites).toEqual(mapSelection(["docs/specs/x.md", ".stamity/learnings/x.md"]));
+    expect(decision.suites).toEqual(expect.arrayContaining([...(LANE_FLOOR["specs"] ?? []), ...(LANE_FLOOR["learnings"] ?? [])]));
     expect(new Set(decision.suites).size).toBe(decision.suites.length);
-    expect(decision.recordsOnly).toBe(false);
     const everything = decideTyped({ event: "push", base: SHA, paths: Object.values(SAMPLE) });
-    expect(everything.lanes).toEqual(["learnings", "records", "specs", "website"]);
-    expect(everything).toMatchObject({ full: false, siteBuild: true, cliCheck: true, recordsOnly: false });
+    expect(everything.lanes).toEqual(["learnings", "specs", "website"]);
+    expect(everything).toMatchObject({ full: false, siteBuild: true, cliCheck: true });
     expect(new Set(everything.suites).size).toBe(everything.suites.length);
     expect(everything.suites).toContain("test/learnings/repoLearnings.test.ts");
     expect(everything.suites).toContain("test/ci/docsSite.test.ts");
@@ -370,6 +338,11 @@ describe("the lanes — website, specs and learnings beside the records", () => 
       "src/cli.ts",
       "docs/../src/cli.ts",
       "website/./x.md",
+      // ADDED (TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job)): the record
+      // locations, in no lane since the records lane retired.
+      ".stamity/runs/x/record.md",
+      INBOX,
+      ".stamity/handoffs/x.md",
     ]) {
       expect(laneOfTyped(path), path).toBeNull();
       // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes,
@@ -395,15 +368,18 @@ describe("the lanes — website, specs and learnings beside the records", () => 
       ["docs/getting-started.md", "README.md"],
       ["src/cli.ts", "content/x.md", "website/package-lock.json"],
       [".stamity/runs/r/record.md", "docs/specs/x.md", "docs/troubleshooting.md", "src/cli.ts"],
+      // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): moved from the
+      // no-site list below, since a plan under `docs/plans/` is a website path now.
+      ["docs/plans/019-x.md", "README.md"],
     ]) {
       const decision = decideTyped({ event: "pull_request", base: SHA, paths });
-      expect(decision, paths.join(" ")).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true, recordsOnly: false });
+      expect(decision, paths.join(" ")).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true });
     }
     // A full answer whose diff names no site path builds no site.
     for (const paths of [
       ["src/cli.ts"],
       ["docs/specs/x.md", "src/cli.ts"],
-      ["docs/plans/019-x.md", "README.md"],
+      [".stamity/runs/r/record.md", "README.md"],
       [".stamity/learnings/x.md", "content/x.md"],
       ["website-old/x", "docs/../src/cli.ts"],
     ]) {
@@ -422,12 +398,14 @@ describe("the lanes — website, specs and learnings beside the records", () => 
     expect(decideTyped({ event: "push", base: SHA, paths: [] })).toMatchObject({ full: true, siteBuild: false });
   });
 
-  it("sends a docs path to the website lane unless it sits under plans or specs", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): a plan is a
+  // website path now, so only `docs/specs/` keeps a docs path off the website lane.
+  it("sends a docs path to the website lane unless it sits under specs", () => {
     expect(laneOfTyped("docs/specs.md")).toBe("website");
     expect(laneOfTyped("docs/plans-old/x.md")).toBe("website");
     expect(laneOfTyped("docs/specs-old/x.md")).toBe("website");
     expect(laneOfTyped("docs/getting-started.md")).toBe("website");
-    expect(laneOfTyped("docs/plans/019-x.md")).toBe("records");
+    expect(laneOfTyped("docs/plans/019-x.md")).toBe("website");
     expect(laneOfTyped("docs/specs/x.md")).toBe("specs");
     expect(laneOfTyped(".stamity/learnings/x.md")).toBe("learnings");
   });
@@ -451,35 +429,37 @@ function under(folder: string): string {
 // ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (REQ-FLOW-062, REQ-PROVE-031):
 // the lanes' suites come from the base commit's test-input map. The direction of risk is the same
 // as above: a path the map cannot answer for, an "all" entry, or no map at all is full CI.
+// TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): every case below
+// that used a run record as its lane path uses a learnings or spec path, since a record is in no
+// lane now; each map, answer and assertion is otherwise kept.
 describe("decide — the lanes' suites from the base commit's map", () => {
-  const RUNS = under(".stamity/runs");
+  const LEARNINGS = under(".stamity/learnings");
   const DOCS = under("docs");
   const SITE = under("website");
 
   it("unions every entry a lane path matches, and leaves out an entry no changed path matches", () => {
     const map = [
-      { glob: RUNS, tests: ["test/a.test.ts", "test/b.test.ts"] },
+      { glob: LEARNINGS, tests: ["test/a.test.ts", "test/b.test.ts"] },
       { glob: DOCS, tests: ["test/b.test.ts", "test/c.test.ts"] },
       { glob: SITE, tests: ["test/w.test.ts"] },
     ];
-    const paths = [".stamity/runs/x/record.md", "docs/plans/001-x.md"];
+    const paths = [".stamity/learnings/x.md", "docs/specs/001-x.md"];
     const decision = decideRaw({ event: "pull_request", base: SHA, paths, map });
     expect(decision).toMatchObject({
       full: false,
-      lanes: ["records"],
+      lanes: ["learnings", "specs"],
       suites: ["test/a.test.ts", "test/b.test.ts", "test/c.test.ts"],
-      recordsOnly: true,
     });
     // The same union `selectTests` gives for these paths and this map (review/77).
     expect(decision.suites).toEqual(selectTests({ paths, class: "records", map }).files);
   });
 
-  it("names the census's records suites for a records-only diff", () => {
-    const paths = [".stamity/runs/x/record.md", INBOX];
+  it("names the census's spec suites for a specs-only diff", () => {
+    const paths = ["docs/specs/x.md", "docs/specs/y.md"];
     const decision = decideTyped({ event: "push", base: SHA, paths });
-    expect(decision).toMatchObject({ full: false, lanes: ["records"], recordsOnly: true });
+    expect(decision).toMatchObject({ full: false, lanes: ["specs"] });
     expect(decision.suites).toEqual(mapSelection(paths));
-    // The census lists its own guard on every records entry, which `RECORDS_SUITES` never did.
+    // The census lists its own guard on every spec and docs entry, which `RECORDS_SUITES` never did.
     expect(decision.suites).toContain("test/ci/testInputsGuard.test.ts");
   });
 
@@ -495,8 +475,8 @@ describe("decide — the lanes' suites from the base commit's map", () => {
 
   it("reads full with no map, an empty one, or the argument left out, building the site only for a site path", () => {
     for (const map of [null, [], undefined]) {
-      const records = decideRaw({ event: "pull_request", base: SHA, paths: [".stamity/runs/x/record.md"], map });
-      expect(records, String(map)).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: false, recordsOnly: false });
+      const learnings = decideRaw({ event: "pull_request", base: SHA, paths: [".stamity/learnings/x.md"], map });
+      expect(learnings, String(map)).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: false });
       const site = decideRaw({ event: "pull_request", base: SHA, paths: ["website/x.md"], map });
       expect(site, String(map)).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true });
     }
@@ -504,22 +484,22 @@ describe("decide — the lanes' suites from the base commit's map", () => {
   });
 
   it("reads full when one lane path matches no entry, naming it", () => {
-    const map = [{ glob: RUNS, tests: ["test/a.test.ts"] }];
-    const decision = decideRaw({ event: "pull_request", base: SHA, paths: [".stamity/runs/x/record.md", "website/x.md"], map });
+    const map = [{ glob: LEARNINGS, tests: ["test/a.test.ts"] }];
+    const decision = decideRaw({ event: "pull_request", base: SHA, paths: [".stamity/learnings/x.md", "website/x.md"], map });
     expect(decision).toMatchObject({ full: true, lanes: [], suites: [], siteBuild: true });
     expect(decision.reason).toContain("website/x.md");
   });
 
   it("reads full when a matching entry says all, naming the entry", () => {
     const map = [
-      { glob: RUNS, tests: ["test/a.test.ts"] },
+      { glob: LEARNINGS, tests: ["test/a.test.ts"] },
       { glob: DOCS, tests: "all" as const },
     ];
-    const decision = decideRaw({ event: "push", base: SHA, paths: [".stamity/runs/x/record.md", "docs/plans/1.md"], map });
+    const decision = decideRaw({ event: "push", base: SHA, paths: [".stamity/learnings/x.md", "docs/plans/1.md"], map });
     expect(decision).toMatchObject({ full: true, lanes: [], suites: [] });
     expect(decision.reason).toContain(DOCS);
     // An "all" entry no changed path matches selects nothing.
-    expect(decideRaw({ event: "push", base: SHA, paths: [".stamity/runs/x/record.md"], map })).toMatchObject({
+    expect(decideRaw({ event: "push", base: SHA, paths: [".stamity/learnings/x.md"], map })).toMatchObject({
       full: false,
       suites: ["test/a.test.ts"],
     });
@@ -529,8 +509,8 @@ describe("decide — the lanes' suites from the base commit's map", () => {
     // `parseClassFile` refuses these at the base; the pure half refuses them again, since the
     // workflow passes the list to `npx vitest run` unquoted.
     for (const name of ["--reporter=json", "test/a b.test.ts", "test/x/*.test.ts", "../outside.test.ts"]) {
-      const map = [{ glob: RUNS, tests: ["test/a.test.ts", name] }];
-      const decision = decideRaw({ event: "push", base: SHA, paths: [".stamity/runs/x/record.md"], map });
+      const map = [{ glob: LEARNINGS, tests: ["test/a.test.ts", name] }];
+      const decision = decideRaw({ event: "push", base: SHA, paths: [".stamity/learnings/x.md"], map });
       expect(decision, name).toMatchObject({ full: true, lanes: [], suites: [] });
       expect(decision.reason, name).toContain(JSON.stringify(name));
     }
@@ -593,7 +573,9 @@ describe("the lanes' own decision code", () => {
         const holds = pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : path === pattern;
         expect(holds, `${pattern} holds ${path}`).toBe(false);
       }
-      for (const paths of [[path], [".stamity/runs/x/record.md", path], [path, INBOX, "docs/plans/1.md"]]) {
+      // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the lane paths
+      // beside it were records; they are a spec and a learning, which are still lane paths.
+      for (const paths of [[path], ["docs/specs/x.md", path], [path, ".stamity/learnings/x.md", "docs/plans/1.md"]]) {
         const decision = decideTyped({ event: "pull_request", base: SHA, paths });
         expect(decision, paths.join(" ")).toMatchObject({ full: true, lanes: [], suites: [] });
         expect(decision.reason, paths.join(" ")).toContain(path);
@@ -654,8 +636,11 @@ function run(root: string, args: readonly string[], env: Record<string, string> 
   });
 }
 
+// TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the CLI prints five
+// lines, `records_only` gone, so no case reads it; a case whose diff was records-only to keep a lane
+// open uses a spec, which still takes one, and the first case pins that a record diff is full CI.
 describe("records-only.mjs — the CLI over a real diff", () => {
-  it("prints records_only=true for a diff touching only a run record", () => {
+  it("prints full=true and no records_only line for a diff touching only a run record", () => {
     const repo = repository();
     const base = repo.commit("noop");
     repo.write(".stamity/runs/x/record.md", "# new record\n");
@@ -665,69 +650,75 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     expect(result.status, result.stderr).toBe(0);
     // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes):
     // the CLI now prints one line per output (`full`, `lanes`, `suites`, `site_build`,
-    // `cli_check`, `records_only`) where it printed `records_only` alone. The records answer this
-    // case pins is unchanged; it is read out of the six lines, and the lane is pinned beside it.
-    expect(outputsOf(result.stdout)).toMatchObject({ records_only: "true", full: "false", lanes: '["records"]' });
+    // `cli_check`, `records_only`) where it printed `records_only` alone.
+    expect(outputsOf(result.stdout)).toMatchObject({ full: "true", lanes: "[]", suites: "" });
+    expect(outputsOf(result.stdout)).not.toHaveProperty("records_only");
+    expect(result.stderr).toContain("is in no lane");
   });
 
-  it("prints records_only=false when the same diff also touches src/cli.ts", () => {
+  it("prints full=true when a lane diff also touches src/cli.ts", () => {
     const repo = repository();
     const base = repo.commit("noop");
-    repo.write(".stamity/runs/x/record.md", "# new record\n");
+    repo.write("docs/specs/x.md", "# new spec\n");
     repo.write("src/cli.ts", "export const changed = 1;\n");
-    repo.commit("records and code");
+    repo.commit("a spec and code");
     const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "push" });
     expect(result.status, result.stderr).toBe(0);
     // TEST CHANGE, justified (2026-10-08, unit a2-ci-lanes): read out of the six output lines, as
     // above; a code path is in no lane, so the answer is full CI.
-    expect(outputsOf(result.stdout)).toMatchObject({ records_only: "false", full: "true" });
+    expect(outputsOf(result.stdout)).toMatchObject({ full: "true" });
     expect(result.stderr).toContain("src/cli.ts");
   });
 
-  it("sees both sides of a rename, so moving code into a record location is not a record", () => {
+  it("sees both sides of a rename, so moving code into a lane location is not a lane change", () => {
     // `git diff --name-only` reports a detected rename by its NEW name only. Without
-    // `--no-renames` this diff would list one record path and read true while deleting code.
+    // `--no-renames` this diff would list one lane path and read narrow while deleting code.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the
+    // target was the runs folder, which is in no lane now, so the case would pass without the flag;
+    // the target is the spec folder, a lane, so it still fails if `--no-renames` is dropped.
     const repo = repository();
     const base = repo.commit("noop");
-    mkdirSync(join(repo.root, ".stamity/runs/x"), { recursive: true });
-    renameSync(join(repo.root, "src/cli.ts"), join(repo.root, ".stamity/runs/x/cli.ts"));
-    repo.commit("move code under the runs folder");
+    mkdirSync(join(repo.root, "docs/specs/x"), { recursive: true });
+    renameSync(join(repo.root, "src/cli.ts"), join(repo.root, "docs/specs/x/cli.ts"));
+    repo.commit("move code under the spec folder");
     const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "pull_request" });
     expect(result.status, result.stderr).toBe(0);
     // TEST CHANGE, justified (2026-10-08, unit a2-ci-lanes): read out of the six output lines.
-    expect(outputsOf(result.stdout)).toMatchObject({ records_only: "false", full: "true" });
+    expect(outputsOf(result.stdout)).toMatchObject({ full: "true" });
   });
 
-  it("prints false on the schedule and on a dispatch, even for a records-only diff", () => {
+  it("prints full=true on the schedule and on a dispatch, even for a specs-only diff", () => {
     const repo = repository();
     const base = repo.commit("noop");
-    repo.write(".stamity/runs/x/record.md", "# new record\n");
-    repo.commit("records");
+    repo.write("docs/specs/x.md", "# new spec\n");
+    repo.commit("a spec");
+    // The control: the same diff on a push takes the specs lane, so the full answers below come from the event.
+    expect(outputsOf(run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "push" }).stdout)).toMatchObject({ full: "false" });
     for (const event of ["schedule", "workflow_dispatch"]) {
       const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: event });
       expect(result.status, result.stderr).toBe(0);
       // TEST CHANGE, justified (2026-10-08, unit a2-ci-lanes): read out of the six output lines.
-      expect(outputsOf(result.stdout), event).toMatchObject({ records_only: "false", full: "true" });
+      expect(outputsOf(result.stdout), event).toMatchObject({ full: "true" });
     }
   });
 
-  it("prints false for an all-zero, empty or absent base, and for a base git does not have", () => {
+  it("prints full=true for an all-zero, empty or absent base, and for a base git does not have", () => {
     const repo = repository();
-    repo.write(".stamity/runs/x/record.md", "# new record\n");
-    repo.commit("records");
+    repo.write("docs/specs/x.md", "# new spec\n");
+    repo.commit("a spec");
     for (const args of [["--base", "0".repeat(40)], ["--base", ""], [], ["--base", "b".repeat(40)]]) {
       const result = run(repo.root, args, { GITHUB_EVENT_NAME: "push" });
       expect(result.status, `${args.join(" ")}: ${result.stderr}`).toBe(0);
       // TEST CHANGE, justified (2026-10-08, unit a2-ci-lanes): read out of the six output lines.
-      expect(outputsOf(result.stdout), args.join(" ")).toMatchObject({ records_only: "false", full: "true" });
+      expect(outputsOf(result.stdout), args.join(" ")).toMatchObject({ full: "true" });
     }
   });
 
   it("appends the answer to GITHUB_OUTPUT when the runner provides one", () => {
     const repo = repository();
     const base = repo.commit("noop");
-    repo.write("docs/plans/001-x.md", "# plan\n");
-    repo.commit("a plan");
+    repo.write("docs/specs/001-x.md", "# spec\n");
+    repo.commit("a spec");
     const output = join(repo.root, "..", `${repo.root.split(/[\\/]/).at(-1) ?? "x"}.output`);
     scratches.push(output);
     writeFileSync(output, "earlier=1\n");
@@ -738,17 +729,16 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     // TEST CHANGE, justified (2026-10-09, run 2026-10-08_product-core, unit p2c-ci-lanes-from-map):
     // the suites line was `RECORDS_SUITES`; it is the base map's selection for the plan, which the
     // pure half computes from the same census map the scratch base commits.
-    const suites = decideTyped({ event: "push", base: SHA, paths: ["docs/plans/001-x.md"] }).suites;
-    expect(suites).toEqual(expect.arrayContaining([...RECORDS_FLOOR]));
+    const suites = decideTyped({ event: "push", base: SHA, paths: ["docs/specs/001-x.md"] }).suites;
+    expect(suites).toEqual(expect.arrayContaining([...(LANE_FLOOR["specs"] ?? [])]));
     expect(readFileSync(output, "utf8")).toBe(
       [
         "earlier=1",
         "full=false",
-        'lanes=["records"]',
+        'lanes=["specs"]',
         `suites=${suites.join(" ")}`,
         "site_build=false",
         "cli_check=false",
-        "records_only=true",
         "",
       ].join("\n"),
     );
@@ -771,7 +761,6 @@ describe("records-only.mjs — the CLI over a real diff", () => {
       suites: mapSelection(["website/package-lock.json"]).join(" "),
       site_build: "true",
       cli_check: "false",
-      records_only: "false",
     });
   });
 
@@ -792,7 +781,6 @@ describe("records-only.mjs — the CLI over a real diff", () => {
       suites: "",
       site_build: "true",
       cli_check: "false",
-      records_only: "false",
     });
   });
 
@@ -816,28 +804,28 @@ describe("records-only.mjs — the CLI over a real diff", () => {
   // commit only. A change to the class file is in no lane, so a head that edits it runs full CI;
   // the checked-out copy, which is the head's in CI, is never read.
   it("reads the base commit's map, not the checked-out copy, when the head's drops a suite", () => {
-    const classFile = (tests: readonly string[]) => JSON.stringify({ testInputs: [{ glob: under(".stamity/runs"), tests }] });
+    const classFile = (tests: readonly string[]) => JSON.stringify({ testInputs: [{ glob: under("docs/specs"), tests }] });
     const repo = repository(classFile(["test/records", "test/ci/leakGate.test.ts"]));
     const base = repo.commit("noop");
-    repo.write(".stamity/runs/x/record.md", "# new record\n");
-    repo.commit("a record");
+    repo.write("docs/specs/x.md", "# new spec\n");
+    repo.commit("a spec");
     // The work tree's copy drops the leak gate, as a head commit would; git's diff never sees it.
     repo.write(CLASS_FILE, classFile(["test/records"]));
     const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "pull_request" });
     expect(result.status, result.stderr).toBe(0);
-    expect(outputsOf(result.stdout)).toMatchObject({ full: "false", lanes: '["records"]', suites: "test/ci/leakGate.test.ts test/records" });
+    expect(outputsOf(result.stdout)).toMatchObject({ full: "false", lanes: '["specs"]', suites: "test/ci/leakGate.test.ts test/records" });
   });
 
   it("runs full CI when the base commit has no class file, or one the parser refuses", () => {
-    const refused = JSON.stringify({ testInputs: [{ glob: under(".stamity/runs"), tests: ["--reporter=json"] }] });
+    const refused = JSON.stringify({ testInputs: [{ glob: under("docs/specs"), tests: ["--reporter=json"] }] });
     for (const classFile of [null, refused, "{ not json"]) {
       const repo = repository(classFile);
       const base = repo.commit("noop");
-      repo.write(".stamity/runs/x/record.md", "# new record\n");
-      repo.commit("a record");
+      repo.write("docs/specs/x.md", "# new spec\n");
+      repo.commit("a spec");
       const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "push" });
       expect(result.status, result.stderr).toBe(0);
-      expect(outputsOf(result.stdout), String(classFile)).toMatchObject({ full: "true", lanes: "[]", suites: "", records_only: "false" });
+      expect(outputsOf(result.stdout), String(classFile)).toMatchObject({ full: "true", lanes: "[]", suites: "" });
       expect(result.stderr, String(classFile)).toMatch(/map/);
     }
   });
@@ -859,14 +847,14 @@ describe("records-only.mjs — the CLI over a real diff", () => {
     expect(existsSync(join(copy, "package.json"))).toBe(false);
     const repo = repository();
     const base = repo.commit("noop");
-    repo.write(".stamity/runs/x/record.md", "# new record\n");
-    repo.commit("a record");
+    repo.write("docs/specs/x.md", "# new spec\n");
+    repo.commit("a spec");
     const result = run(repo.root, ["--base", base], { GITHUB_EVENT_NAME: "pull_request" }, join(copy, SCRIPT_PATH));
     expect(result.status, result.stderr).toBe(0);
     expect(outputsOf(result.stdout)).toMatchObject({
       full: "false",
-      lanes: '["records"]',
-      suites: mapSelection([".stamity/runs/x/record.md"]).join(" "),
+      lanes: '["specs"]',
+      suites: mapSelection(["docs/specs/x.md"]).join(" "),
     });
   });
 });

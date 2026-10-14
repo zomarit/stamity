@@ -18,17 +18,17 @@
 #
 # MERGE-BLOCKING (required through the `all-ci-checks` aggregator):
 #   - `changes`, one leg, first. It decides which of the two sides below runs.
-#     `scripts/ci/records-only.mjs` (the lane classifier; the name predates its other lanes) prints
+#     `scripts/ci/records-only.mjs` (the lane classifier; the name predates its lanes) prints
 #     `full=false` only when EVERY path the push or pull request changes falls in a lane:
-#     `records` (`.stamity/runs/`, `.stamity/handoffs/`, `docs/plans/`, `.stamity/inbox.md`),
 #     `specs` (`docs/specs/`), `learnings` (`.stamity/learnings/`) or `website` (`website/` and
-#     every other `docs/` path); an engine `.gitkeep` is in none. One path in no lane (`README.md`
-#     ships in the package, so it is one), a missing or all-zero base, a base git cannot find, the
-#     weekly schedule and a manual dispatch all read `full=true`, which is full CI. It also prints
-#     the lanes, their suites, `site_build`, `cli_check`, and `records_only` (kept one release,
-#     read by nothing here; it leaves at the first release after the lanes merged). `site_build`
-#     is true whenever the diff touches a `website` path, on a full answer too, and whenever the
-#     diff could not be read, so no side of the split passes a site change it did not build.
+#     every other `docs/` path); an engine `.gitkeep` is in none, and neither is a record
+#     (`.stamity/runs/`, `.stamity/handoffs/`, `.stamity/inbox.md`), since the records live on the
+#     `records` branch. One path in no lane (`README.md` ships in the package, so it is one), a
+#     missing or all-zero base, a base git cannot find, the weekly schedule and a manual dispatch
+#     all read `full=true`, which is full CI. It also prints the lanes, their suites, `site_build`
+#     and `cli_check`. `site_build` is true whenever the diff touches a `website` path, on a full
+#     answer too, and whenever the diff could not be read, so no side of the split passes a site
+#     change it did not build.
 #   - `prove-pr`, one leg, on a push to `main` only (skipped on every other trigger), beside
 #     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
 #     tree equals the head tree of a pull request holding that commit, and that head's newest
@@ -51,6 +51,13 @@
 #     the learnings); the `website` lane adds the docs site build and the root typecheck (a test
 #     imports a `website/` module). The aggregator asserts which side ran, so a lanes pass can
 #     never stand in for a full one.
+#   - `records`, one leg, in `zomarit/stamity` alone, on every trigger, beside both sides and a
+#     proven push: it needs no other job, because its input is the `records` branch, which no pull
+#     request's run proved. `scripts/records.mjs guard` refuses a record tracked on the commit,
+#     `scripts/records.mjs restore` writes the records from `origin/records` (the full-history
+#     checkout fetched it), and the job runs the records suite (`npm run test:records`), the leak
+#     gate over a worktree of the records branch, and the measurements page's drift check. A fork
+#     has no records branch, so there it is skipped, and the aggregator asserts `skipped`.
 #   - `check`, four legs, on every change no lane covers, unless `prove-pr` proved the push.
 #     ubuntu on the declared engines floor (22.22.2) and on the LTS canonical (24), plus windows
 #     on 24 as two legs that each run one half of the suite
@@ -172,9 +179,6 @@ jobs:
       suites: ${{ steps.classify.outputs.suites }}
       site_build: ${{ steps.classify.outputs.site_build }}
       cli_check: ${{ steps.classify.outputs.cli_check }}
-      # Kept one release for any reader of the old output; nothing in this file reads it. Remove it
-      # at the first release after the lanes merged, with the classifier's line that prints it.
-      records_only: ${{ steps.classify.outputs.records_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -773,7 +777,7 @@ jobs:
   # own steps) for `website`. The builds come AFTER the suites, so no suite can quietly start
   # depending on one.
   lanes:
-    name: lanes (records, specs, learnings and website changes)
+    name: lanes (specs, learnings and website changes)
     needs: [changes, prove-pr]
     if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full == 'false'"
     runs-on: ubuntu-latest
@@ -862,6 +866,55 @@ jobs:
         if: needs.changes.outputs.site_build == 'true'
         working-directory: website
         run: npm run build
+
+  # The records, which live on the `records` branch and so on no side of the lane split. It runs in
+  # the canonical repository alone (a fork has no records branch), on every trigger, and needs no
+  # other job: a proven push and a failed classifier say nothing about `origin/records`, so neither
+  # may skip it. The full-history checkout already holds `origin/records`, the tags and `main`'s
+  # history the records suite reads, so the restore fetches nothing. `guard` refuses a record
+  # tracked on the checked-out commit. The leak gate runs over a detached worktree of the branch,
+  # where every record is tracked: in this checkout the restored records are untracked, and the
+  # gate's `--exclude-standard` listing would skip one that `main`'s `.gitignore` or a nested one
+  # matches. The measurements page renders from the records, so its drift is checked here.
+  records:
+    name: records (restored from the records branch)
+    if: github.repository == 'zomarit/stamity'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: No record tracked on this commit
+        run: node scripts/records.mjs guard
+
+      - name: Restore the records
+        run: node scripts/records.mjs restore --ref origin/records --no-fetch --force
+
+      - name: Records suite
+        run: npm run test:records
+
+      - name: Leak gate over the records branch
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/records-tree" origin/records
+          node scripts/leak-gate.mjs --root "$RUNNER_TEMP/records-tree"
+
+      - name: Measurements page drift
+        run: node scripts/generate-docs.mjs --page measurements && git diff --exit-code docs/measurements.md
 
   # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
   # change, which is precisely why something has to go and ask whether those bytes are still
@@ -974,19 +1027,31 @@ jobs:
   # any other answer `prove-pr` must have been skipped (every event but a push to `main`) or have
   # succeeded with `proven` not `true`, and one of the two shapes above must hold. So a failed or
   # cancelled reader is red, and a `true` beside a skipped reader is red.
+  #
+  # The `records` job is asserted outside the three shapes, since it runs beside every one of them:
+  # `success` in `zomarit/stamity`, where it is merge-blocking, and `skipped` anywhere else, where
+  # its guard skips it. The repository arrives through the step's `env:`, never interpolated into
+  # the script body.
   all-ci-checks:
     name: all-ci-checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [changes, prove-pr, check, lanes, supply-chain, apm-install, plugin-route]
+    needs: [changes, prove-pr, check, lanes, records, supply-chain, apm-install, plugin-route]
     steps:
       - name: Report
+        env:
+          REPO: ${{ github.repository }}
         run: |
-          echo "changes=${{ needs.changes.result }} full=${{ needs.changes.outputs.full }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} lanes=${{ needs.lanes.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
+          echo "changes=${{ needs.changes.result }} full=${{ needs.changes.outputs.full }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} lanes=${{ needs.lanes.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
           test "${{ needs.changes.result }}" = "success"
+          if [ "$REPO" = "zomarit/stamity" ]; then
+            test "${{ needs.records.result }}" = "success"
+          else
+            test "${{ needs.records.result }}" = "skipped"
+          fi
           if [ "${{ needs.prove-pr.result }}" = "success" ] && [ "${{ needs.prove-pr.outputs.proven }}" = "true" ]; then
             test "${{ needs.check.result }}" = "skipped"
             test "${{ needs.apm-install.result }}" = "skipped"

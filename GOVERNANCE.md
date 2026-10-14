@@ -87,9 +87,9 @@ walk-through. A client CLI that fails to install leaves its own legs skipped wit
 rather than reddening the lane; a broken root is red.
 
 A change whose every path falls in a lane takes the `lanes` job in place of those three lanes.
-There are four lanes: `records` (run records, the deferral inbox, handoffs and plans), `specs`
-(the spec), `learnings` (the recorded learnings) and `website` (the docs site and every other
-`docs/` path). The job runs what those paths can break: the suites that read them, the
+There are three lanes: `specs` (the spec), `learnings` (the recorded learnings) and `website` (the
+docs site and every other `docs/` path, plans included). A record (run records, the deferral inbox,
+handoffs) is in no lane. The job runs what those paths can break: the suites that read them, the
 generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. The `learnings` lane
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
 typecheck. `scripts/ci/records-only.mjs` decides, and it reads the suites from the test-input map in
@@ -100,14 +100,22 @@ the base commit, a changed path no entry matches, or a matching entry that selec
 the full side the LTS leg also builds the docs site when the change touches a `website` path or no
 diff was read. [CONTRIBUTING.md](CONTRIBUTING.md) lists each lane's paths.
 
+The records belong on the `records` branch, and the `records` job, merge-blocking in this
+repository, checks them on every change, beside whichever side ran. `scripts/records.mjs guard`
+refuses a record tracked on the commit, and `scripts/records.mjs restore` writes the records from
+`origin/records`; the job then runs `npm run test:records`, the leak gate over a worktree of that
+branch, and the measurements page's drift check. A fork has no records branch, so there the job is
+skipped.
+
 A push to `main` whose tree a pull request already proved skips both sides.
 `scripts/ci/pr-proven.mjs` answers proven only when the pushed tree is the head tree of a pull
 request whose latest `ci.yml` pull-request run passed `all-ci-checks`. Any other answer, a failed
 read included, is not proven, and the push then runs the `lanes` job or the full side as
-`scripts/ci/records-only.mjs` decides for its diff. Only that workflow's own run counts as
-evidence, not a check of the same name from another workflow. `all-ci-checks` asserts which of the
-three shapes ran, a proven push, the `lanes` job or the full side, so neither short answer reads as
-a full pass.
+`scripts/ci/records-only.mjs` decides for its diff; the `records` job runs on a proven push too.
+Only that workflow's own run counts as evidence, not a check of the same name from another
+workflow. `all-ci-checks` asserts which of the three shapes ran, a proven push, the `lanes` job or
+the full side, so neither short answer reads as a full pass, and it asserts the `records` job
+passed here and was skipped in a fork.
 
 ### What `all-pr-checks` covers
 

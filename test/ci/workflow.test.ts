@@ -237,6 +237,12 @@ const ALL_STEPS: readonly (readonly [string, string, WorkflowStep])[] = ALL_JOBS
 
 // ── ci.yml ───────────────────────────────────────────────────────────────────
 
+/**
+ * The canonical repository, which ci.yml's `records` job is guarded to and its aggregator reads
+ * through `$REPO`. Committed workflow text a fork's rename leaves alone (ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14)).
+ */
+const CANONICAL_REPOSITORY = "zomarit/stamity";
+
 describe("ci.yml — the merge-blocking gate", () => {
   const jobs = ci.workflow.jobs;
   const check = stepsOf(ci, "check");
@@ -244,7 +250,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a1-proven-push):
   // the title's count moves from eight to nine because `prove-pr` joins; every lane the old title
   // named is still pinned below.
-  it("keeps the nine lanes: the classifier, the proven-push reader, three gates, the records lane, two advisory probes, and one stable aggregator", () => {
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the title's count
+  // moves from nine to ten because the canonical `records` job joins after `lanes`; the `lanes` job
+  // keeps its place, and every other lane is still pinned below.
+  it("keeps the ten lanes: the classifier, the proven-push reader, three gates, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
     // CHANGED by plan 008 file 3, unit V1w: `plugin-route` joins the merge-blocking set, so this
     // list and the aggregator's `needs` below both move. It sits beside `apm-install` because the
     // two answer the same KIND of question — what a real consumer's tooling does with a published
@@ -265,6 +274,7 @@ describe("ci.yml — the merge-blocking gate", () => {
       "apm-install",
       "plugin-route",
       "lanes",
+      "records",
       "supply-chain",
       "dependency-review",
       "all-ci-checks",
@@ -560,11 +570,14 @@ describe("ci.yml — the merge-blocking gate", () => {
     // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): `records` is
     // renamed `lanes`, and the split is read off `changes`' `full` answer instead of
     // `records_only`; both sides are still asserted, each naming what ran and what skipped.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records` joins
+    // `needs`, because the aggregator asserts its result outside the three shapes.
     expect(aggregator.needs).toEqual([
       "changes",
       "prove-pr",
       "check",
       "lanes",
+      "records",
       "supply-chain",
       "apm-install",
       "plugin-route",
@@ -596,6 +609,13 @@ describe("ci.yml — the merge-blocking gate", () => {
     }
     expect(report).toContain('test "${{ needs.lanes.result }}" = "skipped"');
     expect(report, "the aggregator still reads the retired answer").not.toContain("records_only");
+    // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14): the records job is
+    // asserted on every shape, by the repository it ran in, which arrives through `env:`.
+    expect(report).toContain(`if [ "$REPO" = "${CANONICAL_REPOSITORY}" ]; then`);
+    expect(report).toContain('test "${{ needs.records.result }}" = "success"');
+    expect(report).toContain('test "${{ needs.records.result }}" = "skipped"');
+    expect(report).not.toContain("github.repository");
+    expect(stepOf(aggregator.steps, "Report").env).toEqual({ REPO: "${{ github.repository }}" });
   });
 
   // ADDED by plan 008 file 3, unit V1w — the `plugin-route` lane. Its properties split by what
@@ -811,7 +831,9 @@ describe("ci.yml — the merge-blocking gate", () => {
     const HEAVY = ["check", "apm-install", "plugin-route"] as const;
     const ANSWERS = ["true", "false", ""] as const;
     const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"] as const;
-    const OUTPUTS = ["full", "lanes", "suites", "site_build", "cli_check", "records_only"] as const;
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records_only`
+    // leaves with the records lane, so five outputs are passed through.
+    const OUTPUTS = ["full", "lanes", "suites", "site_build", "cli_check"] as const;
 
     it("classifies first, on every trigger, with read-only rights and the full history", () => {
       const changes = jobOf(ci, "changes");
@@ -822,9 +844,7 @@ describe("ci.yml — the merge-blocking gate", () => {
       // waiting on it would skip and the aggregator would have nothing to assert against.
       expect(changes.if).toBeUndefined();
       expect(changes.needs).toBeUndefined();
-      // The six answers the classifier prints, each passed through under its own name;
-      // `records_only` is kept, derived, for one release, for any reader outside this file; nothing
-      // in this file reads it, and it leaves at the first release after this change merges.
+      // The five answers the classifier prints, each passed through under its own name.
       expect(changes.outputs).toEqual(
         Object.fromEntries(OUTPUTS.map((key) => [key, `\${{ steps.classify.outputs.${key} }}`])),
       );
@@ -972,6 +992,96 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
   });
 
+  // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14; REQ-PROVE-025). The
+  // records live on the `records` branch, so no side of the lane split can check them: the `records`
+  // job restores them from `origin/records` and runs the records suite, the leak gate over that
+  // branch and the measurements drift check, on every trigger, a proven push included, since its
+  // input is not part of the tree a pull request's run proved. It runs in the canonical repository
+  // alone (a fork has no records branch), and the aggregator asserts it there.
+  describe("the records job", () => {
+    // Looked up inside each case, so a missing job fails each case by name rather than the file at collection.
+    const records = () => ({ job: jobOf(ci, "records"), steps: stepsOf(ci, "records") });
+    const RECORDS_GUARD = `github.repository == '${CANONICAL_REPOSITORY}'`;
+
+    it("runs in the canonical repository alone, on every trigger, needing nothing, with read-only rights", () => {
+      const { job } = records();
+      expect(job.name).toBe("records (restored from the records branch)");
+      expect(job.if).toBe(RECORDS_GUARD);
+      // No `needs`: a failed classifier or a proven push must not skip it, since neither says
+      // anything about the records branch.
+      expect(job.needs).toBeUndefined();
+      expect(job["runs-on"]).toBe("ubuntu-latest");
+      expect(job["timeout-minutes"]).toBe(15);
+      expect(job.permissions).toEqual({ contents: "read" });
+      for (const event_name of ["pull_request", "push", "schedule", "workflow_dispatch"]) {
+        for (const [repository, runs] of [
+          [CANONICAL_REPOSITORY, true],
+          ["example/stamity-fork", false],
+          ["", false],
+        ] as const) {
+          const context = { github: { event_name, repository } };
+          expect(evaluateWorkflowExpression(job.if ?? "true", context), `${event_name} ${repository}`).toBe(runs);
+        }
+      }
+    });
+
+    it("guards, restores, runs the records suite, gates the branch, then checks the page, in that order", () => {
+      const { steps } = records();
+      expect(steps.map((step) => step.name)).toEqual([
+        "Checkout",
+        "Set up Node",
+        "Install",
+        "No record tracked on this commit",
+        "Restore the records",
+        "Records suite",
+        "Leak gate over the records branch",
+        "Measurements page drift",
+      ]);
+      // The full history fetches `origin/records`, the tags and `main`'s history the shipped-spec
+      // case reads; no credential stays in the checkout.
+      const checkout = stepOf(steps, "Checkout");
+      expect(checkout.uses).toBe(stepOf(check, "Checkout").uses);
+      expect(checkout.with).toEqual({ "persist-credentials": false, "fetch-depth": 0 });
+      const node = stepOf(steps, "Set up Node");
+      expect(node.uses).toBe(stepOf(check, "Set up Node ${{ matrix.node }}").uses);
+      expect(node.with).toEqual({ "node-version": "24", cache: "npm" });
+      expect(runOf(steps, "Install")).toBe("npm ci");
+      expect(runOf(steps, "No record tracked on this commit")).toBe("node scripts/records.mjs guard");
+      // No fetch: the checkout already holds `origin/records`.
+      expect(runOf(steps, "Restore the records")).toBe("node scripts/records.mjs restore --ref origin/records --no-fetch --force");
+      expect(runOf(steps, "Records suite")).toBe("npm run test:records");
+      expect(runOf(steps, "Measurements page drift")).toBe(
+        "node scripts/generate-docs.mjs --page measurements && git diff --exit-code docs/measurements.md",
+      );
+      for (const step of steps) {
+        expect(step["continue-on-error"], step.name).toBeUndefined();
+        expect(step.if, step.name).toBeUndefined();
+      }
+    });
+
+    // The checkout's own leak gate lists files with `--exclude-standard`, so a restored record that
+    // `main`'s `.gitignore` or a nested one matches (a run's reports, a raw eval payload, a `.env`)
+    // would never be read. The gate runs over a detached worktree of the branch instead, where every
+    // record is tracked, as `records.mjs commit` gates the commit it publishes.
+    it("runs the leak gate over a worktree of the records branch, not over main's checkout", () => {
+      const { steps } = records();
+      const gate = runOf(steps, "Leak gate over the records branch");
+      expect(gate.trim().split("\n")).toEqual([
+        'git worktree add --detach "$RUNNER_TEMP/records-tree" origin/records',
+        'node scripts/leak-gate.mjs --root "$RUNNER_TEMP/records-tree"',
+      ]);
+      expect(gate).not.toContain("npm run gate");
+      expect(indexOf(steps, "Leak gate over the records branch")).toBeGreaterThan(indexOf(steps, "Restore the records"));
+    });
+
+    it("holds no secret and no token in any step", () => {
+      const { steps } = records();
+      for (const step of steps) {
+        expect(JSON.stringify(step), step.name).not.toMatch(/secrets\.|GITHUB_TOKEN|GH_TOKEN/);
+      }
+    });
+  });
+
   // ADDED by run 2026-10-08_maintainer-tooling, unit a1-proven-push. A push to `main` whose tree a
   // pull request already proved skips the test matrix. The risk is one direction only — a push
   // read as proven when it was not — so what is pinned here is that the reader runs on a push to
@@ -1112,7 +1222,10 @@ describe("ci.yml — the merge-blocking gate", () => {
       // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): the
       // short lane is the `lanes` job, and the map names each lane it runs.
       "`lanes`",
+      // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records` names
+      // the canonical records job now, not a lane; the restore it runs is named beside it.
       "`records`",
+      "scripts/records.mjs",
       "`specs`",
       "`learnings`",
       "`website`",
@@ -1166,8 +1279,12 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
   // read `records_only`, so the renderer substitutes `full` and every call passes the `full`
   // answer that the old `records_only` answer meant (`true` became `false`, `false` became `true`,
   // the absent answer stays absent). Every case and every assertion is kept, one for one.
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `Results` gains
+  // `records`, and the body runs with `REPO` in its environment, as the step's `env:` gives it. Every
+  // shape below models the canonical repository with `records` green, so each case and assertion
+  // written before it is kept one for one; the records job's own cases follow at the end.
   type Results = Readonly<
-    Record<"changes" | "prove-pr" | "check" | "lanes" | "supply-chain" | "apm-install" | "plugin-route", string>
+    Record<"changes" | "prove-pr" | "check" | "lanes" | "records" | "supply-chain" | "apm-install" | "plugin-route", string>
   >;
 
   function render(results: Results, full: string, proven: string): string {
@@ -1186,14 +1303,18 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     return rendered;
   }
 
-  const execute = (results: Results, full: string, proven = "") =>
-    spawnSync("bash", ["-e", "-c", render(results, full, proven)], { encoding: "utf8" }).status;
+  const execute = (results: Results, full: string, proven = "", repo: string = CANONICAL_REPOSITORY) =>
+    spawnSync("bash", ["-e", "-c", render(results, full, proven)], {
+      encoding: "utf8",
+      env: { ...process.env, REPO: repo },
+    }).status;
 
   const FULL: Results = {
     changes: "success",
     "prove-pr": "skipped",
     check: "success",
     lanes: "skipped",
+    records: "success",
     "supply-chain": "failure",
     "apm-install": "success",
     "plugin-route": "success",
@@ -1203,6 +1324,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     "prove-pr": "skipped",
     check: "skipped",
     lanes: "success",
+    records: "success",
     "supply-chain": "failure",
     "apm-install": "skipped",
     "plugin-route": "skipped",
@@ -1213,6 +1335,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     "prove-pr": "success",
     check: "skipped",
     lanes: "skipped",
+    records: "success",
     "supply-chain": "failure",
     "apm-install": "skipped",
     "plugin-route": "skipped",
@@ -1300,6 +1423,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
       "prove-pr": "skipped",
       check: "skipped",
       lanes: "skipped",
+      records: "success",
       "supply-chain": "success",
       "apm-install": "skipped",
       "plugin-route": "skipped",
@@ -1307,6 +1431,34 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     expect(execute(skippedAll, "")).not.toBe(0);
     expect(execute({ ...FULL, changes: "cancelled" }, "true")).not.toBe(0);
     expect(execute({ ...SHORT, changes: "failure" }, "false")).not.toBe(0);
+  });
+
+  // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14): the records job is
+  // asserted outside the three shapes, by the repository the run is in.
+  const SHAPES = [
+    ["full", FULL, "true", ""],
+    ["lanes", SHORT, "false", ""],
+    ["proven", PROVEN, "true", "true"],
+  ] as const;
+
+  it("fails every shape in the canonical repository unless the records job passed", () => {
+    for (const [label, shape, full, proven] of SHAPES) {
+      expect(execute(shape, full, proven), label).toBe(0);
+      for (const records of ["failure", "cancelled", "skipped"]) {
+        expect(execute({ ...shape, records }, full, proven), `${label} records=${records}`).not.toBe(0);
+      }
+    }
+  });
+
+  it("passes every shape elsewhere only with the records job skipped", () => {
+    for (const repo of ["example/stamity-fork", ""]) {
+      for (const [label, shape, full, proven] of SHAPES) {
+        expect(execute({ ...shape, records: "skipped" }, full, proven, repo), `${label} ${repo}`).toBe(0);
+        for (const records of ["success", "failure", "cancelled"]) {
+          expect(execute({ ...shape, records }, full, proven, repo), `${label} ${repo} records=${records}`).not.toBe(0);
+        }
+      }
+    }
   });
 });
 
@@ -1957,11 +2109,15 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     // not a pr-checks one, so this test's property is unchanged.
     // TEST CHANGE, justified (2026-10-08, run 2026-10-08_maintainer-tooling, unit a2-ci-lanes): `records`
     // is renamed `lanes`; it is still a ci.yml job that reports on every event.
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): the canonical
+    // `records` job joins; it is a ci.yml job that reports on every event (skipped outside the
+    // canonical repository), not a pr-checks one.
     expect(jobOf(ci, "all-ci-checks").needs).toEqual([
       "changes",
       "prove-pr",
       "check",
       "lanes",
+      "records",
       "supply-chain",
       "apm-install",
       "plugin-route",
@@ -2117,6 +2273,10 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
       expect(text, `${name} does not describe the records-only lane`).toContain(
         "scripts/ci/records-only.mjs",
       );
+      // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14): the canonical records
+      // job, merge-blocking here, is described with the script it restores the records through.
+      expect(text, `${name} does not describe the records job`).toContain("scripts/records.mjs");
+      expect(text, `${name} does not describe the records suite`).toContain("npm run test:records");
     }
 
     // CONTRIBUTING used to claim the DCO and the title were "checked in CI" while no job checked
@@ -2966,6 +3126,30 @@ describe("release.yml — the only publishing path", () => {
     expect(gatesShell).not.toContain("apm-install-smoke");
     expect(gatesShell).not.toMatch(/\bpython\b|\bpip\b/);
     expect(indexOf(gatesSteps, "Set up Python"), "setup-python belongs to apm-route").toBe(-1);
+  });
+
+  // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14; REQ-PROVE-025): the
+  // release gates restore the records from the `origin/records` ref the depth-0 checkout already
+  // fetched, and run the records suite beside `npm test`. No fetch: after checkout there is no
+  // credential to fetch with, and the resolve step's proof rests on the same refs.
+  it("restores the records after the install and runs the records suite after the tests, with no fetch", () => {
+    expect(stepOf(gatesSteps, "Checkout").with?.["fetch-depth"]).toBe(0);
+    const restore = stepOf(gatesSteps, "Restore the records");
+    expect(restore.run).toBe("node scripts/records.mjs restore --ref origin/records --no-fetch --force");
+    expect(runOf(gatesSteps, "Records suite")).toBe("npm run test:records");
+    expect(indexOf(gatesSteps, "Restore the records")).toBe(indexOf(gatesSteps, "Install") + 1);
+    expect(indexOf(gatesSteps, "Records suite")).toBe(indexOf(gatesSteps, "Test") + 1);
+    expect(indexOf(gatesSteps, "Records suite")).toBeLessThan(indexOf(gatesSteps, "Pack tarball"));
+    for (const name of ["Restore the records", "Records suite"]) {
+      const step = stepOf(gatesSteps, name);
+      expect(step.if, name).toBeUndefined();
+      expect(step["continue-on-error"], name).toBeUndefined();
+      expect(step.env, name).toBeUndefined();
+    }
+    expect(
+      gatesSteps.flatMap((step) => (step.run ?? "").split("\n")).filter((line) => /^\s*git fetch\b/.test(line)),
+      "the gates job fetches nothing after its checkout",
+    ).toEqual([]);
   });
 
   it("proves the published ROUTE in a job with no credential and no path to the artifact", () => {
@@ -4640,6 +4824,8 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "scripts/ci/records-only.mjs",
       // ADDED by unit a1-proven-push (2026-10-08): the proven-push reader.
       "scripts/ci/pr-proven.mjs",
+      // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14): the records restore and guard.
+      "scripts/records.mjs",
     ]) {
       expect(referenced).toContain(script);
     }
@@ -4690,6 +4876,7 @@ describe("dependabot.yml — the update policy behind the pins", () => {
     updates: readonly {
       "package-ecosystem": string;
       directory: string;
+      "target-branch"?: string;
       schedule: { interval: string };
       groups?: Record<
         string,
@@ -4700,9 +4887,15 @@ describe("dependabot.yml — the update policy behind the pins", () => {
 
   it("covers both ecosystems weekly, and every npm manifest in the tree", () => {
     expect(config.version).toBe(2);
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): a fourth entry
+    // watches the `records` branch's own workflow, whose action pins Dependabot would otherwise
+    // never bump; every entry is still listed, with the branch it targets when it is not the default.
     expect(
-      config.updates.map((entry) => `${entry["package-ecosystem"]} ${entry.directory}`),
-    ).toEqual(["npm /", "npm /website", "github-actions /"]);
+      config.updates.map(
+        (entry) =>
+          `${entry["package-ecosystem"]} ${entry.directory}${entry["target-branch"] === undefined ? "" : ` -> ${entry["target-branch"]}`}`,
+      ),
+    ).toEqual(["npm /", "npm /website", "github-actions /", "github-actions / -> records"]);
     for (const entry of config.updates) {
       expect(entry.schedule.interval).toBe("weekly");
     }

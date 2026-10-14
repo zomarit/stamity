@@ -210,7 +210,10 @@ describe("the identity the CLI and CI suites assert against", () => {
       // nightly guard's case adds three literals: the guard string the three jobs must carry,
       // and the canonical repository in two context rows it is evaluated against. Committed
       // workflow text again, so a renamed fork passes the case unedited.
-      "test/ci/workflow.test.ts": { route: 16, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
+      // TEST CHANGE (run 2026-10-13_records-branch, unit r5-ci-records-job): was `route: 16`. One
+      // literal joins, the constant naming ci.yml's canonical records-job guard and the repository
+      // its aggregator compares `$REPO` against; committed workflow text, unedited by a rename.
+      "test/ci/workflow.test.ts": { route: 17, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
       "test/ci/packSigningRehearsal.test.ts": { route: 4, why: "the rehearsal workflow's repository guard and its Actions environment fixture" },
       // ADDED by plan 010, unit e1-fork-release-workflow: the fork release workflow refuses the
       // canonical repository and the canonical package name, and its suite runs those guards
