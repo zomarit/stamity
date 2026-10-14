@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-13 against the private import recipe, which copies upstream main alone, and the mirror-era sentences it qualifies. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the plan and the run record this page links and names, and the recommended generatedPaths list, which no longer names the measurements page. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -84,7 +84,7 @@ the runner you selected. Where network policy requires mirrors, configure the ap
 Python endpoints and the permitted Actions first, then repeat the same fetch, build and install
 checks against them. This guide uses APM's private git route; an experimental APM registry is a
 separate deployment choice. Official sources and tested clients are recorded in
-[the enterprise downstream plan](plans/005-enterprise-downstream-support.md).
+[the enterprise downstream plan](https://github.com/zomarit/stamity/blob/records/docs/plans/005-enterprise-downstream-support.md).
 
 Confirm the destination owner's GitHub plan supports the private branch controls you need. Private
 rulesets and protected branches need GitHub Pro, Team or Enterprise Cloud. A plan-related `403`
@@ -123,7 +123,7 @@ The last command checks the baseline this example imported. It runs in this work
 the newest release happens to be. The value above is an example and it ages: a check against a tag
 your import predates fails, and that failure is the point of the command. Confirm `origin` points
 to the private destination before every initial push. The import narrows GitHub's own bare-clone
-procedure, linked from [the enterprise downstream plan](plans/005-enterprise-downstream-support.md):
+procedure, linked from [the enterprise downstream plan](https://github.com/zomarit/stamity/blob/records/docs/plans/005-enterprise-downstream-support.md):
 it copies `main` alone, no other branch and no tag, so `plugin-dist`, `plugins/v*`, the `v*`
 release tags and the evidence-archive, replay and retirement tags stay upstream, and the push
 deletes nothing at the destination. Keep the bare import as a backup until the downstream and
@@ -324,7 +324,7 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
     ".stamity/generated/**",
     "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**",
     "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**",
-    "docs/capability-matrix.md", "docs/measurements.md", "llms.txt", "src/pack/catalogPins.ts"
+    "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"
   ],
   "watch": ["content/charter/**", "src/types/core.ts", "src/roster/**", "src/mcp/catalog.ts"],
   "shadows": { "packs/acme/rules/acme-secrets.md": "content/rules/stamity-secrets.md" }
@@ -338,12 +338,10 @@ second command the plain `generate-docs.mjs` above already covers; the pack-mani
 `generate-pack-manifests.mjs --write` row, which rewrites an integrity map after a deliberate pack
 edit; and the `dist/plugins/` row, which is ignored rather than tracked. `generatedPaths` is the
 tracked left column of the rows that remain, plus `.stamity/manifest.json`, which `sync` writes
-beside `.stamity/generated/`, and `docs/measurements.md`, because plain
-`node scripts/generate-docs.mjs` renders every page family, the measurements page included — a
-fork whose tree renders that page differently, from its own snapshot under `evals/measurements/`
-say, would otherwise meet the rewrite as an unlisted generated path. `npm ci --ignore-scripts`
-leads the list because the commands run in a fresh linked worktree that has no `node_modules` of
-its own.
+beside `.stamity/generated/`. The measurements page is not listed: a fork holds no records, so
+`generate-docs.mjs` skips that page there with a notice and leaves the committed page as it is.
+`npm ci --ignore-scripts` leads the list because the commands run in a fresh linked worktree that
+has no `node_modules` of its own.
 
 Keep the two lists in step. A generated path that is not listed is offered to a human as a conflict
 nobody should resolve by hand. A listed path that nothing regenerates keeps its conflict markers
@@ -1196,7 +1194,8 @@ none, and it must not carry any. A developer whose git cannot read your reposito
 
 The template was walked on 2026-09-26 on Claude Code 2.1.281 on Linux, with the file at
 `/etc/claude-code/managed-settings.json`, rendered for this repository at `plugins/v1.9.1`, and
-with no login. The record is `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`.
+with no login. The record is `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`
+on the `records` branch.
 
 - The client obeyed the file at the Linux path.
 - After one interactive start the marketplace was listed, and the install put the plugin at the

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the run records and the eval evidence this page links and names. -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -28,17 +28,17 @@ Every figure below comes from a committed artifact, so you can check it instead 
 Its final gate table is all passes. Its last review verdict is an approval at or above the
 confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
 never counts. The frozen snapshot is
-[`evals/measurements/merge-ready-2026-10-12.json`](evals/measurements/merge-ready-2026-10-12.json),
+[`evals/measurements/merge-ready-2026-10-12.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-12.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 45](evals/runs/2026-10-11-run-45/RESULTS.md), the 1.14.0 release run: PASS as composed with run 44, which alone was FAIL.**
+**Eval run of record: [run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md), the 1.14.0 release run: PASS as composed with run 44, which alone was FAIL.**
 Golden 0.988 (80/81; `ask-narrow-symbol` still fails, 1 of 3), floors 31/31, guardrail hold 24/24, benign-twin false refusals 0/6, trigger probes 30/30.
 Run 44 alone was FAIL on two floor cases, `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the benign-twin
 false-refusal rate not met; five cases were then fixed as defects of the case, one Brief re-quoted and four expected rows amended, each now admitting
 more ([SET-v7](evals/SET-v7.md)); run 45 re-measured five cases, composed with run 44, and carried the other 136. No threshold moved.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
-2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).
+2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](https://github.com/zomarit/stamity/blob/records/evals/reach/npm-downloads-2026-09-14.json).
 A download is a package fetch, not a person. Weekly active installs are unmeasured: this project
 collects no telemetry, and no figure here stands in for that one.
 
@@ -131,11 +131,11 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, releasing the fork through its own workflow, and rolling the plugin out with managed settings. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
-Hook scripts are not in that corpus row, because they are not corpus content. The three portable
-bodies are generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a
-fourth, the review gate, from its own adapter. Eight rows above are marked Generated, written by
-four generators, and [CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command
-that rewrites it. Every link on this page is repo-relative, so the docs are read from the tree.
+Hook scripts are not in that corpus row, because they are not corpus content. The three portable bodies are
+generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a fourth, the review gate,
+from its own adapter. Eight rows above are marked Generated, written by four generators, and
+[CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command that rewrites it. Every link on this
+page is repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence.
 
 ## What the tests cover
 
@@ -148,11 +148,11 @@ stale generated file fails the build instead of drifting. Details in [CONTRIBUTI
 
 This repository runs its own output. `AGENTS.md`, the managed block in `CLAUDE.md`, `.claude/` and
 `.stamity/generated/` are engine-generated and committed, so `node dist/cli.js check` at the root
-re-proves them drift-clean against the current engine. A regression in emission then shows up as a
-failing check instead of a surprise downstream. Regenerate those paths rather than editing them by
-hand. `.agents/` is the exception: that projection is emitted only for a selected client that reads
-it, and the one selected here does not. The rest of `.stamity/` is setup state and authored
-content, not a regeneration target: the manifest, learnings, handoffs, runs, overrides, the inbox.
+re-proves them drift-clean against the current engine. A regression in emission then shows up as a failing check
+instead of a surprise downstream. Regenerate those paths rather than editing them by hand. `.agents/` is the
+exception: that projection is emitted only for a selected client that reads it, and the one selected here does not.
+The rest of `.stamity/` is setup state and authored content, not a regeneration target: the manifest, learnings,
+handoffs, runs, overrides, the inbox. In this repository the runs, handoffs, evidence and inbox live on the `records` branch.
 
 ## License
 

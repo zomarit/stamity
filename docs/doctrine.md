@@ -2,12 +2,12 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the eval runs this page links and names. -->
 <!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
      surface, the root question's three answers change, the always-on split across clients moves,
      or the deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this
      page to the hand-page contract; `../src/content/charter.ts` owns the budgets and
-     `../evals/runs/` owns what is red. -->
+     `../evals/runs/` on the `records` branch owns what is red. -->
 
 # Doctrine
 
@@ -95,10 +95,12 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 45](../evals/runs/2026-10-11-run-45/RESULTS.md), the 1.14.0 release run, and its PASS is a
-  composed one: the full run behind it was FAIL. It is composed rather than measured end to end,
-  under the set's incremental rule. Run 44 measured every case in full.
-  [Run 44](../evals/runs/2026-10-11-run-44/RESULTS.md) alone was FAIL on two floor cases,
+  [run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md),
+  the 1.14.0 release run, and its PASS is a composed one: the full run behind it was FAIL. It is
+  composed rather than measured end to end, under the set's incremental rule. Run 44 measured
+  every case in full.
+  [Run 44](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-44/RESULTS.md)
+  alone was FAIL on two floor cases,
   `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the
   benign-twin false-refusal rate not met; run 45 re-measured five cases, composed with run 44, and
   carried the other 136 with their hashes. The five are the cases run 44 failed: those two, the
@@ -150,10 +152,10 @@ What the project does not do is published beside what it does.
   unanswerable and blocked items, `open` rows, open questions carried forward, per-item
   dispositions and DEFER rows. Each block ends on a next-step line, which says so when nothing is
   outstanding. For a plan, that line names the handoff a clean artifact takes.
-- The run artifacts under `evals/runs/` say which run is red and by how much. The latest full run
-  states its verdict against each declared threshold. No red baseline is re-run to make it look
-  better. The [eval set README](../evals/README.md) carries the baselines and the rule that they
-  stay put.
+- The run artifacts under `evals/runs/` on the `records` branch say which run is red and by how
+  much. The latest full run states its verdict against each declared threshold. No red baseline is
+  re-run to make it look better. The [eval set README](../evals/README.md) carries the baselines
+  and the rule that they stay put.
 
 ## How does an artifact get deleted?
 

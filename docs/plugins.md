@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the two run records this page names. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-30. `test/docsPages.test.ts` holds this
@@ -104,13 +104,13 @@ the first walks of a remote source ran against a private mirror of it instead. T
 rehearsal of 2026-09-22
 pointed Claude Code and Copilot CLI at that mirror pinned at the tag. The Codex walk of 2026-09-24
 added it to codex-cli 0.155.1 at both release tags and at the distribution branch. Both are
-recorded in `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, the Codex walk under its
-"The Codex half (E3)" section. One walk has since installed from this repository's own public
-distribution: the managed-settings walk of 2026-09-26 declared `zomarit/stamity` at `plugins/v1.9.1`
-through Claude Code's managed settings and installed the plugin at user scope, recorded in
-`.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`. The branch form through
-`marketplace add` at project scope is still unexecuted against it. No block on this page is
-presented as executed when it was not.
+recorded in `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` (on the `records`
+branch), the Codex walk under its "The Codex half (E3)" section. One walk has since installed from
+this repository's own public distribution: the managed-settings walk of 2026-09-26 declared
+`zomarit/stamity` at `plugins/v1.9.1` through Claude Code's managed settings and installed the
+plugin at user scope, recorded in `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`
+(on the `records` branch). The branch form through `marketplace add` at project scope is still
+unexecuted against it. No block on this page is presented as executed when it was not.
 
 `<owner>/stamity` below is your own mirror or this repository, whichever your organization serves
 from. The branch a release publishes the distribution to is `plugin-dist`, and each release also
@@ -615,7 +615,8 @@ mirror that carries the moved presets; a consumer of this repository's own distr
 *Executed 2026-09-22 by the private-chain rehearsal (renovate 44.107.0): one pull request per
 consumer, the plugin consumer's changing one file and one line — the catalog's `ref` — and the APM
 consumer's changing `apm.yml`, its lock and the deployed files; a second run after the merges
-opened none; the record is `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`.*
+opened none; the record is `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` (on the
+`records` branch).*
 
 **Where the review step actually sits.** No client delivers a plugin update as a pull request.
 Claude Code's marketplace auto-update, Cursor's team-marketplace re-index and the Copilot CLI's

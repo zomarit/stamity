@@ -6,7 +6,11 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { CLI_REFERENCE_DOC_PATH } from "../../../src/cli/docs/cliReference.ts";
 import { CONFIG_REFERENCE_DOC_PATH } from "../../../src/cli/docs/configReference.ts";
-import { MEASUREMENTS_DOC_PATH, measurementInputs } from "../../../src/cli/docs/measurements.ts";
+import {
+  MEASUREMENTS_DOC_PATH,
+  RECORDS_BLOB_URL,
+  measurementInputs,
+} from "../../../src/cli/docs/measurements.ts";
 import {
   LLMS_INDEX_DOC_PATH,
   LLMS_INDEX_SECTIONS,
@@ -137,10 +141,24 @@ describe("every listed path resolves", () => {
   /**
    * The wave-0 promise `test/docsPages.test.ts` deferred: README links the
    * four generated targets by path and leaves their existence to this unit.
+   *
+   * TEST CHANGE, justified (2026-10-14, unit r3-hand-page-links, REQ-PROVE-020): README's three
+   * proof links — the merge-ready snapshot, the run of record and the reach snapshot — point into
+   * the `records` branch, which a checkout of `main` does not carry. A target under
+   * `RECORDS_BLOB_URL` is held to a whole-file path there (no anchor, no query) and left out of the
+   * on-disk check; any other scheme is still refused, and every repo-relative target is still
+   * resolved.
    */
   it("resolves every repo-relative link in README.md", () => {
     const readme = readFileSync(join(REPO_ROOT, "README.md"), "utf-8");
-    const targets = linkTargets(readme).filter((target) => !target.startsWith("#"));
+    const all = linkTargets(readme).filter((target) => !target.startsWith("#"));
+    const records = all.filter((target) => target.startsWith(RECORDS_BLOB_URL));
+    for (const target of records) {
+      expect(target.slice(RECORDS_BLOB_URL.length), "README links a record by more than its path").toMatch(
+        /^[\w.-]+(?:\/[\w.-]+)*$/,
+      );
+    }
+    const targets = all.filter((target) => !records.includes(target));
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
       expect(target, "README link is not repo-relative").not.toMatch(/^([a-z][a-z0-9+.-]*:|\/)/i);

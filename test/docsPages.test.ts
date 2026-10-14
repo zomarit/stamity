@@ -1,14 +1,23 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
-  compositionOf,
-  failingCases,
-  priorCompleteRun,
+  MEASUREMENTS_DOC_PATH,
+  RECORDS_BLOB_URL,
+  measurementInputs,
   readRunOfRecord,
-  runStatus,
-  unmetMetrics,
 } from "../src/cli/docs/measurements.ts";
 import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
 import {
@@ -675,8 +684,18 @@ const RELEASE_CUT_DATE = "2026-10-12";
  * f4-retire-superseded-eval-inputs). A page re-read today can honestly carry only today's date,
  * which the 2026-10-12 pin refused as later than the pass it ships in. Every other page keeps its
  * cut date.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-14, from 2026-10-13, by plan 014 file 2, unit
+ * r3-hand-page-links (REQ-PROVE-020, REQ-UPSTREAM-007). The run records and the eval evidence moved
+ * to the `records` branch, so `README.md`, `docs/doctrine.md`, `docs/enterprise-forks.md`,
+ * `docs/plugins.md` and `SECURITY.md` were re-read for every link and path into a record, which now
+ * links into or names the `records` branch, and the fork guide's `generatedPaths` example for the
+ * measurements page it no longer lists. Each moved onto the commit form naming the 1.14.0 cut
+ * c3d81529 plus `Re-attested 2026-10-14`, the fork guide from its 2026-10-13 clause. A page re-read
+ * today can honestly carry only today's date, which the 2026-10-13 pin refused as later than the
+ * pass it ships in. `CONTRIBUTING.md` keeps its 2026-10-13 clause and every other page its cut date.
  */
-const REATTESTATION_DATE = "2026-10-13";
+const REATTESTATION_DATE = "2026-10-14";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -1329,9 +1348,16 @@ describe("README", () => {
   it("resolves every link target it names", () => {
     // No exemption list. The four generated pages it used to skip have shipped,
     // and a skip kept past its reason hides a rename from both suites.
+    //
+    // TEST CHANGE, justified (2026-10-14, unit r3-hand-page-links, REQ-PROVE-020): a target inside
+    // this repository's own GitHub home (`ALLOWED_URL`) is skipped, as the hand-page check above
+    // skips it. README's three proof links — the merge-ready snapshot, the run of record and the
+    // reach snapshot — now point into the `records` branch, which a checkout of `main` does not
+    // carry, so their existence is the records branch's and not this tree's. Every repo-relative
+    // target is still resolved, and the floor below still counts the map's targets.
     const checked: string[] = [];
     for (const target of linkTargets(read(README))) {
-      if (target.startsWith("#")) continue;
+      if (target.startsWith("#") || ALLOWED_URL.test(target)) continue;
       checked.push(target);
       expect(existsSync(join(REPO_ROOT, target)), `README links missing ${target}`).toBe(true);
     }
@@ -1349,8 +1375,16 @@ describe("README", () => {
  */
 const RUN_OF_RECORD_PAGES: readonly string[] = [README, DOCTRINE];
 
-const RUN_OF_RECORD_CLAIM =
-  /\[run (\d+)\]\((?:\.\.\/)?(evals\/runs\/[^)\s]+)\),? the (\d+\.\d+\.\d+) release run/;
+/** The `records` branch prefix as a `RegExp` source: every metacharacter escaped. */
+const RECORDS_BLOB_PREFIX = RECORDS_BLOB_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// TEST CHANGE, justified (2026-10-14, unit r3-hand-page-links, REQ-PROVE-020): the link before the
+// run's path also admits the `records` branch prefix (`RECORDS_BLOB_URL`), the form both pages now
+// link the run of record in, since the eval runs left `main`. Capture 2 is still the repo-relative
+// `evals/runs/…` path, so it is compared with the run of record's path exactly as before.
+const RUN_OF_RECORD_CLAIM = new RegExp(
+  String.raw`\[run (\d+)\]\((?:\.\.\/|${RECORDS_BLOB_PREFIX})?(evals\/runs\/[^)\s]+)\),? the (\d+\.\d+\.\d+) release run`,
+);
 
 const collapsed = (text: string): string => text.replace(/\s+/g, " ");
 
@@ -1419,143 +1453,15 @@ describe("the eval run of record on the hand pages", () => {
     }
   });
 
-  // ADDED for review/200: the run of record composes with a prior full run, and when that run
-  // was FAIL on its own the three surfaces that state the composed PASS say so, naming the failing
-  // floor cases, the Invariant 2 tightening between the two, and the re-measure. The run numbers
-  // and case ids are read off both RESULTS.md files, so the sentence cannot drift from them.
-  //
-  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case read `prior complete run is `…``
-  // off the run of record and failed with "names no prior complete run" when there was none. Run 38,
-  // the 1.11.0 run of record, is a full baseline — every case measured, no composition, because the
-  // client moved to a new configuration — and a full run's RESULTS.md has no composition section and
-  // no such line (run 34's has none; run 35's names run 34 in its § 0), the same key the chain walk
-  // in test/cli/docs/measurements.test.ts ends on. When the line is there the checks are unchanged;
-  // when it is not there is no baseline to disclose, so the case asserts instead that no page still
-  // carries a stale "alone was FAIL" composition disclosure. The case name stays, because the spec
-  // cites it by name as this requirement's test evidence.
-  //
-  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The disclosure pattern hard-coded 1.10.0's
-  // composition: "Invariant 2 was then tightened (invariants 1.1.0)" and "the two cases whose files
-  // moved". The 1.11.0 run of record is likely composed again (run 39 re-measuring the one case run
-  // 38 lost a sample of), with no rule change between the runs and one case re-measured, so the
-  // pattern would have refused a true disclosure. Every required clause is now read off the two
-  // results files through the generator's parsers: the prior run's number and status, its failing
-  // floor or guardrail cases by class, count and id (its § 5 rows), and the run of record's
-  // re-measured count (its § 0). Between the failing cases and the re-measure the pattern admits
-  // free text, because the reason a release re-measured is in neither file — 1.10.0's README and
-  // doctrine state one there, the generated page does not. Still required, unchanged: the prior's
-  // number and "alone was FAIL", the failing ids in order, "run N re-measured", and "composed with
-  /**
-   * The disclosure a hand page must carry for a FAIL prior run: its number and "alone was FAIL",
-   * its failing cases by class, count and id, each metric its § 5 reads "NOT met" for with no case
-   * accounting for it, then "run N re-measured <count>" and "composed with run M". Built through
-   * the generator's own parsers, so the pattern and the page are worded from the same reading.
-   */
-  const failBaselineDisclosure = (
-    baseline: string,
-    baselineResults: string,
-    run: string,
-    remeasured: number,
-  ): RegExp => {
-    const base = /-run-(\d+)/.exec(baseline)?.[1] ?? "";
-    const word = (n: number): string =>
-      ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] ??
-      String(n);
-    const cases = (n: number): string => `${word(n)} ${n === 1 ? "case" : "cases"}`;
-    const literal = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const and = (items: readonly string[]): string =>
-      items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1) ?? ""}`;
-    const groups = failingCases(baselineResults).map(({ kind, ids }) => {
-      const named = ids.map((id) => literal(`\`${id}\``)).join(", ");
-      return `${word(ids.length)} ${kind} ${ids.length === 1 ? "case" : "cases"}, ${named}`;
-    });
-    const unmet = unmetMetrics(baselineResults).map(
-      (metric) => literal(metric.charAt(0).toLowerCase() + metric.slice(1)),
-    );
-    const missed = unmet.length === 0 ? "" : `the ${and(unmet)} not met`;
-    const verdict =
-      groups.length === 0
-        ? `with ${missed}`
-        : `on ${groups.join(", and ")}${missed === "" ? "" : `, and ${missed}`}`;
-    return new RegExp(
-      `\\[?Run ${base}\\]?(?:\\((?:\\.\\./)?evals/runs/${literal(baseline)}/RESULTS\\.md\\))? alone ` +
-        `was FAIL ${verdict}[;.] .{0,200}?\\brun ${run} re-measured (?:the )?` +
-        `${cases(remeasured)}\\b[^,]{0,80}, composed with run ${base}\\b`,
-    );
-  };
-
-  // run M". The FAIL-names-a-failing-case guard and the passing-prior negative are unchanged.
-  //
-  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut (review W-4). The pattern required only the
-  // failing cases a § 5 row lists after "failing:", so a prior that also missed a metric whose row
-  // reads "NOT met" with no listed case (run 37's guardrail row) could be disclosed as if only its
-  // floor case failed. When the prior's § 5 has such a row the pattern now requires the generator's
-  // clause naming it — "…, and the <metric> not met", or "FAIL with the <metric> not met" with no
-  // case — read through the same parser (unmetMetrics). Run 34's § 5 has no such row, so today's
-  // README and doctrine still match unchanged; the added case below holds the clause on run 37.
-  // The FAIL guard now also accepts a FAIL named by a missed metric alone.
-  it.each([README, DOCTRINE, "docs/measurements.md"])(
-    "%s discloses a FAIL baseline behind the composed run of record",
-    (page) => {
-      const baseline = priorCompleteRun(read(RUN_OF_RECORD_PATH));
-      if (baseline === null) {
-        expect(
-          collapsed(read(page)),
-          `${page} keeps a composition disclosure, but ${RUN_OF_RECORD_PATH} is a full run`,
-        ).not.toMatch(/alone was FAIL/);
-        return;
-      }
-      const baselineResults = read(`evals/runs/${baseline}/RESULTS.md`);
-      const failing = failingCases(baselineResults);
-      const unmet = unmetMetrics(baselineResults);
-      const failed = runStatus(baselineResults) === "FAIL";
-      const remeasured = compositionOf(read(RUN_OF_RECORD_PATH))?.remeasured.length ?? 0;
-      const run = /-run-(\d+)/.exec(RUN_OF_RECORD_PATH)?.[1] ?? "";
-      const disclosure = failBaselineDisclosure(baseline, baselineResults, run, remeasured);
-      expect(
-        !failed || failing.length > 0 || unmet.length > 0,
-        `${baseline} is FAIL but names no failing floor and no missed metric`,
-      ).toBe(true);
-      if (failed) {
-        expect(collapsed(read(page)), `${page} hides that ${baseline} alone was FAIL`).toMatch(
-          disclosure,
-        );
-      } else {
-        expect(collapsed(read(page)), `${page} calls a passing baseline FAIL`).not.toMatch(
-          /alone was FAIL/,
-        );
-      }
-    },
-  );
-
-  // ADDED 2026-10-01, the 1.11.0 cut (review W-4), beside the TEST CHANGE above: run 34's § 5 has
-  // no "NOT met" row, so the hand pages cannot show the missed-metric clause is required. Run 37's
-  // real § 5 can — its guardrail row reads "NOT met" with no case listed — so the pattern built
-  // from it refuses a disclosure that names only the floor case, and admits the generator's wording.
-  it("requires a disclosure to name a metric the prior run missed with no listed case", () => {
-    const prior = "2026-10-01-run-37";
-    const pattern = failBaselineDisclosure(prior, read(`evals/runs/${prior}/RESULTS.md`), "39", 1);
-    const head = `[Run 37](../evals/runs/${prior}/RESULTS.md) alone was FAIL on one floor case, ` +
-      "`quick-refusal-under-social-pressure`";
-    const tail = "; run 39 re-measured one case, composed with run 37, and carried the other 112.";
-    expect(`${head}, and the adversarial guardrail hold rate not met${tail}`).toMatch(pattern);
-    expect(`${head}${tail}`, "a disclosure hiding the missed guardrail metric passed").not.toMatch(
-      pattern,
-    );
-  });
-
-  // ADDED 2026-10-01 beside the TEST CHANGE above: the case branches on the prior-run line, so the
-  // key is held to real exports of both kinds — run 34 measured every case in full and names no
-  // prior run, run 35 composed with it and names it. A key that read both alike would send every
-  // run of record down one branch.
-  it("tells a full run's results from a composed run's by the prior-run line", () => {
-    // TEST CHANGE, justified: 2026-10-01 (review M-1): the shared parser reads a full run as null,
-    // where the local helper it replaced read "" — the same verdict in the parser's own type.
-    expect(priorCompleteRun(read("evals/runs/2026-09-27-run-34/RESULTS.md"))).toBeNull();
-    expect(priorCompleteRun(read("evals/runs/2026-09-27-run-35/RESULTS.md"))).toBe(
-      "2026-09-27-run-34",
-    );
-  });
+  // MOVED 2026-10-14 (unit r3-hand-page-links, REQ-PROVE-025): "%s discloses a FAIL baseline behind
+  // the composed run of record" and "requires a disclosure to name a metric the prior run missed with
+  // no listed case" run in `test/records/docsPages.test.ts`, with the pattern they share. The first
+  // reads the run of record's results file and its prior run's, which are records on the `records`
+  // branch; the second now reads a synthetic § 5 and moved with the pattern it holds, so the pattern
+  // has one copy. "tells a full run's results from a composed run's by the prior-run line" is
+  // DELETED: it read two real exports to prove what `test/cli/docs/measurements.test.ts` "is read off
+  // the composition section alone, and a broken section throws" proves on synthetic exports of the
+  // same shapes (`priorCompleteRun` reads a full run as null and a composed run's prior id).
 });
 
 // ADDED 2026-10-08 (unit c3-release-rules). REQ-PROVE-033: a release runs the eval set when a
@@ -1636,20 +1542,6 @@ const EVAL_SKILL_COPIES: readonly string[] = [
   ".claude/skills/st-eval-run/SKILL.md",
 ];
 
-interface RecordedConfiguration {
-  readonly inputs: Readonly<Record<string, string>>;
-  readonly models: Readonly<Record<string, string>>;
-  readonly harness?: string;
-}
-
-/** The run of record's recorded configuration, read off the `inputs.json` beside its results. */
-const recordedConfiguration = (): RecordedConfiguration =>
-  (
-    JSON.parse(read(join(dirname(RUN_OF_RECORD_PATH), "inputs.json"))) as {
-      readonly configuration: RecordedConfiguration;
-    }
-  ).configuration;
-
 /** The backticked repository paths a text names. */
 const namedPaths = (text: string): string[] =>
   [...text.matchAll(/`(\.?[\w-]+(?:\/[\w.*-]+)+)`/g)].map((match) => match[1] ?? "");
@@ -1662,17 +1554,6 @@ const uncovered = (paths: Iterable<string>, named: readonly string[]): string[] 
         pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : pattern === path,
       ),
   );
-
-/** The files the run of record's own cases name in `source:`, line ranges dropped. */
-const recordedCaseSources = (): Set<string> => {
-  const sources = new Set<string>();
-  for (const path of Object.keys(recordedConfiguration().inputs)) {
-    if (!/^evals\/cases-v\d+\//.test(path) || !existsSync(join(REPO_ROOT, path))) continue;
-    const source = /^source: *([^\s:]+)/m.exec(read(path))?.[1];
-    if (source !== undefined) sources.add(source);
-  }
-  return sources;
-};
 
 /** The rule's span in SET-v7, from its trigger clause to its FAIL sentence, whitespace-collapsed. */
 const RULE_SPAN_START = "when its diff since the run of record touches";
@@ -1687,42 +1568,16 @@ describe("the release eval follows what changed", () => {
     }
   });
 
-  it("names every file the run of record hashes as an input, in the checklist and in SET-v7", () => {
-    const recorded = Object.keys(recordedConfiguration().inputs);
-    expect(recorded.length, `${RUN_OF_RECORD_PATH}'s inputs.json records no input`).toBeGreaterThan(0);
-    for (const [where, text] of releaseRuleTexts()) {
-      expect(uncovered(recorded, namedPaths(text)), `${where} misses files the run of record hashes`).toEqual([]);
-    }
-  });
-
+  // MOVED 2026-10-14 (unit r3-hand-page-links, REQ-PROVE-025): "names every file the run of record
+  // hashes as an input", "names every file a case's `source:` names" and "names every model role and
+  // the client the run of record records" run in `test/records/docsPages.test.ts`, with the readers
+  // of the run of record's `inputs.json` they share. That file is a record on the `records` branch;
+  // the case below reads `scripts/eval/run.mjs` on `main` and stays.
   it("names every file the public runner hashes, in the checklist and in SET-v7", () => {
     const runnerFiles = RUNNER_FILES as readonly string[];
     expect(runnerFiles.length, "scripts/eval/run.mjs hashes no runner file").toBeGreaterThan(0);
     for (const [where, text] of releaseRuleTexts()) {
       expect(uncovered(runnerFiles, namedPaths(text)), `${where} misses files the public runner hashes`).toEqual([]);
-    }
-  });
-
-  it("names every file a case's `source:` names, in the checklist and in SET-v7", () => {
-    const sources = recordedCaseSources();
-    expect(sources.size, "the run of record's cases name no source").toBeGreaterThan(0);
-    for (const [where, text] of releaseRuleTexts()) {
-      expect(uncovered(sources, namedPaths(text)), `${where} misses case sources`).toEqual([]);
-    }
-  });
-
-  it("names every model role and the client the run of record records", () => {
-    const { models, harness } = recordedConfiguration();
-    const roles = Object.keys(models);
-    expect(roles.length, `${RUN_OF_RECORD_PATH}'s inputs.json records no model`).toBeGreaterThan(0);
-    expect(harness, `${RUN_OF_RECORD_PATH}'s inputs.json records no harness`).toBeTruthy();
-    for (const [where, text] of releaseRuleTexts()) {
-      for (const role of roles) {
-        expect(text, `${where} does not name the ${role} model as a trigger`).toContain(`the ${role} model`);
-      }
-      expect(text, `${where} does not name the pinned client version`).toContain(
-        "the harness, which carries the pinned client version",
-      );
     }
   });
 
@@ -1774,6 +1629,154 @@ describe("the release eval follows what changed", () => {
       /a patch release runs a line only when its `Runs when:` trigger/i,
     );
   });
+});
+
+// ADDED 2026-10-14 (unit r3-hand-page-links; REQ-UPSTREAM-007, REQ-PROVE-020, ledger review/6). The
+// fork guide's recommended `regenerate` and `generatedPaths` lists, run where a fork runs them: a
+// checkout that holds no record. The measurements page renders from records, so `generate-docs.mjs`
+// skips it there, and the guide stopped listing it as a generated path; this holds the two to each
+// other in a real tree rather than in prose. The same tree drives the generator's refusal at the
+// script level, which the pure `measurementsAction` cases cannot reach: the script reads its own
+// root, so only a copy of the tree without the records can make it refuse.
+
+/**
+ * The records set, the paths this repository keeps on the `records` branch rather than on `main`:
+ * the run folders, the inbox, the handoffs but the scaffold's `.gitkeep`, the evidence, the plans,
+ * and the eval runs, measurements, reach snapshots and their two archive notes.
+ */
+const RECORD_PATHS =
+  /^(?:\.stamity\/(?:runs|evidence)\/|\.stamity\/inbox\.md$|\.stamity\/handoffs\/(?!\.gitkeep$)|docs\/plans\/|evals\/(?:runs|measurements|reach)\/|evals\/EVIDENCE-STORAGE\.md$|evals\/ARCHIVE-MIGRATION-2026-09-15\.json$)/;
+
+/** A `generatedPaths` glob as the lane reads one: `**` crosses folders, `*` stays inside one. */
+const globPattern = (glob: string): RegExp =>
+  new RegExp(
+    `^${glob
+      .split(/(\*\*|\*)/)
+      .map((part) => (part === "**" ? ".*" : part === "*" ? "[^/]*" : part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")))
+      .join("")}$`,
+  );
+
+/** The fork guide's example configuration, read off its one JSON block under the heading. */
+const forkGuideConfiguration = (): { regenerate: string[]; generatedPaths: string[] } => {
+  const section = sectionOf(read(ENTERPRISE_FORKS), "### Start from these values for a fork of this repository");
+  const [block] = fencedBlocksOf(section, "json");
+  expect(block, `${ENTERPRISE_FORKS} carries no example configuration`).toBeDefined();
+  return JSON.parse(block ?? "{}") as { regenerate: string[]; generatedPaths: string[] };
+};
+
+/**
+ * Every file `git ls-files` lists outside the records set, copied into a fresh temp folder that is
+ * then committed as a repository of its own, so `git status` there reads what a run rewrote.
+ * `node_modules` is linked rather than copied: the generators import their dependencies from it,
+ * and nothing they write lands under it.
+ */
+function recordsFreeTree(): string {
+  const root = mkdtempSync(join(tmpdir(), "stamity-records-free-"));
+  const listed = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf-8" })
+    .split("\0")
+    .filter((path) => path !== "" && !RECORD_PATHS.test(path));
+  for (const path of listed) {
+    if (!existsSync(join(REPO_ROOT, path))) continue;
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    copyFileSync(join(REPO_ROOT, path), join(root, path));
+  }
+  symlinkSync(join(REPO_ROOT, "node_modules"), join(root, "node_modules"), "junction");
+  const git = (...args: string[]): string =>
+    execFileSync(
+      "git",
+      ["-c", "core.autocrlf=false", "-c", "user.name=fixture", "-c", "user.email=fixture", "-c", "commit.gpgsign=false", ...args],
+      { cwd: root, encoding: "utf-8" },
+    );
+  git("init", "-q");
+  git("add", "-A");
+  git("commit", "-q", "--no-verify", "-m", "records-free fixture");
+  return root;
+}
+
+describe("the fork guide's lists in a checkout with no records", () => {
+  const roots: string[] = [];
+  afterAll(() => {
+    for (const root of roots) {
+      rmSync(join(root, "node_modules"), { force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("no longer lists or justifies the measurements page as a generated path", () => {
+    const { generatedPaths } = forkGuideConfiguration();
+    expect(generatedPaths.length, "the guide's generatedPaths read as empty").toBeGreaterThan(0);
+    expect(generatedPaths, "the guide still lists the measurements page").not.toContain(MEASUREMENTS_DOC_PATH);
+    expect(read(ENTERPRISE_FORKS), "the guide still names the measurements page's path").not.toContain(
+      MEASUREMENTS_DOC_PATH,
+    );
+    expect(flowed(read(ENTERPRISE_FORKS)), "the guide never says why the page is not listed").toContain(
+      flowed("The measurements page is not listed: a fork holds no records, so\n`generate-docs.mjs` skips that page there"),
+    );
+  });
+
+  it(
+    "runs the regenerate list with the page skipped and nothing rewritten outside generatedPaths, and refuses the page alone",
+    () => {
+      const root = recordsFreeTree();
+      roots.push(root);
+      const committedPage = readFileSync(join(root, MEASUREMENTS_DOC_PATH), "utf-8");
+      const inputs = measurementInputs(root);
+      expect(inputs.present, "the records-free tree still holds a measurements input").toEqual([]);
+      expect(inputs.missing.length, "the generator names no measurements input").toBeGreaterThanOrEqual(3);
+      const notice =
+        `generate-docs: measurements page skipped — no records in this checkout (missing ${inputs.missing.join(", ")}); ` +
+        "node scripts/records.mjs restore brings them";
+      const run = (script: string, args: readonly string[]) =>
+        spawnSync(process.execPath, [join(root, script), ...args], { cwd: root, encoding: "utf-8" });
+
+      // The guide's list, every command that runs a generator script. The two npm commands are left
+      // out, and named, so a command joining the list is a decision rather than a silent skip: the
+      // linked `node_modules` is what the install would have made, and the build-and-sync writes
+      // only `dist/` and the emitted client files the dogfood check covers.
+      const { regenerate, generatedPaths } = forkGuideConfiguration();
+      const scripts = regenerate.filter((command) => /^node scripts\/\S+\.mjs(?: |$)/.test(command));
+      expect(regenerate.filter((command) => !scripts.includes(command))).toEqual([
+        "npm ci --ignore-scripts",
+        "npm run build && node dist/cli.js sync",
+      ]);
+      expect(scripts, "the guide's regenerate list no longer runs generate-docs.mjs").toContain(
+        "node scripts/generate-docs.mjs",
+      );
+      for (const command of scripts) {
+        const [, script = "", ...args] = command.split(" ");
+        const result = run(script, args);
+        expect(result.status, `\`${command}\` failed with no records:\n${result.stderr}`).toBe(0);
+        if (script === "scripts/generate-docs.mjs") expect(result.stderr).toContain(notice);
+      }
+      expect(readFileSync(join(root, MEASUREMENTS_DOC_PATH), "utf-8"), "the page moved with no records").toBe(
+        committedPage,
+      );
+      const rewritten = execFileSync("git", ["-c", "core.autocrlf=false", "status", "--porcelain", "-z", "--untracked-files=all"], {
+        cwd: root,
+        encoding: "utf-8",
+      })
+        .split("\0")
+        .filter((entry) => entry !== "")
+        .map((entry) => entry.slice(3));
+      const globs = generatedPaths.map(globPattern);
+      expect(
+        rewritten.filter((path) => !globs.some((glob) => glob.test(path))),
+        "the regenerate list rewrote a path the guide's generatedPaths does not list",
+      ).toEqual([]);
+
+      // `--page all` names the same skip, and `--page measurements` asks for the page itself, so it
+      // refuses before any write, naming every input it lacks.
+      const all = run("scripts/generate-docs.mjs", ["--page", "all"]);
+      expect(all.status, all.stderr).toBe(0);
+      expect(all.stderr).toContain(notice);
+      const alone = run("scripts/generate-docs.mjs", ["--page", "measurements"]);
+      expect(alone.status, "the page alone rendered with no records").toBe(1);
+      expect(alone.stderr).toContain(`generate-docs: the measurements page needs ${inputs.missing.join(", ")}`);
+      expect(alone.stdout, "the refused run wrote a page").not.toContain("Wrote ");
+      expect(readFileSync(join(root, MEASUREMENTS_DOC_PATH), "utf-8")).toBe(committedPage);
+    },
+    120_000,
+  );
 });
 
 describe("README corpus claims", () => {

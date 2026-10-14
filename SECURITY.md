@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.14.0 release cut (2026-10-12). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, which now holds the inbox, the run ledger and the signing evidence this page names. -->
 <!-- Re-open when: a `file::symbol` address below stops resolving, a control in the table loses its
      last caller under `src/`, a new install route or execution surface ships, a control named under
      "Publishing this package" changes in `.github/workflows/release.yml`, or the crosswalk in
@@ -321,7 +321,7 @@ where it depends on it.
   1.14.0. The Copilot case is tracked in `.stamity/inbox.md` as the row
   `2026-10-10_next-tier/review/22`, and the residual on every client is tracked as the row
   `2026-10-11_release-1-14-0/review/36` of the ledger
-  `.stamity/runs/2026-10-11_release-1-14-0/ledger.jsonl`.
+  `.stamity/runs/2026-10-11_release-1-14-0/ledger.jsonl`; both files are on the `records` branch.
 - **Bounded phase IO.** `src/guard/promptGuard.ts` defines a 500 KB phase-input bound, a 1 MB
   agent-output bound, and boundary-marker wrapping. Only `MAX_USER_CONTENT_LENGTH` above has
   production callers: the overlay path applies it as a 250 000-character ceiling, and the
@@ -367,7 +367,8 @@ so where it says which edition each id belongs to.
 
 Two advisories, in three Dependabot alerts, are open and watched rather than fixed. Each alert is
 rated high, and none names a patched version (read live on 2026-10-11). They are known residuals
-in 1.14.0, tracked in `.stamity/inbox.md` as the row `2026-10-08_product-core/close/1`:
+in 1.14.0, tracked in `.stamity/inbox.md` (on the `records` branch) as the row
+`2026-10-08_product-core/close/1`:
 
 - `http-cache-semantics` <= 4.2.0 (GHSA-ch52-4w7c-c8xp, high, max-stale handling can disclose
   cross-user cached responses), alerts #23 and #27, no patched version. #23 is `package-lock.json`,
@@ -393,7 +394,7 @@ names the run that carries it, so you can open the run rather than take the sent
 
 | Work | Current boundary |
 |---|---|
-| Pack-author signing | `scripts/sign-pack.mjs` signs the existing payload, verifies the declared identity and writes the detached bundle atomically. See [the author workflow](docs/packs-and-trust.md). Local cryptographic fixtures substitute the external identity service in the suite. The authenticated live-signing proof is closed: the [rehearsal on the 1.7.0 candidate](https://github.com/zomarit/stamity/actions/runs/34758487370) signed with a real GitHub OIDC and Sigstore identity and passed its negative controls. Its artifacts are archived under `.stamity/runs/2026-09-14_package-11/evidence/`. Every rehearsal run is public in two ways, by design: it writes two entries to the public Sigstore transparency log under this repository's workflow identity, and it uploads the signed fixture packs as run artifacts. Those packs hold one throwaway rule file and no product content, and the rehearsal publishes nothing else |
+| Pack-author signing | `scripts/sign-pack.mjs` signs the existing payload, verifies the declared identity and writes the detached bundle atomically. See [the author workflow](docs/packs-and-trust.md). Local cryptographic fixtures substitute the external identity service in the suite. The authenticated live-signing proof is closed: the [rehearsal on the 1.7.0 candidate](https://github.com/zomarit/stamity/actions/runs/34758487370) signed with a real GitHub OIDC and Sigstore identity and passed its negative controls. Its artifacts are archived under `.stamity/runs/2026-09-14_package-11/evidence/` on the `records` branch. Every rehearsal run is public in two ways, by design: it writes two entries to the public Sigstore transparency log under this repository's workflow identity, and it uploads the signed fixture packs as run artifacts. Those packs hold one throwaway rule file and no product content, and the rehearsal publishes nothing else |
 | Release egress | `gates`, `apm-route` and `publish` use fail-closed per-job policies. Artifact storage is limited to the current official GitHub account roster. [Endpoint evidence and proof boundaries](.github/release-egress.md) distinguish implementation, changed-job rehearsal and the final credential-bearing publish path. That last boundary is closed: the [1.7.0 release run](https://github.com/zomarit/stamity/actions/runs/34771477218) published over OIDC with provenance, confirmed by the post-publication verifier. The rehearsal-only summary executes no third-party code |
 
 A threat model over the emitted surfaces was a third item on this list, and it has come off. The
