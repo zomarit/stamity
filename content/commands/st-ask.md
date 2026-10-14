@@ -69,9 +69,9 @@ dependency edge —
 facet B's question cannot be written until facet A answers. Token cost is not a dependency
 edge, and a wide question is not a reason to collapse facets into one repo-wide sweep.
 
-Each researcher brief carries: `objective` (the facet as one question), `scope` (globs that
-bound the read), `questions[]`, `output_sections[]` (the named tables synthesis needs),
-`depth`, `tool_tier` (`codebase` | `+docs` | `+web`), and `handoff_to: ask synthesis`.
+Each researcher brief carries: `objective` (the facet as one question), `scope` (globs that bound the read), `questions[]`, `output_sections[]` (the named
+tables synthesis needs), `depth`, `tool_tier` (`codebase` | `+docs` | `+web`), and `handoff_to: ask synthesis`. Every sub-agent call passes `model` for the
+role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 ### Context budget
 
@@ -136,6 +136,10 @@ report" and is indistinguishable from a facet that was quietly dropped.
 Sub-agents do not ask the user. A researcher returning `BLOCKED_AMBIGUITY` hands up its
 competing readings; the orchestrator asks one question with numbered options and a declared
 default-if-no-response, then re-dispatches that facet narrowed.
+
+Before the blocks print, the run walks each Blocked row, Contradiction and low-confidence claim by
+the `stamity-question-protocol` rule's Close walk. Ask writes nothing: each decision is recorded in
+the answer, and acting on it is the person's.
 
 ## Escalation
 

@@ -274,8 +274,8 @@ applies no edit, and this command writes nothing in that mode.
 Fan out researchers when the questions are independent — one per module or
 surface — and merge through a single writer: `spec-author` owns every file
 under `docs/specs/`. Two authors on one spec file is a protocol violation.
-Sub-agents do not question the operator: an ambiguity comes back as
-`BLOCKED_AMBIGUITY` naming the readings, and this command asks.
+Sub-agents do not question the operator: an ambiguity comes back as `BLOCKED_AMBIGUITY` naming the readings, and this command asks. Every sub-agent call
+passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 ## Return contract
 
@@ -296,6 +296,11 @@ Every run closes with:
   run that closed with none of those says so in the same line. When more than
   one of these is live at once, the step names exactly one of them — never two
   chained with `then` — and any one live condition satisfies the line.
+
+That close prints after the run has walked each open `[NEEDS CLARIFICATION]`
+marker, each unconfirmed T2 or T3 proposal and each census gap by the
+`stamity-question-protocol` rule's Close walk, and nothing prints after it;
+`check` records each answer and writes nothing.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:

@@ -29,12 +29,12 @@ the signal — any failing probe or unclean drift exits non-zero, warnings alone
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `${STAMITY:CLI} <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell. A `not-runnable` result on both names the install as the unresolved input.
 
-Every repo gate named here — the probe above, and the failing-test gate at step 6 — runs in a
-`test-runner` spawn, never in this command's own context. The runner returns a gate-by-gate
-result: the exact command, pass or fail, and the verbatim failing excerpt. Bare pass/fail is not
-a result, and a fresh spawn keeps a long gate's output out of the reasoning context that ranks
-the hypotheses. The runner reports and nothing else — it applies no edit and proposes no patch,
-so adding it opens no second fix path.
+Every repo gate named here — the probe above, and the failing-test gate at step 6 — runs in a `test-runner` spawn, never in
+this command's own context. The runner returns a gate-by-gate result: the exact command, pass or fail, and the verbatim
+failing excerpt. Bare pass/fail is not a result, and a fresh spawn keeps a long gate's output out of the reasoning context that
+ranks the hypotheses. The runner reports and nothing else — it applies no edit and proposes no patch, so adding it opens no
+second fix path. Every sub-agent call passes `model` for the role's class from the client's map at `.stamity/generated/models/`;
+when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
 
 When both targets are live (a product test fails *and* drift is reported), debug the install
 first. Generated context is an input to every other hypothesis, so a stale corpus makes the
@@ -213,6 +213,10 @@ and reaches the same transition as a switch the user makes.
 | Cause is one mechanical slip inside the quick thresholds | `/st-quick` | the cited line plus the failing test |
 | The symptom turns out to be a question, not a defect | `/st-ask` | the symptom rewritten as the question |
 | The defect arrived as review feedback on delivered work | `/st-rework` | the diagnosis as a triage input |
+
+Before the closing report, the run walks each regression clause with no test, any instrumentation
+held under a capture-later agreement and each surviving hypothesis by the `stamity-question-protocol`
+rule's Close walk.
 
 The closing report ends on one recommended next step, derived from this run's own state and not
 from the table above: a regression clause with no test makes writing it the step; instrumentation

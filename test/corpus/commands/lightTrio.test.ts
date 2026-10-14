@@ -392,6 +392,10 @@ describe("light trio — the closing next step", () => {
     // fix, drop or schedule, no "asks once", and no pointer at the board's rule, whose branches
     // append. A scan hit, a red gate and a refused item keep the routes the lane already has,
     // so no second text can disagree with them.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f5-touchpoints-a; comment only, no
+    // assertion moved): REQ-FLOW-080 gives the lane a close walk with two options, carry to
+    // `/st-work` now or leave on `Not done:`, two paragraphs above this one and pinned in "the
+    // close walk" block below. This paragraph still offers nothing, and the lane still appends no row.
     for (const absent of ["fix now", "drop", "schedule", "asks once", "the board", "/st-board", "Leftovers"]) {
       expect(last, `the closing paragraph offers or points at "${absent}"`).not.toContain(absent);
     }
@@ -403,6 +407,141 @@ describe("light trio — the closing next step", () => {
     expect(escalation.indexOf("| Trigger | Switch to | Evidence carried |")).toBeLessThan(
       escalation.indexOf("This lane appends no inbox row."),
     );
+  });
+});
+
+/** The pointer every touchpoint's walk carries, at the protocol section it names. */
+const CLOSE_WALK_POINTER = "by the `stamity-question-protocol` rule's Close walk";
+
+/** The touchpoints' model sentence (REQ-LADDER-007), in its two halves. */
+const MODEL_PASS =
+  "Every sub-agent call passes `model` for the role's class from the client's map at `.stamity/generated/models/`;";
+const MODEL_FALLBACK =
+  "when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.";
+
+/** The body's paragraphs, each whitespace-flattened, blank-line separated. */
+function paragraphsOf(file: CorpusFile): string[] {
+  return file.parsed.body
+    .trim()
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim());
+}
+
+/**
+ * REQ-FLOW-080 — every touchpoint ends on a walk, the summary last.
+ *
+ * Each light touchpoint names its own leftovers and points at the question protocol's Close
+ * walk, which holds the shape (one question each, rounds, defaults, nothing after the summary);
+ * the pointer is asserted to resolve. The walk is placed ahead of the report it precedes, and
+ * the report's next-step paragraph keeps its place at the end, so the order the text gives is
+ * the order the run prints.
+ */
+describe("light trio — the close walk (REQ-FLOW-080)", () => {
+  it("points at a Close walk section the question protocol really carries", async () => {
+    const protocol = await load("rules/stamity-question-protocol.md");
+
+    expect(protocol.parsed.body).toMatch(/^## Close walk$/m);
+    expect(protocol.parsed.body.replace(/\s+/g, " ")).toContain(
+      "The summary or proof block prints after the last answer, and nothing prints after it.",
+    );
+  });
+
+  it("debug walks clauses with no test, held instrumentation and surviving hypotheses before the closing report", async () => {
+    const paragraphs = paragraphsOf(await load("commands/st-debug.md"));
+    const walk = paragraphs.at(-2) ?? "";
+
+    expect(walk).toBe(
+      "Before the closing report, the run walks each regression clause with no test, any instrumentation " +
+        "held under a capture-later agreement and each surviving hypothesis " +
+        CLOSE_WALK_POINTER +
+        ".",
+    );
+    // The report and its one next step stay the body's last block.
+    expect(paragraphs.at(-1)).toMatch(/^The closing report ends on one recommended next step/);
+    expect(paragraphs.at(-3)).toMatch(/^\| Situation \| Switch to \| Evidence carried \|/);
+    expect(flow(await load("commands/st-debug.md")).split(CLOSE_WALK_POINTER)).toHaveLength(2);
+  });
+
+  it("quick walks refused or deferred items and pre-existing failures with two options and appends no inbox row", async () => {
+    const paragraphs = paragraphsOf(await load(QUICK));
+    const walk = paragraphs.at(-3) ?? "";
+
+    expect(walk).toBe(
+      "Before the report, the batch walks each refused or deferred item and each pre-existing failure " +
+        "left alone " +
+        CLOSE_WALK_POINTER +
+        ", with two options: carry it to `/st-work` now, or leave it on `Not done:`.",
+    );
+    // The report's next step, then the no-append paragraph, in that order and last.
+    expect(paragraphs.at(-2)).toMatch(/^The report closes on one recommended next step/);
+    expect(paragraphs.at(-1)).toMatch(/^This lane appends no inbox row\./);
+    // Edge case: the walk offers no inbox branch, so a "leave" answer writes nothing anywhere.
+    for (const absent of ["inbox", "append", "fix now", "drop", "schedule"]) {
+      expect(walk, `the walk offers or names "${absent}"`).not.toContain(absent);
+    }
+  });
+
+  it("ask walks Blocked rows, Contradictions and low-confidence claims, records the decisions and writes nothing", async () => {
+    const file = await load("commands/st-ask.md");
+    const output = section(file, "Output").replace(/\s+/g, " ");
+
+    expect(output).toContain(
+      "Before the blocks print, the run walks each Blocked row, Contradiction and low-confidence claim " +
+        CLOSE_WALK_POINTER +
+        ". Ask writes nothing: each decision is recorded in the answer, and acting on it is the person's.",
+    );
+    // The walk sits after the four blocks are defined and before the closing next step.
+    const paragraphs = paragraphsOf(file);
+    expect(paragraphs.at(-1)).toMatch(/^Close on one recommended next step/);
+    expect(flow(file).indexOf(CLOSE_WALK_POINTER)).toBeLessThan(flow(file).indexOf("## Escalation"));
+    // Read-only holds through the walk: the spawn set does not widen.
+    expect(frontmatterField(file.parsed, "spawns")).toEqual(["researcher"]);
+  });
+});
+
+/**
+ * REQ-LADDER-007 (the touchpoints' half) — every spawning light touchpoint passes the role's
+ * class model from its client's map and names a fallback it took.
+ */
+describe("light trio — the model sentence (REQ-LADDER-007)", () => {
+  it.each(TRIO)("$id passes the class model from the client's map", async (command) => {
+    const text = flow(await load(command.relPath));
+
+    // Non-degenerate: the sentence is owed only where the command spawns.
+    expect(command.spawns.length).toBeGreaterThan(0);
+    expect(text).toContain(`${MODEL_PASS} ${MODEL_FALLBACK}`);
+  });
+});
+
+/**
+ * REQ-PLUGIN-046 — a `gate` reason that names a refused folder stops the lane.
+ *
+ * The engine keeps a folder shaped like a bare repository from git and says so in the
+ * reason; a lane that read that reason as "scan not run" went on and ran the session's own
+ * git there, which the engine's refusal exists to prevent.
+ */
+describe("quick — a refused folder stops the lane (REQ-PLUGIN-046)", () => {
+  it("stops the batch on a refused-folder reason, runs no git there, and gives the reason", async () => {
+    const gates = section(await load(QUICK), "Quality gates").replace(/\s+/g, " ");
+    const sentence =
+      "A `reason` from either `gate` call that says git was not started because a folder has the layout " +
+      "of a bare repository stops the batch there instead: no later step runs, no git command runs in that " +
+      "folder, the commit included, and the report gives that reason under `Not done:` with every applied " +
+      "item listed as ungated.";
+
+    expect(gates).toContain(sentence);
+    // It overrides the not-run path it follows, inside step 1 and ahead of step 2.
+    expect(gates.indexOf("`secret scan: not run` under `Not done:`. A `reason` from either")).toBeGreaterThan(0);
+    expect(gates.indexOf(sentence)).toBeLessThan(gates.indexOf("2. **Classify.**"));
+  });
+
+  it("matches the words the engine's refused-folder reason really carries", async () => {
+    // The lane recognises the reason by its words, so a reworded producer would disarm the stop
+    // with every corpus case still green. Read as text: the wording is the contract, not a value
+    // any export carries.
+    const gateSource = await readFile(join(CORPUS_ROOT, "..", "src", "cli", "commands", "gate.ts"), "utf8");
+
+    expect(gateSource).toContain('"git was not started here: this folder, or a folder above it, has the layout of a bare repository');
   });
 });
 

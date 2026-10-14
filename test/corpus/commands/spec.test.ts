@@ -336,6 +336,41 @@ describe("/st-spec — design decisions carried as text", () => {
     expect(contract).toMatch(/an unconfirmed T2 or T3 proposal/);
     expect(contract).toMatch(/a census gap/);
   });
+
+  // REQ-FLOW-080: the run walks its own leftovers through the question protocol's Close walk
+  // before the close prints, and nothing prints after it. The walk names the three states
+  // the next step already derives from, so the two lists cannot drift apart unnoticed.
+  it("walks its leftovers by the protocol's Close walk before the close prints (REQ-FLOW-080)", async () => {
+    const contract = await sectionProse("## Return contract");
+    const walk =
+      "That close prints after the run has walked each open `[NEEDS CLARIFICATION]` marker, each " +
+      "unconfirmed T2 or T3 proposal and each census gap by the `stamity-question-protocol` rule's " +
+      "Close walk, and nothing prints after it; `check` records each answer and writes nothing.";
+
+    expect(contract).toContain(walk);
+    // After the close's list, whose last item is the next step, and before the separate
+    // pre-write question `create` asks.
+    expect(contract.indexOf("Next step — derived from this run's own state")).toBeLessThan(contract.indexOf(walk));
+    expect(contract.indexOf(walk)).toBeLessThan(contract.indexOf("`create` against a repo that already holds"));
+    // The return contract stays the body's last section, so nothing is specified after the close.
+    const body = (await artifact).parsed.body;
+    expect(headings(body).at(-1)).toBe("## Return contract");
+    // The pointer resolves: the protocol carries the section it names.
+    const protocol = await readFile(join(CORPUS_ROOT, "rules/stamity-question-protocol.md"), "utf8");
+    expect(protocol).toMatch(/^## Close walk$/m);
+  });
+
+  // REQ-LADDER-007 (the touchpoints' half): a spawning command passes the class model from
+  // the client's map and says when it took a fallback.
+  it("passes the role's class model from the client's map on every sub-agent call", async () => {
+    const dispatch = await sectionProse("## Dispatch");
+
+    expect(dispatch).toContain(
+      "Every sub-agent call passes `model` for the role's class from the client's map at " +
+        "`.stamity/generated/models/`; when a call is refused with a list, it takes the class's first " +
+        "`fallbacks` entry on that list, else the closest, and says so in one line.",
+    );
+  });
 });
 
 describe("/st-spec — edge cases the design names", () => {
