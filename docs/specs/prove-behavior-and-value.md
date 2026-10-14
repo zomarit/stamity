@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.14.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -58,6 +58,16 @@ in the "Sign-offs" section of `.stamity/runs/2026-10-13_lean-repository/record.m
 branch the same day: every path in this file that names one of this repository's own records reads on that branch
 (REQ-PROVE-023), and a citation of one keeps its text.
 
+The text dated 2026-10-14 that names run `2026-10-14_cli-native` comes from the spec delta of
+`docs/plans/020-cli-native-01.md` (plan 020 file 1), which deletes the APM and plugin distribution routes in 1.15.0,
+and from the deltas its units' reports declared. It moved two requirements here from `docs/specs/plugin-lifecycle.md`,
+each keeping its id and set at the end of `## Requirements`: REQ-PLUGIN-020 (the CI lanes, the proven push, the
+nightly guard and the records job) and REQ-PLUGIN-025 (the release eval artifact on the records branch). Each carries
+the amendments with a CI or release job, as they stood there at `c96c7146`; the plugin route's proofs retire in that
+spec's stub. It also amends REQ-PROVE-002, REQ-PROVE-003, REQ-PROVE-021, REQ-PROVE-025, REQ-PROVE-030, REQ-PROVE-031
+and REQ-PROVE-033 where they named the deleted routes, and cites the tree at `d590a266`, the integration head the
+deletion landed on. It ships with 1.15.0.
+
 ## Intent
 
 Stop shipping claims this repository cannot show. Three were open at 1.7.0: an always-on context
@@ -99,9 +109,9 @@ selected clients. Cursor keeps `.mdc` (`…cursor.ts:356`); the `st-` surface ga
 
 - GIVEN `on-demand` with both rules selected WHEN emission runs THEN two `stamity-<id>` skill
   directories carry their descriptions, neither rule lands under `.claude/rules/`, `.mdc` survives, and
-  claude's native copy (`…skillsProjection.ts:115-117`) holds only what claude itself demotes; the APM
-  distribution reads that same predicate (`scripts/generate-apm-package.mjs:42-50`) and lands a glob-less
-  rule at `.apm/skills/stamity-<id>/SKILL.md`, never as an instruction (`…apmPackage.test.ts:210-228`).
+  claude's native copy (`…skillsProjection.ts:115-117`) holds only what claude itself demotes (route clause
+  dropped 1.15.0: the clause on how the APM distribution read that predicate, citing its generator and its suite,
+  both deleted with the APM route).
 
 ### REQ-PROVE-003 — Codex folds only floors
 
@@ -132,8 +142,8 @@ every selection, so its bytes are the same with and without Codex (REQ-PROVE-005
 - **Ownership.** The override is a Codex-owned infra row, written whole with no managed block (`:306-307`,
   `:466-478`). An operator's own root `AGENTS.override.md` is an unmanaged collision: sync refuses it without
   `--force`, and takes a verified `.bak` with it (sign-off at 14:49Z, `record.md:500-504`). Deselecting Codex reclaims
-  the override. The Codex plugin does not carry it; `stamity plugin setup` writes it
-  (`scripts/plugins/clients/codex.mjs:90-95`).
+  the override (route clause dropped 1.15.0: "The Codex plugin does not carry it; `stamity plugin setup` writes it",
+  citing a packager deleted with the plugin route).
 - **A refused source.** Before the override repeats any operator bytes from `AGENTS.md`, the gates the merge lane
   puts on kept operator bytes apply: a symbolic link or a shared hard link is refused unread, and the repeated text is
   deny-scanned (`readRepublishSource` and `republishDenyRefusal` in `src/merge/safeWrite.ts`, called at
@@ -172,7 +182,7 @@ every selection, so its bytes are the same with and without Codex (REQ-PROVE-005
 - `judgment: maintainer` · GIVEN a live Codex session on a fixture WHEN asked for the first line of the secrets rule
   THEN it quotes it. (The live check quoted a marker placed in the override, not this line.)
 - Tests: `test/emit/sharedCharterIdentity.test.ts`, `test/adapters/codex.test.ts`,
-  `test/ci/pluginPackages.codex.test.ts`, `test/emit/syncDriftProof.e2e.test.ts`.
+  `test/emit/syncDriftProof.e2e.test.ts` (route clause dropped 1.15.0: the Codex plugin packager's suite, deleted).
 
 ### REQ-PROVE-004 — Codex skills-list budget
 
@@ -987,11 +997,12 @@ High-risk letter — and a release row needs a walk or a fresh acceptance, so a 
 `unperformed` on the next run, with a reason naming the acceptance, whatever its hash; the exception keys on the status,
 never on the id's letter (`:126-182`). A measured row outranks any signature: only a `not-run` or `unperformed` row
 takes a carried answer (`:89-99`). `scripts/qa/run.mjs` records a run's answers with `--walked <ids>`,
-`--accept-unwalked <ids>`, `--by <name>` and `--on <YYYY-MM-DD>` (`scripts/qa/run.mjs:190-231`); a measured row takes
+`--accept-unwalked <ids>`, `--by <name>` and `--on <YYYY-MM-DD>` (`scripts/qa/run.mjs:163-205`); a measured row takes
 no human answer, and a fresh answer drops the reopen text (`scripts/qa/bind.mjs:191-249`). The form renders
-`ACCEPTED UNWALKED <date> by <name> (not walked; holds for this run only)` (`scripts/qa/form.mjs:172-187`), and its
-footer says an accepted row reopens on the next run whatever its hash (`:259-264`). No row reaches `performed` without
-a person's recorded answer. The QA skill's own row states and input hash are REQ-FLOW-017 and REQ-FLOW-018.
+`ACCEPTED UNWALKED <date> by <name> (not walked; holds for this run only)` (`scripts/qa/form.mjs:145-148`), and its
+footer says an accepted row reopens on the next run whatever its hash (`:242-247`). No row reaches `performed` without
+a person's recorded answer. (Re-pointed 2026-10-14 to `d590a266`, where the QA harness's plugin lane left both files;
+the three citations read `scripts/qa/run.mjs:190-231`, `scripts/qa/form.mjs:172-187` and `:259-264` at `b855876a`.) The QA skill's own row states and input hash are REQ-FLOW-017 and REQ-FLOW-018.
 
 **Expand/contract:** one status value is added. Its readers are `CARRYABLE` and the row-shape test; an older `form.mjs`
 reading a new file renders an accepted row as `UNPERFORMED`, the safe direction.
@@ -1023,6 +1034,20 @@ does not exclude (`scripts/records.mjs:470-472`), and there it sits beside the b
   path. GIVEN `records.mjs commit --dry-run` THEN the built tree carries the new evidence file. Test evidence:
   `test/ci/recordsScript.test.ts` holds both over the record paths in general (the `setup` case and the `commit` cases);
   no case names an evidence file.
+
+Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`, unit `d3-ci-qa`; cited at `d590a266`). The harness
+measures nine rows: `H1a`–`H1d`, `H2` and `H3a`–`H3d` (`QA_ROWS`, `scripts/qa/form.mjs:24-100`). The five rows of the
+plugin route, `H4a`–`H4d` and `H5`, leave the form with it; an evidence file that still carries one renders it under
+"Retired rows", after the table and outside it, with the status it was recorded with, and outside the inputs list
+(`RETIRED_ROWS`, `:102-118`; `renderForm`, `:206-222`). `scripts/qa/run.mjs` has no plugins lane and takes no `--dist`
+and no `--skip-plugins` (its usage, `:163-168`; `parseArgs`, `:179-205`).
+
+- GIVEN an evidence file carrying `H4a`–`H4d` and a performed `H5` WHEN the form renders THEN it does not throw, lists
+  each under "Retired rows" as retired in 1.15.0 with its recorded status, and keeps them out of the table and the
+  input list; GIVEN a file with none of them THEN no retired section prints (`test/qa/form.test.ts`, the describe "the
+  retired plugin-route rows"). GIVEN `run.mjs` THEN a run writes exactly the nine catalogue rows, and `--dist` and
+  `--skip-plugins` are refused as unknown options (`test/qa/run.test.ts`, "main — no plugins lane"; added
+  2026-10-14).
 
 ### REQ-PROVE-022 — Table headers associated on the docs site
 
@@ -1262,8 +1287,12 @@ The suite runs in four places:
    `success` in `zomarit/stamity` and `skipped` elsewhere, the repository passed through `env:` (`:1062-1085`).
 2. `release.yml`'s `gates` job: "Restore the records" after `Install` and "Records suite" after `Test`, with no extra
    fetch, its depth-0 checkout already holding `origin/records`, which the step names in full, as the records job does
-   (`.github/workflows/release.yml:283-300`).
-   `fork-release.yml` is unchanged.
+   (`.github/workflows/release.yml:282-311`, the restore step, and `:322-323`, the records suite, at `d590a266`;
+   re-pointed 2026-10-14, they read `:283-300`, which the deletion of the release's plugin and APM steps and the
+   restore step's own rewrite in `fde42e60` moved).
+   `fork-release.yml` was unchanged by this requirement (amended 2026-10-14: plan 020 file 1 rewrote that workflow when
+   it deleted the plugin route, REQ-PLUGIN-027 in `docs/specs/fork-layer.md`; the records suite is still not part of
+   it).
 3. `.github/workflows/records.yml` on the `records` branch, on every push to it: it checks out `main` for the tools,
    restores the pushed commit, and runs the records suite, the leak gate over a worktree of the pushed commit, the
    hygiene check and the drift check (`scripts/records/workflow.yml:1-50`, the template `init` writes). It runs
@@ -1294,7 +1323,9 @@ Criteria:
   default suite, every other file discovered once", and its win32 discovery case).
 - GIVEN `ci.yml` and `release.yml` THEN each restores `origin/records` before `npm run test:records`. AND the classifier
   has no `records` lane and no `records_only` output. AND `all-ci-checks` requires `records` to read `success` in
-  `zomarit/stamity` and `skipped` elsewhere. AND `fork-release.yml` is byte-unchanged. Test evidence:
+  `zomarit/stamity` and `skipped` elsewhere. AND `fork-release.yml` runs no records step (amended 2026-10-14: it read
+  "is byte-unchanged", which held until plan 020 file 1 rewrote the workflow; this half is read from the file,
+  `.github/workflows/fork-release.yml:167-334`, and no case named below pins it). Test evidence:
   `test/ci/workflow.test.ts` (the describe "the records job", the executed aggregator's two records cases, the release
   restore case) and `test/ci/recordsOnly.test.ts` ("the records lane, retired").
 - GIVEN a run in progress beside a closed run WHEN the record checks run THEN the in-progress run's ledger is left out
@@ -1343,6 +1374,12 @@ the accepted suites at `:90-95`). Before, a reopened pull request's older suite 
   both ways, AND a third suite is still a second producer. Test evidence: `test/ci/prProven.test.ts`, "accepts every
   ci.yml pull-request run's check suite on the head, the newest run deciding" and "proves a reopened pull request's
   head from its newest ci.yml run, beside the older run's suite (row 104)".
+
+Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`, unit `d3-ci-qa`; cited at `d590a266`). The jobs
+`apm-install` and `plugin-route` are deleted with the APM and plugin routes, so a proven push skips `check` and the
+`lanes` job, and `all-ci-checks` asserts both `skipped` on that shape (`.github/workflows/ci.yml:750-752`); the
+paragraph's and the criterion's "`check`, `apm-install`, `plugin-route` and the `lanes` job" read `check` and `lanes`
+from 1.15.0. REQ-PLUGIN-020, below, carries the aggregator's `needs`.
 
 ### REQ-PROVE-031 — Website, spec and learnings changes take lanes
 
@@ -1429,6 +1466,11 @@ never covers — `docs/specs/**`, `README.md` and its own file — while its pus
   site once: in ci.yml for the site's paths, here only for the rest", and the `check` and `lanes` cases through its
   helper `expectSiteHandback`.
 
+Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`, unit `d3-ci-qa`; cited at `d590a266`). "`check`,
+`apm-install` and `plugin-route` run when `full` is not `false`" reads "`check` runs when `full` is not `false`": the
+other two jobs are deleted with the APM and plugin routes (`.github/workflows/ci.yml:220-223`, the `check` job's
+condition).
+
 ### REQ-PROVE-032 — One file names the eval run of record
 
 `evals/run-of-record.json` names the run of record's results file (`path`), the release it measured (`release`) and the
@@ -1460,8 +1502,10 @@ model-facing change"; otherwise it runs the full set. A FAIL run of record is ne
 the full set. The checklist's eval line and the set's incremental section name the file list in full, as a list derived
 from those three sources and not chosen.
 
-- GIVEN a release that changed only `scripts/eval/run.mjs`, `scripts/plugins/setupCommand.mjs`, a `cases-v4` case or
-  the `st-eval-run` skill THEN it runs the full set. GIVEN a release on a newer client version THEN it runs the full
+- GIVEN a release that changed only `scripts/eval/run.mjs`, a `cases-v4` case or the `st-eval-run` skill THEN it runs
+  the full set (route clause dropped 1.15.0: the examples named `scripts/plugins/setupCommand.mjs`, deleted with the
+  plugin route, and no case's `source:` names a file outside `content/` since, `test/evals/coverage.test.ts`, "governs
+  no case outside content/"; the rule that a file a case's `source:` names is a trigger does not move). GIVEN a release on a newer client version THEN it runs the full
   set. GIVEN a FAIL run of record THEN the release runs the full set. GIVEN the checklist's eval line and the set's
   incremental section THEN each covers every file the run of record's `inputs.json` hashes, every file the public
   runner hashes and every case's `source:` file, and names the scenario and judge models, the pinned client version, a
@@ -1525,6 +1569,102 @@ configuration; on the public route it names the harness id.
   `r1b-records-suite-eval-cases`; it read `test/evals/manualRunner.test.ts`. The case reads run 43's committed
   `inputs.json`, a record, so it moved unchanged to the records suite; the synthetic comparator cases stay in
   `test/evals/manualRunner.test.ts`.)
+
+### REQ-PLUGIN-020 — The CI lanes, the proven push, the nightly guard and the records job
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`). Its amendments with a CI job moved: the nightly guard of 2026-10-13 and the records job of
+2026-10-14, each as it stood there at `c96c7146` with its route clauses dropped in place. The two amendments those
+superseded, of 2026-09-30 (the records-only lane) and 2026-10-08 (the lanes and the proven push, REQ-PROVE-030 and
+REQ-PROVE-031), read there. The requirement's own paragraph — the per-client install, discovery and invocation proof,
+its measurements, and the CI and nightly halves that carried it — retires with the plugin route, and so does its
+amendment of 2026-09-26 on the Codex route; the heading read "Per-client install, discovery and invocation proof".
+
+Amended 2026-10-13 (plan 014 file 1, unit `f3-nightly-canonical-guard`). Nightly's `headless-lane` job runs only where
+`github.repository == 'zomarit/stamity'`; in any other repository the job is skipped before its first step (route
+clause dropped 1.15.0: "which carries the invocation legs", "so a fork holding all four secrets drives no leg", and the
+sentences on the drive step and on `ci.yml`'s `plugin-route` job). `macos-smoke` and `node-next` carry the same guard;
+no requirement covers those two jobs.
+
+- **Evidence**, cited by job and step name as this requirement's workflow citations are: in
+  `.github/workflows/nightly.yml`, the jobs `macos-smoke`, `node-next` and `headless-lane` each carry the job-level
+  `if: github.repository == 'zomarit/stamity'` (route clause dropped 1.15.0: the four client drive steps inside
+  `headless-lane`, deleted). The guard has no privacy clause; the comment above the file's `jobs:` key gives the reason.
+- **Proof:** `test/ci/workflow.test.ts`, the describe "nightly.yml — the canonical repository guard", one case per job,
+  "<job> runs only in the canonical repository, on a schedule or on demand".
+
+- GIVEN `nightly.yml` THEN `macos-smoke`, `node-next` and `headless-lane` each carry exactly
+  `if: github.repository == 'zomarit/stamity'`.
+- GIVEN that guard evaluated with `github.repository` = `acme/stamity-private` THEN it reads false; with
+  `zomarit/stamity` THEN true.
+
+Amended 2026-10-14 (plan 014 file 2, re-planned in run `2026-10-13_records-branch`, unit `r5-ci-records-job`; cited at
+`4d003d60`). The records live on the `records` branch (REQ-PROVE-023), so `main` carries no record and no change is
+records-only. The lane classifier, `scripts/ci/records-only.mjs`, keeps its name and its `changes` job, with three lanes
+— `specs`, `learnings` and `website` — and no `records` lane and no `records_only` output; a record path that reaches
+`main` is in no lane and takes the full matrix (`scripts/ci/records-only.mjs:39-51`; REQ-PROVE-031). "Merge-blocking
+through `all-ci-checks`" holds on every change that no lane covers and no proven push skips: a lanes-only change skips
+`check`, and the `lanes` job runs in its place; a proven push skips both (route clause dropped 1.15.0: "`plugin-route`
+with" and "and `apm-install`", and "all four"; the citations `.github/workflows/ci.yml:607-610` and `:795-798` read at
+`4d003d60`). `ci.yml`'s `records` job restores the records and runs the records suite in the canonical repository on
+every trigger, beside every shape and never in place of another job (route clause dropped 1.15.0: it read "never in
+place of `plugin-route`"); the aggregator needs it and asserts `success` in `zomarit/stamity` and `skipped` elsewhere
+(`:910-948`, `:1072`, `:1081-1085` at `4d003d60`; REQ-PROVE-025).
+
+- GIVEN `ci.yml` THEN no job reads `records_only`, AND `check` carries no records-only condition (route clause dropped
+  1.15.0: "`plugin-route`, `check` and `apm-install` carry"; `test/ci/workflow.test.ts`, its `OUTPUTS` pin of the
+  classifier's outputs and the aggregator's `records_only` absence).
+
+Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`, unit `d3-ci-qa`; cited at `d590a266`). The CI and
+release surfaces of 1.15.0:
+
+- **The aggregator.** `all-ci-checks` needs `changes`, `prove-pr`, `check`, `lanes`, `records` and `supply-chain`
+  (`.github/workflows/ci.yml:736`). Its report asserts that `changes` succeeded, the `records` job as above, and one of
+  three shapes: a proven push with `check` and `lanes` both `skipped`, a lanes-only change with `lanes` passed and
+  `check` skipped, or the full side with `check` passed and `lanes` skipped (`:741-763`). The jobs `apm-install` and
+  `plugin-route` are deleted, and so are the generate-and-diff lines of the two route generators (`:374-380`,
+  `:508-513`).
+- **The release.** `release.yml`'s `apm-route` job and every plugin build, attestation, push and asset step are
+  deleted: `publish` needs `gates` alone and holds `contents: write` and `id-token: write`, the provenance grant npm
+  needs (`.github/workflows/release.yml:511-534`), and every step that ships runs after the tarball digest is verified
+  against the gates job's output.
+- **The nightly.** `headless-lane` is the scratch-repo dogfood alone: it builds, packs the tarball, installs it into a
+  throwaway project, runs `init` for the four clients and `check`, and asserts each client's residue on disk, holding
+  no credential and driving no client (`.github/workflows/nightly.yml:104-189`), under the canonical guard (`:115`).
+- **Retired with the route:** the per-client install, discovery and invocation proof, in CI, in the nightly and in the
+  QA rows `H4a`–`H4d` (REQ-PROVE-021, amended 2026-10-14).
+
+- GIVEN the workflows THEN no job, step, output or permission names the plugin or APM route, the aggregator's `needs`
+  and its three shapes are the ones above, `publish.needs` is `[gates]`, nothing that ships runs before the tarball
+  digest's verification, and the nightly's headless lane runs the scratch-repo dogfood and reads no secret
+  (`test/ci/workflow.test.ts`, the cases "names no plugin or APM route in any job, step, output or permission",
+  "publishes nothing before the tarball's digest is verified against the gates output" and "runs the scratch-repo
+  dogfood as the whole headless lane, holding no credential"; added 2026-10-14).
+- **Expand/contract:** the two CI jobs, the release job and the steps left in one change; the ruleset requires
+  `all-ci-checks` and `all-pr-checks` alone, both kept, so no required context goes missing (`docs/plans/020-cli-native-01.md`,
+  unit `d3-ci-qa`, its edge case). Rollback is a revert of the change.
+
+### REQ-PLUGIN-025 — The release eval artifact on the records branch
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`). Its amendment of 2026-10-14 moved as it stood there at `c96c7146`. The requirement's own
+paragraph, the eval coverage of the generated `st-setup` command and of plugin-mode invocation, retires with the plugin
+route: the three cases it named, `plugin-mode-invocation`, `st-setup-fresh-repository` and
+`st-setup-refuses-generated-setup`, left the eval set on 2026-10-14, recorded in a dated paragraph of
+`evals/SET-v7.md`. The heading read "Eval coverage for the generated command and plugin-mode invocation".
+
+Amended 2026-10-14 (plan 014 file 2, unit `r7-remove-records-from-main`; cited at `4d003d60`). The clause read "the
+committed run artifact under `evals/runs/` records a per-metric score". The run artifacts left `main` for the `records`
+branch (REQ-PROVE-023); `main` names the run of record in `evals/run-of-record.json` (REQ-PROVE-032), and every
+`evals/runs/` path in this requirement reads on that branch. The release checklist's eval line has the release publish
+its artifact to `records` with `node scripts/records.mjs commit -m <message>` before the tag, move
+`evals/run-of-record.json` in a `main` commit after that publish, and record `git rev-parse origin/records` at the cut
+(`.github/release-controls-checklist.md:214-224`).
+
+- GIVEN the release eval run WHEN it is published THEN its artifact is committed to `records` by `records.mjs commit`,
+  AND `main`'s `evals/run-of-record.json` names its `RESULTS.md` as `path`. `judgment: maintainer` (a release step,
+  read at the cut; `test/docsPages.test.ts`'s "%s names the generator's run and release" holds the hand pages to the
+  file).
 
 ## Non-goals
 

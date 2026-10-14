@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
@@ -79,6 +79,15 @@ synthetic fixture under `npm test`. The same day the records moved to the `recor
 under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`,
 `evals/measurements/` or `evals/reach/`, reads on that branch, and its citation keeps its text. A path of the run layout
 a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
+
+On 2026-10-14 run `2026-10-14_cli-native` (plan 020 file 1, `docs/plans/020-cli-native-01.md`) deleted the plugin
+distribution route in 1.15.0, the `plugin-backed` install mode with it (`docs/specs/plugin-lifecycle.md`, retired to a
+stub). No route installs a Claude Code plugin since, so each clause below that names "a Claude Code plugin install" or
+"plugin roots" describes a state no route produces, and is marked "(route retired 1.15.0)" where it stands; no
+criterion is added or removed, so the count below holds. The container hook layout those clauses describe,
+`hookScriptsRoot` set, is still in the code with no route left to set it: the Claude adapter still renders no report
+`Write` there (`src/adapters/claude.ts:482-488` at `d590a266`), and the plan's follow-up row removes the layout
+(`docs/plans/020-cli-native-01.md`, its Follow-ups).
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -159,7 +168,7 @@ from disk: a lost context or a compaction must not lose a finding or change a re
    - a red test-runner return;
    - a researcher return;
    - a verdict-role return on Cursor, GitHub Copilot CLI and Codex, and on a Claude Code
-     plugin install (amendment A2);
+     plugin install (amendment A2; the plugin install: route retired 1.15.0);
    - a return whose report write was refused, which says so (amendment A12).
 
    The 1,500-character cap binds prose only. A digest never drops a Critical or Warning line,
@@ -170,7 +179,7 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | Requirement | Claude Code | Cursor | GitHub Copilot CLI | Codex |
 |---|---|---|---|---|
 | 001, 002 two-tier returns | yes | yes | yes | yes in the agent definitions and in the `/st-work` body, which ships as the shared skill `.agents/skills/st-work/SKILL.md`, started as `$st-work` (`src/adapters/codex.ts:77-97`, `:435-437`, read at `a9e94f06`; REQ-FLOW-026) (amended 2026-09-30; it read "yes in the agent definitions; no `/st-work` body is emitted (`docs/capability-matrix.md:240`)") |
-| 003 verdict-role report write | yes; degraded on a plugin install (the container hook layout): no `Write`, full inline return (amendment A2) | degraded: full inline return, disclosure line | degraded: full inline return, disclosure line | degraded: full inline return, disclosure line |
+| 003 verdict-role report write | yes; degraded on a plugin install (the container hook layout): no `Write`, full inline return (amendment A2; the plugin install: route retired 1.15.0) | degraded: full inline return, disclosure line | degraded: full inline return, disclosure line | degraded: full inline return, disclosure line |
 | 004 report naming | yes | yes | yes | yes |
 | 005–008 ledger verb, fields, fixer, closures | yes | yes | yes | yes: the verb, and the body-carried steps through the `$st-work` skill (amended 2026-09-30; it read "verb yes; the body-carried steps have no carrier") |
 | 009–012 dispatch, amendment, implementer return, record head | yes | yes | yes | yes: the agent-definition parts, and the body-carried parts through the `$st-work` skill (amended 2026-09-30; it read "agent-definition parts yes; body-carried parts have no carrier") |
@@ -178,7 +187,7 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | 014 body order | yes | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment (amended 2026-09-30; it read "not applicable: no body emitted") |
 | 015 replay | retired 2026-09-29 before any scored run (amended; it read `measured`) | `not-run`, with reason | `not-run`, with reason | `not-run`, with reason |
 | 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
-| 017 read-only git for the verdict roles and the spec-author (added 2026-09-30) | yes in the repository layout: `Bash` admitted by the generated guard for the five read-only subcommands only; degraded on a plugin install: no `Bash`, the brief carries the hunks | degraded: `readonly: true` blocks state-changing shell commands but names no subcommand list, so the role relies on the client (soft) | gap: no shell for a verdict role; the brief carries the diff as a patch file in the run's reports folder, never the implementer's account | degraded: the role sentence permits the five subcommands inside the `read-only` sandbox, as prose only (soft, provisional) |
+| 017 read-only git for the verdict roles and the spec-author (added 2026-09-30) | yes in the repository layout: `Bash` admitted by the generated guard for the five read-only subcommands only; degraded on a plugin install (route retired 1.15.0): no `Bash`, the brief carries the hunks | degraded: `readonly: true` blocks state-changing shell commands but names no subcommand list, so the role relies on the client (soft) | gap: no shell for a verdict role; the brief carries the diff as a patch file in the run's reports folder, never the implementer's account | degraded: the role sentence permits the five subcommands inside the `read-only` sandbox, as prose only (soft, provisional) |
 | 018 fresh re-review, approval with no declared gate (added 2026-09-30) | yes | yes | yes | yes: the agent-definition parts, and the body through the `$st-work` skill (amended 2026-09-30; it read "agent-definition parts yes; the `/st-work` body is not emitted") |
 | 019 usage lines, 020 leftovers line (added 2026-10-10) | yes: body-carried; tokens where the client reports them, else `unreported` | yes: body-carried, the same | yes: body-carried, the same | yes: body-carried through the `$st-work` skill, the same |
 
@@ -270,7 +279,8 @@ Implements C1, C4 (D1).
 
 - **Returned in full, never digested:** a `BLOCKED_*` return, a red test-runner return, a
   researcher return, and a verdict-role return where the client grants no report write — on
-  Cursor, Copilot and Codex, and on a Claude Code plugin install (amendment A2). A return whose
+  Cursor, Copilot and Codex, and on a Claude Code plugin install (amendment A2; the plugin install: route retired
+  1.15.0). A return whose
   report write was refused is returned in full and says so (amendment A12). A `BLOCKED_*`
   return carries no findings block and writes no report (amendment A11).
 - **In every digest:**
@@ -325,7 +335,8 @@ write their report through a `Write` limited to their own role's reports under
   checkout (amendment A12).
 - **Plugin installs.** On a Claude Code plugin install (the container hook layout, which
   anchors no project root) the verdict roles get no `Write` and return in full inline — a
-  declared degradation (amendment A2).
+  declared degradation (amendment A2). (Route retired 1.15.0: no route installs one; the container layout alone
+  keeps the rule, `src/adapters/claude.ts:482-488` at `d590a266`.)
 - **Other clients.** On Cursor, Copilot and Codex, the grants stay read-only. The verdict roles
   return in full inline with their C2 block, and the emitted capability disclosure says so.
 
@@ -340,7 +351,8 @@ the spec-author's, also carry `readOnlyGit: true` (REQ-CTX-017; `src/roster/agen
 document keeps its schema id, `stamity/agent-tool-policies/v1`, and gains the key on those rows only. On Claude Code
 the five roles' `tools:` lines carry `Bash` in the repository layout, and the generated guard admits it for read-only
 git alone: a verdict role's non-git `Bash` is refused as `GIT_COMMAND_DENIED`, no longer as `CATEGORY_DENIED`
-(`src/hooks/scripts.ts:1501-1507`). A plugin install renders no `Bash` for them (`docs/capability-matrix.md:271`). A
+(`src/hooks/scripts.ts:1501-1507`). A plugin install renders no `Bash` for them (`docs/capability-matrix.md:271`; the
+plugin install: route retired 1.15.0). A
 row derived for a user-authored agent drops the key, as it drops `writePaths` (`src/tools/allowlist.ts:628-631`). The
 Write-path rules above, the plugin degradation and the ruling on the `edit` category stand. On Cursor, Copilot and
 Codex the grants stay read-only; what each does for read-only git is REQ-CTX-017's parity row.
@@ -930,7 +942,7 @@ Implements C12 (D9, D10).
 Added 2026-09-26 (plan 010 file 1, decision D2). Every hook the engine wires declares its budget.
 
 - **Session-start rows** (the resume card and the tamper notice) declare `timeoutMs: 30000` on all
-  four clients, in repository mode and in plugin roots.
+  four clients, in repository mode and in plugin roots (the plugin roots: route retired 1.15.0).
 - **Claude's ConfigChange wiring of the tamper notice** declares the same 30 s (amended 2026-09-26
   on `review/28` and `review/36`). **The pre-tool-use guard and the review gate** declare no
   timeout, on purpose. A timed-out Claude PreToolUse hook lets the call through, and the review
@@ -945,7 +957,7 @@ Added 2026-09-26 (plan 010 file 1, decision D2). Every hook the engine wires dec
 
   Lines are counted as `\n` only, so CRLF and LF count alike. Each script is measured as the larger
   of its generated-layout and plugin-root renders, and a client that does not emit a script is
-  skipped.
+  skipped. (The plugin-root render is the container layout's, which no route produces since 1.15.0.)
 - **Guard latency** over node's own start stays ≤ 15 ms, as the median of 7 warm runs. It is
   measured locally at each release, not in CI.
 
@@ -963,8 +975,8 @@ verdict role's `Read` that reaches the policy (amended 2026-09-26 on `review/83`
 under a generous `--budget`, so no timing bound runs in CI (`review/82`). The release checklist runs
 it before the tag (`.github/release-controls-checklist.md:235`). Tests: `test/emit/hooksInfra.test.ts`
 (the 30-second rows at `:572-575` and the pinned absence on the guard and the review gate),
-`test/ci/pluginPackages.claude.test.ts:457` (a built plugin root),
-`test/hooks/scriptBudget.test.ts:124`, and `test/ci/hookLatency.test.ts`. Not measured: the resume
+`test/hooks/scriptBudget.test.ts:124`, and `test/ci/hookLatency.test.ts` (route retired 1.15.0: the list also named
+the suite of a built plugin root, deleted with the route). Not measured: the resume
 card's own wall time against the 30-second budget; the 7-run median is recorded at the release, and
 no release has recorded it yet.
 
@@ -1186,7 +1198,8 @@ command again whenever this section grows; do not count by eye.
   each `tools:` line contains `Write` and contains neither `Edit` nor `NotebookEdit`.
 - GIVEN `stamity sync` on a manifest whose Claude Code hooks are plugin-owned, or an emission
   that sets `hookScriptsRoot`, WHEN the Claude definitions of the four verdict roles are read
-  THEN no `tools:` line contains `Write` (amendment A2).
+  THEN no `tools:` line contains `Write` (amendment A2; the plugin-owned half: route retired 1.15.0, so the
+  `hookScriptsRoot` half is the criterion's one live arm).
 - GIVEN the emitted Claude pre-tool-use guard and a reviewer `Write` whose `file_path` is
   `<project root>/.stamity/runs/2026-09-23_demo/reports/u1-reviewer-r1.md`, with no symlink on
   the path, WHEN the guard runs THEN it exits 0.
@@ -1714,7 +1727,8 @@ frozen files.").
     `git -c <k>=<v> log`, `git --no-pager log`, `git show --ext-diff`, `git log --show-signature`,
     `git log --help` and `ls` exit 2, and `ls` is refused as `GIT_COMMAND_DENIED`.
 - GIVEN sync on a manifest whose Claude Code hooks are plugin-owned THEN none of the five roles'
-  `tools:` lines carries `Bash`.
+  `tools:` lines carries `Bash` (route retired 1.15.0: no install mode makes them plugin-owned, so this criterion has
+  no subject and stays as the record).
 - GIVEN sync for Cursor, Copilot and Codex THEN each client's capability disclosure states what it
   does for read-only git — Cursor's `readonly: true`, no `execute` for a Copilot verdict role,
   Codex's prose inside the `read-only` sandbox — as the parity row declares.

@@ -1,6 +1,6 @@
 ---
 id: model-ladder
-# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
@@ -239,12 +239,17 @@ on the Codex and Copilot rows, which `config set` reads before its clamp test
 
 Where the delta differed, and what is not verified. The delta named no legacy field; it said a
 stored `minimal` is "still accepted by `config set`", which the field carries. Whether Copilot's
-loader also takes the `reasoningEffort` spelling of the online reference's table is unverified,
-and no live run has loaded an agent carrying the key, so a wrong spelling would leave agents at
-the session's effort while the capability row reads emitted (`src/roster/modelLadder.ts:410-416`;
-`build/21`). The cloud agent's handling of the key is the accepted risk
-`docs/specs/everyday-flows.md` records in its `## Risks`. The APM package's Copilot agents carry
-no effort line (`scripts/generate-apm-package.mjs:601-606`; `build/22`).
+loader also takes the `reasoningEffort` spelling of the online reference's table is unverified. A
+live run has since loaded an agent carrying the `reasoning-effort` key: QA row 2 of the same run, at
+its close, ran the emitted `stamity-implementer` on Copilot CLI 1.0.89 with `reasoning-effort: high`
+in its frontmatter, and `build/21` closed fixed by that live check
+(`.stamity/runs/2026-10-10_next-tier/record.md:462`, `:488`). (Amended 2026-10-14, folding the inbox
+row `2026-10-11_release-1-14-0/review/5`; it read "and no live run has loaded an agent carrying the
+key, so a wrong spelling would leave agents at the session's effort while the capability row reads
+emitted (`src/roster/modelLadder.ts:410-416`; `build/21`)".) The cloud agent's handling of the key
+is the accepted risk `docs/specs/everyday-flows.md` records in its `## Risks`. (Route clause dropped
+1.15.0: "The APM package's Copilot agents carry no effort line", `build/22`, citing the APM generator
+deleted with that route.)
 
 Expand/contract: the union widens by one level, Codex's row gains two levels and drops one to
 legacy, and Copilot's row gains a key and a scale. A manifest that stores `ultra` is refused, by

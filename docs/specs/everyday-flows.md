@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -92,6 +92,20 @@ integration branch (`fix/plan-016-file-0` at `fa8163a3`; the hook-file unit's JS
 at its integration commit `8d4b932e`). All five units are integrated, the last, `u0-registry-bound-calls`, at
 `6d2fb2e7`. They shipped with 1.12.0, which set `status` to `shipped-with-1.12.0`.
 
+The text dated 2026-10-14 comes from the spec delta of `docs/plans/020-cli-native-01.md` (plan 020 file 1, run
+`2026-10-14_cli-native`), which deletes the APM and plugin distribution routes in 1.15.0, and from the deltas its units'
+reports declared. It moved seven requirements here from `docs/specs/plugin-lifecycle.md`, each keeping its id, and set
+them after REQ-FLOW-038, beside the ownership requirements they extend: REQ-PLUGIN-005 (the runner's start of `node`),
+REQ-PLUGIN-014 (the manifest's `gates` object and its held `plugin` key), REQ-PLUGIN-016 (the ledger bound's
+amendment, the settings document, the doctor rows), REQ-PLUGIN-017 (explicit gates), REQ-PLUGIN-045 and REQ-PLUGIN-046
+(the ownership bound and the byte and rendering proofs) and REQ-PLUGIN-047 (`check`'s expectations). Each carries the
+CLI half of the text as it stood there at `c96c7146`; the route's half retires in that spec's stub, and a route clause
+inside the moved text is dropped in place and marked "(route clause dropped 1.15.0)". A paragraph headed "Amended
+2026-10-14" under each says what 1.15.0 holds, citing the tree at `d590a266`, the integration head the deletion landed
+on. The same pass dropped the route clauses of REQ-FLOW-002, REQ-FLOW-025, REQ-FLOW-026, REQ-FLOW-038 and REQ-FLOW-063,
+and, folding the inbox row `2026-10-11_release-1-14-0/review/5`, restated REQ-FLOW-071's sentence on the live run. It
+ships with 1.15.0.
+
 ## Intent
 
 The nine commands and the setup that serves them should do what a user asks, day to day: calls resolve, gates run
@@ -148,9 +162,8 @@ even when it cannot pin (`src/cli/kit/packageName.ts:216-227`).
 
 The charter's one call uses the token: "change via `${STAMITY:CLI} config`" (`content/charter/stamity-charter.md:26`),
 so every user's `AGENTS.md` carries the pinned call (this repository's own copy: `AGENTS.md:15`). `.claude/` bodies
-carry the rendered form; the APM bodies under `.apm/` ship the token raw, as they ship every token (the accepted APM
-state). A plugin body carries the literal pinned call at the plugin's own version, with `--no` for a package with
-no channel (`scripts/plugins/tokens.mjs:12-17`, `:50-62`).
+carry the rendered form (route clause dropped 1.15.0: it went on to say how the APM bodies and the plugin bodies carried
+the token, both routes deleted in 1.15.0; the sentences read at `c96c7146`).
 
 - **As built, where the delta differed:**
   - A hook hint carries the pinned call beside the short form: `` `stamity <verb>` where the CLI is installed, else
@@ -666,8 +679,9 @@ file write tool (`:136`). The close writes the inbox through `stamity ledger inb
 
 Landed 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`, inbox row 324; shipped with
 1.14.0): setup writes no permission allowlist. The engine renders no `permissions` member in
-`.claude/settings.json`, in repository setups and in plugin setups alike (`stamity plugin setup`, where a plugin that
-carries hooks leaves the engine no member to write; `buildSettingsJson`, `src/adapters/claude.ts`). The three `read`
+`.claude/settings.json` (`buildSettingsJson`, `src/adapters/claude.ts`; route clause dropped 1.15.0: "in repository
+setups and in plugin setups alike (`stamity plugin setup`, where a plugin that carries hooks leaves the engine no member
+to write …)", the verb and the mode deleted in 1.15.0). The three `read`
 rows a release rendered (`Read`, `Grep`, `Glob`) leave on the next `sync` without a backup where the ledger records
 them, and an owner's equal row with no record stays; a ledger from 1.11.0, which records no entries, takes them by
 REQ-FLOW-036's expand/contract rule. A bare `Read` rule matches every file read, and reads inside the working
@@ -716,10 +730,10 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
 - Codex's skills-list check counts the touchpoints: the full selection measures 6,909 characters over 26 skills
   against the 8,000 cap (`codexSkillsListChars`, `src/emit/capabilityMatrix.ts:379-384`; the refusal at
   `src/adapters/codex.ts:397-418`; REQ-PROVE-004).
-- The Codex plugin does not carry the touchpoints. They stay repository-owned, `stamity plugin setup` writes them into
-  the shared tree, and the packager drops a command-class row there (`scripts/plugins/clients/codex.mjs:25-30`,
-  `:50-52`, `:84-89`; sign-off at 15:56Z, option (b)). The Cursor plugin carries them under `skills/` as class
-  `command`, without the Codex companion (`scripts/plugins/clients/cursor.mjs:63-73`).
+- (Route clause dropped 1.15.0: this bullet said which plugin root carried the touchpoints and that
+  `stamity plugin setup` wrote them into the shared tree, citing the plugin packagers under `scripts/plugins/`; the
+  route, the verb and those files are deleted, and the bullet reads at `c96c7146`. The touchpoints stay
+  repository-owned, written by `sync` as the bullets above state.)
 
 - **Live check** (2026-09-30T15:56Z, a fixture set up by the lane's `init -y --tools codex,cursor,copilot`):
   codex-cli 0.155.1 loaded the body on `$st-work`; cursor-agent 2026.09.28 loaded it on `/st-work`; Copilot CLI
@@ -756,8 +770,8 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
 - **Proof:** `test/emit/touchpointSkills.test.ts`, `test/emit/skillsProjection.test.ts`,
   `test/adapters/codex.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`,
   `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts` (the 1.10.0 reclaim case),
-  `test/ci/pluginPackages.codex.test.ts`, `test/ci/pluginPackages.cursor.test.ts`, `test/cli/commands/plugin.test.ts`,
-  `test/docsPages.test.ts`; the live check; QA.
+  `test/docsPages.test.ts`; the live check; QA. (Route clause dropped 1.15.0: the list also named three suites of the
+  plugin route, deleted with it.)
 
 ### REQ-FLOW-036 — `.claude/settings.json` is merged entry by entry, and an owner's entries survive every verb
 
@@ -937,10 +951,940 @@ bytes still hash to what the ledger recorded, inside the engine's bound; an edit
 - **Units:** `u0-hook-files-ownership`.
 - **Evidence (before):** `src/adapters/cursor.ts:110-116` at `d10db029`. Of the 201 paths a four-client `init` records
   on 1.11.0, 11 carry no prefixed segment: the six fixed client files, the three charters and the two guards.
-- **Expand/contract:** the old names are reclaimed by proof; the plugin roots ship the new names under `hooks/`, and a
-  client on an older root keeps the old names inside its own root, which `sync` never touches.
+- **Expand/contract:** the old names are reclaimed by proof (route clause dropped 1.15.0: "the plugin roots ship the new
+  names under `hooks/`, and a client on an older root keeps the old names inside its own root, which `sync` never
+  touches"; no plugin root ships since 1.15.0).
 - **Proof:** `test/emit/namePrefix.test.ts`, `test/adapters/cursor.test.ts`, `test/merge/hookFilesOwnership.test.ts`;
   `test/adapters/cursorLegacyGuards.test.ts` with its four fixtures (added 2026-10-08).
+
+### REQ-PLUGIN-005 — The emitted hook runner starts `node` by an absolute path
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`). Only its CLI amendment moved. The requirement's first half, how a plugin container's hooks
+resolve their root variables and read the container's own policy document, retires with the plugin route, and its
+text reads at `c96c7146`; the heading read "Plugin hooks resolve their roots and never write configuration".
+
+Amended 2026-10-12 (read at `1b492297`). The emitted runner starts a row whose launcher is the word `node` as
+`process.execPath`, the interpreter the runner itself runs under, so no lookup by name takes place; a row naming any
+other launcher, `node.exe` and a path to node included, is started by the name the row gives (`buildPortableHookRunner`,
+`src/hooks/portableRunner.ts`). The working folder, `shell: false`, the timeout and the buffer are unchanged.
+`SECURITY.md`'s row on how git is started names this start beside git's, and a hook with any other launcher as a
+residual. No requirement id and no criterion is added. Tests: `test/hooks/portableRunner.test.ts`, the describe "which
+program a row's launcher starts"; its three cases under "on a Windows host, where the runtime takes the child's folder
+first" run on Windows only, and the cases under "on a POSIX host whose PATH names the folder the child runs in" are
+skipped there.
+
+Amended 2026-10-14 (plan 020 file 1; cited at `d590a266`). The paragraph above is unchanged. Of the retired half, the
+repository-mode reading stands: the guard reads the one policy document it was rendered for, the
+`../../agent-tool-policies.json` climb, chosen when the hooks are planned rather than ordered at run time
+(`policiesPathFor` and `POLICIES_PATH_FROM_SCRIPT`, `src/emit/hooksInfra.ts:104`, `:119-121`). The container layout
+the rest of that half described, `hookScriptsRoot` set, is still in the code with no route left to set it; the plan's
+follow-up row removes it (`docs/plans/020-cli-native-01.md`, its Follow-ups).
+
+### REQ-PLUGIN-014 — The manifest's `gates` object, and the `plugin` key held through the 1.15 line
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (run `2026-10-14_cli-native`). The plan's
+spec delta did not list it; it moved by that plan's rule that a requirement with a CLI job moves, since the manifest's
+`gates` object is the CLI's. The text below is the requirement as it stood there at `c96c7146`, its route clauses
+dropped in place; the heading read "Manifest records plugin-backed mode additively".
+
+Given the manifest schema, When the plugin fields are added, Then `MANIFEST_VERSION` is unchanged, an optional `gates`
+object accepts `test`, `lint`, `typecheck` and `all` as non-empty single-line command strings, every manifest fixture
+written before the fields existed parses unchanged and round-trips without gaining a key, and a manifest carrying an
+unknown key under `gates` is refused naming the key (route clause dropped 1.15.0: the `plugin` object's grammar, "an
+optional `plugin` object accepts `mode` of exactly `generated` or `plugin-backed` plus an optional `clients` map from
+tool to `{ version, classes }` where `classes` is a subset of `agent, skill, command, rule, hooks`", and "under
+`plugin` or").
+
+As built (2026-09-20): `MANIFEST_VERSION` is unchanged, both fields are additive at schema 1.0.0, and
+`MANIFEST_FIELD_ORDER` places `plugin` then `gates` after `models`. One bound the paragraph does not state: a gate
+command is a non-empty single line of at most 512 characters, and a backtick or the `${STAMITY:` prefix inside one is
+refused by name, because a pinned gate is rendered into the charter unescaped. (Route clause dropped 1.15.0: it read
+"Three bounds"; the other two, `PLUGIN_OWNED_CLASSES` and how a malformed `classes` value read, left with the mode.)
+
+Amended 2026-10-14 (plan 020 file 1, unit `d7-engine`; cited at `d590a266`). The `plugin` key is held, not read.
+`SetupManifest.plugin` is typed `unknown` (`src/types/manifest.ts`), and the reader accepts any value there without
+validation and writes it back as it stands, the field keeping its place in `MANIFEST_FIELD_ORDER`
+(`src/manifest/manifest.ts`), so a manifest a 1.14.0 setup wrote still loads and a second `sync` moves none of it.
+Nothing that emits reads it (REQ-PLUGIN-045, amended 2026-10-14); the leftover-install warning reads it as raw JSON
+(REQ-PLUGIN-016, amended 2026-10-14). Removing the key from the schema in 1.15.0 would make `check`, `sync` and `clean`
+refuse every manifest that still holds it, and dropping it on the first `sync` would end the warning after one run, so
+it is held through the 1.15 line; the release after 1.15.0 removes it with a manifest migration step
+(`docs/plans/020-cli-native-01.md`, its "Settled by this plan" and its Follow-ups).
+
+- GIVEN a manifest a 1.14.0 setup wrote with a `plugin` block WHEN it is read and written back THEN it loads with no
+  refusal and the block is value-identical; GIVEN a `plugin` value of any other shape THEN it is held the same way
+  (`test/manifest/manifest.test.ts`, "accepts the 1.14 record without validating it" and the held-value cases; added
+  2026-10-14).
+
+### REQ-PLUGIN-016 — The ledger bound, settings co-ownership, the node row and the pack-reach row
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`). Its amendments with a CLI job moved, each as it stood there at `c96c7146` with its route
+clauses dropped in place. Its first paragraph, the ownership boundary under `plugin.mode: "plugin-backed"`, retires with
+the mode, as do the paragraphs headed "As built (2026-09-20)" (the boundary predicate and the `plugin-runtime` row) and
+"Amended 2026-09-26" (that row's warning) and the plugin half of "Amended 2026-10-06"; they read at `c96c7146`. The
+heading read "sync, check and clean honor the ownership boundary". The paragraph headed "Amended 2026-10-14" states the
+doctor rows as 1.15.0 ships them.
+
+Amended 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). "Only ledger rows" is bounded. Every row names a path
+inside the owned-path bound of REQ-PLUGIN-045, or the manifest is refused when it is read: `check` fails its `manifest`
+row naming the row, and `sync` and `clean` act on nothing. Inside the bound, a row licenses a whole-file delete or an
+overwrite without a backup only together with the bytes: a recorded `contentHash` that matches the file, an
+engine-minted name in a content folder, and at an instruction file or the Copilot setup workflow bytes that show the
+engine wrote them (REQ-PLUGIN-046); or a managed block spanning the file. A row with no `contentHash` proves nothing:
+the sweep keeps its file, and an overwrite takes a verified `.bak` first.
+
+- GIVEN a committed ledger row outside the bound WHEN `check` runs THEN it exits 1 and the `manifest` row names the row;
+  WHEN `sync -y` or `clean -y` runs THEN it exits 1 with `CONFIG_ERROR` naming the row and `git status --porcelain`
+  prints nothing.
+- GIVEN an in-bound engine-named row with no `contentHash` WHEN `sync -y` reclaims it THEN the file stays and the sweep
+  names it `skipped-unsafe-path`.
+
+As built (2026-10-07): the evidence, measured at `d10db029` — hand-added rows made `sync -y` (exit 0) delete five owner
+files and overwrite a sixth with no `.bak`, `clean -y` deleted the same, and `check` reported them only as "5 queued for
+reclaim" (`src/manifest/ledger.ts:157-163`, `src/merge/reclaim.ts:327-338`, `:345-347`, `:372-375`, `:743-763`,
+`src/merge/safeWrite.ts:863-877`, `:922-932`, `src/cli/commands/check.ts:1503` at that commit). The bound and its proofs
+are those of REQ-PLUGIN-045 and REQ-PLUGIN-046, with their tests.
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `b4-no-read-allow-rows`): `.claude/settings.json` no
+longer splits that way. The engine renders no `permissions` member; its `hooks` object is emitted, and the settings row
+stays planned (`src/adapters/claude.ts`, `buildSettingsJson` and the settings row it feeds; route clause dropped 1.15.0:
+"under either install mode" and "only when hooks are not plugin-owned, so under a plugin that carries hooks the
+engine's rendering is `{}`"). That planned row is how a recorded allow row leaves, by the per-entry merge, on the next
+`sync` (REQ-FLOW-025, REQ-FLOW-036) (route clause dropped 1.15.0: "`plugin setup` refuses a repository that already
+carries a setup, so it is not that path"). A `permissions` member that is not an object, or an `allow` that is not an
+array, still collides, as it did while releases up to 1.12.0 rendered the rows (`planClaudeSettings`,
+`src/manifest/claudeSettings.ts`). It read: "its `permissions` half always emitted".
+
+- (Route clause dropped 1.15.0: the two criteria on `plugin setup --client claude -y` over a file holding only
+  `enabledPlugins`, and on a plugin-backed setup's three recorded rows. A file the client wrote first keeps its
+  `enabledPlugins` through `init`, `sync` and `clean`: the amendment of 2026-10-14, below.) Test evidence:
+  `test/adapters/claude.test.ts`, `test/merge/settingsKeyOwnership.test.ts` (route clause dropped 1.15.0: the two
+  suites of the deleted verb it also named).
+
+As built (2026-09-21), one row of the runtime surface these doctor rows share: the `node` row is
+never `unstated` when no root's locator answers. `requiredNodeRange()` reads this build's declared `>=22.22.2`, and ONE
+tri-state `judgeNodeFloor` judges it (route clause dropped 1.15.0: the shared probe that held both, its
+`engineNodeFacts()` and the second reader, the `plugin-runtime` row, are deleted; the two helpers are back in
+`check.ts`, amended 2026-10-14 below).
+
+As built (2026-09-22), amended 2026-10-07 (plan 016 file 0, unit `u0-settings-ownership`): the settings document under
+the boundary. `sync` and `check` plan `.claude/settings.json` per entry (REQ-FLOW-036), and `check`'s drift gate previews
+exactly the write `sync` would make. The engine owns each `permissions.allow` row and each hook entry it wrote. The
+ledger records each by the hash of its canonical JSON, and the engine owns nothing else in the file: it never writes or
+removes `permissions.deny`, `permissions.ask` or an owner's entry. An entry equal to the rendering needs no proof. An
+engine entry that leaves or changes goes silently only when the ledger records it (or proves the file unedited) and it
+lies inside the engine's bound: an allow row a release rendered (`Read`, `Grep`, `Glob`; the engine renders none since
+2026-10-08, and before it read "an allow row the engine renders"), or a hook entry whose every command runs a script under
+`.stamity/`. Otherwise it goes behind a verified `.bak`, whose warning names the entry and `.claude/settings.local.json`
+for personal rows. `clean`, and a client's removal through the reclaim sweep, remove the engine's entries, a stale
+repository-mode hook entry included (recognised by its script under `.stamity/generated/hooks/`). They keep every other
+member and delete the file only when the engine created it and nothing foreign remains
+(`reduceClaudeSettingsToForeignContent`; `src/merge/reclaim.ts`, gate 4). The reclaim takes a backup only when an entry
+it removes is not proven. A key another tool added needs none. A backup that cannot be taken refuses the removal and
+leaves the file untouched: a backup or nothing. The file collides only when it is not a JSON object or a member the
+engine writes into has another type. The collision names the member, `--force` does not clear it, and `check`'s step
+for it does not offer `--force` (route clause dropped 1.15.0: "Under a plugin-backed setup an operator's own `hooks`
+key is still reported by `check`'s `plugin-duplicates` row and by `plugin status` as an `unmanaged` hooks duplicate",
+citing a probe module deleted with the verb). (It read "strip only the keys the install mode makes the
+engine's" and "behind a verified `.bak` when the file's bytes no longer hash to what the ledger recorded".) Amended
+2026-10-07 (build): "runs a script under `.stamity/`" reads as the script the command executes, in the engine's own
+script folders — `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`, never the user's
+`.stamity/hooks/` (`commandRunsStateScript`, `src/manifest/coOwnedJson.ts`); a user-hook entry is proven only by
+re-rendering a definition still in `.stamity/hooks/`. `check`'s drift gate passes the write's own ledger hashes to the
+prediction, so "previews exactly the write" holds for every co-owned lane. A hashless co-owned row reads as drifted. A
+refused document keeps its ledger rows and record, and `clean` keeps every engine hook script a kept hooks document
+still runs.
+
+- GIVEN a setup and a `.claude/settings.json` to which another tool added a key WHEN `clean -y` runs THEN the file holds
+  exactly that foreign key, and no `.bak` exists anywhere in the repository (route clause dropped 1.15.0: it read
+  "GIVEN a plugin-backed setup and").
+- GIVEN an engine hook entry the operator edited WHEN `clean -y` runs THEN a verified `.bak` exists and the output names
+  that entry.
+
+As built (2026-10-07): the lanes are registered in `coOwnedDocumentLanes` (`src/cli/engine/emissionWrite.ts`), and the
+ownership each verb passes is `coOwnedOwnershipOf`; the proof by re-rendering a user hook is `coOwnedReclaimRenderings`
+in the same module. Tests: `test/merge/settingsOwnerEntries.test.ts`, `test/merge/settingsKeyOwnership.test.ts`,
+`test/manifest/coOwnedJson.test.ts`, `test/merge/reclaim.test.ts` (100% coverage).
+
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit `u4b-pack-reach-row`, integrated as `778c9ef0` with its
+fix rounds; cited at `eb4f0727`; route clause dropped 1.15.0: the first of its two facts, how pack skills reached
+plugin-backed clients, left with the mode).
+
+- **The doctor rows gain `pack-reach`,** printed after `plugin-duplicates` and before `invariants` (it went on "so
+  `check` prints fifteen rows", citing `src/cli/commands/check.ts:1415-1437` and `:1458-1463` at `eb4f0727`; the count
+  is one fewer since 1.15.0, amended 2026-10-14 below). Its judgment
+  is the emission plan's own `packReach` (`src/types/content.ts:146-201`; set at
+  `src/emit/planner.ts:1131-1133` by `packReachOf`, `:1146-1258`), read off each artifact's `tools:`
+  list rather than off the planned rows, because a pack rule reaches Codex as text inside the composite appendix, which
+  no per-rule row owns. A pack skill reaches every selected client; an agent, rule or command reaches every client its
+  `tools:` list admits; each accepted pack hook file reaches every client whose hooks this repository wires; an MCP
+  server reaches every selected client once `manifest.mcp.servers` selects it, and none, dropped as `not selected`,
+  until then (route clause dropped 1.15.0: "and `isPluginOwned`", and "whose plugin does not carry its class"). The
+  row (`checkPackReach`, `src/cli/commands/check.ts:1143-1294`) reads:
+  - `pass` with no readable manifest, and with no `pack:` row in the ledger, planning nothing
+    (`:1188-1193`); otherwise `pass` when no pack is in a state below, naming the artifact counts and
+    any artifact that reaches no client for a reason of its own (`:1280-1293`);
+  - `fail`, so `check` exits 1, for an installed pack none of whose artifacts reaches a selected
+    client and that supplies no unselected MCP server (`:1231-1234`, `:1266-1276`). It names the
+    pack, each artifact and why (its own `tools:` list), then the remedies that run: `clean --pack <id>` in the pinned
+    call form, and, where an artifact's `tools:` list names a client, the `config set tools` call that adds it, then
+    `sync` (`describeSilentPack`, `:1336-1360`; route clause dropped 1.15.0: "the plugin that carries its class, or");
+  - `warn`, exit 0, for a pack whose only remaining delivery is an MCP server nobody selected,
+    naming `config mcp add <id>`; a pack the organisation's trust policy denies; and a pack that
+    ships nothing a client loads, every hook row it ships rejected (`:1235-1262`, `:1277-1279`; route clause dropped
+    1.15.0: "a pack that reaches some client while a plugin drops one of its artifacts for another, each named");
+  - `warn` "not evaluated" when the plan cannot be built, the drift gate carrying the failure
+    (`:1216-1224`).
+
+  With a pack installed the row runs one emission plan of its own beside the drift gate's, and keeps
+  that plan's policy-denial lines off stderr so each prints once (`withoutPolicyWarningPrint`,
+  `src/pack/projection.ts:463-478`). Every pack-supplied id it prints passes through `sanitizeLabel`.
+
+- (Route clause dropped 1.15.0: the criterion on a pack skill under `plugin.mode: "plugin-backed"`, and the plugin
+  halves of the next one.) GIVEN no pack installed THEN `pack-reach` is `pass` and nothing is planned
+  (`test/cli/commands/check.test.ts`, the describe "check — pack-reach").
+- GIVEN a pack whose only artifact is an MCP server the manifest does not select THEN `pack-reach` is
+  `warn`, naming `config mcp add <id>`; GIVEN a pack the trust policy denies, or one whose every hook
+  row was rejected, THEN it is `warn`; GIVEN a plan that cannot be built THEN it is `warn` "not
+  evaluated" and the drift gate fails (the same describe; `test/emit/plannerPackReach.test.ts`).
+
+Amended 2026-10-14 (plan 020 file 1, unit `d7-engine`; cited at `d590a266`). The `plugin-backed` mode is gone, so no
+class is plugin-owned anywhere (REQ-PLUGIN-045, amended 2026-10-14). The doctor rows and the verbs' text as 1.15.0 ships
+them:
+
+- **`plugin-runtime` is removed**, with the locator probe behind it, so `check` prints one row fewer.
+- **`plugin-duplicates` warns, and never fails, on a leftover install.** It reads the manifest file and
+  `.claude/settings.json` as raw JSON, so a manifest that fails another field still gets the warning
+  (`checkPluginDuplicates`, `src/cli/commands/check.ts:1213-1230`). It names a client when the held `plugin` block lists
+  it under `clients`, and `claude` when `enabledPlugins` holds a `<plugin id>@…` key, the plugin id being the running
+  package's name without its scope (`leftoverPluginClients` and `pluginId`, `src/cli/kit/packageName.ts:287-289`,
+  `:319-330`). Only the four client ids reach the text, each with that client's own uninstall command, then a line
+  saying to delete the `plugin` key where the manifest named the client (`pluginUninstallCommands` and
+  `leftoverPluginLines`, `:298-306`, `:348-362`). With no client named it passes, "no leftover plugin install".
+- **`sync` and `clean` print the same lines for the held block.** `sync`'s report prints them under `warning:`
+  (`src/cli/commands/sync/report.ts`, through `leftoverPluginLines`), and `clean` prints them before it deletes the
+  state directory, its preview included, with no JSON key (`printLeftoverPlugin`, `src/cli/commands/clean.ts:375-380`).
+  Neither reads `enabledPlugins`, so an install recorded there alone warns in `check` only (ledger row `build/31` of
+  run `2026-10-14_cli-native`, open).
+- **`sync --json` carries no `pluginOwned`, and `clean --json` no `pluginUninstall`.**
+- **`pack-reach` keeps its row and loses its plugin reason.** The `plugin-owned` drop reason and the partial-drop
+  warning are gone; a pack none of whose artifacts reaches a selected client through its own `tools:` list, and that
+  supplies no unselected MCP server, still fails, and the three `warn` states above stand (`checkPackReach`,
+  `src/cli/commands/check.ts:1267-1374`).
+- **The node row's helpers live in `check.ts`:** `requiredNodeRange` and `judgeNodeFloor` (`:177-204`), whose one reader
+  is now the `node-version` row (`checkNodeVersion`, `:215`).
+
+- GIVEN a manifest holding `{"plugin":{"mode":"plugin-backed","clients":{"claude":{"version":"1.14.0","classes":["skill"]}}}}`
+  WHEN `check` runs THEN it exits 0 and `plugin-duplicates` reads `warn`, naming `claude` and its uninstall command;
+  WHEN `sync` runs THEN it emits Claude's skills, prints the same warning, and keeps the block value-identical; GIVEN
+  `enabledPlugins` naming another product's plugin THEN no warning; GIVEN a block naming an unknown client or carrying
+  control characters THEN only known client ids print and the emission is byte-identical to a repository without the
+  block (`test/cli/commands/check.test.ts`, the `plugin-duplicates` cases; `test/cli/commands/syncEngine.test.ts`;
+  `test/cli/commands/clean.test.ts`; added 2026-10-14).
+- GIVEN the doctor row list THEN it holds no `plugin-runtime` row; GIVEN `.claude/settings.json` holding
+  `enabledPlugins` THEN `init`, `sync` and `clean` keep the key (`test/cli/commands/check.test.ts`;
+  `test/merge/settingsKeyOwnership.test.ts`, its cases ported to `init`; added 2026-10-14).
+- GIVEN an installed pack whose every artifact's `tools:` list names no selected client THEN `pack-reach` is `fail`,
+  naming the pack; GIVEN a held `plugin` block THEN no artifact drops (`test/emit/plannerPackReach.test.ts`,
+  `test/cli/commands/check.test.ts`, its `pack-reach` cases; added 2026-10-14).
+
+### REQ-PLUGIN-017 — Explicit gates beat detection
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`). The text below is the requirement as it stood there at `c96c7146`, its `plugin status` half
+dropped in place; the heading read "Explicit facts and gates replace placeholders".
+
+Given `stamity config set gates.test "npm run test:unit"`, When the charter is rendered, Then its
+`Verification gates` section carries that exact string for the Tests row, the other rows carry the
+detected commands, and `${STAMITY:VERIFY_GATE_ALL}` renders from the configured `all` when set and
+from the detected composition otherwise; Given a fact detection could not determine, Then the rendered charter carries
+the literal `unknown` for it rather than an invented value (route clause dropped 1.15.0: "When `stamity plugin status`
+runs, Then it lists that fact as `unconfigured` with the exact `stamity config` command that sets it, and the rendered
+charter still carries"); and the rendered file contains 0 occurrences of `${STAMITY:`.
+
+As built (2026-09-20): a configured gate outranks detection per key, `all` composes from the merged
+rows, and the charter and the skills projection both render through `readGates(manifest)` so one
+pinned set reaches every surface; `config detect` never clears a pin, `none` drops a key and an
+emptied `gates` object, and `config list` prints a `detected:` prefix for every unset row. One
+literal moved: a refusal exits 1 with `VALIDATION_ERROR`, not 64 — `src/types/errors.ts` retired
+the sysexits translation and every failure exits 1 with the kind in `error.code` (ledger row
+build/34). (Route clause dropped 1.15.0: the sentence on what `stamity plugin status` listed as `unconfigured`, and the
+paragraph headed "As built (2026-09-21)" on that verb's `--client` flag.)
+
+Amended 2026-10-14 (plan 020 file 1, unit `d6-verb`): the gates and facts above are unchanged. The verb that listed the
+unconfigured facts is removed (REQ-PLUGIN-047, amended 2026-10-14); `config list` is where an operator reads which
+rows are detected.
+
+### REQ-PLUGIN-045 The ledger names only paths the engine writes, and a row proves a delete or an overwrite only with the bytes
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`), beside the ownership requirements it extends, unchanged in substance. The text below is the
+requirement as it stood there at `c96c7146`, its route clauses dropped in place.
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). The manifest is committed, and `sync` and `clean` act on
+what its ledger names, so the ledger is bounded by one exported value, `OWNED_PATHS` (`src/manifest/ownedPaths.ts`). It
+lists the sixteen platform files the engine writes at names it did not mint (`AGENTS.md`, `AGENTS.override.md`,
+`CLAUDE.md`, `.claude/settings.json`, `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `.codex/config.toml`,
+`.codex/hooks.json`, `.cursor/hooks.json`, `.cursor/hooks/stamity-mcp-guard.mjs`,
+`.cursor/hooks/stamity-subagent-guard.mjs`, the 1.11.0 guard names `.cursor/hooks/mcp-guard.mjs` and
+`.cursor/hooks/subagent-guard.mjs`, `.github/hooks/stamity.json`, `.github/workflows/copilot-setup-steps.yml`); a
+charter `AGENTS.md` in any folder; the twelve content folders (`.agents/skills/`, `.claude/agents/`,
+`.claude/commands/`, `.claude/rules/`, `.claude/skills/`, `.codex/agents/`, `.cursor/agents/`, `.cursor/rules/`,
+`.cursor/skills/` — written by 1.0.0 to 1.10.0 — `.github/agents/`, `.github/instructions/`, `.github/prompts/`); the
+state folders `.stamity/generated/` and `.stamity/mcp/`; and an installed pack's own folder `.stamity/packs/<id>/`. An
+`infra` row may name a platform file, a charter, a state folder or, for its `pack:<id>` owner, its pack folder; an
+agent, skill, rule or command row only a content folder. A row outside the bound refuses the manifest when it is read.
+Inside it, a whole-file delete or an overwrite without a backup needs a recorded `contentHash` that matches the file —
+plus, in a content folder, a name the engine minted (a `st-` or `stamity-` basename, or a skill folder so named directly
+under a `skills/` folder) — or a managed block spanning the file. A row with no `contentHash` proves nothing. `check`
+names every path a `sync` would reclaim, with the action and the proof, in its text and in `--json` (`drift.reclaim`),
+and publishes the bound as `ownedPaths`; a later unit that adds an emitted path extends the bound and raises its
+`version`.
+
+Amended 2026-10-07 (build): a `drift.reclaim` entry whose action is `keep`, `refuse` or `gone` also carries `why`, the
+sweep's reason; `check`'s text prints every reclaim line, with no "… and N more" fold, and shows a control character in
+a path as an escape. A whole-file delete also needs every segment below the bound folder, the folders and the file alike,
+to be listed under exactly the row's spelling, the file's real parent to lie inside the real path of the bound folder the
+row claims, and no symbolic link among `.stamity/`, a state folder or a pack folder on its own path. On the co-owned
+path, a row with no `contentHash` reads as drifted, so the reduction takes a verified `.bak` first. The exact list is
+sixteen paths, not the fourteen the delta drafted: the two guard names of REQ-FLOW-038 joined it beside the two 1.11.0
+names, which stay so their rows validate for the first sync after an upgrade, and `OWNED_PATHS.version` is 2.
+
+- GIVEN a committed repository and an added `infra` row for `docs/owner.md` recording that file's hash WHEN `check`,
+  `sync -y` or `clean -y` runs THEN `check` exits 1 naming the row, `sync` and `clean` exit 1 with `CONFIG_ERROR` naming
+  it, and no file changed.
+- GIVEN hashless rows for `notes/st-owner.md`, `src/stamity-x.ts`, `packages/app/skills/st-foo/index.ts` and
+  `lib/30-stamity-y.js`, and hashed `infra` rows for `.stamity/learnings/keep-me.md` and `.github/workflows/ci.yml`, THEN
+  each is refused the same way.
+- GIVEN the rows every release from 1.0.0 to 1.11.0 writes THEN each lies in the bound; GIVEN every planner output for
+  every client set, every MCP dialect, an installed pack and a user override of each class THEN each lies in the bound
+  (route clause dropped 1.15.0: "both install modes", one mode being left).
+- GIVEN an engine-named row with no `contentHash` WHEN `sync -y` reclaims it THEN the file stays; GIVEN a hashless row
+  for an owner's file that `init` skipped WHEN `sync -y` overwrites it THEN a verified `.bak` holds the owner's bytes.
+- GIVEN a deselected engine file WHEN `check --json` runs THEN `drift.reclaim` names its path with `action: "delete"` and
+  `proof: "hash"`, and the text names it; GIVEN any repository THEN `check --json` carries `ownedPaths`.
+- GIVEN an engine-named row with no `contentHash` WHEN `check --json` runs THEN its `drift.reclaim` entry has
+  `action: "refuse"` and a non-empty `why` (added from the build).
+- GIVEN 25 deselected rows with `strip` and `reduce` actions among them WHEN `check` runs THEN all 25 reclaim lines print
+  and none reads "… and N more"; GIVEN a row whose path holds a control character THEN its line shows the escape, never
+  the raw byte (added from the build).
+- GIVEN a hashed row spelled `.claude/agents/Stamity-x.md` for a file listed as `.claude/agents/stamity-x.md` on a
+  case-folding file system WHEN `sync -y` reclaims it THEN the file stays (added from the build).
+- GIVEN a bound content folder whose subfolder is a symbolic link to a folder outside it, and a hashed row through that
+  link WHEN `sync -y` reclaims it THEN the file stays (added from the build).
+- GIVEN `.stamity/generated/` committed as a symbolic link and a hashed row under it WHEN `sync -y` reclaims it THEN the
+  file stays (added from the build).
+- GIVEN a forged hashless `.claude/settings.json` row and an owner's `permissions` and `hooks` WHEN `sync -y` or
+  `clean -y` reduces the file THEN a verified `.bak` holds the owner's bytes first (added from the build).
+
+As built (2026-10-07): before the change no single list of the engine's paths existed (the constants sat in the four
+adapters and six other modules); `infra` rows were trusted by type alone (`src/manifest/ledger.ts:157-163` at
+`d10db029`), and a hash proved a delete anywhere under `.stamity/` (`src/merge/reclaim.ts:345-347`, `:372-375` there).
+Measured 2026-10-06: every release from 1.0.0 to 1.11.0 records a hash on every row, and 5,288 rows in 19 ledgers fall
+inside the bound with the artifact-type split above. The bound is `OWNED_PATHS`, `ownedPathKind` and `ownedFolderOf` in
+`src/manifest/ownedPaths.ts`, read by manifest validation (`src/manifest/manifest.ts`), the planner's containment check
+(`src/manifest/ledger.ts`), the reclaim sweep (`src/merge/reclaim.ts`) and `check --json`. Tests:
+`test/manifest/ownedPaths.test.ts` (the bound over every planner output and over the frozen rows of every release,
+`test/manifest/fixtures/released-ledger-rows.json`), `test/cli/ledgerForgery.test.ts`, `test/merge/reclaim.test.ts` and
+`test/merge/reclaim.property.test.ts` (`src/merge/reclaim.ts` and `src/manifest/ownedPaths.ts` held at 100%),
+`test/cli/commands/check.test.ts` (route clause dropped 1.15.0: "Plan 016 file 2's `u2-release-integrity` publishes the
+bound in `release.json` as `ownedPaths`", the plugin distribution's manifest).
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `d1a-rendering-proof-core` to
+`d1c-charter-and-exact-paths` and lane D's fixer rounds): inside the bound, a delete at the paths REQ-PLUGIN-046 names
+needs a rendering — the running engine's, or at the two 1.11.0 Cursor guard names the frozen 1.11.0 builder's
+rendering for the setup — beside the recorded hash the bytes match, which no longer proves it alone (or a managed
+block spanning the file, which a recorded hash the bytes do not match vetoes). A backup-free overwrite at a charter or
+instruction file and at `.github/hooks/stamity.json` needs the incoming rendering or a managed block spanning the
+file, or it keeps the previous content recoverable (REQ-PLUGIN-046, amended 2026-10-08; `needsRenderingProof` and
+`renderingProofClass`, `src/manifest/ownedPaths.ts`). Elsewhere inside the bound the recorded hash still proves what
+the paragraph above says: a delete at the state and pack folders and at the `stamity-` Cursor guards, and a
+backup-free overwrite at any other path the engine writes. `SECURITY.md` names both among its known residuals.
+
+Amended 2026-10-14 (plan 020 file 1, unit `d7-engine`; cited at `d590a266`). Emission, the reclaim renderings and the
+proof plan read nothing from a manifest's held `plugin` block (REQ-PLUGIN-014, amended 2026-10-14): the adapters' plugin
+row filters and hook-infrastructure id lists, the planner's plugin ownership of `.agents/skills/` and its hand-off of
+plugin-owned hooks, and the plugin filter of `coOwnedReclaimRenderings` are gone, and the proof plan still drops the
+block from the manifest it plans with (`src/cli/engine/emissionWrite.ts`). So every adapter emits, byte for byte, the
+rows it emits for a manifest with no block, and a hostile block — control characters, an unknown client, a value of
+any shape — moves no emitted byte. The bound, `OWNED_PATHS`, does not change.
+
+- GIVEN a manifest holding a `plugin` block over every client's skills and hooks WHEN each adapter and the planner plan
+  THEN the rows equal, byte for byte, those of the same manifest with no block; GIVEN a hostile block WHEN `sync` runs
+  THEN it emits what a repository without the block emits and prints none of the block (`test/adapters/claude.test.ts`,
+  `cursor.test.ts`, `copilot.test.ts`, `codex.test.ts`; `test/emit/planner.test.ts`;
+  `test/cli/commands/syncEngine.test.ts`; `test/pack/projection.test.ts`, its held-block half; added 2026-10-14).
+
+### REQ-PLUGIN-046 An import decision binds only as `init` records it, and an instruction file leaves only on its own bytes
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`), with its amendments, unchanged in substance. The text below is the requirement as it stood
+there at `c96c7146`, its one route clause dropped in place. `docs/specs/worktree-lane.md` cites the look before git it
+states (REQ-WORKTREE-001).
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-ledger-bound`). `init` records one decision per pre-existing instruction
+file (`importChoice`). The engine cannot authenticate a committed record — the manifest carries no signature, and a key
+kept in the repository would be as forgeable as the record — so a decision binds only while it agrees with what only
+the engine's own actions leave behind. A decision names one of the four files `init` imports (`AGENTS.md`, `AGENT.md`,
+`CLAUDE.md`, `.github/copilot-instructions.md`), or the manifest is refused. A `skip` decision and a ledger row for the
+same path refuse the manifest: the engine never records a row for a skipped file. `sync` never writes a whole engine file
+over an instruction file that holds the owner's text outside the engine's managed block — the shape only `supplement`
+leaves: under any other decision the path is an `import-decision` collision, `--force` does not clear it, and the remedy
+names `init --force --import-config replace`. At `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md` and
+`.github/workflows/copilot-setup-steps.yml`, a recorded hash proves a whole-file delete or a backup-free overwrite only
+when the bytes show the engine wrote them: the charter (first non-blank line `# Charter`, then `## Repo facts`,
+`## Invariants`, `## Touchpoints` and `## Conditional layer` in order, no managed-block markers), the Codex rule appendix
+(first non-blank line opening `# Conditional rules (Codex down-conversion)`), the Copilot workflow's engine header line,
+or a managed block spanning the file. Otherwise the sweep keeps the file and an overwrite takes a verified `.bak` first.
+
+Amended 2026-10-07 (build): `AGENTS.override.md`, `CLAUDE.md` and the Copilot workflow need this byte proof only at the
+repository root; a charter `AGENTS.md` needs it in any folder. The root `AGENTS.override.md` proves itself when the Codex
+appendix heading `## Conditional rules (Codex down-conversion)` stands on a line of its own — under `skip` the engine
+writes it as the owner's `AGENTS.md` text plus that section — while a hand-edited override still fails its recorded
+hash, so it is kept on reclaim and backed up on write. In the write lane, a managed block spanning the file proves the
+bytes too.
+
+- GIVEN `importChoice` naming `.cursor/hooks.json` as `skip` THEN the manifest is refused and `check` exits 1 naming the
+  decision.
+- GIVEN a `skip` decision and a ledger row for the same path THEN the manifest is refused and `AGENTS.md` is
+  byte-identical after `sync -y`.
+- GIVEN a supplemented owner `AGENTS.md` whose decision reads `replace`, or none WHEN `sync -y` or `sync -y --force` runs
+  THEN it exits 1, `AGENTS.md` is byte-identical, no `.bak` exists, and `check --json` names the path with
+  `collisionKind: "import-decision"`.
+- GIVEN an owner's `docs/AGENTS.md` and a forged row hashing its bytes WHEN `sync -y` runs THEN the file stays; GIVEN the
+  engine's unedited per-package charter whose package left THEN it is deleted.
+- GIVEN the charter rendered at the head and one written by 1.0.0 THEN both pass the recogniser; GIVEN `# Charter`
+  followed by notes, or a file carrying STAMITY markers, THEN it fails.
+- GIVEN the engine's root `AGENTS.override.md` written under `skip` (the owner's `AGENTS.md` text plus the Codex
+  appendix section) WHEN `sync -y` rewrites it THEN no `.bak` is taken; GIVEN the same file with the heading
+  `## Conditional rules (Codex down-conversion)` removed THEN a verified `.bak` holds it first (added from the build).
+
+As built (2026-10-07): measured 2026-10-06 on 1.11.0, `skip` for Cursor's hook file and both guards (rows and files
+removed) left `check` at exit 0 while `cursor` stayed selected; `supplement` flipped to `replace` made `sync` overwrite
+the owner's `AGENTS.md`; flipped to `skip` with the rows' hash set to the file, `sync` deleted `AGENTS.md` whole. Every
+release's charter carries the four headings; 1.0.0 to 1.7.0 carry no `Invariants version` line. The recognisers are
+`needsByteProof`, `isEngineCharterDocument` and `bytesShowEngineOutput` in `src/manifest/ownedPaths.ts`; the collision
+kind is `import-decision` in `src/cli/commands/sync/engine.ts`. Tests: `test/cli/ledgerForgery.test.ts`,
+`test/manifest/manifest.test.ts`, `test/manifest/ownedPaths.test.ts` (with `test/manifest/fixtures/charter-1.0.0.md`).
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, units `d1a-rendering-proof-core`, `d1b-cursor-guard-pins` and
+`d1c-charter-and-exact-paths`, with lane D's fixer rounds 1, 3 and 4; inbox rows 519, 560, 585 and 586). A whole-file
+delete at an engine-named file in a content folder, an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md`
+and the Copilot setup workflow at the repository root, `.github/hooks/stamity.json`, or one of Cursor's two 1.11.0
+guard names needs one of two proofs, and a recorded hash the bytes do not match vetoes both. The first is bytes that
+hash to the row's recorded hash and, raw or with `\r\n` read as `\n`, to a rendering the running engine produces at
+that path, planned for the clients the setup wrote for (the manifest's clients and every client a ledger row names,
+each in repository mode) over the bundled corpus, the override tree and the installed packs. Every installed pack is
+rendered whatever the organisation's trust policy says, so the first `sync` after the policy denies a pack proves and
+removes that pack's copies, while the projection itself still writes nothing of a denied pack; the plan is hashed and
+discarded, never written. The second is a managed block spanning the file. At an `AGENTS.md` below the root, when a
+client of the setup reads per-folder files, the renderings also include the root charter as the engine renders it
+before an import decision on the root, so the engine's unedited copy whose package has left is still proven and
+removed. At the two 1.11.0 Cursor guard names only, the rendering is the guard a frozen copy of the 1.11.0 builder
+(`src/adapters/cursorLegacyGuards.ts`) renders for the setup: the ten agents 1.11.0 shipped plus every Cursor agent
+the ledger records, the running installation's package name and npm channel, at version 1.11.0. A test holds the copy
+to four fixtures captured from the published 1.11.0 package, each pinned by its SHA-256 (REQ-FLOW-038, amended
+2026-10-08). A recorded hash that matches, and the structural fingerprint, no longer prove a delete there on their own
+(`src/merge/reclaim.ts`, gate 4: the matching hash, then the rendering). The fingerprint still decides which
+instruction files may reach the proof: a file it does not read as the engine's falls to the managed-block rules, so
+`CLAUDE.md` is proven only by a block that spans it.
+
+A file whose bytes no built rendering matches — an owner's file, or a copy an earlier release rendered that the running
+engine no longer produces — is kept as `skipped-user-content`, its report entry names the path's class and the step to
+delete it by hand, and its row leaves the ledger. A file the proof could not judge, because the plan could not be
+built, is kept unjudged: its entry carries `unproven: true` and names why, and its row stays, so the next `sync` tries
+again. Under the full `clean`, which removes the setup with its ledger, that entry instead says no sync will try again
+and to delete the file by hand unless it is the owner's. A rendering built for the path judges the file whatever else
+failed to build, so the 1.11.0 re-render decides at the old guard names even when the running engine's plan threw. A
+proven delete keeps `proof: "hash"` and names the rendering in its detail (`engineRenderingsFor` and
+`provenLegacyCursorGuards`, `src/cli/engine/emissionWrite.ts`; gate 4's `renderingRefusal`, `src/merge/reclaim.ts`;
+`ignoringPolicyDenialForProof`, `src/pack/projection.ts`).
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, lane D's fixer rounds 4 to 6, under the declared default of
+the ledger rows `build/62` and `review/109`; a `.bak` on every such overwrite, or a machine-local record of the hashes
+this checkout's engine wrote, are the alternatives the run's record leaves to the maintainer). At a charter or
+instruction file and at `.github/hooks/stamity.json`, a whole-file overwrite the ledger records keeps the bytes it
+replaces recoverable unless the incoming rendering proves them (they equal it once `\r\n` reads as `\n`) or a managed
+block spans the file. The previous content is then kept in git history, with no `.bak` and a notice naming it, when
+the file is tracked and clean in the repository whose top level is the setup root. Otherwise it is kept behind a
+verified `.bak` and a warning: for an uncommitted or untracked file, a setup in a monorepo subfolder, a charter inside
+a submodule, and whenever git is absent or a git check fails or outlives its 5-second timeout. The checks run git from
+the setup root, never the file's own folder, with every `GIT_*` variable stripped and `safe.bareRepository=explicit`
+and `core.fsmonitor=false` on every call. They require one ordinary, merged, regular-file index entry that agrees with
+`HEAD`, and the bytes read under the write lock must hash in process to that entry's blob, raw or with `\r\n` read as
+`\n`; no call reads work-tree content, so no filter command runs (`overwriteNeedsRecovery` and `isTrackedAndClean`,
+`src/merge/safeWrite.ts`). A file whose fingerprint fails, or whose bytes drifted from the recorded hash, takes the
+`.bak` as before. So the structural fingerprint no longer proves a backup-free overwrite on its own there. The notice
+also prints for the engine's own committed, unedited `AGENTS.md` on a release that changes the charter, and an
+uncommitted setup, or one in a monorepo subfolder, gets an `AGENTS.md.bak`. The notice reads as that routine case: the
+previous content is in git history and the change shows in `git status`. A `.bak` taken because git could not confirm
+the previous bytes are committed says so and names the `.bak`, and "may be yours" stays for bytes the fingerprint does
+not read as the engine's (`review/129`, `review/132`). For the delete and the overwrite alike, the paragraph above
+read: "a recorded hash proves a whole-file delete or a backup-free overwrite only when the bytes show the engine wrote
+them: the charter (…), the Codex rule appendix (…), the Copilot workflow's engine header line, or a managed block
+spanning the file." A delete there still needs that matching recorded hash; the hash and the fingerprint together no
+longer prove it, nor a backup-free overwrite.
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, the branch pass's fix round 2, `review/128` and `build/65`,
+the maintainer's sign-off on the whole-branch review's W-1). The proof reads only the running engine's renderings, so
+a full `clean` run by another version than the last `sync`, or after detection or the gates moved since it, would keep
+every unedited engine file and then remove the ledger with `.stamity/`. A full `clean`, and `clean --pack <id>` for
+that pack's copies, therefore refuses before touching anything — no file, no row, nothing under `.stamity/` — when a
+file it would keep is one a `sync` with this version rewrites: its bytes still hash to the recorded hash, and the
+plan `sync` runs for this setup (the manifest's clients, the org policy applied; route clause dropped 1.15.0: it read
+"the manifest's clients and plugin record", and nothing reads the held `plugin` block since 1.15.0) writes other bytes
+at that path. It exits with `CLEAN_ERROR`, names a few of the files and then a count, names the version in
+`generatedBy` when it differs from the running one, and says to run `sync` with this version first, moving aside
+first any of the files that is the owner's; `--dry-run` refuses the same way. A file `sync` writes at no path (a
+retired artifact, a 1.11.0 Cursor guard name, a departed package's charter copy) or writes with these very bytes, an
+edited file, and a file the proof could not judge are not counted. The sweep marks such an entry `staleRendering` on
+a preview run before the confirmation (`refuseStaleRenderings`, `src/cli/commands/clean.ts`; `syncRenderingsFor`,
+`src/cli/engine/emissionWrite.ts`; gate 4's `renderingRefusal`, `src/merge/reclaim.ts`).
+
+Amended 2026-10-12 (run `2026-10-11_release-1-14-0`, unit `f3-clean-refusal-names-the-pack-exception`; ledger rows
+`build/18`, `fix/1` and `review/10`, one defect, and `review/33` for this passage). The refusal above has one more
+cause, and its next step one exception. A pack file edited after install renders other bytes at its client copy, so
+the copy, which still hashes to the recorded hash, is one a `sync` with this version rewrites, and both forms of the
+command refuse over it. There the `sync` the step names would carry the edited bytes into the clients' files, which
+`check`'s `pack-integrity` remedy forbids. So the step still says to run `sync` with this version first and then the
+same `clean`, and now names the exception in the same sentence: unless the `pack-integrity` row of `check` names an
+edited pack file, one that no longer hashes to what its install recorded. Then `sync` is not run; that file is moved
+out of the pack's directory first, as that row says, and the same `clean` is run again (`clean --pack <id>` after the
+pack form, `clean -y` after the full one). With the file out of the pack's directory no rendering names its copy, so
+the sweep keeps and names the copy and the run needs no `sync`. The exception is worded on an edited file, not on a
+failing row: once the file is out the row reports it missing, and a copy that is stale for another reason still needs
+that `sync`. The exception reaches an edited file only where that row names it. The row counts every finding and names
+the first five (`checkPackIntegrity` and `MAX_NAMES_INLINE`, `src/cli/commands/check.ts`), so with more than five an
+edited file past the fifth is counted and not named, and the step's words then lead to the `sync` (ledger row
+`review/30`, deferred with `build/20`, `review/31` and `fix/8`, the other routes where the next steps of the two
+commands differ). Only the step's text moved: the refusal's condition, code, exit status, message and `why` are as the
+paragraph above states them, and its sentence on the step stays true and was incomplete (`refuseStaleRenderings`,
+`src/cli/commands/clean.ts`; `packReinstallSteps` and `describePackIntegrityFinding`, `src/pack/verifyInstalled.ts`).
+
+`SECURITY.md`'s manifest-forgery row names three known residuals inside the bound. (1) At an instruction file and at
+`.github/hooks/stamity.json`, an overwrite of a file git tracks with no uncommitted change takes no `.bak`, under a
+forged row hashing an owner's file too: the owner's previous content is in git history, and the overwrite shows in
+`git status` and in the notice. Git before 2.38 ignores `safe.bareRepository`, so there the check rests on the look
+the amendment of 2026-10-12 below states: for a tree git checked out, a setup root with no `.git` of its own that
+holds committed bare-repository files is refused before git starts, its index answers nothing, and that overwrite
+takes the `.bak`; what the look leaves on such a git is the ledger row `2026-10-11_release-1-14-0/fix/13` (amended
+2026-10-12; the sentence read "and the engine does not check git's version, so there a setup root with no `.git` of
+its own that holds committed bare-repository files can answer the check from its own index"). Elsewhere inside the
+bound a backup-free overwrite still rests on the recorded hash alone,
+and so does a delete at the state and pack folders and at the `stamity-` Cursor guards. (2) A planted pack or override
+whose rendering copies an owner's file byte for byte, beside a forged row hashing it, still proves that delete through
+`sync`, `clean` and `clean --pack`, and a planted pack folder widens what the proof renders even under a policy that
+denies every pack (ledger rows `review/63`, `review/65` and `review/69` of run `2026-10-08_maintainer-tooling`). (3) A
+selected `[mcp_servers.<id>]` table in `.codex/config.toml`, and the bare `[mcp_servers]` table the engine renders
+when no server is selected, are proved by their record alone (REQ-FLOW-037): a forged `coOwned` record that hashes an
+owner's bare `[mcp_servers]` makes it the engine's, and owner servers written under it as dotted keys are then
+refreshed away with no `.bak`. It is tracked as the deferred row `2026-10-08_inbox-pass/pass/3`
+(`.stamity/runs/2026-10-08_inbox-pass/ledger.jsonl`).
+
+Amended 2026-10-12 (run `2026-10-11_release-1-14-0`, units `s1-every-git-read-pinned` and `s2-bare-shape-guard` with
+their fix round; ledger rows `review/14` and `fix/2`, one finding, `review/43`, `review/49` and `review/50` of the fix
+round, and `build/30` for the sentence amended above). The tracked-and-clean check no longer rests on
+`safe.bareRepository=explicit` alone, which git honours only from 2.38. Before each of its git calls starts git, the
+check takes a look of its own, with no git in it (`gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts`): from the
+real path of the setup root it walks towards the filesystem root, asking `lstat` whether a name exists, its type and
+its device, and `stat` the type of each `.git` entry, as git takes it, and reading no file's content. A level is
+refused when it passes git's own test for a repository folder by entry names: `HEAD` beside `commondir`, or beside both
+`objects` and `refs`, a link counting as the entry it stands in for. The walk ends without a refusal at a level whose
+`.git` is a regular file (or a live link to one), or a folder (or a live link to one) that passes the same test; at the
+first level on another file system than the starting folder's, except on Windows; and at the filesystem root. A `.git`
+of any other kind (an empty folder, one holding `HEAD` alone, a dangling link) ends nothing, and that level is tested
+like any other. On a refusal no git is started, the check answers as it
+does when a git call fails, and the overwrite takes the verified `.bak`. So for a tree git checked out, a committed
+folder of that shape at the setup root, or above it with no such `.git` between, does not answer the check: on git
+2.38 and later by the option and by the look, on an older git by the look alone. The look decides by names, so it also
+refuses a level that holds the names and that git could not open. What an older git opens is read from git's source
+and was probed on git 2.52 with the option switched off; no git older than 2.38 was run.
+
+The same look is taken by the shared runner (`gitCheckRunner`, `src/cli/engine/gitStatus.ts`), which throws as it does
+when git refuses the folder, exit status 128 included, and by the `worktree` verbs' one start of git, which is handed
+the environment those verbs keep (REQ-WORKTREE-001 of `docs/specs/worktree-lane.md`, amended 2026-10-12). The check
+and the shared runner strip every `GIT_*` variable and hand the look none. Which reads go through the shared runner
+is `SECURITY.md`'s to state, in its row on a folder committed in the shape of a bare repository; no requirement of
+this spec restates that list. All of it is the CLI verbs' and not the library's. The package's API also carries the
+origin read as a function, `detectRepoGitIdentity` (`src/workspace/git.ts`), whose default runner is not the shared
+one: called with no runner it starts git by an absolute path, as the next paragraph states, and as plain git in every
+other way, with neither option, no look and the caller's whole environment, and at a folder git opens as a bare
+repository it returns the origin that folder names. `init` and `config detect` pass it the shared runner
+(`detectPlatform`, `src/cli/commands/init/plan.ts`; `runDetect`, `src/cli/commands/config.ts`), so no verb reaches
+that default. The module sits below the shared runner and cannot import it, as the function's own comment says;
+`SECURITY.md`'s row states the same boundary, and a default that is the pinned runner is deferred (ledger row
+`fix/30`).
+
+Amended 2026-10-12 (the same run; read against `85db3729`). Every place that starts git starts it by an absolute path,
+never by its bare name: the shared runner, the tracked-and-clean check, the `worktree` verbs' one start of git and the
+library's default runner (`gitCheckRunner`, `src/cli/engine/gitStatus.ts`; `runGitCheck`, `src/merge/safeWrite.ts`;
+`runGit`, `src/worktree/git.ts`; `execGit`, `src/workspace/git.ts`). Each asks `gitProgramFor`
+(`src/shared/programPath.ts`), which resolves git once per working folder and `PATH` value through
+`resolveProgramOnPath` and remembers a path it found, never an answer of nothing. The walk goes over `PATH` in order
+and takes only an entry that is a full path. It skips an empty entry and a relative one, which both name the working
+folder or a folder under it, and an entry whose real path is the working folder's, however it is spelled. In each
+entry it tries the names the runtime tries for a bare name: on POSIX the name as given, which must be a regular file
+with an execute bit, and on Windows the name with `.com` added, then with `.exe`. The walk is pure over what it is
+handed, the platform, the `PATH` value, the working folder and the file probe, so its Windows rules are held on every
+host. Where no entry holds git no program is started, and each start answers as on a machine with no git installed:
+the shared runner and the default runner throw the error Node gives a start that finds no program (`programNotFound`,
+the same file), the check rejects with it and the overwrite takes the `.bak`, and the `worktree` seam settles with
+status 127. None of those outcomes carries the mark the next paragraph states. Before this change the four places
+named git bare and left the lookup to the runtime, which on Windows looks in the folder the child runs in before any
+`PATH` entry (read from the runtime's source, not from a run), so a file of git's name in that folder was the program
+started. `SECURITY.md` states the claim in a row of its own and bounds it to the folder git runs in: the walk takes
+the `PATH` the engine is started with as given. No requirement id is added; this requirement owns how the engine
+starts git. Tests, by name: `test/shared/programPath.test.ts`, whole; `test/cli/engine/gitStatus.test.ts` (the
+describe "the default runner starts the git an absolute PATH entry holds", and the case "reads a repository whose root
+holds a program file under git's name", which runs on Windows only); `test/merge/safeWrite.test.ts` ("starts git by an
+absolute path for every call the check makes", "answers from the git on PATH where the setup root holds a file of
+git's name" and "takes the .bak, and starts nothing, where only the setup root holds a file of git's name");
+`test/worktree/git.test.ts` (the describe "runGit starts the git an absolute PATH entry holds"); and
+`test/workspace/git.test.ts` (the describe "detectRepoGitIdentity — the default seam starts the git an absolute PATH
+entry holds"). The cases that put a file of git's name in the working folder are skipped on Windows, where that one
+case stands in for them.
+
+A refusal by the look is told apart from every other way git does not answer where the mark below is read, and nowhere
+else (the same run's fix rounds, commits `f01c76ba`, `fa07900d`, `c6354ecd`, `82016965` and `fbcdc652`; ledger rows
+`review/44`, `review/55`, `review/57` to `review/61`, `review/66`, `review/71` to `review/73`, `fix/20`, `fix/23` and
+`fix/24`). The error the shared runner throws at such a folder, and no other, carries the mark `keptFromGit`, and the
+working-tree status read through it carries `reason: "bare-layout"` (`keptFromGit` and `readWorkingTreeStatus`,
+`src/cli/engine/gitStatus.ts`); the mark is read, never git's message. Each text printed where the mark is read states
+that cause, that git was not started because this folder or a folder above it has the layout of a bare repository, and
+names no git command: `check`'s `git-available` row, still a `warn`, which says to find that folder by looking at
+entries by name, to run no git in it or in any folder under it, and to start no flow there until the folder is moved
+off that path, since the git a flow's session and its sub-agents start is not set to refuse such a folder (`checkGit`,
+`src/cli/commands/check.ts`); `sync`'s closing step after a write, which says how to review without git and, where the
+report folded rows out of its list, that the list was cut short and what the manifest's ledger and `sync --json` do
+and do not say (`syncClosingLines`, `src/cli/commands/sync.ts`); `init`'s question, its no-git note, which closes on
+the sentence about flows that `check`'s row carries, the security line of its ready panel and of its dry-run preview,
+and its refusal when the question is declined (`askProceedWithoutGit` and `noGitNote`, `src/cli/commands/init.ts`;
+`gitignoreLine`, `src/cli/commands/init/panel.ts`); the first of `init`'s next steps, which says to move that folder
+off the path, or to work from a checkout that does not keep it there, before a client or a flow is started, and which
+the ready panel puts at the head of each client's list and `init --json` carries once, first in `nextSteps`, the usual
+steps following it unchanged (`refusedFolderSteps`, `src/cli/commands/init/panel.ts`); after a guided migration that
+leaves paths of the previous setup behind, the clause of the uninstall line that says to copy the files holding the
+operator's own prose out of the folder with no git command, where it says to commit wherever git answers, on the ready
+panel and in the dry-run preview (`residueLines`, the same file); and `gate`'s reason, which names no git call as
+failed and no exit status, inside the sentence REQ-FLOW-065 gives a change that could not be read
+(`describeGitFailure`, `src/cli/commands/gate.ts`). Two things at such a folder do not turn on the mark. The
+overwrite's `.bak` warning is the one printed whenever git could not confirm the previous bytes, with its list of
+other causes and no git command: the check's own git call rejects there with no mark (`runGitCheck` and
+`isTrackedAndClean`, `src/merge/safeWrite.ts`). And `init --json` prints no note, its stdout being the one document,
+and that document carries no field naming the cause: the step is its one sign of it (`src/cli/kit/program.ts`; ledger
+rows `fix/9`, deferred, and `fix/32`). Everywhere else the step is absent. Where git answers, each of those texts is
+the one it was. Where git did not answer and the look refused nothing, every text these verbs print goes by what the
+engine itself found and names no git command, `git status`, `git --version`, `git init`, `git diff` and
+`git rev-parse` included: a git typed at a prompt is found by the shell's rules and not by the engine's walk, so it
+answers for a program the engine may never start. `check`'s `git-available` row and `init` ask the walk instead
+(`gitProgramFor`, called from `checkGit` and once by the `init` command, which hands the answer to its question, its
+note, its refusal and its panel; the note as read at `d53af1dd`, the rest of this passage at `db6ac4a8`). The row and
+`init`'s no-git note are two texts each. Where the walk found no git, each says the engine found no git to start, says
+that git is taken only from a `PATH` entry that is a full path to a folder other than this one, and states outright
+what `worktree` and `gate scan` lose. Where it found one, each says so, which leaves a missing repository and a git too
+slow for the check: the row tells those two apart by a `.git` entry found by name, and the note words what the two
+verbs lose on the repository alone. `init`'s other texts follow the note. Its question has a third text, for a walk
+that found no git, and is the one it was where the walk found one. The security line of its ready panel and of its
+dry-run preview has a text for each answer of the walk, and neither says the rule takes effect on a `git init`. Its
+refusal when the question is declined has a text for each as well: the next step tells a repository by a `.git` entry
+found by name, or says to install git or to put its folder on `PATH` by its full path. And after a guided migration
+the uninstall line names the copy wherever git did not answer, whatever the walk found (`askProceedWithoutGit`,
+`noGitNote` and the refusal, `src/cli/commands/init.ts`; `gitignoreLine` and `residueLines`,
+`src/cli/commands/init/panel.ts`). `sync`'s closing step after a write has a third text there too: it names no
+`git diff`, gives no cause of its own and points at `check`'s row, and it carries the same added words where the list
+was cut short (`NEXT_AFTER_WRITE_NO_GIT_ANSWER_LINE`, `src/cli/commands/sync.ts`). `gate`'s reason names its first
+read in words where that read fails or runs long, with git's own exit status and no git call; a read that fails
+later, in a work tree git opened for the engine, keeps its step (`describeGitFailure`). No
+key, type, exit status or error code moved: `check` exits as before, `gate classify` gives `product` at exit 0 and
+`gate scan` exits 1, `init`'s refusal keeps `VALIDATION_ERROR` and its message, the document of `init --json` has the
+keys it has in a plain folder, with `nextSteps` the flat list of strings it was and one string more, first, at such a
+folder only, and the `dirty` block of `sync --json` holds `available`, `dirty` and `changedCount` and no reason
+(`syncJsonPayload`, `src/cli/commands/sync/report.ts`). `handoff`, `config detect` and the history and origin reads of
+`init` read the refusal as git not answering, as before. Where git itself refuses a folder the look passed, the layout
+of residual (1) below on git 2.38 and later, no mark is set and the ordinary texts print (ledger rows `fix/25`,
+`review/65` and `review/68`, deferred). This requirement owns the look, the shared runner's mark and these texts; the
+`worktree` verbs' refusal at such a folder is REQ-WORKTREE-001's.
+
+`SECURITY.md`'s row bounds the claim to a tree git checked out and to the git the CLI's verbs start, and names
+four known residuals in 1.14.0, each tracked as a ledger row of the run. (1) On a git older than 2.38, a `.git` folder
+that holds those names and that git cannot open ends the look as safe, while that git walks past it and opens a
+folder of the shape at that level or at any level above it; that walk was run on git 2.52 with the option at its
+default, which is how an older git reads it, and on no older git. No commit can hold a `.git` entry, so this takes a
+leftover or damaged `.git` on the operator's own machine, or a tree that did not come from git
+(`2026-10-11_release-1-14-0/fix/13`). The next two are the `worktree` verbs' alone, since only they keep git's own
+variables. (2) With `GIT_COMMON_DIR` exported and no `GIT_DIR`, a git older than 2.38 takes part of a repository from
+the folder the variable names and so opens a committed folder on fewer entries than the look asks for; the look does
+not read that variable, so it passes a folder that such a git opens (`2026-10-11_release-1-14-0/fix/14`). (3) With
+`GIT_DIR` set they take no look, whatever the value, and git resolves a relative value against the folder it runs in,
+so such a value can name a folder the tree holds, on any git version (`2026-10-11_release-1-14-0/review/51`). (4)
+Everything above is the git the CLI's verbs themselves start, and no other: git that a client's own tools, a flow's
+session and the sub-agents it dispatches, or the operator's shell start carries neither option and takes no look, and
+started in or under a committed folder of the shape that git can open, it reads that folder as the repository. That
+does not take a refusal by the look. The look is taken from the folder a verb runs in and walks upward, so a
+committed folder of the shape elsewhere in the tree, below the setup root, meets no look and no warning: `check`'s
+`git-available` row says nothing of it and passes where git answers at the setup root. Where the look does refuse a
+folder, that does not stop a flow either, since `/st-quick` and `/st-work` read `gate`'s reason as a scan that did not
+run and go on with the session's own git; `check`'s row, `init`'s note and the first of `init`'s next steps say there
+to start no flow until the folder is moved. The one setting git documents against it, `safe.bareRepository` set to
+`explicit` in the operator's own user-level or system-level git configuration, is the operator's to make, and it
+covers a folder below the setup root as it covers one the look refuses; the engine neither sets it nor checks for it
+(`2026-10-11_release-1-14-0/review/70`, and `review/79` of the same run for the folder below the setup root).
+
+- GIVEN an owner's `.claude/skills/st-local/SKILL.md`, an owner's `.cursor/hooks/mcp-guard.mjs` whose bytes are not the
+  setup's 1.11.0 re-render, an owner `AGENTS.md` copying the charter's title and four headings at the root, an owner
+  nested `AGENTS.md` opening with the Codex appendix title, an owner `AGENTS.override.md` with the appendix heading on a
+  line, an owner Copilot workflow with the engine's header line, and an owner `.github/hooks/stamity.json`, each under a
+  forged row hashing it, WHEN `sync -y` or `clean -y` sweeps THEN each stays (added 2026-10-08).
+- GIVEN a 1.11.0 setup's unedited guards, core, with a local pack's agents or with an override agent, THEN the first
+  `sync` deletes both; GIVEN a client deselected after setup THEN its unedited files are still deleted, a deselected
+  Copilot's workflow and hooks file included; GIVEN a Claude-only setup's unedited files WHEN `clean -y` runs THEN each
+  is deleted; GIVEN the engine's unedited per-package charter whose package left, under a `supplement` or `skip` decision
+  on the root, WHEN `sync -y` runs THEN it is deleted (added 2026-10-08).
+- GIVEN a deny-all policy over an installed, projected pack WHEN `sync -y` runs THEN every copy is deleted and none is
+  written, and an owner's file at a copy's name under a forged row is kept (added 2026-10-08).
+- GIVEN a proof plan that cannot be built WHEN `sync -y` sweeps THEN each file that needs the proof is kept with
+  `unproven: true`, its row stays and the entry names why; WHEN the full `clean -y` sweeps THEN the entry says the setup
+  is being removed and to delete the file by hand unless it is yours; GIVEN a file whose bytes match no built rendering
+  THEN it is kept with no mark and its row leaves (added 2026-10-08).
+- GIVEN Copilot selected and forged rows hashing an owner's untracked root `AGENTS.md` and `.github/hooks/stamity.json`
+  WHEN `sync -y` runs THEN a verified `.bak` holds each owner file; GIVEN the same repository committed THEN no `.bak`
+  exists and the notice names git history (added 2026-10-08).
+- GIVEN such an overwrite of a tracked file with an uncommitted or staged edit, an `assume-unchanged` or unmerged entry, a
+  setup root that is not the repository's top level, no setup root, git missing, or `GIT_DIR` aimed at another
+  repository THEN it takes the `.bak`; GIVEN a committed bare-repository-shaped folder beside the hooks file whose config
+  names a file-system monitor, or a clean filter on a stat-dirty tracked file, THEN neither command runs, and every git
+  call the check makes carries `safe.bareRepository=explicit` and `core.fsmonitor=false` (added 2026-10-08).
+- GIVEN a setup whose root charter and one skill carry an earlier release's rendering, their recorded hashes matching
+  and `generatedBy` naming that release, WHEN `clean -y`, `clean -y --json` or `clean --dry-run` runs THEN it exits 1
+  with `CLEAN_ERROR`, names both files and the release, and every file and `.stamity/` are byte-identical; WHEN `sync -y`
+  runs and then `clean -y` THEN every file the ledger named is gone and so is `.stamity/`; GIVEN an owner's file at a
+  pack copy's name under a forged row hashing it WHEN `clean --pack <id> -y` runs THEN it refuses the same way and the
+  file and the manifest are unchanged (added 2026-10-08, `review/128`).
+- GIVEN a setup root made as a bare repository, with no `.git`, whose own index tracks a committed `AGENTS.md`, and a
+  ledger row hashing that file WHEN an overwrite of it runs THEN no git is started, a verified `.bak` holds the
+  previous bytes and the warning says git could not confirm they are committed (added 2026-10-12, `review/14`).
+- GIVEN the look over seeded folders THEN it refuses `HEAD` beside `commondir` or beside both `objects` and `refs`, and
+  a folder under such a level, and passes `HEAD` alone, `HEAD` beside one of the two, and a folder under one of those;
+  it ends without a refusal at a `.git` file, whatever it holds, and at a `.git` link that leads to a file, at a
+  `.git` folder or a live `.git` link holding those names, and walks past an empty `.git` folder, one holding `HEAD`
+  alone and a dangling `.git` link; a link standing in for an entry counts as that entry; the walk starts from where a
+  linked folder really is; off Windows it ends at the first level on another file system, and the level it starts at
+  is tested whatever its device; and handed an environment it takes no look with `GIT_DIR` set, counts `HEAD` beside
+  `refs` as the shape with `GIT_OBJECT_DIRECTORY` set, and crosses a file system with `GIT_DISCOVERY_ACROSS_FILESYSTEM`
+  set to a value git reads as true or cannot read, and not with one git reads as false: empty, `false`, `no`, `off` or
+  a zero (added 2026-10-12; the `.git` link to a file and the value read as false added the same day, after the review
+  of pull request #97).
+- GIVEN a folder holding an empty `HEAD` beside empty `objects` and `refs`, with no `.git`, THEN the working-tree status
+  read there and in a folder under it carries `reason: "bare-layout"`, the shared runner's error there carries the
+  mark, and an error with status 128 alone does not; WHEN `check` runs there THEN it exits 0 and its `git-available`
+  row is a `warn` that says git was not started, says to run no git in that folder or in any folder under it and to
+  start no flow there until the folder is moved, and names no `git status`; WHEN `sync` writes there THEN its closing
+  step names no git command, and past twenty listed rows it says the list was cut short, while `sync --json` has the
+  keys and the three-field `dirty` block it has in a plain folder; WHEN `init` runs there, live or as a dry run, THEN
+  its note and its security line state that cause, its question asks on it, a declined question exits 1 with nothing
+  written, and no text of the run names `git init`, `git status`, `git diff`, `git log` or `git rev-parse`; WHEN a
+  live `init` runs there THEN its note says to start no flow there until the folder is moved, and under each client's
+  heading the ready panel's next steps are one step that says to move the folder, then the steps a plain folder gets;
+  WHEN `init --json` runs there THEN `nextSteps` is that step followed by the plain folder's list, and the document,
+  its `decisions` and its `report` have the plain folder's keys; WHEN `init` runs there over a previous setup with a
+  full migration, live or as a dry run, THEN the uninstall line names a copy made with no git command, does not say
+  to commit, and no text of the run names one of those five git commands; WHEN `gate classify` or `gate scan` runs
+  there THEN classify gives `product` at exit 0 and scan exits 1, each reason saying git was not started and naming
+  no git call as failed, with the keys a folder with no repository gets; GIVEN a folder with no repository and no
+  such layout, on a host with git on `PATH`, THEN the step is absent, `check`'s row, `init`'s note and `init`'s
+  security line say the engine found a git binary, `init`'s question is the one it was, a declined question's next
+  step tells a repository by a `.git` entry found by name, the uninstall line after a full migration names a copy,
+  a `sync` that wrote files closes on a step that says to review without git and points at `check`'s row, `gate`'s
+  reason says no git work tree was found, with git's exit status, and none of those texts names a git command,
+  `git --version`, `git init`, `git diff` and `git rev-parse` included; GIVEN the same `sync` in a repository THEN
+  its closing step is the one it was;
+  GIVEN a folder of that layout below a setup root that git opens WHEN `check` runs at the root THEN the row passes
+  and says nothing of that folder; GIVEN a real bare repository with an origin of its own, on git's own default for
+  `safe.bareRepository`, THEN the library's origin read returns that origin with no runner passed, and nothing
+  through the shared runner (added 2026-10-12, `review/44`; the clauses on flows, the step and the uninstall line
+  follow `review/71` to `review/73`, the folder below the root `review/79`, and the library's read `fix/30`; the
+  clause on `check`'s row where there is simply no repository was amended the same day with the next criterion,
+  `init`'s note joined it there, and the other texts of that clause the round after).
+- GIVEN a folder with no repository and no such layout WHEN `check` runs under a `PATH` with no entry the engine
+  takes git from, first an empty one and then one whose only entry is the setup root, which holds files of git's
+  program names, THEN each run exits 0 and its `git-available` row is a `warn` that says the engine found no git to
+  start, says git is taken only from a `PATH` entry that is a full path to a folder other than this one, says
+  outright that `gate scan` exits 1 and that the flows list `secret scan: not run`, and names no missing
+  repository, no slow git, no `.git` entry and no git command; WHEN `init` runs under each of those two, live or as
+  a dry run, THEN it exits 0 and its one no-git note says the files have no revert path because the engine found no
+  git to start, says the same of the `PATH` entries git is taken from and of `gate scan` and the flows, and names no
+  missing repository, no slow git and no git command; WHEN `init` runs under an empty `PATH`, live or as a dry run,
+  THEN its security line says the engine found no git to start and names no missing repository, and no text of the
+  run names a git command; WHEN it runs there at a terminal THEN its question asks on that cause, Enter writes, and a
+  declined question exits 1 with nothing written, its next step saying to install git or to put its folder on
+  `PATH`; WHEN `sync` writes under an empty `PATH` THEN it closes on the step it closes on in a folder with no
+  repository (added 2026-10-12; the clauses on `init` and `sync` the same day).
+- GIVEN a Claude setup with `ops` added and synced and one of the pack's installed files edited WHEN
+  `clean --pack ops -y` or `clean --dry-run` runs THEN each exits 1 with `CLEAN_ERROR` naming that file's client copy,
+  its next step holds the `sync` step it always gave and then the exception, naming `clean --pack ops` or `clean -y`
+  as the command to run again, and the copy's bytes are unchanged; GIVEN the edited file then moved out of the pack's
+  directory and no `sync` run WHEN `clean --dry-run` and then `clean --pack ops -y` run THEN both exit 0, the moved
+  file's copy is kept and named with the bytes it had before the edit, and the pack's folder and rows are gone (added
+  2026-10-12, `review/33`).
+
+Tests for the criteria added 2026-10-08: `test/cli/commands/clean.test.ts`, `test/cli/ledgerForgery.test.ts`,
+`test/merge/reclaim.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`,
+`test/manifest/ownedPaths.test.ts`, `test/merge/safeWrite.test.ts`, `test/cli/flows.e2e.test.ts`.
+
+Tests for the criteria added 2026-10-12: `test/merge/safeWrite.test.ts` (the describe "gitDiscoveryMeetsBareShape —
+the look before git is started" and the case "starts no git at a setup root shaped like a bare repository, and takes
+the .bak"), `test/cli/engine/gitStatus.test.ts` and `test/worktree/git.test.ts` (the same look at the shared runner
+and at the `worktree` verbs' start of git), `test/workspace/git.test.ts` (the case "starts git by an absolute path
+with none of the pinned options and reads the folder's own origin with no runner passed, and nothing through the
+pinned runner", which also holds each start to a full path since the default moved to one) and
+`test/cli/commands/clean.test.ts` (the case "refuses over the copy of an edited pack file, and its next step keeps
+that pack away from sync"). For the texts at a refused folder, the cases the fix rounds added, red first but where
+one pins a text or a behaviour that did not move: `test/cli/engine/gitStatus.test.ts` ("says the folder was kept from
+git, at the folder and below it, and reads no history there" and "marks the runner's own refusal for a caller that
+words the failure, and no other error"); `test/cli/commands/check.test.ts` ("says the folder was kept from git, with
+no hint to run git there, where the look before git refused it", which compares the row whole, the whole-row
+comparison of "names the two verbs that need git on the git-available row where git does not answer", which also
+holds the row to naming no git command, "says the engine found no git to start, and names no other cause, where no
+PATH entry it takes git from holds one", both red before the row asked the walk, and "passes the git-available row,
+and warns of nothing, for a folder of that layout below the setup root"); `test/cli/commands/sync.test.ts` (the describe "sync — a folder the look before git refused", and in
+"syncClosingLines" the cases "names no git command in the review next-step where the folder was kept from git" and
+"says the list was cut short where the report folded rows, at such a folder and wherever else git did not answer";
+and, for a folder git did not answer in for another cause, the describe "sync — where git did not answer" and the
+case "names no git command in the review next-step wherever else git did not answer", red before the step had a
+text for that state);
+`test/cli/commands/syncEngine.test.ts` ("carries the three working-tree facts and nothing more, whatever the
+status says of why git did not answer"); `test/cli/commands/init.test.ts` ("says the engine found no git to start, and
+names no git command, where no PATH entry it takes git from holds one, on $name" and the whole-note comparison of
+"names the two verbs that need git on $name", both red before the note asked the walk, "states the cause and names
+no git command where the look before git refused the folder, on $name", "refuses a declined question there with that cause, and
+names no git command", "states that cause on the security line there, and no text of the run names a git command, on
+$name", "asks the question on that cause there, and Enter still takes the default and writes", "opens the ready
+panel's next steps with moving the folder there, and the usual steps follow", "opens `--json`'s nextSteps with the
+same step there, and moves no key of the document", "says in the note there to start no flow until the folder is
+moved, and keeps the other note as it was" and "names no commit and no git command on the migration's uninstall line
+there, on $name", with the control case "keeps the question as it was where there is simply no repository", and, for
+the other texts where git did not answer, "names no git command in the declined question's refusal where there is
+simply no repository", "says on the security line that the engine found a git binary, and no text of the run names a
+git command, where there is simply no repository, on $name", "says on the security line that the engine found no git
+to start, and no text of the run names a git command, on $name", "asks the question on the engine having found no
+git, and Enter still takes the default and writes" and "refuses a declined question on the engine having found no
+git, and names no git command", each red before `init` handed the walk's answer to those texts);
+`test/cli/commands/initPanel.test.ts` ("states the cause
+and names no git command where the look before git refused the folder", "carries that cause from the panel's input
+to its security line", "opens every client's steps with moving the folder where the look before git refused it",
+"keeps the steps as they were where git answers and where there is simply no repository", "names no commit and no
+git command on the uninstall line where the look before git refused the folder", "keeps the uninstall line as it
+was where git answers", "names a copy and no commit on the uninstall line wherever else git did not answer", "says
+the engine found a git binary, and names no git command, where git did not answer" and "says the engine found no git
+to start, and names no missing repository, where its walk found none"); and `test/cli/commands/gate.test.ts` ("says
+git was not started, and names no git call as failed, where the look before git refused the folder", "exits 1 saying
+git was not started, with the same document, where the look before git refused the folder" and "names no git command
+in the reason where there is simply no repository, for classify and for scan").
+
+Amended 2026-10-08 (run `2026-10-08_maintainer-tooling`, unit `d1a2-clean-pack-copies`, with lane D's fixer rounds 1
+and 2). `clean --pack <id>` also removes the copies `sync` projected from that pack into the clients' folders, while the
+pack is still installed. Only a client row at a path that needs the rendering proof can be a copy. It plans the emission
+twice, both times for the clients the setup wrote for and with every installed pack rendered whatever the trust policy
+says: once as the manifest stands, and once with the pack's `pack:<id>` rows removed. A copy is a client row whose path
+the first plan renders and the second does not, or a row of one of the pack's own artifacts at a path the second plan
+does not render. The pack's artifacts are read off its own rows and its folder, and a row matches one by class, catalog
+id and the name its path projects under, so an artifact whose file was moved out of the pack folder is still the
+pack's, and a forged row naming an artifact at another path is not. Each copy joins the sweep and leaves only as bytes
+the first plan renders; an edited copy, or an owner's file at a copy's name under a forged row, is kept and named, and a
+judged copy's row leaves with the pack's rows, kept or not. When the first plan cannot be built (a pack whose own command
+and skill share a name, which the planner refuses), the copies are only the rows of the pack's own artifacts. None can
+be proven, so each is kept and named: one unedited since its recorded hash keeps its row, one edited or hashless loses
+it, and the run never falls back to the recorded hash. When the second plan cannot be built, no copy is looked for,
+their rows stay, and the run says so. `--dry-run` lists each copy and writes nothing; the confirmation names the copy
+count; the next steps name each kept copy for a delete by hand "unless it is yours", then the pinned `sync`. The pack
+remedies the CLI prints — the name-clash refusal's, `add`'s replace steps and `check`'s pack-integrity one — gain the
+same step by hand after `clean --pack`: "delete by hand each client copy it keeps and names, unless it is yours". `add`'s
+remedy for a pack no longer installed reads `sync`, that step, `add`, `sync` (`findPackCopies`,
+`src/cli/commands/clean.ts`; `remedyOf`, `src/emit/planner.ts`; `replaceSteps`, `src/cli/commands/add.ts`;
+`packReinstallSteps`, `src/pack/verifyInstalled.ts`). Before, `clean --pack` removed only `.stamity/packs/<id>/` and
+left the copies to the next `sync`, which no rendering can prove once the pack is gone.
+
+- GIVEN a Claude setup with `ops` added and synced WHEN `clean --pack ops -y` runs THEN every `.claude/` copy projected
+  from `ops` is deleted with `proof: "hash"`, its row is gone, and no other row moved; GIVEN one copy edited, or an
+  owner's file at a copy's name under a forged row, THEN it stays and is named; GIVEN `--dry-run` THEN each copy is listed
+  and nothing is written; GIVEN two packs THEN the other pack's copies and rows are untouched; GIVEN a deny-all policy
+  THEN the copies are still found and deleted (added 2026-10-08).
+- GIVEN the 1.11.0 `ops` clash WHEN `clean --pack ops -y` runs THEN it keeps and names the copies of the pack's own
+  artifacts and nothing else (a retired engine row and owner files under forged rows stay untouched), the unedited ones
+  keep their rows, and the printed remedy with its step by hand runs to a green `check`; GIVEN a setup that cannot be
+  planned without the pack THEN no copy is taken and every copy keeps its bytes and its row; GIVEN a scoped pack whose
+  edited file was moved out of its folder as `check`'s integrity remedy says THEN the printed steps run to a green
+  `check` (added 2026-10-08).
+
+Tests for these criteria: `test/cli/commands/clean.test.ts` (the `clean --pack` copies cases: the proof-hash delete,
+the edited copy, the forged row, `--dry-run`, two packs, a deny-all policy, the unplannable pack and the setup that
+cannot be planned without it) and `test/pack/upgradeRemedy.test.ts` (the 1.11.0 `ops` clash and the integrity remedy's
+printed steps, a scoped pack's included).
+
+Amended 2026-10-14 (plan 020 file 1, unit `d7-engine`; cited at `d590a266`). The renderings every proof above builds
+read nothing from the manifest's held `plugin` block (REQ-PLUGIN-045, amended 2026-10-14), and "each in repository
+mode" names the one install mode 1.15.0 has. Nothing else in this requirement moved.
+
+### REQ-PLUGIN-047 `check` takes the expected release and client set from its caller
+
+Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
+`2026-10-14_cli-native`). The text below is the requirement as it stood there at `c96c7146`, its route clauses dropped
+in place; the heading read "`check` takes the expected release, client set and install mode from its caller".
+
+Added 2026-10-07 (plan 016 file 0, unit `u0-check-expectations`). `check` proves the files match the manifest and the
+running CLI, and a pull request can change both. Two flags take the expectation from a caller the pull request cannot
+edit, such as a required workflow's input: `--expect-version <semver>` (the running CLI and the manifest's `generatedBy`
+both equal it) and `--expect-tools <csv>` (the manifest's clients equal it as a set) (route clause dropped 1.15.0: it
+read "Three flags", the third being "`--expect-mode <mode>` (the manifest records that install mode; the values are
+`INSTALL_MODES`)"). With any of them `check` prints one more row,
+`expectations`, and a `--json` object of the same name; a mismatch fails the run with `error.code: "EXPECTATION_ERROR"`,
+exit 1, naming the expected and the recorded value and the step that restores it. Without them the output is
+byte-identical to before.
+
+Amended 2026-10-07 (build): `error.next` joins its steps with `"; "`, as `error.why` joins the mismatches, one step per
+mismatch in the same order. With `--expect-version` given, every step runs the expected release — the client-set step
+too (route clause dropped 1.15.0: "and install-mode steps") — so following the steps in order leaves `generatedBy` at
+the expected release; without it they run the running release. An `--expect-version` carrying build metadata
+(`1.12.0+acme.1`) is refused with `VALIDATION_ERROR`, because npm versions carry none. The expected-release calls read
+the identity record `packageCommand` reads, registry included (`packageCommandAt`, `src/cli/kit/packageName.ts`), so a
+registry fork's steps name its registry (REQ-PLUGIN-048).
+
+- GIVEN a repository whose manifest dropped `cursor` with its rows and files WHEN `check --expect-tools claude,cursor`
+  runs THEN it exits 1 with `EXPECTATION_ERROR` and `expectations.tools.missing` is `["cursor"]`; WHEN plain `check` runs
+  THEN its output is unchanged.
+- GIVEN `--expect-version` other than the running release or the manifest's `generatedBy` THEN `check` exits 1 naming
+  which (route clause dropped 1.15.0: "GIVEN `--expect-mode generated` on a plugin-backed manifest THEN it exits 1").
+- GIVEN an invalid value (`--expect-version 1.x`, `--expect-tools claude,emacs`) THEN it exits 1 with `VALIDATION_ERROR`
+  before any probe; GIVEN `--expect-mode` with any value THEN it exits 2 as an unknown option (amended 2026-10-14; it
+  read "GIVEN `--expect-mode bogus` THEN it exits 2").
+- GIVEN `docs/cli-reference.md` THEN it lists the two flags and the `EXPECTATION_ERROR` code, and
+  `docs/troubleshooting.md` documents the `expectations` row (amended 2026-10-14; it read "the three flags").
+- GIVEN `--expect-version 1.12.0+acme.1` THEN `check` exits 1 with `VALIDATION_ERROR` before any probe; GIVEN a failing
+  `--expect-version` and a failing `--expect-tools` THEN `error.next` holds one step per mismatch separated by `"; "`, and
+  every step names the expected release; GIVEN a registry fork THEN each step carries `--@<scope>:registry=<url>`
+  (added from the build).
+
+As built (2026-10-07): measured 2026-10-06 on 1.11.0, dropping `cursor` with its 78 rows and 76 files, guards included,
+left `check` at exit 0, and `check --help` offered `--json` and `-y` only. The flags, `evaluateExpectations` and the
+remedy steps are in `src/cli/commands/check.ts`; the code is in `src/types/errors.ts` and `CODE_MEANINGS`
+(`src/cli/docs/cliReference.ts`). Tests: `test/cli/checkExpectations.test.ts`, `test/cli/commands/check.test.ts`, and
+the surface suites (`test/types/errors.test.ts`, `test/cli/docs/cliReference.test.ts`,
+`test/resilience/failureClass.test.ts`, `test/docsPages.test.ts`). The reusable check action that would run these flags
+from a trusted workflow is not built.
+
+Amended 2026-10-14 (plan 020 file 1, units `d6-verb` and `d7-engine`; cited at `d590a266`). `evaluateExpectations`
+reads two expectations, the version and the client set (`src/cli/commands/check.ts:2288-2325`), so `expectations`
+carries no `mode`, and `--expect-mode` is an option `check` does not know. The verb that set the install mode leaves
+too: `stamity plugin <subcommand>` exits 2 as an unknown command whose error names `stamity --help`, `--help` lists
+nine verbs and thirteen are registered (`src/cli.ts`), and `EngineRegistry` has no `plugins` group
+(`src/composition/root.ts`). `docs/cli-reference.md` is regenerated from the flags.
+
+- GIVEN `stamity plugin status` or `stamity plugin setup` THEN it exits 2 with `unknown command 'plugin'` and names
+  `stamity --help`; GIVEN the surface THEN nine verbs are advertised and thirteen registered
+  (`test/cli/surface.e2e.test.ts`, "exits 2 on the removed verb … as an unknown command, pointing at --help"; added
+  2026-10-14).
 
 ### REQ-FLOW-061 — A change gets the checks its class needs
 
@@ -1125,7 +2069,8 @@ the record head's `Base:` line (REQ-CTX-012).
   provider is ${STAMITY:CI_PROVIDER}; where that reads `unknown` or is still an unresolved `STAMITY` substitution
   token, the final tree runs `all` whatever the class" (`content/agents/stamity-test-runner.md:37-39`;
   `src/emit/substitution.ts:102-113`). The unresolved-token clause is as built, beyond the delta: a copy that ships
-  the token raw, as the APM package's bodies do (REQ-FLOW-002), runs every gate on the final tree. `/st-quick` still
+  the token raw runs every gate on the final tree (route clause dropped 1.15.0: "as the APM package's bodies do
+  (REQ-FLOW-002)"; no route ships a raw copy since then, and the clause stays as the fail-closed reading). `/st-quick` still
   names the charter's line, which its own session loads (`content/commands/st-quick.md:187-188`). A `red` verdict
   writes nothing to the named report path and is returned in full, rows and excerpts
   (`content/agents/stamity-test-runner.md:144-145`).
@@ -1585,11 +2530,17 @@ no such key (`src/adapters/copilot.ts:486-520`, the line at `:511`; `:536-549`).
   CLI command reference's claim, unverified on 1.0.89, and the cloud agent's undocumented handling of the key
   (`:205-219`); `agentsFormat` names the key (`:171-172`).
 - **As built, where the delta differed:** the delta said the row names "the `--no-custom-instructions` override". The
-  landed row marks it unverified: no live run passed the flag (`review/21`, `review/23`). No live run has yet loaded
-  an agent carrying the key either, so its effect rests on the changelog and the loader's key list (`build/13`).
+  landed row marks it unverified: no live run passed the flag (`review/21`, `review/23`). A live run has since loaded
+  an agent carrying the key: QA row 2 of the same run, at its close, ran the emitted `stamity-implementer` as a
+  sub-agent on Copilot CLI 1.0.89 with `include-custom-instructions: true` in its frontmatter, and the sub-agent quoted
+  the charter's `Invariants version` line, which the run before the key returned as `CHARTER: NONE`
+  (`.stamity/runs/2026-10-10_next-tier/record.md:390-391`, `:462`, and `:488`, where `build/13` closes fixed by the
+  live check). (Amended 2026-10-14, folding the inbox row `2026-10-11_release-1-14-0/review/5`; it read "No live run
+  has yet loaded an agent carrying the key either, so its effect rests on the changelog and the loader's key list
+  (`build/13`)".)
 - **Expand/contract:** one added frontmatter key on every emitted Copilot agent. Rollback is a re-sync at the prior
-  version. The APM package writes its own Copilot agents with `name` and `description` only, so an APM install gets
-  no such key (`scripts/generate-apm-package.mjs:601-606`; `build/12`). The accepted risk is in `## Risks`.
+  version (route clause dropped 1.15.0: the sentence on the APM package's own Copilot agents, which carried no such
+  key, `build/12`; the APM route is deleted). The accepted risk is in `## Risks`.
 - **Proof:** `test/adapters/copilot.test.ts`, `test/emit/capabilityMatrix.test.ts`; the live check; QA.
 
 ### REQ-FLOW-074 — The close decides every leftover
@@ -1952,7 +2903,9 @@ residual.
 ## Acceptance criteria
 
 One set per requirement. Each is machine-checkable unless tagged `judgment:`. Once a test named under a requirement
-exists, it is the normative record for that requirement.
+exists, it is the normative record for that requirement. The seven requirements moved here on 2026-10-14
+(REQ-PLUGIN-005, -014, -016, -017 and -045 to -047) keep their criteria where they stood, under each requirement
+above.
 
 **REQ-FLOW-001**
 
@@ -1978,8 +2931,8 @@ exists, it is the normative record for that requirement.
 - GIVEN an installed copy (`node_modules/.bin/stamity` present) WHEN the same steps run THEN they run
   `npx --no stamity <verb>`, resolve that copy, and make no registry download.
 - GIVEN init WHEN the emitted `AGENTS.md` is read THEN its maturity-tier line reads
-  "change via `npx -y <package>@<v> config`", and the APM package's copy of the charter body carries `${STAMITY:CLI}`
-  raw.
+  "change via `npx -y <package>@<v> config`" (route clause dropped 1.15.0: "and the APM package's copy of the charter
+  body carries `${STAMITY:CLI}` raw").
 - GIVEN a package whose running manifest is `private: true` with no `publishConfig.registry` WHEN init or sync emits
   THEN every pinned call reads `npx --no <package>@<v>`, and no emitted file carries `npx -y <package>`.
 
@@ -2234,7 +3187,8 @@ exists, it is the normative record for that requirement.
   and every other file under `.cursor/` is byte-identical (amended 2026-10-08, unit `d1a-rendering-proof-core`; it
   read "THEN they are removed, and every other file under `.cursor/` is byte-identical").
 - GIVEN Copilot selected beside Codex or Cursor THEN its capability disclosure declares the double listing.
-- GIVEN a Codex plugin build THEN no touchpoint ships in the plugin, and the content skills still map under `skills/`.
+- (Route clause dropped 1.15.0: "GIVEN a Codex plugin build THEN no touchpoint ships in the plugin, and the content
+  skills still map under `skills/`", the plugin build deleted in 1.15.0.)
 - GIVEN tools `[codex]` WHEN init prints its next steps THEN they name `$st-onboard` and `$st-<id>`, and never
   `/st-onboard`.
 - `judgment: maintainer` · GIVEN a live Codex session WHEN the user types `$st-work` THEN the body loads; GIVEN a live
@@ -2586,8 +3540,10 @@ exists, it is the normative record for that requirement.
   check's version and date, the `--no-custom-instructions` override as unverified on 1.0.89, and the cloud agent's
   undocumented handling of the key.
 - GIVEN a Copilot CLI session in a repository set up by this engine WHEN its orchestrator dispatches an emitted agent
-  through `task` THEN the sub-agent quotes the charter's `Invariants version` line. `judgment: maintainer`; not yet
-  run with the key emitted (`build/13`).
+  through `task` THEN the sub-agent quotes the charter's `Invariants version` line. `judgment: maintainer`; run with
+  the key emitted on Copilot CLI 1.0.89 at the close of run `2026-10-10_next-tier`, its QA row 2, and quoted
+  (`.stamity/runs/2026-10-10_next-tier/record.md:462`; amended 2026-10-14, it read "not yet run with the key emitted
+  (`build/13`)").
 
 **REQ-FLOW-074**
 
@@ -2713,16 +3669,23 @@ exists, it is the normative record for that requirement.
   rows the text dated 2026-10-10 cites.
 - `test`: each requirement names its suites above; once a test exists it is the normative record.
 - `source`: `src/shared/cliCall.ts`, `src/emit/substitution.ts`, `src/cli/kit/packageName.ts`,
-  `scripts/plugins/tokens.mjs`, `src/types/markers.ts`, `src/detect/repoAnalyzer.ts`, `src/detect/verificationGates.ts`,
+  `src/types/markers.ts`, `src/detect/repoAnalyzer.ts`, `src/detect/verificationGates.ts`,
   `src/cli/commands/init/plan.ts`, `src/cli/commands/check.ts`, `src/mcp/env.ts`, `src/cli/commands/sync/engine.ts`,
   `src/learnings/validation.ts`, `src/learnings/store.ts`, `src/runs/ledgerStore.ts`, `src/cli/commands/init/panel.ts`,
   `src/cli/commands/init/apply.ts`, `src/cli/notice/updateNotice.ts`, `src/adapters/copilot.ts`, `src/adapters/codex.ts`,
-  `src/adapters/cursor.ts`, `src/emit/skillsProjection.ts`, `scripts/plugins/clients/codex.mjs`,
-  `scripts/plugins/clients/cursor.mjs`, `src/change/classify.ts`, `src/change/testInputs.ts`, `src/change/scan.ts`,
-  `src/cli/commands/gate.ts`, `src/roster/triggers.ts`, `src/roster/reviewCaps.ts`, `.stamity/change-classes.json`, and
-  the command, agent and skill bodies under `content/`.
+  `src/adapters/cursor.ts`, `src/emit/skillsProjection.ts`, `src/change/classify.ts`, `src/change/testInputs.ts`,
+  `src/change/scan.ts`, `src/cli/commands/gate.ts`, `src/roster/triggers.ts`, `src/roster/reviewCaps.ts`,
+  `.stamity/change-classes.json`, and the command, agent and skill bodies under `content/`.
 - `source` (added 2026-10-10): `src/runs/inboxStore.ts`, `src/runs/disposition.ts`, `src/cli/commands/ledger.ts`,
-  `content/skills/st-verify/scripts/spec-plan-coverage.mjs`, `scripts/generate-apm-package.mjs`.
+  `content/skills/st-verify/scripts/spec-plan-coverage.mjs`.
+- (Amended 2026-10-14: the two `source` lists above named `scripts/plugins/tokens.mjs`,
+  `scripts/plugins/clients/codex.mjs`, `scripts/plugins/clients/cursor.mjs` and `scripts/generate-apm-package.mjs`,
+  deleted with the routes in 1.15.0.)
+- `docs/plans/020-cli-native-01.md` — the spec delta that deleted the APM and plugin routes and moved REQ-PLUGIN-005,
+  -014, -016, -017 and -045 to -047 here, with `.stamity/runs/2026-10-14_cli-native/` for its run, added 2026-10-14.
+- `source` (added 2026-10-14): `src/cli/commands/check.ts` (`checkPluginDuplicates`, `checkPackReach`,
+  `evaluateExpectations`), `src/cli/kit/packageName.ts` (`leftoverPluginLines`), `src/cli/commands/clean.ts`
+  (`printLeftoverPlugin`), `src/types/manifest.ts` (`SetupManifest.plugin`).
 - `docs/plans/015-board-writes.md`, and `.stamity/runs/2026-10-12_board-writes/plan.md` (its in-flow re-plan, whose
   `## Spec delta` the 2026-10-12 merge took), `record.md` and `ledger.jsonl` — the sign-offs, the review rounds and the
   ledger rows the text dated 2026-10-12 cites (REQ-FLOW-078, REQ-FLOW-079; REQ-FLOW-025 modified), added 2026-10-12.
@@ -2762,9 +3725,12 @@ exists, it is the normative record for that requirement.
   bounds it: both capability rows say the cloud handling is undocumented and claim nothing for it
   (`src/adapters/copilot.ts:196-219`). What would change it: a cloud-agent run on a repository carrying the keys, or
   GitHub's custom-agents page listing them.
-- REQ-FLOW-071's effect is not yet shown by a live run: the 2026-10-10 check ran without the key and proved the gap
-  alone (that run's ledger `build/13`). Until a run with the key emitted quotes the charter, the claim rests on the
-  CLI's changelog and its loader's key list.
+- REQ-FLOW-071's effect rests on one live run: the 2026-10-10 check ran without the key and proved the gap alone, and
+  QA row 2 of that run, at its close, ran with the key emitted on Copilot CLI 1.0.89 and the sub-agent quoted the
+  charter (`.stamity/runs/2026-10-10_next-tier/record.md:462`). One run on one CLI version is what bounds the claim;
+  a later CLI version is unmeasured. (Amended 2026-10-14, folding the inbox row
+  `2026-10-11_release-1-14-0/review/5`; it read "REQ-FLOW-071's effect is not yet shown by a live run … Until a run
+  with the key emitted quotes the charter, the claim rests on the CLI's changelog and its loader's key list.")
 - A row the screen withholds reaches a run without its description (REQ-FLOW-068). What bounds it: the row still
   matches by its location, its files, its day and its tag, and prints its line, severity and location with the
   pattern id, so Frame and the close name it for the person to read. A true finding is never reworded until the
@@ -2884,8 +3850,9 @@ exists, it is the normative record for that requirement.
   - **Copilot's verdict roles load the working tree's instructions** (`review/22`, a security finding and a decision
     left open). With REQ-FLOW-071's key, Copilot's reviewer and lenses load the checkout's `AGENTS.md`, `CLAUDE.md`
     and `copilot-instructions.md`, so a branch that edits one is judged by roles already following the edit.
-  - **The APM package's Copilot agents** carry neither `include-custom-instructions` nor `reasoning-effort`
-    (`scripts/generate-apm-package.mjs:601-606`; `build/12`, `build/22`).
+  - **The APM package's Copilot agents** carried neither `include-custom-instructions` nor `reasoning-effort`
+    (`build/12`, `build/22`). Settled 2026-10-14 by the deletion: 1.15.0 removes the APM route, so no Copilot agent
+    ships outside the engine's emission (route clause dropped 1.15.0: the citation named the deleted APM generator).
 - REQ-FLOW-078 and REQ-FLOW-079 — the residuals run `2026-10-12_board-writes` recorded, as landed:
   - **The other inbox writers still use the file tools.** `fill`'s removal of an entry it triaged and `/st-plan`'s
     follow-up append, and beside them `/st-rework`'s and `/st-pr-resolve`'s appends, the dep-audit skill's and

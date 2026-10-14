@@ -1,6 +1,6 @@
 ---
 id: enterprise-upstream-lane
-# A design document, authored outside the spec command and excluded from the site build.
+# A design document, authored outside the spec command, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md).
 status: shipped-with-1.4.0
 obsolete_when: the lane's behaviour moves into the CLI reference and the enterprise-forks guide carries every requirement below, or a decision cuts the surface
@@ -20,7 +20,8 @@ repositories.
 Every claim about existing behaviour below carries a `path:line` citation taken from the tree at `a42b45d` (the 1.3.0 head) at the time of writing.
 The amendments dated 2026-10-13 to REQ-UPSTREAM-002 and REQ-UPSTREAM-014 (run `2026-10-13_lean-repository`, plan 014 file 1, units `f2-lane-release-tags-only`
 and `f1-import-recipe`) cite the tree at `7327f435`. The amendments dated 2026-10-14 to REQ-UPSTREAM-001 and REQ-UPSTREAM-007 (run `2026-10-13_records-branch`, plan 014 file 2,
-unit `r3-hand-page-links`) cite the tree at `4d003d60`. Citations are code spans rather than links: they address lines, which no link form can resolve.
+unit `r3-hand-page-links`) cite the tree at `4d003d60`. The amendments dated 2026-10-14 that name run `2026-10-14_cli-native` (plan 020 file 1,
+`docs/plans/020-cli-native-01.md`) record the deletion of the APM and plugin distribution routes in 1.15.0, and cite the tree at `d590a266`. Citations are code spans rather than links: they address lines, which no link form can resolve.
 
 ## Intent
 
@@ -56,6 +57,12 @@ That last class is the one that makes a naive merge painful. A downstream edit t
 (`.stamity/learnings/corpus-edits-ship-with-a-dogfood-sync.md`). When upstream edits the same
 rule, git reports three conflicts where only one is real. The lane therefore treats
 **generated paths as regenerable**, not as merge inputs (REQ-UPSTREAM-007).
+
+Amended 2026-10-14 (run `2026-10-14_cli-native`). The two paragraphs above describe the tree at `a42b45d`. 1.15.0
+deletes the APM and plugin routes, and with them the root manifests `apm.yml`, `plugin.json`, `.claude-plugin/` and
+`.cursor-plugin/`, the `.apm/**` tree and `scripts/generate-apm-package.mjs` (`4a1cf96e`). The emitted tree a fork
+merges is now `.claude/**`, `AGENTS.md`'s managed block and `.stamity/manifest.json`, and a corpus edit touches the
+source and its `.claude/` copy; the rule that generated paths regenerate rather than merge is unchanged.
 
 ### The customization boundaries that exist today
 
@@ -152,11 +159,9 @@ The fork declares its upstream in `.stamity/upstream.json` at the repository roo
   "releases": { "pattern": "v*", "prerelease": false },
   "gates": [{ "name": "check", "run": "npm ci --ignore-scripts && npm run check" }],
   "regenerate": [
-    "node scripts/generate-apm-package.mjs",
-    "node scripts/generate-plugin-manifests.mjs",
     "npm run build && node dist/cli.js sync"
   ],
-  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"],
+  "generatedPaths": [".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"],
   "watch": ["content/charter/**", "src/types/core.ts"],
   "shadows": { "packs/acme/rules/acme-secrets.md": "content/rules/stamity-secrets.md" }
 }
@@ -172,6 +177,13 @@ a non-object, or a `version` other than 1 is a config error (exit 2).
 `"docs/measurements.md"` after `"docs/capability-matrix.md"`. A fork holds no records, so `generate-docs.mjs` skips
 that page there and nothing regenerates it (REQ-UPSTREAM-007); the guide's example dropped it too,
 `docs/enterprise-forks.md:322-328`.)
+
+(Amended 2026-10-14, plan 020 file 1, run `2026-10-14_cli-native`: the example's `regenerate` listed
+`node scripts/generate-apm-package.mjs` and `node scripts/generate-plugin-manifests.mjs` first, and its
+`generatedPaths` listed `".apm/**"`, `"apm.yml"`, `"plugin.json"`, `".claude-plugin/**"` and `".cursor-plugin/**"`.
+1.15.0 deletes those scripts and trees with the APM and plugin routes, so a fork that keeps the two commands ends its
+integration `regenerate-failed`; the guide's example dropped them, and its section "Drop the deleted routes from a fork
+set up before 1.15.0" says what an existing fork edits first, `docs/enterprise-forks.md:284-305`, `:329-365`.)
 
 The verbs are `status`, `preview`, `integrate`, `continue`, `validate`, `abort`, and
 `help`. Every verb accepts `--json` (one JSON document on stdout, nothing else on stdout)
@@ -232,9 +244,10 @@ invariant 7 does not allow.)
   (`docs/specs/enterprise-upstream-lane.md:166-167`). The fetch is `fetchUpstream`
   (`:1063-1083`): its tag half is one `git fetch --prune` of that refspec (`:1067`), and the
   sweep, `sweepReleaseTags` (`:1089-1097`), runs after a successful fetch with the glob
-  (`:1075`). "no release tag matching" is `:1293`. The canonical repository cuts
-  `plugins/v<version>` tags (`package.json:50`,
-  `stamity.distribution.tagPattern`).
+  (`:1075`). "no release tag matching" is `:1293`. The canonical repository cut
+  `plugins/v<version>` tags through 1.14.0 (route clause dropped 1.15.0: the citation `package.json:50`,
+  `stamity.distribution.tagPattern`, a key deleted with the plugin route in `4a1cf96e`; the tags stay upstream, so the
+  sweep still has them to keep out).
 - **Proof:** `test/upstream/lane.test.ts`, the describe "the release-tag fetch" (`:1820`), and in
   the describe "release selection" the cases "cuts the pattern into the glob the fetch uses: the
   prefix before the first *, the suffix after the last" and "builds the tag refspec into the
@@ -395,8 +408,9 @@ merge commit always contains exactly the tree the gates tested. The commands run
 merged tree's own scripts with the caller's environment — the report says so on the first
 run — which is why the GitHub layer runs them in a job that holds no credential. The
 default list for this repository is written into the guide and mirrors
-`CONTRIBUTING.md`'s regeneration table less its two `--write` maintenance rows and its ignored
-`dist/plugins/` row, with `.stamity/manifest.json` added because `sync` writes it.
+`CONTRIBUTING.md`'s regeneration table less its two `--write` maintenance rows, with `.stamity/manifest.json` added
+because `sync` writes it (route clause dropped 1.15.0: "and its ignored `dist/plugins/` row", which left that table
+with the plugin route).
 `docs/measurements.md` is not listed: a fork holds no records, and `generate-docs.mjs --page all` skips that page there
 with a notice (REQ-PROVE-020 in `docs/specs/prove-behavior-and-value.md`); the guide says which rows and why.
 
@@ -681,13 +695,21 @@ needs editing for a rename: every suite that has to know this package's identity
 `package.json` (`docs/enterprise-forks.md:172-179`). Two identity carriers stay the fork's own
 data and are named in the guide's identity step, `renovate/plugins.json` and
 `renovate/companion.json` (`docs/enterprise-forks.md:145-147`). A private package has no npm
-channel, so the regenerated marketplace entry carries a `github` source naming the repository
-instead of an npm package the fork never publishes (`scripts/generate-plugin-manifests.mjs`, its
-`marketplaceSource` binding). The guide states the host boundary beside its portability claim:
-the lane script is portable, while both generators resolve identity through
-`scripts/distribution-identity.mjs`, which accepts a `repository.url` on the public GitHub host
-and refuses every other host before it writes a byte (`docs/enterprise-forks.md`, the
-portability paragraph under "Add the optional token, and what it buys").
+channel (route clause dropped 1.15.0: "so the regenerated marketplace entry carries a `github` source naming the
+repository instead of an npm package the fork never publishes", citing the plugin manifest generator, deleted). The
+guide states the host boundary beside its portability claim: the lane script is portable, while both generators
+resolve identity through `scripts/distribution-identity.mjs`, which accepts a `repository.url` on the public GitHub
+host and refuses every other host before it writes a byte (`docs/enterprise-forks.md`, the portability paragraph under
+"Add the optional token, and what it buys").
+
+Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`; cited at `d590a266`). "Private release destinations
+follow REQ-APM-008" reads "follow REQ-PLUGIN-027 in `docs/specs/fork-layer.md`": REQ-APM-008 is retired with the APM
+route, and a fork's release is its own workflow publishing the npm package. The identity step carries one preset,
+`renovate/companion.json`; a fork tree that still holds `renovate/plugins.json` keeps it untouched
+(`docs/enterprise-forks.md:163-165`). The generators are deleted, and the one identity writer left is
+`scripts/fork-identity.mjs`, which resolves through `scripts/distribution-identity.mjs` and refuses a
+`repository.url` off the public GitHub host before it writes a byte (`docs/enterprise-forks.md:155-161`;
+REQ-PLUGIN-028).
 
 ### REQ-UPSTREAM-018 — Monitoring and real platform evidence
 
@@ -710,6 +732,11 @@ a previous manual install do not configure its later noninteractive invocation. 
 manifest targets, detection of multiple clients can fail that update. See the official
 [APM target precedence](https://microsoft.github.io/apm/reference/cli/install/) and
 [manifest target guidance](https://microsoft.github.io/apm/reference/cli/targets/).
+
+Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`): the two paragraphs above, and the private APM
+release and install the next subsection names, retire with the APM route in 1.15.0. A fork's consumers install its
+CLI from its registry (REQ-PLUGIN-027 in `docs/specs/fork-layer.md`), so the update ordering that matters is the npm
+version of that package.
 
 #### Operational proof
 
@@ -863,7 +890,8 @@ generator script, a default in `config.json`, a pin file `README.md`, a gate scr
 
 - The original bundled-content-layer deferral was fulfilled by the fork layer in 1.5.0;
   `docs/specs/fork-layer.md` records the decision, precedence and drift behavior. The
-  2026-09-10 APM compatibility extension completes that layer's package projection.
+  2026-09-10 APM compatibility extension completes that layer's package projection (retired 2026-10-14 with the APM
+  route in 1.15.0; the CLI is the layer's one consumer, REQ-FORK-010).
 - Landing the pull request. The lane prepares; people merge.
 - Any model-assisted resolution or suggestion.
 - A GitLab or Bitbucket pipeline. The script is the portable half; the guide names the

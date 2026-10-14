@@ -128,13 +128,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer runs the macOS smoke, the next-Node leg or the client drive on a schedule.
 - **The repository's records moved to the `records` branch.** Run records and ledgers, the deferral
   inbox, handoffs, QA evidence, plans, eval runs and measurement snapshots no longer live on `main`,
-  so forks stop merging them with each release and APM installs stop vendoring them. Read them at
+  so forks stop merging them with each release. Read them at
   `https://github.com/zomarit/stamity/tree/records`; history is unchanged. A fork's next integrate
   deletes upstream's records from its tree, and a fork that edited one of them keeps its copy by
   resolving the modify/delete conflict in favour of its own file.
 
 ### Removed
 
+- **The APM and plugin distribution routes.** The npm CLI is the one way to install stamity. This
+  is a removal in a minor release, made on purpose: neither route had a known user. What leaves:
+  - **The APM route.** `apm.yml` and the `.apm/` tree leave `main`, so an unpinned
+    `apm install zomarit/stamity` stops resolving at the merge, before any release. An install
+    pinned to an earlier tag keeps working at that version and gets no update.
+  - **The plugin route.** `plugin.json`, `.claude-plugin/`, `.cursor-plugin/` and
+    `renovate/plugins.json` leave `main`, and no release builds, attaches or pushes a plugin
+    distribution again, so a marketplace added from the repository stops resolving too. The
+    `plugin-dist` branch and the `plugins/v*` tags stay where they are, as frozen history, so a
+    plugin install pinned to one keeps its version and gets no update.
+  - **The `stamity plugin` verb** (`plugin status` and `plugin setup`). It is now an unknown
+    command, exit 2, and `--help` lists nine verbs.
+  - **The `plugin-backed` install mode.** A manifest written by 1.14.0 that still holds a `plugin`
+    block keeps working: the block is held, never read, through the 1.15 line. `check`'s
+    `plugin-duplicates` row warns, never fails, naming each client the block or Claude Code's
+    `enabledPlugins` still records and that client's own uninstall command; `sync` and `clean`
+    print the same lines for the clients the block names. Uninstall the plugin, then delete the
+    `plugin` key.
+  - **`check --expect-mode`.** It is now an unknown option, exit 2; `--expect-version` and
+    `--expect-tools` are unchanged.
+  - **The `plugin-runtime` doctor row**, so `check` prints one row fewer, and the JSON keys
+    `pluginOwned` (`sync --json`) and `pluginUninstall` (`clean --json`).
+  - **The exports** `INSTALL_MODES`, `INSTALL_MODE_DEFAULT`, `PLUGIN_OWNED_CLASSES`, `InstallMode`,
+    `PluginClientRecord`, `PluginConfig`, `PluginOwnedClass` and `EngineRegistry.plugins`, and the
+    capability matrix's `PLUGIN_CONTAINER_CLASSES`, `PluginContainerClass`, `PluginContainerFact`
+    and `CapabilityMatrixInputs.plugins`, which `EngineRegistry.emit.capabilityMatrix` made
+    public. The capability matrix page loses its "Plugin containers" section.
+  - **For a fork.** `scripts/fork-identity.mjs` runs no generator and leaves a leftover
+    `renovate/plugins.json` alone. A `stamity.distribution` block in `package.json` is ignored
+    with a one-line notice for one release, not refused. `fork-release.yml` publishes the npm
+    package and a GitHub release carrying the tarball and its `.sha256` only.
+    `docs/enterprise-forks.md` says which lines of a fork's own configuration to drop before
+    integrating this release.
+  - **CI.** The merge gate and the nightly run no client's CLI any more: the plugin install,
+    discovery and invocation legs left with the route.
+
+  The plugins guide leaves the site, and `docs/enterprise-quickstart.md` now orders the fork-only
+  route.
 - **The superseded eval inputs.** `SET-v1`…`SET-v6`, `rubric-v1`…`rubric-v3`,
   `coverage-exemptions-v3`…`-v5` and `cases/`, `cases-v2/`, `cases-v3/` leave the tree; no
   script, test or source read them. Tag `evals-retired-2026-10-13` (commit `6dfa5ffe`) keeps

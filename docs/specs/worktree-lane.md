@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.1.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
@@ -265,7 +265,8 @@ seam now starts git one way:
   strips nothing (`src/workspace/git.ts:137-146`, `:159-177`); REQ-PLUGIN-046
   states it.
 - **Before git is started the lane takes the look REQ-PLUGIN-046 states**
-  (`docs/specs/plugin-lifecycle.md`, amended 2026-10-12;
+  (`docs/specs/everyday-flows.md`, where the requirement moved on 2026-10-14
+  with its id, from `docs/specs/plugin-lifecycle.md`; amended 2026-10-12;
   `gitDiscoveryMeetsBareShape`, `src/merge/safeWrite.ts:1122-1147`), from the
   folder the call runs in, and hands it the environment it keeps
   (`src/worktree/git.ts:120`). Where the look refuses, no git is started and
