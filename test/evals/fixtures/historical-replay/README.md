@@ -11,5 +11,5 @@ changing any record. It is a replay fixture, not the complete evidence of run 24
 The test still compares all 27 verdicts and every binding/advisory row, and requires
 the rejected attempt to refuse for its recorded reason.
 
-The full run remains recoverable through its archive pointer under `evals/runs/`.
-See `evals/EVIDENCE-STORAGE.md` for the storage and recovery contract.
+The full run remains recoverable through its archive pointer under `evals/runs/` on the `records` branch.
+See `evals/EVIDENCE-STORAGE.md` there for the storage and recovery contract.

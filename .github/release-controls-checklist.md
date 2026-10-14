@@ -213,8 +213,9 @@ file the run of record's `inputs.json` hashes as an input, every file the public
 every file a case's `source:` names, and the docs tests read those and refuse a list that misses
 one. When it runs, the full set is measured — by the release's baseline run, or
 by an incremental run composed with it under that file's incremental rule — and the release
-carries the composed artifact under `evals/runs/`. When none of those holds, the release carries
-the run of record forward and its notes say `carried forward from run N: no model-facing change`,
+carries the composed artifact under `evals/runs/` on the `records` branch, published with
+`node scripts/records.mjs commit -m <message>` before the tag. When none of those holds, the
+release carries the run of record forward and its notes say `carried forward from run N: no model-facing change`,
 N being the run of record's number: the one carried form this checklist admits. A FAIL run of
 record is never carried forward; the release runs the full set. Its exception covered its own
 release alone. The corpus
@@ -319,12 +320,17 @@ suite catches, a stale claim under a fresh stamp is the one a person catches. (A
 release; on a patch, when the diff since the last release touches a hand page or a surface one
 states — a CLI verb, flag or config key, or an emitted file.
 
-A fifth line rides the cut with the fourth: the measurements page's input is refreshed —
-`node scripts/merge-ready-rate.mjs --write` freezes the verified merge-ready rate over the committed run
-records into `evals/measurements/merge-ready-<date>.json`, then `node scripts/generate-docs.mjs --page
-measurements` re-renders `docs/measurements.md` from it; both are committed before the tag. A run record
-written after the snapshot is not on the page until the next refresh, which is the page's own contract.
-(Added 2026-09-15, with the page.) Runs when: a run record under `.stamity/runs/` or
+A fifth line rides the cut with the fourth: the measurements page's input is refreshed, in the
+three steps that page names, all before the tag. First, `node scripts/merge-ready-rate.mjs --write`
+freezes the verified merge-ready rate over the run records into
+`evals/measurements/merge-ready-<date>.json` in the checkout. Second,
+`node scripts/records.mjs commit -m <message>` publishes that snapshot with the run record to the
+`records` branch. Third, the pin moves in the `main` commit that regenerates the page:
+`MEASUREMENT_SNAPSHOT_PATH` in `src/cli/docs/measurements.ts` names the new snapshot, and
+`node scripts/generate-docs.mjs --page measurements` re-renders `docs/measurements.md` from it. A
+run record written after the snapshot is not on the page until the next refresh, which is the page's
+own contract. (Added 2026-09-15, with the page; the records publish added 2026-10-14, when the
+records left `main`.) Runs when: a run record under `.stamity/runs/` or
 `evals/run-of-record.json` changed since the last snapshot.
 
 A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the generated guard the script times (`.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`, built from `src/hooks/scripts.ts` and every module it imports) or `scripts/hook-latency.mjs` moved since the last release, or the Node version the release is cut on moved.

@@ -126,6 +126,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   namespace, and a pattern git cannot use as a refspec is refused at load.
 - **The nightly workflow runs only in `zomarit/stamity`.** A private import that enables Actions
   no longer runs the macOS smoke, the next-Node leg or the client drive on a schedule.
+- **The repository's records moved to the `records` branch.** Run records and ledgers, the deferral
+  inbox, handoffs, QA evidence, plans, eval runs and measurement snapshots no longer live on `main`,
+  so forks stop merging them with each release and APM installs stop vendoring them. Read them at
+  `https://github.com/zomarit/stamity/tree/records`; history is unchanged. A fork's next integrate
+  deletes upstream's records from its tree, and a fork that edited one of them keeps its copy by
+  resolving the modify/delete conflict in favour of its own file.
 
 ### Removed
 

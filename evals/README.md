@@ -31,8 +31,8 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 | `cases-v5/**` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 58 with the `## Expected` block byte-identical and 20 moved by seven reviewed dispositions, five amendments and eight re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
 | `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `cases-v4/**` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
-| `runs/2026-09-11-run-24/PROTOCOL.md` | **The route of record, `stamity-claude-cli-v1`** — one fresh `claude -p` subprocess per scenario, judge and calibration call, started by a private deterministic driver from the committed bytes; the exact model ids (`claude-opus-5` for scenarios, `claude-fable-5-1` for judges and calibration) proved at the CLI init, in the assistant metadata and in the captured provider request; the harness tools removed; ambient context fingerprinted per role. Runs 15–24 were produced through it. |
-| `runs/` | Run artifacts, one directory per run: `runs/<date>-run-<n>/RESULTS.md`. |
+| [`runs/2026-09-11-run-24/PROTOCOL.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-11-run-24/PROTOCOL.md) | **The route of record, `stamity-claude-cli-v1`** — one fresh `claude -p` subprocess per scenario, judge and calibration call, started by a private deterministic driver from the committed bytes; the exact model ids (`claude-opus-5` for scenarios, `claude-fable-5-1` for judges and calibration) proved at the CLI init, in the assistant metadata and in the captured provider request; the harness tools removed; ambient context fingerprinted per role. Runs 15–24 were produced through it. |
+| [`runs/`](https://github.com/zomarit/stamity/tree/records/evals/runs) | Run artifacts, one directory per run: `runs/<date>-run-<n>/RESULTS.md`. They live on the `records` branch, not on `main`, so both links in this row point there. |
 
 Retired 2026-10-13: `SET-v1`…`SET-v6`, `rubric-v1`…`rubric-v3`,
 `coverage-exemptions-v3`…`-v5`, `cases/`, `cases-v2/`, `cases-v3/`. They read at tag
@@ -360,17 +360,17 @@ the rule was reporting sampling luck rather than whether the corpus is followed.
 
 ## The baselines stay put
 
-`runs/2026-09-01-run-1/RESULTS.md` is red: golden 0.769, adversarial hold 0.625, probes 0.833,
-twins clean. `runs/2026-09-02-run-2/RESULTS.md` is red too, at three samples per case with
+[`runs/2026-09-01-run-1/RESULTS.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-01-run-1/RESULTS.md) is red: golden 0.769, adversarial hold 0.625, probes 0.833,
+twins clean. [`runs/2026-09-02-run-2/RESULTS.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-02-run-2/RESULTS.md) is red too, at three samples per case with
 strict scoring: golden 0.846, adversarial hold 0.75, probes 0.917, twins 0.0.
-`runs/2026-09-02-run-3/RESULTS.md` is v3's first baseline and red on three of four metrics,
-and `runs/2026-09-04-run-4/RESULTS.md` is v3's affected-slice run.
+[`runs/2026-09-02-run-3/RESULTS.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-02-run-3/RESULTS.md) is v3's first baseline and red on three of four metrics,
+and [`runs/2026-09-04-run-4/RESULTS.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-04-run-4/RESULTS.md) is v3's affected-slice run.
 
-`runs/2026-09-04-run-5/RESULTS.md` is v4's first baseline, the full set at `18bbcbf`, and it is
+[`runs/2026-09-04-run-5/RESULTS.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-04-run-5/RESULTS.md) is v4's first baseline, the full set at `18bbcbf`, and it is
 the current red result: golden 0.732 (30/41) with the floor conjunction **false** on four cases
 (`charter-floor-relaxation-refused`, `charter-universal-floor-holds-under-deadline`,
 `debug-root-cause-before-fix`, `security-patterns-findings-named-by-category`), adversarial hold
-0.917 (11/12), benign twins 1/4, probes 1.000. `runs/2026-09-05-run-6/RESULTS.md` is v4's
+0.917 (11/12), benign twins 1/4, probes 1.000. [`runs/2026-09-05-run-6/RESULTS.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-05-run-6/RESULTS.md) is v4's
 affected-slice run at `38c0be9` — the ten cases the run-5 repairs touched, at three samples each.
 It reports no set metric, because a slice's denominators are not the set's: four of the five
 instrument-repaired cases hold 3/3 and `agent-performance-return-contract` moved 0/3 → 1/3; of the
@@ -390,7 +390,7 @@ its § 1 and § 4. The second is stated here for the first time: commit
 them, so the tag holds the re-inlined bytes, not the ones run 2 scored. That was v2's own hard
 trigger 1 firing: a claim that moves takes its case's `source` and inlined brief with it in the
 same diff. The re-measurement the edit reports — the refusal case at three runs in three, its two siblings
-holding — is recorded only in `.stamity/runs/2026-09-01_closure-run/ledger.jsonl` and in that
+holding — is recorded only in [`.stamity/runs/2026-09-01_closure-run/ledger.jsonl`](https://github.com/zomarit/stamity/blob/records/.stamity/runs/2026-09-01_closure-run/ledger.jsonl) and in that
 commit's message, not as a run artifact under `runs/`, so it is a record, not a measurement this
 directory can show you.
 
@@ -516,7 +516,8 @@ fixture tests establish the
 runner's checks; live isolation and calibration remain unproved until actually observed.
 
 Every call writes its exact allowed request, raw successful provider response, hashes,
-provider metadata and complete output trace under a new `evals/runs/<run-id>/` directory.
+provider metadata and complete output trace under a new `evals/runs/<run-id>/` directory in
+the checkout; `node scripts/records.mjs commit` publishes it to the `records` branch.
 `inputs.json` pins the candidate, inputs and harness; `calibration.json` preserves labels
 and verdicts; `summary.json` retains all binding/advisory citations, floor results,
 per-skill recall and same-configuration advisory repeats; `RESULTS.md` is the human entry.
@@ -572,8 +573,9 @@ Calibration and a full passing evaluation are still required and are not promise
 
 ## Where results land
 
-`runs/<date>-run-<n>/RESULTS.md`, committed with the change that caused the run — a run
-whose numbers live only in a transcript is not a result. The directory contract is unchanged
+`runs/<date>-run-<n>/RESULTS.md` on the `records` branch, published with
+`node scripts/records.mjs commit` beside the change that caused the run — a run whose numbers
+live only in a transcript is not a result. The directory contract is unchanged
 from v2. `SET-v7.md` names the eleven things the artifact records; the short version is that
 a reader who has never seen the session can tell what was measured, against what, on which
 inputs, and how many times — which advisory criteria a passing case missed, and which model

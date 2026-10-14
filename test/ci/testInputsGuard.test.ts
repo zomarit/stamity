@@ -374,7 +374,11 @@ describe("this repository's test-input map", () => {
       if (decision.suites.join(" ") !== selected.join(" ")) gaps.push(`${path}: lanes ${decision.suites.join(" ")} != ${selected.join(" ")}`);
     }
 
-    expect(laned).toBeGreaterThan(100);
+    // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r7-remove-records-from-main, build/16): the
+    // floor was 100, met only while the 33 `docs/plans/**` files sat on `main` in the `website` lane (they match
+    // `docs/**`). r7 moves them to the `records` branch, leaving 77 tracked lane paths (learnings 21, website 43,
+    // specs 13); the floor still proves the walk is not degenerate, and the gaps check below is unchanged.
+    expect(laned).toBeGreaterThan(60);
     expect(gaps).toEqual([]);
   });
 

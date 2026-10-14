@@ -126,8 +126,8 @@ A record is a path the `records` branch holds instead of `main`, as `scripts/rec
 lists them: run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
 `.stamity/handoffs/`, evidence under `.stamity/evidence/`, plans under `docs/plans/`, and the eval
 runs, measurements and reach snapshots under `evals/runs/`, `evals/measurements/` and
-`evals/reach/`, with two archive notes beside them in `evals/`. A plan still falls in the `website` lane by its path; every other record is in no
-lane, so a change to one runs the full side. The records belong on the `records` branch, and the
+`evals/reach/`, with two archive notes beside them in `evals/`. No record is tracked on `main`, so
+no record is in a lane; "Keep the records" below says how one reaches the `records` branch, and the
 `records` job checks them there. It runs on every change, beside
 whichever side ran, in this repository only, and it is merge-blocking here. It runs
 `node scripts/records.mjs guard`, which refuses a record tracked on the commit, restores the records
@@ -344,6 +344,30 @@ admits no scores, which is the only thing it has produced so far: run 12 is bloc
 record has come through this route. See [evals/README.md](evals/README.md) for the transport's
 isolation limits and artifact layout.
 
+## Keep the records
+
+The repository's records live on the `records` branch, not on `main`: run records and ledgers, the
+deferral inbox, handoffs, QA evidence, plans, eval runs and measurement snapshots, at the paths
+`scripts/records-paths.mjs` lists. Read them at <https://github.com/zomarit/stamity/tree/records>.
+The branch shares no history with `main` and is never merged into it.
+
+- A new clone runs `node scripts/records.mjs setup` once. It writes the record paths into the
+  clone's shared `.git/info/exclude`, so `main` never sees them, and restores the records from
+  `origin/records` into the checkout.
+- Publish records with `node scripts/records.mjs commit -m "<message>"`. It gates the exact commit
+  it builds on `records`, then pushes it, never forced. `--dry-run` lists what it would publish. A
+  run whose record still reads `Status: in progress` is left out until the run closes.
+- Never run `git clean -X` (or `-x`) in a checkout holding unpublished records. The record paths are
+  ignored there, so the clean deletes them.
+- A change to `src/cli/docs/**`, `test/records/**` or the ledger grammar also runs
+  `npm run test:records`, after `setup`. `npm run check` does not run that suite; CI's `records` job
+  does.
+- The release close publishes its records first, then lands `main`'s pin bump, so `main` never pins
+  a snapshot the `records` branch does not hold yet.
+- Lanes write no records. A linked worktree shares `.git/info/exclude` with the main checkout, so a
+  record written in a lane's worktree is ignored there and lost when the worktree is removed; the
+  main checkout writes the records.
+
 ## Write the commit, then open the pull request
 
 Write conventional-commit subjects in the imperative mood. Keep one unit of work per commit. Sign
@@ -378,9 +402,9 @@ Something wrong that is not a vulnerability goes to the
 | `content/` | the canonical corpus |
 | `packs/` | the first-party packs |
 | `test/` | the three lanes |
-| `evals/` | the eval set, its cases, and its run artifacts |
+| `evals/` | the eval set and its cases; its run artifacts are on the `records` branch |
 | `scripts/` | generators, the leak gate, the three smokes (publish shape, APM route, client plugin route), and the upstream lane (`upstream.mjs`, for forks) |
-| `docs/` | the generated reference pages (`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `measurements.md`, `reference/`) beside the hand-written guides, plus `docs/plans/` and `docs/specs/` |
+| `docs/` | the generated reference pages (`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `measurements.md`, `reference/`) beside the hand-written guides, plus `docs/specs/`; the plans under `docs/plans/` are on the `records` branch |
 | `website/` | the docs site, a separate npm project |
 
 The boundary between engine and CLI is enforced by a static import-graph test, not by convention

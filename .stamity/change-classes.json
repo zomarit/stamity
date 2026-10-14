@@ -26,51 +26,6 @@
   "testInputs": [
     { "glob": "content/**", "tests": "all" },
     {
-      "glob": ".stamity/runs/**",
-      "tests": [
-        "test/authoring/specPlanCoverage.test.ts",
-        "test/ci/leakGate.test.ts",
-        "test/ci/testInputsGuard.test.ts",
-        "test/cli/docs/measurements.test.ts",
-        "test/docsPages.test.ts",
-        "test/records",
-        "test/runs/ledgerGates.test.ts"
-      ]
-    },
-    {
-      "glob": ".stamity/inbox.md",
-      "tests": [
-        "test/authoring/specPlanCoverage.test.ts",
-        "test/ci/leakGate.test.ts",
-        "test/ci/testInputsGuard.test.ts",
-        "test/cli/docs/measurements.test.ts",
-        "test/docsPages.test.ts",
-        "test/records"
-      ]
-    },
-    {
-      "glob": ".stamity/handoffs/**",
-      "tests": [
-        "test/authoring/specPlanCoverage.test.ts",
-        "test/ci/leakGate.test.ts",
-        "test/ci/testInputsGuard.test.ts",
-        "test/cli/docs/measurements.test.ts",
-        "test/docsPages.test.ts",
-        "test/records"
-      ]
-    },
-    {
-      "glob": "docs/plans/**",
-      "tests": [
-        "test/authoring/specPlanCoverage.test.ts",
-        "test/ci/leakGate.test.ts",
-        "test/ci/testInputsGuard.test.ts",
-        "test/cli/docs/measurements.test.ts",
-        "test/docsPages.test.ts",
-        "test/records"
-      ]
-    },
-    {
       "glob": "docs/specs/**",
       "tests": [
         "test/authoring/specPlanCoverage.test.ts",

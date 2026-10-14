@@ -21,8 +21,9 @@ python3 scripts/evidence-archive.py pack \
 
 Output files must not already exist. Omit `--url` during local preparation; it is
 then `null` until a verified storage location is assigned. Keep the completed
-`ARCHIVE.json` in Git. Upload the archive to the same public/private repository's
-GitHub Release, download it into a separate location, verify, and restore it before
+`ARCHIVE.json` on the `records` branch, published with `node scripts/records.mjs commit`.
+Upload the archive to the same public/private repository's GitHub Release, download it
+into a separate location, verify, and restore it before
 considering removal of the original evidence. This tool does not establish that a
 run is closed or that its consumers have migrated.
 
