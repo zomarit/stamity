@@ -2,10 +2,9 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
 import { cleanCommand, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
-import type * as PackageNameApi from "../../../src/cli/kit/packageName.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import { ORG_POLICY_REL_PATH } from "../../../src/pack/orgPolicy.ts";
 import { MANIFEST_VERSION, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
@@ -1355,13 +1354,18 @@ describe("clean — consent is separate from output format", () => {
   });
 });
 
-afterEach(() => {
-  vi.doUnmock("../../../src/cli/kit/packageName.ts");
-  vi.resetModules();
-});
-
-describe("the plugin uninstall disclosure", () => {
-  /** The initialised fixture, with a plugin recorded for two of the four clients. */
+/**
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): `clean`
+ * printed each recorded client's vendor uninstall command and carried them as
+ * `pluginUninstall` in `--json`. 1.15.0 deleted the plugin route and removed that
+ * key outright; the lines are now the leftover-plugin warning `check` and `sync`
+ * print (`test/cli/commands/check.test.ts` pins its wording and the renamed
+ * package's id), and `clean` prints it as text, before it deletes the held block
+ * that is the install's last record. What stays: the block changes nothing
+ * `clean` removes, and `--json` carries no plugin key.
+ */
+describe("a held plugin block under clean", () => {
+  /** The initialised fixture, with a 1.14 plugin block recorded for two of the four clients. */
   async function seedWithPlugin(temp: TempDirHandle): Promise<string> {
     const root = await seedInitialisedRepo(temp);
     const manifest: SetupManifest = {
@@ -1382,28 +1386,31 @@ describe("the plugin uninstall disclosure", () => {
     return root;
   }
 
-  it("prints one uninstall line per recorded client, in TOOLS order, and removes no file inside a plugin", async () => {
+  it("prints the leftover-plugin warning for each client the held block names, in TOOLS order, and no pluginUninstall key", async () => {
     const root = await seedWithPlugin(tempDir());
 
     const result = await runClean(root, ["-y"]);
 
     expect(result.code).toBe(0);
+    expect(result.stdout).toContain("warning: a plugin install from before 1.15.0 is still recorded");
     const lines = result.stdout
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => /^(claude|cursor|copilot|codex):/.test(line));
     expect(lines).toEqual([
       "claude: claude plugin uninstall stamity@<your marketplace>",
-      // `codex plugin remove`, read from `codex --help` on 0.154.0 (2026-09-20):
-      // the client grew a CLI form after the plan named the `/plugins` view.
       "codex: codex plugin remove stamity@<your marketplace>",
     ]);
-    // The two clients with no record say nothing: a line for a plugin nobody
-    // installed is an instruction that cannot be followed.
-    expect(result.stdout).not.toContain("cursor:");
-    expect(result.stdout).not.toContain("copilot:");
-    // And it is a disclosure, not an action.
-    expect(result.stdout).toContain("stays installed");
+    // Printed before the state directory went, which is why it can still be said.
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+
+    const preview = await runClean(await seedWithPlugin(tempDir()), ["--dry-run"]);
+    expect(preview.stdout).toContain("claude: claude plugin uninstall stamity@<your marketplace>");
+
+    const again = await seedWithPlugin(tempDir());
+    const doc = parseSingleDoc((await runClean(again, ["-y", "--json"])).stdout);
+    expect(doc).not.toHaveProperty("pluginUninstall");
+    expect(doc["removed"]).toEqual(expect.any(Number));
   });
 
   it("removes nothing outside the ledger, plugin record or not", async () => {
@@ -1419,47 +1426,6 @@ describe("the plugin uninstall disclosure", () => {
 
     expect(after).toEqual(await snapshot(control));
     expect(Object.keys(after)).toContain("README.md");
-  });
-
-  it("carries the same lines in the --json payload", async () => {
-    const root = await seedWithPlugin(tempDir());
-
-    const doc = parseSingleDoc((await runClean(root, ["-y", "--json"])).stdout);
-
-    expect(doc["pluginUninstall"]).toEqual([
-      "claude: claude plugin uninstall stamity@<your marketplace>",
-      "codex: codex plugin remove stamity@<your marketplace>",
-    ]);
-  });
-
-  it("names the plugin a RENAMED package installs as, not the canonical id", async () => {
-    // The plugin id on every client surface is the package name with its npm
-    // scope removed — the derivation `scripts/plugins/catalogs.mjs` makes. A
-    // hardcoded `stamity` sent a downstream operator at a plugin id their
-    // marketplace does not carry.
-    //
-    // MOCK, with its reason: the running package's name is fixed by the
-    // manifest this suite runs out of, and a rename cannot be staged
-    // in-process. Only the name is substituted; the derivation from a real
-    // manifest on disk is proven in `test/cli/kit/packageName.test.ts`, and
-    // everything below it here — the sweep, the record read, the rendering —
-    // is the real command.
-    vi.doMock("../../../src/cli/kit/packageName.ts", async (importOriginal) => {
-      const actual = await importOriginal<typeof PackageNameApi>();
-      return { ...actual, packageName: (): string => "@acme/stamity-fork" };
-    });
-    vi.resetModules();
-    const renamed = await import("../../../src/cli/commands/clean.ts");
-    const root = await seedWithPlugin(tempDir());
-
-    const result = await runInProcess([renamed.cleanCommand], ["clean", "-y"], {
-      cwd: root,
-      env: {},
-    });
-
-    expect(result.stdout).toContain("claude plugin uninstall stamity-fork@<your marketplace>");
-    expect(result.stdout).toContain("codex plugin remove stamity-fork@<your marketplace>");
-    expect(result.stdout).not.toContain("uninstall stamity@");
   });
 
   it("says nothing at all on a repository that records no plugin", async () => {

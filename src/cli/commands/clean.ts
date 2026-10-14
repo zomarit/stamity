@@ -24,7 +24,7 @@ import {
   type SetupManifest,
 } from "../../types/manifest.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../../types/content.ts";
-import { TOOLS, type Tool } from "../../types/core.ts";
+import { TOOLS } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import {
   coOwnedReclaimReducers,
@@ -39,7 +39,7 @@ import {
 } from "../engine/emissionWrite.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { CliFailure } from "../kit/output.ts";
-import { hasNpmChannel, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
+import { hasNpmChannel, leftoverPluginLines, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { confirm, promptGate } from "../kit/prompts.ts";
 
@@ -365,57 +365,16 @@ async function exists(dir: string): Promise<boolean> {
 const REINIT_OFFER = `start fresh: ${packageCommand("init")}`;
 
 /**
- * How each client uninstalls the plugin — the vendor's own command, printed
- * because this verb cannot run it.
- *
- * `clean` removes ledger rows and the files they name. A plugin root is the
- * CLIENT's installation, outside the repository and outside anything this
- * engine has an ownership claim over, so the honest close on a plugin-backed
- * repository is to say what is left and who removes it. Nothing here executes.
- *
- * The marketplace is a placeholder rather than a value: the manifest records
- * the plugin's VERSION and the classes it carries, never the catalog it was
- * installed from, and inventing a name would send an operator at a marketplace
- * they may not have added.
- *
- * Commands as the vendors document them: `codex plugin remove` is read from
- * `codex --help` on 0.154.0 (2026-09-20). Cursor documents no CLI form, so its
- * line names the view that does the job.
- *
- * The plugin ID is DERIVED, never the literal `stamity`: it is the running
- * package's name with its npm scope removed, the same derivation the catalogs
- * make (`scripts/plugins/catalogs.mjs`), so the four lines name the id a
- * renamed downstream's own marketplace actually carries. A hardcoded canonical
- * id would send that operator at a plugin their client has never heard of.
+ * The leftover-plugin warning `check` and `sync` print
+ * (`../kit/packageName.ts::leftoverPluginLines`), read off the held block
+ * alone: this verb deletes that block, and the vendor uninstall is a step it
+ * cannot take. Nothing prints when the block names no client.
  */
-function pluginId(): string {
-  return packageName().replace(/^@[^/]+\//, "");
-}
-
-function pluginUninstallCommands(): Readonly<Record<Tool, string>> {
-  const id = pluginId();
-  return {
-    claude: `claude plugin uninstall ${id}@<your marketplace>`,
-    cursor: `uninstall the ${id} plugin from Cursor's Customize view`,
-    copilot: `copilot plugin uninstall ${id}`,
-    codex: `codex plugin remove ${id}@<your marketplace>`,
-  };
-}
-
-/**
- * The uninstall lines this run owes, one per client the manifest records a
- * plugin for, in {@link TOOLS} order.
- *
- * Read off `plugin.clients` rather than off `tools`: a client can be recorded
- * and deselected, and the plugin is still installed in it — that is exactly the
- * state where nobody would otherwise be told.
- */
-function pluginUninstallLines(manifest: SetupManifest): string[] {
-  const recorded = manifest.plugin?.clients ?? {};
-  const commands = pluginUninstallCommands();
-  return TOOLS.filter((tool) => recorded[tool] !== undefined).map(
-    (tool) => `  ${tool}: ${commands[tool]}`,
-  );
+function printLeftoverPlugin(ctx: CliContext, manifest: SetupManifest): void {
+  const [first, ...rest] = leftoverPluginLines(manifest.plugin, undefined);
+  if (first === undefined) return;
+  ctx.io.out(`${ctx.palette.yellow(`warning: ${first}`)}\n`);
+  for (const line of rest) ctx.io.out(`  ${line}\n`);
 }
 
 /** The one-per-line next-step block every exit path ends with. */
@@ -1065,6 +1024,10 @@ export const cleanCommand: CommandModule = {
     const underStateDir = (path: string): boolean => path.startsWith(`${STATE_DIR}/`);
     const wiringKept = (report.wiringKept ?? []).filter((doc) => doc.scripts.some(underStateDir));
     const stateDirKept = [...new Set(wiringKept.flatMap((doc) => doc.scripts.filter(underStateDir)))];
+    // Before the state directory goes: the manifest's held `plugin` block is the
+    // last record of a 1.14 plugin install, and once it is deleted neither
+    // `check` nor `sync` can warn about it again. Text only, preview included.
+    printLeftoverPlugin(ctx, manifest);
     const stateDirRemoved = ctx.dryRun || stateDirKept.length > 0 ? false : await removeStateDir(rootDir);
 
     const formatted = formatReclaimReport(report);
@@ -1085,9 +1048,6 @@ export const cleanCommand: CommandModule = {
         `Dry run: nothing was written and ${STATE_DIR}/ is untouched. ` +
           `A real run also deletes ${STATE_DIR}/ and everything in it.\n`,
       );
-      // Printed on the preview too: what a real run would leave behind is part
-      // of what the preview is for, and the lines name no destructive step.
-      renderPluginUninstall(ctx, manifest);
       nextSteps(ctx, ["apply it: stamity clean"]);
     } else {
       ctx.io.out(
@@ -1096,7 +1056,6 @@ export const cleanCommand: CommandModule = {
           `${stateDirRemoved ? `, ${STATE_DIR}/ removed` : ""}.\n`,
       );
       ctx.io.out("Left your .gitignore untouched — stale ignore lines are harmless.\n");
-      renderPluginUninstall(ctx, manifest);
       nextSteps(ctx, [REINIT_OFFER]);
     }
 
@@ -1110,21 +1069,7 @@ export const cleanCommand: CommandModule = {
         // The held-back scripts that kept the state directory, when any did (S17).
         ...(stateDirKept.length > 0 ? { stateDirKept } : {}),
         entries: report.entries,
-        // The same lines the human report prints, so a machine caller driving
-        // an uninstall reads the steps this verb did not take.
-        pluginUninstall: pluginUninstallLines(manifest).map((line) => line.trim()),
       },
     };
   },
 };
-
-/** The plugin-uninstall disclosure, printed only when a client records one. */
-function renderPluginUninstall(ctx: CliContext, manifest: SetupManifest): void {
-  const lines = pluginUninstallLines(manifest);
-  if (lines.length === 0) return;
-  ctx.io.out(
-    `The plugin itself stays installed — it lives in your client, not in this repository, ` +
-      `so this command neither removed it nor touched a file inside its root. Uninstall it ` +
-      `with your client's own command:\n${lines.join("\n")}\n`,
-  );
-}

@@ -61,26 +61,19 @@ export type {
 
 // ---- Manifest & ledger ----
 export {
-  INSTALL_MODES,
-  INSTALL_MODE_DEFAULT,
   MANIFEST_FILE,
   MANIFEST_VERSION,
-  PLUGIN_OWNED_CLASSES,
   isPackOwner,
   packOwner,
 } from "./types/manifest.ts";
 // `ImportDecision` and `ModelConfig` are reachable from `SetupManifest`
 // (`importChoice`, `models`), so a consumer that holds a manifest already holds
 // them; naming them makes that reachable surface addressable instead of
-// anonymous. `PluginConfig`, `PluginClientRecord`, `GatesConfig` and
-// `InstallMode` ship the same way (`plugin`, `gates`), with `INSTALL_MODES` and
-// `PLUGIN_OWNED_CLASSES` beside them: a consumer that can name `InstallMode`
-// but cannot narrow a `string` to it has half an enum.
+// anonymous. `GatesConfig` ships the same way (`gates`).
 export type {
   GatesConfig,
   HooksConfig,
   ImportDecision,
-  InstallMode,
   LearningsConfig,
   LedgerEntry,
   LedgerOwner,
@@ -88,9 +81,6 @@ export type {
   McpConfig,
   ModelConfig,
   PackOwner,
-  PluginClientRecord,
-  PluginConfig,
-  PluginOwnedClass,
   SetupManifest,
   ToolOptions,
 } from "./types/manifest.ts";

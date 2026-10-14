@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { chmod, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { delimiter, join, relative, sep } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkClaudeHookShell,
   checkCommand,
@@ -15,7 +15,6 @@ import {
   runDriftGate,
   type DoctorCheck,
 } from "../../../src/cli/commands/check.ts";
-import { probePluginRuntime } from "../../../src/cli/commands/plugin/probe.ts";
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
@@ -73,31 +72,6 @@ import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
  *   or an exit code is a statement about check's logic rather than about how
  *   much a fixture happened to trip.
  */
-
-/**
- * The install spec this release's APM route actually publishes:
- * `<owner>/<repo>#plugins/v<version>`, read out of this checkout's own
- * `repository.url`.
- *
- * Derived, never typed. The scoped npm name and the repository slug are two
- * different identities (`@zomarit/stamity` against `zomarit/stamity`), and a
- * fixture that spelled the npm name where the release writes the slug would
- * prove the matcher against a string no APM install ever produces — which is
- * exactly the defect these fixtures were rewritten for.
- */
-function ownRepositorySlug(): string {
-  const raw = readFileSync(fileURLToPath(new URL("../../../package.json", import.meta.url)), "utf8");
-  const manifest = JSON.parse(raw) as { repository?: { url?: string } };
-  return (manifest.repository?.url ?? "")
-    .replace(/^git\+/, "")
-    .replace(/\.git$/, "")
-    .replace("https://github.com/", "");
-}
-
-/** The published APM dependency line: what `release.json`'s `apm.installSpec` carries. */
-function apmInstallSpec(version = "1.9.0"): string {
-  return `${ownRepositorySlug()}#plugins/v${version}`;
-}
 
 const getRepo = useTempDir("stamity-check");
 
@@ -234,8 +208,8 @@ interface SeedOptions {
   /** `false` leaves `.stamity/learnings` and `.stamity/handoffs` absent. */
   stateDirs?: boolean;
   files?: Record<string, string>;
-  /** The manifest's plugin record, as `stamity plugin setup` persists it. */
-  plugin?: SetupManifest["plugin"];
+  /** The manifest's held `plugin` block, as a 1.14 `stamity plugin setup` persisted it. */
+  plugin?: unknown;
   /**
    * Files seeded BEFORE the fixture sync. Sync re-detects the repository and persists what it
    * found as the manifest's `detected` block, so this is how a fixture chooses what detection
@@ -247,11 +221,13 @@ interface SeedOptions {
 }
 
 /**
- * A setup whose Claude agents a plugin now carries (`stamity plugin setup`):
- * the agents `ids` name join the fixture corpus, the sync writes each as
- * Claude's `.claude/agents/stamity-<id>.md` and records it, and the plugin
- * record seeded after it leaves each one a deselected path whose bytes are
- * still the running engine's rendering for Claude in repository mode.
+ * A setup whose Claude agents are deselected while their bytes are still the
+ * running engine's rendering: the agents `ids` name join the fixture corpus, a
+ * sync for claude and cursor writes each as Claude's
+ * `.claude/agents/stamity-<id>.md` and records it, a sync for cursor alone
+ * reclaims the claude rows, and those agents' files and rows are put back. The
+ * proof plan renders every client a ledger row names, so each one previews as a
+ * `deselected` delete with a `hash` proof, and it is the only candidate.
  *
  * TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
  * an engine-named file in a content folder is now deleted only when its bytes
@@ -259,15 +235,35 @@ interface SeedOptions {
  * corpus renders is kept as a retired artifact. The reclaim-preview cases whose
  * subject is a deselected engine file's delete seed it this way, so the preview
  * still names the delete, the reason and the proof they assert.
+ *
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): this
+ * helper recorded a `plugin-backed` block carrying Claude's agents; 1.15.0
+ * deleted that mode, so the deselection is a client the setup no longer
+ * targets, the common reason a content file becomes a candidate.
  */
-async function seedPluginCarriedAgents(ids: readonly string[]): Promise<string> {
+async function seedDeselectedAgents(ids: readonly string[]): Promise<string> {
   const handle = getRepo();
   await handle.seedFiles(
     Object.fromEntries(ids.map((id) => [`corpus/agents/stamity-${id}.md`, AGENT_FIXTURE.replace("id: reviewer", `id: ${id}`)])),
   );
-  return seedRepo(handle, {
-    plugin: { mode: "plugin-backed", clients: { claude: { version: createApp().version, classes: ["agent"] } } },
-  });
+  const root = await seedRepo(handle, { tools: ["claude", "cursor"] });
+  const paths = new Set(ids.map((id) => `.claude/agents/stamity-${id}.md`));
+  const both = await readManifest(root);
+  const kept = (both?.ledger ?? []).filter((entry) => entry.adapter === "claude" && paths.has(entry.path));
+  const bytes = await Promise.all([...paths].map(async (path) => [path, await readFile(join(root, path), "utf8")] as const));
+
+  const engineVersion = createApp().version;
+  await writeManifest(root, { ...(both as SetupManifest), tools: ["cursor"] }, { now: T0 });
+  await applySync(root, await planSync(root, engineVersion), { engineVersion, force: false, dryRun: false, now: T0 });
+
+  await handle.seedFiles(Object.fromEntries(bytes));
+  const cursorOnly = await readManifest(root);
+  await writeManifest(
+    root,
+    { ...(cursorOnly as SetupManifest), generatedBy: engineVersion, ledger: [...(cursorOnly?.ledger ?? []), ...kept] },
+    { now: T0 },
+  );
+  return root;
 }
 
 /**
@@ -429,13 +425,10 @@ describe("checkNodeVersion", () => {
 });
 
 /**
- * The doctor's plugin rows read the process environment, so every direct
- * `runDoctor` call in this file pins `env: {}`. Without it a machine that
- * happens to export `CLAUDE_PLUGIN_ROOT` — a developer running the suite inside
- * a client that sets it — would take a different branch of `plugin-runtime`
- * than CI does, and a suite whose verdict depends on the shell it was started
- * from is not a gate. The command-level cases go through `runInProcess`, whose
- * env already defaults to `{}` for the same reason.
+ * Every direct `runDoctor` call in this file pins `env: {}`, so a suite's
+ * verdict never depends on the shell it was started from. The command-level
+ * cases go through `runInProcess`, whose env already defaults to `{}` for the
+ * same reason.
  */
 
 describe("check — a healthy repository", () => {
@@ -506,7 +499,9 @@ describe("check — a healthy repository", () => {
   // TEST CHANGE, justified (2026-10-03, REQ-PLUGIN-016, run 2026-10-03_pack-engine-defects
   // unit u4b-pack-reach-row): the title's count moved from fourteen to fifteen with the
   // `pack-reach` row below; the assertion is the array, which names every row.
-  it("returns the fifteen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): fifteen to
+  // fourteen — the `plugin-runtime` row left with the plugin route.
+  it("returns the fourteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -542,13 +537,12 @@ describe("check — a healthy repository", () => {
       "preserved-duplicate",
       "pack-integrity",
       // TEST CHANGE, justified (2026-09-20, REQ-PLUGIN-016): the two plugin rows
-      // joined the doctor. `plugin-runtime` answers about the ENVIRONMENT — is a
-      // plugin root reachable, and does its runtime match this repository's
-      // recorded state — and `plugin-duplicates` about the repository beside it,
-      // so they sit after the repository-state probes and before `invariants`,
+      // joined the doctor after the repository-state probes and before `invariants`,
       // which alone reads the installed corpus. No row above moved, and the pin
       // stays a literal array so the next one has to be placed here too.
-      "plugin-runtime",
+      // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine):
+      // `plugin-runtime` left with the plugin route; `plugin-duplicates` stays one
+      // release as the leftover-plugin warning, in the same place.
       "plugin-duplicates",
       // TEST CHANGE, justified (2026-10-03, REQ-PLUGIN-016, run 2026-10-03_pack-engine-defects
       // unit u4b-pack-reach-row): `pack-reach` joined the doctor after the plugin rows. It reads
@@ -780,10 +774,10 @@ describe("check — the drift gate", () => {
     // release records one, is the same reclaim-pending drift.
     // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
     // a made-up agent no corpus renders is now kept as a retired artifact, so
-    // the deselected engine agent is one the sync wrote and a plugin now
-    // carries (`seedPluginCarriedAgents`); its row and hash are the sync's own.
+    // the deselected engine agent is one the sync wrote for a client the setup
+    // no longer targets (`seedDeselectedAgents`); its row and hash are the sync's own.
     const legacy = ".claude/agents/stamity-legacy-guide.md";
-    const root = await seedPluginCarriedAgents(["legacy-guide"]);
+    const root = await seedDeselectedAgents(["legacy-guide"]);
 
     const { code, doc } = await runJson(root);
 
@@ -793,7 +787,11 @@ describe("check — the drift gate", () => {
       clean: false,
       missing: [],
       reclaimPending: 1,
-      reclaim: [{ path: legacy, reason: "deselected", action: "delete", proof: "hash" }],
+      // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+      // reason reads `adapter-removed`, not `deselected` — the agent's client is
+      // no longer targeted, now that no plugin-backed record can take one class
+      // from a targeted client (`seedDeselectedAgents`).
+      reclaim: [{ path: legacy, reason: "adapter-removed", action: "delete", proof: "hash" }],
     });
     expect(doc.drift?.changes).toEqual([]);
 
@@ -852,17 +850,20 @@ describe("check — the reclaim preview", () => {
 
   it("names a deselected engine file with its action and proof, in --json and in the text", async () => {
     // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
-    // the deselected engine agent is one the sync wrote and a plugin now
-    // carries (`seedPluginCarriedAgents`), where a made-up agent no corpus
-    // renders stood; that one is now kept as a retired artifact.
+    // the deselected engine agent is one the sync wrote for a client the setup
+    // no longer targets (`seedDeselectedAgents`), where a made-up agent no
+    // corpus renders stood; that one is now kept as a retired artifact.
     const gone = ".claude/agents/stamity-gone.md";
-    const root = await seedPluginCarriedAgents(["gone"]);
+    const root = await seedDeselectedAgents(["gone"]);
 
     const { code, doc } = await runJson(root);
     const human = await runHuman(root);
 
     expect(code).toBe(1);
-    expect(doc.drift?.reclaim).toEqual([{ path: gone, reason: "deselected", action: "delete", proof: "hash" }]);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+    // reason reads `adapter-removed` (`seedDeselectedAgents`); the action and the
+    // proof this case is about are unchanged.
+    expect(doc.drift?.reclaim).toEqual([{ path: gone, reason: "adapter-removed", action: "delete", proof: "hash" }]);
     expect(doc.drift?.reclaimPending).toBe(1);
     expect(human.stdout).toContain(`  delete    ${gone} (hash)`);
     // A preview: the file is still there.
@@ -871,12 +872,12 @@ describe("check — the reclaim preview", () => {
 
   it("prints every delete line, never folding one into the overflow row", async () => {
     // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
-    // 25 engine agents the sync wrote and a plugin now carries
-    // (`seedPluginCarriedAgents`), where made-up agents no corpus renders
+    // 25 engine agents the sync wrote for a client the setup no longer targets
+    // (`seedDeselectedAgents`), where made-up agents no corpus renders
     // stood; those are now kept as retired artifacts.
     const ids = Array.from({ length: 25 }, (_, index) => `gone-${String(index).padStart(2, "0")}`);
     const paths = ids.map((id) => `.claude/agents/stamity-${id}.md`);
-    const root = await seedPluginCarriedAgents(ids);
+    const root = await seedDeselectedAgents(ids);
 
     const human = await runHuman(root);
 
@@ -1936,35 +1937,6 @@ describe("check — a drift gate that cannot run", () => {
 });
 
 /**
- * The two plugin rows (REQ-PLUGIN-016, REQ-PLUGIN-019).
- *
- * `plugin-runtime` spawns a real child process: the locator's `--print`
- * contract is an exit code plus a JSON document, and a stub that returned the
- * document in-process would prove the parse while leaving the exit-code branch
- * — the half that decides `fail` against `warn` — untested. The fixture
- * locators below are three-line scripts, so the spawn costs milliseconds.
- */
-/** A plugin root whose locator body is `body`. */
-async function pluginRoot(handle: TempDirHandle, name: string, body: string): Promise<string> {
-  await handle.seedFiles({ [`${name}/runtime/locate.mjs`]: body });
-  return handle.path(name);
-}
-
-/** The locator's documented `--print` payload, as file 1's locator emits it. */
-function printing(runtime: Record<string, unknown>, exitCode = 0): string {
-  return [
-    `const report = ${JSON.stringify({
-      project: ".",
-      runtime,
-      node: { version: process.versions.node, floor: "22.22.2", ok: true },
-    })};`,
-    "process.stdout.write(`${JSON.stringify(report, null, 2)}\\n`);",
-    `process.exit(${exitCode});`,
-    "",
-  ].join("\n");
-}
-
-/**
  * `claude-hook-shell` (prove/190, prove/242): the anchored Claude hook commands cannot launch
  * under Claude Code's PowerShell fallback — a Windows host with no Git Bash — and the guard is
  * then silently disarmed. The render cannot serve both shells, so `check` says so on that host.
@@ -2210,18 +2182,22 @@ describe("check — claude-hook-shell", () => {
     expect(verdict.detail).toContain(`Git Bash at ${handle.path("spelled/Git/bin/bash.exe")}`);
   });
 
-  it("passes with a note on win32 when claude is not targeted, or its hooks are a plugin's", () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+  // plugin-owned-hooks half left with the `plugin-backed` mode. A held 1.14 block that
+  // still names claude's hooks no longer releases the row: this engine emits those hooks.
+  it("passes with a note on win32 when claude is not targeted, and a held plugin block releases nothing", () => {
     const none = checkClaudeHookShell({ ...claude, tools: ["cursor"] } as SetupManifest, { platform: "win32", env: { PATH: "" } });
     expect(none.status).toBe("pass");
     expect(none.detail).toContain("claude is not a target tool");
-    // Plugin-owned hooks are the plugin's render, not this adapter's: nothing anchored is on disk.
-    const owned = {
+    const held = {
       ...claude,
-      plugin: { mode: "plugin-backed", clients: { claude: { root: "x", classes: ["hooks"] } } },
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["hooks"] } } },
     } as unknown as SetupManifest;
-    const verdict = checkClaudeHookShell(owned, { platform: "win32", env: { PATH: "" } });
-    expect(verdict.status).toBe("pass");
-    expect(verdict.detail).toContain("carried by its plugin");
+    const host = { platform: "win32", env: { PATH: "" } } as const;
+    // The same verdict a manifest with no block gets on this host — on a POSIX host a fail,
+    // since nothing here holds Git Bash; the 1.14 reading passed with a plugin note.
+    expect(checkClaudeHookShell(held, host)).toEqual(checkClaudeHookShell(claude, host));
+    expect(checkClaudeHookShell(held, host).detail).not.toContain("plugin");
   });
 
   it("is a row of the real doctor, passing on this host", async () => {
@@ -2266,485 +2242,6 @@ async function doctorRow(
   if (found === undefined) throw new Error(`no doctor row ${id}`);
   return found;
 }
-
-/**
- * The ceiling is a CEILING (SEC3-M3).
- *
- * `execFile`'s `timeout` sends a signal and then waits for `close`, and `close`
- * waits for every writer on the child's stdout — including a DETACHED
- * grandchild that inherited it. A locator that ignores SIGTERM and leaves such
- * a grandchild behind therefore held the probe open indefinitely, which is a
- * `check` that hangs, which is a CI job that hangs.
- *
- * The stub below is the smallest portable shape of that: a locator that spawns
- * a detached grandchild inheriting stdout, installs a SIGTERM handler that does
- * nothing, and then sits. The ceiling is passed in rather than waited out, so
- * the case costs its own timeout and not five seconds.
- */
-/**
- * The locator that will not close, with the grandchild's life as the
- * parameter: the in-process ceiling case wants it short so no handle outlives
- * the run, the process-level release case wants it LONGER than everything the
- * probe is allowed, so an exit before it is proof of release.
- */
-const stubbornLocator = (grandchildMs: number): string =>
-  [
-    "import { spawn } from 'node:child_process';",
-    // The grandchild inherits fd 1, so the parent's death does not close the
-    // pipe this probe is reading.
-    `spawn(process.execPath, ['-e', 'setTimeout(() => {}, ${grandchildMs})'], {`,
-    "  detached: true,",
-    "  stdio: ['ignore', 1, 'ignore'],",
-    "}).unref();",
-    "process.on('SIGTERM', () => {});",
-    `setTimeout(() => {}, ${grandchildMs});`,
-    "",
-  ].join("\n");
-
-describe("probePluginRuntime — the timeout ceiling", () => {
-  // 2s, not a minute: the case is over long before that, and a short life
-  // keeps no handle around after the run.
-  const STUBBORN_LOCATOR = stubbornLocator(2000);
-
-  /** The ceiling both cases hand the probe. */
-  const CEILING_MS = 300;
-  /**
-   * The release case's wall-clock budget, derived rather than typed (M-5).
-   *
-   * The case runs the probe in a cold `node` that imports the type-stripped
-   * engine graph, so its elapsed time is that cold start plus the ceiling, and
-   * a literal budget is a guess about a runner. The basis is measured once,
-   * here, by running the same driver shape with the probe call left out —
-   * measured 2026-09-20 on this machine at ~130ms, against ~30ms for a bare
-   * `node -e ''` — and MARGIN is the one guessed number, wide because the
-   * required CI legs include runners this cannot measure. The budget is
-   * `CEILING_MS + MARGIN x coldStart`; the driver's own timeout and the
-   * grandchild's life are multiples of it, so the three cannot drift apart.
-   */
-  const MARGIN = 8;
-  let coldStartMs = 0;
-  const probeModule = pathToFileURL(
-    fileURLToPath(new URL("../../../src/cli/commands/plugin/probe.ts", import.meta.url)),
-  ).href;
-
-  beforeAll(async () => {
-    // The driver's shape with the probe call left out: a cold `node`, the same
-    // import. Inline rather than a file, because no per-test directory exists
-    // at suite scope.
-    const started = Date.now();
-    await new Promise<void>((settle, reject) => {
-      execFile(
-        process.execPath,
-        ["--input-type=module", "-e", `await import(${JSON.stringify(probeModule)});`],
-        { encoding: "utf8" },
-        (error) => (error === null ? settle() : reject(error)),
-      );
-    });
-    coldStartMs = Date.now() - started;
-  });
-
-  it("settles as a timeout rather than waiting on a locator that will not close", async () => {
-    const handle = getRepo();
-    const pluginDir = await pluginRoot(handle, "plugin-stubborn", STUBBORN_LOCATOR);
-
-    const started = Date.now();
-    const probe = await probePluginRuntime(pluginDir, { timeoutMs: 300 });
-
-    expect(probe.outcome).toBe("timeout");
-    expect(probe.message).toContain(pluginDir);
-    // The claim is the ceiling itself: settling at all is not enough, it has to
-    // settle near the ceiling rather than when the grandchild finally lets go.
-    expect(Date.now() - started).toBeLessThan(1_500);
-  });
-
-  /**
-   * SEC4-M1: settling the promise is not releasing the process.
-   *
-   * The timer above settles the row at the ceiling, but settling leaves this
-   * process holding the read ends of the child's stdout and stderr pipes, and
-   * the detached grandchild holding a write end — a live handle, so an event
-   * loop that cannot exit until the grandchild does. The CLI never calls
-   * `process.exit`, so that is a `check` in CI waiting on a stranger's process.
-   *
-   * Measured before the fix (2026-09-20, Node 22.22.3): the shipped probe did
-   * NOT hang here, because `execFile`'s own `timeout` — set to the same
-   * ceiling — destroys both streams inside its `kill()` before it signals. That
-   * is an undocumented line of Node's, not a contract, and with the `timeout`
-   * option removed (the release resting on the probe's timer alone) this case
-   * was red at the driver's budget. The probe now destroys the streams itself,
-   * and this case holds the release whichever mechanism a future Node leaves.
-   *
-   * Asserted at the PROCESS level, because that is where the property lives: a
-   * driver runs the probe in its own `node` and the assertion is that the
-   * driver exits, near the ceiling, while the grandchild is still holding the
-   * pipe. The vitest worker cannot stand in for it — its pool keeps the worker
-   * alive whatever handles a test leaks.
-   */
-  it("releases the process once the probe settles, while the grandchild still holds stdout", async () => {
-    const handle = getRepo();
-    const budgetMs = CEILING_MS + MARGIN * coldStartMs;
-    // The driver's own budget, well under the grandchild's life: hitting it
-    // IS the defect, reported as a kill rather than as a vitest timeout.
-    const driverTimeoutMs = 2 * budgetMs;
-    // Past the probe's ceiling, past the driver's budget, past the margin —
-    // an exit before it can only be release.
-    const grandchildMs = 3 * budgetMs;
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-stubborn-long",
-      stubbornLocator(grandchildMs),
-    );
-    // Node strips the module's types itself (22.18+; the floor is 22.22), so the
-    // driver imports the source the suite imports, not a bundle of it.
-    const driver = handle.path("driver.mjs");
-    await writeFile(
-      driver,
-      [
-        `const { probePluginRuntime } = await import(${JSON.stringify(probeModule)});`,
-        `const probe = await probePluginRuntime(${JSON.stringify(pluginDir)}, { timeoutMs: ${CEILING_MS} });`,
-        "process.stdout.write(JSON.stringify({ outcome: probe.outcome }));",
-        "",
-      ].join("\n"),
-    );
-
-    const started = Date.now();
-    const run = await new Promise<{ error: Error | null; stdout: string }>((settle) => {
-      execFile(
-        process.execPath,
-        [driver],
-        { timeout: driverTimeoutMs, killSignal: "SIGKILL", encoding: "utf8" },
-        (error, stdout) => settle({ error, stdout }),
-      );
-    });
-    const elapsed = Date.now() - started;
-
-    expect(run.error, `the probe process did not exit on its own (${elapsed}ms)`).toBeNull();
-    expect(JSON.parse(run.stdout)).toEqual({ outcome: "timeout" });
-    // Near the ceiling plus a cold start; nowhere near the grandchild.
-    expect(
-      elapsed,
-      `${elapsed}ms against a budget of ${budgetMs}ms (ceiling ${CEILING_MS} + ${MARGIN} x ${coldStartMs}ms cold start)`,
-    ).toBeLessThan(budgetMs);
-  });
-});
-
-describe("check — plugin-runtime", () => {
-  /**
-   * TEST CHANGE, justified (2026-09-20, unit C4 / REQ-PLUGIN-016): this case
-   * asserted `warn` for a repository that records no plugin client and sets no
-   * root variable — which is every repository not running on a plugin,
-   * including this one, so `check` carried a standing advisory warning nobody
-   * could act on. The row's SUBJECT decides the severity now: with nothing
-   * recorded and no root in the environment there is no plugin to report on,
-   * so the honest answer is `pass`. The warn did not disappear — it moved to
-   * the state it was written for, a recorded client with no reachable root,
-   * which the case below pins. Nothing about the resolved, refused or
-   * major-skew branches moved.
-   */
-  it("passes quietly when no client records a plugin and no root variable is set", async () => {
-    const root = await seedRepo(getRepo());
-
-    const probe = await doctorRow(root, "plugin-runtime", {});
-
-    expect(probe.status).toBe("pass");
-    expect(probe.detail).toBe("no plugin recorded and no plugin root in the environment");
-  });
-
-  /**
-   * TEST CHANGE, justified (2026-09-24, prove/337 / REQ-PLUGIN-016): this case pinned the remedy
-   * "run this check through the plugin's st-setup or set CLAUDE_PLUGIN_ROOT". Its first half could
-   * not be followed — st-setup runs `plugin status` and `plugin setup`, never `check` — and its
-   * second named one client's variable. The locator now hands `check` its root as PLUGIN_ROOT, so
-   * the remedy names that route and the client-neutral variable. Only the detail text moved; the
-   * `warn` for a recorded client with no root is the same verdict.
-   */
-  it("warns with the two ways to make it answerable when a recorded client has no root", async () => {
-    const root = await seedRepo(getRepo(), {
-      plugin: {
-        mode: "generated",
-        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
-      },
-    });
-
-    const probe = await doctorRow(root, "plugin-runtime", {});
-
-    expect(probe.status).toBe("warn");
-    expect(probe.detail).toBe(
-      "no plugin root in the environment; run check through the installed root's locator " +
-        "(node <root>/runtime/locate.mjs -- check) or set PLUGIN_ROOT to that root",
-    );
-  });
-
-  it("passes on a recorded client when check runs through the installed root's locator (prove/337)", async () => {
-    // Two real halves composed, because neither fixture can be the whole: the REAL locator, copied
-    // into a plugin root, starts a stub runtime that reports the environment it was handed — no
-    // built CLI exists in a test run — and that environment is then the one `check` reads, whose
-    // probe runs the same real locator with `--print`.
-    const handle = getRepo();
-    const root = await seedRepo(handle, {
-      plugin: {
-        mode: "generated",
-        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
-      },
-    });
-    const version = createApp().version;
-    await handle.seedFiles({
-      "plugin-real/stamity-plugin.json": JSON.stringify({ name: "stamity", version }),
-      "plugin-real/runtime/package.json": JSON.stringify({
-        name: canonical().name,
-        version,
-        engines: { node: ">=22.0.0" },
-      }),
-      "plugin-real/runtime/locate.mjs": readFileSync(
-        fileURLToPath(new URL("../../../scripts/plugins/locate.mjs", import.meta.url)),
-        "utf8",
-      ),
-      "plugin-real/runtime/dist/cli.js":
-        "process.stdout.write(JSON.stringify({ args: process.argv.slice(2), PLUGIN_ROOT: process.env.PLUGIN_ROOT }))\n",
-    });
-    const pluginDir = handle.path("plugin-real");
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value !== undefined) env[key] = value;
-    }
-    // The vitest process may itself run inside a plugin session; a root variable inherited from it
-    // would decide what the locator hands over.
-    for (const name of ["CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "PLUGIN_ROOT", "COPILOT_PLUGIN_ROOT"]) {
-      delete env[name];
-    }
-
-    const located = await new Promise<{ error: Error | null; stdout: string }>((settle) => {
-      execFile(
-        process.execPath,
-        [join(pluginDir, "runtime", "locate.mjs"), "--project", root, "--", "check"],
-        { cwd: root, env, encoding: "utf8", timeout: 20_000 },
-        (error, stdout) => settle({ error, stdout }),
-      );
-    });
-    expect(located.error).toBeNull();
-    const handed = JSON.parse(located.stdout) as { args: string[]; PLUGIN_ROOT?: string };
-    expect(handed).toEqual({ args: ["check"], PLUGIN_ROOT: pluginDir });
-
-    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: handed.PLUGIN_ROOT });
-
-    expect(probe.status).toBe("pass");
-    expect(probe.detail).toBe(
-      `runtime bundled ${version} at ${join(pluginDir, "runtime", "dist", "cli.js")}`,
-    );
-  });
-
-  it("passes with the resolved kind, version and path when the locator exits 0", async () => {
-    const handle = getRepo();
-    const root = await seedRepo(handle);
-    const version = createApp().version;
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-ok",
-      printing({
-        kind: "bundled",
-        path: `${handle.path("plugin-ok")}/runtime/node_modules/stamity`,
-        version,
-        refusal: null,
-      }),
-    );
-
-    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir });
-
-    expect(probe.status).toBe("pass");
-    expect(probe.detail).toBe(
-      `runtime bundled ${version} at ${pluginDir}/runtime/node_modules/stamity`,
-    );
-  });
-
-  /**
-   * TEST CHANGE, justified (2026-09-20, REQ-PLUGIN-016): this case seeded a
-   * repository that records NO plugin client and still asserted `fail`, so an
-   * unrelated session's exported `CLAUDE_PLUGIN_ROOT` could fail the CI of a
-   * repository that has nothing to do with any plugin. The fixture now records
-   * the client whose refusal this is — which is the subject the verdict was
-   * always about — and the unrecorded case below pins the `warn` it became.
-   * Nothing about the quoted refusal or the resolved and skew branches moved.
-   */
-  it("fails with the locator's own refusal quoted when it exits 2", async () => {
-    const handle = getRepo();
-    const root = await seedRepo(handle, {
-      plugin: {
-        mode: "generated",
-        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
-      },
-    });
-    const refusal = "stamity plugin: no runtime found — probed /a and /b; reinstall the plugin";
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-refused",
-      printing({ kind: "none", path: null, version: null, refusal }, 2),
-    );
-
-    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir });
-
-    expect(probe.status).toBe("fail");
-    // The locator's message, not a restatement of it: the refusal names what
-    // was probed, and only the locator knows that.
-    expect(probe.detail).toContain(refusal);
-    expect(probe.detail).toContain(pluginDir);
-  });
-
-  it("strips a control byte a hostile locator puts in its refusal", async () => {
-    // SEC5-M1 (CWE-150): the refusal is the plugin root's own string, quoted
-    // into a row `check` prints raw — so a root could paint a false row in a
-    // CI log. The refusal is still quoted; the bytes that steer a terminal
-    // are dropped.
-    const handle = getRepo();
-    const root = await seedRepo(handle, {
-      plugin: {
-        mode: "generated",
-        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
-      },
-    });
-    const refusal = "no runtime found\u001b[2K\rok    plugin-runtime  spoofed";
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-refused-hostile",
-      printing({ kind: "none", path: null, version: null, refusal }, 2),
-    );
-
-    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir });
-
-    expect(probe.status).toBe("fail");
-    expect(probe.detail).toContain("no runtime found");
-    // oxlint-disable-next-line no-control-regex -- the control byte IS the subject
-    expect(probe.detail).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
-  });
-
-  it("warns on the same refusal in a repository that records no plugin at all", async () => {
-    // The third state, and the reason the second exists: a root variable
-    // exported by an unrelated session is not this repository's claim about
-    // itself, so a broken plugin somewhere in the environment cannot fail the
-    // CI of a repository that records no client and is not plugin-backed. The
-    // refusal is still quoted — it is worth reading — it is simply advisory.
-    const handle = getRepo();
-    const root = await seedRepo(handle);
-    const refusal = "stamity plugin: no runtime found — probed /a and /b; reinstall the plugin";
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-refused-unrecorded",
-      printing({ kind: "none", path: null, version: null, refusal }, 2),
-    );
-
-    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir });
-
-    expect(probe.status).toBe("warn");
-    expect(probe.detail).toContain(refusal);
-    expect(probe.detail).toContain(pluginDir);
-  });
-
-  it("fails the refusal in a plugin-backed repository even before a client is recorded", async () => {
-    // `mode: "plugin-backed"` is the repository saying it RUNS on a plugin, so
-    // a locator that refuses is this repository's own broken install whatever
-    // the clients map happens to hold.
-    const handle = getRepo();
-    const root = await seedRepo(handle, { plugin: { mode: "plugin-backed", clients: {} } });
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-refused-backed",
-      printing({ kind: "none", path: null, version: null, refusal: "no runtime found" }, 2),
-    );
-
-    expect((await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir })).status).toBe(
-      "fail",
-    );
-  });
-
-  it("fails a plugin-backed repository whose runtime is a different major", async () => {
-    const handle = getRepo();
-    const root = await seedRepo(handle, {
-      generatedBy: "1.9.0",
-      plugin: {
-        mode: "plugin-backed",
-        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
-      },
-    });
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-skewed",
-      printing({ kind: "companion", path: "/somewhere", version: "2.0.1", refusal: null }),
-    );
-
-    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir });
-
-    expect(probe.status).toBe("fail");
-    expect(probe.detail).toContain("major 2 against major 1");
-    expect(probe.detail).toContain("1.9.0");
-  });
-
-  it("passes the same skew while the manifest still says generated", async () => {
-    // Coexistence, not a defect: a repository that has not migrated is not
-    // running on that runtime, so the majors have nothing to agree about.
-    const handle = getRepo();
-    const root = await seedRepo(handle, { generatedBy: "1.9.0" });
-    const pluginDir = await pluginRoot(
-      handle,
-      "plugin-generated",
-      printing({ kind: "companion", path: "/somewhere", version: "2.0.1", refusal: null }),
-    );
-
-    expect((await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir })).status).toBe("pass");
-  });
-
-  /**
-   * The document is CHECKED, not just shaped. `parseLocatorReport` used to
-   * assert that `runtime` and `node` were objects and cast the rest, so a
-   * locator answering `kind: "sideways"` or `node.ok: "yes"` reached the row as
-   * a resolved runtime and printed a kind no reader of this engine recognises.
-   */
-  it.each([
-    ["a kind outside the three words", { kind: "sideways", path: null, version: null, refusal: null }, null],
-    ["a non-string path", { kind: "bundled", path: 7, version: null, refusal: null }, null],
-    ["a non-boolean node.ok", { kind: "bundled", path: null, version: null, refusal: null }, { version: "22.0.0", floor: null, ok: "yes" }],
-  ])("warns on a locator document carrying %s", async (_label, runtime, node) => {
-    const handle = getRepo();
-    const root = await seedRepo(handle);
-    const document = JSON.stringify({
-      runtime,
-      node: node ?? { version: process.versions.node, floor: "22.22.2", ok: true },
-    });
-    const pluginDir = await pluginRoot(
-      handle,
-      `plugin-malformed-${String(_label).replaceAll(/\W+/g, "-")}`,
-      `process.stdout.write(${JSON.stringify(document)});\nprocess.exit(0);\n`,
-    );
-
-    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir });
-
-    expect(probe.status).toBe("warn");
-    expect(probe.detail).toContain("stdout was not the locator's --print document");
-  });
-
-  it("warns rather than failing when the root holds no locator at all", async () => {
-    const root = await seedRepo(getRepo());
-
-    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: getRepo().path("no-such-root") });
-
-    // A broken plugin install is the client's state, not this repository's, and
-    // failing a CI gate on it would be a verdict about the wrong subject.
-    expect(probe.status).toBe("warn");
-    expect(probe.detail).toContain("no-such-root");
-  });
-});
-
-const pluginOf = (mode: "generated" | "plugin-backed"): SetupManifest["plugin"] => ({
-  mode,
-  clients: { claude: { version: "1.9.0", classes: ["agent"] } },
-});
-
-/** One agent ledger row, as the claude adapter would have written it. */
-const agentRow = (id: string): LedgerEntry => ({
-  path: `.claude/agents/stamity-${id}.md`,
-  adapter: "claude",
-  artifactId: id,
-  artifactType: "agent",
-  contentHash: createHash("sha256").update(id).digest("hex"),
-});
 
 const duplicatesRow = (root: string): Promise<DoctorCheck> =>
   doctorRow(root, "plugin-duplicates");
@@ -3170,700 +2667,233 @@ describe("check — the gates it did not run (REQ-FLOW-008)", () => {
  * needs a real doctor run, and that page's suite is a text lane.
  */
 describe("check — the troubleshooting page's doctor sample", () => {
-  it("shows the plugin-runtime line a repository recording nothing really prints", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the sample
+  // pinned the `plugin-runtime` line, a row that left with the plugin route; the line a
+  // repository recording nothing prints is now `plugin-duplicates`'s pass.
+  it("shows the plugin-duplicates line a repository recording nothing really prints", async () => {
     const page = await readFile(
       fileURLToPath(new URL("../../../docs/troubleshooting.md", import.meta.url)),
       "utf8",
     );
     const sample = page
       .split("\n")
-      .find((line) => line.trimStart().startsWith("ok    plugin-runtime"));
-    expect(sample, "the troubleshooting sample has no ok plugin-runtime line").toBeDefined();
+      .find((line) => line.trimStart().startsWith("ok    plugin-duplicates"));
+    expect(sample, "the troubleshooting sample has no ok plugin-duplicates line").toBeDefined();
 
     const root = await seedRepo(getRepo());
-    const probe = await doctorRow(root, "plugin-runtime", {});
+    const probe = await doctorRow(root, "plugin-duplicates", {});
 
     // Status and detail both: a sample showing the right sentence under the
     // wrong verdict is the exact defect this pins against.
     expect(probe.status).toBe("pass");
     // Column padding collapsed: the page aligns its table, and the alignment is
     // not the claim — the verdict word and the sentence are.
-    expect(sample?.trim().replaceAll(/\s+/g, " ")).toBe(`ok plugin-runtime ${probe.detail}`);
+    expect(sample?.trim().replaceAll(/\s+/g, " ")).toBe(`ok plugin-duplicates ${probe.detail}`);
   });
 });
 
+/**
+ * `plugin-duplicates` — the leftover-plugin warning, held for the 1.15 line.
+ *
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): 1.15.0
+ * deleted the plugin route, its `plugin-backed` mode and the duplicate scan this
+ * row ran over the ledger, an APM manifest and the native folders, so every case
+ * that pinned that scan, its three sources and its `fail` under `plugin-backed`
+ * left with it. The row now warns, and never fails, when the manifest's held
+ * `plugin` block or Claude's `enabledPlugins` still records an install, naming
+ * only the four client ids and each vendor's uninstall command.
+ */
 describe("check — plugin-duplicates", () => {
-  /**
-   * `agent` alone, not the four classes file 1's claude root carries.
-   *
-   * `seedRepo` performs a real sync, so its ledger already holds this client's
-   * four generated hook rows — a record naming `hooks` would therefore report a
-   * true duplicate in every case below and leave none of them able to say
-   * anything about the source it is actually about. The selection is empty, so
-   * `agent` starts with no rows and each case adds exactly the ones it means.
-   */
-  it("reports a hooks key in .claude/settings.json as an unmanaged hooks duplicate while the plugin carries hooks", async () => {
-    // W2: the plugin's hooks and the file's own hooks both load, and neither
-    // the ledger source (only the generated hooks tree) nor the unmanaged scan
-    // (only the native content directories) looked at the settings document.
-    const root = await seedRepo(getRepo(), {
-      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
-      files: {
-        ".claude/settings.json": `${JSON.stringify(
-          { permissions: { allow: ["Read"] }, hooks: { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] } },
-          null,
-          2,
-        )}\n`,
-      },
+  const PLUGIN_ID = canonical().name.replace(/^@[^/]+\//, "");
+  const HEADER =
+    "a plugin install from before 1.15.0 is still recorded; 1.15.0 removed the plugin route and " +
+    "this repository's own files now carry its content, so uninstall the plugin with your " +
+    "client's own command:";
+  const MANIFEST_LINE = `then delete the \`plugin\` key from ${STATE_DIR}/manifest.json; nothing reads it since 1.15.0`;
+  /** The block a 1.14 `stamity plugin setup` wrote for claude. */
+  const HELD_1_14 = { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["skill"] } } };
+
+  it("warns on the held 1.14 block, naming claude and its uninstall command, and still exits 0", async () => {
+    const root = await seedRepo(getRepo(), { plugin: HELD_1_14 });
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "plugin-duplicates")).toEqual({
+      id: "plugin-duplicates",
+      status: "warn",
+      detail: [HEADER, `claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`, MANIFEST_LINE].join("\n"),
     });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("fail");
-    expect(duplicates.detail).toContain("claude: hooks (1 file(s), unmanaged) at .claude/settings.json — ");
-    expect(duplicates.detail).toContain("loads");
-    expect(duplicates.detail).toContain(".claude/settings.local.json");
-    // Since per-entry settings ownership (REQ-FLOW-036), `clean` removes a stale repository-mode
-    // hook entry as well as `sync` (src/manifest/claudeSettings.ts::reduceClaudeSettingsToForeignContent),
-    // so the remedy names both verbs rather than `sync` alone.
-    expect(duplicates.detail).toMatch(/ sync and \S+(?: \S+)* clean both remove a stale repository-mode rendering/);
-    // `clean` is offered beside `sync`, so the remedy says what else it deletes (review/12).
-    expect(duplicates.detail).toContain(
-      "clean also deletes every file this engine wrote and the whole .stamity/ directory, so sync is the one for this row",
-    );
+    // The manifest that holds the block is valid, and drift is clean: the block steers nothing.
+    expect(row(doc, "manifest").status).toBe("pass");
+    expect(doc.drift?.clean).toBe(true);
+    expect(code).toBe(0);
   });
 
-  it("passes when a client records a plugin and nothing duplicates it", async () => {
-    const root = await seedRepo(getRepo(), { plugin: pluginOf("plugin-backed") });
+  it("names every client the held block records, in TOOLS order, each with its own command", async () => {
+    const root = await seedRepo(getRepo(), {
+      plugin: { mode: "generated", clients: { codex: {}, cursor: {}, claude: {}, copilot: {} } },
+    });
 
     const probe = await duplicatesRow(root);
 
-    expect(probe.status).toBe("pass");
-    expect(probe.detail).toBe("no duplicated classes");
+    expect(probe.status).toBe("warn");
+    expect(probe.detail.split("\n")).toEqual([
+      HEADER,
+      `claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`,
+      `cursor: uninstall the ${PLUGIN_ID} plugin from Cursor's Customize view`,
+      `copilot: copilot plugin uninstall ${PLUGIN_ID}`,
+      `codex: codex plugin remove ${PLUGIN_ID}@<your marketplace>`,
+      MANIFEST_LINE,
+    ]);
   });
 
-  it("warns on ledger rows of a carried class while the mode is generated", async () => {
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      ledger: [agentRow("reviewer"), agentRow("implementer")],
+  it("warns on Claude's enabledPlugins key for this package's plugin, with no manifest line", async () => {
+    const root = await seedRepo(getRepo());
+    const settingsPath = join(root, ".claude", "settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
+    await writeFile(settingsPath, `${JSON.stringify({ ...settings, enabledPlugins: { [`${PLUGIN_ID}@acme`]: true } }, null, 2)}\n`);
+
+    const probe = await duplicatesRow(root);
+
+    expect(probe).toEqual({
+      id: "plugin-duplicates",
+      status: "warn",
+      detail: [HEADER, `claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`].join("\n"),
     });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("warn");
-    // Two rows, counted rather than listed, with the source and the remedy the
-    // cell prescribes for it.
-    expect(duplicates.detail).toContain("claude: agent (2 file(s), ledger)");
-    expect(duplicates.detail).toContain(npxCommand("clean -y"));
-    expect(duplicates.detail).toContain(npxCommand("plugin setup --client claude"));
   });
 
-  it("fails the same repository once the manifest records plugin-backed", async () => {
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("plugin-backed"),
-      ledger: [agentRow("reviewer"), agentRow("implementer")],
+  it("passes on another product's plugin in enabledPlugins, and on a repository recording nothing", async () => {
+    const root = await seedRepo(getRepo());
+    expect(await duplicatesRow(root)).toEqual({
+      id: "plugin-duplicates",
+      status: "pass",
+      detail: "no leftover plugin install",
     });
 
-    const duplicates = await duplicatesRow(root);
-
-    // The same repository, the same two rows, one field different: the severity
-    // is the manifest's mode and nothing else.
-    expect(duplicates.status).toBe("fail");
-    expect(duplicates.detail).toContain("claude: agent (2 file(s), ledger)");
-  });
-
-  it("names each duplicated file by its repository-relative path, sorted", async () => {
-    // W-D2: REQ-PLUGIN-019 names each duplicated class "with its path", and the
-    // row counted files without naming one — an operator told to remove "the
-    // file" had to find it. Sorted, so the order is the paths' own and not the
-    // ledger's write order.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      ledger: [agentRow("reviewer"), agentRow("implementer")],
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.detail).toContain(
-      "claude: agent (2 file(s), ledger) at .claude/agents/stamity-implementer.md, " +
-        ".claude/agents/stamity-reviewer.md — ",
+    const settingsPath = join(root, ".claude", "settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
+    await writeFile(
+      settingsPath,
+      `${JSON.stringify({ ...settings, enabledPlugins: { [`not-${PLUGIN_ID}@acme`]: true, [PLUGIN_ID]: true } }, null, 2)}\n`,
     );
+
+    expect((await duplicatesRow(root)).status).toBe("pass");
   });
 
-  it("names the first three paths of a class and folds the rest into a count", async () => {
-    // The bound, pinned: a class with many files would turn one doctor row
-    // into a directory listing, so the detail names three and counts the rest.
-    // Five rows: three shown, two folded, and the two folded are the last two
-    // in sorted order.
+  it("prints nothing of a hostile block but the known client ids, and accepts a block of any shape", async () => {
+    const esc = String.fromCharCode(27);
     const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      ledger: ["e", "d", "c", "b", "a"].map((id) => agentRow(id)),
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.detail).toContain(
-      "claude: agent (5 file(s), ledger) at .claude/agents/stamity-a.md, " +
-        ".claude/agents/stamity-b.md, .claude/agents/stamity-c.md +2 more — ",
-    );
-    expect(duplicates.detail).not.toContain("stamity-d.md");
-  });
-
-  it("names the unowned native file and the matched dependency spelling as their paths", async () => {
-    // The `unmanaged` remedy says "remove the file"; this is where the file is
-    // named. An `apm` finding has no file — the dependency spelling that
-    // matched stands as its path.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
-        ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
-        "corpus/agents/stamity-reviewer.md": AGENT_FIXTURE,
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.detail).toContain(
-      "claude: agent (1 file(s), unmanaged) at .claude/agents/stamity-reviewer.md — ",
-    );
-    expect(duplicates.detail).toContain(`claude: agent (1 file(s), apm) at ${apmInstallSpec()} — `);
-  });
-
-  it("names an APM dependency and an unowned native file as their own sources", async () => {
-    const repo = getRepo();
-    const root = await seedRepo(repo, {
-      plugin: pluginOf("generated"),
-      files: {
-        // The install spec THIS release publishes — `<owner>/<repo>#plugins/
-        // v<version>`, read out of the running checkout at runtime, so a
-        // downstream that renamed the package and repointed `repository.url`
-        // recognises its own dependency and this one recognises its own.
-        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
-        // A file under a native directory carrying an id the plugin carries and
-        // no ledger row — hand-placed, or left by a tool that is not this one.
-        ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
-        "corpus/agents/stamity-reviewer.md": AGENT_FIXTURE,
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("warn");
-    expect(duplicates.detail).toContain("claude: agent (1 file(s), apm)");
-    expect(duplicates.detail).toContain(
-      "deploys the same classes; remove it from apm.yml and run apm install, or keep the " +
-        "plugin uninstalled",
-    );
-    expect(duplicates.detail).toContain("claude: agent (1 file(s), unmanaged)");
-    expect(duplicates.detail).toContain(
-      "not written by this engine; remove the file or keep it as an override under " +
-        `${STATE_DIR}/overrides/`,
-    );
-  });
-
-  /**
-   * The mixed repository, pinned as a DECISION rather than as a defect
-   * (REQ-PLUGIN-019, disposition 2026-09-20).
-   *
-   * `.agents/skills/` is the vendor-neutral tree, and it stays written while
-   * ANY generated-mode reader still owns `skill` — so a repository whose cursor
-   * is plugin-backed for `skill` beside a generated codex has that tree on disk
-   * and both clients read it. Cursor therefore does receive those skills twice,
-   * once from its plugin and once from the shared tree, and this row still
-   * passes: the ledger source filters rows by adapter and the unmanaged source
-   * exempts anything a ledger row owns, so neither sees the tree as cursor's
-   * duplicate. Failing here would break the CI of a legitimate mixed
-   * repository, and the tree cannot be removed without stripping the generated
-   * client. The way out is moving the last reader onto the plugin, not a
-   * verdict from this row.
-   */
-  it("passes a mixed repository whose shared skills tree still serves a generated reader", async () => {
-    const handle = getRepo();
-    await handle.seedFiles({ "corpus/skills/st-verify/SKILL.md": SKILL_FIXTURE });
-    const root = await seedRepo(handle, {
-      tools: ["cursor", "codex"],
       plugin: {
-        mode: "plugin-backed",
-        clients: { cursor: { version: "1.9.0", classes: ["skill"] } },
+        mode: `${esc}[2K\rok    plugin-duplicates  spoofed`,
+        clients: { [`vim${esc}[2K`]: { version: "x" }, codex: "not a record", toString: 1 },
       },
     });
 
-    // The sync the boundary is recorded by: `seedRepo` emits in generated mode
-    // and stamps the plugin record afterwards, so cursor still holds the shared
-    // tree's ledger rows until emission runs again under the new ownership.
-    // That second run is what a real `plugin setup` is followed by, and it is
-    // the state this decision is about.
-    const engineVersion = createApp().version;
-    await applySync(root, await planSync(root, engineVersion), {
-      engineVersion,
-      force: false,
-      dryRun: false,
-      now: T0,
-    });
+    const { code, doc } = await runJson(root);
+    const probe = row(doc, "plugin-duplicates");
 
-    // The shared tree is still there, and codex — the generated reader — is
-    // what keeps it there.
-    expect(existsSync(join(root, ".agents/skills/st-verify/SKILL.md"))).toBe(true);
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("pass");
-    expect(duplicates.detail).toBe("no duplicated classes");
+    expect(probe.status).toBe("warn");
+    expect(probe.detail.split("\n")).toEqual([
+      HEADER,
+      `codex: codex plugin remove ${PLUGIN_ID}@<your marketplace>`,
+      MANIFEST_LINE,
+    ]);
+    expect(probe.detail).not.toContain("vim");
+    expect(probe.detail).not.toContain("spoofed");
+    expect(code).toBe(0);
   });
 
-  /**
-   * A pack skill is repository-installed content no plugin ships, so emission
-   * keeps writing it under a plugin that carries `skill` (run
-   * 2026-10-03_pack-engine-defects, defect 3). Its client rows are recorded
-   * exactly like a core skill's — the client as owner, class `skill`, the
-   * catalog id — and only the pack's own install rows say which files they
-   * are. Two phases, one repository: the core skill's leftover rows beside the
-   * plugin still fail the row while the pack skill's rows sit in the same
-   * ledger, and once emission re-runs under the plugin only the pack skill's
-   * rows remain and the row passes.
-   */
-  it.each([
-    ["cursor", ["cursor"]],
-    ["claude", ["claude"]],
-    ["all four", ["claude", "cursor", "copilot", "codex"]],
-  ] as const)(
-    "exempts an installed pack skill's rows and still fails a core skill beside the plugin (%s)",
-    async (_label, toolSet) => {
-      const tools: Tool[] = [...toolSet];
-      const handle = getRepo();
-      const packFiles: Record<string, string> = {
-        "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
-        "skills/st-acme-skill/references/notes.md": "Acme reference notes.\n",
-      };
-      await handle.seedFiles({
-        "corpus/skills/st-verify/SKILL.md": SKILL_FIXTURE,
-        ...Object.fromEntries(
-          Object.entries(packFiles).map(([rel, body]) => [`pack-src/acme/${rel}`, body]),
-        ),
-        "pack-src/acme/pack.json": `${JSON.stringify({
-          name: "acme",
-          version: "1.0.0",
-          integrity: Object.fromEntries(
-            Object.entries(packFiles).map(([rel, body]) => [
-              rel,
-              createHash("sha256").update(body, "utf8").digest("hex"),
-            ]),
-          ),
-        })}\n`,
-      });
-      const root = await seedRepo(handle, { tools });
-      const engineVersion = createApp().version;
-      const resync = async (): Promise<void> => {
-        await applySync(root, await planSync(root, engineVersion), {
-          engineVersion,
-          force: false,
-          dryRun: false,
-          now: T0,
-        });
-      };
+  it.each([["a string", "plugin-backed"], ["an array", ["claude"]], ["a null", null]])(
+    "holds %s under `plugin` without refusing the manifest, naming no client",
+    async (_label, plugin) => {
+      const root = await seedRepo(getRepo(), { plugin });
 
-      const plan = await planPackInstall(root, handle.path("pack-src/acme"), {
-        allowUntrusted: true,
-      });
-      expect(plan.collisions).toEqual([]);
-      const seeded = await readManifest(root);
-      if (seeded === null) throw new Error("fixture lost its manifest");
-      const installed = await applyPackInstall(root, plan, seeded, { engineVersion, now: T0 });
-      expect(installed.result.installed).toBe(true);
-      await writeManifest(root, installed.manifest, { now: T0 });
-      await resync();
+      const { code, doc } = await runJson(root);
 
-      const generated = await readManifest(root);
-      if (generated === null) throw new Error("fixture lost its manifest");
-      await writeManifest(
-        root,
-        {
-          ...generated,
-          plugin: {
-            mode: "plugin-backed",
-            clients: Object.fromEntries(
-              tools.map((tool) => [tool, { version: "1.11.0", classes: ["skill"] }]),
-            ),
-          },
-        },
-        { now: T0 },
-      );
-
-      // Phase 1: the generated sync's rows, under the new plugin record.
-      const skillsDirOf = (tool: Tool): string =>
-        tool === "claude" ? ".claude/skills" : ".agents/skills";
-      const before = await duplicatesRow(root);
-      expect(before.status).toBe("fail");
-      for (const tool of tools) {
-        expect(before.detail).toContain(
-          `${tool}: skill (1 file(s), ledger) at ${skillsDirOf(tool)}/st-verify/SKILL.md — `,
-        );
-      }
-      expect(before.detail).not.toContain("st-acme-skill");
-
-      // Phase 2: emission re-run under the plugin, as `plugin setup` does.
-      await resync();
-      const after = await duplicatesRow(root);
-      expect(after.status).toBe("pass");
-      expect(after.detail).toBe("no duplicated classes");
-      // Not vacuous: every client still holds both pack skill files as its own
-      // `skill` rows, and the core skill's rows are gone.
-      const ledger = (await readManifest(root))?.ledger ?? [];
-      for (const tool of tools) {
-        expect(
-          ledger
-            .filter((entry) => entry.adapter === tool && entry.artifactType === "skill")
-            .map((entry) => entry.path)
-            .toSorted(),
-        ).toEqual([
-          `${skillsDirOf(tool)}/st-acme-skill/SKILL.md`,
-          `${skillsDirOf(tool)}/st-acme-skill/references/notes.md`,
-        ]);
-      }
+      expect(row(doc, "manifest").status).toBe("pass");
+      expect(row(doc, "plugin-duplicates").status).toBe("pass");
+      expect(code).toBe(0);
     },
   );
 
-  /**
-   * The projection walks an installed pack skill's folder as it sits on disk,
-   * so a support file with no `pack:<id>` row — one a re-install's newer
-   * version dropped (`add` deletes nothing), or one added by hand — is still
-   * emitted to every client under the plugin. The exemption keys on the
-   * folder, so that file's client rows do not fail the row (review W-1 of run
-   * 2026-10-03_pack-engine-defects, unit u4a-pack-skill-origin).
-   */
-  it("exempts a support file in an installed pack skill's folder that no pack row records", async () => {
-    const tools: Tool[] = ["claude", "cursor"];
+  it("names the plugin id a RENAMED package installed, not the canonical one", async () => {
+    // The plugin id on every client surface was the package name with its npm
+    // scope removed; a hardcoded `stamity` would send a fork's operator at a plugin
+    // id their marketplace never carried, and would miss their `enabledPlugins` key.
+    //
+    // MOCK, with its reason: the running package's name is fixed by the manifest
+    // this suite runs out of, and a rename cannot be staged in-process. Only the
+    // kit's own package-root walk is redirected, to a real renamed `package.json`;
+    // the name read and the warning's lines are the real module.
     const handle = getRepo();
-    const packFiles: Record<string, string> = {
-      "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
-    };
-    await handle.seedFiles({
-      ...Object.fromEntries(
-        Object.entries(packFiles).map(([rel, body]) => [`pack-src/acme/${rel}`, body]),
-      ),
-      "pack-src/acme/pack.json": `${JSON.stringify({
-        name: "acme",
-        version: "1.0.0",
-        integrity: Object.fromEntries(
-          Object.entries(packFiles).map(([rel, body]) => [
-            rel,
-            createHash("sha256").update(body, "utf8").digest("hex"),
-          ]),
-        ),
-      })}\n`,
+    const pseudoInstall = handle.path("pseudo-install");
+    await mkdir(pseudoInstall, { recursive: true });
+    await writeFile(join(pseudoInstall, "package.json"), `${JSON.stringify({ name: "@acme/stamity-fork", version: "1.8.0" })}\n`);
+    const kitDir = join("src", "cli", "kit");
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string =>
+          from.endsWith(kitDir) ? pseudoInstall : actual.findPackageRoot(from),
+      };
     });
-    const root = await seedRepo(handle, { tools });
-    const engineVersion = createApp().version;
-    const plan = await planPackInstall(root, handle.path("pack-src/acme"), {
-      allowUntrusted: true,
-    });
-    const seeded = await readManifest(root);
-    if (seeded === null) throw new Error("fixture lost its manifest");
-    const installed = await applyPackInstall(root, plan, seeded, { engineVersion, now: T0 });
-    expect(installed.result.installed).toBe(true);
-    await writeManifest(
-      root,
-      {
-        ...installed.manifest,
-        plugin: {
-          mode: "plugin-backed",
-          clients: Object.fromEntries(
-            tools.map((tool) => [tool, { version: "1.11.0", classes: ["skill"] }]),
-          ),
-        },
-      },
-      { now: T0 },
-    );
-    // The unrecorded support file, beside the recorded SKILL.md on disk.
-    const installedSkillDir = join(root, STATE_DIR, "packs", "acme", "skills", "st-acme-skill");
-    await mkdir(join(installedSkillDir, "references"), { recursive: true });
-    await writeFile(join(installedSkillDir, "references", "stale.md"), "Left behind.\n", "utf8");
-    await applySync(root, await planSync(root, engineVersion), {
-      engineVersion,
-      force: false,
-      dryRun: false,
-      now: T0,
-    });
+    try {
+      const kit = await import("../../../src/cli/kit/packageName.ts");
 
-    const ledger = (await readManifest(root))?.ledger ?? [];
-    // No pack row records the support file …
-    expect(
-      ledger.filter((entry) => entry.adapter === "pack:acme").map((entry) => entry.artifactId),
-    ).not.toContain("acme/skills/st-acme-skill/references/stale.md");
-    // … yet every client holds it as its own `skill` row.
-    for (const tool of tools) {
-      const skillsDir = tool === "claude" ? ".claude/skills" : ".agents/skills";
-      expect(
-        ledger.some(
-          (entry) =>
-            entry.adapter === tool &&
-            entry.artifactType === "skill" &&
-            entry.path === `${skillsDir}/st-acme-skill/references/stale.md`,
-        ),
-      ).toBe(true);
+      expect(kit.leftoverPluginLines(undefined, { "stamity-fork@acme": true })).toEqual([
+        HEADER,
+        "claude: claude plugin uninstall stamity-fork@<your marketplace>",
+      ]);
+      expect(kit.leftoverPluginLines({ clients: { codex: {} } }, undefined)[1]).toBe(
+        "codex: codex plugin remove stamity-fork@<your marketplace>",
+      );
+      // The canonical id is another product's plugin to a fork.
+      expect(kit.leftoverPluginLines(undefined, { "stamity@acme": true })).toEqual([]);
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
     }
-    const duplicates = await duplicatesRow(root);
-    expect(duplicates.status).toBe("pass");
-    expect(duplicates.detail).toBe("no duplicated classes");
   });
 
-  /**
-   * The pack exemption is skill-only (review/7 of run 2026-10-03_pack-engine-defects).
-   * A pack command or agent is written by emission like any other row of its class, and
-   * under a plugin that carries the class emission stops writing it — so a copy a
-   * generated sync left behind is a stale duplicate the client loads beside the plugin's,
-   * exactly as a core command's would be, and `plugin-duplicates` must still count it.
-   */
-  it("still counts a stale pack command and agent under a plugin that carries their classes", async () => {
-    const handle = getRepo();
-    const root = await seedRepo(handle, { tools: ["claude"] });
-    await installAcmePack(handle, root, {
-      "commands/st-acme-cmd.md": COMMAND_FIXTURE.replace("id: cmd-work", "id: acme-cmd"),
-      "agents/stamity-acme-agent.md": AGENT_FIXTURE.replace("id: reviewer", "id: acme-agent"),
-      "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
-    });
-    await resyncAt(root);
-    const generated = await readManifest(root);
-    if (generated === null) throw new Error("fixture lost its manifest");
-    await writeManifest(
-      root,
-      {
-        ...generated,
-        plugin: {
-          mode: "plugin-backed",
-          clients: { claude: { version: "1.11.0", classes: ["agent", "skill", "command"] } },
-        },
-      },
-      { now: T0 },
-    );
+  it("still warns when another field makes the manifest unreadable", async () => {
+    // The row reads the file as raw JSON, not through the validator, so a defect
+    // elsewhere in the manifest cannot hide a leftover install.
+    const root = await seedRepo(getRepo(), { plugin: HELD_1_14 });
+    const path = join(root, STATE_DIR, "manifest.json");
+    const manifest = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    await writeFile(path, `${JSON.stringify({ ...manifest, ledgar: [] }, null, 2)}\n`);
 
-    const duplicates = await duplicatesRow(root);
+    const { doc } = await runJson(root);
 
-    expect(duplicates.status).toBe("fail");
-    expect(duplicates.detail).toContain(
-      "claude: agent (1 file(s), ledger) at .claude/agents/stamity-acme-agent.md — ",
-    );
-    expect(duplicates.detail).toContain(
-      "claude: command (1 file(s), ledger) at .claude/commands/st-acme-cmd.md — ",
-    );
-    // The pack skill beside them is the exemption, and stays one.
-    expect(duplicates.detail).not.toContain("st-acme-skill");
-  });
-
-  it("names a copilot agent and prompt whose double extensions no ledger row owns", async () => {
-    // `<id>.agent.md` and `<id>.prompt.md` are what the copilot adapter writes.
-    // A single-extension strip leaves `stamity-reviewer.agent` and
-    // `st-work.prompt`, which match no carried id, so the unmanaged scan saw
-    // nothing at all in this client's directories.
-    const root = await seedRepo(getRepo(), {
-      tools: ["copilot"],
-      plugin: {
-        mode: "generated",
-        clients: { copilot: { version: "1.9.0", classes: ["agent", "command"] } },
-      },
-      files: {
-        "corpus/agents/stamity-reviewer.md": AGENT_FIXTURE,
-        "corpus/commands/st-work.md": COMMAND_FIXTURE,
-        ".github/agents/stamity-reviewer.agent.md": "---\nname: reviewer\n---\n\nBody.\n",
-        ".github/prompts/st-work.prompt.md": "---\nname: work\n---\n\nBody.\n",
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.detail).toContain("copilot: agent (1 file(s), unmanaged)");
-    expect(duplicates.detail).toContain("copilot: command (1 file(s), unmanaged)");
-  });
-
-  it("still names a dependency spelled as the scoped npm package, not only the slug", async () => {
-    // Two identities, one row: an APM manifest written by hand against the
-    // registry name has to be recognised beside the release's own slug form.
-    // Quoted, because `@` is a reserved indicator at the head of a plain YAML
-    // scalar and an unquoted scoped name makes the whole file unparseable.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - "${canonical().name}#plugins/v1.9.0"\n`,
-      },
-    });
-
-    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
-  });
-
-  it("reports nothing for a mirror published under another owner", async () => {
-    // The documented bound, pinned rather than assumed: the match is the slug
-    // or the package name, and a private mirror at `acme/stamity-mirror`
-    // carries neither. Missing it is the safe direction — a false duplicate
-    // would send an operator to remove a dependency that deploys nothing —
-    // and closing it needs the installed marketplace on the client record,
-    // which no manifest field carries yet.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": "name: consumer\ndependencies:\n  - acme/stamity-mirror#plugins/v1.9.0\n",
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("pass");
-    expect(duplicates.detail).toBe("no duplicated classes");
-  });
-
-  it("strips a control byte an apm.yml dependency smuggles into the row", async () => {
-    // SEC5-M1 (CWE-150): the matched dependency line is quoted into the
-    // remedy and carried as the finding's path, and `check` prints the row
-    // raw. A YAML double-quoted scalar can spell `\e`, so a crafted entry
-    // could paint a false doctor row in a CI log. The row still reports the
-    // duplicate — the bytes that steer a terminal are what it drops.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - "${apmInstallSpec()}\\e[2K\\rok    spoofed-row"\n`,
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.detail).toContain("claude: agent (1 file(s), apm)");
-    // oxlint-disable-next-line no-control-regex -- the control byte IS the subject
-    expect(duplicates.detail).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
-  });
-
-  it("names the dependency under the nested `dependencies: apm:` section the consumer manifest documents", async () => {
-    // W-D1: `docs/enterprise-forks.md` documents the consumer's `apm.yml` with
-    // its dependencies NESTED under an `apm:` section, and
-    // `scripts/apm-install-smoke.mjs` writes exactly that shape — while this
-    // row read `dependencies` as a flat list only, so the documented shape
-    // reported nothing. The block below is the page's own, with its example
-    // dependency replaced by the spec this release publishes.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `targets: [claude]\ndependencies:\n  apm:\n    - ${apmInstallSpec()}\n`,
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("warn");
-    expect(duplicates.detail).toContain("claude: agent (1 file(s), apm)");
-  });
-
-  it("names a dependency spelled as the repository's https URL", async () => {
-    // M-1: the bound (the case below) excluded `/` on both sides, so the URL
-    // spelling of the SAME repository — `https://github.com/<slug>#ref` — no
-    // longer matched. A `/` before the slug is a URL's path separator, not a
-    // longer name.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - https://github.com/${ownRepositorySlug()}#plugins/v1.9.0\n`,
-      },
-    });
-
-    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
-  });
-
-  it("names a dependency that points at a subpath of the repository", async () => {
-    // M-1: `<slug>/<dir>#ref` is the same repository, one directory in, and a
-    // `/` after the slug ends the name as surely as the `#` does.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - ${ownRepositorySlug()}/plugins/claude#plugins/v1.9.0\n`,
-      },
-    });
-
-    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
-  });
-
-  it("names a dependency whose slug differs from the repository's only in case", async () => {
-    // M-1: GitHub owner and repository names are case-insensitive, so an
-    // upper-cased spelling resolves to the same repository and deploys the
-    // same content.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - ${ownRepositorySlug().toUpperCase()}#plugins/v1.9.0\n`,
-      },
-    });
-
-    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
-  });
-
-  it("reports nothing for a same-owner sibling whose name merely starts with the slug", async () => {
-    // W4-1: the match was an unbounded substring, so `<owner>/<repo>` was found
-    // inside `<owner>/<repo>-suffix#plugins/v1.9.0` and a repository depending
-    // on ANY same-owner sibling with a longer name was told to remove a
-    // dependency that deploys nothing. The identity has to end where the
-    // dependency's name ends: at the `#` that starts the ref, or at whitespace,
-    // a quote or the end of the line. The sibling's name is synthetic — derived
-    // from this checkout's own slug, never a real repository.
-    const root = await seedRepo(getRepo(), {
-      plugin: pluginOf("generated"),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - ${ownRepositorySlug()}-suffix#plugins/v1.9.0\n`,
-      },
-    });
-
-    const duplicates = await duplicatesRow(root);
-
-    expect(duplicates.status).toBe("pass");
-    expect(duplicates.detail).toBe("no duplicated classes");
-  });
-
-  /**
-   * The severity-to-exit-code half, on a fixture whose ONLY finding is the
-   * duplicate.
-   *
-   * An `apm.yml` dependency leaves no file on disk and no ledger row, so the
-   * drift gate stays clean and the exit code is the doctor's verdict alone —
-   * which is what the claim is about. The ledger and unmanaged fixtures above
-   * both drift by construction (a ledgered path with no file; an unowned file
-   * at a path sync plans), and an exit code asserted there would be a statement
-   * about the drift gate wearing this row's name.
-   */
-  const apmOnly = async (mode: "generated" | "plugin-backed"): Promise<string> =>
-    await seedRepo(getRepo(), {
-      plugin: pluginOf(mode),
-      files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
-      },
-    });
-
-  it("leaves the exit code at 0 while the mode is generated", async () => {
-    const { code, doc } = await runJson(await apmOnly("generated"));
-
+    expect(row(doc, "manifest").status).toBe("fail");
     expect(row(doc, "plugin-duplicates").status).toBe("warn");
-    expect(code).toBe(0);
-    expect(doc.ok).toBe(true);
-    // Both rows travel in the payload, so a machine caller reads them without
-    // parsing the human table.
-    expect(doc.doctor.map((entry) => entry.id)).toEqual(
-      expect.arrayContaining(["plugin-runtime", "plugin-duplicates"]),
-    );
   });
 
-  it("takes the exit code to 1 once the mode is plugin-backed", async () => {
-    const { code, doc } = await runJson(await apmOnly("plugin-backed"));
+  it("puts each further line under the detail column, and no padding in the --json detail", async () => {
+    // review/41: continuation lines were joined with a fixed 25-space indent,
+    // four columns left of the detail column, and the spaces shipped in --json.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): moved here
+    // from `pack-reach`, whose only two-line warning was the plugin drop that left
+    // with the `plugin-backed` mode; this row's warning is the multi-line one now.
+    const root = await seedRepo(getRepo(), { plugin: HELD_1_14 });
 
-    expect(row(doc, "plugin-duplicates").status).toBe("fail");
-    expect(code).toBe(1);
-    expect(doc.ok).toBe(false);
-  });
+    const { doc } = await runJson(root);
+    const probe = row(doc, "plugin-duplicates");
+    const lines = probe.detail.split("\n");
+    expect(lines).toHaveLength(3);
+    expect(lines.every((line) => line === line.trim())).toBe(true);
 
-  it("passes a repository that records no plugin at all", async () => {
-    const root = await seedRepo(getRepo(), {
-      ledger: [agentRow("reviewer")],
-      files: { ".claude/agents/stamity-reviewer.md": "body\n" },
-    });
-
-    const probe = await duplicatesRow(root);
-
-    expect(probe.status).toBe("pass");
-    expect(probe.detail).toBe("no client records a plugin, so nothing can duplicate");
+    const human = await runHuman(root);
+    const width = Math.max(...doc.doctor.map((entry) => entry.id.length));
+    const column = 2 + 4 + 2 + width + 2;
+    const out = human.stdout.split("\n");
+    const first = out.findIndex((line) => line.includes(lines[0]!));
+    expect(first).toBeGreaterThan(-1);
+    expect(out[first]!.indexOf(lines[0]!)).toBe(column);
+    expect(out[first + 1]).toBe(`${" ".repeat(column)}${lines[1]!}`);
+    expect(out[first + 2]).toBe(`${" ".repeat(column)}${lines[2]!}`);
   });
 });
 
@@ -3904,7 +2934,7 @@ async function installAcmePack(
   await writeManifest(root, installed.manifest, { now: T0 });
 }
 
-/** One real sync, as `sync` (or `plugin setup`) runs it. */
+/** One real sync, as `sync` runs it. */
 async function resyncAt(root: string): Promise<void> {
   const engineVersion = createApp().version;
   await applySync(root, await planSync(root, engineVersion), {
@@ -3915,23 +2945,18 @@ async function resyncAt(root: string): Promise<void> {
   });
 }
 
-/** Record a plugin-backed client set on the manifest, then sync under it. */
-async function goPluginBacked(
-  root: string,
-  clients: NonNullable<NonNullable<SetupManifest["plugin"]>["clients"]>,
-): Promise<void> {
-  const manifest = await readManifest(root);
-  if (manifest === null) throw new Error("fixture lost its manifest");
-  await writeManifest(root, { ...manifest, plugin: { mode: "plugin-backed", clients } }, { now: T0 });
-  await resyncAt(root);
-}
-
 /**
  * `pack-reach` (REQ-PLUGIN-016; run 2026-10-03_pack-engine-defects, unit
  * u4b-pack-reach-row): an installed pack none of whose artifacts reaches a
- * selected client fails the row — in plugin-backed mode, a command-only pack
- * on a client whose plugin carries commands installs, syncs green and does
- * nothing. The judgment is the emission plan's own `packReach`.
+ * selected client fails the row — a pack whose every artifact's `tools:` list
+ * names no selected client installs, syncs green and does nothing. The
+ * judgment is the emission plan's own `packReach`.
+ *
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+ * `plugin-owned` drop reason left with the `plugin-backed` mode, so the cases
+ * that reached the row through a plugin record now reach it through a `tools:`
+ * list, the one that only pinned the plugin-drop sentence is gone, and the case
+ * that pinned a partial plugin drop now pins that a held block drops nothing.
  */
 describe("check — pack-reach", () => {
   const ACME_CMD = COMMAND_FIXTURE.replace("id: cmd-work", "id: acme-cmd");
@@ -3984,52 +3009,25 @@ describe("check — pack-reach", () => {
     expect(code).toBe(0);
   });
 
-  it("fails a command-only pack on a plugin that carries commands, naming why and the way out", async () => {
+  it("drops nothing for a held plugin block: the pack's command reaches every selected client", async () => {
+    // The 1.14 record that carried claude's commands no longer moves a class out
+    // of emission: the block is held for the warning and read by nothing else.
     const handle = getRepo();
-    const root = await seedRepo(handle, { tools: ["claude"] });
-    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
-    await goPluginBacked(root, { claude: { version: "1.11.0", classes: ["command"] } });
-
-    const { code, doc } = await runJson(root);
-    const reach = row(doc, "pack-reach");
-
-    expect(reach.status).toBe("fail");
-    // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
-    // review/38. The second remedy, "run claude on the CLI's generated mode",
-    // named no command and none exists; the row now gives only the remedy that
-    // runs and states the plugin boundary as a fact.
-    expect(reach.detail).toBe(
-      'pack "acme" reaches no selected client: command st-acme-cmd — the claude plugin ' +
-        `carries the command class. Remove it with ${npxCommand("clean --pack acme")}. While a ` +
-        "client's plugin carries a class, this repository writes none of that class for it; " +
-        "only a pack's skills are exempt",
-    );
-    expect(reach.detail).not.toContain("generated mode");
-    // The row alone decides the exit: drift is clean once the sync ran under the plugin.
-    expect(doc.driftStatus).toBe("evaluated");
-    expect(doc.drift?.clean).toBe(true);
-    expect(code).toBe(1);
-  });
-
-  it("warns, naming each dropped artifact, when the pack still reaches another client", async () => {
-    const handle = getRepo();
-    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
-    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
-    // Codex's plugin carries no commands, so the pack's command still reaches it.
-    await goPluginBacked(root, {
-      claude: { version: "1.11.0", classes: ["command"] },
-      codex: { version: "1.11.0", classes: ["skill"] },
+    const root = await seedRepo(handle, {
+      tools: ["claude", "codex"],
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.11.0", classes: ["command"] } } },
     });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    await resyncAt(root);
 
     const { code, doc } = await runJson(root);
 
     expect(row(doc, "pack-reach")).toEqual({
       id: "pack-reach",
-      status: "warn",
-      detail:
-        'pack "acme": command st-acme-cmd is not written for claude (the claude plugin carries ' +
-        "the command class); it reaches codex",
+      status: "pass",
+      detail: "1 installed pack(s), 1 artifact(s), each reaching a selected client",
     });
+    expect(existsSync(join(root, ".claude", "commands", "st-acme-cmd.md"))).toBe(true);
     expect(code).toBe(0);
   });
 
@@ -4151,14 +3149,22 @@ describe("check — pack-reach", () => {
     expect(code).toBe(0);
   });
 
-  it("warns, naming both, on a plugin-dropped command beside an unselected server", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the command
+  // misses claude through its own `tools:` list, where a plugin carrying the command
+  // class dropped it; the awaiting-server sentence this case pins is unchanged.
+  it("warns, naming both, on a command no selected client takes beside an unselected server", async () => {
     const handle = getRepo();
     const root = await seedRepo(handle, { tools: ["claude"] });
-    await installAcmePack(handle, root, {
-      "commands/st-acme-cmd.md": ACME_CMD,
-      "mcp_servers/telemetry.json": PACK_SERVER,
-    });
-    await goPluginBacked(root, { claude: { version: "1.11.0", classes: ["command"] } });
+    await installAcmePack(
+      handle,
+      root,
+      {
+        "commands/st-acme-cmd.md": ACME_CMD.replace("load: on-demand", "load: on-demand\ntools: [copilot]"),
+        "mcp_servers/telemetry.json": PACK_SERVER,
+      },
+      ["copilot"],
+    );
+    await resyncAt(root);
 
     const { code, doc } = await runJson(root);
 
@@ -4167,7 +3173,7 @@ describe("check — pack-reach", () => {
       status: "warn",
       detail:
         'pack "acme" reaches no selected client until a server it supplies is selected: ' +
-        "command st-acme-cmd — the claude plugin carries the command class; " +
+        "command st-acme-cmd — its tools: list names only copilot; " +
         `mcp-server packtel — not selected; ${npxCommand("config mcp add packtel")} selects it. ` +
         `Or remove it with ${npxCommand("clean --pack acme")}`,
     });
@@ -4235,13 +3241,21 @@ describe("check — pack-reach", () => {
     // id is the pack-supplied name that reaches this row.
     const handle = getRepo();
     const root = await seedRepo(handle, { tools: ["claude"] });
-    await installAcmePack(handle, root, {
-      "commands/st-acme-cmd.md": COMMAND_FIXTURE.replace(
-        "id: cmd-work",
-        'id: "acme\\e[2K\\rcmd"',
-      ),
-    });
-    await goPluginBacked(root, { claude: { version: "1.11.0", classes: ["command"] } });
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+    // command misses claude through its `tools:` list, where a plugin record dropped
+    // it; the id it prints, the subject here, is unchanged.
+    await installAcmePack(
+      handle,
+      root,
+      {
+        "commands/st-acme-cmd.md": COMMAND_FIXTURE.replace(
+          "id: cmd-work",
+          'id: "acme\\e[2K\\rcmd"',
+        ).replace("load: on-demand", "load: on-demand\ntools: [copilot]"),
+      },
+      ["copilot"],
+    );
+    await resyncAt(root);
 
     const reach = await doctorRow(root, "pack-reach");
 
@@ -4250,37 +3264,6 @@ describe("check — pack-reach", () => {
     expect(reach.detail).toContain('pack "acme" reaches no selected client: command st-acme[2K cmd —');
     // oxlint-disable-next-line no-control-regex -- the control byte IS the subject
     expect(reach.detail).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
-  });
-
-  it("puts each further line under the detail column, and no padding in the --json detail", async () => {
-    // review/41: continuation lines were joined with a fixed 25-space indent,
-    // four columns left of the detail column, and the spaces shipped in --json.
-    const handle = getRepo();
-    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
-    await installAcmePack(handle, root, {
-      "commands/st-acme-cmd.md": ACME_CMD,
-      "agents/stamity-acme-agent.md": AGENT_FIXTURE.replace("id: reviewer", "id: acme-agent"),
-    });
-    await goPluginBacked(root, {
-      claude: { version: "1.11.0", classes: ["command", "agent"] },
-      codex: { version: "1.11.0", classes: ["skill"] },
-    });
-
-    const { doc } = await runJson(root);
-    const reach = row(doc, "pack-reach");
-    expect(reach.status).toBe("warn");
-    const lines = reach.detail.split("\n");
-    expect(lines).toHaveLength(2);
-    expect(lines.every((line) => line.startsWith('pack "acme": '))).toBe(true);
-
-    const human = await runHuman(root);
-    const width = Math.max(...doc.doctor.map((entry) => entry.id.length));
-    const column = 2 + 4 + 2 + width + 2;
-    const out = human.stdout.split("\n");
-    const first = out.findIndex((line) => line.includes(lines[0]!));
-    expect(first).toBeGreaterThan(-1);
-    expect(out[first]!.indexOf(lines[0]!)).toBe(column);
-    expect(out[first + 1]).toBe(`${" ".repeat(column)}${lines[1]!}`);
   });
 
   it("warns 'not evaluated' when the plan cannot be built, leaving the failure to the drift gate", async () => {
@@ -4303,7 +3286,10 @@ describe("check — pack-reach", () => {
 });
 
 describe("check — the non-mutation guarantee (REQ-PLUGIN-019)", () => {
-  it("changes no file on disk, on a repository that records a plugin and has duplicates", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the repository
+  // records a leftover plugin install (the held block and Claude's `enabledPlugins`), where it
+  // held an APM manifest for a duplicate scan that left with the plugin route.
+  it("changes no file on disk, on a repository that records a leftover plugin install", async () => {
     const repo = getRepo();
     const root = await seedRepo(repo, {
       plugin: {
@@ -4321,16 +3307,19 @@ describe("check — the non-mutation guarantee (REQ-PLUGIN-019)", () => {
       ],
       files: {
         ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
-        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
       },
     });
+    const settingsPath = join(root, ".claude", "settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
+    await writeFile(settingsPath, `${JSON.stringify({ ...settings, enabledPlugins: { "stamity@acme": true } }, null, 2)}\n`);
     const before = await hashTree(root);
 
-    await runJson(root);
+    const { doc } = await runJson(root);
+    expect(row(doc, "plugin-duplicates").status).toBe("warn");
 
-    // Every byte, not a spot check: `check` is the read-only verb, and the two
-    // new rows walk native directories and spawn a child process, which are the
-    // two ways a diagnostic acquires a write by accident.
+    // Every byte, not a spot check: `check` is the read-only verb, and a row that
+    // reads the manifest and the settings document beside the validator is one way
+    // a diagnostic acquires a write by accident.
     expect(await hashTree(root)).toEqual(before);
   });
 });
@@ -4379,8 +3368,9 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       status: "pass",
       detail: `release ${RUNNING} — as expected`,
     });
-    // Outside `runDoctor`: the sixteenth row exists only because a flag asked for it.
-    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(15);
+    // Outside `runDoctor`: the fifteenth row exists only because a flag asked for it.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
+    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(14);
   });
 
   it("fails another --expect-version naming the running release and generatedBy", async () => {
@@ -4404,11 +3394,12 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     expect(row(doc, "expectations").status).toBe("fail");
   });
 
-  it("pins every remedy to the expected release when the running CLI, the clients and the mode all miss", async () => {
-    const root = await seedRepo(getRepo(), {
-      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
-    });
-    const flags = ["--expect-version", "9.9.9", "--expect-tools", "claude,cursor", "--expect-mode", "generated"];
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): `--expect-mode` left
+  // with the `plugin-backed` install mode, so its flag and its step left this case; the pinning
+  // of every remaining step to the expected release is what it still asserts.
+  it("pins every remedy to the expected release when the running CLI and the clients both miss", async () => {
+    const root = await seedRepo(getRepo());
+    const flags = ["--expect-version", "9.9.9", "--expect-tools", "claude,cursor"];
 
     const { code, doc } = await runExpecting(root, flags);
 
@@ -4425,11 +3416,6 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       `run this check with the expected release: ${npxAt("9.9.9", "check --expect-version 9.9.9")}`,
       `${npxAt("9.9.9", "config set tools claude,cursor")}, then ${npxAt("9.9.9", "sync")}, ` +
         "in a reviewed pull request",
-      // TEST CHANGE, justified (2026-10-08, build/71): the mode step read "only through clean -y,
-      // then init". After an upgrade `clean` refuses until a `sync` runs (review/128), so the step
-      // leads with `sync`, at the expected release like every other step.
-      `a repository changes install mode only through ${npxAt("9.9.9", "sync")}, then ${npxAt("9.9.9", "clean -y")}, ` +
-        `then ${npxAt("9.9.9", "init")}, in a reviewed pull request`,
     ]);
     expect((failure(doc).why ?? "").split("; ")).toHaveLength(steps.length);
     expect(failure(doc).next).not.toContain(`@${RUNNING} `);
@@ -4516,10 +3502,10 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     // never asks the default registry for the fork's name. The rename is applied
     // the way the fork-name case above applies it: only the kit's own
     // package-root walk is redirected.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+    // `--expect-mode` flag and its step left with the `plugin-backed` install mode.
     const handle = getRepo();
-    const root = await seedRepo(handle, {
-      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
-    });
+    const root = await seedRepo(handle);
     const pseudoInstall = handle.path("pseudo-install");
     await mkdir(pseudoInstall, { recursive: true });
     await writeFile(
@@ -4551,8 +3537,6 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
           "9.9.9",
           "--expect-tools",
           "claude,cursor",
-          "--expect-mode",
-          "generated",
         ],
         { cwd: root },
       );
@@ -4564,9 +3548,6 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
         `regenerate with the expected release in a reviewed pull request: ${prefix} sync`,
         `run this check with the expected release: ${prefix} check --expect-version 9.9.9`,
         `${prefix} config set tools claude,cursor, then ${prefix} sync, in a reviewed pull request`,
-        // TEST CHANGE, justified (2026-10-08, build/71): the step leads with `sync` (review/128).
-        `a repository changes install mode only through ${prefix} sync, then ${prefix} clean -y, then ${prefix} init, ` +
-          "in a reviewed pull request",
       ]);
       // No step escapes the identity: no bare `-y` call for the fork's name, and a
       // refused registry is never echoed.
@@ -4594,52 +3575,28 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     });
   });
 
-  it("fails --expect-mode generated on a plugin-backed manifest, naming both modes", async () => {
-    const root = await seedRepo(getRepo(), {
-      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
-    });
-
-    const { code, doc } = await runExpecting(root, ["--expect-mode", "generated"]);
-
-    expect(code).toBe(1);
-    // First, whatever else the plugin record fails: the caller's expectation is the
-    // cause an orchestrator acts on, and the 0/1/2 contract holds.
-    expect(failure(doc).code).toBe("EXPECTATION_ERROR");
-    expect(failure(doc).why).toBe("mode plugin-backed, expected generated");
-    expect(failure(doc).next).toContain(npxCommand("clean -y"));
-    expect(failure(doc).next).toContain(npxCommand("init"));
-    expect(doc.expectations).toEqual({
-      ok: false,
-      mode: { expected: "generated", recorded: "plugin-backed", ok: false },
-    });
-  });
-
   it("passes every flag together and names only what was asked", async () => {
     const root = await seedRepo(getRepo());
 
-    const { code, doc } = await runExpecting(root, [
-      "--expect-version",
-      RUNNING,
-      "--expect-tools",
-      "claude",
-      "--expect-mode",
-      "generated",
-    ]);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): two flags, not
+    // three — `--expect-mode` left with the `plugin-backed` install mode.
+    const { code, doc } = await runExpecting(root, ["--expect-version", RUNNING, "--expect-tools", "claude"]);
 
     expect(code).toBe(0);
-    expect(row(doc, "expectations").detail).toBe(
-      `release ${RUNNING}, clients claude, mode generated — as expected`,
-    );
+    expect(row(doc, "expectations").detail).toBe(`release ${RUNNING}, clients claude — as expected`);
   });
 
-  it("refuses an --expect-mode outside INSTALL_MODES as a usage error, before any probe", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the flag itself left
+  // with the `plugin-backed` install mode, so every value — one it once accepted included — is
+  // now an unknown option, refused as a usage error before any probe.
+  it("refuses --expect-mode as an unknown option, before any probe", async () => {
     const root = await seedRepo(getRepo());
 
-    const result = await runInProcess([checkCommand], ["check", "--expect-mode", "bogus"], { cwd: root });
+    const result = await runInProcess([checkCommand], ["check", "--expect-mode", "generated"], { cwd: root });
 
     expect(result.code).toBe(2);
     expect(result.stdout).not.toContain("doctor");
-    expect(result.stderr).toContain("bogus");
+    expect(result.stderr).toContain("--expect-mode");
   });
 
   it.each(["1.x", "latest", "", ">=1.0.0"])(
@@ -4711,7 +3668,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     expect(doc.expectations).toMatchObject({ tools: { expected: ["claude"] } });
   });
 
-  it("lists the three flags in check --help", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): two flags, not three.
+  it("lists the two flags in check --help", async () => {
     const result = await runInProcess([checkCommand], ["check", "--help"]);
     // Commander wraps the descriptions to the terminal width; the words are the assertion.
     const help = result.stdout.replaceAll(/\s+/g, " ");
@@ -4725,9 +3683,7 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     expect(help).toContain(
       "--expect-tools <csv> fail unless the manifest's clients are exactly the listed ids, each one of claude, cursor, copilot, codex",
     );
-    expect(help).toContain(
-      '--expect-mode <mode> fail unless the manifest records this install mode (choices: "generated", "plugin-backed")',
-    );
+    expect(help).not.toContain("--expect-mode");
   });
 
   it("puts EXPECTATION_ERROR before drift, and still prints the drift lines", async () => {
@@ -4778,7 +3734,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     const human = await runHuman(root);
 
     expect(doc).not.toHaveProperty("expectations");
-    expect(doc.doctor).toHaveLength(15);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
+    expect(doc.doctor).toHaveLength(14);
     expect(human.stdout).not.toContain("expectations");
   });
 });
@@ -4792,10 +3749,12 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     const { doc } = await runJson(root);
 
     expect(doc.doctor.map((entry) => entry.id)).not.toContain("change-classes");
-    expect(doc.doctor).toHaveLength(15);
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
+    expect(doc.doctor).toHaveLength(14);
   });
 
-  it("passes a valid class file, as the sixteenth row before invariants", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
+  it("passes a valid class file, as the fifteenth row before invariants", async () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
@@ -4815,7 +3774,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
       detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
     });
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids).toHaveLength(16);
+    expect(ids).toHaveLength(15);
     expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
   });
 
@@ -4876,14 +3835,13 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
 });
 
 describe("evaluateExpectations (REQ-PLUGIN-047)", () => {
-  function manifestOf(tools: Tool[], generatedBy: string, plugin?: SetupManifest["plugin"]): SetupManifest {
-    const manifest = createManifest({
+  function manifestOf(tools: Tool[], generatedBy: string): SetupManifest {
+    return createManifest({
       tools,
       selection: { items: { agent: [], skill: [], rule: [], command: [] } },
       generatorVersion: generatedBy,
       now: T0,
     });
-    return plugin === undefined ? manifest : { ...manifest, plugin };
   }
 
   it("answers only the fields it was asked, and ok when there are none", () => {
@@ -4912,27 +3870,15 @@ describe("evaluateExpectations (REQ-PLUGIN-047)", () => {
     expect(evaluateExpectations({ version: "1.12.0" }, manifestOf(["claude"], "1.12.0"), "1.13.0").ok).toBe(false);
   });
 
-  it("reads the default mode off a manifest with no plugin record, and the recorded one otherwise", () => {
-    expect(evaluateExpectations({ mode: "generated" }, manifestOf(["claude"], "1.12.0"), "1.12.0")).toEqual({
-      ok: true,
-      mode: { expected: "generated", recorded: "generated", ok: true },
-    });
-    const backed = manifestOf(["claude"], "1.12.0", {
-      mode: "plugin-backed",
-      clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
-    });
-    expect(evaluateExpectations({ mode: "plugin-backed" }, backed, "1.12.0").ok).toBe(true);
-    expect(evaluateExpectations({ mode: "generated" }, backed, "1.12.0").ok).toBe(false);
-  });
-
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case that read
+  // the install mode off the manifest left with `--expect-mode` and the `plugin-backed` mode.
   it("answers null recorded values and not ok for a manifest it could not read", () => {
     expect(
-      evaluateExpectations({ version: "1.12.0", tools: ["claude"], mode: "generated" }, null, "1.12.0"),
+      evaluateExpectations({ version: "1.12.0", tools: ["claude"] }, null, "1.12.0"),
     ).toEqual({
       ok: false,
       version: { expected: "1.12.0", running: "1.12.0", generatedBy: null, ok: false },
       tools: { expected: ["claude"], recorded: null, missing: [], extra: [], ok: false },
-      mode: { expected: "generated", recorded: null, ok: false },
     });
   });
 });

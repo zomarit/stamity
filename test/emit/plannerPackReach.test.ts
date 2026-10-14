@@ -15,8 +15,8 @@ import { useTempDir } from "../support/tempDir.ts";
  * The emission plan's `packReach` (run 2026-10-03_pack-engine-defects, unit
  * u4b-pack-reach-row): per installed pack, which selected clients each
  * artifact reaches and why it misses the others. `check`'s `pack-reach` row
- * reads it, so a pack that installs and reaches no client — a command-only pack
- * under a plugin that carries commands — stops passing as healthy.
+ * reads it, so a pack that installs and reaches no client — a command whose own
+ * `tools:` list names no selected client — stops passing as healthy.
  *
  * No mocks: real temp repositories, packs installed through the engine's own
  * plan/apply path, the bundled corpus, and the production adapter registry.
@@ -141,7 +141,7 @@ async function installPack(
   return applied.manifest;
 }
 
-function manifestFor(tools: Tool[], plugin?: SetupManifest["plugin"]): SetupManifest {
+function manifestFor(tools: Tool[], plugin?: unknown): SetupManifest {
   return {
     ...createManifest({
       tools,
@@ -221,7 +221,11 @@ describe("composeEmissionPlanner — packReach", () => {
     );
   });
 
-  it("drops a class each client's plugin carries, and keeps the pack skill everywhere", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): this case pinned the
+  // `plugin-owned` drops a `plugin-backed` record made. That reason left with the mode, so the
+  // same manifest — the held 1.14 block — now drops nothing: every class reaches both clients,
+  // and the rows agree.
+  it("drops nothing for a held plugin block that recorded every class", async () => {
     const manifest = await installPack(
       "acme",
       EVERY_CLASS,
@@ -235,40 +239,14 @@ describe("composeEmissionPlanner — packReach", () => {
     );
 
     const { paths, packReach } = await planOf(manifest);
-    const byKind = new Map(packReach?.[0]?.artifacts.map((entry) => [entry.kind, entry]));
 
-    expect(byKind.get("skill")).toEqual({
-      kind: "skill",
-      id: "st-acme-skill",
-      reachedBy: ["claude", "codex"],
-      dropped: [],
-    });
-    expect(byKind.get("command")).toEqual({
-      kind: "command",
-      id: "st-acme-cmd",
-      reachedBy: ["codex"],
-      dropped: [{ reason: "plugin-owned", tool: "claude", cls: "command" }],
-    });
-    expect(byKind.get("agent")?.reachedBy).toEqual(["codex"]);
-    expect(byKind.get("rule")).toEqual({
-      kind: "rule",
-      id: "stamity-acme-rule",
-      reachedBy: ["claude", "codex"],
-      dropped: [],
-    });
-    expect(byKind.get("hooks")).toEqual({
-      kind: "hooks",
-      id: HOOK_FILE,
-      reachedBy: [],
-      dropped: [
-        { reason: "plugin-owned", tool: "claude", cls: "hooks" },
-        { reason: "plugin-owned", tool: "codex", cls: "hooks" },
-      ],
-    });
-    // The rows agree: Codex receives the command, Claude does not.
-    expect(paths).toContain(".agents/skills/st-acme-cmd/SKILL.md");
-    expect(paths).not.toContain(".claude/commands/st-acme-cmd.md");
-    expect(paths).toContain(".claude/skills/st-acme-skill/SKILL.md");
+    for (const entry of packReach?.[0]?.artifacts ?? []) {
+      if (entry.kind === "mcp-server") continue;
+      expect(entry, entry.kind).toMatchObject({ reachedBy: ["claude", "codex"], dropped: [] });
+    }
+    expect(packReach?.[0]?.artifacts).toHaveLength(6);
+    expect(paths).toContain(".claude/commands/st-acme-cmd.md");
+    expect(paths).toContain(".claude/agents/stamity-acme-agent.md");
   });
 
   it("reads an artifact's own tools: list — a drop only when it names no selected client", async () => {
@@ -355,13 +333,13 @@ describe("composeEmissionPlanner — packReach", () => {
   });
 
   it("reports each installed pack under its own id, sorted, with only its own artifacts", async () => {
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): zeta's command
+    // misses claude through its own `tools:` list, where a plugin record dropped it.
     const first = await installPack(
       "zeta",
-      { "commands/st-zeta-cmd.md": artifact("zeta-cmd", "command") },
-      manifestFor(["claude"], {
-        mode: "plugin-backed",
-        clients: { claude: { version: "1.11.0", classes: ["command"] } },
-      }),
+      { "commands/st-zeta-cmd.md": artifact("zeta-cmd", "command", ["copilot"]) },
+      manifestFor(["claude"]),
+      ["copilot"],
     );
     const manifest = await installPack(
       "alpha",
@@ -383,7 +361,7 @@ describe("composeEmissionPlanner — packReach", () => {
             kind: "command",
             id: "st-zeta-cmd",
             reachedBy: [],
-            dropped: [{ reason: "plugin-owned", tool: "claude", cls: "command" }],
+            dropped: [{ reason: "declares no selected client", declared: ["copilot"] }],
           },
         ],
       },

@@ -135,10 +135,11 @@ async function seedCorpus(handle: TempDirHandle): Promise<void> {
  */
 async function seedRepo(
   handle: TempDirHandle,
-  opts: { ledger?: LedgerEntry[]; tools?: Tool[]; plugin?: SetupManifest["plugin"] } = {},
+  opts: { ledger?: LedgerEntry[]; tools?: Tool[]; plugin?: unknown; dir?: string } = {},
 ): Promise<string> {
   await seedCorpus(handle);
-  const root = handle.path("repo");
+  // `dir` lets one case hold two repositories beside one corpus; every other case takes `repo`.
+  const root = handle.path(opts.dir ?? "repo");
   const manifest: SetupManifest = {
     ...createManifest({
       tools: opts.tools ?? ["claude"],
@@ -734,9 +735,14 @@ describe("reclaim", () => {
     //
     // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
     // the orphaned rule's made-up bytes are now kept as a retired artifact, so
-    // the orphan is the engine's own rule a plugin now carries for Claude: its
-    // bytes are the running engine's rendering there (`renderedAt`), and the
-    // plugin record leaves the path unplanned, still `deselected`.
+    // the orphan is the engine's own rule for Claude: its bytes are the running
+    // engine's rendering there (`renderedAt`).
+    //
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): a
+    // `plugin-backed` record left the path unplanned while Claude stayed
+    // targeted (`deselected`); that mode is gone, so the setup now targets cursor
+    // alone and the row's reason reads `adapter-removed`. The dry-run, sweep and
+    // pack-row claims this case is about are unchanged.
     const oldPath = ".claude/rules/stamity-old.md";
     const packPath = ".stamity/packs/demo/thing.md";
     const oldBytes = await renderedAt(handle, { "corpus/rules/stamity-old.md": ruleFixture("old") }, "claude", oldPath);
@@ -753,17 +759,14 @@ describe("reclaim", () => {
       artifactId: "thing",
       artifactType: "infra",
     };
-    const root = await seedRepo(handle, {
-      ledger: [oldRow, packRow],
-      plugin: { mode: "plugin-backed", clients: { claude: { version: ENGINE_VERSION, classes: ["rule"] } } },
-    });
+    const root = await seedRepo(handle, { tools: ["cursor"], ledger: [oldRow, packRow] });
     await handle.seedFiles({
       [`repo/${oldPath}`]: oldBytes,
       [`repo/${packPath}`]: "pack content\n",
     });
 
     const plan = await planSync(root, ENGINE_VERSION);
-    expect(plan.reclaim).toEqual([{ entry: oldRow, reason: "deselected" }]);
+    expect(plan.reclaim).toEqual([{ entry: oldRow, reason: "adapter-removed" }]);
 
     const manifestBytesBefore = await readFile(manifestPath(root), "utf8");
     const dry = await applySync(root, plan, {
@@ -1338,53 +1341,89 @@ describe("MCP documents are merged, never overwritten", () => {
 });
 
 /**
- * What the report owes an operator whose plugin delivers part of the setup
- * (REQ-PLUGIN-016). The counts alone would show a much shorter written list
- * with nothing on screen connecting it to the plugin.
+ * The leftover-plugin warning in sync's report, and the held block it reads.
+ *
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the two
+ * cases here pinned the `plugin-owned` lines and the `pluginOwned` JSON key a
+ * `plugin-backed` record produced. 1.15.0 deleted that mode: the manifest's
+ * `plugin` block is held through the 1.15 line — written back as it stands,
+ * steering nothing — and sync prints the warning `check`'s `plugin-duplicates`
+ * row prints, naming only the four client ids.
  */
-describe("the plugin-owned report lines", () => {
-  const PLUGIN: SetupManifest["plugin"] = {
-    mode: "plugin-backed",
-    clients: {
-      claude: { version: "1.9.0", classes: ["command", "hooks", "agent", "skill"] },
-    },
-  };
+describe("the leftover-plugin warning and the held block", () => {
+  const SKILL = "---\nid: drill\ntype: skill\ndescription: fixture skill\ntags: [orchestration]\nload: on-demand\nobsolete_when: fixture trigger\n---\n\n# Drill\n\nSkill body.\n";
+  /** The block a 1.14 `stamity plugin setup` wrote, keys out of the order the serializer writes. */
+  const HELD = { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["skill"] } } };
+  const PLUGIN_ID = packageName().replace(/^@[^/]+\//, "");
 
-  it("prints one line per client with its classes in declaration order, and carries it in JSON", async () => {
+  async function syncOnce(root: string) {
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    const report = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 });
+    return { plan, report };
+  }
+
+  it("emits the claude skills, prints the warning, and keeps the block value-identical", async () => {
     const handle = tempDir();
-    const root = await seedRepo(handle, { plugin: PLUGIN });
+    const root = await seedRepo(handle, { plugin: HELD });
+    await handle.seedFiles({ "corpus/skills/st-drill/SKILL.md": SKILL });
 
-    const plan = await planSync(root, ENGINE_VERSION);
-    const report = await applySync(root, plan, {
-      engineVersion: ENGINE_VERSION,
-      force: false,
-      dryRun: false,
-      now: T1,
-    });
+    const { plan, report } = await syncOnce(root);
+    const text = renderSyncReport(plan, report, plainPalette);
 
-    // Declaration order, not the order the record listed them in.
-    expect(renderSyncReport(plan, report, plainPalette)).toContain(
-      "plugin-owned  claude: agent, skill, command, hooks",
+    expect(report.wrote.map((row) => row.path)).toContain(".claude/skills/st-drill/SKILL.md");
+    expect(text).toContain(
+      "  warning: a plugin install from before 1.15.0 is still recorded; 1.15.0 removed the plugin route",
     );
-    expect(syncJsonPayload(plan, report)["pluginOwned"]).toEqual([
-      { tool: "claude", classes: ["agent", "skill", "command", "hooks"] },
-    ]);
+    expect(text).toContain(`    claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`);
+    expect(text).toContain("    then delete the `plugin` key from .stamity/manifest.json; nothing reads it since 1.15.0");
+    expect(syncJsonPayload(plan, report)).not.toHaveProperty("pluginOwned");
+    expect((await readManifest(root))?.plugin).toEqual(HELD);
+
+    // A second sync: the block is still there, so the warning lasts the release.
+    const again = await syncOnce(root);
+    expect((await readManifest(root))?.plugin).toEqual(HELD);
+    expect(renderSyncReport(again.plan, again.report, plainPalette)).toContain("warning: a plugin install from before 1.15.0");
   });
 
-  it("prints nothing and carries an empty list on a repository with no plugin field", async () => {
+  it("emits byte-for-byte what a repository with no block emits, for a hostile block, and prints none of it", async () => {
+    const esc = String.fromCharCode(27);
+    const hostile = {
+      mode: `${esc}[2K\rsynced: 0 created`,
+      clients: { [`vim${esc}]0;x`]: { classes: ["agent"] }, cursor: "anything", claude: { classes: "all" } },
+      root: "../../outside",
+    };
+    const handle = tempDir();
+    const withBlock = await seedRepo(handle, { plugin: hostile, dir: "with-block" });
+    const without = await seedRepo(handle, { dir: "without" });
+    await handle.seedFiles({ "corpus/skills/st-drill/SKILL.md": SKILL });
+    expect(withBlock).not.toBe(without);
+    const a = await syncOnce(withBlock);
+    const textA = renderSyncReport(a.plan, a.report, plainPalette);
+    const b = await syncOnce(without);
+
+    const rows = (plan: typeof a.plan) => plan.outputs.map((row) => [row.path, row.content]);
+    expect(rows(a.plan).some(([path]) => path === ".claude/skills/st-drill/SKILL.md")).toBe(true);
+    expect(rows(a.plan)).toEqual(rows(b.plan));
+    expect((await readManifest(withBlock))?.ledger).toEqual((await readManifest(without))?.ledger);
+    const onDisk = await Promise.all(rows(b.plan).map(async ([path]) => [path, await readFile(join(withBlock, path!), "utf8")]));
+    expect(onDisk).toEqual(rows(b.plan));
+    // Only the two known ids it names are printed, and nothing of the block itself.
+    expect(textA).toContain(`    claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`);
+    expect(textA).toContain(`    cursor: uninstall the ${PLUGIN_ID} plugin from Cursor's Customize view`);
+    expect(textA).not.toContain("vim");
+    expect(textA).not.toContain(esc);
+    expect(textA).not.toContain("outside");
+    expect((await readManifest(withBlock))?.plugin).toEqual(hostile);
+  });
+
+  it("prints no warning on a repository with no plugin field", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
 
-    const plan = await planSync(root, ENGINE_VERSION);
-    const report = await applySync(root, plan, {
-      engineVersion: ENGINE_VERSION,
-      force: false,
-      dryRun: false,
-      now: T1,
-    });
+    const { plan, report } = await syncOnce(root);
 
-    expect(renderSyncReport(plan, report, plainPalette)).not.toContain("plugin-owned");
-    expect(syncJsonPayload(plan, report)["pluginOwned"]).toEqual([]);
+    expect(renderSyncReport(plan, report, plainPalette)).not.toContain("plugin");
+    expect(syncJsonPayload(plan, report)).not.toHaveProperty("pluginOwned");
   });
 });
 
@@ -1432,9 +1471,12 @@ describe("a hashless ledger row in the write lane", () => {
   it("previews the reclaim a dry run would take with the same actions and proofs check names", async () => {
     const handle = tempDir();
     // TEST CHANGE, justified (2026-10-08, row 560, unit d1a-rendering-proof-core):
-    // the deselected agent is the engine's own rendering for Claude, which a
-    // plugin now carries (`renderedAt`), where made-up bytes no corpus renders
-    // stood; those are now kept as a retired artifact.
+    // the deselected agent is the engine's own rendering for Claude
+    // (`renderedAt`), where made-up bytes no corpus renders stood; those are now
+    // kept as a retired artifact.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+    // setup targets cursor alone, where a `plugin-backed` record carried Claude's
+    // agents; the preview's actions and proofs are unchanged.
     const gone = ".claude/agents/stamity-gone.md";
     const goneBytes = await renderedAt(
       handle,
@@ -1449,10 +1491,7 @@ describe("a hashless ledger row in the write lane", () => {
       artifactType: "agent",
       contentHash: sha256(goneBytes),
     };
-    const root = await seedRepo(handle, {
-      ledger: [row],
-      plugin: { mode: "plugin-backed", clients: { claude: { version: ENGINE_VERSION, classes: ["agent"] } } },
-    });
+    const root = await seedRepo(handle, { tools: ["cursor"], ledger: [row] });
     await handle.seedFiles({ [`repo/${gone}`]: goneBytes });
 
     const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });

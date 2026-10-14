@@ -338,12 +338,12 @@ describe("composeEmissionPlanner({}) — core rows only", () => {
 
 // ── Residue merging ──────────────────────────────────────────────
 
-// ── Plugin ownership of the shared projection ────────────────────
+// ── A held plugin block over the shared projection ───────────────
 
-/** `ctx` with a plugin record bolted on; `createManifest` takes no such option. */
+/** `ctx` with a held 1.14 plugin block bolted on; `createManifest` takes no such option. */
 const withPlugin = (
   ctx: EmissionContext,
-  plugin: NonNullable<SetupManifest["plugin"]>,
+  plugin: unknown,
 ): EmissionContext => ({
   ...ctx,
   manifest: { ...ctx.manifest, plugin },
@@ -401,9 +401,18 @@ describe("the effort disclosures the plan carries", () => {
   });
 });
 
-describe("plugin ownership of the shared skills projection", () => {
+/**
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): four
+ * cases here pinned what a `plugin-backed` record did to the plan — the shared
+ * skills tree dropped or narrowed to the readers no plugin carried skills for,
+ * the hook copies skipped, the "hook wiring" disclosure. 1.15.0 deleted that
+ * mode, so the block is held for the leftover-plugin warning and steers
+ * nothing: the two cases replacing them pin the plan and its warnings
+ * byte-identical to a manifest with no block.
+ */
+describe("a held plugin block over the shared skills projection", () => {
   it("emits the tree co-owned by every reader when no plugin owns skills", async () => {
-    // The control. It is the same repository as the two cases below with one
+    // The control. It is the same repository as the cases below with one
     // field absent, so a difference there is the field's and nothing else's.
     const corpus = await seedCorpus();
     const tools: Tool[] = ["cursor", "copilot", "codex"];
@@ -415,52 +424,27 @@ describe("plugin ownership of the shared skills projection", () => {
     expect(adaptersOf(rows.get(P.skillRef)!)).toEqual(tools);
   });
 
-  it("emits no .agents/skills row when every reader's plugin carries skill", async () => {
+  it("plans byte-for-byte the plan with no block, when the block records every reader's skills and hooks", async () => {
     const corpus = await seedCorpus();
     const tools: Tool[] = ["claude", "cursor", "copilot", "codex"];
     const ctx = withPlugin(ctxOf(tools, corpus), {
       mode: "plugin-backed",
       clients: Object.fromEntries(
-        tools.map((tool) => [tool, { version: "1.9.0", classes: ["skill"] }]),
+        tools.map((tool) => [tool, { version: "1.14.0", classes: ["skill", "hooks"] }]),
       ),
     });
 
     const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctx);
 
-    expect(plan.filter((output) => output.path.startsWith(".agents/skills/"))).toEqual([]);
-    // The rest of the core survives: the boundary is per class, and the charter
-    // and the policy document are not a plugin's to carry.
-    expect(plan.map((output) => output.path)).toContain(P.agentsMd);
-    expect(plan.map((output) => output.path)).toContain(P.policyDoc);
+    const control = await composeEmissionPlanner(residuesFor(tools)).plan(ctxOf(tools, corpus));
+    expect(plan).toEqual(control);
+    expect(adaptersOf(byPath(plan).get(P.skillMain)!)).toEqual(tools);
+    expect(plan.map((output) => output.path).filter((path) => path.startsWith(`${P.hooksRoot}/claude/`))).toHaveLength(
+      HOOK_FILES.length,
+    );
   });
 
-  it("keeps the tree co-owned by exactly the readers whose plugin does not carry skill", async () => {
-    const corpus = await seedCorpus();
-    const tools: Tool[] = ["cursor", "copilot", "codex"];
-    const ctx = withPlugin(ctxOf(tools, corpus), {
-      mode: "plugin-backed",
-      clients: {
-        cursor: { version: "1.9.0", classes: ["skill"] },
-        copilot: { version: "1.9.0", classes: ["skill"] },
-      },
-    });
-
-    const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctx);
-
-    const rows = byPath(plan);
-    // Written once, owned by codex alone — so deselecting codex reclaims it and
-    // deselecting either plugin-backed client does not.
-    expect(plan.filter((output) => output.path === P.skillMain)).toHaveLength(1);
-    expect(adaptersOf(rows.get(P.skillMain)!)).toEqual(["codex"]);
-    expect(adaptersOf(rows.get(P.skillRef)!)).toEqual(["codex"]);
-    expect(rows.get(P.skillMain)!.coOwners).toBeUndefined();
-  });
-
-  it("discloses the repo's own hooks not reaching a plugin-backed client", async () => {
-    // A real delivery gap, not a planning detail. That client takes its hook
-    // CONFIGURATION from the plugin root, which was built from the vendor's
-    // tree and cannot name a hook this repository authored — so the hook runs
-    // on every other selected client and silently never fires on this one.
+  it("wires the repo's own hooks into every client and discloses nothing, whatever the block records", async () => {
     const corpus = await seedCorpus();
     const temp = getTemp();
     const rootDir = temp.path("plugin-hooks-repo");
@@ -475,44 +459,17 @@ describe("plugin ownership of the shared skills projection", () => {
     const tools: Tool[] = ["claude", "codex"];
     const ctx = withPlugin(ctxOf(tools, corpus, { rootDir }), {
       mode: "plugin-backed",
-      clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
+      clients: { claude: { version: "1.14.0", classes: ["hooks"] } },
     });
 
     const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(ctx);
-
-    const disclosure = result.warnings.find((warning) => warning.startsWith("hook wiring:"));
-    expect(disclosure).toContain("1 accepted hook row(s)");
-    expect(disclosure).toContain("not wired into claude");
-    expect(disclosure).toContain("every other selected client");
-
-    // The control: the same repository with no plugin field says nothing, so
-    // the line is a statement about the boundary and not about the hook.
     const control = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(
       ctxOf(tools, corpus, { rootDir }),
     );
-    expect(control.warnings.filter((warning) => warning.startsWith("hook wiring:"))).toEqual([]);
-  });
 
-  it("plans no hook script copy for a client whose plugin carries hooks", async () => {
-    const corpus = await seedCorpus();
-    const tools: Tool[] = ["claude", "codex"];
-    const ctx = withPlugin(ctxOf(tools, corpus), {
-      mode: "plugin-backed",
-      clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
-    });
-
-    const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctx);
-
-    const paths = plan.map((output) => output.path);
-    expect(paths.filter((path) => path.startsWith(`${P.hooksRoot}/claude/`))).toEqual([]);
-    // codex is not recorded, so its three copies are still planned — the skip is
-    // per client, not a repository-wide switch.
-    expect(paths.filter((path) => path.startsWith(`${P.hooksRoot}/codex/`))).toHaveLength(
-      HOOK_FILES.length,
-    );
-    // The policy document is `.stamity/` state, repository-owned under either
-    // mode, and it stays co-owned by both clients.
-    expect(adaptersOf(byPath(plan).get(P.policyDoc)!)).toEqual(tools);
+    expect(result.warnings).toEqual(control.warnings);
+    expect(result.outputs).toEqual(control.outputs);
+    expect(result.warnings.filter((warning) => warning.startsWith("hook wiring:"))).toEqual([]);
   });
 
   it("ignores a client recorded in the plugin but absent from the selection", async () => {

@@ -32,23 +32,17 @@ import type { DetectedSummary } from "../types/detect.ts";
 import { isSemverShaped } from "../shared/cliCall.ts";
 import { EngineError } from "../types/errors.ts";
 import {
-  INSTALL_MODES,
-  INSTALL_MODE_DEFAULT,
   MANIFEST_FILE,
   MANIFEST_VERSION,
   PACK_OWNER_PREFIX,
-  PLUGIN_OWNED_CLASSES,
   RULE_DELIVERIES,
   RULE_DELIVERY_DEFAULT,
   type GatesConfig,
   type ImportDecision,
-  type InstallMode,
   type LearningsConfig,
   type LedgerEntry,
   type ManifestMigration,
   type McpConfig,
-  type PluginConfig,
-  type PluginOwnedClass,
   type RuleDelivery,
   type SetupManifest,
 } from "../types/manifest.ts";
@@ -225,12 +219,6 @@ const VALID_PLATFORMS = new Set(Object.keys(PLATFORM_MEMBERS));
 
 /** Rule-delivery membership set, from the sanctioned list the types leaf publishes. */
 const VALID_RULE_DELIVERIES = new Set<string>(RULE_DELIVERIES);
-
-/** Install-mode membership set, from the sanctioned list the types leaf publishes. */
-const VALID_INSTALL_MODES = new Set<string>(INSTALL_MODES);
-
-/** Plugin-ownable class membership set, from the same leaf's total record. */
-const VALID_PLUGIN_OWNED_CLASSES = new Set<string>(PLUGIN_OWNED_CLASSES);
 
 /** Ledger `artifactType` values: the content classes plus the infra bucket. */
 const VALID_ARTIFACT_TYPES = new Set<string>([...CONTENT_CLASSES, "infra"]);
@@ -615,105 +603,6 @@ function collectModelsErrors(value: unknown, errors: string[]): void {
   }
 }
 
-/** Known fields of one plugin client record. */
-const PLUGIN_CLIENT_FIELDS = ["version", "classes"] as const;
-
-/**
- * One client's plugin record. Both halves are load-bearing and both are
- * checked: the `version` is what a compatibility read compares against the
- * engine's own, and `classes` is the ownership boundary itself — every class
- * named here is one `sync` will not write and `clean` will not reclaim, so a
- * typo'd or duplicated entry is a file the repository silently stops owning.
- */
-function collectPluginClientErrors(tool: string, value: unknown, errors: string[]): void {
-  const field = `plugin.clients.${tool}`;
-  if (!isPlainObject(value)) {
-    errors.push(`\`${field}\` must be an object with \`version\` and \`classes\``);
-    return;
-  }
-
-  // Semver, not any string: the compatibility read majors this value, so one
-  // it cannot parse is a defect rather than a shrug (same rule as `version`).
-  if (typeof value.version !== "string" || semver.valid(value.version) === null) {
-    errors.push(
-      `\`${field}.version\` must be the plugin's semantic version ` +
-        `(got ${JSON.stringify(value.version)})`,
-    );
-  }
-
-  if (!Array.isArray(value.classes)) {
-    errors.push(
-      `\`${field}.classes\` must be an array of ${PLUGIN_OWNED_CLASSES.join(", ")}`,
-    );
-  } else if (value.classes.length === 0) {
-    errors.push(
-      `\`${field}.classes\` must name at least one class — a client that owns ` +
-        `nothing is spelled by dropping its record, not by an empty list`,
-    );
-  } else {
-    const seen = new Set<string>();
-    for (const entry of value.classes) {
-      if (typeof entry !== "string" || !VALID_PLUGIN_OWNED_CLASSES.has(entry)) {
-        errors.push(
-          `\`${field}.classes\` names unknown class ${JSON.stringify(entry)} ` +
-            `(known: ${PLUGIN_OWNED_CLASSES.join(", ")})`,
-        );
-        continue;
-      }
-      if (seen.has(entry)) {
-        errors.push(
-          `\`${field}.classes\` lists ${JSON.stringify(entry)} twice — one entry per class`,
-        );
-        continue;
-      }
-      seen.add(entry);
-    }
-  }
-
-  for (const key of unknownFields(value, PLUGIN_CLIENT_FIELDS)) {
-    errors.push(`unknown field \`${field}.${key}\``);
-  }
-}
-
-/**
- * The install-mode record. `mode` is REQUIRED once a `plugin` block exists —
- * the block's whole job is to say where content comes from, and a block that
- * does not say would have to be read as one default here and another there.
- *
- * `clients` is legal under either mode: recording a root before migrating is
- * an ordinary state, and {@link pluginOwnedClasses} is the single reader that
- * decides what the mode means for ownership.
- */
-function collectPluginErrors(value: unknown, errors: string[]): void {
-  if (!isPlainObject(value)) {
-    errors.push("`plugin` must be an object");
-    return;
-  }
-
-  collectEnumError(value.mode, VALID_INSTALL_MODES, "plugin.mode", errors);
-  if (value.mode === undefined) {
-    errors.push(`\`plugin.mode\` is required (one of ${INSTALL_MODES.join(" | ")})`);
-  }
-
-  if (value.clients !== undefined) {
-    if (!isPlainObject(value.clients)) {
-      errors.push("`plugin.clients` must be an object keyed by tool");
-    } else {
-      for (const [tool, record] of Object.entries(value.clients)) {
-        if (!VALID_TOOLS.has(tool)) {
-          errors.push(`\`plugin.clients.${tool}\` names unknown tool (known: ${TOOLS.join(", ")})`);
-          continue;
-        }
-        collectPluginClientErrors(tool, record, errors);
-      }
-    }
-  }
-
-  for (const key of unknownFields(value, ["mode", "clients"])) {
-    errors.push(`unknown field \`plugin.${key}\``);
-  }
-}
-
 /** Known fields of the gates block, doubling as its strict key set. */
 const GATE_FIELDS = ["test", "lint", "typecheck", "all"] as const;
 
@@ -1021,7 +910,8 @@ export function collectManifestErrors(data: unknown): string[] {
     }
   }
   if (data.models !== undefined) collectModelsErrors(data.models, errors);
-  if (data.plugin !== undefined) collectPluginErrors(data.plugin, errors);
+  // `plugin` is held, not validated: any value a 1.14 setup wrote parses, so
+  // the manifest that still carries it is not refused (`SetupManifest.plugin`).
   if (data.gates !== undefined) collectGatesErrors(data.gates, errors);
   if (data.importChoice !== undefined) {
     collectImportChoiceErrors(data.importChoice, errors);
@@ -1221,11 +1111,11 @@ export interface PreservedManifestFields {
   learnings?: LearningsConfig;
   toolOptions?: SetupManifest["toolOptions"];
   /**
-   * The install record. A regeneration that dropped it would hand every class
-   * the plugin owns back to emission — the ownership boundary is an answer the
-   * operator gave, not a fact a fresh run recomputes.
+   * The held 1.14 install record, carried as it stands through the 1.15 line
+   * (`SetupManifest.plugin`): a regeneration that dropped it would end the
+   * leftover-plugin warning after one run, before the operator uninstalled.
    */
-  plugin?: PluginConfig;
+  plugin?: unknown;
   /** The operator's pinned gate commands; a fresh run only detects, never asks. */
   gates?: GatesConfig;
 }
@@ -1301,50 +1191,6 @@ export function readRuleDelivery(manifest: SetupManifest | null | undefined): Ru
   return value !== undefined && VALID_RULE_DELIVERIES.has(value)
     ? value
     : RULE_DELIVERY_DEFAULT;
-}
-
-/**
- * Resolve where this repository's content comes from, defaulting on absence —
- * the one reader `sync`, `check`, `clean` and the plugin verbs all go through,
- * so a manifest written before the key existed cannot resolve one way here and
- * another way there. Same re-check as {@link readMaturityTier}: a hand-edited
- * value outside the sanctioned set falls back to the default rather than
- * reaching emission as an unknown mode (the persistence boundary refuses it in
- * {@link collectManifestErrors}).
- */
-export function readInstallMode(manifest: SetupManifest | null | undefined): InstallMode {
-  const value = manifest?.plugin?.mode;
-  return value !== undefined && VALID_INSTALL_MODES.has(value) ? value : INSTALL_MODE_DEFAULT;
-}
-
-/**
- * The classes `tool` owes to a plugin rather than to emission — empty unless
- * the manifest records {@link INSTALL_MODES} `plugin-backed` AND carries a
- * record for that tool.
- *
- * The mode is what moves ownership; a client record under `generated` is a
- * repository noting the root it knows about before it migrates, and reading
- * that as ownership would stop emission for a plugin nobody installed yet.
- * Returned as a fresh set so no caller can widen another's answer, and total
- * for the same reason {@link readReviewCap} is: `sync`, `check` and `clean`
- * each ask this question, and three call sites deciding it for themselves is
- * three chances to draw the boundary somewhere else.
- */
-export function pluginOwnedClasses(
-  manifest: SetupManifest | null | undefined,
-  tool: Tool,
-): ReadonlySet<PluginOwnedClass> {
-  if (readInstallMode(manifest) !== "plugin-backed") return new Set();
-  const record = manifest?.plugin?.clients?.[tool];
-  if (record === undefined) return new Set();
-  // Membership re-check for the same reason the resolvers above carry one: a
-  // manifest OBJECT can reach here without having passed validation — which is
-  // also why `classes` is shape-checked before it is filtered. A hand-edited
-  // `"classes": "agents"` used to throw a TypeError out of a total resolver
-  // three commands call; the honest unvalidated answer is the empty set, the
-  // same one an absent record gets.
-  if (!Array.isArray(record.classes)) return new Set();
-  return new Set(record.classes.filter((entry) => VALID_PLUGIN_OWNED_CLASSES.has(entry)));
 }
 
 /**

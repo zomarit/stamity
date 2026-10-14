@@ -63,7 +63,6 @@
 
 import { renderAgentsMd, AGENTS_MD_FILE, type AgentsMdPlan } from "./agentsMd.ts";
 import { planHooksInfra, type CoreHooksPlan } from "./hooksInfra.ts";
-import { isPluginOwned, sharedProjectionOwners } from "./ownership.ts";
 import {
   projectSkills,
   SKILLS_PROJECTION_DIR,
@@ -459,10 +458,6 @@ export async function buildCoreEmissionPlan(
         ...(ctx.facts.hookScriptsRoot === undefined
           ? {}
           : { hookScriptsRoot: ctx.facts.hookScriptsRoot }),
-        // Resolved HERE rather than in the hooks planner, which is handed a
-        // manifest slice rather than the manifest: this function has the whole
-        // of it, and `./ownership.ts` stays the one place the boundary is read.
-        pluginOwnedHooks: TOOLS.filter((tool) => isPluginOwned(ctx.manifest, tool, "hooks")),
       }),
     ),
     packsPromise,
@@ -805,7 +800,7 @@ function customizingSkillFilePath(row: ProjectedSkillFile): string {
  * and the skill silently hides the command. `add` refuses such a pack before
  * writing it, but a repository can already hold one — a pack installed by an
  * engine without that check, an override, a fork artifact — and `sync`,
- * `check`, `init` and `plugin setup` all plan through here.
+ * `check` and `init` all plan through here.
  *
  * `index` is the residue context's full walk: the corpus with its fork and
  * override layers applied, plus the installed packs. A replacing skill is named
@@ -866,15 +861,15 @@ function refuseInvocableNameClashes(index: ContentIndex, cli: CliCallContext): v
         : "every artifact listed would share the one skill folder its name gives it wherever " +
           "it is delivered as a skill — a rule is, on a client that demotes it — so there " +
           "they overwrite each other's files",
-      // `sync`, `check`, `init` and `plugin setup` all plan through here, so the
-      // step names the command that stopped rather than assuming it was sync.
+      // `sync`, `check` and `init` all plan through here, so the step names the
+      // command that stopped rather than assuming it was sync.
       next:
         remedies.length === 0
           ? "report the clash to the package's maintainers; no file in this repository can " +
             "resolve it"
           : "apply one remedy per name listed above, then re-run the command that stopped " +
-            `here (\`${remedyCall(cli, "sync")}\`, \`${remedyCall(cli, "check")}\`, ` +
-            `\`${remedyCall(cli, "init")}\` or \`${remedyCall(cli, "plugin setup")}\`)`,
+            `here (\`${remedyCall(cli, "sync")}\`, \`${remedyCall(cli, "check")}\` or ` +
+            `\`${remedyCall(cli, "init")}\`)`,
     },
   );
 }
@@ -1032,25 +1027,13 @@ export function composeEmissionPlanner(
         core.agentsMd.root.content,
         sharedOwners(CHARTER_ARTIFACT_ID, "infra"),
       );
-      // Ownership of the shared tree is narrowed once, off the manifest: a
-      // reader whose plugin CARRIES `skill` receives those skills from its own
-      // plugin root, so it is no longer an owner here and the tree is emitted
-      // while any reader remains (`./ownership.ts`). With no `plugin` field
-      // this is `projectionReaders` itself and nothing about the plan moves.
-      //
-      // A PACK skill is the documented exception, and it is decided per row:
-      // pack content is installed into THIS repository, no plugin ships it,
-      // and dropping its owners would leave an installed pack's skills
-      // reachable by no client at all. So a pack row keeps every reader.
-      const projectionOwners = sharedProjectionOwners(ctx.manifest, projectionReaders);
       for (const file of core.skills) {
-        const owners = file.origin === "pack" ? projectionReaders : projectionOwners;
-        if (owners.length === 0) continue;
+        if (projectionReaders.length === 0) continue;
         addRow(
           rows,
           file.path,
           file.content,
-          owners.map((tool) => ({
+          projectionReaders.map((tool) => ({
             adapter: tool,
             artifactId: file.artifactId,
             artifactType: file.artifactType,
@@ -1172,30 +1155,23 @@ export function composeEmissionPlanner(
  * Per installed pack, which selected clients each artifact it ships reaches,
  * and why it misses the ones it does not — the plan's `packReach`, which
  * `check`'s `pack-reach` row reads (`../cli/commands/check.ts`). A pack none of
- * whose artifacts reaches a client is installed and does nothing; in
- * plugin-backed mode that is the ordinary fate of a command-only pack on
- * Claude, Cursor and Copilot, and nothing else on any surface said so.
+ * whose artifacts reaches a client is installed and does nothing, and nothing
+ * else on any surface says so.
  *
- * Read off the two filters every adapter applies to pack content, not off the
- * planned rows: the artifact's own `tools:` list, and the ownership boundary
- * ({@link isPluginOwned}, the one place a plugin's classes are decided). The
- * rows cannot answer it — a pack rule reaches Codex as text inside the
+ * Read off the filter every adapter applies to pack content, not off the
+ * planned rows: the artifact's own `tools:` list. The rows cannot answer it — a pack rule reaches Codex as text inside the
  * down-conversion appendix, a composite document no per-rule row owns, so a
  * join on row owners would call a delivered rule dropped. Per class:
  *
- * - **skill** — every selected client: pack skills are the documented
- *   exception to plugin ownership (above, `projectionOwners`) and are
- *   projected verbatim, `tools:` unread, like the pack skill lane projects them;
- * - **agent, rule, command** — every client its `tools:` list admits whose
- *   plugin does not carry the class;
+ * - **skill** — every selected client: pack skills are projected verbatim,
+ *   `tools:` unread, like the pack skill lane projects them;
+ * - **agent, rule, command** — every client its `tools:` list admits;
  * - **hooks** — one artifact per pack hook file the hook lane accepted, reaching
- *   every client whose hooks this repository wires: a client whose plugin
- *   carries `hooks` takes its configuration from the plugin root, which is
- *   the hooks planner's "not wired" warning. A file every row of which was
- *   rejected is not an artifact here; that planner's warning names it. Read
- *   per pack, because the core pass reads all packs' hooks as one lane;
+ *   every selected client. A file every row of which was rejected is not an
+ *   artifact here; that planner's warning names it. Read per pack, because the
+ *   core pass reads all packs' hooks as one lane;
  * - **mcp-server** — every selected client when `manifest.mcp.servers` selects
- *   it (no plugin carries `mcp`; Claude, Cursor and Copilot place it through
+ *   it (Claude, Cursor and Copilot place it through
  *   {@link CoreEmissionPlan.mcpFor}, Codex composes it into its own config),
  *   and none, dropped as `not selected`, when it does not: installing a pack
  *   makes its servers selectable, never selected (`../mcp/emit.ts` →
@@ -1220,10 +1196,10 @@ async function packReachOf(
         artifacts: [
           ...packs.items
             .filter((item) => item.provenance?.pack === pack.id)
-            .map((item) => contentReachOf(ctx.manifest, tools, item)),
+            .map((item) => contentReachOf(tools, item)),
           ...[...new Set(hookFiles)]
             .toSorted()
-            .map((file) => classReachOf(ctx.manifest, tools, "hooks", file)),
+            .map((file) => classReachOf(tools, "hooks", file)),
           ...packs.mcpServers
             .filter((server) => server.sourcePackId === pack.id)
             .map(
@@ -1245,7 +1221,6 @@ async function packReachOf(
 
 /** One pack content item's reach: see {@link packReachOf}. */
 function contentReachOf(
-  manifest: SetupManifest,
   tools: readonly Tool[],
   item: CatalogItem,
 ): PackArtifactReach {
@@ -1262,24 +1237,16 @@ function contentReachOf(
   }
   const targeted =
     declared === undefined ? tools : tools.filter((tool) => declared.includes(tool));
-  return classReachOf(manifest, targeted, item.type, id);
+  return classReachOf(targeted, item.type, id);
 }
 
-/** Split `targeted` into the clients that reach a `cls` artifact and the ones whose plugin owns it. */
+/** A `cls` artifact reaching every client in `targeted`, dropped by none. */
 function classReachOf(
-  manifest: SetupManifest,
   targeted: readonly Tool[],
   cls: Exclude<ContentClass, "skill"> | "hooks",
   id: string,
 ): PackArtifactReach {
-  return {
-    kind: cls,
-    id,
-    reachedBy: targeted.filter((tool) => !isPluginOwned(manifest, tool, cls)),
-    dropped: targeted
-      .filter((tool) => isPluginOwned(manifest, tool, cls))
-      .map((tool) => ({ reason: "plugin-owned" as const, tool, cls })),
-  };
+  return { kind: cls, id, reachedBy: [...targeted], dropped: [] };
 }
 
 /**

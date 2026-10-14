@@ -152,7 +152,8 @@ export interface EmissionPlan {
    * be selected, which warns.
    *
    * A fact about the plan, not about a file, for the reason {@link warnings}
-   * is: an artifact a client's plugin drops has no row to hang a finding on.
+   * is: an artifact a client's `tools:` list or an unselected server drops has
+   * no row to hang a finding on.
    * Empty when no pack is installed. Optional on the type only so a planner
    * with no pack surface (the no-op planner, a hand-built fixture) need not
    * state it; the composed planner (`src/emit/planner.ts`) always sets it.
@@ -187,16 +188,14 @@ export interface PackArtifactReach {
 }
 
 /**
- * Why a pack artifact misses a client. `plugin-owned`: the client's installed
- * plugin carries the artifact's class, so this repository writes none of it
- * for that client. `declares no selected client`: the artifact's own `tools:`
- * list names none of the selected clients (`add` already says so at install).
+ * Why a pack artifact misses a client. `declares no selected client`: the
+ * artifact's own `tools:` list names none of the selected clients (`add`
+ * already says so at install).
  * `not selected`: an MCP server the pack supplies that `manifest.mcp.servers`
  * does not select — installing a pack makes its servers selectable, and only
  * `config mcp add <id>` makes one emitted, so it reaches no client until then.
  */
 type PackArtifactDrop =
-  | { reason: "plugin-owned"; tool: Tool; cls: ContentClass | "hooks" }
   | { reason: "declares no selected client"; declared: Tool[] }
   | { reason: "not selected" };
 

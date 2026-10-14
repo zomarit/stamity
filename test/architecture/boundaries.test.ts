@@ -481,10 +481,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // else — it sits at the depth of the markers it reads (TD-06).
   "src/emit/stateScaffold.ts": { unit: "p4-u02", wave: 2 },
   "src/emit/hooksInfra.ts": { unit: "p4-u03", wave: 5 },
-  // The plugin ownership boundary: one predicate over the manifest, read by the
-  // core composer, the four adapters and the sync report. Wave 5 because it
-  // sits on the manifest resolvers (wave 4) and below every emitter that asks.
-  "src/emit/ownership.ts": { unit: "pl-c3", wave: 5 },
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the
+  // plugin ownership boundary `src/emit/ownership.ts` (pl-c3, wave 5) left with
+  // the `plugin-backed` install mode, so its row went with the file.
   // The pack manifest reader gained the permission manifest below it in P5, so
   // it left wave 2 for its true depth. Its frontmatter waiver retired with the
   // move: wave-2 frontmatter is now strictly below it.
@@ -613,17 +612,12 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // its own wave under another unit is the violation `checkWaveLayering`
   // names. The module header states the same refusal at the call site.
   "src/cli/commands/workspace.ts": { unit: "w-u1", wave: 15 },
-  // The shared plugin probe (pl-c4): the locator spawn and the duplicate scan
-  // `check.ts` reads for its two plugin rows. Wave 14, one below `check.ts`,
-  // which is what makes that cross-unit import legal — and its true depth
-  // besides: nothing it calls sits above the wave-13 kit.
-  //
-  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d6-verb): the
-  // `stamity plugin` verb, its setup engine, its status report and the
-  // capability reader at wave 2 (pl-c6) left with the plugin route, so their
-  // four rows went with the files; this row stays until unit d7 deletes the
-  // probe with the install mode.
-  "src/cli/commands/plugin/probe.ts": { unit: "pl-c4", wave: 14 },
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, units d6-verb and
+  // d7-engine): the `stamity plugin` verb, its setup engine, its status report
+  // and the capability reader at wave 2 (pl-c6) left with the plugin route in
+  // d6, and the shared plugin probe `src/cli/commands/plugin/probe.ts` (pl-c4,
+  // wave 14) left with the install mode in d7; the node-floor helpers `check.ts`
+  // read from it moved into `check.ts`. Their five rows went with the files.
   // wave 16 (P2 wave 3) — program assembly
   "src/cli.ts": { unit: "p2-16", wave: 16 },
 

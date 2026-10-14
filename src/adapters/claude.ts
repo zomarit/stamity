@@ -56,7 +56,7 @@
  *    wrote and recorded by hash — the hook entries of the `hooks` object (the
  *    core hook interchange transformed to the client shape, the `ConfigChange`
  *    tamper wiring, the review-gate wiring below) when the repository owns
- *    hooks, and none under a plugin that carries them — plus, until they leave,
+ *    hooks — plus, until they leave,
  *    the `permissions.allow` rows a release up to 1.12.0 wrote and recorded.
  *    Every other entry and key (`enabledPlugins`, `model`, the owner's own
  *    `permissions` rows, …) is kept as it is. A `permissions` that is not an
@@ -110,7 +110,6 @@ import type {
   ResiduePlanner,
 } from "../emit/planner.ts";
 import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
-import { isPluginOwned, withoutPluginOwnedRows } from "../emit/ownership.ts";
 import { NATIVE_SKILL_DIRS, nativeSkillRows } from "../emit/skillsProjection.ts";
 import {
   cliCallContextOf,
@@ -437,18 +436,6 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
   ],
 };
 
-/**
- * This client's infra rows that are HOOK wiring, and so a plugin's to carry
- * when the manifest records `hooks` against claude (`../emit/ownership.ts`).
- *
- * The review gate is the whole list: it is a script this adapter both places
- * and wires, on two events only this client fires. The settings document is
- * NOT here — it is planned in both modes, with no member under a plugin that
- * carries hooks, so the per-entry merge still runs over the file — and neither
- * are the bridge, the MCP placement or anything else an `infra` row can be.
- */
-const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set(["claude-review-gate"]);
-
 // ── The planner ──────────────────────────────────────────────────
 
 /**
@@ -479,22 +466,7 @@ export const claudeResiduePlanner: ResiduePlanner = {
     // here would put a second copy of a rule already emitted under
     // `.claude/rules/` in front of the one client that does not need it
     // (`../emit/skillsProjection.ts`, `nativeSkillRows`).
-    //
-    // SKIPPED WHOLESALE when an installed plugin carries this client's skills:
-    // the plugin root holds the same directory, and a second copy under
-    // `.claude/skills/` is the duplicate `check`'s `plugin-duplicates` row
-    // exists to report. A PACK skill is the exception — repository-installed
-    // content no plugin ships — so it is copied whatever the manifest records.
-    const skillsArePluginOwned = isPluginOwned(ctx.manifest, TOOL, "skill");
-    // The pack rows that survived that decision, named for the filter at the
-    // end of this planner: their `origin` does not travel onto the emitted row,
-    // so the generic class filter would drop them a second time.
-    const packSkillPaths = new Set<string>();
     for (const file of nativeSkillRows(core.skills, TOOL, core.demotedRules)) {
-      if (skillsArePluginOwned) {
-        if (file.origin !== "pack") continue;
-        packSkillPaths.add(file.path);
-      }
       rows.push({
         path: file.path,
         content: file.content,
@@ -511,12 +483,9 @@ export const claudeResiduePlanner: ResiduePlanner = {
     // generated guard can scope it: the repository layout, where the guard's
     // own location names the root. A plugin hook root (the container layout)
     // anchors no project root, so that guard refuses every report write, and an
-    // agent carrying the tool there would only waste attempts. Each half is
-    // shared with one sibling: the settings `hooks` object keys on the
-    // plugin-owned half alone, and the review gate's layout on the
-    // `hookScriptsRoot` half alone.
-    const scopedWrite =
-      ctx.facts.hookScriptsRoot === undefined && !isPluginOwned(ctx.manifest, TOOL, "hooks");
+    // agent carrying the tool there would only waste attempts. The review
+    // gate's layout keys on the same `hookScriptsRoot` fact.
+    const scopedWrite = ctx.facts.hookScriptsRoot === undefined;
     for (const item of items) {
       if (item.type === "rule") {
         if (!demoted.has(item.id)) rows.push(buildRuleFile(item, render.rule));
@@ -530,34 +499,16 @@ export const claudeResiduePlanner: ResiduePlanner = {
     }
     rows.push({
       path: CLAUDE_SETTINGS_PATH,
-      // Planned in both modes: in repository mode the document carries the
-      // hook entries, and under a plugin that carries hooks it carries no
-      // member at all (REQ-PLUGIN-016). The row stays planned so the per-entry
-      // merge still runs over the file: it removes a recorded allow row an
-      // earlier release wrote, or a left-behind repository-mode hook entry.
-      content: buildSettingsJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, {
-        hooks: !isPluginOwned(ctx.manifest, TOOL, "hooks"),
-      }),
+      // The document carries the hook entries, and the per-entry merge over the
+      // file also removes a recorded allow row an earlier release wrote.
+      content: buildSettingsJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot),
       owner: owner("claude-settings", "infra"),
     });
     rows.push(buildReviewGate(ctx));
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
-
-    // One filter over the finished set, after every builder has had its say:
-    // the rule, agent and command rows above answer from their own
-    // `artifactType`, and the hook-script rows from this adapter's own id list.
-    // A repository with no `plugin` field gets its rows back unchanged.
-    return {
-      outputs: withoutPluginOwnedRows(
-        ctx.manifest,
-        TOOL,
-        rows,
-        HOOK_INFRA_ARTIFACT_IDS,
-        packSkillPaths,
-      ),
-    };
+    return { outputs: rows };
   },
 };
 
@@ -827,13 +778,7 @@ function buildSettingsJson(
   core: CoreEmissionPlan,
   cli: CliCallContext,
   hookScriptsRoot?: string,
-  emit: { hooks: boolean } = { hooks: true },
 ): string {
-  // The `hooks` key is omitted entirely, not emitted empty: an empty object is
-  // a claim that this client has no hooks, and what is true under a
-  // plugin-backed setup is that its hooks live in the plugin's own
-  // configuration. With no other member to render, the document is empty.
-  if (!emit.hooks) return "{}\n";
   const rows = core.hooks.interchangeFor(TOOL);
   // The core's rows already carry the client's view of their own scripts
   // (`../emit/hooksInfra.ts`). This one does not: the review gate rides two

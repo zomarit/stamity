@@ -3,6 +3,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pinnedCliCall, scopeRegistryArg } from "../../shared/cliCall.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
+import { isPlainObject } from "../../config/parse.ts";
+import { TOOLS, type Tool } from "../../types/core.ts";
+import { MANIFEST_FILE } from "../../types/manifest.ts";
+import { STATE_DIR } from "../../types/markers.ts";
 
 /**
  * Who this installation IS, and how a user re-invokes it.
@@ -219,44 +223,6 @@ export function registryOption(opts: {
   return registry === null ? {} : { npmRegistry: registry };
 }
 
-/**
- * The repository this installation was built from, as `<owner>/<repo>`.
- *
- * A SECOND identity, and not derivable from the first. `packageName()` answers
- * the registry name (`@zomarit/stamity`); the plugin distribution this release
- * publishes is addressed by the repository slug instead — an APM dependency on
- * it reads `zomarit/stamity#plugins/v<version>` and a marketplace is added with
- * `<slug>#<ref>`. The two share no substring, so a surface that matches one
- * while the operator wrote the other sees nothing.
- *
- * Derived exactly as `scripts/distribution-identity.mjs` derives it, because
- * the string being recognised is the one that generator wrote: `repository.url`
- * with npm's `git+` prefix and `.git` suffix removed, then required to be a
- * bare `https://github.com/<owner>/<repo>`. `null` for anything else — another
- * forge, the `"owner/repo"` shorthand that generator does not read, a manifest
- * that names no repository — because a guessed slug would match a dependency
- * line belonging to somebody else.
- */
-const GITHUB_REPOSITORY_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/;
-
-/** `undefined` until computed; `null` is the answer "this manifest names none". */
-let cachedSlug: string | null | undefined;
-
-export function repositorySlug(): string | null {
-  if (cachedSlug === undefined) {
-    const repository = readOwnManifest()?.["repository"];
-    const url =
-      typeof repository === "object" && repository !== null
-        ? (repository as Record<string, unknown>)["url"]
-        : undefined;
-    const normalized =
-      typeof url === "string" ? url.replace(/^git\+/, "").replace(/\.git$/, "") : "";
-    const match = GITHUB_REPOSITORY_URL.exec(normalized);
-    cachedSlug = match === null ? null : `${match[1]}/${match[2]}`;
-  }
-  return cachedSlug;
-}
-
 /** Memoized like {@link cachedName}: the running package's version cannot change mid-process. */
 let cachedVersion: string | null = null;
 
@@ -309,4 +275,88 @@ export function packageCommandAt(version: string, verb: string): string {
   // argument renders here without throwing.
   const words = ["npx", npmChannel ? "" : "--no", scopeRegistryArg(name, opts.registry), name, verb];
   return words.filter((word) => word !== "").join(" ");
+}
+
+// ── The leftover-plugin warning (held through the 1.15 line) ────────────────
+
+/**
+ * The plugin id a 1.14 install carried: the running package's name with its
+ * npm scope removed, so a renamed fork's warning names the id its own
+ * marketplace carried rather than the canonical `stamity`.
+ */
+function pluginId(): string {
+  return packageName().replace(/^@[^/]+\//, "");
+}
+
+/**
+ * How each client uninstalls a plugin — the vendor's own command, printed
+ * because no verb here can run it. The marketplace is a placeholder: no record
+ * names the catalog the plugin came from. `codex plugin remove` is read from
+ * `codex --help` on 0.154.0 (2026-09-20); Cursor documents no CLI form, so its
+ * line names the view that does the job.
+ */
+function pluginUninstallCommands(): Readonly<Record<Tool, string>> {
+  const id = pluginId();
+  return {
+    claude: `claude plugin uninstall ${id}@<your marketplace>`,
+    cursor: `uninstall the ${id} plugin from Cursor's Customize view`,
+    copilot: `copilot plugin uninstall ${id}`,
+    codex: `codex plugin remove ${id}@<your marketplace>`,
+  };
+}
+
+/**
+ * The clients a plugin install from before 1.15.0 is still recorded for, in
+ * {@link TOOLS} order: the ones the manifest's held `plugin` block names under
+ * `clients`, and `claude` when `.claude/settings.json`'s `enabledPlugins`
+ * holds a `<plugin id>@<marketplace>` key.
+ *
+ * Both inputs are untrusted JSON read as they stand — the held block is never
+ * validated (`SetupManifest.plugin`) — so nothing in them is printed: only a
+ * name in {@link TOOLS} can come back, and a value of any other shape names no
+ * client.
+ */
+function leftoverPluginClients(heldPlugin: unknown, enabledPlugins: unknown): Tool[] {
+  const named = new Set<Tool>();
+  if (isPlainObject(heldPlugin) && isPlainObject(heldPlugin["clients"])) {
+    const clients = heldPlugin["clients"];
+    for (const tool of TOOLS) if (Object.hasOwn(clients, tool)) named.add(tool);
+  }
+  if (isPlainObject(enabledPlugins)) {
+    const prefix = `${pluginId()}@`;
+    if (Object.keys(enabledPlugins).some((key) => key.startsWith(prefix))) named.add("claude");
+  }
+  return TOOLS.filter((tool) => named.has(tool));
+}
+
+/**
+ * The leftover-plugin warning, one sentence and one line per client: `check`'s
+ * `plugin-duplicates` row prints it as its detail, and `sync`'s report and
+ * `clean` print it under `warning:`. Empty when no client is named.
+ *
+ * It lives in this kit module, beside {@link packageName}, because every line
+ * names the plugin id derived from the running package's name, and because the
+ * three verbs that print it can each import this layer: `clean` and `sync`'s
+ * report sit at one wave under different units and may not import each other.
+ *
+ * 1.15.0 deleted the plugin route, so a plugin a 1.14 setup installed still
+ * loads its own copy of the content this repository now writes. The manifest's
+ * `plugin` key is held, not read, through the 1.15 line so the warning lasts
+ * until the operator removes it; the closing line says so when the key is what
+ * named a client.
+ */
+export function leftoverPluginLines(heldPlugin: unknown, enabledPlugins: unknown): string[] {
+  const clients = leftoverPluginClients(heldPlugin, enabledPlugins);
+  if (clients.length === 0) return [];
+  const commands = pluginUninstallCommands();
+  const fromManifest = leftoverPluginClients(heldPlugin, undefined).length > 0;
+  return [
+    "a plugin install from before 1.15.0 is still recorded; 1.15.0 removed the plugin route and " +
+      "this repository's own files now carry its content, so uninstall the plugin with your " +
+      "client's own command:",
+    ...clients.map((tool) => `${tool}: ${commands[tool]}`),
+    ...(fromManifest
+      ? [`then delete the \`plugin\` key from ${STATE_DIR}/${MANIFEST_FILE}; nothing reads it since 1.15.0`]
+      : []),
+  ];
 }

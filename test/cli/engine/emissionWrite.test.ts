@@ -814,7 +814,10 @@ describe("coOwnedReclaimRenderings — the proof by re-rendering for user hooks 
     });
   });
 
-  it("renders nothing with no definitions, a folder it cannot read, or a plugin carrying Claude's hooks", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the half that
+  // pinned a `plugin-backed` record dropping a client's documents left with that mode; a held
+  // block now drops nothing, so all three documents are rendered under it.
+  it("renders nothing with no definitions or a folder it cannot read, and all three under a held plugin block", async () => {
     const temp = getTemp();
     expect((await coOwnedReclaimRenderings(temp.dir, manifestOf())).size).toBe(0);
 
@@ -822,16 +825,15 @@ describe("coOwnedReclaimRenderings — the proof by re-rendering for user hooks 
     expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ hooks: { userHooksDir: "not-a-folder" } }))).size).toBe(0);
 
     await temp.seedFiles({ ".stamity/hooks/audit.mjs": "process.exit(0)\n", ".stamity/hooks/audit.json": definition });
-    // TEST CHANGE, justified: build/54 (revised sign-off) — Cursor's and Codex's
-    // hook files now take a rendering too, so a plugin carrying Claude's hooks
-    // drops the settings document's alone; one carrying all three drops them all.
-    const plugin: SetupManifest["plugin"] = { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } };
-    expect([...(await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin }))).keys()]).toEqual([".cursor/hooks.json", ".codex/hooks.json"]);
-    const all: SetupManifest["plugin"] = {
+    const held = {
       mode: "plugin-backed",
-      clients: Object.fromEntries((["claude", "cursor", "codex"] as const).map((tool) => [tool, { version: "1.9.0", classes: ["hooks"] }])),
+      clients: Object.fromEntries((["claude", "cursor", "codex"] as const).map((tool) => [tool, { version: "1.14.0", classes: ["hooks"] }])),
     };
-    expect((await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin: all }))).size).toBe(0);
+    expect([...(await coOwnedReclaimRenderings(temp.dir, manifestOf({ plugin: held }))).keys()]).toEqual([
+      ".claude/settings.json",
+      ".cursor/hooks.json",
+      ".codex/hooks.json",
+    ]);
   });
 
   it("renders each definition into Cursor's and Codex's hook files as a release up to 1.6.0 wired it directly (build/54)", async () => {

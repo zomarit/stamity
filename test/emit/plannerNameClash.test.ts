@@ -16,8 +16,8 @@ import { useTempDir } from "../support/tempDir.ts";
  * 2026-10-03_pack-engine-defects, defect 1, the `sync` half): a command and a
  * skill the catalog keys apart by class still land in ONE `st-<x>` folder, and
  * a repository can already hold such a pair — a pack installed by an engine
- * that had no `add`-time check, an override, a fork artifact. `sync`, `check`,
- * `init` and `plugin setup` all plan through `composeEmissionPlanner`, so the
+ * that had no `add`-time check, an override, a fork artifact. `sync`, `check`
+ * and `init` all plan through `composeEmissionPlanner`, so the
  * refusal is asserted there, on the plan, naming every owner and its remedy.
  *
  * No mocks: real temp repositories, packs installed through the engine's own
@@ -168,7 +168,11 @@ describe("composeEmissionPlanner — an installed cross-class name clash", () =>
       expect(refusal.message).toContain(ACME_REMEDY);
       expect(refusal.why).toContain("one folder");
       expect(refusal.next).toContain(`\`${call("sync")}\``);
-      expect(refusal.next).toContain(`\`${call("plugin setup")}\``);
+      // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the step named
+      // `plugin setup` among the commands that plan through here; d6 deleted that verb, so the
+      // remedy names the three that remain and must not send a reader at the gone one.
+      expect(refusal.next).toContain(`\`${call("init")}\``);
+      expect(refusal.next).not.toContain("plugin setup");
       expect(refusal.next).not.toMatch(/`stamity /u);
     },
   );

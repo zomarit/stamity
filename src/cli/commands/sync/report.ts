@@ -1,5 +1,4 @@
 import { countSelectionItems } from "../../../content/selection.ts";
-import { pluginOwnedSummary } from "../../../emit/ownership.ts";
 import { formatReclaimReport } from "../../../merge/reclaim.ts";
 import {
   PACK_OWNER_PREFIX,
@@ -8,6 +7,7 @@ import {
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { coOwnedReclaimReducers, rowsCarriedThroughSweep } from "../../engine/emissionWrite.ts";
+import { leftoverPluginLines } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { SyncApplyReport, SyncPlan, SyncPlanEntry } from "./engine.ts";
 
@@ -203,20 +203,17 @@ function salvageLines(plan: SyncPlan, report: SyncApplyReport, palette: Palette)
 }
 
 /**
- * What an installed plugin delivers instead of this run — one line per
- * selected client whose manifest record moves classes out of emission
- * (`../../../emit/ownership.ts`).
- *
- * Owed, not decorative. A sync on a plugin-backed repository writes no agents,
- * skills, commands or hook scripts for that client, and a report that printed
- * only the counts would leave an operator reading a much shorter list with
- * nothing saying why it shrank. Empty on every repository with no `plugin`
- * field, which is why the pre-plugin report is byte-identical.
+ * The leftover-plugin warning (`../../kit/packageName.ts::leftoverPluginLines`)
+ * in this report: the manifest's held `plugin` block is what a sync carries, so
+ * it is what the report reads (`check` reads the settings document as well).
  */
-function pluginOwnedLines(manifest: SetupManifest, palette: Palette): string[] {
-  return pluginOwnedSummary(manifest).map((row) =>
-    palette.dim(`plugin-owned  ${row.tool}: ${row.classes.join(", ")}`),
-  );
+function leftoverPluginReportLines(manifest: SetupManifest, palette: Palette): string[] {
+  const [first, ...rest] = leftoverPluginLines(manifest.plugin, undefined);
+  if (first === undefined) return [];
+  return [
+    palette.yellow(`  warning: ${first}`),
+    ...rest.map((line) => palette.yellow(`    ${line}`)),
+  ];
 }
 
 function provenanceLines(rollup: ProvenanceRollup, palette: Palette): string[] {
@@ -330,7 +327,7 @@ export function renderSyncReport(
     lines.push(...salvageLines(plan, report, palette));
   }
 
-  lines.push(...pluginOwnedLines(provenanceSource(plan, report), palette));
+  lines.push(...leftoverPluginReportLines(provenanceSource(plan, report), palette));
   lines.push(...provenanceLines(provenanceFromManifest(provenanceSource(plan, report)), palette));
   return lines.join("\n");
 }
@@ -382,13 +379,6 @@ export function syncJsonPayload(plan: SyncPlan, report: SyncApplyReport): Record
     // string unions — so it is structured-cloneable by construction.
     reclaim: structuredClone(reclaimed),
     provenance: provenanceFromManifest(provenanceSource(plan, report)),
-    // The same rows the human report prints as `plugin-owned` lines, as data:
-    // a machine caller comparing what it asked for against what was written
-    // needs the classes that never entered the plan.
-    pluginOwned: pluginOwnedSummary(provenanceSource(plan, report)).map((row) => ({
-      tool: row.tool,
-      classes: [...row.classes],
-    })),
     // The three facts by name, not the status whole: why git did not answer
     // (`WorkingTreeStatus.reason`) is told by `check`'s `git-available` row and,
     // in human mode, by this verb's closing step (`../sync.ts`), and a field

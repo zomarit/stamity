@@ -13,10 +13,8 @@ import {
   manifestPath,
   maturityDirective,
   migrateManifest,
-  pluginOwnedClasses,
   readCommunicationStyle,
   readGates,
-  readInstallMode,
   readManifest,
   readMaturityTier,
   readReviewCap,
@@ -39,13 +37,7 @@ import {
   type Tool,
 } from "../../src/types/core.ts";
 import { EngineError, type ErrorCode } from "../../src/types/errors.ts";
-import {
-  INSTALL_MODES,
-  INSTALL_MODE_DEFAULT,
-  MANIFEST_VERSION,
-  PLUGIN_OWNED_CLASSES,
-  type SetupManifest,
-} from "../../src/types/manifest.ts";
+import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -1161,14 +1153,22 @@ describe("models — the operator's ladder overrides", () => {
 });
 
 /**
- * The plugin-backed install record and the operator's pinned gate commands.
+ * The held 1.14 install record and the operator's pinned gate commands.
  *
  * Both fields are additive at the current schema generation, so the first case
  * IS the contract: a manifest written before they existed parses unchanged,
  * round-trips without gaining a key, and needs no migration step.
+ *
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): 1.15.0
+ * deleted the `plugin-backed` install mode, so the `plugin` block is HELD, not
+ * validated or read: the cases that pinned its ownership readers
+ * (`readInstallMode`, `pluginOwnedClasses`, `INSTALL_MODES`,
+ * `PLUGIN_OWNED_CLASSES`) and its per-key validation errors left with them, and
+ * two cases below pin the held behaviour instead — any value is accepted and
+ * written back value-identical.
  */
-describe("plugin and gates — the plugin-backed install record", () => {
-  /** The record REQ-PLUGIN-014 names: claude plugin-backed, four classes carried. */
+describe("plugin and gates — the held install record", () => {
+  /** The record a 1.14 setup wrote: claude plugin-backed, four classes carried. */
   function pluginBacked(): SetupManifest {
     return {
       ...fullManifest(),
@@ -1241,134 +1241,34 @@ describe("plugin and gates — the plugin-backed install record", () => {
     expect(keys.slice(models, models + 3)).toEqual(["models", "plugin", "gates"]);
   });
 
-  it("accepts the plugin-backed record and reports the classes that client owns", () => {
-    const manifest = pluginBacked();
-
-    expect(collectManifestErrors(manifest)).toEqual([]);
-    expect(readInstallMode(manifest)).toBe("plugin-backed");
-    expect([...pluginOwnedClasses(manifest, "claude")].toSorted()).toEqual([
-      "agent",
-      "command",
-      "hooks",
-      "skill",
-    ]);
-    // A tool with no record owns nothing, even under a plugin-backed manifest.
-    expect([...pluginOwnedClasses(manifest, "cursor")]).toEqual([]);
+  it("accepts the 1.14 plugin-backed record without validating it, and owns nothing by it", () => {
+    expect(collectManifestErrors(pluginBacked())).toEqual([]);
   });
 
-  it("reads a hand-edited non-array `classes` as owning nothing", () => {
-    // M-i: the comment above the filter says this path is reachable WITHOUT
-    // validation, and it was — `classes` was filtered unconditionally, so a
-    // hand-edited string threw a TypeError out of a total resolver that `sync`,
-    // `check` and `clean` all call. The empty set is the answer an unreadable
-    // record earns, the same one an absent record gets.
-    const handEdited = {
-      ...pluginBacked(),
-      plugin: {
-        mode: "plugin-backed",
-        clients: { claude: { version: "1.9.0", classes: "agent" } },
-      },
-    } as unknown as SetupManifest;
-
-    expect([...pluginOwnedClasses(handEdited, "claude")]).toEqual([]);
-    // And validation still names it, so the defect is not merely absorbed.
-    expect(collectManifestErrors(handEdited).join(" ")).toContain("classes");
-  });
-
-  it("owns nothing while the mode is still `generated`, clients map or not", () => {
-    // A repository can record the roots it knows about before it migrates: the
-    // MODE moves ownership, not the presence of a client record.
-    const staged: SetupManifest = {
-      ...fullManifest(),
-      plugin: {
-        mode: "generated",
-        clients: { claude: { version: "1.9.0", classes: ["agent", "skill"] } },
-      },
-    };
-
-    expect(collectManifestErrors(staged)).toEqual([]);
-    expect(readInstallMode(staged)).toBe("generated");
-    expect([...pluginOwnedClasses(staged, "claude")]).toEqual([]);
-  });
-
-  it("defaults the install mode for an absent, unread or plugin-less manifest", () => {
-    expect(readInstallMode(null)).toBe("generated");
-    expect(readInstallMode(undefined)).toBe("generated");
-    expect(readInstallMode(fullManifest())).toBe("generated");
-    expect([...pluginOwnedClasses(null, "claude")]).toEqual([]);
-    expect(INSTALL_MODE_DEFAULT).toBe("generated");
-    expect(INSTALL_MODES).toEqual(["generated", "plugin-backed"]);
-  });
-
-  it("keeps the ownable classes at the content classes plus hooks", () => {
-    // `PLUGIN_OWNED_CLASSES` is built from a total record over the union, so a
-    // new `ContentClass` cannot land without being placed there. This asserts
-    // the derivation rather than a literal that could drift away from it.
-    expect([...PLUGIN_OWNED_CLASSES].toSorted()).toEqual([...CONTENT_CLASSES, "hooks"].toSorted());
-  });
-
-  it("names exactly the one defective key under `plugin`", () => {
-    const cases: [string, unknown, string][] = [
-      ["a mode outside the two", { mode: "other" }, "`plugin.mode`"],
-      ["a missing mode", { clients: {} }, "`plugin.mode`"],
-      ["a plugin that is not an object", "plugin-backed", "`plugin` must be an object"],
-      ["a clients map that is not an object", { mode: "generated", clients: [] }, "`plugin.clients`"],
-      [
-        "an empty class list",
-        { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: [] } } },
-        "`plugin.clients.claude.classes`",
-      ],
-      [
-        "a duplicated class",
-        {
-          mode: "plugin-backed",
-          clients: { claude: { version: "1.9.0", classes: ["agent", "agent"] } },
-        },
-        "`plugin.clients.claude.classes`",
-      ],
-      [
-        "a class nothing emits",
-        {
-          mode: "plugin-backed",
-          clients: { claude: { version: "1.9.0", classes: ["agent", "macro"] } },
-        },
-        "`plugin.clients.claude.classes`",
-      ],
-      [
-        "an unknown tool",
-        { mode: "plugin-backed", clients: { vim: { version: "1.9.0", classes: ["agent"] } } },
-        "`plugin.clients.vim`",
-      ],
-      [
-        "a version that is not a version",
-        {
-          mode: "plugin-backed",
-          clients: { claude: { version: "not-a-version", classes: ["agent"] } },
-        },
-        "`plugin.clients.claude.version`",
-      ],
-      [
-        "a client record that is not an object",
-        { mode: "plugin-backed", clients: { claude: "1.9.0" } },
-        "`plugin.clients.claude`",
-      ],
-      ["a stray key under plugin", { mode: "generated", root: "/plugins" }, "unknown field `plugin.root`"],
-      [
-        "a stray key under a client record",
-        {
-          mode: "plugin-backed",
-          clients: { claude: { version: "1.9.0", classes: ["agent"], root: "/plugins" } },
-        },
-        "unknown field `plugin.clients.claude.root`",
-      ],
+  it("holds any value under `plugin` — one 1.14 never wrote included — and writes it back value-identical", async () => {
+    // Each of these was a validation error before 1.15.0. The block is held,
+    // not read, so none may refuse the manifest that carries it: a refusal here
+    // would make `check`, `sync` and `clean` stop on a repository mid-upgrade.
+    const held: [string, unknown][] = [
+      ["a mode outside the two", { mode: "other" }],
+      ["a missing mode", { clients: {} }],
+      ["a plugin that is not an object", "plugin-backed"],
+      ["a null", null],
+      ["an unknown tool", { mode: "plugin-backed", clients: { vim: { version: "1.9.0", classes: ["agent"] } } }],
+      ["a version that is not a version", { mode: "plugin-backed", clients: { claude: { version: "x", classes: [] } } }],
+      ["a stray key, keys out of order", { root: "/plugins", mode: "generated", clients: { claude: "1.9.0" } }],
     ];
 
-    for (const [label, plugin, fragment] of cases) {
-      const errors = collectManifestErrors({ ...fullManifest(), plugin });
-
-      expect(errors, `${label} must produce one error`).toHaveLength(1);
-      expect(errors[0], label).toContain(fragment);
-    }
+    const reread = await Promise.all(
+      held.map(async ([label, plugin]) => {
+        const manifest = { ...fullManifest(), plugin } as SetupManifest;
+        expect(collectManifestErrors(manifest), label).toEqual([]);
+        const root = join(getRoot().dir, label.replaceAll(/[^a-z]+/g, "-"));
+        await writeManifest(root, manifest, { now: FIXED_NOW });
+        return (await readManifest(root))?.plugin;
+      }),
+    );
+    expect(reread).toEqual(held.map(([, plugin]) => plugin));
   });
 
   it("names exactly the one defective gate command", () => {

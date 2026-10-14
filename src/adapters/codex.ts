@@ -25,7 +25,6 @@ import {
   type ResidueEmission,
   type ResiduePlanner,
 } from "../emit/planner.ts";
-import { withoutPluginOwnedRows } from "../emit/ownership.ts";
 import {
   SKILLS_PROJECTION_DIR,
   TOUCHPOINT_POLICY_FILE,
@@ -296,22 +295,6 @@ const HOOKS_ARTIFACT_ID = "codex-hooks";
 const CONFIG_ARTIFACT_ID = "codex-config";
 
 /**
- * The infra rows that are HOOK wiring, and so a plugin's to carry when the
- * manifest records `hooks` against codex (`../emit/ownership.ts`).
- *
- * {@link CODEX_CONFIG_FILE} is NOT on the list. It is this client's
- * configuration — MCP tables, the features flag, the subagent pointers — and
- * this adapter owns its tables there under either install mode (table by
- * table beside the owner's, REQ-FLOW-037). The capability file
- * file 1 emits for codex declares hooks `repository-owned` for exactly that
- * reason, so the plugin-backed branch here is defence rather than a live path.
- */
-const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set([
-  HOOKS_ARTIFACT_ID,
-  "codex-portable-hook",
-]);
-
-/**
  * A nested rules file. Composite by nature — it carries several rules — so it
  * ledgers as infrastructure under one id rather than claiming to be any single
  * rule artifact.
@@ -505,11 +488,7 @@ export const codexResiduePlanner: ResiduePlanner = {
     }
     if (downConverted.dropped.length > 0) warnings.push(droppedRulesWarning(downConverted.dropped));
 
-    // One filter over the finished set: the agent and rule rows answer from
-    // their own `artifactType`, the hook rows from this adapter's own id list.
-    // A repository with no `plugin` field gets its rows back unchanged.
-    const kept = withoutPluginOwnedRows(ctx.manifest, TOOL, rows, HOOK_INFRA_ARTIFACT_IDS);
-    return { outputs: kept.toSorted((a, b) => compareText(a.path, b.path)), warnings };
+    return { outputs: rows.toSorted((a, b) => compareText(a.path, b.path)), warnings };
   },
 };
 

@@ -45,7 +45,6 @@ import {
   type McpConfig,
   type ModelConfig,
   type RuleDelivery,
-  type SetupManifest,
 } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -206,8 +205,8 @@ interface CtxOptions {
   mcp?: McpConfig;
   models?: ModelConfig;
   rootDir?: string;
-  /** The manifest's plugin record; absent everywhere but the ownership cases. */
-  plugin?: SetupManifest["plugin"];
+  /** The manifest's held 1.14 `plugin` block; absent everywhere but the case proving it steers nothing. */
+  plugin?: unknown;
 }
 
 function ctxOf(options: CtxOptions): EmissionContext {
@@ -2591,27 +2590,28 @@ describe("the omission notice under on-demand", () => {
   });
 });
 
-describe("codex residue under plugin ownership", () => {
-  it("drops the agent and hook rows the record names and keeps the composed config", async () => {
+/**
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case
+ * pinned the agent and hook rows a `plugin-backed` record took out of codex's
+ * residue. 1.15.0 deleted that mode; the held block steers nothing, so the
+ * residue under the 1.14 record equals the residue with no block.
+ */
+describe("codex residue under a held plugin block", () => {
+  it("plans the same rows, byte for byte, as a manifest with no block", async () => {
     const contentRoot = await seedCorpus();
-    const ctx = ctxOf({
-      contentRoot,
-      plugin: {
-        mode: "plugin-backed",
-        clients: { codex: { version: "1.9.0", classes: ["agent", "hooks"] } },
-      },
+    const residue = async (plugin?: unknown) => {
+      const ctx = ctxOf({ contentRoot, ...(plugin === undefined ? {} : { plugin }) });
+      return (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
+    };
+    const withBlock = await residue({
+      mode: "plugin-backed",
+      clients: { codex: { version: "1.14.0", classes: ["agent", "hooks"] } },
     });
+    const control = await residue();
 
-    const paths = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx))
-      .outputs.map((row) => row.path);
-
-    expect(paths.filter((path) => path.startsWith(`${CODEX_AGENTS_DIR}/`))).toEqual([]);
-    expect(paths).not.toContain(CODEX_HOOKS_FILE);
-    expect(paths.filter((path) => path.includes("/hooks/codex/"))).toEqual([]);
-
-    // `.codex/config.toml` is this client's WHOLE configuration — MCP tables,
-    // the features flag, the subagent pointers — and this adapter owns it whole
-    // under either install mode, so it is not on the hook id list.
-    expect(paths).toContain(CODEX_CONFIG_FILE);
+    const shape = (rows: readonly { path: string; content: string }[]) =>
+      rows.map((row) => [row.path, row.content]);
+    expect(withBlock.some((row) => row.path === CODEX_HOOKS_FILE)).toBe(true);
+    expect(shape(withBlock)).toEqual(shape(control));
   });
 });

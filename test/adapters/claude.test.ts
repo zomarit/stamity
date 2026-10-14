@@ -42,7 +42,6 @@ import type {
   McpConfig,
   ModelConfig,
   RuleDelivery,
-  SetupManifest,
 } from "../../src/types/manifest.ts";
 import { getMarkersForPath, stampMarkerVersion } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -228,11 +227,10 @@ interface PlanOverrides {
    */
   hookScriptsRoot?: string;
   /**
-   * The manifest's plugin record. Set only by the ownership cases; absent
-   * everywhere else, which is the generated emission every other case here
-   * asserts — and the reason none of this file's expected paths moved.
+   * The manifest's held 1.14 `plugin` block. Set only by the case that proves
+   * it steers nothing; absent everywhere else.
    */
-  plugin?: SetupManifest["plugin"];
+  plugin?: unknown;
 }
 
 /** Every rule, agent and command of the real corpus, selected by bare catalog id. */
@@ -264,8 +262,8 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
   // Same shape a repo carries after `stamity config set ruleDelivery …`; absent
   // means the engine default, which is what every other case in this file runs.
   if (over.ruleDelivery !== undefined) manifest.ruleDelivery = over.ruleDelivery;
-  // Same shape `stamity plugin setup` persists; `createManifest` takes no
-  // option for it either.
+  // The block a 1.14 `stamity plugin setup` persisted; `createManifest` takes
+  // no option for it either.
   if (over.plugin !== undefined) manifest.plugin = over.plugin;
   return {
     rootDir: over.rootDir ?? getTemp().path("repo"),
@@ -1969,95 +1967,29 @@ describe("settings under a plugin root", () => {
   });
 });
 
-describe("claude residue under plugin ownership", () => {
-  /** file 1's claude root declares these four `carried`. */
-  const CARRIED: SetupManifest["plugin"] = {
-    mode: "plugin-backed",
-    clients: { claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] } },
-  };
-
-  it("writes no agent, skill, command or hook-script row, and keeps every rule", async () => {
-    const { rows } = await planned({ plugin: CARRIED });
-    const paths = rows.map((row) => row.path);
-
-    for (const dir of [".claude/agents", CLAUDE_SKILLS_DIR, CLAUDE_COMMANDS_DIR]) {
-      expect(paths.filter((path) => path.startsWith(`${dir}/`)), dir).toEqual([]);
-    }
-    expect(paths.filter((path) => path.startsWith(`${HOOKS_GENERATED_DIR}/claude/`))).toEqual([]);
-    expect(paths).not.toContain(CLAUDE_REVIEW_GATE_PATH);
-
-    // Rules are NOT in the record, so every one of them is still written — the
-    // boundary is per class, and the generated emission for the classes the
-    // plugin does not carry is untouched.
-    const rules = paths.filter((path) => path.startsWith(".claude/rules/"));
-    expect(rules.length).toBeGreaterThan(0);
-    // Against the control rather than a literal count, so the assertion stays
-    // true of a corpus that grows a rule.
-    const control = (await planned()).rows
-      .map((row) => row.path)
-      .filter((path) => path.startsWith(".claude/rules/"));
-    expect(rules).toEqual(control);
-    // And the bridge survives: `CLAUDE.md` is the client's memory import, which
-    // is repository configuration under either install mode.
-    expect(paths).toContain(CLAUDE_MD_PATH);
-  });
-
-  // TEST CHANGE, justified (2026-10-08, inbox row 324): the case pinned the
-  // permissions half as the one member a plugin-backed setup writes. No allow
-  // row is rendered now, so the plugin route writes an empty document.
-  it("emits the settings document with no member at all under a plugin that carries hooks", async () => {
-    const { rows } = await planned({ plugin: CARRIED });
-    const row = byPath(rows).get(CLAUDE_SETTINGS_PATH);
-    // Still planned: the row is what lets the per-entry merge remove a recorded
-    // row or a left-behind repository-mode hook entry on this route.
-    expect(row).toBeDefined();
-    // No `hooks: {}` — that would claim this client has no hooks, and what is
-    // true is that its hooks live in the plugin — and no `permissions`.
-    expect(row!.content).toBe("{}\n");
-  });
-
-  it("keeps the whole residue when the record names only hooks", async () => {
-    const { rows } = await planned({
-      plugin: {
-        mode: "plugin-backed",
-        clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
-      },
-    });
-    const paths = rows.map((row) => row.path);
-
-    expect(paths.filter((path) => path.startsWith(".claude/agents/")).length).toBeGreaterThan(0);
-    expect(paths.filter((path) => path.startsWith(`${CLAUDE_SKILLS_DIR}/`)).length).toBeGreaterThan(
-      0,
-    );
-    expect(paths).not.toContain(CLAUDE_REVIEW_GATE_PATH);
-    // TEST CHANGE, justified (2026-10-08, inbox row 324): expected `["permissions"]`;
-    // no allow row is rendered now, so the plugin-mode document has no member.
-    expect(Object.keys(JSON.parse(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content))).toEqual([]);
-  });
-
-  it("copies an installed pack's skill into the native tree even when skills are plugin-owned", async () => {
-    // A pack is repository-installed content: no plugin ships it, so skipping
-    // it would leave it reachable by no client at all. The core rows are handed
-    // in directly here — the pack resolution lane is `../pack`'s to exercise,
-    // and what this case is about is the ONE branch that reads `origin`.
-    const ctx = await ctxOf({ selection: EMPTY_SELECTION, plugin: CARRIED });
-    const core = await buildCoreEmissionPlan(ctx);
-    const packSkill = {
-      path: `${SKILLS_PROJECTION_DIR}/acme-drill/SKILL.md`,
-      content: "---\nname: acme-drill\ndescription: pack skill\n---\n\nBody.\n",
-      artifactId: "drill",
-      artifactType: "skill" as const,
-      origin: "pack" as const,
+/**
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the four
+ * cases here pinned what a `plugin-backed` record took out of claude's residue —
+ * the agents, skills, commands and hook rows, the settings `hooks` member — and
+ * the pack-skill exception to it. 1.15.0 deleted that mode: the manifest's
+ * `plugin` block is held for the leftover-plugin warning and steers nothing, so
+ * the one case left pins that the residue under the 1.14 record carrying every
+ * class equals the residue with no block, row for row and byte for byte.
+ */
+describe("claude residue under a held plugin block", () => {
+  it("plans the same rows, byte for byte, as a manifest with no block", async () => {
+    const held = {
+      mode: "plugin-backed",
+      clients: { claude: { version: "1.14.0", classes: ["agent", "skill", "command", "hooks"] } },
     };
-    const corpusSkill = { ...packSkill, path: `${SKILLS_PROJECTION_DIR}/stamity-house/SKILL.md`, artifactId: "house", origin: "corpus" as const };
+    const withBlock = (await planned({ plugin: held })).rows;
+    const control = (await planned()).rows;
 
-    const rows = (
-      await claudeResiduePlanner.planResidue({ ...core, skills: [packSkill, corpusSkill] }, ctx)
-    ).outputs;
-    const paths = rows.map((row) => row.path);
-
-    expect(paths).toContain(`${CLAUDE_SKILLS_DIR}/acme-drill/SKILL.md`);
-    expect(paths).not.toContain(`${CLAUDE_SKILLS_DIR}/stamity-house/SKILL.md`);
+    const shape = (rows: readonly { path: string; content: string }[]) =>
+      rows.map((row) => [row.path, row.content]);
+    expect(withBlock.some((row) => row.path.startsWith(".claude/agents/"))).toBe(true);
+    expect(shape(withBlock)).toEqual(shape(control));
+    expect(JSON.parse(byPath(withBlock).get(CLAUDE_SETTINGS_PATH)!.content)).toHaveProperty("hooks");
   });
 });
 
@@ -2071,21 +2003,14 @@ describe("claude residue under plugin ownership", () => {
 // keeps the three names an earlier release rendered, so a recorded row leaves
 // silently on the next sync and an unrecorded equal row stays the owner's.
 describe("the settings document's allow rows and the per-entry bound", () => {
-  it("renders no allow row under either install mode, keeps the earlier releases' rows as the bound, and hooks only while the repository owns them", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the plugin-backed
+  // half, an empty document, left with that install mode; the generated half is unchanged.
+  it("renders no allow row, keeps the earlier releases' rows as the bound, and renders the hooks", async () => {
     const generated = await planned();
     const repoDoc = JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content) as Record<string, unknown>;
     expect(repoDoc).not.toHaveProperty("permissions");
     expect(repoDoc).toHaveProperty("hooks");
     expect(ENGINE_PERMISSION_ROWS).toEqual(["Read", "Grep", "Glob"]);
-
-    const pluginBacked = await planned({
-      plugin: {
-        mode: "plugin-backed",
-        clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
-      },
-    });
-    const pluginDoc = JSON.parse(byPath(pluginBacked.rows).get(CLAUDE_SETTINGS_PATH)!.content) as Record<string, unknown>;
-    expect(pluginDoc).toEqual({});
   });
 });
 
@@ -2180,20 +2105,16 @@ describe("the verdict roles' path-scoped report write", () => {
     }
   });
 
-  it("renders no Write for the verdict roles when an installed plugin carries the hooks", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case that
+  // pinned no `Write` under a plugin carrying the hooks left with the `plugin-backed` mode; a
+  // held block no longer moves the hooks, so the verdict roles keep the repository render.
+  it("keeps Write for the verdict roles under a held plugin block naming the hooks", async () => {
     expectVerdictRowsCarryWritePaths();
     const { rows } = await planned({
-      plugin: {
-        mode: "plugin-backed",
-        clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
-      },
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["hooks"] } } },
     });
 
-    // The agents are still repository-written here (only hooks moved), which
-    // is what makes the render decision visible at all.
-    for (const id of VERDICT_IDS) {
-      expect(agentHead(rows, id)["tools"], id).toBe(toClaudeToolsFrontmatter(["read"]));
-    }
+    for (const id of VERDICT_IDS) expect(toolNames(rows, id), id).toContain(CLAUDE_REPORT_WRITE_TOOL);
   });
 
   it("renders no Write for a verdict row whose every pattern fails the grammar", () => {

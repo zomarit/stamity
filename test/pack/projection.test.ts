@@ -489,7 +489,12 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
     expect([...rows.keys()].filter((path) => path.startsWith(".stamity/packs/"))).toEqual([]);
   });
 
-  it("stamps every pack skill row origin pack, so a plugin carrying skills still lets it reach the client", async () => {
+  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the second half
+  // asserted that a `plugin-backed` record carrying skills took the corpus skill out of both
+  // trees and left the pack skill. 1.15.0 deleted that mode, so the same record is a held
+  // block that steers nothing: both skills reach both trees. The origin stamp, the defect
+  // this case was written for, is asserted unchanged.
+  it("stamps every pack skill row origin pack, and a held plugin block drops neither skill", async () => {
     // Defect 3 of run 2026-10-03_debug-pack-defects: the pack lane built its
     // rows without `origin`, so both plugin-mode exemptions (the shared tree's
     // and Claude's native copy) read them as core rows and dropped them.
@@ -508,9 +513,8 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
       [".agents/skills/stamity-runbook/references/notes.md", "pack"],
     ]);
 
-    // Both readers' plugins carry the skill class: the corpus skill leaves
-    // both trees, and the pack skill stays in both.
-    const pluginBacked: SetupManifest = {
+    // The 1.14 record that carried both readers' skills: held, so neither skill leaves.
+    const held: SetupManifest = {
       ...installed,
       plugin: {
         mode: "plugin-backed",
@@ -520,16 +524,19 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
         },
       },
     };
-    const paths = [...byPath(await planAll(ctxOf(fixture, pluginBacked))).keys()];
+    const paths = [...byPath(await planAll(ctxOf(fixture, held))).keys()];
     expect(paths).toEqual(
       expect.arrayContaining([
         ".agents/skills/stamity-runbook/SKILL.md",
         ".agents/skills/stamity-runbook/references/notes.md",
         ".claude/skills/stamity-runbook/SKILL.md",
         ".claude/skills/stamity-runbook/references/notes.md",
+        ".agents/skills/stamity-alpha/SKILL.md",
+        ".claude/skills/stamity-alpha/SKILL.md",
       ]),
     );
-    expect(paths.filter((path) => path.includes("/stamity-alpha/"))).toEqual([]);
+    // And no row at all moved: the plan equals the one with no block.
+    expect(paths).toEqual([...byPath(await planAll(ctxOf(fixture, installed))).keys()]);
   });
 
   it("projects pack rules, agents and commands through each tool's own residue surface", async () => {

@@ -1,15 +1,17 @@
 import { createHash } from "node:crypto";
 import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { delimiter, join, relative, resolve, sep } from "node:path";
-import { Option, type Command } from "commander";
+import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Command } from "commander";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
+import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
+import { isPlainObject } from "../../config/parse.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
-import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
-import { readGates, readInstallMode } from "../../manifest/manifest.ts";
+import { readGates } from "../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../manifest/ownedPaths.ts";
 import {
   extractManagedBlock,
@@ -24,6 +26,7 @@ import {
 } from "../../pack/projection.ts";
 import { receiptRelPath } from "../../pack/receipt.ts";
 import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
+import { findPackageRoot } from "../../shared/paths.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import {
   describePackIntegrityFinding,
@@ -35,8 +38,6 @@ import type { PackArtifactReach, PackReach } from "../../types/content.ts";
 import { TOOLS, type Tool, VALID_TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import {
-  INSTALL_MODES,
-  type InstallMode,
   isPackOwner,
   type LedgerEntry,
   MANIFEST_FILE,
@@ -47,19 +48,10 @@ import { STATE_DIR } from "../../types/markers.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import { CliFailure, type FailureDoc } from "../kit/output.ts";
-import { packageCommand, packageCommandAt } from "../kit/packageName.ts";
+import { leftoverPluginLines, packageCommand, packageCommandAt } from "../kit/packageName.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
-import {
-  collectPluginDuplicates,
-  describeDuplicatePaths,
-  judgeNodeFloor,
-  majorOf,
-  pluginRootVariable,
-  probePluginRuntime,
-  requiredNodeRange,
-} from "./plugin/probe.ts";
 import type { ReclaimActionEntry, ReclaimProof } from "../../merge/reclaim.ts";
 import { planSync, previewReclaim, type SyncPlanEntry } from "./sync/engine.ts";
 import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts";
@@ -70,7 +62,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — fifteen environment and state probes, each a
+ * 1. **DOCTOR** — fourteen environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -177,17 +169,44 @@ const MAX_NAMES_INLINE = 5;
 // ── Doctor ─────────────────────────────────────────────────────────────────
 
 /**
+ * `engines.node` from the package that ships this build, or `null` when it
+ * cannot be read as a range. Read rather than duplicated as a constant: the
+ * floor is declared in package.json, and a second copy here could disagree with
+ * the one npm actually enforces at install time.
+ */
+async function requiredNodeRange(): Promise<string | null> {
+  try {
+    const root = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+    const parsed = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      engines?: { node?: unknown };
+    };
+    const range = parsed.engines?.node;
+    return typeof range === "string" && semver.validRange(range) !== null ? range : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One interpreter version against one declared floor: the three answers the
+ * comparison can give. Tri-state rather than a boolean because the row below
+ * WARNS on an unparseable version and FAILS below the floor — two severities
+ * and two sentences.
+ *
+ * `includePrerelease` is part of the judgment: semver excludes prereleases from
+ * a plain range by default, so a Node nightly on a satisfying major would read
+ * as below the floor — a false failure rather than a real one.
+ */
+function judgeNodeFloor(nodeVersion: string, range: string): "satisfies" | "below" | "unparseable" {
+  const parsed = semver.valid(nodeVersion) ?? semver.coerce(nodeVersion)?.version ?? null;
+  if (parsed === null) return "unparseable";
+  return semver.satisfies(parsed, range, { includePrerelease: true }) ? "satisfies" : "below";
+}
+
+/**
  * The `node-version` DOCTOR ROW for a Node version against the package's
  * `engines.node` range: this function owns the severity and the sentence, and
- * nothing else.
- *
- * The comparison itself is `judgeNodeFloor` in `./plugin/probe.ts`, called here
- * and by `engineNodeFacts` for `plugin status`'s own node row. It was composed
- * twice — `semver.valid`/`coerce`, then `satisfies` with `includePrerelease`,
- * once in each place — which is two chances to disagree about one interpreter,
- * and `includePrerelease` in particular is the kind of option one copy loses.
- * The tri-state verdict is what lets this row keep severities the report has no
- * use for: `unparseable` WARNS here and folds into `ok` there.
+ * the comparison is {@link judgeNodeFloor}'s.
  *
  * Pure and exported because it is the one probe whose failing branch cannot be
  * reached in-process: a suite runs on a Node that already satisfies the range,
@@ -433,7 +452,7 @@ async function checkLearnings(
 /**
  * The repository's class file (REQ-FLOW-061): the change classes and the
  * test-input map `gate classify` reads from a base commit. No row when the file
- * is absent, so a repository without one keeps its fifteen rows. This reads the
+ * is absent, so a repository without one keeps its fourteen rows. This reads the
  * work tree's copy, the one the next pull request lands as a base: it passes
  * when the validator accepts it, and fails naming the first error, since a base
  * holding a refused copy has `gate classify` apply only its raising entries
@@ -641,10 +660,8 @@ async function checkEnvMcp(
  * block reaches the client, and not a shell that runs `stamity check` outside
  * a Claude session, and the fail text says exactly that.
  *
- * Fails only where every condition holds: `win32`, Claude targeted, its hooks
- * emitted by this engine rather than carried by a plugin (a plugin-owned hook
- * set is the plugin's render, not this adapter's), and none of the three
- * places holds Git Bash. Everywhere else it passes with the note that says
+ * Fails only where every condition holds: `win32`, Claude targeted, and none
+ * of the three places holds Git Bash. Everywhere else it passes with the note that says
  * which condition, or which place, released it, so the row reads the same on
  * every host and is never silently absent.
  */
@@ -666,13 +683,11 @@ export function checkClaudeHookShell(
     };
   }
   const targeted = (manifest?.tools ?? []).includes("claude");
-  if (!targeted || isPluginOwned(manifest, "claude", "hooks")) {
+  if (!targeted) {
     return {
       id,
       status: "pass",
-      detail: targeted
-        ? "Claude's hooks are carried by its plugin, so no anchored hook row of this engine's is on disk"
-        : "claude is not a target tool, so no anchored hook row is emitted",
+      detail: "claude is not a target tool, so no anchored hook row is emitted",
     };
   }
   // Keys matched by pattern, not by spelling: see the docblock on `Path`.
@@ -1158,167 +1173,81 @@ async function checkInvariants(): Promise<DoctorCheck> {
 }
 
 
-// ── Plugin rows ────────────────────────────────────────────────────────────
+// ── The leftover plugin row ────────────────────────────────────────────────
 
 /**
- * Which runtime an installed plugin would run this engine from.
- *
- * The probe itself is `./plugin/probe.ts`, shared with `stamity plugin status`
- * so the doctor and the report cannot answer differently; what lives here is
- * the SEVERITY, which is this row's alone.
- *
- * Absence is graded by what the repository claims. A repository that records no
- * plugin client and has no root in its environment is not running on a plugin
- * at all — there is nothing to report and nothing to act on, so the row passes
- * quietly rather than parking a standing advisory on every `check` of every
- * ordinary repository. Once a client IS recorded, an unreachable root is worth
- * saying: the repository names a plugin this run could not look at.
- *
- * It fails on exactly two things, and both are states in which the plugin is
- * installed, does not work, and is one THIS repository claims: the locator
- * REFUSED (exit 2 — no runtime found, or a Node below the floor) while a client
- * is recorded or the mode is plugin-backed, and a plugin-backed repository
- * whose state was written by a different major than the runtime resolves. A
- * refusal with neither claim warns instead: the root variable came from
- * somewhere else in the environment, and an unrelated session's broken plugin
- * is not this repository's defect to fail on. The second is
- * REQ-PLUGIN-013's compatibility half read from the doctor's side: the manifest
- * and the runtime disagreeing about the major is the state where a sync would
- * rewrite files under rules the recorded setup was not written to.
- *
- * Anything else the spawn can do — a timeout, a root with no locator in it,
- * stdout that is not the document — warns. The row reports on an environment it
- * does not own, and turning a broken plugin install into a failed `check` would
- * gate a repository's CI on a client's own state.
+ * JSON text as a value, or `undefined` for text that is absent or does not
+ * parse — the `manifest` row and the settings merge own those defects, and this
+ * row only asks what a document names.
  */
-async function checkPluginRuntime(
-  env: Readonly<Record<string, string | undefined>>,
-  manifest: SetupManifest | null,
-): Promise<DoctorCheck> {
-  const id = "plugin-runtime";
-  const variable = pluginRootVariable(env);
-  if (variable === undefined) {
-    const recorded = Object.keys(manifest?.plugin?.clients ?? {}).length > 0;
-    if (!recorded) {
-      return {
-        id,
-        status: "pass",
-        detail: "no plugin recorded and no plugin root in the environment",
-      };
-    }
-    return {
-      id,
-      status: "warn",
-      detail:
-        `no plugin root in the environment; run check through the installed root's locator ` +
-        `(node <root>/runtime/locate.mjs -- check) or set PLUGIN_ROOT to that root`,
-    };
+function parseJsonLeniently(text: string | null): unknown {
+  if (text === null) return undefined;
+  // A leading byte-order mark is an editor's, not the document's.
+  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return undefined;
   }
-  const root = (env[variable] ?? "").trim();
-  const probe = await probePluginRuntime(root);
-
-  if (probe.outcome === "timeout" || probe.outcome === "unreadable") {
-    return { id, status: "warn", detail: probe.message ?? "the locator answered nothing" };
-  }
-  if (probe.outcome === "refused") {
-    // Whose broken install is this? A refusal is a defect only where the
-    // repository CLAIMS the plugin — a recorded client, or a plugin-backed
-    // mode. With neither, the root variable came from somewhere else in the
-    // environment (another session, a shell profile), and failing here would
-    // gate an unrelated repository's CI on a plugin it never asked for. The
-    // refusal is still quoted; only the severity moves.
-    const claimed =
-      Object.keys(manifest?.plugin?.clients ?? {}).length > 0 ||
-      readInstallMode(manifest) === "plugin-backed";
-    return {
-      id,
-      status: claimed ? "fail" : "warn",
-      detail: `${variable}=${root}: ${probe.message ?? ""}`,
-    };
-  }
-
-  const detail = `runtime ${probe.kind} ${probe.version ?? "unknown"} at ${probe.path ?? root}`;
-  if (readInstallMode(manifest) === "plugin-backed") {
-    const runtimeMajor = majorOf(probe.version);
-    const stateMajor = majorOf(manifest?.generatedBy);
-    if (runtimeMajor !== null && stateMajor !== null && runtimeMajor !== stateMajor) {
-      return {
-        id,
-        status: "fail",
-        detail:
-          `${detail}, but this repository's ${STATE_DIR}/ state was written by stamity ` +
-          `${manifest?.generatedBy ?? "an unrecorded version"} — major ${runtimeMajor} against ` +
-          `major ${stateMajor}. Pin the plugin back to a ${stateMajor}.x release, or install the ` +
-          `matching companion runtime, before the next sync rewrites anything.`,
-      };
-    }
-  }
-  return { id, status: "pass", detail };
 }
 
 /**
- * Content a plugin carries that this repository ALSO holds, from all three
- * sources it can come from (`./plugin/probe.ts` finds them).
+ * A plugin install from before 1.15.0 that this repository still records,
+ * held for the 1.15 line and then removed with the manifest's `plugin` key.
  *
- * The severity split is the coexistence rule of REQ-PLUGIN-019, and it is not a
- * matter of taste: a repository whose manifest still says `mode: "generated"`
- * has an installed plugin beside a generated setup, which is the expected state
- * BEFORE the operator cleans — failing there would break the CI of every
- * repository mid-migration. Once the manifest records `plugin-backed`, the same
- * finding is a defect: emission has stopped writing those classes, so anything
- * still on disk is stale content the client is loading twice.
+ * 1.15.0 deleted the plugin route: this repository's own files carry every
+ * class now, so a plugin a 1.14 setup installed loads a second copy beside
+ * them. Two records name one: the manifest's held `plugin` block (its
+ * `clients`), and Claude's `.claude/settings.json` `enabledPlugins` key for
+ * this package's plugin id. Both are read here as raw JSON, never through the
+ * manifest validator, so a manifest that fails another field still gets the
+ * warning, and nothing in either document is printed: the lines name only the
+ * four client ids and each vendor's uninstall command
+ * (`../kit/packageName.ts::leftoverPluginLines`, which `sync` and `clean`
+ * print too).
+ *
+ * Never `fail`: the plugin lives in the operator's client, outside anything
+ * this repository can change, and a CI gate on it would fail every repository
+ * mid-upgrade.
  */
-async function checkPluginDuplicates(
-  rootDir: string,
-  manifest: SetupManifest | null,
-): Promise<DoctorCheck> {
+async function checkPluginDuplicates(rootDir: string): Promise<DoctorCheck> {
   const id = "plugin-duplicates";
-  const recorded = manifest?.plugin?.clients ?? {};
-  if (TOOLS.every((tool) => recorded[tool] === undefined)) {
-    return { id, status: "pass", detail: "no client records a plugin, so nothing can duplicate" };
-  }
-
-  const findings = await collectPluginDuplicates(rootDir, manifest);
-  if (findings.length === 0) {
-    return { id, status: "pass", detail: "no duplicated classes" };
-  }
-  const lines = findings.map(
-    (finding) =>
-      `${finding.tool}: ${finding.cls} (${finding.files} file(s), ${finding.source}) at ` +
-      `${describeDuplicatePaths(finding.paths)} — ${finding.remedy}`,
+  const [manifestRaw, settingsJson] = await Promise.all([
+    readIfPresent(join(rootDir, STATE_DIR, MANIFEST_FILE)),
+    readIfPresent(join(rootDir, ...CLAUDE_SETTINGS_PATH.split("/"))),
+  ]);
+  const manifestDocument = parseJsonLeniently(manifestRaw);
+  const settingsDocument = parseJsonLeniently(settingsJson);
+  const lines = leftoverPluginLines(
+    isPlainObject(manifestDocument) ? manifestDocument["plugin"] : undefined,
+    isPlainObject(settingsDocument) ? settingsDocument["enabledPlugins"] : undefined,
   );
-  return {
-    id,
-    status: readInstallMode(manifest) === "plugin-backed" ? "fail" : "warn",
-    // Plain newlines: the renderer indents each continuation line under the
-    // detail column, so `--json` carries no layout whitespace.
-    detail: lines.join("\n"),
-  };
+  if (lines.length === 0) return { id, status: "pass", detail: "no leftover plugin install" };
+  // Plain newlines: the renderer indents each continuation line under the
+  // detail column, so `--json` carries no layout whitespace.
+  return { id, status: "warn", detail: lines.join("\n") };
 }
 
 /**
  * Installed packs, judged by whether what they ship reaches a selected client
  * (REQ-PLUGIN-016).
  *
- * The state this row exists for is plugin-backed mode: a client whose plugin
- * carries a class receives none of that class from this repository, pack
- * content included, so a command-only pack on Claude, Cursor or Copilot — or a
- * hooks-only pack on any of the four — installs, syncs green, and does
- * nothing. Pack skills are the one exception and always reach. The judgment is
- * the emission plan's own (`EmissionPlan.packReach`, `../../emit/planner.ts`),
- * read rather than restated here, so this row and what `sync` writes cannot
- * disagree about which classes a plugin owns.
+ * A pack can install, sync green, and do nothing: every artifact's own
+ * `tools:` list names only clients this repository does not select, or its
+ * one delivery is an MCP server nobody selected, or the organisation's trust
+ * policy denies it. The judgment is the emission plan's own
+ * (`EmissionPlan.packReach`, `../../emit/planner.ts`), read rather than
+ * restated here, so this row and what `sync` writes cannot disagree about
+ * which client an artifact reaches.
  *
  * - `fail` — an installed pack none of whose artifacts reaches any selected
  *   client and that supplies no unselected MCP server, named with why and
  *   with its remedies.
  * - `warn` — a pack whose only remaining delivery is an MCP server nobody has
  *   selected yet, named with `config mcp add <id>`; a pack the organisation's
- *   trust policy denies, which is installed and projects nothing; artifacts of a pack that
- *   does reach somewhere, dropped for a client whose plugin carries their
- *   class, each one named; and a pack that ships nothing deliverable (every
- *   hook row rejected — `sync` names why), which is inert though no plugin
- *   took anything.
+ *   trust policy denies, which is installed and projects nothing; and a pack
+ *   that ships nothing deliverable (every hook row rejected — `sync` names
+ *   why), which is inert.
  * - `pass` — no pack is installed, or no pack is in any state above. The line
  *   counts the artifacts that reach a client and names any that reach none —
  *   an artifact whose `tools:` list names no selected client, a server not
@@ -1383,24 +1312,19 @@ async function checkPackReach(
   // waiting on `config mcp add`, an operator's opt-in rather than a defect, which
   // warns with that command. A pack with nothing deliverable (every hook row it
   // ships rejected, which sync names) has no artifact to judge, so it warns as
-  // inert rather than failing: no plugin took anything from it.
+  // inert rather than failing.
   const silent = reach.filter(
     (pack) => pack.artifacts.length > 0 && !pack.artifacts.some(reachesAClient),
   );
   const failing = silent.filter((pack) => !pack.artifacts.some(isUnselected));
   const awaiting = silent.filter((pack) => pack.artifacts.some(isUnselected));
   const reaching = reach.filter((pack) => pack.artifacts.some(reachesAClient));
-  const partial = reaching.flatMap((pack) =>
-    pack.artifacts
-      .filter((artifact) => pluginDropsOf(artifact).length > 0)
-      .map((artifact) => describePartialDrop(pack.packId, artifact)),
-  );
   // In a pack that reaches elsewhere, an artifact that reaches no client for a
   // reason of its own — its `tools:` list, a server not selected — is named, so
   // no line claims it reaches.
   const unreached = reaching.flatMap((pack) =>
     pack.artifacts
-      .filter((artifact) => !reachesAClient(artifact) && pluginDropsOf(artifact).length === 0)
+      .filter((artifact) => !reachesAClient(artifact))
       .map((artifact) => `pack "${sanitizeLabel(pack.packId)}": ${describeUnreached(artifact)}`),
   );
   const inert = reach
@@ -1413,7 +1337,6 @@ async function checkPackReach(
   const warnings = [
     ...denied.map(describeDeniedPack),
     ...awaiting.map(describeAwaitingPack),
-    ...partial,
     ...inert,
   ];
   // Plain newlines: the renderer indents each continuation line under the
@@ -1453,29 +1376,15 @@ function reachesAClient(artifact: PackArtifactReach): boolean {
   return artifact.reachedBy.length > 0;
 }
 
-/** The clients a plugin took an artifact from, in the plan's (canonical) order. */
-function pluginDropsOf(artifact: PackArtifactReach): Tool[] {
-  return artifact.dropped.flatMap((drop) => (drop.reason === "plugin-owned" ? [drop.tool] : []));
-}
-
-/** `the claude plugin carries` · `the claude and cursor plugins carry` — a sentence's subject and verb. */
-function pluginOwnersPhrase(tools: readonly Tool[]): string {
-  return tools.length === 1
-    ? `the ${tools[0]} plugin carries`
-    : `the ${tools.slice(0, -1).join(", ")} and ${tools.at(-1)} plugins carry`;
-}
-
 /** A pack-supplied MCP server `manifest.mcp.servers` does not select. */
 function isUnselected(artifact: PackArtifactReach): boolean {
   return artifact.dropped.some((drop) => drop.reason === "not selected");
 }
 
-/** Why one artifact reaches no client: its plugin drops, its selection, or its own `tools:` list. */
+/** Why one artifact reaches no client: its selection, or its own `tools:` list. */
 function describeUnreached(artifact: PackArtifactReach): string {
   const id = sanitizeLabel(artifact.id);
   const name = `${artifact.kind} ${id}`;
-  const plugins = pluginDropsOf(artifact);
-  if (plugins.length > 0) return `${name} — ${pluginOwnersPhrase(plugins)} the ${artifact.kind} class`;
   if (isUnselected(artifact)) {
     return `${name} — not selected; ${packageCommand(`config mcp add ${id}`)} selects it`;
   }
@@ -1492,8 +1401,7 @@ function declaredToolsOf(artifact: PackArtifactReach): Tool[] {
 /**
  * A pack that reaches no selected client, with only remedies that run: remove
  * it, or — when an artifact's own `tools:` list names a client — add that
- * client. A class a client's plugin carries has no command that writes it from
- * here, so that cause is stated as the fact it is, not offered as a step.
+ * client.
  */
 function describeSilentPack(pack: PackReach, selected: readonly Tool[]): string {
   const packId = sanitizeLabel(pack.packId);
@@ -1505,13 +1413,9 @@ function describeSilentPack(pack: PackReach, selected: readonly Tool[]): string 
       ? `, or add a client its tools: list names with ` +
         `${packageCommand(`config set tools ${widened.join(",")}`)}, then ${packageCommand("sync")}`
       : "";
-  const pluginNote = pack.artifacts.some((artifact) => pluginDropsOf(artifact).length > 0)
-    ? ". While a client's plugin carries a class, this repository writes none of that class " +
-      "for it; only a pack's skills are exempt"
-    : "";
   return (
     `pack "${packId}" reaches no selected client: ${why}. Remove it with ` +
-    `${packageCommand(`clean --pack ${packId}`)}${addClient}${pluginNote}`
+    `${packageCommand(`clean --pack ${packId}`)}${addClient}`
   );
 }
 
@@ -1538,15 +1442,6 @@ function describeAwaitingPack(pack: PackReach): string {
   );
 }
 
-function describePartialDrop(packId: string, artifact: PackArtifactReach): string {
-  const plugins = pluginDropsOf(artifact);
-  const reached =
-    artifact.reachedBy.length > 0 ? `reaches ${artifact.reachedBy.join(", ")}` : "reaches no client";
-  return (
-    `pack "${sanitizeLabel(packId)}": ${artifact.kind} ${sanitizeLabel(artifact.id)} is not written for ${plugins.join(", ")} ` +
-    `(${pluginOwnersPhrase(plugins)} the ${artifact.kind} class); it ${reached}`
-  );
-}
 
 /**
  * Every doctor probe, in report order.
@@ -1575,7 +1470,6 @@ export async function runDoctor(
     envMcp,
     preservedDuplicate,
     packIntegrity,
-    pluginRuntime,
     pluginDuplicates,
     packReach,
     changeClasses,
@@ -1587,8 +1481,7 @@ export async function runDoctor(
     guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
     guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
-    guarded("plugin-runtime", () => checkPluginRuntime(app.runtime.env, manifest)),
-    guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir, manifest)),
+    guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
@@ -1609,15 +1502,10 @@ export async function runDoctor(
     checkClaudeHookShell(manifest, { platform: process.platform, env: process.env }),
     preservedDuplicate,
     packIntegrity,
-    // The two plugin rows sit after the repository-state probes and before the
-    // corpus one, because the first of them answers about the ENVIRONMENT (is a
-    // plugin root reachable, and does its runtime match this state) and the
-    // second about the repository beside it.
-    pluginRuntime,
+    // After the repository-state probes: what this repository still records of
+    // a plugin install from before 1.15.0.
     pluginDuplicates,
-    // After the plugin rows, because it reads the same boundary from the other
-    // side: not what the repository holds twice, but what an installed pack
-    // ships that no selected client receives.
+    // What an installed pack ships that no selected client receives.
     packReach,
     // Present only with a class file. It answers about this repository, so it
     // sits with the repository rows, before the one row that reads the corpus.
@@ -1731,7 +1619,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the doctor's fifteen probes on screen, which a diagnostic command exists to
+ * the doctor's fourteen probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
@@ -1807,8 +1695,7 @@ export interface CharterGateReport {
  *
  * A gate is unresolved on either of two grounds:
  *
- * 1. **Nothing to run.** For the three single gates this is `plugin status`'s
- *    definition (`./plugin/status.ts`, `unconfiguredFacts`): no pin, and
+ * 1. **Nothing to run.** For the three single gates this is no pin, and
  *    detection resolved nothing. It is not read off the rendered value's
  *    `unknown — no` prefix, because a pinned command is the operator's answer
  *    whatever it spells. The full gate is where that definition does not fit:
@@ -2298,7 +2185,7 @@ interface ManifestState {
 /**
  * Read the manifest once for the probes that need it. A defective manifest is
  * carried as a message rather than thrown: it is one row's verdict, and the
- * other fourteen probes still have work to do.
+ * other thirteen probes still have work to do.
  */
 async function readManifestState(
   rootDir: string,
@@ -2331,7 +2218,7 @@ async function readProvenance(
 /**
  * Run one probe, converting anything it throws into a warn row for that probe.
  * A sealed directory or an unreadable file is worth saying out loud; it is not
- * worth losing the other fourteen verdicts over.
+ * worth losing the other thirteen verdicts over.
  */
 async function guarded(id: string, run: () => Promise<DoctorCheck>): Promise<DoctorCheck> {
   try {
@@ -2366,8 +2253,7 @@ function messageOf(cause: unknown): string {
 
 /**
  * What the caller says the repository must be (REQ-PLUGIN-047): the release
- * that generated it and runs this check, the clients it targets, the install
- * mode it records. Every surface the rest of `check` compares against — the
+ * that generated it and runs this check, and the clients it targets. Every surface the rest of `check` compares against — the
  * manifest, the files, the running CLI — is one a pull request can change, so
  * an expectation has to come from a caller the pull request cannot edit, such
  * as a required workflow's input. A field left out is not checked.
@@ -2375,7 +2261,6 @@ function messageOf(cause: unknown): string {
 export interface Expectations {
   version?: string;
   tools?: readonly Tool[];
-  mode?: InstallMode;
 }
 
 /**
@@ -2387,7 +2272,6 @@ export interface ExpectationReport {
   ok: boolean;
   version?: { expected: string; running: string; generatedBy: string | null; ok: boolean };
   tools?: { expected: Tool[]; recorded: Tool[] | null; missing: Tool[]; extra: Tool[]; ok: boolean };
-  mode?: { expected: InstallMode; recorded: InstallMode | null; ok: boolean };
 }
 
 /**
@@ -2429,20 +2313,15 @@ export function evaluateExpectations(
       ok: recorded !== null && missing.length === 0 && extra.length === 0,
     };
   }
-  if (expected.mode !== undefined) {
-    const recorded = manifest === null ? null : readInstallMode(manifest);
-    report.mode = { expected: expected.mode, recorded, ok: recorded === expected.mode };
-  }
-  report.ok = [report.version, report.tools, report.mode].every((field) => field?.ok !== false);
+  report.ok = [report.version, report.tools].every((field) => field?.ok !== false);
   return report;
 }
 
 /**
- * The two free-valued `--expect-*` flags, parsed before any probe runs: a bad
- * value costs nothing and is named, the way `workspace --tools` refuses one.
- * `--expect-mode` needs no reading here — commander's `choices` already turned
- * any other value into a usage error. `null` when no flag was given, which is
- * what keeps a run without them byte-identical to one before they existed.
+ * The two `--expect-*` flags, parsed before any probe runs: a bad value costs
+ * nothing and is named, the way `workspace --tools` refuses one. `null` when no
+ * flag was given, which is what keeps a run without them byte-identical to one
+ * before they existed.
  */
 function readExpectations(opts: Record<string, unknown>): Expectations | null {
   const expectations: Expectations = {};
@@ -2472,8 +2351,6 @@ function readExpectations(opts: Record<string, unknown>): Expectations | null {
   }
   const rawTools = opts["expectTools"];
   if (typeof rawTools === "string") expectations.tools = readExpectedTools(rawTools);
-  const rawMode = opts["expectMode"];
-  if (typeof rawMode === "string") expectations.mode = rawMode as InstallMode;
   return Object.keys(expectations).length === 0 ? null : expectations;
 }
 
@@ -2507,7 +2384,7 @@ function readExpectedTools(raw: string): Tool[] {
 /** Each field that failed, in the operator's words, in field order. */
 function expectationMismatches(report: ExpectationReport): string[] {
   const lines: string[] = [];
-  const { version, tools, mode } = report;
+  const { version, tools } = report;
   if (version !== undefined && version.generatedBy !== version.expected) {
     lines.push(`generated by ${version.generatedBy ?? "nothing"}, expected ${version.expected}`);
   }
@@ -2521,16 +2398,13 @@ function expectationMismatches(report: ExpectationReport): string[] {
     ];
     lines.push(`clients ${(tools.recorded ?? []).join(", ") || "none"} — ${gaps.join(", ")}`);
   }
-  if (mode !== undefined && !mode.ok) {
-    lines.push(`mode ${mode.recorded ?? "none"}, expected ${mode.expected}`);
-  }
   return lines;
 }
 
 /**
  * The `expectations` doctor row. Printed only when a flag asked for it, after
  * `invariants` and outside {@link runDoctor}, so a run without the flags keeps
- * its fifteen rows (sixteen with a class file). A manifest that could not be read leaves nothing to compare
+ * its fourteen rows (fifteen with a class file). A manifest that could not be read leaves nothing to compare
  * against: the row says so, and the `manifest` row above it carries the cause.
  */
 function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorCheck {
@@ -2542,7 +2416,6 @@ function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorC
     const asked = [
       ...(report.version === undefined ? [] : [`release ${report.version.expected}`]),
       ...(report.tools === undefined ? [] : [`clients ${report.tools.expected.join(", ")}`]),
-      ...(report.mode === undefined ? [] : [`mode ${report.mode.expected}`]),
     ];
     return { id, status: "pass", detail: `${asked.join(", ")} — as expected` };
   }
@@ -2567,13 +2440,13 @@ function pinnedCallAt(version: string, verb: string): string {
  * expectation to the repository.
  *
  * With a release expected, every step runs that release, not the running one:
- * a client-set or mode step at the running release would regenerate there last
- * and break `generatedBy` again. Without one, they run the running release, as
+ * a client-set step at the running release would regenerate there last and
+ * break `generatedBy` again. Without one, they run the running release, as
  * every other remedy here does.
  */
-function expectationSteps(report: ExpectationReport, manifestTools: readonly Tool[]): string[] {
+function expectationSteps(report: ExpectationReport): string[] {
   const steps: string[] = [];
-  const { version, tools, mode } = report;
+  const { version, tools } = report;
   const call =
     version === undefined ? packageCommand : (verb: string): string => pinnedCallAt(version.expected, verb);
   if (version !== undefined && version.generatedBy !== version.expected) {
@@ -2590,19 +2463,6 @@ function expectationSteps(report: ExpectationReport, manifestTools: readonly Too
   if (tools !== undefined && !tools.ok) {
     steps.push(
       `${call(`config set tools ${tools.expected.join(",")}`)}, then ${call("sync")}, ` +
-        "in a reviewed pull request",
-    );
-  }
-  if (mode !== undefined && !mode.ok) {
-    const clients = (tools?.expected ?? manifestTools).join(",");
-    const setup =
-      mode.expected === "plugin-backed"
-        ? call(`plugin setup --client ${clients}`)
-        : call("init");
-    steps.push(
-      // Led by `sync`: after an upgrade `clean` refuses until this version has
-      // rewritten its files (review/128, build/71).
-      `a repository changes install mode only through ${call("sync")}, then ${call("clean -y")}, then ${setup}, ` +
         "in a reviewed pull request",
     );
   }
@@ -2629,7 +2489,7 @@ function expectationOutcome(
   return {
     report,
     row: expectationsRow(report, evaluated),
-    steps: failed ? expectationSteps(report, manifest.tools) : [],
+    steps: failed ? expectationSteps(report) : [],
     mismatches: failed ? expectationMismatches(report) : [],
   };
 }
@@ -2648,11 +2508,6 @@ export const checkCommand: CommandModule = {
       .option(
         "--expect-tools <csv>",
         `fail unless the manifest's clients are exactly the listed ids, each one of ${TOOLS.join(", ")}`,
-      )
-      .addOption(
-        new Option("--expect-mode <mode>", "fail unless the manifest records this install mode").choices([
-          ...INSTALL_MODES,
-        ]),
       );
   },
 
@@ -2677,7 +2532,7 @@ export const checkCommand: CommandModule = {
       readProvenance(rootDir, ctx.engine),
     ]);
     // The caller's expectations, only when a flag asked (REQ-PLUGIN-047): one
-    // more row after the fifteen, so its `fail` reaches `ok` like any other.
+    // more row after the fourteen, so its `fail` reaches `ok` like any other.
     const expectations =
       expected === null ? null : expectationOutcome(expected, manifestState.manifest, ctx.app.version);
     const doctor = expectations === null ? probes : [...probes, expectations.row];

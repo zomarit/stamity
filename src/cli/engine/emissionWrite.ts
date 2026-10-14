@@ -19,7 +19,6 @@ import {
 import { buildContentIndex, type ContentIndex } from "../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../detect/repoAnalyzer.ts";
 import { emitsPerPackage } from "../../emit/monorepoPlan.ts";
-import { isPluginOwned } from "../../emit/ownership.ts";
 import { readHookDefinitions, type UserHookDefinition } from "../../hooks/userHooks.ts";
 import {
   claudeSettingsReclaimReducer,
@@ -889,21 +888,18 @@ const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;
  * 1.6.0 wired them as directly (`../../manifest/hookDocuments.ts::directHookRendering`,
  * the build/54 sign-off) — the runner's entries are in the bound by path. An
  * entry equal to one of them is the engine's; one whose definition is gone, or
- * that differs, is outside the bound. None for a client whose hooks a plugin
- * carries (the repository renders none there), and none at all when the folder
- * cannot be read (nothing is then proved, so the backup is taken).
+ * that differs, is outside the bound. None at all when the folder cannot be
+ * read (nothing is then proved, so the backup is taken).
  */
 export async function coOwnedReclaimRenderings(
   rootDir: string,
   manifest: SetupManifest,
 ): Promise<ReadonlyMap<string, unknown>> {
-  const documents: [Tool, string, (rows: readonly UserHookDefinition[]) => unknown][] = [
-    ["claude", CLAUDE_SETTINGS_PATH, (rows) => ({ hooks: claudeUserHookEntries(rows) })],
-    ["cursor", CURSOR_HOOKS_CONFIG_PATH, (rows) => directHookRendering("cursor", rows)],
-    ["codex", CODEX_HOOKS_FILE, (rows) => directHookRendering("codex", rows)],
+  const documents: [string, (rows: readonly UserHookDefinition[]) => unknown][] = [
+    [CLAUDE_SETTINGS_PATH, (rows) => ({ hooks: claudeUserHookEntries(rows) })],
+    [CURSOR_HOOKS_CONFIG_PATH, (rows) => directHookRendering("cursor", rows)],
+    [CODEX_HOOKS_FILE, (rows) => directHookRendering("codex", rows)],
   ];
-  const rendered = documents.filter(([tool]) => !isPluginOwned(manifest, tool, "hooks"));
-  if (rendered.length === 0) return new Map();
   let read;
   try {
     read = await readHookDefinitions(resolve(rootDir, manifest.hooks?.userHooksDir ?? DEFAULT_USER_HOOKS_DIR), rootDir);
@@ -915,7 +911,7 @@ export async function coOwnedReclaimRenderings(
   // The reader's rows carry provenance beside the interchange fields; the
   // renderer reads the interchange fields alone, as the emission does.
   const rows = read.hooks;
-  return rows.length === 0 ? new Map() : new Map(rendered.map(([, path, render]) => [path, render(rows)]));
+  return rows.length === 0 ? new Map() : new Map(documents.map(([path, render]) => [path, render(rows)]));
 }
 
 /**
@@ -965,16 +961,15 @@ export interface RenderingProof {
  * `../../manifest/ownedPaths.ts::needsRenderingProof` names, and only those.
  *
  * The clients this setup wrote for are the manifest's `tools` plus every client
- * a ledger row names (a `pack:` owner is not a client), each in repository
- * mode: a client deselected since setup, or one whose classes a plugin now
- * carries (`plugin setup`), is the common reason a content file becomes a
- * candidate, and its unedited files are still what the engine renders for it
+ * a ledger row names (a `pack:` owner is not a client): a client deselected
+ * since setup is the common reason a content file becomes a candidate, and its
+ * unedited files are still what the engine renders for it
  * there. Not every client in `TOOLS`: a rule-skill records the selected clients
  * in its own bytes (`metadata.stamity.tools`), so a render for every client is
  * not what a narrower setup wrote. The manifest handed to `planFor` is built
  * the way `sync` builds its own (`../commands/sync/engine.ts::planSync`):
  * full-corpus selection and fresh detection, with those clients selected and
- * no plugin record, and with every installed pack rendered whatever the org
+ * no held `plugin` block, and with every installed pack rendered whatever the org
  * policy says (`../../pack/projection.ts::ignoringPolicyDenialForProof`): the
  * copies a pack projected before the policy denied it are still the engine's,
  * and keeping them would leave the denied pack active in every client. The
@@ -1037,6 +1032,8 @@ export async function engineRenderingsFor(
     setupClients.tools = clients;
     setupClients.selection = fullCorpusSelection(index);
     setupClients.detected = summarizeDetection(repoInfo);
+    // The held 1.14 `plugin` block steers no emission; the proof plan drops it
+    // all the same, so no rendering this proof hashes is planned with it.
     delete setupClients.plugin;
     const plan = (planned: SetupManifest): Promise<readonly AdapterOutput[]> =>
       withoutPolicyWarningPrint(() =>
@@ -1081,7 +1078,7 @@ export async function engineRenderingsFor(
  * The SHA-256 of what `sync` with the running engine writes at each of `paths`
  * that needs the rendering proof, for this setup as it stands: the plan
  * `../commands/sync/engine.ts::planSync` runs — full-corpus selection and fresh
- * detection over the manifest's own clients and plugin record, the org policy
+ * detection over the manifest's own clients, the org policy
  * applied — and not {@link engineRenderingsFor}'s wider proof plan, whose extra
  * clients change a rule-skill's bytes. `clean` reads it to tell a kept file a
  * `sync` would rewrite (review/128) from one no `sync` changes. Empty when the

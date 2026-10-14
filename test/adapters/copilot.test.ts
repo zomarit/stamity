@@ -40,7 +40,7 @@ import {
   toCopilotToolsFrontmatter,
 } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
-import type { RuleDelivery, SetupManifest } from "../../src/types/manifest.ts";
+import type { RuleDelivery } from "../../src/types/manifest.ts";
 import type { ModelClass, Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -139,8 +139,8 @@ interface CtxOptions {
   languages?: string[];
   pins?: Partial<Record<ModelClass, string>>;
   efforts?: EffortMap;
-  /** The manifest's plugin record; absent everywhere but the ownership cases. */
-  plugin?: SetupManifest["plugin"];
+  /** The manifest's held 1.14 `plugin` block; absent everywhere but the case proving it steers nothing. */
+  plugin?: unknown;
 }
 
 function ctxOf(over: CtxOptions = {}): EmissionContext {
@@ -1621,26 +1621,24 @@ describe("copilot under ruleDelivery: on-demand", () => {
   });
 });
 
-describe("copilot residue under plugin ownership", () => {
-  it("drops the agent, command and hook rows the record names and keeps the instructions", async () => {
-    const plugin: SetupManifest["plugin"] = {
+/**
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case
+ * pinned the agent, command and hook rows a `plugin-backed` record took out of
+ * copilot's residue. 1.15.0 deleted that mode; the held block steers nothing, so
+ * the residue under the 1.14 record equals the residue with no block.
+ */
+describe("copilot residue under a held plugin block", () => {
+  it("plans the same rows, byte for byte, as a manifest with no block", async () => {
+    const plugin = {
       mode: "plugin-backed",
-      clients: { copilot: { version: "1.9.0", classes: ["agent", "command", "hooks"] } },
+      clients: { copilot: { version: "1.14.0", classes: ["agent", "command", "hooks"] } },
     };
-    const paths = pathsOf(await planResidue({ plugin }));
+    const withBlock = await planResidue({ plugin });
+    const control = await planResidue();
 
-    expect(paths.filter((path) => path.startsWith(".github/agents/"))).toEqual([]);
-    expect(paths.filter((path) => path.startsWith(".github/prompts/"))).toEqual([]);
-    expect(paths).not.toContain(COPILOT_HOOKS_PATH);
-    expect(paths.filter((path) => path.includes("/hooks/copilot/"))).toEqual([]);
-
-    // The setup workflow is infra that is not hook wiring, and rules are not in
-    // the record: both survive, byte-for-byte as the control emits them.
-    expect(paths).toContain(COPILOT_SETUP_STEPS_PATH);
-    const control = pathsOf(await planResidue()).filter((path) =>
-      path.endsWith(".instructions.md"),
-    );
-    expect(control.length).toBeGreaterThan(0);
-    expect(paths.filter((path) => path.endsWith(".instructions.md"))).toEqual(control);
+    const shape = (rows: readonly { path: string; content: string }[]) =>
+      rows.map((row) => [row.path, row.content]);
+    expect(pathsOf(withBlock)).toContain(COPILOT_HOOKS_PATH);
+    expect(shape(withBlock)).toEqual(shape(control));
   });
 });

@@ -6,7 +6,6 @@ import {
   CURSOR_COMMANDS_DIR,
   CURSOR_GUARD_EVENTS,
   CURSOR_HOOKS_CONFIG_PATH,
-  CURSOR_RULES_DIR,
   CURSOR_RULE_LINE_CAP,
   EVENT_RENAME,
   LEGACY_CURSOR_GUARD_PATHS,
@@ -39,7 +38,7 @@ import { ADAPTER_ALLOWLIST_COVERAGE } from "../../src/tools/translator.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { CORPUS_ROOT } from "../corpus/harness.ts";
-import type { RuleDelivery, SetupManifest } from "../../src/types/manifest.ts";
+import type { RuleDelivery } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -228,8 +227,8 @@ interface CtxOptions {
    * emission every other case in this file asserts.
    */
   hookScriptsRoot?: string;
-  /** The manifest's plugin record; absent everywhere but the ownership cases. */
-  plugin?: SetupManifest["plugin"];
+  /** The manifest's held 1.14 `plugin` block; absent everywhere but the case proving it steers nothing. */
+  plugin?: unknown;
 }
 
 function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
@@ -1667,37 +1666,26 @@ describe("hooks.json under a plugin root", () => {
   });
 });
 
-describe("cursor residue under plugin ownership", () => {
-  it("drops the agent, command and hook rows the record names and keeps the rules", async () => {
+/**
+ * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case
+ * pinned the agent, command and hook rows a `plugin-backed` record took out of
+ * cursor's residue. 1.15.0 deleted that mode; the held block steers nothing, so
+ * the residue under the 1.14 record equals the residue with no block.
+ */
+describe("cursor residue under a held plugin block", () => {
+  it("plans the same rows, byte for byte, as a manifest with no block", async () => {
     const corpus = await seedCorpus();
-    const rows = await residueFor(corpus, {
+    const withBlock = await residueFor(corpus, {
       plugin: {
         mode: "plugin-backed",
-        clients: { cursor: { version: "1.9.0", classes: ["agent", "command", "hooks"] } },
+        clients: { cursor: { version: "1.14.0", classes: ["agent", "command", "hooks"] } },
       },
     });
-    const paths = new Set(rows.map((row) => row.path));
+    const control = await residueFor(corpus);
 
-    expect([...paths].filter((path) => path.startsWith(`${CURSOR_AGENTS_DIR}/`))).toEqual([]);
-    if (CURSOR_COMMANDS_DIR !== null) {
-      expect([...paths].filter((path) => path.startsWith(`${CURSOR_COMMANDS_DIR}/`))).toEqual([]);
-    }
-    // All four hook rows, the two guard scripts included: each is reachable
-    // only through the hooks config, so leaving one would write a script this
-    // client can no longer run.
-    expect(paths.has(CURSOR_HOOKS_CONFIG_PATH)).toBe(false);
-    expect(paths.has(SUBAGENT_GUARD_PATH)).toBe(false);
-    expect(paths.has(MCP_GUARD_PATH)).toBe(false);
-    expect([...paths].filter((path) => path.includes("/hooks/cursor/"))).toEqual([]);
-
-    // Rules are not in the record, so they are emitted exactly as the control
-    // emits them.
-    const control = (await residueFor(corpus))
-      .map((row) => row.path)
-      .filter((path) => path.startsWith(`${CURSOR_RULES_DIR}/`));
-    expect([...paths].filter((path) => path.startsWith(`${CURSOR_RULES_DIR}/`)).toSorted()).toEqual(
-      control.toSorted(),
-    );
-    expect(control.length).toBeGreaterThan(0);
+    const shape = (rows: readonly { path: string; content: string }[]) =>
+      rows.map((row) => [row.path, row.content]);
+    expect(withBlock.some((row) => row.path === CURSOR_HOOKS_CONFIG_PATH)).toBe(true);
+    expect(shape(withBlock)).toEqual(shape(control));
   });
 });
