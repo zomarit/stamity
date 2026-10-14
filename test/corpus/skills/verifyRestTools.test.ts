@@ -431,6 +431,71 @@ describe("performance axis — advisory unless budgets", () => {
   });
 });
 
+describe("maintainability axis — module depth (REQ-FLOW-082)", () => {
+  const MAINTAINABILITY = "skills/st-verify/references/maintainability.md";
+
+  /** One check's block: from its bold id to the next bold id or the section's end. */
+  function checkBlock(text: string, id: string): string {
+    const start = text.indexOf(`**\`${id}\`**`);
+    expect(start, `no ${id} check in this section`).toBeGreaterThanOrEqual(0);
+    const rest = text.slice(start + id.length + 6);
+    const end = rest.search(/\*\*`[a-z][a-z0-9-]*`\*\*/);
+    return text.slice(start, end === -1 ? undefined : start + id.length + 6 + end);
+  }
+
+  it("files maint-module-depth under Judgment, with no threshold", async () => {
+    const file = await load(MAINTAINABILITY);
+
+    expect(checkIds(section(file, "Judgment checks"))).toContain("maint-module-depth");
+    expect(checkIds(section(file, "Runnable checks"))).not.toContain("maint-module-depth");
+    // A judgment carries evidence, not a number; a `Threshold:` would make it a
+    // runnable check filed in the wrong section.
+    const block = checkBlock(section(file, "Judgment checks"), "maint-module-depth");
+    expect(block).not.toMatch(/Threshold:/);
+  });
+
+  it("states the deletion test, the evidence form, the carve-out and the not-applicable subjects", async () => {
+    const file = await load(MAINTAINABILITY);
+    const block = checkBlock(section(file, "Judgment checks"), "maint-module-depth").replace(
+      /\s+/g,
+      " ",
+    );
+
+    expect(block).toMatch(/the deletion test/i);
+    expect(block).toMatch(/a pass-through/i);
+    expect(block).toMatch(/the interface is the test surface/i);
+    expect(block).toContain(
+      "`<path:line> exports=<k> (median <m>), lines=<n> (median <x>), forwards=<f>/<k>`",
+    );
+    expect(block).toMatch(
+      /`maint-size-outliers` deferred here is cited with its module's export count beside the repo median/i,
+    );
+    // A judgment row needs a verdict both ways, not only a finding shape.
+    expect(block).toMatch(/the module is deep and passes/i);
+    expect(block).toMatch(/nearly as wide as what it hides, and fails/i);
+    expect(block).toMatch(
+      /a port at a cross-cutting boundary the repo declares is not a pass-through/i,
+    );
+    expect(block).toMatch(
+      /`not-applicable` for a re-export index, a generated file, a test-only helper/i,
+    );
+  });
+
+  it("has maint-size-outliers defer a narrow-interface hit to maint-module-depth", async () => {
+    const file = await load(MAINTAINABILITY);
+    const block = checkBlock(section(file, "Runnable checks"), "maint-size-outliers").replace(
+      /\s+/g,
+      " ",
+    );
+
+    // Edge case: one export and 900 lines is deep, so the size check records no
+    // hit and the depth check decides it; the deferral is what keeps the two
+    // checks from contradicting each other on one file.
+    expect(block).toMatch(/exports at or below the repo median/i);
+    expect(block).toMatch(/is deferred to `maint-module-depth` and records no hit here/i);
+  });
+});
+
 describe("enhancability axis — the migrations floor it gates", () => {
   it("names all four phases the migrations rule names, and one reversal per phase", async () => {
     const axis = await load("skills/st-verify/references/enhancability.md");

@@ -616,6 +616,24 @@ describe("reviewer — multi-lens verdict", () => {
     expect(rubric.replace(/\s+/g, " ")).toMatch(/recorded as not applicable/i);
   });
 
+  it("measures module depth on the maintainability row, not size alone", async () => {
+    const rubric = section(await load("agents/stamity-reviewer.md"), "Rubric");
+    const row = tableRows(rubric).find((candidate) => candidate.startsWith("| Maintainability |"));
+
+    expect(row, "rubric has no Maintainability row").toBeDefined();
+    const text = (row ?? "").replace(/\s+/g, " ");
+    // REQ-FLOW-082: a layer that forwards what it wraps is the finding, and a big
+    // file is one only when its interface is wide too — size alone is a deep module.
+    expect(text).toMatch(
+      /a new layer whose interface is nearly as wide as what it hides \(a pass-through\)/i,
+    );
+    expect(text).toMatch(
+      /a function or file well past the repo's own norms whose interface is wide too/i,
+    );
+    // The size clause no longer ends the row on size alone.
+    expect(text).not.toMatch(/well past the repo's own norms\. \|$/);
+  });
+
   it("scopes itself to the diff by default and carves out the whole-branch deep pass", async () => {
     const file = await load("agents/stamity-reviewer.md");
     const rubric = section(file, "Rubric").replace(/\s+/g, " ");
