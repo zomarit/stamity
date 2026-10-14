@@ -933,16 +933,19 @@ describe("the session start names a cloud or CI session (REQ-FLOW-085)", () => {
     "Session: a Copilot cloud agent session.",
     "- A preToolUse hook that times out fails open.",
     "- An ask answer is read as deny.",
-    "- Hooks run only from the default branch.",
+    // TEST CHANGE (e10-cloud-docs-matrix fix round 1, review/121): the line says what its two rows
+    // say, the file must be on the default branch and the clone's copy loads; the old wording
+    // implied a branch's changed copy never runs, which no cited page states.
+    "- Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded.",
   ];
   // TEST CHANGE (e10-cloud-docs-matrix, build/75): "The MCP guard does not run." is gone. Cursor's
   // hooks page (read 2026-10-15) says `beforeMCPExecution` does not run in Cursor-hosted cloud
   // agents and says nothing of self-hosted workers, which are the only Cursor sessions this line
   // prints in; the fact stays in CLIENT_CLOUD_FACTS as an unverified row with no session line.
-  const CURSOR_WORKER = [
-    "Session: a self-hosted Cursor worker.",
-    "- subagentStart is skipped in a first or read-only turn.",
-  ];
+  // TEST CHANGE (e10-cloud-docs-matrix fix round 1, review/120): the read-only-turn line goes too,
+  // by the same rule. Cursor's page states it of cloud agents, not of self-hosted workers, which
+  // are the only Cursor sessions this prints in. The session is still named, with no lines.
+  const CURSOR_WORKER = ["Session: a self-hosted Cursor worker."];
   const CI_RUN = ["Session: a CI run.", "- No person answers; declared defaults apply."];
 
   /** The banner of an empty repository, then whatever the session adds. */

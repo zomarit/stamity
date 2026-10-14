@@ -1360,7 +1360,7 @@ if (allowed.size === 0 && faults.length > 0) {
     "Blocked every MCP call: this setup configured no MCP servers, so there is " +
       "no allowlist to match against. Add one with " +
       MCP_ADD_CALL +
-      " and re-run " +
+      ". Then re-run " +
       SYNC_CALL +
       ".",
   );
@@ -1383,7 +1383,7 @@ if (allowed.size === 0 && faults.length > 0) {
       identity +
       '": it is absent from the resolved .cursor/mcp.json set. Add it with ' +
       MCP_ADD_CALL +
-      " and re-run " +
+      ". Then re-run " +
       SYNC_CALL +
       ".",
   );

@@ -396,9 +396,9 @@ A vendor's cloud runs only the hooks it documents. Each fact below is dated, wit
 - Claude Code: a cloud session with several repositories loads no repository hooks, so neither the
   guard nor the session start runs there. With one repository it runs the clone's
   `.claude/settings.json`.
-- Copilot: the cloud agent uses hooks only when the file is on the default branch, and loads them
-  from the clone, so a branch that adds or changes `.github/hooks/stamity.json` does not run its own
-  copy.
+- Copilot: the cloud agent uses hooks only when the hooks file is present on the default branch, and
+  loads them from `.github/hooks/*.json` in its clone, so a branch that adds the file runs no hooks
+  until the file reaches the default branch.
 - Cursor: its hosted cloud agents run no `sessionStart`, `sessionEnd` or MCP hook, and no hook at all
   during their early read-only turns. A self-hosted worker runs `sessionStart` when a session claims
   it.

@@ -149,7 +149,10 @@ export interface ClientCloudFact {
   /**
    * The line the session-start hook prints for this fact in that client's cloud
    * session, when it prints one (REQ-FLOW-085). `test/emit/capabilityMatrix.test.ts`
-   * holds the emitted script's lines equal to these, in this order.
+   * holds the emitted script's lines equal to these, in this order, and holds
+   * every row carrying one to `documented`: the session start never tells an
+   * agent a guard is off, or how a hook loads, beyond what the cited page says
+   * of the session it prints in.
    */
   readonly sessionStart?: string;
 }
@@ -250,7 +253,7 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       url: "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks",
       accessDate: "2026-10-15",
     },
-    sessionStart: "Hooks run only from the default branch.",
+    sessionStart: "Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded.",
   },
   {
     tool: "copilot",
@@ -288,7 +291,7 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "`CURSOR_AGENT_SOCKET` marks a self-hosted worker's session, as the research behind " +
       "`docs/plans/020-cli-native-02.md` found on 2026-10-14; the self-hosted page names no such variable.",
-    status: "not documented",
+    status: "unverified",
     citation: { url: "https://cursor.com/docs/cloud-agent/self-hosted", accessDate: "2026-10-15" },
   },
   {
@@ -305,10 +308,10 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     subject: "Read-only turns",
     fact:
       "No hook runs during a cloud agent's early read-only turns, `subagentStart` included. The page " +
-      "says so of cloud agents and not separately of self-hosted workers.",
+      "says so of cloud agents and not separately of self-hosted workers, so the session start there " +
+      "claims nothing about it.",
     status: "unverified",
     citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
-    sessionStart: "subagentStart is skipped in a first or read-only turn.",
   },
   {
     tool: "codex",

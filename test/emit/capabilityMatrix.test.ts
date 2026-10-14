@@ -733,6 +733,11 @@ describe("the cloud column and the Cloud sessions section", () => {
       );
       expect(cloudFact(tool, "Session marker").fact).toContain(`\`${marker}\``);
     }
+    // review/120 and review/121: a session line is printed as a fact, so it rests only on a
+    // documented row; an unverified or silent page prints nothing.
+    for (const row of CLIENT_CLOUD_FACTS.filter((fact) => fact.sessionStart !== undefined)) {
+      expect(row.status, `${row.tool} ${row.subject}`).toBe("documented");
+    }
     // Codex Cloud documents no project hook, so no session start runs there to print a line.
     expect(CLIENT_CLOUD_FACTS.some((row) => row.tool === "codex" && row.sessionStart !== undefined)).toBe(false);
   });
