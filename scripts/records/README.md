@@ -25,5 +25,11 @@ Pushes are never forced, and the branch cannot be deleted. When `commit` refuses
 branch moved, run `node scripts/records.mjs restore`, then `commit` again. `restore` writes what
 changed only on the branch, keeps what you changed and have not published, and refuses, writing
 nothing, when a record changed on both sides. A record deleted on the branch is deleted from your
-checkout only when your copy is the one you last synced; if you edited it since, `restore` refuses
-the same way, and `--force` keeps it.
+checkout only when your copy is the one you last synced, `--force` or not; if you edited it since,
+`restore` refuses the same way, and `--force` keeps it and names it: your next `commit`
+publishes it again unless you remove it. A record the branch renamed only in case is never deleted
+from your checkout.
+
+This branch holds nothing but records and its own four files (this README, `.gitignore`,
+`.gitattributes` and `.github/workflows/records.yml`). `restore` refuses a commit that holds
+anything else, writing nothing, so the records checks fail on such a push.

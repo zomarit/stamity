@@ -11,7 +11,9 @@
 //                                           checkout, three ways against the sync base: a record
 //                                           changed only on <ref> is written, one changed only here
 //                                           is kept, one changed on both refuses the run; one
-//                                           deleted on <ref> is deleted here only if unedited
+//                                           deleted on <ref> is deleted here only if unedited; a
+//                                           <ref> holding anything but records and the branch's
+//                                           own files is refused before any write
 //   commit -m <message> [--dry-run] [--allow-deletions]
 //                                           build a commit on the sync base from the records on
 //                                           disk, gate that exact commit, then push it; refuses
@@ -62,6 +64,11 @@ const TEMPLATES = [
   ['gitattributes', '.gitattributes'],
   ['workflow.yml', '.github/workflows/records.yml'],
 ]
+/** The files `init` writes beside the records: the only other paths a records commit may hold. */
+const BRANCH_FILES = new Set(TEMPLATES.map(([, destination]) => destination))
+/** A path as a disk that folds case and normalizes names (macOS, Windows) resolves it. */
+const folded = (path) => path.normalize('NFC').toLowerCase()
+const KEPT_FOLDED = new Set(KEEP_ON_MAIN.map(folded))
 const MODES = new Set(['100644', '100755'])
 const MAX_BUFFER = 256 * 1024 * 1024
 const RUNS_DIR = '.stamity/runs'
@@ -195,6 +202,12 @@ function blockedParent(ctx, path) {
 function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false }) {
   if (fetch) fetchRecords(ctx)
   const oid = requireCommit(ctx, ref, 'fetch the records branch, or run `init` once')
+  // A records commit holds the records and the files `init` writes, nothing else: one pushed
+  // without this script that carries more is refused before any write, so the records job fails on it.
+  const stray = splitZ(ctx.git(['ls-tree', '-r', '-z', '--full-tree', '--name-only', oid]))
+    .filter((path) => !BRANCH_FILES.has(path) && (!isRecordPath(path) || KEPT_FOLDED.has(folded(path))))
+  if (stray.length > 0)
+    stop(1, [`refused: ${ref} holds paths that are neither records nor the branch's own files (${[...BRANCH_FILES].join(', ')}); nothing was written:`, ...stray])
   const rows = lsTree(ctx, oid)
   const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
   if (unsupported.length > 0) stop(1, [`refused: ${ref} holds entries restore does not write (only regular files under the record paths):`, ...unsupported])
@@ -221,16 +234,22 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     else unchanged++
   }
   // A record the sync base holds and the ref does not was deleted there since: this copy goes too
-  // only when it is the base's byte for byte, so no unpublished byte is lost; an edited copy is a
-  // conflict. A symlink is never hashed or followed. --force deletes nothing, as before the base.
-  const onRef = new Set(rows.map((row) => row.path)), deletes = [], edited = []
-  for (const [path, baseOid] of force || was === null ? [] : was) {
-    if (onRef.has(path) || !isRecordPath(path)) continue
+  // only when it is the base's byte for byte, so no unpublished byte is lost, --force or not; an
+  // edited copy is a conflict, and under --force is kept and named. A path the ref holds in another
+  // case, or main's placeholder in any case, is never deleted: a disk that folds case resolves both
+  // names to one file. A symlink is never hashed or followed.
+  const onRef = new Set(rows.map((row) => row.path)), deletes = [], edited = [], renamed = []
+  const onRefFolded = new Map(rows.map((row) => [folded(row.path), row.path]))
+  for (const [path, baseOid] of was ?? []) {
+    if (onRef.has(path) || !isRecordPath(path) || KEPT_FOLDED.has(folded(path))) continue
     const parent = blockedParent(ctx, path)
     if (parent !== null) { if (parent.why === 'symlink') symlinks.add(parent.path); continue }
     const stat = lstatOrNull(ctx.abs(path))
     if (stat === null) continue
-    if (stat.isFile() && ctx.git(['hash-object', `--path=${path}`, '--', path]).trim() === baseOid) deletes.push(path)
+    const spelled = onRefFolded.get(folded(path))
+    if (stat.isSymbolicLink()) symlinks.add(path)
+    else if (spelled !== undefined) renamed.push({ path, spelled })
+    else if (stat.isFile() && ctx.git(['hash-object', `--path=${path}`, '--', path]).trim() === baseOid) deletes.push(path)
     else edited.push(path)
   }
   if (symlinks.size > 0) stop(1, ['refused: a record or one of its folders is a symlink, and restore never writes through one:', ...[...symlinks].toSorted()])
@@ -241,11 +260,11 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     stop(1, [
       `refused: ${differs.length + edited.length} record(s) changed both here and on ${ref} since the last sync (${synced}); nothing was written.`,
       ...(differs.length === 0 ? [] : [
-        `For each, save your copy, write ${ref}'s (git show ${ref}:<path>), run restore again, then re-apply your edit; --force takes ${ref}'s copy of every differing record:`,
+        `For each, save your copy, write ${ref}'s (git show ${ref}:<path>), run restore again, then re-apply your edit; --force takes ${ref}'s copy of every differing record and deletes every unedited copy of a record deleted there:`,
         ...differs.map(({ row }) => row.path),
       ]),
       ...(edited.length === 0 ? [] : [
-        `Deleted on ${ref} and edited here: move your copy out of the checkout and run restore again, then put it back and commit it if it should stay; --force keeps every one as it is:`,
+        `Deleted on ${ref} and edited here: move your copy out of the checkout and run restore again, then put it back and commit it if it should stay; --force keeps every one, and the next \`commit\` publishes it again unless you remove it:`,
         ...edited,
       ]),
     ])
@@ -264,13 +283,19 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
   }
   for (const path of deletes) rmSync(ctx.abs(path))
   ctx.git(['update-ref', SYNC_BASE, oid])
+  // A record the last sync wrote here and the disk has lost: written back, and named, since restore cannot tell a deletion from a loss.
+  const recreated = was === null ? [] : writes.filter((row) => was.has(row.path))
   return {
     code: 0,
     lines: [
       `restored ${writes.length} record(s) from ${ref}, updated ${updates.length}, overwrote ${overwrite.length - updates.length}, ` +
-        `fixed ${modes.length} mode(s), deleted ${deletes.length}, ${unchanged} unchanged, kept ${pending.length} local edit(s)`,
+        `fixed ${modes.length} mode(s), deleted ${deletes.length}, ${unchanged} unchanged, kept ${pending.length + edited.length} local edit(s)`,
       ...deletes.map((path) => `deleted ${path}: deleted on ${ref}, and this copy was the last synced one`),
+      ...recreated.map((row) => `re-created ${row.path}: it was gone from disk; if you deleted it on purpose, delete it again and publish with \`commit --allow-deletions\``),
       ...pending.map(({ row }) => `kept ${row.path}: a local edit not yet published`),
+      ...edited.map((path) => `kept ${path}: deleted on ${ref} and edited here; the next \`commit\` publishes it again unless you remove it`),
+      ...renamed.map(({ path, spelled }) => `kept ${path}: ${ref} holds it as ${spelled}; rename this copy to that name (where the disk folds case) ` +
+        'or remove it (where the two names are two files), or the next `commit` publishes it under this name too'),
     ],
   }
 }

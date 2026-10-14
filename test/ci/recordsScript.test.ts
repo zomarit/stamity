@@ -100,6 +100,22 @@ function world(options: { init?: boolean } = {}) {
   const refs = (cwd: string): string => git(cwd, "for-each-ref", "--format=%(refname) %(objectname)");
   const tree = (ref: string): string[] => git(origin, "ls-tree", "-r", "--name-only", ref).split("\n");
   const synced = (cwd: string): string => git(cwd, "rev-parse", "--verify", "--quiet", SYNC_BASE);
+  const blob = (cwd: string, body: string): string =>
+    execFileSync("git", ["-C", cwd, "hash-object", "-w", "--stdin"], { env, input: body, encoding: "utf8", stdio: "pipe" }).trim();
+  let crafted = 0;
+  /**
+   * A records commit on top of `from`, built in `cwd` through a scratch index and never pushed, as a
+   * push made without this script would be: `edit` runs git against that index.
+   */
+  const craft = (cwd: string, from: string, edit: (indexed: (...args: string[]) => string) => void): string => {
+    crafted += 1;
+    const index = join(dir, `crafted-${String(crafted)}.index`);
+    const indexed = (...args: string[]): string =>
+      execFileSync("git", ["-C", cwd, ...args], { env: { ...env, GIT_INDEX_FILE: index }, encoding: "utf8", stdio: "pipe" }).trim();
+    indexed("read-tree", from);
+    edit(indexed);
+    return indexed("commit-tree", indexed("write-tree"), "-p", from, "-m", "crafted");
+  };
   /** A second clone of the same origin, restored, as another machine would be. */
   const machine = async (name: string): Promise<string> => {
     const path = join(dir, name);
@@ -108,7 +124,7 @@ function world(options: { init?: boolean } = {}) {
     expect(restored.code, restored.lines.join("\n")).toBe(0);
     return path;
   };
-  return { dir, env, git, write, origin, url, clone, base, opts, refs, tree, synced, machine };
+  return { dir, env, git, write, origin, url, clone, base, opts, refs, tree, synced, blob, craft, machine };
 }
 
 describe("the record paths", () => {
@@ -167,6 +183,20 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(readFileSync(join(fresh, `${ALPHA}/ledger.jsonl`), "utf8")).toBe("{\"id\":\"alpha/1\"}\n");
     if (POSIX) expect(statSync(join(fresh, RUN, "tool.sh")).mode & 0o111).toBe(0o111);
     expect(w.synced(fresh)).toBe(w.git(w.origin, "rev-parse", "records"));
+    // Nothing was on this disk before, so nothing is re-created: a fresh clone's restore is not a list of every record.
+    expect(result.lines.filter((line) => line.startsWith("re-created "))).toEqual([]);
+  });
+
+  it("names each record it re-creates, one line per path, when the copy last synced here is gone from disk", async () => {
+    const w = world();
+    rmSync(join(w.clone, PLAN));
+    rmSync(join(w.clone, `${ALPHA}/ledger.jsonl`));
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(restored.lines.filter((line) => line.startsWith("re-created ")).map((line) => line.split(":")[0]))
+      .toEqual([`re-created ${ALPHA}/ledger.jsonl`, `re-created ${PLAN}`]);
+    expect(restored.lines.join("\n")).toContain("commit --allow-deletions");
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
   });
 
   it("with no sync base yet, refuses a differing local record and writes nothing, overwrites with --force, and deletes no local file", async () => {
@@ -202,6 +232,7 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(refused.code).toBe(1);
     expect(refused.lines).toContain(`${ALPHA}/ledger.jsonl`);
     expect(refused.lines).not.toContain(PLAN);
+    expect(refused.lines.join("\n")).toContain("and deletes every unedited copy of a record deleted there");
     expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results\n");
     expect(readFileSync(join(w.clone, `${ALPHA}/ledger.jsonl`), "utf8")).toContain("alpha/a");
     expect(w.synced(w.clone)).toBe(before);
@@ -237,7 +268,7 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(w.tree("records")).not.toContain(PLAN);
   });
 
-  it("refuses a record deleted on the other side and edited here, writing nothing, and --force deletes nothing", async () => {
+  it("refuses a record deleted on the other side and edited here, writing nothing; --force deletes the unedited copy and keeps the edited one, naming it", async () => {
     const w = world();
     const b = await w.machine("b");
     rmSync(join(b, PLAN));
@@ -250,6 +281,8 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(refused.code).toBe(1);
     expect(refused.lines).toContain(PLAN);
     expect(refused.lines).not.toContain(`${ALPHA}/ledger.jsonl`);
+    // The advice names what --force does to such a copy, so taking it publishes nothing by surprise.
+    expect(refused.lines.join("\n")).toContain("--force keeps every one, and the next `commit` publishes it again unless you remove it");
     expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, a's unpublished edit\n");
     expect(readFileSync(join(w.clone, `${ALPHA}/ledger.jsonl`), "utf8")).toBe("{\"id\":\"alpha/1\"}\n");
     expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results\n");
@@ -257,8 +290,97 @@ describe("restore", { timeout: 60_000 }, () => {
     const forced: Result = await records.restore({ ...w.opts, force: true });
     expect(forced.code, forced.lines.join("\n")).toBe(0);
     expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, a's unpublished edit\n");
-    expect(existsSync(join(w.clone, `${ALPHA}/ledger.jsonl`))).toBe(true);
+    expect(forced.lines).toContain(`kept ${PLAN}: deleted on origin/records and edited here; the next \`commit\` publishes it again unless you remove it`);
+    // The unedited copy holds nothing unpublished, so --force removes it as a plain restore would.
+    expect(existsSync(join(w.clone, `${ALPHA}/ledger.jsonl`))).toBe(false);
+    expect(forced.lines.some((line) => line.startsWith(`deleted ${ALPHA}/ledger.jsonl`))).toBe(true);
     expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results, from b\n");
+    const published: Result = await records.publish({ ...w.opts, message: "a", runGates: passing().run });
+    expect(published.code, published.lines.join("\n")).toBe(0);
+    expect(published.lines.filter((line) => line.includes(`${ALPHA}/ledger.jsonl`))).toEqual([]);
+    expect(published.lines).toContain(`A ${PLAN}`);
+    expect(w.tree("records")).not.toContain(`${ALPHA}/ledger.jsonl`);
+  });
+
+  it("keeps a record renamed only in case on the other side, deleting nothing, and never deletes the placeholder main keeps", async () => {
+    const w = world();
+    const renamed = "docs/plans/001-Alpha.md";
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const oid = w.git(w.clone, "rev-parse", `${upstream}:${PLAN}`);
+    const rename = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--force-remove", "--", PLAN);
+      indexed("update-index", "--add", "--cacheinfo", `100644,${oid},${renamed}`);
+    });
+    const restored: Result = await records.restore({ ...w.opts, ref: rename, fetch: false });
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(restored.lines.some((line) => line.startsWith("deleted "))).toBe(false);
+    expect(existsSync(join(w.clone, PLAN))).toBe(true);
+    expect(readFileSync(join(w.clone, renamed), "utf8")).toBe("# plan\n");
+    expect(restored.lines.join("\n")).toContain(`kept ${PLAN}: ${rename} holds it as ${renamed}`);
+    // A base row spelled as main's placeholder in another case is never a deletion either.
+    const shouting = GITKEEP.replace(".gitkeep", ".GITKEEP");
+    const crafted = w.craft(w.clone, upstream, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "")},${shouting}`);
+    });
+    w.git(w.clone, "update-ref", SYNC_BASE, crafted);
+    const again: Result = await records.restore({ ...w.opts, force: true });
+    expect(again.code, again.lines.join("\n")).toBe(0);
+    expect(existsSync(join(w.clone, GITKEEP))).toBe(true);
+    expect(w.git(w.clone, "status", "--porcelain", "--", GITKEEP)).toBe("");
+  });
+
+  it("refuses, before any write and naming each path, a records commit holding a path that is neither a record nor the branch's own file", async () => {
+    const w = world();
+    const upstream = w.git(w.clone, "rev-parse", "origin/records");
+    const before = w.synced(w.clone);
+    for (const stray of ["dist/x.js", "docs/specs/a.md", GITKEEP.replace(".gitkeep", ".GITKEEP")]) {
+      const crafted = w.craft(w.clone, upstream, (indexed) => {
+        indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, upstream\n")},${PLAN}`);
+        indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "stray\n")},${stray}`);
+      });
+      for (const force of [false, true]) {
+        // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
+        const result: Result = await records.restore({ ...w.opts, ref: crafted, fetch: false, force });
+        expect(result.code, `${stray} ${String(force)}`).toBe(1);
+        expect(result.lines).toContain(stray);
+        expect(result.lines[0]).toContain("neither records nor the branch's own files");
+        expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+        expect(w.synced(w.clone)).toBe(before);
+      }
+    }
+    expect(existsSync(join(w.clone, "dist/x.js"))).toBe(false);
+    expect(existsSync(join(w.clone, "docs/specs/a.md"))).toBe(false);
+    expect(readFileSync(join(w.clone, GITKEEP), "utf8")).toBe("");
+  });
+
+  it.skipIf(!POSIX)("refuses a symlinked folder or file in place of a record deleted on the other side, forced or not, deleting nothing", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    rmSync(join(b, PLAN));
+    rmSync(join(b, `${ALPHA}/ledger.jsonl`));
+    expect((await records.publish({ root: b, env: w.env, message: "b", allowDeletions: true, runGates: passing().run }) as Result).code).toBe(0);
+    const before = w.synced(w.clone);
+    // Outside the checkout, a byte-for-byte copy of the sync base's plan: a restore that followed the link would delete it.
+    const outside = join(w.dir, "outside");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "001-alpha.md"), "# plan\n");
+    const shapes = [
+      { blocked: "docs/plans", place: () => { rmSync(join(w.clone, "docs/plans"), { recursive: true }); symlinkSync(outside, join(w.clone, "docs/plans")); } },
+      { blocked: PLAN, place: () => { rmSync(join(w.clone, "docs/plans")); mkdirSync(join(w.clone, "docs/plans")); symlinkSync(join(outside, "001-alpha.md"), join(w.clone, PLAN)); } },
+    ];
+    for (const shape of shapes) {
+      shape.place();
+      for (const force of [false, true]) {
+        // oxlint-disable-next-line no-await-in-loop -- each restore runs over the checkout the previous one left
+        const result: Result = await records.restore({ ...w.opts, force });
+        expect(result.code, `${shape.blocked} ${String(force)}: ${result.lines.join("\n")}`).toBe(1);
+        expect(result.lines[0]).toContain("is a symlink");
+        expect(result.lines).toContain(shape.blocked);
+        expect(readFileSync(join(outside, "001-alpha.md"), "utf8")).toBe("# plan\n");
+        expect(readFileSync(join(w.clone, `${ALPHA}/ledger.jsonl`), "utf8")).toBe("{\"id\":\"alpha/1\"}\n");
+        expect(w.synced(w.clone)).toBe(before);
+      }
+    }
   });
 
   it.skipIf(!POSIX)("never writes through a symlinked record folder", async () => {
@@ -340,6 +462,26 @@ describe("commit", { timeout: 60_000 }, () => {
     expect(dry.lines).toContain(`M ${PLAN}`);
     expect(dry.lines.join("\n")).toContain(gates.calls[0]?.commit ?? "?");
     expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
+  });
+
+  it("refuses a publish from a checkout that never synced, naming restore, and pushes nothing", async () => {
+    const w = world();
+    // A fresh clone with every record on disk (copied in, as from a backup), one an old copy: no sync base says which copy they are.
+    const fresh = join(w.dir, "fresh");
+    execFileSync("git", ["clone", "-q", w.url, fresh], { env: w.env });
+    for (const record of w.tree("records").filter((path) => isRecordPath(path)))
+      w.write(fresh, record, w.git(w.origin, "cat-file", "blob", `records:${record}`) + "\n");
+    w.write(fresh, PLAN, "# plan, an old copy\n");
+    const before = { origin: w.refs(w.origin), fresh: w.refs(fresh) };
+    const gates = passing();
+    const refused: Result = await records.publish({ root: fresh, env: w.env, message: "m", runGates: gates.run });
+    expect(refused.code).toBe(1);
+    expect(refused.lines.join("\n")).toContain("has not synced to the records branch yet");
+    expect(refused.lines.join("\n")).toContain("run `node scripts/records.mjs restore`");
+    expect(gates.calls).toHaveLength(0);
+    expect(w.refs(w.origin)).toBe(before.origin);
+    expect(w.refs(fresh)).toBe(before.fresh);
+    expect(w.git(w.origin, "show", `records:${PLAN}`)).toBe("# plan");
   });
 
   it("moves no ref on --dry-run when origin moved, and names restore", async () => {
@@ -565,6 +707,7 @@ describe("the branch templates", () => {
   it("tells a reader how to restore and publish, and that a run in progress is left out", () => {
     const readme = template(README);
     for (const text of ["node scripts/records.mjs setup", "node scripts/records.mjs commit -m", "never forced",
-      "cannot be deleted", "Status: in progress", "deleted on the branch"]) expect(readme).toContain(text);
+      "cannot be deleted", "Status: in progress", "deleted on the branch", "publishes it again", "nothing but records"])
+      expect(readme).toContain(text);
   });
 });
