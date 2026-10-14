@@ -159,6 +159,16 @@ Six verbs. Exit codes: 0 done, 1 refused, 2 bad arguments.
    under the record paths into the checkout.
    - It refuses, listing the paths, where a local file differs, unless `--force` is given.
    - It never deletes a local file and never writes through a symlinked parent.
+   - *Amended 2026-10-14 (sign-offs S24, S25, S26, S29, S32 and S34 of the build night; the text above is kept as
+     planned).* `restore` merges three ways against a per-checkout sync base, the records commit the checkout last
+     restored, published or imported, and `commit` builds on that base and refuses, naming `restore`, when
+     `origin/records` moved past it (S24). "Never deletes a local file" became "never deletes a file that holds
+     unpublished bytes": a record the other side deleted is deleted here only when this copy is the sync base's byte
+     for byte (S25), under `--force` too, which keeps and names an edited copy (S26). `restore` refuses, before any
+     write, a ref holding a path outside the record set and the branch's own files, two names equal under case
+     folding, folders included, or a name that is not portable, and `commit` runs the same check on the tree it builds
+     before any push (S26, S29, S32, S34). It still never writes through a symlink. REQ-PROVE-024 in
+     `docs/specs/prove-behavior-and-value.md` states the rules as built.
 3. **`commit -m <msg> [--dry-run] [--allow-deletions]`** builds a commit on top of `origin/records` from the record
    files on disk, through a separate index, so `main`'s index is never touched.
    - The file list is `main`'s `.gitignore`-filtered list (settled default 3).
@@ -592,6 +602,14 @@ No unit touches `content/**`, so no eval case moves and no dogfood sync runs.
   4. With anything collected and no `force`, it returns `{ code: 1 }` listing the paths and writes nothing.
   5. A parent that is a symlink → `{ code: 1 }` naming it.
   6. It never deletes a working-tree file.
+
+  *Amended 2026-10-14 (S24, S25, S26, S29, S32, S34; steps 1–6 are kept as planned).* Step 3 compares three ways
+  against the sync base, `refs/worktree/stamity/records-base`, and with a base step 4 refuses only a record changed on
+  both sides, keeping a disk-only edit (S24). Step 6 narrowed to "never deletes a file that holds unpublished bytes": a record deleted on the ref since the
+  base is removed when the disk copy is the base's byte for byte, `--force` included, and an edited one is a conflict,
+  or under `--force` kept and named (S25, S26). Before any write the ref's whole tree is checked — record paths and the
+  branch's four files only, no two names equal under case folding, every name portable — and `publish` runs the same
+  check on its built tree (S26, S29, S32, S34). See the note under § A, verb 2, and REQ-PROVE-024.
 - **`publish({ message, dryRun = false, allowDeletions = false, runGates = defaultGates })`** — the CLI verb is `commit`.
   1. `git fetch --no-tags origin records`. `origin/records` absent → `{ code: 1 }` "no records branch: run `init`".
   2. The files are `git ls-files -z --others --cached --exclude-from=.gitignore -- <RECORDS_PATHSPECS>`, minus
@@ -775,6 +793,13 @@ jobs:
     side.
   - A new full-side job takes the heavy jobs' `needs` and `if:` (`:240-241`), so a lanes-only change and a proven
     push skip it.
+- **Amended 2026-10-14 (S23; the text above is kept as planned).** The test-input map moves in two halves. `r5` drops
+  only `test/records` and `test/records/specStatus.test.ts` from the `docs/specs/**` entry of
+  `.stamity/change-classes.json`, since the canonical `records` job runs them; the four record-path entries
+  (`.stamity/runs/**`, `.stamity/inbox.md`, `.stamity/handoffs/**`, `docs/plans/**`) stay while the records are tracked,
+  because removing them then turns `test/ci/testInputsGuard.test.ts` red, and they leave in `r7`, in the commit that
+  untracks the records. The in-flow plan of run `2026-10-13_records-branch` also keeps `scripts/ci/records-only.mjs`
+  and the `changes` job, retiring only the `records` lane and the `records_only` output (S10).
 
 ### r6-records-branch — create the branch, protect it, and see its first check green
 
@@ -789,6 +814,12 @@ jobs:
 | `depends_on` | r4-records-script, r5-ci-records-job, approval of each outward push owner: maintainer |
 | `verify` | `node scripts/records.mjs verify --base <sha>` exits 0, and the records workflow run reads `success` |
 
+*Amended 2026-10-14 (S33; the cell above is kept as planned).* The records workflow checks out `main` for its tools,
+and `main` gains `scripts/records.mjs` and `test:records` only when this pull request merges, so the import commit's
+first `records.yml` run (step 4) is red by construction: it fails at its restore step. Nothing waits on it, since the
+pull request's merge-blocking `records` job reads `origin/records` itself at the first push. `r6`'s verify reads
+`verify --base <sha>` exit 0 now, and the workflow's `success` from a re-run of that first run after the merge.
+
 ### r7-remove-records-from-main — the contract step, and the texts that describe it
 
 | Field | Content |
@@ -801,6 +832,13 @@ jobs:
 | `edgeCases` | A record edited on disk between steps 1 and 2 → step 2's `verify` fails; publish again first. The removal commit is reverted later → the records reappear on `main` from history, and `guard` then fails in CI, which is the signal to re-run this unit. A fork that edited one of upstream's records meets a modify/delete conflict at its next integrate; the CHANGELOG entry tells it to keep its own copy. |
 | `depends_on` | r6-records-branch |
 | `verify` | `node scripts/records.mjs guard && npm test && npm run test:records && npm run lint && npm run typecheck && npm run gate` |
+
+*Amended 2026-10-14 (S23, S30 and S33; the cell above is kept as planned).* The commit that untracks the records also
+removes the four record-path entries of `.stamity/change-classes.json`'s test-input map (S23). With the 33 plans gone
+from the `website` lane, 77 lane paths remain, so `test/ci/testInputsGuard.test.ts`'s lane-path floor `laned > 100`
+fails although the census finds no gap: `r7` lowers it to `> 60`, a justified test change (the rehearsal of S30).
+`r7`'s verify also runs `npm run build && node dist/cli.js check` in a tree with no record on disk, and it reports no
+drift (S33).
 
 `r7-remove-records-from-main` interfaces:
 
