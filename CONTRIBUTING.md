@@ -246,7 +246,7 @@ next regeneration. For the generator-owned rows that gate is a test. For the las
 |---|---|
 | `docs/capability-matrix.md` | `node scripts/generate-capability-matrix.mjs` |
 | `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` | `node scripts/generate-docs.mjs` |
-| `docs/measurements.md` | `node scripts/merge-ready-rate.mjs --write`, then `node scripts/generate-docs.mjs --page measurements` |
+| `docs/measurements.md` | `node scripts/merge-ready-rate.mjs --write`, then `node scripts/records.mjs commit -m <message>`, then a `main` commit that moves the pin and runs `node scripts/generate-docs.mjs --page measurements` |
 | `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` |
 | `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` |
 | `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` |
@@ -256,8 +256,11 @@ next regeneration. For the generator-owned rows that gate is a test. For the las
 
 Five notes on that table:
 
-- `--write` on `merge-ready-rate.mjs` freezes the snapshot under `evals/measurements/`, which the
-  measurements page renders from.
+- `--write` on `merge-ready-rate.mjs` freezes a new snapshot under `evals/measurements/`. The
+  measurements page renders the snapshot `MEASUREMENT_SNAPSHOT_PATH` in `src/cli/docs/measurements.ts`
+  pins, not the newest one, so the page moves with its pin: publish the snapshot to `records` with
+  `node scripts/records.mjs commit -m <message>`, then move the pin in the `main` commit that
+  regenerates the page.
 - `generate-pack-manifests.mjs` verifies every pack against its own `pack.json` integrity map, then
   rewrites the pins module and nothing else. Its `--write` mode is maintenance, for after a
   deliberate pack edit. The plain invocation fails on the drift instead.
@@ -357,9 +360,17 @@ The branch shares no history with `main` and is never merged into it.
 - Publish records with `node scripts/records.mjs commit -m "<message>"`. It gates the exact commit
   it builds on `records`, then pushes it, never forced. `--dry-run` lists what it would publish. A
   run whose record still reads `Status: in progress` is left out until the run closes.
+- `node scripts/records.mjs restore` brings the checkout up to `origin/records`. Run it when
+  `commit` refuses because the branch moved, and in another checkout before its first `commit`. It
+  merges against the sync base, the records commit this checkout last restored or published: it
+  writes what changed only on `records`, keeps what you changed and have not published, and refuses
+  when a record changed on both sides. A record deleted on `records` but edited here is kept, and
+  the next `commit` publishes it again unless you remove it.
 - Never run `git clean -X` (or `-x`) in a checkout holding unpublished records. The record paths are
   ignored there, so the clean deletes them.
-- A change to `src/cli/docs/**`, `test/records/**` or the ledger grammar also runs
+- A change to `src/cli/docs/**`, `test/records/**`, the ledger grammar, or a file the records suite
+  imports or runs (`scripts/eval/run.mjs`, `scripts/eval/instrument.mjs`, `src/runs/inboxStore.ts`,
+  `src/runs/disposition.ts`, `content/skills/st-verify/scripts/spec-plan-coverage.mjs`) also runs
   `npm run test:records`, after `setup`. `npm run check` does not run that suite; CI's `records` job
   does.
 - The release close publishes its records first, then lands `main`'s pin bump, so `main` never pins
@@ -367,6 +378,18 @@ The branch shares no history with `main` and is never merged into it.
 - Lanes write no records. A linked worktree shares `.git/info/exclude` with the main checkout, so a
   record written in a lane's worktree is ignored there and lost when the worktree is removed; the
   main checkout writes the records.
+
+A fork's `origin` has no `records` branch, so `setup` there refuses. `npm test` needs no records:
+the canonical repository's `records` job checks a fork's pull request. To run
+`npm run test:records` in a fork, fetch upstream's records under a local ref and restore from it
+(run both again to refresh them):
+
+```sh
+git fetch https://github.com/zomarit/stamity refs/heads/records:refs/remotes/upstream/records
+node scripts/records.mjs setup --ref upstream/records --no-fetch
+```
+
+A fork does not publish records: `commit` and `init` are the canonical repository's.
 
 ## Write the commit, then open the pull request
 

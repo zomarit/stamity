@@ -195,6 +195,33 @@ describe("setup", { timeout: 60_000 }, () => {
     expect(result.code, result.lines.join("\n")).toBe(0);
     expect(readFileSync(join(w.clone, ".git/info/exclude"), "utf8")).toContain("# <<< stamity records");
   });
+
+  it("in a fork with no records branch, refuses plain setup without sending the fork to init, and restores upstream's records through --ref and --no-fetch", () => {
+    const w = world();
+    // A fork as GitHub makes one by default: the default branch only, no `records` branch.
+    const fork = join(w.dir, "fork.git");
+    execFileSync("git", ["clone", "-q", "--bare", "--single-branch", "--branch", "main", w.url, fork], { env: w.env });
+    const clone = join(w.dir, "fork-clone");
+    execFileSync("git", ["clone", "-q", pathToFileURL(fork).href, clone], { env: w.env });
+    const cli = (...args: string[]) => spawnSync(process.execPath, [SCRIPT, ...args], { cwd: clone, env: w.env, encoding: "utf8" });
+    const plain = cli("setup");
+    expect(plain.status, plain.stderr).toBe(1);
+    expect(plain.stderr).toContain("no records branch on origin");
+    expect(plain.stderr).toContain("a fork fetches upstream's records branch");
+    expect(plain.stderr).toContain("setup --ref <ref> --no-fetch");
+    // The one-time `init` belongs to the canonical repository; a fork that ran it would push an empty records branch.
+    expect(plain.stderr).not.toMatch(/run `node scripts\/records\.mjs init/);
+    expect(w.git(fork, "for-each-ref", "--format=%(refname)")).not.toContain("refs/heads/records");
+    w.git(clone, "fetch", "-q", w.url, "refs/heads/records:refs/remotes/upstream/records");
+    const forked = cli("setup", "--ref", "upstream/records", "--no-fetch");
+    expect(forked.status, forked.stderr).toBe(0);
+    expect(forked.stdout).toContain("from upstream/records");
+    expect(readFileSync(join(clone, ".git/info/exclude"), "utf8")).toContain("# <<< stamity records");
+    expect(readFileSync(join(clone, PLAN), "utf8")).toBe("# plan\n");
+    expect(w.synced(clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+    const status = w.git(clone, "status", "--porcelain", "--untracked-files=all");
+    for (const line of status.split("\n").filter(Boolean)) expect(isRecordPath(line.slice(3)), line).toBe(false);
+  });
 });
 
 describe("restore", { timeout: 60_000 }, () => {

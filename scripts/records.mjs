@@ -5,7 +5,8 @@
 // through `.gitignore` and never through a symlink.
 //
 // Usage: node scripts/records.mjs <verb> [options]
-//   setup                                   write the exclude block, then restore
+//   setup [--ref <ref>] [--no-fetch]        write the exclude block, then restore (a fork passes
+//                                           upstream's records, fetched under its own ref name)
 //   restore [--ref <ref>] [--no-fetch] [--force]
 //                                           write the records of <ref> (origin/records) into the
 //                                           checkout, three ways against the sync base: a record
@@ -95,6 +96,10 @@ const RUNS_DIR = '.stamity/runs'
 /** The head line /st-work and /st-debug keep on a run's record until its close. */
 const IN_PROGRESS = /^Status: in progress\s*$/
 const RESTORE_HINT = 'run `node scripts/records.mjs restore`, then `commit` again'
+/** Where the records come from when origin has none: `init` is the canonical repository's one-time step, never a fork's. */
+const NO_BRANCH_HINT = 'the canonical repository creates it once with `node scripts/records.mjs init --base <sha>`; ' +
+  'a fork fetches upstream\'s records branch under a local ref and passes it, as `node scripts/records.mjs setup --ref <ref> --no-fetch`, ' +
+  'and publishes no records (CONTRIBUTING.md, "Keep the records")'
 
 /** A verb's refusal, carried to the verb's boundary and returned as `{ code, lines }`. */
 class Stop extends Error {
@@ -175,7 +180,7 @@ function requireCommit(ctx, rev, hint) {
 function fetchRecords(ctx, into = REMOTE_REF) {
   const fetched = ctx.tryGit(['fetch', '--no-tags', '--refmap=', 'origin', `${BRANCH_REF}:${into}`])
   if (fetched.ok) return
-  if (ctx.commit(REMOTE_REF) === null) stop(1, ['no records branch on origin: run `node scripts/records.mjs init --base <sha>` once'])
+  if (ctx.commit(REMOTE_REF) === null) stop(1, [`no records branch on origin: ${NO_BRANCH_HINT}`])
   stop(1, [`fetching the records branch failed: ${fetched.error}`])
 }
 
@@ -276,7 +281,7 @@ function refuseUnsafeTree(ctx, oid, { holds, outcome, fix, onBranch }) {
 
 function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false }) {
   if (fetch) fetchRecords(ctx)
-  const oid = requireCommit(ctx, ref, 'fetch the records branch, or run `init` once')
+  const oid = requireCommit(ctx, ref, `fetch the records branch first; where none exists, ${NO_BRANCH_HINT}`)
   // One pushed without this script that breaks the tree rule is refused before any write, so the records job fails on it.
   refuseUnsafeTree(ctx, oid, {
     holds: `${ref} holds`, outcome: 'nothing was written', fix: 'Drop the old spelling of each from the records branch', onBranch: () => true,
@@ -383,7 +388,7 @@ export async function setup(options = {}) {
       mkdirSync(dirname(file), { recursive: true })
       writeFileSync(file, after)
     }
-    const restored = restoreIn(ctx, {})
+    const restored = restoreIn(ctx, { ref: options.ref, fetch: options.fetch })
     return { code: restored.code, lines: [`${after === before ? 'kept' : 'wrote'} the records block in ${file}`, ...restored.lines] }
   })
 }
@@ -600,12 +605,12 @@ export async function init({ base, ...options } = {}) {
   })
 }
 
-const USAGE = 'Usage: node scripts/records.mjs setup | restore [--ref <ref>] [--no-fetch] [--force] | ' +
+const USAGE = 'Usage: node scripts/records.mjs setup [--ref <ref>] [--no-fetch] | restore [--ref <ref>] [--no-fetch] [--force] | ' +
   'commit -m <message> [--dry-run] [--allow-deletions] | verify --base <sha> [--ref <ref>] | guard [--ref <ref>] | init --base <sha>'
 
 /** Each verb's flags: a flag with a key takes a value; a flag with a pair sets a boolean. */
 const VERBS = {
-  setup: { run: setup, flags: {} },
+  setup: { run: setup, flags: { '--ref': 'ref', '--no-fetch': ['fetch', false] } },
   restore: { run: restore, flags: { '--ref': 'ref', '--no-fetch': ['fetch', false], '--force': ['force', true] } },
   commit: { run: publish, flags: { '-m': 'message', '--dry-run': ['dryRun', true], '--allow-deletions': ['allowDeletions', true] }, required: ['-m'] },
   verify: { run: verify, flags: { '--base': 'base', '--ref': 'ref' }, required: ['--base'] },

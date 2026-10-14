@@ -214,9 +214,14 @@ every file a case's `source:` names, and the docs tests read those and refuse a 
 one. When it runs, the full set is measured — by the release's baseline run, or
 by an incremental run composed with it under that file's incremental rule — and the release
 carries the composed artifact under `evals/runs/` on the `records` branch, published with
-`node scripts/records.mjs commit -m <message>` before the tag. When none of those holds, the
+`node scripts/records.mjs commit -m <message>` before the tag. The `main` commit that moves
+`evals/run-of-record.json` to that run follows the publish: before it, the merge-blocking `records`
+job's measurements step refuses the missing results file. When none of those holds, the
 release carries the run of record forward and its notes say `carried forward from run N: no model-facing change`,
-N being the run of record's number: the one carried form this checklist admits. A FAIL run of
+N being the run of record's number: the one carried form this checklist admits. Either way, the
+release notes record `git rev-parse origin/records` at the cut, after the publish, and link the
+evidence as `https://github.com/zomarit/stamity/blob/<that sha>/<path>`, so a later push to
+`records` cannot change what the tag cites. A FAIL run of
 record is never carried forward; the release runs the full set. Its exception covered its own
 release alone. The corpus
 is model-executed prose, so a version cut that moved a trigger with no run behind it ships
@@ -327,10 +332,12 @@ freezes the verified merge-ready rate over the run records into
 `node scripts/records.mjs commit -m <message>` publishes that snapshot with the run record to the
 `records` branch. Third, the pin moves in the `main` commit that regenerates the page:
 `MEASUREMENT_SNAPSHOT_PATH` in `src/cli/docs/measurements.ts` names the new snapshot, and
-`node scripts/generate-docs.mjs --page measurements` re-renders `docs/measurements.md` from it. A
+`node scripts/generate-docs.mjs --page measurements` re-renders `docs/measurements.md` from it. The
+release notes record `git rev-parse origin/records` at the cut, after the publish, and link the
+snapshot as `https://github.com/zomarit/stamity/blob/<that sha>/<path>`. A
 run record written after the snapshot is not on the page until the next refresh, which is the page's
 own contract. (Added 2026-09-15, with the page; the records publish added 2026-10-14, when the
-records left `main`.) Runs when: a run record under `.stamity/runs/` or
+records left `main`, and the cut's `records` commit named the same day.) Runs when: a run record under `.stamity/runs/` or
 `evals/run-of-record.json` changed since the last snapshot.
 
 A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the generated guard the script times (`.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`, built from `src/hooks/scripts.ts` and every module it imports) or `scripts/hook-latency.mjs` moved since the last release, or the Node version the release is cut on moved.
