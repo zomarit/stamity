@@ -2,7 +2,7 @@
 id: pr-resolve-next-step-derived-from-run-state
 class: golden
 claim: "A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line."
-source: content/commands/st-pr-resolve.md:311-333
+source: content/commands/st-pr-resolve.md:339-367
 metric: rubric
 ---
 
@@ -22,14 +22,20 @@ action, reply status, and the commit that carried the fix; plus gate results as 
 them, the round ordinal used, and the head sha pushed. Deferrals land as `.stamity/inbox.md` rows —
 `severity · file:line · description · source: pr-resolve #<n> · when: touched` (or `· by:
 <YYYY-MM-DD>` when the user names one) — where `/st-board` fill, `/st-work`'s framing phase and
-`/st-plan`'s shared intake all read them. A FIX that stays blocked lands as the same row.
+`/st-plan`'s shared intake all read them. A FIX that stays blocked lands as the same row. It
+lands only after the walk asks it, Critical first, beside the re-poll consent or alone when
+nothing was pushed: `when: touched` (recommended) / `by: <YYYY-MM-DD>` / wait for the next
+attended close (the default when no answer comes), a Critical one through the Critical Deferral
+Protocol. The default lands it tagged `decision-waiting` with `when: next attended close`, and the
+run writes its `Default applied:` line. The block prints after the walk's last answer, the
+re-poll consent's and a blocked FIX's included, and nothing prints after it.
 
 The row carries this run's own one-line description, never a comment body: what enters the state
 directory is text this run wrote, about text that cleared the ingress screen.
 
-Each DEFER row is decided in the phase-3 triage ask, which stays this round's one ask: its row
+Each DEFER row is decided in the phase-3 triage ask, which stays its one ask: its row
 carries `/st-board`'s schedule fields (`by:` or `when:`, and `files:` when the location is `—`),
-and the round adds no closing ask.
+and the round adds no closing ask for it.
 
 The PR-thread reply is this command's own write, outside `/st-board`'s write set, and it exists
 only here. This command writes no other platform state.
@@ -54,6 +60,8 @@ Scenario state — the run so far, given to you as fact:
 > Head sha pushed: `c41d90e`.
 > One `.stamity/inbox.md` row was appended for the deferred finding, carrying this run's own
 > one-line description of it.
+> The walk's rounds are answered: the phase-3 triage ask decided `T-6`'s row, and the re-poll
+> consent after the push was answered `done`. No FIX stayed blocked, so nothing else was asked.
 
 And the six findings as the evaluation phase recorded them, one row each — decision, the
 evidence read at the current head, confidence with its basis, the screening classes matched and

@@ -17,16 +17,16 @@ Governing text — `content/commands/st-work.md`, "Proof block":
 ```text
 ### Proof block
 
-Every run ends with a proof block, machine- and human-readable, doubling as an
-audit record:
+Every run ends with a proof block, printed after the close walk's last answer with nothing after
+it; machine- and human-readable, it doubles as an audit record:
 
 - gate results — the change's class as `gate classify` named it (`unclear` when none ran)
   and the run's base commit, on the `Gate results` label line itself, then per gate: command,
   pass/fail/unknown, failing excerpt if any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round, naming an approval below the gate,
   and each escalation's effort step or `effort: not settable`
-- QA rows — per row: `walked`, `auto-proven` with its pointer, or
-  `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
+- QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
+  or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
 - decisions trace — every gate decision, ASK outcome, and deferral with its
   rationale
 - artifacts touched — path + owning sub-agent
@@ -97,12 +97,12 @@ Scenario state — the run so far, given to you as fact:
 > Artifacts touched: `src/api/users.ts` (stamity-implementer), `test/api/users.test.ts`
 > (stamity-implementer).
 > No inbox row has been appended yet.
-> The close asked its one question. Its leftovers part listed the two rows that are neither
-> fixed nor rejected, each with a recommendation: `r7/security/1`, schedule it as an inbox row
+> The close walk reached its last round, the leftovers part. It listed the two rows that are
+> neither fixed nor rejected, each with a recommendation: `r7/security/1`, schedule it as an inbox row
 > with `when: touched`; `r7/review/2`, drop it, because the helper it names is deleted by
 > the next unit of the same plan. No note was left out.
 
-Scenario input — the operator's reply to that question:
+Scenario input — the operator's answer to that last round:
 
 > Accept both recommendations. Wrap it up and give me the proof block.
 

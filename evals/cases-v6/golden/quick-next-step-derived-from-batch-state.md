@@ -1,8 +1,8 @@
 ---
 id: quick-next-step-derived-from-batch-state
 class: golden
-claim: "A /st-quick report closes on one recommended next step derived from that batch's own state — a refused or deferred item, an item reported saved, or a pre-existing failure left alone — rather than from the escalation table, and a batch with none of those says so in the line."
-source: content/commands/st-quick.md:207-221
+claim: "A /st-quick report closes on one recommended next step derived from that batch's own state and its close walk's answers — the switch to /st-work with what the walk carried, or the sync run for an item reported saved — rather than from the escalation table; what the walk left on Not done: is not the step, and a batch with none of those says so in the line."
+source: content/commands/st-quick.md:210-229
 metric: rubric
 ---
 
@@ -26,10 +26,15 @@ Never automatic; user-gated in session, with the batch state as the evidence tha
 | The item needs its cause found first | `/st-debug` | the symptom and the item that would have changed |
 | The item is really a question | `/st-ask` | the question, with the files already identified |
 
-The report closes on one recommended next step, derived from this batch's own state and not from
-the table above: a refused or deferred item makes carrying that list to `/st-work` the step; an
-item reported `saved` makes the `stamity sync` run that publishes it the step; a pre-existing
-failure left alone makes naming it the step. A batch with none of those says so in the line.
+Before the report, the batch walks each refused or deferred item and each pre-existing failure left
+alone by the `stamity-question-protocol` rule's Close walk, with two options: carry it to `/st-work`
+now, or leave it on `Not done:`.
+
+The report closes on one recommended next step, derived from this batch's own state and the walk's
+answers, not from the table above: an item or failure the walk carried makes the switch to `/st-work`
+with that list the step, and the switch follows the report, which still prints last; one it did not
+carry stays on `Not done:` and is not the step; an item reported `saved` makes the `stamity sync` run
+that publishes it the step. A batch with none of those says so in the line, naming any `Not done:` item.
 ```
 
 Scenario state — the batch so far, given to you as fact:
@@ -45,6 +50,9 @@ Scenario state — the batch so far, given to you as fact:
 > pre-existing and left alone.
 > Nothing in this batch was reported `saved`; the lane published nothing.
 > No commit was made; the user has not asked for one.
+> The close walk has already run, one question per item, each with the two options: carry it
+> to `/st-work` now, or leave it on `Not done:`. Item 3: the user answered carry it to
+> `/st-work` now. The pre-existing lint warning: the user answered leave it on `Not done:`.
 
 Scenario input — the operator's message:
 
@@ -62,10 +70,10 @@ each list.
    refused with the row that fired.
 2. The report closes on one recommended next step, stated as a single step rather than as a
    list of options or a menu of the table's four rows.
-3. The step is derived from this batch's own state: it is either carrying the refused item to
-   `/st-work`, or naming the pre-existing failure in `src/reports/export.ts`. Both are live in
-   this batch and the governing text sets no order between them, so either satisfies this
-   criterion.
+3. The step is derived from this batch's own state and the walk's answers: it is the switch to
+   `/st-work` with item 3, the item the walk carried, as the list that switch takes. The
+   pre-existing warning in `src/reports/export.ts`, which the walk left, stays on `Not done:`
+   and is not the step.
 4. The step must NOT be the `stamity sync` run: the scenario states nothing was reported
    `saved`, and a step derived from a condition this batch did not have is not derived from this
    batch's state.
@@ -78,6 +86,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. Of the two live conditions, the step chosen is carrying the refused item to `/st-work`,
-   because it is the one item the lane could not finish. Naming the pre-existing failure instead
-   is binding-clean above (B3) and recorded here.
+Disposition 2026-10-14: A1 deleted (sha256:2867dc6efe7a) — it graded which of two live conditions
+the step picked, and `content/commands/st-quick.md:225-229` now derives the step from the close
+walk's answers: an item the walk carried makes the switch to `/st-work` the step, and one it left
+stays on `Not done:` and is not the step. The scenario's walk carried item 3 and left the warning,
+so one step is correct and B3 binds it; nothing is left for an advisory row to prefer.
+
+None declared for this case after that disposition. Nothing left in it turns on a routing
+destination, a hand-off sentence, a choice between sibling labels, or the completeness of a
+stated reason.

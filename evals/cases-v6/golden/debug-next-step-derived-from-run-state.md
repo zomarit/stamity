@@ -2,7 +2,7 @@
 id: debug-next-step-derived-from-run-state
 class: golden
 claim: "A /st-debug closing report ends on one recommended next step derived from that run's own state — a regression clause with no test, instrumentation held under a capture-later agreement, or a surviving hypothesis — rather than from the escalation table, and a run with none of those says so."
-source: content/commands/st-debug.md:209-223
+source: content/commands/st-debug.md:209-229
 metric: rubric
 ---
 
@@ -23,10 +23,16 @@ Governing text — `content/commands/st-debug.md`, "Escalation":
 | The symptom turns out to be a question, not a defect | `/st-ask` | the symptom rewritten as the question |
 | The defect arrived as review feedback on delivered work | `/st-rework` | the diagnosis as a triage input |
 
-The closing report ends on one recommended next step, derived from this run's own state and not
-from the table above: a regression clause with no test makes writing it the step; instrumentation
-held under a capture-later agreement makes the strip at the window's end the step; a surviving
-hypothesis makes its discriminating observation the step. None of those, and the line says so.
+Before the closing report, the run walks each regression clause with no test and each surviving
+hypothesis by the `stamity-question-protocol` rule's Close walk. Instrumentation held under a
+capture-later agreement was decided at step 3: the report lists it with that agreement, and the walk
+does not ask about it again.
+
+The closing report ends on one recommended next step, derived from this run's own state and the
+walk's answers, not from the table above: a regression clause with no test makes writing it the
+step; instrumentation held under a capture-later agreement makes the strip at the window's end the
+step; a surviving hypothesis makes its discriminating observation the step. An item the walk
+scheduled or dropped is not the step. None of those, and the line says so.
 The line ends there: one step, no second step behind it and no "if you meant X instead" branch.
 A fact that would change the step is named above the step as a fact to settle, never as a second
 ending the reader has to choose between.
@@ -48,6 +54,10 @@ Scenario state — the run so far, given to you as fact:
 >      gave; the agreed capture window closes at the end of Friday, and the counters are still
 >      deployed.
 > No hypothesis survives: the confirmed cause accounts for every observation.
+> The close walk has already run. It asked one question, about the regression clause with no
+> test: 1. keep it open, writing its test the next step (recommended, and the default) · 2. drop
+> it, with a reason. The user answered 1. The counters were not walked: their capture-later
+> agreement was decided at step 3.
 
 Scenario input — the operator's message:
 

@@ -46,13 +46,13 @@ those patterns and each specialist body names its surfaces, so no row is copied 
 may add a lens and never remove one. Deep runs the full pass; standard runs a lens on a trigger-path
 match. The `security` lens runs at every tier when `stamity gate classify` names the class
 `security-sensitive`, and on a trigger-path match; light runs no other lens. With no class from
-`gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason` naming a failed read, the lens runs at every
-tier as for `security-sensitive`. The charter's universal floor holds at every tier, so a tier that skipped
-the security lens outright made that floor false. When the class's checks name `dependency-audit` (a bump
-of dependency lockfiles alone, no bumped package carrying an install script), the dependency audit runs
-first, and the lens only if the audit flags something, as that skill defines it; the lockfiles' own
-trigger-path match waits for that flag. A bump of a package with an install script, any other lockfile
-format, a parse failure, or an audit that cannot run keeps the lens.
+`gate classify` (no `Base:`, no CLI or `gate` verb) or a `reason` naming a failed read, the lens
+runs at every tier as for `security-sensitive`. The charter's universal floor holds at every tier,
+so a tier that skipped the security lens outright made that floor false. When the class's checks
+name `dependency-audit` (a bump of dependency lockfiles alone, no bumped package carrying an
+install script), the dependency audit runs first, and the lens only if the audit flags something,
+as that skill defines it; the lockfiles' own trigger-path match waits for that flag. A bump of a
+package with an install script, any other lockfile format, a parse failure, or an audit that cannot run keeps the lens.
 ```
 
 Scenario state — given to you as fact:
@@ -151,10 +151,11 @@ each list.
 6. The response must NOT count the standing `micromatch` advisory as a flag that sends this
    bump to the security lens.
 7. The response states that both earlier bumps went to the security lens: last week's audit
-   was `partial` and the week before's could not run, and a `partial` audit, or one that
-   cannot run, counts as a flag, whatever it reported or failed to report on the entry its
-   bump changed. Stating it of the two bumps meets this criterion; the response need not
-   recite the rule in general. A response that lets either earlier bump leave without the
+   was `partial`, and a `partial` audit counts as a flag whatever it reported on the entry its
+   bump changed; the week before's could not run, and an audit that cannot run counts as a
+   flag, or, in the Specialist pass's own words, keeps the lens. Either ground meets this
+   criterion for that bump. Stating it of the two bumps meets this criterion; the response
+   need not recite the rule in general. A response that lets either earlier bump leave without the
    lens, that reads last week's report as no flag because it shows no advisory, licence flag
    or risk class on the changed entry, or that sends either bump to the lens only for the
    lockfile's trigger-path match or its `security-sensitive` class, fails this criterion.

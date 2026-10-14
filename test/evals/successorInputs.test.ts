@@ -285,6 +285,43 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "\"the pull-request thread reply, `/st-pr-resolve`'s own write outside `/st-board`'s write set\". A2 still " +
     "grades only whether the step says where the re-post lands, so a step naming the thread reply passes it under " +
     "either wording. No binding row moves, the claim holds, and the B / A counts hold at 8 / 2.",
+  // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080): the three rows
+  // below are the reviewed diffs for three carried `## Expected` blocks the close walk's corpus text moved; each
+  // names the landed text, the rows that moved and what the block now admits or refuses.
+  "question-shape-and-default":
+    "Expectation re-synced 2026-10-14 to the landed corpus (run 2026-10-14_cli-native, unit f9-evals; " +
+    "REQ-FLOW-080): the question protocol's Floor item 6 (`content/rules/stamity-question-protocol.md:38-46`, " +
+    "re-quoted in the Brief) moved from \"One question per turn, with related sub-questions bundled into it\" to " +
+    "\"One ask per turn, with related questions bundled into it\", the unit its Gates and its Close walk count. B1 " +
+    "read \"exactly one question\" and B6 \"a second, separate question\", which a judge could hold against a " +
+    "response that bundles two related questions into its one ask, as item 6 allows. B1 now reads exactly one ask, " +
+    "one question or related questions bundled into it, and says B2 to B5 hold for each question it carries; B6 " +
+    "stays a `must NOT` row and refuses a second, separate ask in the same turn. What the block now admits that it " +
+    "could be read to refuse: related questions bundled into the one ask, each holding B2 to B5. It still refuses " +
+    "a second ask, an echoed request and a silent pick. No other row moves, the claim holds, and the B / A counts " +
+    "hold at 7 / 0.",
+  "quick-next-step-derived-from-batch-state":
+    "Expectation re-synced 2026-10-14 to the landed corpus (run 2026-10-14_cli-native, unit f9-evals; " +
+    "REQ-FLOW-080, REQ-FLOW-077): `/st-quick` now walks each refused or deferred item and each pre-existing " +
+    "failure left alone before its report, with two options, carry it to `/st-work` now or leave it on " +
+    "`Not done:`, and derives the next step from the batch's state and the walk's answers " +
+    "(`content/commands/st-quick.md:210-229`, re-quoted in the Brief): an item the walk carried makes the switch " +
+    "to `/st-work` the step, one it left stays on `Not done:` and is not the step, and \"a pre-existing failure " +
+    "left alone makes naming it the step\" is gone. The Brief's scenario gains the walk's answers (item 3 " +
+    "carried, the lint warning left). B3 admitted either live condition as the step and A1 preferred the refused " +
+    "item; B3 now names the switch to `/st-work` with item 3 and reads the left warning as not the step, and A1 " +
+    "is deleted with its disposition note, nothing being left for it to prefer. What B3 now refuses that it " +
+    "admitted: naming the pre-existing failure as the step. The claim moves with it, B1, B2 and B4 to B7 are " +
+    "unchanged, and the B / A counts move from 7 / 1 to 7 / 0.",
+  "rework-next-step-derived-from-run-state":
+    "Expectation re-synced 2026-10-14 to the landed corpus (run 2026-10-14_cli-native, unit f9-evals; " +
+    "REQ-FLOW-080): `/st-rework`'s proof block is now printed after the handoff's answer with nothing of the run " +
+    "after it, and its recommended next step is the block's last field rather than a line beside it " +
+    "(`content/commands/st-rework.md:276-285`, re-quoted in the Brief). B1 counted the block's seven things and " +
+    "B3 asked for a next step \"in addition to the proof block\"; B1 now counts eight, the next step among them, " +
+    "and B3 reads the step as the block's last field with nothing of this run printed after the block. What the " +
+    "block now refuses that it admitted: a step printed outside the block, or anything of the run printed after " +
+    "it. B2 and B4 to B7 are unchanged, the claim moves with B3, and the B / A counts hold at 7 / 1.",
 };
 
 const markdown = (directory: string): string[] =>

@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:277-430
+source: content/commands/st-plan.md:277-438
 metric: rubric
 ---
 
@@ -90,7 +90,7 @@ Sections, in order:
 | `id` | stable slug, the target of `depends_on` |
 | `requirements` | the spec requirement ids (`REQ-<area>-<nnn>`) this unit implements — the join key it shares with the spec, the test name and the board item. Where the spec carries no ids, the literal `spec carries no ids`; never blank |
 | `files` | paths this unit writes; disjoint from every unit that can run beside it |
-| `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline |
+| `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline, and the module interface the unit lands behind |
 | `testCriteria` | the assertions that prove the unit, each testable under L1 |
 | `edgeCases` | at least one, with its expected behavior |
 | `depends_on` | unit ids, or `none` |
@@ -151,6 +151,14 @@ file moves here, and neither side effect is a third write channel for the plan i
 ## Return contract
 
 Terminal state, one of: `DONE` · `BLOCKED_AMBIGUITY` · `BLOCKED_DEPENDENCY` · `BLOCKED_FAILURE`.
+
+Before this block, the run walks its leftovers through the question-protocol rule's Close walk:
+each open question still carried, then each follow-up's schedule fields (`by:` or `when:`, and
+`files:` when its location is `—`), the recommended schedule first and the Drop list among the
+options. Each answer lands in the artifact before a follow-up row appends; the block prints after
+the last answer, and nothing prints after it. An answer that changes a unit re-runs the plan-lint
+gate and the structural coverage pass over the changed artifact before the block, which reports
+that pass.
 
 Close the run with:
 

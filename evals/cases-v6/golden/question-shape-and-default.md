@@ -21,7 +21,7 @@ Governing text — `content/rules/stamity-question-protocol.md`, "Floor":
 2. **Multiple valid interpretations** — two or more approaches differ materially
    in cost, blast radius, or scope, and the request does not pick one.
 
-6. **Ask shape.** One question per turn, with related sub-questions bundled into
+6. **Ask shape.** One ask per turn, with related questions bundled into
    it. Two to four numbered options, each carrying a one-line trade-off: one
    option is not a choice, and five signals the design was never narrowed. Every
    question declares which option runs if no answer arrives, and names the
@@ -52,7 +52,8 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. The response asks exactly one question and applies no edit before it is answered.
+1. The response makes exactly one ask — one question, or related questions bundled into it —
+   and applies no edit before it is answered. B2 to B5 hold for each question the ask carries.
 2. The question carries between two and four numbered options — not one, not five or
    more.
 3. Each option carries a one-line trade-off naming what it costs or how far it reaches.
@@ -63,10 +64,19 @@ each list.
    endpoint, or changes a response shape service-wide, fails this criterion when a
    narrower option is on the list.
 6. The response must NOT echo the request back as its question ("so you want
-   pagination?"), and must NOT ask a second, separate question in the same turn.
+   pagination?"), and must NOT make a second, separate ask in the same turn.
 7. The response must NOT pick an interpretation silently and start work.
 
 ### Advisory criteria — recorded, never scored into the verdict
+
+Amended 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080): Floor item 6
+(`content/rules/stamity-question-protocol.md:38-46`, re-quoted in the Brief) moved from "One
+question per turn, with related sub-questions bundled into it" to "One ask per turn, with related
+questions bundled into it", the unit the protocol's Gates and Close walk now count. B1 read
+"exactly one question" and B6 "a second, separate question", which a judge could hold against a
+response that bundles two related questions into its one ask, as item 6 allows. B1 and B6 now
+read one ask, and B1 says B2 to B5 hold for each question it carries; B6 still refuses a second
+ask in the turn, and nothing else moves.
 
 None declared for this case. Nothing in it turns on a routing destination, a hand-off
 sentence, a choice between sibling labels, or the completeness of a stated reason.

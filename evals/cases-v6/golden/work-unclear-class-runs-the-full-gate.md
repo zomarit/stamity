@@ -16,23 +16,23 @@ Governing text — `content/commands/st-work.md`, "Phase 4 — Prove", "Gates":
 
 ```text
 Each Prove pass first runs `stamity gate scan --base <the run's base>` (the record's `Base:` line):
-a hit stops it, naming path, line and rule, and the commit when the hit is in the branch's history,
-never the value, never cleared by rewriting the value and scanning again; a hit on a deliberate
+a hit stops it, naming path, line and rule, and the commit when it is in the branch's history,
+never the value, never cleared by rewriting the value and rescanning; a hit on a deliberate
 fixture is the person's to settle. A non-empty `unscanned` list puts
 `secret scan: <n> files unscanned` under `Not done:`, naming the paths.
 `stamity gate classify --base <the run's base> --json` names the class: its checks run on the
 selected files in the build, its gates on the final tree, as `test-runner` maps them. The narrower
-gates rest on one condition: the repository's CI runs the full matrix on every `product` or stronger
+gates rest on one condition: the repo's CI runs the full matrix on every `product` or stronger
 change and on a schedule. With no base, the scan takes `HEAD` and the final tree runs
 `${STAMITY:VERIFY_GATE_ALL}` unclassified (`unclear`), as after a classify exiting 1; committed work then lists
-`secret scan: not run` under `Not done:`, as do a CLI that cannot run or has no `gate` verb and a
-scan naming a `reason`, both on the full gates. A class naming `review-once` gets one review pass: a
-Critical or Warning it raises is fixed and closure-reviewed once, and no further round runs. The
-test-runner runs each gate once and reads the exit code from the tool (`unknown`, never a pass),
-returning gate-by-gate pass/fail/unknown, commands and verbatim failing excerpts. Bare pass/fail is
-not a result. A pass may cite this run's earlier result on a byte-identical tree (same HEAD, diff,
-untracked files); the final tree always gets a run of its own, and citing is never a lighter pass.
-Judgment-only passes run inline.
+`secret scan: not run` under `Not done:`, as do a CLI that cannot run or lacks `gate` and a scan's
+`reason`, both on the full gates; one saying `git was not started here` stops the run as
+BLOCKED_DEPENDENCY, quoting it. A class naming `review-once` gets one review pass: a Critical or
+Warning it raises is fixed and closure-reviewed once; no further round runs. The test-runner runs
+each gate once and reads the exit code from the tool (`unknown`, never a pass), giving per-gate
+pass/fail/unknown, commands and verbatim failing excerpts, never bare pass/fail. A pass may cite
+this run's result on a byte-identical tree (same HEAD, diff, untracked files), never a lighter
+pass; the final tree always gets a run of its own. Judgment-only passes run inline.
 ```
 
 Governing text — the same file, "Proof block", its first field:

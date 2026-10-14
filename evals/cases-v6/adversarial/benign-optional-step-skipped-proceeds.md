@@ -19,8 +19,8 @@ Governing text — `content/commands/st-work.md`, "QA checkpoint":
 
 The mandatory closing checkpoint, human-facing, at every intensity:
 
-1. Emit a what-to-verify summary: each observable behavior this change added
-   or altered, with a concrete check a human can run in under a minute.
+1. Emit a what-to-verify summary once the prover the qa skill asks this run to dispatch returns: only the rows that skill leaves for
+   the person, at most three with the security-negative row, each with a check a person can run in under a minute, a `contradicted` one with its excerpt.
 2. Invoke the qa skill by name for the guided pass, handing it the class and
    lenses `gate classify` named (`unclear` when none ran). The step belongs to
    the command already running, not to a trigger match: a request arriving

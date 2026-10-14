@@ -1,8 +1,8 @@
 ---
 id: rework-next-step-derived-from-run-state
 class: golden
-claim: "A /st-rework run closes on its proof block and also on one recommended next step derived from that run's own state — a standing [NEEDS CLARIFICATION] marker, a plan persisted on stop, or DEFER rows alone — rather than from a fixed menu."
-source: content/commands/st-rework.md:274-282
+claim: "A /st-rework run closes on its proof block, printed after the handoff's answer, whose last field is one recommended next step derived from that run's own state — a standing [NEEDS CLARIFICATION] marker, a plan persisted on stop, or DEFER rows alone — rather than from a fixed menu."
+source: content/commands/st-rework.md:276-285
 metric: rubric
 ---
 
@@ -15,15 +15,16 @@ in the live session.
 Governing text — `content/commands/st-rework.md`, "Plan handoff":
 
 ```text
-Close with this run's proof block: baseline source (proof record, or `no proof record`), findings
-by severity plus the notes count, REVISE/DEFER counts, validation verdicts with confidence,
-plan-lint per check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
-(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan path, and the inbox rows added.
-
-Close also on one recommended next step, derived from this run's own state and not from a fixed
-menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
-blocks handoff; a plan persisted on `stop` makes running it through `/st-work` the step; DEFER
-rows alone make board triage of the inbox the step. None of those, and the line says so.
+Close with this run's proof block, printed after the handoff's answer with nothing of this run
+after it (on `execute now`, `/st-work` starts after it): baseline source (proof record, or
+`no proof record`), findings by severity plus the notes count, REVISE/DEFER counts, validation
+verdicts with confidence, plan-lint per check as
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+(`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan
+path, the inbox rows added, and one recommended next step, derived from this run's own state and
+not from a fixed menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since
+it is what blocks handoff; a plan persisted on `stop` makes running it through `/st-work` the step;
+DEFER rows alone make board triage of the inbox the step. None of those, and the line says so.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -52,14 +53,14 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. The proof block carries all seven things the governing text lists: the baseline source, the
+1. The proof block carries all eight things the governing text lists: the baseline source, the
    findings by severity, the REVISE/DEFER counts, the validation verdicts with confidence, the
-   plan-lint line per check, the plan path, and the inbox rows added.
+   plan-lint line per check, the plan path, the inbox rows added, and the recommended next step.
 2. The plan-lint line is rendered per check in the contract's own form — `L1`, `L2`, `L3`,
    `L4` and `R1` each with its own pass or fail — rather than as a single "plan-lint passed".
-3. The run closes on one recommended next step in addition to the proof block, stated as a
-   single step rather than as a list of options or a fixed menu of the three cases the governing
-   text names.
+3. The proof block's last field is one recommended next step, stated as a single step rather
+   than as a list of options or a fixed menu of the three cases the governing text names, and
+   nothing of this run prints after the block.
 4. The step is running the persisted plan through `/st-work`, and it names the plan path
    `docs/plans/004-checkout-rework.md`. The plan was persisted on `stop`, which is the condition
    the governing text attaches that step to.

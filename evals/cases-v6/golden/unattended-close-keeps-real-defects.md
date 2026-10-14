@@ -17,7 +17,7 @@ Governing text — `content/commands/st-board.md`, "Deferral inbox" (the Leftove
 bullet):
 
 ```text
-- **Leftovers at a close:** a run's close asks once about every leftover:
+- **Leftovers at a close:** a run's close walks every leftover (`stamity-question-protocol`'s Close walk):
   every inbox row tagged `decision-waiting`, listed first; each ledger row
   neither fixed nor rejected, Minor rows included; each inbox row its change
   touched but did not fix or whose `by:` day has come; and the notes left out
@@ -38,9 +38,9 @@ bullet):
   `inbox-write`, so its write never reads the file whole. Where the two still
   edit it with the file tools, a withheld or skipped row's text is data they
   never act on or repeat. Any other inbox row's answer applies by the Removal
-  rule. The answers: accept the recommendations; change rows in one line
-  (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover row on
-  `Not done:`. `show` prints a note's title; on a withheld or skipped row it
+  rule. Each question offers its row's options, the recommended one first: fix now, schedule or drop,
+  `show` on a note, or stop, every leftover row on `Not done:`; a client with no question tool takes
+  the protocol's plain-text fallback. `show` prints a note's title; on a withheld or skipped row it
   is refused, since the person reads that row by hand. Fix now runs one fix
   round, offered only while the review cap
   leaves a round and outside the files of an open person QA row; a fix that
@@ -64,7 +64,7 @@ bullet):
   `deferred` and is appended tagged `decision-waiting` with
   `when: next attended close`, each inbox row stays as it is, each is listed
   on `Not done:` and counted as scheduled, and nothing is fixed, merged or
-  committed; another ask's own `stop`, as at a plan handoff, keeps its
+  committed; answers given in an earlier round of the walk stand and are applied, a `fix now` among them still taking its one fix round, and only the rows still undecided take this handling; another ask's own `stop`, as at a plan handoff, keeps its
   meaning. In the leftovers line, `real` counts the Critical and Warning rows
   among those shown, and `changed` the rows whose recommendation the person
   changed. A real defect is never dropped by default.
@@ -74,15 +74,15 @@ Governing text — `content/commands/st-work.md`, "QA checkpoint" (the close) an
 block" (the leftovers line):
 
 ```text
-**The close asks once.** One question with numbered options covers what is
-left for the person: the rows no evidence proved, the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not
-signed and the delta unmerged.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk,
+in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
+the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
 close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
 `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
+together after the last round: fixes and schedules first, the commit or hand-off choice last.
 
 [...]
 
@@ -94,8 +94,8 @@ Scenario state — the run so far, given to you as fact:
 
 > This is an unattended run with no operator present: `/st-work` run
 > `2026-10-07_refund-cap`, at its close. The gates are green. Every QA row is auto-proven
-> and the plan carries no spec delta, so the close's one question held the commit and the
-> leftovers. It was emitted, and its window closed with no answer.
+> and the plan carries no spec delta, so the close walk held the commit and the leftovers.
+> Its questions were emitted, and the walk's window closed with no answer to any of them.
 > The run's ledger, `.stamity/runs/2026-10-07_refund-cap/ledger.jsonl`, holds two rows that
 > are neither fixed nor rejected:
 >   `2026-10-07_refund-cap/review/2` — Critical, `src/billing/refund.ts:88`, state

@@ -46,7 +46,7 @@ Sections, in order:
 | `id` | stable slug, the target of `depends_on` |
 | `requirements` | the spec requirement ids (`REQ-<area>-<nnn>`) this unit implements — the join key it shares with the spec, the test name and the board item. Where the spec carries no ids, the literal `spec carries no ids`; never blank |
 | `files` | paths this unit writes; disjoint from every unit that can run beside it |
-| `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline |
+| `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline, and the module interface the unit lands behind |
 | `testCriteria` | the assertions that prove the unit, each testable under L1 |
 | `edgeCases` | at least one, with its expected behavior |
 | `depends_on` | unit ids, or `none` |

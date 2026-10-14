@@ -2,7 +2,7 @@
 id: quick-docs-change-without-map-runs-full-suite
 class: golden
 claim: "A docs change in a repository without a declared test-input map runs the full suite: when the class step returns docs with the selection reading full and naming no file, the quick lane's step 3 runs the test command over the whole suite, never the scan alone a docs class with an empty selection would run, and the batch is not done until that run returns green."
-source: content/commands/st-quick.md:150-188
+source: content/commands/st-quick.md:150-191
 metric: rubric
 floor: true
 ---
@@ -35,7 +35,10 @@ The gate is three steps, in order, after the last item lands:
    `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A
    scan that names a `reason` did not read the whole change, and a hit beside it still stops the
    batch; with no hit, step 2 still runs, step 3 runs `${STAMITY:VERIFY_GATE_ALL}`, and the report
-   lists `secret scan: not run` under `Not done:`.
+   lists `secret scan: not run` under `Not done:`. A `reason` from either `gate` call that says git
+   was not started because a folder has the layout of a bare repository stops the batch there
+   instead: no later step runs, no git command runs in that folder, the commit included, and the
+   report gives that reason under `Not done:` with every applied item listed as ungated.
 2. **Classify.** `stamity gate classify --base HEAD --json` names the batch's class and its
    checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
    batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report

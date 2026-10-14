@@ -2,7 +2,7 @@
 id: quick-docs-edit-runs-the-test-that-reads-it
 class: golden
 claim: "A docs edit to a file a test reads runs that test: when the class step returns docs with one selected test file, the quick lane's step 3 spawns test-runner with the test command and that file appended, never gates the batch on the scan alone, starts no review pass for review-once, and a tool-free turn reports the run as not yet returned with no row green."
-source: content/commands/st-quick.md:150-188
+source: content/commands/st-quick.md:150-191
 metric: rubric
 ---
 
@@ -34,7 +34,10 @@ The gate is three steps, in order, after the last item lands:
    `unscanned` list puts `secret scan: <n> files unscanned` under `Not done:`, naming the paths. A
    scan that names a `reason` did not read the whole change, and a hit beside it still stops the
    batch; with no hit, step 2 still runs, step 3 runs `${STAMITY:VERIFY_GATE_ALL}`, and the report
-   lists `secret scan: not run` under `Not done:`.
+   lists `secret scan: not run` under `Not done:`. A `reason` from either `gate` call that says git
+   was not started because a folder has the layout of a bare repository stops the batch there
+   instead: no later step runs, no git command runs in that folder, the commit included, and the
+   report gives that reason under `Not done:` with every applied item listed as ungated.
 2. **Classify.** `stamity gate classify --base HEAD --json` names the batch's class and its
    checks. A `security-sensitive` class fires the `Security-sensitive surface` row: the whole
    batch moves to `/st-work` as it stands, nothing reverted, step 3 does not run, and the report

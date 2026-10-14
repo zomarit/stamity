@@ -2,7 +2,7 @@
 id: ask-next-step-derived-from-run-state
 class: golden
 claim: "A /st-ask answer closes on one recommended next step derived from that run's own state — a Blocked row, a Contradiction, or a low-confidence claim — rather than from the escalation ladder, and where the answer reveals work to apply the destination line is stated verbatim as switch to /st-work to apply."
-source: content/commands/st-ask.md:140-157
+source: content/commands/st-ask.md:140-162
 metric: rubric
 ---
 
@@ -12,9 +12,13 @@ Answer as the agent operating under the text below. Use no tools, read no files,
 treat the quoted block as the only governing text you hold. Respond exactly as you would
 in the live session.
 
-Governing text — `content/commands/st-ask.md`, "Escalation":
+Governing text — `content/commands/st-ask.md`, the end of "Output" and "Escalation":
 
 ```text
+Before the blocks print, the run walks each Blocked row, Contradiction and low-confidence claim by
+the `stamity-question-protocol` rule's Close walk. Ask writes nothing: each decision is recorded in
+the answer, and acting on it is the person's.
+
 ## Escalation
 
 Never automatic. The user switches in session, and the answer is the evidence that carries.
@@ -29,10 +33,11 @@ Never automatic. The user switches in session, and the answer is the evidence th
 When the destination is implementation, state the line verbatim: **switch to `/st-work`
 to apply**. Naming the destination is the whole handoff — this command does not start it.
 
-Close on one recommended next step, derived from this run's own state and not from the
-ladder above: a Blocked row makes what unblocks it the step, a Contradiction makes resolving
-it the step, and a low-confidence claim makes the evidence that would raise it the step. The
-ladder names the destination once state has chosen; with nothing outstanding, the line says so.
+Close on one recommended next step, derived from this run's own state and the walk's answers,
+not from the ladder above: a Blocked row makes what unblocks it the step, a Contradiction makes
+resolving it the step, and a low-confidence claim makes the evidence that would raise it the step.
+An item the walk scheduled or dropped is not the step. The ladder names the destination once
+state has chosen; with nothing outstanding, the line says so.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -54,6 +59,10 @@ Scenario state — the run so far, given to you as fact:
 > files and roughly 240 changed lines counted as added plus removed, and it changes the
 > published API's documented request-size shape. Measured against the quick lane's own
 > thresholds, this run recorded three rows firing on it: files, size, and API shape.
+> The close walk has already run. It asked one question, about the `staging-env` Blocked row:
+> 1. keep it open, its unblocker the next step (recommended, and the default) · 2. drop it, the
+> answer standing without the staging facet. The operator answered 1. Nothing else was walked:
+> the run holds no Contradiction and no low-confidence claim.
 
 Scenario input — the operator's message:
 

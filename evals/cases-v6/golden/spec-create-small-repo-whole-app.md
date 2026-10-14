@@ -2,7 +2,7 @@
 id: spec-create-small-repo-whole-app
 class: golden
 claim: "On a brownfield repository under 5,000 source lines, a request naming the app opens with a mode-chosen line that states the line count and asks one scope question whose first numbered option and declared default is the whole app — asked, never assumed — and the chosen scope is written by spec-author in brownfield mode as spec files carrying REQ- ids."
-source: content/commands/st-spec.md:40-46,61-63,90-110,173-175,256-258,262-266,274-276
+source: content/commands/st-spec.md:40-46,61-63,91-111,174-176,257-259,263-267,275-277
 metric: rubric
 ---
 

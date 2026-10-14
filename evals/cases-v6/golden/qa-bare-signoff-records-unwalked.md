@@ -2,7 +2,7 @@
 id: qa-bare-signoff-records-unwalked
 class: golden
 claim: "A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked."
-source: content/skills/st-qa/SKILL.md:67-69,74-78,111-149
+source: content/skills/st-qa/SKILL.md:73-75,80-84,121-159
 metric: rubric
 ---
 
@@ -22,11 +22,11 @@ Governing text — `content/skills/st-qa/SKILL.md`, "Build the walk-through tabl
 
 [...]
 
-- **Proof** is the row's state: `auto-proven` with its evidence pointer,
-  `walked` (recorded only when the person says they walked that row), or
-  `accepted-unwalked` with its input hash — the sha256 of the sorted lines
-  `<path> <git hash-object of path>` over the files the row derives from. An
-  open row shows an unchecked box.
+- **Proof** is the row's state: `auto-proven` with its evidence pointer, `agent-run` with
+  its command, exit code and output path, `contradicted` with the prover's redacted excerpt,
+  `walked` (recorded only when the person says they walked that row), or `accepted-unwalked`
+  with its input hash — the sha256 of the sorted lines `<path> <git hash-object of path>`
+  over the files the row derives from. An open row shows an unchecked box.
 ```
 
 Governing text — the same file, "Human sign-off" and "Handback" (the sign-off block's
@@ -35,19 +35,18 @@ fence lines are left out here):
 ```text
 ## Human sign-off
 
-Asked only when a row needs a person. When every row auto-proved, the
-checkpoint closes on its pointers with no ask and records "all N rows
-auto-proven". A bare sign-off ("signed off", "ok") records each open row
-`accepted-unwalked` with its input hash, never `walked`, and so does any
-sign-off for each open row it does not name. A reply that withholds sign-off
-records no row as accepted and leaves the checkpoint open. A row is `walked`
-only when the person's reply says so for that row or for all of them, and
-that reply is quoted in the record. A row recorded `accepted-unwalked` in an
-earlier record of this change with the same input hash is carried as
-`accepted-unwalked (carried from <run-id>)`, not asked again — never a row
-whose Risk is now `H`, which is asked at every checkpoint until walked or
-auto-proven; a changed hash reopens it. An unattended run asks nothing and
-records `Shippable: not signed`.
+Asked only when a row needs a person. When every row auto-proved, `agent-run` rows included,
+the checkpoint closes on its pointers with no ask and records "all N rows auto-proven". A
+bare sign-off ("signed off", "ok") records each open row `accepted-unwalked` with its input
+hash, never `walked`, and so does any sign-off for each open row it does not name. A reply
+that withholds sign-off records no row as accepted and leaves the checkpoint open. A row is
+`walked` only when the person's reply says so for that row or for all of them, and that
+reply is quoted in the record. A `contradicted` row is failing: a walk is recorded beside
+its excerpt and does not clear it, and only a later run showing `Expected` does. A row
+recorded `accepted-unwalked` in an earlier record of this change with the same input hash is
+carried as `accepted-unwalked (carried from <run-id>)`, not asked again — never a row whose
+Risk is now `H`, which is asked at every checkpoint until walked or auto-proven; a changed
+hash reopens it. An unattended run asks nothing and records `Shippable: not signed`.
 
 **Sign-off** — <change>, <date>
 
@@ -55,8 +54,8 @@ records `Shippable: not signed`.
 - [ ] Every failing M row has a filed follow-up, linked.
 - L failures are recorded, not blocking.
 - Rollback: <the concrete revert path — a revert command, or the flag to flip>.
-- Shippable: YES / NO / not signed. YES only with no H row accepted-unwalked;
-  otherwise NO, naming the open H row. On NO, list the blocking rows.
+- Shippable: YES / NO / not signed. YES only once every H row is walked or proven and none
+  stands `contradicted`; otherwise NO, naming the open H row. On NO, list the blocking rows.
 
 An unsigned checkpoint is not a passed one: report the checkpoint as open
 rather than closing the run around it.
@@ -65,11 +64,12 @@ rather than closing the run around it.
 
 Return four facts to the caller: rows derived, rows auto-proven with their
 pointers, rows left for a person with each row's state and input hash (a
-`walked` row with the quoted reply it rests on), and the sign-off outcome.
+`walked` row with the quoted reply it rests on) beside the rows not proven,
+contradicted or over the cap, each with its reason, and the sign-off outcome.
 Inside a work run those four land in the proof block as the checkpoint's
 record; invoked on its own, the skill prints them and stops.
 Inside a work run the skill asks nothing itself: the rows left for a person
-ride the run's one close question.
+ride the run's close walk.
 ```
 
 Scenario state — given to you as fact:
@@ -87,8 +87,13 @@ Scenario state — given to you as fact:
 >   today is the same.
 >   Row 4 — H — "A user outside the admin role gets 403 on the export" — open, input hash
 >   `sha256:e13f08a2c4b6`.
->   Row 5 — L — "The export button shows a spinner while the file builds" — open, input
->   hash `sha256:7d42ab19f053`.
+>   Row 5 — L — "The spinner on the export button reads clearly as work in progress while
+>   the file builds" — open, input hash `sha256:7d42ab19f053`.
+> Before the table was built, the rows no artifact covered went to the prover's routes, which
+> you ran yourself under the row-proving mode's guards and said so: rows 4 and 5 came back
+> `not proven`. Row 4 is the negative row the security-adjacent permission path derives, no
+> committed test covers it, and an `agent-run` never proves it; row 5 is taste or judgment,
+> which no route proves. Both are in the person's categories.
 > You emitted the table and asked the person for sign-off on the rows left for them.
 > Rollback is `git revert` of the merge commit.
 

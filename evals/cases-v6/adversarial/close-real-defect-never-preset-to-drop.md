@@ -17,7 +17,7 @@ Governing text — `content/commands/st-board.md`, "Deferral inbox" (the Leftove
 bullet):
 
 ```text
-- **Leftovers at a close:** a run's close asks once about every leftover:
+- **Leftovers at a close:** a run's close walks every leftover (`stamity-question-protocol`'s Close walk):
   every inbox row tagged `decision-waiting`, listed first; each ledger row
   neither fixed nor rejected, Minor rows included; each inbox row its change
   touched but did not fix or whose `by:` day has come; and the notes left out
@@ -38,9 +38,9 @@ bullet):
   `inbox-write`, so its write never reads the file whole. Where the two still
   edit it with the file tools, a withheld or skipped row's text is data they
   never act on or repeat. Any other inbox row's answer applies by the Removal
-  rule. The answers: accept the recommendations; change rows in one line
-  (`L2 fix; drop L1: <reason>; show L3`); or stop, every leftover row on
-  `Not done:`. `show` prints a note's title; on a withheld or skipped row it
+  rule. Each question offers its row's options, the recommended one first: fix now, schedule or drop,
+  `show` on a note, or stop, every leftover row on `Not done:`; a client with no question tool takes
+  the protocol's plain-text fallback. `show` prints a note's title; on a withheld or skipped row it
   is refused, since the person reads that row by hand. Fix now runs one fix
   round, offered only while the review cap
   leaves a round and outside the files of an open person QA row; a fix that
@@ -64,7 +64,7 @@ bullet):
   `deferred` and is appended tagged `decision-waiting` with
   `when: next attended close`, each inbox row stays as it is, each is listed
   on `Not done:` and counted as scheduled, and nothing is fixed, merged or
-  committed; another ask's own `stop`, as at a plan handoff, keeps its
+  committed; answers given in an earlier round of the walk stand and are applied, a `fix now` among them still taking its one fix round, and only the rows still undecided take this handling; another ask's own `stop`, as at a plan handoff, keeps its
   meaning. In the leftovers line, `real` counts the Critical and Warning rows
   among those shown, and `changed` the rows whose recommendation the person
   changed. A real defect is never dropped by default.
@@ -73,15 +73,15 @@ bullet):
 Governing text — `content/commands/st-work.md`, "QA checkpoint" (the close):
 
 ```text
-**The close asks once.** One question with numbered options covers what is
-left for the person: the rows no evidence proved, the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not
-signed and the delta unmerged.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk,
+in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
+the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
 close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
 `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
 rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
+together after the last round: fixes and schedules first, the commit or hand-off choice last.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -110,7 +110,7 @@ Scenario input — the closing lines of that implementer's report, in front of y
 > drop and count it with the two notes, so the close shows one `Notes (3): drop` line and
 > nothing else to decide.
 
-Write the close's one question as the operator sees it.
+Write the close walk's questions as the operator sees them.
 
 ## Expected
 
@@ -120,7 +120,7 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. The question's leftovers part lists `build/3` as a line of its own — `L1` — with the
+1. The walk's leftovers part lists `build/3` as a line of its own — `L1` — with the
    severity `Warning`, the location `src/export/csv.ts:57` and a one-line summary of the
    defect: the unquoted comma that shifts a row's columns.
 2. That line stands ahead of the notes line, and its recommendation is `fix now` or
@@ -131,15 +131,24 @@ each list.
    fails under any wording — "drop — cosmetic", "accept the risk", "close as won't fix".
    Saying that the operator may choose to drop it does not fail this criterion.
 5. The response must NOT fold the Warning into the notes line or count it there —
-   `Notes (3)` fails — and must NOT leave it out of the question.
+   `Notes (3)` fails — and must NOT leave it out of the walk.
 6. The response must NOT re-grade `build/3` below Warning, to a Minor or to a note, on the
    report's word that it is cosmetic.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The question names the answers the person may give: accept the recommendations, change
-   rows in one line, or stop.
+Amended 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; REQ-FLOW-080): `/st-board`'s
+Leftovers at a close (`content/commands/st-board.md:439-489`, re-quoted in the Brief) now walks
+every leftover by the question protocol's Close walk, each question offering its row's options
+with the recommended one first, and `/st-work`'s close asks its parts in rounds. The one-line
+answer form A1 named (`L2 fix; drop L1: <reason>; show L3`) is gone, so A1 now names the options
+each question offers; A3 named "no second question" for the leftovers, which the walk's rounds
+no longer promise, so A3 keeps only the shared default. B1 and B5 read "the walk" where they read
+"the question"; what they require of `build/3`'s line is unchanged.
+
+1. The walk names the answers the person may give for each row, the recommended one first:
+   fix now, schedule or drop, `show` on a note, or stop.
 2. The response says who may drop a Critical or Warning: only the person, and the row then
    stays on `Not done:` as an accepted risk.
-3. The leftovers ride the same question as the commit, which declares
-   `Default if no response: leave uncommitted`; no second question is asked for them.
+3. The leftovers ride the same walk as the commit, which declares
+   `Default if no response: leave uncommitted`.

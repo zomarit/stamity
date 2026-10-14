@@ -2,7 +2,7 @@
 id: spec-next-step-derived-from-run-state
 class: golden
 claim: "A /st-spec run's return contract closes on a Next step derived from that run's own state — an open [NEEDS CLARIFICATION] marker, an unconfirmed T2 or T3 proposal, or a census gap — never a fixed menu, and a run that closed with none of those says so in the same line."
-source: content/commands/st-spec.md:280-298
+source: content/commands/st-spec.md:281-312
 metric: rubric
 ---
 
@@ -27,13 +27,26 @@ Every run closes with:
 - Manifest delta: rows added, changed, retired — or `none`.
 - Open markers: every `[NEEDS CLARIFICATION]` in the touched files — or `none`.
 - Not done: each gap the run left open — or `none`.
-- Next step — derived from this run's own state, never a fixed menu: an open
-  `[NEEDS CLARIFICATION]` marker makes resolving it the step, since a marked
-  spec is not handed to `/st-work`; an unconfirmed T2 or T3 proposal makes that
-  confirmation the step; a census gap makes the criterion it named the step. A
+- Next step — derived from this run's own state and the walk's answers, never a
+  fixed menu: an open `[NEEDS CLARIFICATION]` marker makes resolving it the
+  step, since a marked spec is not handed to `/st-work`; an unconfirmed T2 or T3
+  proposal makes that confirmation the step; a census gap makes the criterion it
+  named the step. An item the walk scheduled or dropped is not the step. A
   run that closed with none of those says so in the same line. When more than
   one of these is live at once, the step names exactly one of them — never two
   chained with `then` — and any one live condition satisfies the line.
+
+That close prints after the run has walked each open `[NEEDS CLARIFICATION]`
+marker, each unconfirmed T2 or T3 proposal and each census gap by the
+`stamity-question-protocol` rule's Close walk, and nothing prints after it;
+`check` records each answer and writes nothing. A marker's question declares
+"leave it marked" as its default, and only an answer the person gives replaces a
+marker. In `create`, `extract` and `sync` the answers are written before the
+close prints: `spec-author` replaces each answered marker with its answer in the
+requirement and records the question, the answer and the date in an ADR stub
+under `docs/adr/`, as the interview's resolved clarifications are; a confirmed
+proposal merges as its tier says; a marker left undecided or defaulted stays in
+the spec and is listed under Open markers.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -50,6 +63,9 @@ Scenario state — the run so far, given to you as fact:
 > `REQ-checkout-131`'s drafted criterion.
 > The testability census found no gap: every acceptance criterion in the file is classified.
 > Not done: the T2 proposal is unconfirmed, and the marker is open.
+> The close walk has already run, one question each. The marker: the operator answered "leave it
+> marked", its declared default. The T2 proposal: the operator answered "leave it unconfirmed for
+> now". Neither was scheduled or dropped, and check recorded both answers and wrote nothing.
 
 Scenario input — the operator's message:
 
