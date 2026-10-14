@@ -301,12 +301,14 @@ Every run closes with:
 That close prints after the run has walked each open `[NEEDS CLARIFICATION]`
 marker, each unconfirmed T2 or T3 proposal and each census gap by the
 `stamity-question-protocol` rule's Close walk, and nothing prints after it;
-`check` records each answer and writes nothing. In `create`, `extract` and `sync`
-the answers are written before the close prints: `spec-author` replaces each
-decided marker with its answer in the requirement and records the question, the
-answer and the date in an ADR stub under `docs/adr/`, as the interview's resolved
-clarifications are; a confirmed proposal merges as its tier says; a marker left
-undecided stays in the spec and is listed under Open markers.
+`check` records each answer and writes nothing. A marker's question declares
+"leave it marked" as its default, and only an answer the person gives replaces a
+marker. In `create`, `extract` and `sync` the answers are written before the
+close prints: `spec-author` replaces each answered marker with its answer in the
+requirement and records the question, the answer and the date in an ADR stub
+under `docs/adr/`, as the interview's resolved clarifications are; a confirmed
+proposal merges as its tier says; a marker left undecided or defaulted stays in
+the spec and is listed under Open markers.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:

@@ -223,10 +223,10 @@ alone by the `stamity-question-protocol` rule's Close walk, with two options: ca
 now, or leave it on `Not done:`.
 
 The report closes on one recommended next step, derived from this batch's own state and the walk's
-answers, not from the table above: an item or failure the walk carried makes the switch to
-`/st-work` with that list the step, and the switch follows the report, which still prints last; one
-it did not carry stays on `Not done:` and is not the step; an item reported `saved` makes the
-`stamity sync` run that publishes it the step. A batch with none of those says so in the line.
+answers, not from the table above: an item or failure the walk carried makes the switch to `/st-work`
+with that list the step, and the switch follows the report, which still prints last; one it did not
+carry stays on `Not done:` and is not the step; an item reported `saved` makes the `stamity sync` run
+that publishes it the step. A batch with none of those says so in the line, naming any `Not done:` item.
 
 This lane appends no inbox row. What a batch cannot finish escalates to `/st-work` by the
 Escalation table above, and that run's close asks about what is left.

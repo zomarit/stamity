@@ -351,14 +351,24 @@ describe("/st-spec — design decisions carried as text", () => {
     // review/28 (fix round 1): in the writing modes an answer has a destination, written before
     // the close prints, and an undecided marker stays marked, so a marked spec is still never
     // handed to `/st-work` on the strength of a question nobody answered.
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f5-touchpoints-a, fix round 2 on
+    // review/38): with nobody to answer, the Close walk applies each question's declared default, and
+    // "each decided marker" let a defaulted one count as decided, so a guessed answer unmarked the
+    // spec. A marker question's default is now "leave it marked", only a person's answer replaces a
+    // marker, and a defaulted marker stays listed under Open markers. The sentence below moved with it.
     const flatContract = contract.replace(/\s+/g, " ");
     expect(flatContract).toContain(
-      "In `create`, `extract` and `sync` the answers are written before the close prints: `spec-author` " +
-        "replaces each decided marker with its answer in the requirement and records the question, the " +
-        "answer and the date in an ADR stub under `docs/adr/`, as the interview's resolved clarifications " +
-        "are; a confirmed proposal merges as its tier says; a marker left undecided stays in the spec and " +
-        "is listed under Open markers.",
+      "A marker's question declares \"leave it marked\" as its default, and only an answer the person " +
+        "gives replaces a marker.",
     );
+    expect(flatContract).toContain(
+      "In `create`, `extract` and `sync` the answers are written before the close prints: `spec-author` " +
+        "replaces each answered marker with its answer in the requirement and records the question, the " +
+        "answer and the date in an ADR stub under `docs/adr/`, as the interview's resolved clarifications " +
+        "are; a confirmed proposal merges as its tier says; a marker left undecided or defaulted stays in " +
+        "the spec and is listed under Open markers.",
+    );
+    expect(flatContract).not.toContain("replaces each decided marker");
     // After the close's list, whose last item is the next step, and before the separate
     // pre-write question `create` asks.
     expect(contract.indexOf("Next step — derived from this run's own state")).toBeLessThan(contract.indexOf(walk));

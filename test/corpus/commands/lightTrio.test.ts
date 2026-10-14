@@ -397,7 +397,12 @@ describe("light trio — the closing next step", () => {
       "This lane appends no inbox row. What a batch cannot finish escalates to `/st-work` by " +
         "the Escalation table above, and that run's close asks about what is left.",
     );
-    expect(paragraphs.at(-2)).toContain("A batch with none of those says so in the line.");
+    // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f5-touchpoints-a, fix round 2): a
+    // batch whose every item the walk left on `Not done:` has no step, and "says so" alone read as
+    // nothing pending beside a non-empty `Not done:` list, so the line now names those items.
+    expect(paragraphs.at(-2)).toContain(
+      "A batch with none of those says so in the line, naming any `Not done:` item.",
+    );
 
     // It gives the lane no leftovers ask of its own (the sign-off on `plan/40`): no choice to
     // fix, drop or schedule, no "asks once", and no pointer at the board's rule, whose branches
