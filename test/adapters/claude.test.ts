@@ -66,14 +66,23 @@ const ADAPTER_SOURCE = fileURLToPath(new URL("../../src/adapters/claude.ts", imp
 const ENGINE_VERSION = "0.0.0-test";
 const FIXED_NOW = new Date("2026-08-14T00:00:00.000Z");
 
+/** Where this client's class-to-model map is written (REQ-LADDER-007), as a literal. */
+const CLAUDE_MODEL_MAP_PATH = ".stamity/generated/models/claude.json";
+
 /**
  * Canonical `model_class` → the frontmatter this client emits with no operator
  * pin, restated to pin the projection. The three alias classes must survive the
- * move off the adapter's own table byte-for-byte; `frontier` has no alias on
- * this client, so it omits the key rather than inventing a size.
+ * move off the adapter's own table byte-for-byte, and `frontier` takes the
+ * documented `fable` alias.
+ *
+ * TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): `frontier`
+ * read `undefined` ("no alias on this client, so it omits the key"), stale since
+ * the projection row gained `frontier: "fable"` (e2-model-defaults-lister,
+ * REQ-LADDER-007). No shipped agent declares `frontier`, so the corpus walk that
+ * reads this table never met the stale entry; the map test below does.
  */
 const EXPECTED_MODEL: Record<string, string | undefined> = {
-  frontier: undefined,
+  frontier: "fable",
   advanced: "opus",
   standard: "sonnet",
   economy: "haiku",
@@ -769,11 +778,15 @@ describe("claude residue over the real corpus", () => {
       // The residue surface, exhaustively: the bridge, the .claude tree, the
       // client's MCP document, and the ONE adapter-owned script under the
       // per-tool generated hooks directory.
+      // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the surface gains
+      // the class-to-model map every client writes under `.stamity/generated/models/`
+      // (REQ-LADDER-007), a claude-owned row; no other path is admitted.
       expect(
         row.path === CLAUDE_MD_PATH ||
           row.path.startsWith(".claude/") ||
           row.path === ".mcp.json" ||
-          row.path === CLAUDE_REVIEW_GATE_PATH,
+          row.path === CLAUDE_REVIEW_GATE_PATH ||
+          row.path === CLAUDE_MODEL_MAP_PATH,
         row.path,
       ).toBe(true);
     }
@@ -785,7 +798,11 @@ describe("claude residue over the real corpus", () => {
     // CHANGED: `.stamity/` used to be entirely core territory. The
     // review gate is the one adapter-owned row there, so the assertion narrows
     // from "no `.stamity/` path" to "no `.stamity/` path but that one".
-    expect(paths.filter((path) => path.startsWith(".stamity/"))).toEqual([CLAUDE_REVIEW_GATE_PATH]);
+    // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): and the model map, the
+    // second adapter-owned row there (REQ-LADDER-007).
+    expect(paths.filter((path) => path.startsWith(".stamity/")).toSorted()).toEqual(
+      [CLAUDE_REVIEW_GATE_PATH, CLAUDE_MODEL_MAP_PATH].toSorted(),
+    );
   });
 
   it("plans byte-identically across two runs over identical input", async () => {
@@ -936,11 +953,50 @@ describe("model and effort projection", () => {
 
     // The pin outranks the ladder on the class it names...
     expect(agentHead(pinned.rows, "stamity-implementer")["model"]).toBe("claude-opus-5");
-    // ...and reaches a class the client publishes no alias for, which is the
-    // only way `frontier` gets a model key at all.
+    // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the comment here read
+    // "and reaches a class the client publishes no alias for, which is the only way `frontier`
+    // gets a model key at all", stale since `frontier` maps to `fable`; the reviewer declares
+    // `advanced`, so the assertion is unchanged. The `frontier` pin reaches the model map.
     expect(agentHead(pinned.rows, "stamity-reviewer")["model"]).toBe("claude-opus-5");
+    const map = JSON.parse(byPath(pinned.rows).get(".stamity/generated/models/claude.json")?.content ?? "{}") as {
+      classes?: Record<string, { model?: string }>;
+    };
+    expect(map.classes?.["frontier"]?.model).toBe("claude-fable-5");
     // An unpinned class still resolves through the client's own alias.
     expect(agentHead(pinned.rows, "stamity-fixer")["model"]).toBe("sonnet");
+  });
+
+  it("writes the class-to-model map with the family aliases, which parses and lists every role (REQ-LADDER-007)", async () => {
+    const { rows } = await planned();
+    const row = byPath(rows).get(".stamity/generated/models/claude.json");
+    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-model-map", artifactType: "infra" });
+    expect(row?.content.endsWith("\n")).toBe(true);
+
+    const map = JSON.parse(row?.content ?? "") as {
+      classes: Record<string, { model?: string; fallbacks: string[] }>;
+      roles: Record<string, string>;
+    };
+    // Every ladder class on its family alias, `frontier` on `fable`; no shipped list here, so no fallbacks.
+    expect(map.classes).toEqual({
+      frontier: { model: "fable", fallbacks: [] },
+      advanced: { model: "opus", fallbacks: [] },
+      standard: { model: "sonnet", fallbacks: [] },
+      economy: { model: "haiku", fallbacks: [] },
+    });
+    for (const [modelClass, model] of Object.entries(EXPECTED_MODEL)) {
+      expect(map.classes[modelClass]?.model, modelClass).toBe(model);
+    }
+    // Every emitted agent, by runtime id, on the class its file's model came from.
+    const agentIds = rows
+      .filter((entry) => entry.path.startsWith(".claude/agents/"))
+      .map((entry) => entry.path.slice(".claude/agents/".length, -".md".length))
+      .toSorted();
+    expect(agentIds.length).toBeGreaterThan(1);
+    expect(Object.keys(map.roles)).toEqual(agentIds);
+    for (const id of agentIds) {
+      expect(agentHead(rows, id)["model"], id).toBe(map.classes[map.roles[id] ?? ""]?.model);
+    }
+    expect(CLAUDE_DIALECT_FACTS.agentsFormat).toContain(".stamity/generated/models/claude.json");
   });
 
   it("takes a class's own claude pin over its every-client pin, and ignores another client's (REQ-LADDER-005)", async () => {

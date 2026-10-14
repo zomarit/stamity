@@ -538,6 +538,11 @@ describe("subagent TOML", () => {
         'name = "stamity-reviewer"',
         'description = "Reviews a change set and returns a verdict."',
         'sandbox_mode = "read-only"',
+        // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the key set gains
+        // `model`, the shipped list's entry 0 for the reviewer's `advanced` class, since an
+        // unpinned class now takes the pick (REQ-LADDER-006, REQ-LADDER-007); every other line is
+        // unchanged.
+        'model = "gpt-6-astra"',
         'model_reasoning_effort = "high"',
         'developer_instructions = """',
         "# reviewer",
@@ -707,6 +712,10 @@ describe("model allocation", () => {
     expect(tomlValue(toml, "model_reasoning_effort")).toBe('"low"');
   });
 
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the unpinned class used
+  // to carry no `model` key; it now takes the shipped pick (REQ-LADDER-006, REQ-LADDER-007), so
+  // the case asserts that pick in place of the absence. What the pin binds, its own class, is
+  // unchanged.
   it("emits the client's model key with the operator's pinned id", () => {
     const toml = buildAgentToml(agentItem("advanced"), grantOf(agentItem("advanced")), "Body.", {
       pins: { advanced: "gpt-fixture-pro" },
@@ -715,14 +724,21 @@ describe("model allocation", () => {
     // `sandbox_mode` (learn.chatgpt.com/docs/agent-configuration/subagents,
     // accessed 2026-08-17).
     expect(tomlValue(toml, "model")).toBe('"gpt-fixture-pro"');
-    // The pin covers one class only; a different class stays unpinned.
-    expect(buildAgentToml(agentItem("standard"), grantOf(agentItem("standard")), "Body.", {
+    // The pin covers one class only; a different class takes its own pick.
+    const standard = buildAgentToml(agentItem("standard"), grantOf(agentItem("standard")), "Body.", {
       pins: { advanced: "gpt-fixture-pro" },
-    })).not.toContain("\nmodel = ");
+    });
+    expect(tomlValue(standard, "model")).toBe('"gpt-6-sol"');
+    expect(standard).not.toContain("gpt-fixture-pro");
   });
 
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the unpinned file used
+  // to carry no `model` key; it now carries the shipped list's entry 0 for its class
+  // (REQ-LADDER-006), asserted in place of the absence. The pin and the effort checks are
+  // unchanged.
   it.each(MODEL_CLASSES)("emits an exact Astra pin for %s with its existing default effort", (modelClass) => {
     const expectedEffort = { frontier: "high", advanced: "high", standard: "medium", economy: "low" };
+    const shippedPick = { frontier: "gpt-6-astra", advanced: "gpt-6-astra", standard: "gpt-6-sol", economy: "gpt-6-luna" };
     const item = agentItem(modelClass);
     const grant = grantOf(item);
 
@@ -731,18 +747,87 @@ describe("model allocation", () => {
       pins: { [modelClass]: "gpt-6-astra" },
     });
 
-    expect(unpinned).not.toContain("\nmodel = ");
+    expect(tomlValue(unpinned, "model")).toBe(`"${shippedPick[modelClass]}"`);
     expect(tomlValue(pinned, "model")).toBe('"gpt-6-astra"');
     expect(tomlValue(pinned, "model_reasoning_effort")).toBe(`"${expectedEffort[modelClass]}"`);
     expect(tomlValue(pinned, "model_reasoning_effort")).toBe(tomlValue(unpinned, "model_reasoning_effort"));
   });
 
-  it("omits the model key entirely with no pin, because this client publishes no class aliases", () => {
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the case read "omits the
+  // model key entirely with no pin, because this client publishes no class aliases". The "never
+  // invent a value" rule is superseded (REQ-LADDER-006): with no pin and no saved list, Codex
+  // takes the shipped priority list's entry 0, so every class now carries `model` (REQ-LADDER-007).
+  it("carries the shipped pick with no pin and no saved list, beside the class's effort", () => {
     const toml = buildAgentToml(agentItem("advanced"), grantOf(agentItem("advanced")));
-    expect(toml).not.toContain("\nmodel = ");
-    // Silence, not a re-declared default: an absent key leaves the choice to the
-    // client, where a literal would be a sizing decision the engine invented.
+    expect(tomlValue(toml, "model")).toBe('"gpt-6-astra"');
     expect(toml).toContain('model_reasoning_effort = "high"');
+    // A bare id: this client carries effort in its own key, so no `[effort=…]` rides on it.
+    expect(toml).not.toContain("[effort");
+    const economy = buildAgentToml(agentItem("economy"), grantOf(agentItem("economy")));
+    expect(tomlValue(economy, "model")).toBe('"gpt-6-luna"');
+  });
+
+  it("picks the first shipped candidate the account's saved list holds, and a pin still wins", async () => {
+    const contentRoot = await seedCorpus();
+    const read = async (models: ModelConfig): Promise<string> => {
+      const ctx = ctxOf({ contentRoot, models });
+      const rows = byPath((await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs);
+      return rows.get(`${CODEX_AGENTS_DIR}/stamity-reviewer.toml`)!.content;
+    };
+    const listed = { codex: { ids: ["gpt-5.6-luna", "gpt-6-sol"], source: "codex-debug-models" as const } };
+
+    // `advanced`'s entry 0 (`gpt-6-astra`) is not on the account's list, so the next candidate wins.
+    expect(tomlValue(await read({ listed }), "model")).toBe('"gpt-6-sol"');
+    // A pin the list holds outranks the pick.
+    expect(tomlValue(await read({ listed, pins: { advanced: { codex: "gpt-5.6-luna" } } }), "model")).toBe(
+      '"gpt-5.6-luna"',
+    );
+    // A pin with no list read is kept as written.
+    expect(tomlValue(await read({ pins: { advanced: { codex: "gpt-fixture-pro" } } }), "model")).toBe(
+      '"gpt-fixture-pro"',
+    );
+  });
+
+  it("writes the class-to-model map, which parses and lists every role (REQ-LADDER-007)", async () => {
+    const contentRoot = await seedCorpus();
+    await getTemp().seedFiles({ "corpus/agents/stamity-stray.md": STRAY_FIXTURE });
+    const ctx = ctxOf({
+      contentRoot,
+      agents: ["reviewer", "stray"],
+      models: { pins: { advanced: { codex: "gpt-6-sol" } } },
+    });
+    const rows = byPath((await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs);
+    const row = rows.get(".stamity/generated/models/codex.json");
+    expect(row?.owner).toEqual({ adapter: "codex", artifactId: "codex-model-map", artifactType: "infra" });
+
+    const map = JSON.parse(row?.content ?? "") as {
+      classes: Record<string, { model?: string; fallbacks: string[] }>;
+      roles: Record<string, string>;
+    };
+    expect(map.classes).toEqual({
+      frontier: { model: "gpt-6-astra", fallbacks: ["gpt-6-sol"] },
+      advanced: { model: "gpt-6-sol", fallbacks: ["gpt-6-astra"] },
+      standard: { model: "gpt-6-sol", fallbacks: ["gpt-5.6-terra"] },
+      economy: { model: "gpt-6-luna", fallbacks: ["gpt-5.6-luna"] },
+    });
+    // The stray agent declares no class, so the map has no row for it.
+    expect(map.roles).toEqual({ "stamity-reviewer": "advanced" });
+    // A file and the map never disagree on a role's model.
+    expect(tomlValue(rows.get(`${CODEX_AGENTS_DIR}/stamity-reviewer.toml`)!.content, "model")).toBe(
+      `"${map.classes["advanced"]?.model}"`,
+    );
+    expect(codexResiduePlanner.facts.agentsFormat).toContain("`model`");
+    expect(codexResiduePlanner.facts.agentsFormat).toContain(".stamity/generated/models/codex.json");
+  });
+
+  it("states in its capability facts that the file's model outranks a per-call escalation (build/62)", () => {
+    const row = codexResiduePlanner.facts.caps.find((cap) => cap.name === "model-escalation")?.value ?? "";
+    expect(row).toMatch(/^a per-call escalation does not change a role's model/);
+    expect(row).toContain("takes precedence over the spawn's");
+    expect(row).toContain("subagents, read 2026-10-14");
+    // The matrix renders it from the same facts object.
+    const codexFacts = LIVE_CAPABILITY_INPUTS.facts.find((facts) => facts.tool === "codex");
+    expect(codexFacts?.caps.find((cap) => cap.name === "model-escalation")?.value).toBe(row);
   });
 
   it("omits both keys for a class the ladder does not assign", () => {
@@ -1870,6 +1955,10 @@ describe("residue planning", () => {
       CODEX_CONFIG_FILE,
       CODEX_HOOKS_FILE,
       ".stamity/generated/hooks/codex/stamity-portable-hook.mjs",
+      // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the residue gains the
+      // class-to-model map every client writes (REQ-LADDER-007), a codex-owned row like the rest;
+      // no other row moved.
+      ".stamity/generated/models/codex.json",
       CODEX_AGENTS_OVERRIDE_FILE,
       "packages/a/AGENTS.md",
       "src/db/AGENTS.md",

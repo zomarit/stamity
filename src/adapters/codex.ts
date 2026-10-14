@@ -53,17 +53,22 @@ import {
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
 import { READ_ONLY_GIT_SUBCOMMANDS } from "../roster/agentPolicies.ts";
+import { modelMapPath, pickModel } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  isModelClass,
+  MODEL_LADDER,
   pinsFor,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
+  type ModelPickSource,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import { substituteCanonicalPlatformMarker, toCodexToolsFrontmatter } from "../tools/translator.ts";
 import type { AdapterOutput, EmissionOwner, RulePrecedence, SourceRefusal } from "../types/content.ts";
+import type { ModelClass } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX } from "../types/markers.ts";
 import { serializeTomlDocument, type TomlValue } from "./toml.ts";
@@ -305,6 +310,9 @@ const RULES_APPENDIX_ARTIFACT_ID = "codex-rules-appendix";
 /** The root {@link CODEX_AGENTS_OVERRIDE_FILE}: the shared charter plus the root appendix. */
 const AGENTS_OVERRIDE_ARTIFACT_ID = "codex-agents-override";
 
+/** The class-to-model map at `.stamity/generated/models/codex.json`. */
+const MODEL_MAP_ARTIFACT_ID = "codex-model-map";
+
 // ── Dialect facts ────────────────────────────────────────────────
 
 /**
@@ -334,7 +342,12 @@ const CODEX_FACTS: AdapterDialectFacts = {
     `the shared AGENTS.md (documented lossy — upstream gap: ${LOSSY_GAP})`,
   hooksConfigPath: CODEX_HOOKS_FILE,
   readsAgentsSkillsDir: true,
-  agentsFormat: `TOML subagent definitions under ${CODEX_AGENTS_DIR}/`,
+  agentsFormat:
+    `TOML subagent definitions under ${CODEX_AGENTS_DIR}/ — \`model\` in every file (the operator's ` +
+    "pin, else the first shipped candidate the account's saved `codex debug models` list holds, else " +
+    "the shipped list's first entry) and `model_reasoning_effort` at the class's level; a value in the " +
+    "file takes precedence over the spawn's and the parent's (subagents page, accessed 2026-10-14); the " +
+    "class-to-model map at `.stamity/generated/models/codex.json`",
   mcpDialect: "codex-toml",
   // AGENTS.md is native here: no entry-file bridge is emitted.
   entryFile: null,
@@ -366,10 +379,26 @@ const CODEX_FACTS: AdapterDialectFacts = {
         "user's Codex home directory, not the repository, and are deprecated in favour of skills",
     },
     { name: "effort-scale", value: EFFORT_SCALE_CAP },
+    // Dated inline: the subagents page cited below was re-read for this claim
+    // on 2026-10-14. It is the client case behind the touchpoints' neutral
+    // sentence "Where the agent file's model outranks the call's, a per-call
+    // escalation leaves it unchanged" (ledger row 2026-10-14_cli-native/build/62).
+    {
+      name: "model-escalation",
+      value:
+        "a per-call escalation does not change a role's model — every emitted agent file carries " +
+        "`model`, and a value in the file takes precedence over the spawn's, the `[agents]` " +
+        "default's and the parent's, for `model` and `model_reasoning_effort` alike; a role runs on " +
+        "its file's model whatever model the call names (learn.chatgpt.com/docs/agent-configuration/" +
+        "subagents, read 2026-10-14). Escalating a role on this client means pinning its class " +
+        "(`stamity config set model.<class>.codex <id>`) and re-syncing",
+    },
   ],
   citations: [
-    // Subagent key set + the project-scoped `.codex/agents/` location.
-    { url: "https://learn.chatgpt.com/docs/agent-configuration/subagents", accessDate: "2026-09-10" },
+    // Subagent key set + the project-scoped `.codex/agents/` location, and the
+    // precedence of a file's `model` and `model_reasoning_effort` over the
+    // spawn's, the `[agents]` default's and the parent's (re-read 2026-10-14).
+    { url: "https://learn.chatgpt.com/docs/agent-configuration/subagents", accessDate: "2026-10-14" },
     // Project-level `.codex/hooks.json`, PascalCase events, exit-2 blocking,
     // the entry keys (`type`, `command`, `commandWindows`, `timeout`) and the
     // SessionEnd default, the plaintext UserPromptSubmit channel, and trust
@@ -420,10 +449,18 @@ export const codexResiduePlanner: ResiduePlanner = {
     // One read of the operator's allocation for the whole batch: pins and
     // efforts are per class, not per agent, so resolving them per file would
     // re-read the same two maps once per subagent.
-    const models = {
+    //
+    // The account's saved list rides beside them: a class with no pin takes the
+    // first shipped candidate on it, else the shipped list's entry 0, and
+    // emission never starts the client to read it (REQ-LADDER-006).
+    const listed = ctx.manifest.models?.listed?.[TOOL]?.ids;
+    const models: ModelOptions = {
       ...(ctx.manifest.models?.pins === undefined ? {} : { pins: pinsFor(ctx.manifest.models, TOOL) }),
       ...(ctx.manifest.models?.effort === undefined ? {} : { efforts: ctx.manifest.models.effort }),
+      ...(listed === undefined ? {} : { listed }),
     };
+    // Each emitted agent's runtime id by its declared class, for the model map.
+    const roles: Partial<Record<string, ModelClass>> = {};
 
     const rows: AdapterOutput[] = [
       emissionRow(CODEX_HOOKS_FILE, buildHooksJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot), HOOKS_ARTIFACT_ID, "infra"),
@@ -436,6 +473,8 @@ export const codexResiduePlanner: ResiduePlanner = {
     }
 
     for (const agent of agents) {
+      const declared = agent.frontmatter.model_class;
+      if (isModelClass(declared)) roles[runtimeAgentId(agent.id)] = declared;
       rows.push(
         emissionRow(
           `${CODEX_AGENTS_DIR}/${runtimeAgentId(agent.id)}.toml`,
@@ -445,6 +484,15 @@ export const codexResiduePlanner: ResiduePlanner = {
         ),
       );
     }
+
+    rows.push(
+      emissionRow(
+        modelMapPath(TOOL),
+        `${JSON.stringify(buildCodexModelMap(roles, models), null, 2)}\n`,
+        MODEL_MAP_ARTIFACT_ID,
+        "infra",
+      ),
+    );
 
     // Built by hand rather than mapped: the rendered rule is the catalog item
     // with one field replaced, and spreading inside a `map` is the shape the
@@ -963,10 +1011,70 @@ export function buildHooksJson(
 /** Grants whose presence means the agent must be able to change the workspace. */
 const MUTATING_CATEGORIES: ReadonlySet<string> = new Set(["edit", "execute"]);
 
-/** Operator allocation for one build: what `stamity config` pinned, per class. */
+/**
+ * Allocation for one build: what `stamity config` pinned and set, per class,
+ * and the ids the account's own CLI listed, as `init` and `sync` saved them.
+ */
 interface ModelOptions {
   pins?: ModelPinMap;
   efforts?: EffortMap;
+  listed?: readonly string[];
+}
+
+/** One class's model on this client and its other candidates, as the agent files and the map carry them. */
+interface ClassModels {
+  readonly model?: string;
+  readonly fallbacks: readonly string[];
+}
+
+/**
+ * The class's model through the one resolver, with the pick
+ * (REQ-LADDER-006): the operator's pin (re-picked when the saved list lacks
+ * it), else the first shipped candidate the saved list holds, else the shipped
+ * list's entry 0 — so every ladder class resolves on this client. The
+ * fallbacks are the pick's candidates without the model. No Codex candidate
+ * carries an effort variant, so the pick reads no level.
+ */
+function classModels(modelClass: ModelClass, opts: ModelOptions): ClassModels {
+  const pick: ModelPickSource = opts.listed === undefined ? {} : { listed: opts.listed };
+  const model = resolveModelValue(modelClass, TOOL, opts.pins, opts.efforts, pick);
+  const picked = pickModel(TOOL, modelClass, undefined, opts.listed);
+  const candidates = picked === undefined ? [] : [picked.id, ...picked.fallbacks];
+  return {
+    ...(model === undefined ? {} : { model }),
+    fallbacks: candidates.filter((id) => id !== model),
+  };
+}
+
+/** `.stamity/generated/models/codex.json`: every ladder class's model, and each emitted role's class. */
+export interface CodexModelMap {
+  classes: Record<ModelClass, { model?: string; fallbacks: string[] }>;
+  roles: Record<string, ModelClass>;
+}
+
+/**
+ * The class-to-model map (REQ-LADDER-007) the touchpoints read to pass
+ * `model` on a sub-agent call. Every ladder class is present in the ladder's
+ * order, `frontier` included although no agent file declares it, because a
+ * flow escalates a role to it on the call; each holds the id the agent files
+ * carry and the class's other candidates. `roles` maps each emitted agent's
+ * runtime id to its declared class, sorted by id so the bytes are stable.
+ */
+export function buildCodexModelMap(
+  roles: Readonly<Partial<Record<string, ModelClass>>>,
+  opts: ModelOptions = {},
+): CodexModelMap {
+  const classes = {} as CodexModelMap["classes"];
+  for (const { modelClass } of MODEL_LADDER) {
+    const { model, fallbacks } = classModels(modelClass, opts);
+    classes[modelClass] = { ...(model === undefined ? {} : { model }), fallbacks: [...fallbacks] };
+  }
+  const sorted: Record<string, ModelClass> = {};
+  for (const id of Object.keys(roles).toSorted()) {
+    const modelClass = roles[id];
+    if (modelClass !== undefined) sorted[id] = modelClass;
+  }
+  return { classes, roles: sorted };
 }
 
 /**
@@ -983,12 +1091,13 @@ interface ModelOptions {
  * the sandbox read-only, so an unknown grant narrows rather than widens.
  *
  * Both allocation axes come from the ladder (`../roster/modelLadder.ts`), never
- * from a table of this adapter's own. `model` is emitted only when an operator
- * pinned an id for the class — this client publishes no symbolic model
- * vocabulary for a class to map onto, so with no pin the key is omitted and the
- * client applies its own default, which is an honest unknown rather than a
- * sizing decision the engine invented. `model_reasoning_effort` carries the
- * class's effort, operator override first.
+ * from a table of this adapter's own. `model` is written for every ladder
+ * class ({@link classModels}): the operator's pin, else the pick from the
+ * account's saved list, else the shipped priority list's entry 0, each a model
+ * this client's CLI listed when its row was read (REQ-LADDER-007). The file's
+ * value outranks the spawn's and the parent's, so a role runs on its class's
+ * model rather than on whatever the parent session runs. `model_reasoning_effort`
+ * carries the class's effort, operator override first.
  */
 export function buildAgentToml(
   item: CatalogItem,
@@ -1011,8 +1120,8 @@ export function buildAgentToml(
   // A class the ladder does not know, or a frontmatter value that is not a
   // string, resolves to nothing on both axes and omits both keys.
   const declaredClass = item.frontmatter.model_class;
-  if (typeof declaredClass === "string") {
-    const model = resolveModelValue(declaredClass, TOOL, opts.pins);
+  if (isModelClass(declaredClass)) {
+    const { model } = classModels(declaredClass, opts);
     if (model !== undefined) entries.push(["model", model]);
     const effort = resolveEffortValue(declaredClass, TOOL, opts.efforts);
     if (effort !== undefined) entries.push(["model_reasoning_effort", effort]);

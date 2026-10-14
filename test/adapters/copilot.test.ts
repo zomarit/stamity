@@ -105,6 +105,18 @@ const CORPUS_AGENT_EFFORT: Readonly<Record<(typeof CORPUS_AGENT_IDS)[number], st
   "test-runner": "low",
 };
 
+/**
+ * The model lines a shipped agent carries with no pin and no saved list, keyed by the effort its
+ * class asks for (one class per level): the shipped priority list's entry 0 as `model`, its
+ * display name in the qualified `<name> (copilot)` form, and the class's CLI ids in priority order
+ * as `models` (REQ-LADDER-007). Literals, like the effort table above.
+ */
+const SHIPPED_PICK_LINES: Readonly<Record<string, readonly string[]>> = {
+  high: ['model: "Claude Opus 5.5 (copilot)"', 'models: ["claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]'],
+  medium: ['model: "Claude Sonnet 5 (copilot)"', 'models: ["claude-sonnet-5", "gpt-6-sol", "gpt-5.6-terra"]'],
+  low: ['model: "Claude Haiku 4.5 (copilot)"', 'models: ["claude-haiku-4.5", "gpt-6-luna", "gpt-5.4-mini"]'],
+};
+
 /** The three CQ specialist lenses, which read and never edit. */
 const SPECIALIST_AGENT_IDS = ["design-quality", "performance", "security"] as const;
 
@@ -147,6 +159,8 @@ interface CtxOptions {
   // passes the `all` key a 1.0.0 string migrates to, so each case resolves the id it did.
   pins?: ModelConfig["pins"];
   efforts?: EffortMap;
+  /** The ids a Copilot CLI listed for the account, persisted as `models.listed.copilot`. */
+  listed?: readonly string[];
   /** The manifest's held 1.14 `plugin` block; absent everywhere but the case proving it steers nothing. */
   plugin?: unknown;
 }
@@ -170,12 +184,15 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
       }),
       // `models` is an operator dial persisted after creation, so it is layered
       // on rather than passed in — the same shape `stamity config` writes.
-      ...(over.pins === undefined && over.efforts === undefined
+      ...(over.pins === undefined && over.efforts === undefined && over.listed === undefined
         ? {}
         : {
             models: {
               ...(over.pins === undefined ? {} : { pins: over.pins }),
               ...(over.efforts === undefined ? {} : { effort: over.efforts }),
+              ...(over.listed === undefined
+                ? {}
+                : { listed: { copilot: { ids: [...over.listed], source: "copilot-help-config" as const } } }),
             },
           }),
       ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
@@ -498,12 +515,18 @@ describe("agents → .github/agents", () => {
       // declares. The contract moved because the Copilot CLI's custom-agent loader reads that key
       // (changelog 1.0.66 and 1.0.88; the 1.0.89 loader) and the engine now writes it
       // (REQ-LADDER-004); every other line is unchanged.
+      // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the exact list gains
+      // the class's `model` and `models` lines between `tools` and `reasoning-effort`. The
+      // contract moved because an unpinned class no longer resolves to nothing on this client:
+      // it takes the shipped priority list's entry 0 when no account list was saved
+      // (REQ-LADDER-006, REQ-LADDER-007); every other line is unchanged.
       expect(frontmatterLines(row.content)).toEqual([
         `name: stamity-${id}`,
         `description: ${frontmatterValue(row.content, "description")}`,
         "target: github-copilot",
         "include-custom-instructions: true",
         `tools: ${toCopilotToolsFrontmatter(rosterAllow(`stamity-${id}`))}`,
+        ...(SHIPPED_PICK_LINES[CORPUS_AGENT_EFFORT[id]] ?? []),
         `reasoning-effort: ${CORPUS_AGENT_EFFORT[id]}`,
       ]);
       expect(frontmatterValue(row.content, "tools")).not.toBe("[]");
@@ -532,9 +555,13 @@ describe("agents → .github/agents", () => {
     // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the pinned model line was the
     // last frontmatter line; `reasoning-effort` now follows it, so the model line is found one
     // from the end. What the pin shows, a model line below `tools`, is unchanged.
+    // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the pin rides as the
+    // first id of `models`, the CLI's priority list, followed by the class's shipped candidates;
+    // a pin with no display name in the shipped list writes no `model:` line, which takes a
+    // display name (REQ-LADDER-007). What the pin shows, a model line below `tools`, is unchanged.
     expect(
       frontmatterLines(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content).at(-2),
-    ).toBe('model: "some-vendor/frontier-1"');
+    ).toBe('models: ["some-vendor/frontier-1", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]');
 
     // A prompt file runs in the session that already carries the instructions: no key.
     const prompts = plan.filter((row) => row.path.startsWith(".github/prompts/"));
@@ -907,6 +934,15 @@ describe("body substitution", () => {
 // ── Model pins and the absent effort axis ────────────────────────
 
 describe("model pinning", () => {
+  /** The `models` list of an emitted file's frontmatter, parsed as YAML; `undefined` with no key. */
+  const modelsOf = (content: string): unknown =>
+    (parseYaml(frontmatterLines(content).join("\n")) as { models?: unknown }).models;
+  const agentAt = (plan: readonly AdapterOutput[], id: string): string =>
+    rowAt(plan, `.github/agents/stamity-${id}.agent.md`).content;
+
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the assertions read the
+  // `model:` line; a pin now rides as the first id of `models`, and these pins have no shipped
+  // display name, so no `model:` line is written (REQ-LADDER-007). Which pin binds is unchanged.
   it("takes the class's copilot pin over its every-client pin, and ignores another client's (REQ-LADDER-005)", async () => {
     const plan = await planResidue({
       pins: {
@@ -915,40 +951,82 @@ describe("model pinning", () => {
       },
     });
 
-    expect(
-      frontmatterValue(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content, "model"),
-    ).toBe('"copilot-only-x"');
-    expect(
-      frontmatterValue(rowAt(plan, ".github/agents/stamity-test-runner.agent.md").content, "model"),
-    ).toBe('"every-client-z"');
+    expect((modelsOf(agentAt(plan, "implementer")) as string[])[0]).toBe("copilot-only-x");
+    expect(agentAt(plan, "implementer")).not.toContain("every-client-y");
+    expect((modelsOf(agentAt(plan, "test-runner")) as string[])[0]).toBe("every-client-z");
+    expect(agentAt(plan, "test-runner")).not.toContain("cursor-only-x");
   });
 
-  it("emits the operator's pinned id for the class an agent declares", async () => {
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the unpinned class used
+  // to emit no model at all; it now takes the shipped pick (REQ-LADDER-006), and the pin rides in
+  // `models` with the class's shipped candidates behind it, for a plan that cannot access it.
+  it("emits the operator's pinned id first, with the class's shipped candidates behind it", async () => {
     const plan = await planResidue({ pins: { advanced: { all: "some-vendor/frontier-1" } } });
 
-    // `implementer` declares `advanced`; `test-runner` declares `economy`,
-    // which this run leaves unpinned.
-    expect(
-      frontmatterValue(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content, "model"),
-    ).toBe('"some-vendor/frontier-1"');
-    expect(
-      frontmatterValue(rowAt(plan, ".github/agents/stamity-test-runner.agent.md").content, "model"),
-    ).toBeUndefined();
+    // `implementer` declares `advanced`; `test-runner` declares `economy`, which this run leaves
+    // unpinned.
+    expect(modelsOf(agentAt(plan, "implementer"))).toEqual([
+      "some-vendor/frontier-1",
+      "claude-opus-5.5",
+      "gpt-6-astra",
+      "claude-opus-5",
+    ]);
+    // No shipped display name for the pin, so no `model:` line (the plan's edge case).
+    expect(frontmatterValue(agentAt(plan, "implementer"), "model")).toBeUndefined();
+    expect(frontmatterValue(agentAt(plan, "test-runner"), "model")).toBe('"Claude Haiku 4.5 (copilot)"');
   });
 
-  it("emits no model key at all with no pin — this client publishes no alias to fall back to", async () => {
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the case read "emits no
+  // model key at all with no pin — this client publishes no alias to fall back to". The "never
+  // invent a value" rule is superseded (REQ-LADDER-006): with no pin and no saved list, Copilot
+  // takes the shipped priority list's entry 0, so every agent now carries `model` and `models`.
+  it("carries the shipped pick with no pin and no saved list, and never `modelPolicy` (REQ-LADDER-007)", async () => {
     const plan = await planResidue();
 
-    const agents = plan.filter((row) => row.path.endsWith(".agent.md"));
-    expect(agents.length).toBeGreaterThan(0);
-    for (const row of agents) {
-      expect(frontmatterLines(row.content).some((line) => line.startsWith("model:")), row.path).toBe(
-        false,
-      );
+    for (const id of CORPUS_AGENT_IDS) {
+      const lines = frontmatterLines(agentAt(plan, id));
+      const expected = SHIPPED_PICK_LINES[CORPUS_AGENT_EFFORT[id]] ?? [];
+      expect(expected, id).toHaveLength(2);
+      expect(lines.filter((line) => /^models?:/.test(line)), id).toEqual(expected);
+      expect(lines.some((line) => line.startsWith("modelPolicy")), id).toBe(false);
     }
+    // Still no alias: the value comes from the pick, not from a vocabulary this client lacks.
     expect(CLIENT_MODEL_PROJECTION.copilot.aliases).toEqual({});
   });
 
+  it("picks each class's first shipped candidate the account's saved list holds", async () => {
+    const plan = await planResidue({ listed: ["unrelated-1", "gpt-6-luna", "claude-opus-5", "gpt-6-astra"] });
+
+    // `advanced`: its entry 0 (`claude-opus-5.5`) is not listed, so the next candidate wins and the
+    // list keeps only what the account offers.
+    expect(frontmatterValue(agentAt(plan, "implementer"), "model")).toBe('"GPT-6 Astra (copilot)"');
+    expect(modelsOf(agentAt(plan, "implementer"))).toEqual(["gpt-6-astra", "claude-opus-5"]);
+    expect(frontmatterValue(agentAt(plan, "test-runner"), "model")).toBe('"GPT-6 Luna (copilot)"');
+    expect(modelsOf(agentAt(plan, "test-runner"))).toEqual(["gpt-6-luna"]);
+    // `standard` has no candidate on this list: the resolver's shipped fallback, entry 0, alone —
+    // a model the plan cannot access falls back to the session's on this client.
+    expect(frontmatterValue(agentAt(plan, "fixer"), "model")).toBe('"Claude Sonnet 5 (copilot)"');
+    expect(modelsOf(agentAt(plan, "fixer"))).toEqual(["claude-sonnet-5"]);
+  });
+
+  it("names a pinned model by its display name when the shipped list gives one, and re-picks a pin the list lacks", async () => {
+    const known = await planResidue({ pins: { advanced: { copilot: "gpt-6-astra" } } });
+    expect(frontmatterValue(agentAt(known, "implementer"), "model")).toBe('"GPT-6 Astra (copilot)"');
+    expect(modelsOf(agentAt(known, "implementer"))).toEqual(["gpt-6-astra", "claude-opus-5.5", "claude-opus-5"]);
+
+    // An id the account lacks fails the call, so the class takes the pick from the saved list.
+    const repicked = await planResidue({
+      pins: { advanced: { copilot: "gpt-5.5" } },
+      listed: ["claude-opus-5", "claude-haiku-4.5"],
+    });
+    expect(frontmatterValue(agentAt(repicked, "implementer"), "model")).toBe('"Claude Opus 5 (copilot)"');
+    expect(modelsOf(agentAt(repicked, "implementer"))).toEqual(["claude-opus-5"]);
+    expect(agentAt(repicked, "implementer")).not.toContain("gpt-5.5");
+  });
+
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the pin is quoted inside
+  // `models` now, where it used to be the `model:` scalar (REQ-LADDER-007); what is pinned, a
+  // colon that cannot open a second key, is unchanged.
   it("quotes a pinned value so a colon in it cannot open a second frontmatter key", () => {
     const output = buildAgentFile(
       itemOf({ type: "agent", id: "pinned", frontmatter: { model_class: "advanced" } }),
@@ -957,11 +1035,15 @@ describe("model pinning", () => {
       { advanced: "vendor:model 3" },
     );
 
-    expect(frontmatterValue(output.content, "model")).toBe('"vendor:model 3"');
-    const parsed = parseYaml(frontmatterLines(output.content).join("\n")) as { model: string };
-    expect(parsed.model).toBe("vendor:model 3");
+    expect(frontmatterValue(output.content, "models")).toBe(
+      '["vendor:model 3", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]',
+    );
+    expect(modelsOf(output.content)).toEqual(["vendor:model 3", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]);
+    expect(frontmatterLines(output.content).filter((line) => line.startsWith("vendor"))).toEqual([]);
   });
 
+  // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): `models` is the second
+  // model key, so its absence is asserted beside `model`'s; the behaviour is unchanged.
   it("drops the key for an artifact that declares no class, and for a class off the ladder", () => {
     const pins = { advanced: "some-vendor/frontier-1" };
     const classless = buildAgentFile(
@@ -980,6 +1062,35 @@ describe("model pinning", () => {
     // A frontmatter typo costs that artifact its model key, never the run.
     expect(frontmatterValue(classless.content, "model")).toBeUndefined();
     expect(frontmatterValue(bogus.content, "model")).toBeUndefined();
+    expect(modelsOf(classless.content)).toBeUndefined();
+    expect(modelsOf(bogus.content)).toBeUndefined();
+  });
+
+  it("writes the class-to-model map, which parses and lists every role (REQ-LADDER-007)", async () => {
+    const plan = await planResidue({ pins: { advanced: { copilot: "gpt-6-astra" } } });
+    const row = rowAt(plan, ".stamity/generated/models/copilot.json");
+    expect(row.owner).toEqual({ adapter: "copilot", artifactId: "copilot-model-map", artifactType: "infra" });
+    expect(row.content.endsWith("\n")).toBe(true);
+
+    const map = JSON.parse(row.content) as {
+      classes: Record<string, { model?: string; fallbacks: string[] }>;
+      roles: Record<string, string>;
+    };
+    // Every ladder class, `frontier` included: a flow escalates a role to it on the call.
+    expect(map.classes).toEqual({
+      frontier: { model: "claude-fable-5.1", fallbacks: ["claude-opus-5.5", "gpt-6-astra"] },
+      advanced: { model: "gpt-6-astra", fallbacks: ["claude-opus-5.5", "claude-opus-5"] },
+      standard: { model: "claude-sonnet-5", fallbacks: ["gpt-6-sol", "gpt-5.6-terra"] },
+      economy: { model: "claude-haiku-4.5", fallbacks: ["gpt-6-luna", "gpt-5.4-mini"] },
+    });
+    expect(Object.keys(map.roles)).toEqual(CORPUS_AGENT_IDS.map((id) => `stamity-${id}`));
+    const classByEffort: Record<string, string> = { high: "advanced", medium: "standard", low: "economy" };
+    for (const id of CORPUS_AGENT_IDS) {
+      expect(map.roles[`stamity-${id}`], id).toBe(classByEffort[CORPUS_AGENT_EFFORT[id]]);
+      // A file and the map never disagree on a role's model.
+      const modelClass = map.roles[`stamity-${id}`] ?? "";
+      expect((modelsOf(agentAt(plan, id)) as string[])[0], id).toBe(map.classes[modelClass]?.model);
+    }
   });
 
   // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "never emits an
@@ -1001,10 +1112,16 @@ describe("model pinning", () => {
     }
     // Non-degenerate: all three class defaults are on the page, and a pinned agent carries the
     // effort line directly below its model line.
+    // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the pin's model line is
+    // `models`, the CLI's priority list with the pin first; a pin with no shipped display name
+    // writes no `model:` line (REQ-LADDER-007). The effort line's place is unchanged.
     expect(new Set(Object.values(CORPUS_AGENT_EFFORT))).toEqual(new Set(["high", "medium", "low"]));
     expect(
       frontmatterLines(rowAt(plan, ".github/agents/stamity-reviewer.agent.md").content).slice(-2),
-    ).toEqual(['model: "some-vendor/frontier-1"', "reasoning-effort: high"]);
+    ).toEqual([
+      'models: ["some-vendor/frontier-1", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]',
+      "reasoning-effort: high",
+    ]);
     expect(CLIENT_MODEL_PROJECTION.copilot.effortKey).toBe("reasoning-effort");
 
     // A prompt file runs in the session, at the session's own effort: no key.
@@ -1588,10 +1705,14 @@ describe("hooks", () => {
     // claim and the entry-key vocabulary come from — so the constant SPLITS
     // rather than being re-stamped whole, which is the behaviour the original
     // comment already prescribed for a partial pass.
+    // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the hooks reference was
+    // re-read whole on 2026-10-14 for the camelCase event names and the `bash` key the hooks file
+    // took that day (REQ-FLOW-086), every other claim its comment names re-checked with them, so
+    // its one date moves; the custom-agents page keeps the list's 2026-09-10 stamp.
     expect(
       COPILOT_DIALECT_FACTS.citations.find((citation) => citation.url.includes("hooks-reference"))
         ?.accessDate,
-    ).toBe("2026-09-17");
+    ).toBe("2026-10-14");
     const dates = new Set(COPILOT_DIALECT_FACTS.citations.map((citation) => citation.accessDate));
     expect(dates.has("2026-09-10")).toBe(true);
     for (const date of dates) expect(date >= "2026-08-17", date).toBe(true);
@@ -1632,6 +1753,8 @@ describe("hooks", () => {
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("`reasoning-effort:`");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("model:");
     expect(COPILOT_DIALECT_FACTS.ruleShape).toContain("patterns comma-separated");
+    // A live run on 1.0.89 has loaded an agent carrying the key (QA row 2 of 2026-10-10_next-tier).
+    expect(effortAxis).toContain("a live run on Copilot CLI 1.0.89 (2026-10-11) loaded an agent carrying");
 
     // Both rows reach the published matrix verbatim — a declaration nothing
     // renders is a claim only this file can read.
@@ -1646,11 +1769,19 @@ describe("hooks", () => {
     expect(row).toBeDefined();
     expect(row).toMatch(/^emitted — /);
     expect(row).toContain("`include-custom-instructions: true` on every agent");
-    // The key's effect is claimed from the changelog; the live check only shows the gap.
+    // The first live check showed the gap; a second live run with the key showed its effect.
+    // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins; ledger row
+    // 2026-10-14_cli-native/build/38): the comment read "the live check only shows the gap", while
+    // QA row 2 of run 2026-10-10_next-tier ran an agent carrying the key on 1.0.89 and its
+    // sub-agent quoted the charter. The row now names that run; the earlier claims stay pinned.
     expect(row).toContain("Copilot CLI changelog 1.0.86");
     expect(row).toContain("1.0.89 loader's frontmatter keys");
     expect(row).toContain("live sub-agent check on Copilot CLI 1.0.89 (2026-10-10)");
     expect(row).toContain("loads no `AGENTS.md`");
+    expect(row).toContain(
+      "a live run on 1.0.89 (2026-10-11) with the key emitted loaded it: the sub-agent quoted the charter's version line",
+    );
+    expect(row).toContain("`.stamity/runs/2026-10-10_next-tier/record.md`, QA row 2");
     // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key; ledger rows review/21 and
     // review/23): the pin read "`--no-custom-instructions` still overrides it", a clause with no
     // source and no mark. The clause now names the page it was read from, which the citation
@@ -1672,6 +1803,31 @@ describe("hooks", () => {
     ).toBe("2026-09-10");
 
     expect(renderCapabilityMatrix()).toContain(row);
+  });
+
+  it("declares the model pick, and that the cloud agent's picker decides the cloud model (REQ-LADDER-007)", () => {
+    const pick = capOf("model-pick");
+    expect(pick).toMatch(/^emitted — /);
+    expect(pick).toContain("`models: [<id>, …]` per agent");
+    expect(pick).toContain("`<name> (copilot)`");
+    expect(pick).toContain("No `modelPolicy` is written");
+    expect(pick).toContain(".stamity/generated/models/copilot.json");
+    // The CLI reference's own caveat: under Auto, a sub-agent inherits the session's model.
+    expect(pick).toContain("Auto");
+
+    const cloud = capOf("cloud-model");
+    expect(cloud).toContain("the task's model picker decides");
+    expect(cloud).not.toMatch(/agent file's `models?` (binds|decides)/);
+
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("`models:`");
+    expect(COPILOT_DIALECT_FACTS.agentsFormat).not.toContain("only under an operator pin");
+    const urls = COPILOT_DIALECT_FACTS.citations.map((citation) => citation.url);
+    expect(urls).toContain("https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model");
+    expect(urls).toContain("https://code.visualstudio.com/docs/agent-customization/custom-agents");
+
+    const matrix = renderCapabilityMatrix();
+    expect(matrix).toContain(pick);
+    expect(matrix).toContain(cloud);
   });
 });
 

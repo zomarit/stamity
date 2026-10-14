@@ -4,7 +4,7 @@
  * rejection and errors; timeouts remain fail-open. Identity-free role guards are
  * telemetry. Other events retain their documented limitations.
  * Current contract: https://docs.github.com/en/copilot/reference/hooks-reference
- * (2026-09-10).
+ * (2026-10-14).
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -48,12 +48,16 @@ import {
   resolveAgentGrant,
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
+import { MODEL_PRIORITY, modelMapPath, pickModel } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  isModelClass,
+  MODEL_LADDER,
   pinsFor,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
+  type ModelPickSource,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
 import { pinnedCliCall } from "../shared/cliCall.ts";
@@ -62,7 +66,7 @@ import {
   toCopilotToolsFrontmatter,
 } from "../tools/translator.ts";
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
-import type { Tool } from "../types/core.ts";
+import type { ModelClass, Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 
 // ── Client layout ────────────────────────────────────────────────
@@ -176,7 +180,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
   hooksConfigPath: COPILOT_HOOKS_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` only under an operator pin, `reasoning-effort:` at the declared class's level) over a markdown prompt",
+    "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `include-custom-instructions: true`, `tools:` alias list, `model:` the class model's display name as `<name> (copilot)` where the shipped list gives one, `models:` the class's CLI ids in priority order — the operator's pin, else the pick from the account's saved list, else the shipped list — `reasoning-effort:` at the declared class's level) over a markdown prompt; the class-to-model map at `.stamity/generated/models/copilot.json`",
   mcpDialect: "vscode-json",
   entryFile: null,
   caps: [
@@ -197,32 +201,64 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     // on 2026-10-10 (the CLI command reference, cited below under its own date,
     // the 1.0.89 loader and its changelog, and the custom-agents page), so the
     // all-or-nothing rule holds (as it did on 2026-09-30, when two rule rows
-    // below were unverified). The scale's two ends are read off the projection
-    // row the emission resolves through, so the row cannot name a level the
-    // files never carry.
+    // below were unverified). The live load is QA row 2 of run
+    // 2026-10-10_next-tier (2026-10-11T01:30:41Z), whose agent carried
+    // `reasoning-effort: high` and whose sub-agent ran at `high`. The scale's
+    // two ends are read off the projection row the emission resolves through,
+    // so the row cannot name a level the files never carry.
     {
       name: "effort-axis",
       value:
         `emitted — \`reasoning-effort: <level>\` per agent, on the scale \`${EFFORT_SCALE[0]}\` … ` +
         `\`${EFFORT_SCALE.at(-1)}\` (Copilot CLI reference, accessed 2026-10-10; the key in the ` +
-        "1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a level the model does not offer is " +
-        "reported and falls back to the session's; the cloud agent's handling of the key is " +
-        "undocumented (custom-agents configuration page, accessed 2026-10-10)",
+        "1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a live run on Copilot CLI 1.0.89 " +
+        "(2026-10-11) loaded an agent carrying `reasoning-effort: high` and its sub-agent ran at " +
+        "that level (`.stamity/runs/2026-10-10_next-tier/record.md`, QA row 2); a level the model " +
+        "does not offer is reported and falls back to the session's; the cloud agent's handling of " +
+        "the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
     },
     // Dated inline, and ACCESS_DATE is not re-stamped: this one claim was read
     // on 2026-10-10 (the CLI changelog, the 1.0.89 loader, the live check, the
     // CLI command reference and the custom-agents page), so the all-or-nothing
-    // rule holds. The key's effect is the changelog's claim; the live check
-    // proved only the gap, and the override flag is the reference's claim alone.
+    // rule holds. The first live check proved the gap; QA row 2 of the same run
+    // (2026-10-11T01:30:41Z) proved the key's effect on 1.0.89, its sub-agent
+    // quoting the charter's version line the run before the key answered
+    // `CHARTER: NONE` to. The override flag is the reference's claim alone.
     {
       name: "sub-agent-instructions",
       value:
         "emitted — `include-custom-instructions: true` on every agent (Copilot CLI changelog " +
         "1.0.86; the key sits in the 1.0.89 loader's frontmatter keys); a live sub-agent check on " +
-        "Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`; " +
+        "Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`, and " +
+        "a live run on 1.0.89 (2026-10-11) with the key emitted loaded it: the sub-agent quoted the " +
+        "charter's version line (`.stamity/runs/2026-10-10_next-tier/record.md`, QA row 2); " +
         "`--no-custom-instructions` overrides it (Copilot CLI command reference, accessed " +
         "2026-10-10; unverified on 1.0.89, where no live run passed the flag); the cloud agent's " +
         "handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
+    },
+    // Dated inline, and ACCESS_DATE is not re-stamped: these claims were read
+    // on 2026-10-14 (the CLI command reference's custom-agent table, VS Code's
+    // custom-agents page and the cloud agent's model page, the last two cited
+    // below under that date), so the all-or-nothing rule holds.
+    {
+      name: "model-pick",
+      value:
+        "emitted — `models: [<id>, …]` per agent, the class's CLI ids in priority order: the " +
+        "runtime uses the first one the plan can access, falls back to the session's model when " +
+        "none resolves, and `models` overrides `model`; under an Auto session model a sub-agent " +
+        "inherits the resolved session model whatever the file says (Copilot CLI command reference, " +
+        "read 2026-10-14). No `modelPolicy` is written, so a `/subagents` override still wins. " +
+        "`model:` carries the display name in the qualified `<name> (copilot)` form VS Code reads " +
+        "(VS Code custom-agents page, read 2026-10-14), and only where the shipped list gives one. " +
+        "The class-to-model map at `.stamity/generated/models/copilot.json` holds the same ids",
+    },
+    {
+      name: "cloud-model",
+      value:
+        "the task's model picker decides — the cloud agent runs on the model picked when the task " +
+        "is assigned or started, and on Auto where no picker is offered; its model page names no custom-agent model " +
+        "key, so the agent file's `model` and `models` are not documented to bind there (cloud " +
+        "agent model page, read 2026-10-14)",
     },
     {
       name: "hook-enforcement",
@@ -296,7 +332,9 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     // Repository hook discovery, the entry keys `type`, `bash`, `cwd`, `matcher` and
     // `timeoutSec`, the camelCase event names, fail behavior, and the
     // sessionStart `additionalContext` injection the portable runner writes.
-    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-09-17" },
+    // Re-read whole on 2026-10-14, when the hooks file took the camelCase names
+    // and the `bash` key, and every claim in this comment re-checked with them.
+    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-14" },
     // The `--reasoning-effort` levels (`low` through `max`), the fallback for
     // a model or effort that cannot be honoured, the default that a sub-agent
     // receives no repository instruction files, and the priority of
@@ -306,6 +344,15 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     {
       url: "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
       accessDate: "2026-10-10",
+    },
+    // The agent file's `model` as a model name or a prioritized list, in the
+    // qualified `Model Name (vendor)` form, e.g. `GPT-5 (copilot)`.
+    { url: "https://code.visualstudio.com/docs/agent-customization/custom-agents", accessDate: "2026-10-14" },
+    // The cloud agent's model: picked when a task starts, Auto where no picker
+    // is offered; no custom-agent model key is named.
+    {
+      url: "https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model",
+      accessDate: "2026-10-14",
     },
   ],
 };
@@ -329,13 +376,19 @@ export const copilotResiduePlanner: ResiduePlanner = {
       readSetupStepsPins(ctx.rootDir),
     ]);
     const render = bodyRenderer(ctx);
-    // The operator's pins, read once: every emitted model value on this client
-    // comes from them, since the projection publishes no alias vocabulary to
-    // fall back to (`../roster/modelLadder.ts`).
+    // The operator's pins, read once: a pin outranks the pick on its class
+    // (`../roster/modelLadder.ts`).
     const pins = pinsFor(ctx.manifest.models, TOOL);
     // The operator's effort overrides, read once beside them: a class with none
     // runs at the ladder's own default.
     const efforts = ctx.manifest.models?.effort ?? {};
+    // The account's own list, as `init` and `sync` persisted it: a class with no
+    // pin takes the first shipped candidate on it, and with no list the shipped
+    // list's entry 0. Emission reads the saved copy and never starts the client
+    // (REQ-LADDER-006).
+    const listed = ctx.manifest.models?.listed?.[TOOL]?.ids;
+    // Each emitted agent's runtime id by its declared class, for the model map.
+    const roles: Partial<Record<string, ModelClass>> = {};
 
     // A demoted rule is NOT written here: the core projected it as a skill
     // under `.agents/skills/stamity-<id>/`, which this client reads directly,
@@ -346,13 +399,21 @@ export const copilotResiduePlanner: ResiduePlanner = {
       switch (item.type) {
         case "rule":
           return demoted.has(item.id) ? [] : [buildInstructionsFile(item, render)];
-        case "agent":
-          return [buildAgentFile(item, grantFor(item), render, pins, efforts)];
+        case "agent": {
+          const declared = item.frontmatter[MODEL_CLASS_FIELD];
+          if (isModelClass(declared)) roles[emittedId(item)] = declared;
+          return [buildAgentFile(item, grantFor(item), render, pins, efforts, listed)];
+        }
         default:
           return [buildPromptFile(item, render, pins)];
       }
     });
 
+    rows.push({
+      path: modelMapPath(TOOL),
+      content: `${JSON.stringify(buildCopilotModelMap(roles, pins, efforts, listed), null, 2)}\n`,
+      owner: owner("copilot-model-map", "infra"),
+    });
     rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL), cliCallContextOf(ctx)), owner: owner("copilot-hooks", "infra") });
     rows.push({ path: `.stamity/generated/hooks/copilot/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("copilot"), owner: owner("copilot-portable-hook", "infra") });
     rows.push({
@@ -468,9 +529,9 @@ export function buildInstructionsFile(
  * (2026-10-10) found that an agent dispatched through `task` without it loads
  * no `AGENTS.md`, so the charter, the invariants and the repo facts never reach
  * it (REQ-FLOW-071; the key since CLI 1.0.86, per its changelog). `tools:` is
- * always present (see the module header), `model:` appears only when the
- * operator pinned an id for the class the agent declares, and
- * `reasoning-effort:` closes the list at that class's level (REQ-LADDER-004).
+ * always present (see the module header), the class's `model:` and `models:`
+ * follow ({@link agentModelLines}), and `reasoning-effort:` closes the list at
+ * that class's level (REQ-LADDER-004).
  *
  * The prompt is measured before the document is composed: the cap applies to
  * the markdown below the frontmatter, which is exactly what the platform
@@ -482,6 +543,7 @@ export function buildAgentFile(
   render: (raw: string) => string,
   pins: ModelPinMap = {},
   efforts: EffortMap = {},
+  listed?: readonly string[],
 ): AdapterOutput {
   const id = emittedId(item);
   const prompt = bodyOf(render(item.body));
@@ -503,7 +565,7 @@ export function buildAgentFile(
         "target: github-copilot",
         "include-custom-instructions: true",
         `tools: ${toCopilotToolsFrontmatter(grant.allow)}`,
-        ...modelLine(item, pins),
+        ...agentModelLines(item, pins, efforts, listed),
         ...effortLine(item, efforts),
       ],
       prompt,
@@ -542,7 +604,9 @@ export function buildPromptFile(
 }
 
 /**
- * The `model:` line for an artifact, or no line at all.
+ * The `model:` line for a prompt file, or no line at all. Agents carry the
+ * pick through {@link agentModelLines}; a prompt runs in the session, so it
+ * takes a model only under an operator pin.
  *
  * Two conditions, both required. The artifact must DECLARE a ladder class —
  * `model_class:` frontmatter is where a role's sizing decision lives, and an
@@ -560,6 +624,117 @@ function modelLine(item: CatalogItem, pins: ModelPinMap): string[] {
   if (typeof declared !== "string") return [];
   const model = resolveModelValue(declared, TOOL, pins);
   return model === undefined ? [] : [`model: ${yamlScalar(model)}`];
+}
+
+/** One class's model on this client and its other candidates, as the agent files and the map carry them. */
+interface ClassModels {
+  /** The model the resolver answers: the pin, else the pick; absent when none resolves. */
+  readonly model?: string;
+  /** The class's other shipped candidates, on the saved list where there is one, in priority order. */
+  readonly fallbacks: readonly string[];
+}
+
+/**
+ * The class's model through the one resolver, with the pick
+ * (REQ-LADDER-006): the operator's pin (re-picked when the saved list lacks
+ * it), else the first shipped candidate the saved list holds, else the shipped
+ * list's entry 0. The fallbacks are the pick's candidates without the model,
+ * so a pinned class still lists the shipped ones behind the pin for a plan
+ * that cannot access it. No Copilot candidate carries an effort variant, so the
+ * pick reads no level.
+ */
+function classModels(
+  modelClass: ModelClass,
+  pins: ModelPinMap,
+  efforts: EffortMap,
+  listed: readonly string[] | undefined,
+): ClassModels {
+  const pick: ModelPickSource = listed === undefined ? {} : { listed };
+  const model = resolveModelValue(modelClass, TOOL, pins, efforts, pick);
+  const picked = pickModel(TOOL, modelClass, undefined, listed);
+  const candidates = picked === undefined ? [] : [picked.id, ...picked.fallbacks];
+  return {
+    ...(model === undefined ? {} : { model }),
+    fallbacks: candidates.filter((id) => id !== model),
+  };
+}
+
+/** The display name the shipped list gives a Copilot model id, from any class, or `undefined`. */
+function displayName(id: string): string | undefined {
+  for (const candidates of Object.values(MODEL_PRIORITY.copilot)) {
+    const display = candidates.find((candidate) => candidate.id === id)?.display;
+    if (display !== undefined) return display;
+  }
+  return undefined;
+}
+
+/**
+ * The `model:` and `models:` lines for an agent, or no line at all
+ * (REQ-LADDER-007).
+ *
+ * Two keys, because two readers take a model from this file in two shapes.
+ * The CLI reads `models`, CLI ids in priority order, uses the first one the
+ * plan can access and overrides `model` with it; VS Code reads `model` as the
+ * qualified display name, `<name> (copilot)`. So `models` carries the class's
+ * model first and its other candidates behind it, and `model` carries the
+ * first one's display name — only where the shipped list gives one, since an
+ * id is not a name VS Code resolves. `modelPolicy` is never written: its
+ * `required` value would lock out the operator's own `/subagents` override.
+ *
+ * An artifact that declares no class, or a class off the ladder, has asked for
+ * no model. Every value is quoted like every other scalar this file emits: a
+ * pin is free text validated for shape only, so a value carrying `: ` would
+ * open a second frontmatter key if it went out bare.
+ */
+function agentModelLines(
+  item: CatalogItem,
+  pins: ModelPinMap,
+  efforts: EffortMap,
+  listed: readonly string[] | undefined,
+): string[] {
+  const declared = item.frontmatter[MODEL_CLASS_FIELD];
+  if (!isModelClass(declared)) return [];
+  const { model, fallbacks } = classModels(declared, pins, efforts, listed);
+  if (model === undefined) return [];
+  const display = displayName(model);
+  return [
+    ...(display === undefined ? [] : [`model: ${yamlScalar(`${display} (copilot)`)}`]),
+    `models: [${[model, ...fallbacks].map((id) => yamlScalar(id)).join(", ")}]`,
+  ];
+}
+
+/** `.stamity/generated/models/copilot.json`: every ladder class's model, and each emitted role's class. */
+export interface CopilotModelMap {
+  classes: Record<ModelClass, { model?: string; fallbacks: string[] }>;
+  roles: Record<string, ModelClass>;
+}
+
+/**
+ * The class-to-model map (REQ-LADDER-007) the touchpoints read to pass
+ * `model` on a sub-agent call. Every ladder class is present in the ladder's
+ * order, `frontier` included although no agent file declares it, because a
+ * flow escalates a role to it on the call; each holds the CLI id the agent
+ * files put first in `models` and the candidates behind it. `roles` maps each
+ * emitted agent's runtime id to its declared class, sorted by id so the bytes
+ * are stable.
+ */
+export function buildCopilotModelMap(
+  roles: Readonly<Partial<Record<string, ModelClass>>>,
+  pins: ModelPinMap = {},
+  efforts: EffortMap = {},
+  listed?: readonly string[],
+): CopilotModelMap {
+  const classes = {} as CopilotModelMap["classes"];
+  for (const { modelClass } of MODEL_LADDER) {
+    const { model, fallbacks } = classModels(modelClass, pins, efforts, listed);
+    classes[modelClass] = { ...(model === undefined ? {} : { model }), fallbacks: [...fallbacks] };
+  }
+  const sorted: Record<string, ModelClass> = {};
+  for (const id of Object.keys(roles).toSorted()) {
+    const modelClass = roles[id];
+    if (modelClass !== undefined) sorted[id] = modelClass;
+  }
+  return { classes, roles: sorted };
 }
 
 /**

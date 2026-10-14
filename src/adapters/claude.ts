@@ -140,11 +140,15 @@ import {
   resolveAgentGrant,
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
+import { modelMapPath } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
+  isModelClass,
+  MODEL_LADDER,
   pinsFor,
   resolveEffortValue,
   resolveModelValue,
+  type ModelPickSource,
 } from "../roster/modelLadder.ts";
 import { cliCallHint } from "../shared/cliCall.ts";
 import {
@@ -152,7 +156,7 @@ import {
   toClaudeToolsFrontmatter,
 } from "../tools/translator.ts";
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
-import type { Tool } from "../types/core.ts";
+import type { ModelClass, Tool } from "../types/core.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -391,7 +395,7 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
   hooksConfigPath: CLAUDE_SETTINGS_PATH,
   readsAgentsSkillsDir: false,
   agentsFormat:
-    "`.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt",
+    "`.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`",
   mcpDialect: "claude-json",
   entryFile: CLAUDE_MD_PATH,
   caps: [
@@ -487,12 +491,16 @@ export const claudeResiduePlanner: ResiduePlanner = {
     // agent carrying the tool there would only waste attempts. The review
     // gate's layout keys on the same `hookScriptsRoot` fact.
     const scopedWrite = ctx.facts.hookScriptsRoot === undefined;
+    // Each emitted agent's runtime id by its declared class, for the model map.
+    const roles: Partial<Record<string, ModelClass>> = {};
     for (const item of items) {
       if (item.type === "rule") {
         if (!demoted.has(item.id)) rows.push(buildRuleFile(item, render.rule));
       }
       else if (item.type === "command") rows.push(buildCommandFile(item, render.command));
       else {
+        const declared = item.frontmatter["model_class"];
+        if (isModelClass(declared)) roles[emittedId(item)] = declared;
         rows.push(
           buildAgentFile(item, grantFor(item), modelFrontmatter(item, ctx), render.agent, scopedWrite),
         );
@@ -506,6 +514,11 @@ export const claudeResiduePlanner: ResiduePlanner = {
       owner: owner("claude-settings", "infra"),
     });
     rows.push(buildReviewGate(ctx));
+    rows.push({
+      path: modelMapPath(TOOL),
+      content: `${JSON.stringify(buildClaudeModelMap(roles, ctx), null, 2)}\n`,
+      owner: owner("claude-model-map", "infra"),
+    });
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
@@ -572,13 +585,24 @@ function grantFor(item: CatalogItem): ResolvedAgentGrant {
   });
 }
 
+/**
+ * The pick source this client hands the resolver: the ids its CLI listed for
+ * the account, where `init` or `sync` saved a list. None is read for this
+ * client today, so a pin binds as written and a class takes its family alias;
+ * passing the source keeps the one resolver call every adapter makes.
+ */
+function pickSource(ctx: EmissionContext): ModelPickSource {
+  const listed = ctx.manifest.models?.listed?.[TOOL]?.ids;
+  return listed === undefined ? {} : { listed };
+}
+
 /** The `model:` and `effort:` lines for one agent, or nothing where the ladder answers nothing. */
 function modelFrontmatter(item: CatalogItem, ctx: EmissionContext): string[] {
   const modelClass = item.frontmatter["model_class"];
   if (typeof modelClass !== "string") return [];
 
   const models = ctx.manifest.models;
-  const model = resolveModelValue(modelClass, TOOL, pinsFor(models, TOOL));
+  const model = resolveModelValue(modelClass, TOOL, pinsFor(models, TOOL), models?.effort, pickSource(ctx));
   const effort = resolveEffortValue(modelClass, TOOL, models?.effort);
   // Quoted through {@link yamlScalar}, like every other value this file writes
   // into frontmatter. Both are OPERATOR input: `stamity config set model.<class>`
@@ -591,6 +615,42 @@ function modelFrontmatter(item: CatalogItem, ctx: EmissionContext): string[] {
     ...(model === undefined ? [] : [`model: ${yamlScalar(model)}`]),
     ...(effort === undefined ? [] : [`effort: ${yamlScalar(effort)}`]),
   ];
+}
+
+/** `.stamity/generated/models/claude.json`: every ladder class's model, and each emitted role's class. */
+export interface ClaudeModelMap {
+  classes: Record<ModelClass, { model?: string; fallbacks: string[] }>;
+  roles: Record<string, ModelClass>;
+}
+
+/**
+ * The class-to-model map (REQ-LADDER-007) the touchpoints read to pass
+ * `model` on a sub-agent call. Every ladder class is present in the ladder's
+ * order, `frontier` included although no agent file declares it, because a
+ * flow escalates a role to it on the call; each holds what the agent files
+ * carry for the class — the operator's pin, else the family alias (`frontier`
+ * on `fable`). `fallbacks` is empty: this client has no shipped priority list,
+ * its aliases name a family rather than one id. `roles` maps each emitted
+ * agent's runtime id to its declared class, sorted by id so the bytes are
+ * stable.
+ */
+function buildClaudeModelMap(
+  roles: Readonly<Partial<Record<string, ModelClass>>>,
+  ctx: EmissionContext,
+): ClaudeModelMap {
+  const models = ctx.manifest.models;
+  const pins = pinsFor(models, TOOL);
+  const classes = {} as ClaudeModelMap["classes"];
+  for (const { modelClass } of MODEL_LADDER) {
+    const model = resolveModelValue(modelClass, TOOL, pins, models?.effort, pickSource(ctx));
+    classes[modelClass] = { ...(model === undefined ? {} : { model }), fallbacks: [] };
+  }
+  const sorted: Record<string, ModelClass> = {};
+  for (const id of Object.keys(roles).toSorted()) {
+    const modelClass = roles[id];
+    if (modelClass !== undefined) sorted[id] = modelClass;
+  }
+  return { classes, roles: sorted };
 }
 
 // ── Builders ─────────────────────────────────────────────────────
