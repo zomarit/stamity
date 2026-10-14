@@ -527,6 +527,22 @@ function listHolds(listed: readonly string[], pin: string): boolean {
 }
 
 /**
+ * Whether the account's list `listed` holds the model operator pin `pin`
+ * names: the test {@link resolveModelValue} keeps a pin by, and re-picks one
+ * that fails. A caller reporting on a pin (`stamity check`'s `model-pins` row)
+ * calls this rather than a copy, so the report and the emission agree.
+ *
+ * The pin is trimmed as the resolver reads it. A bracketed pin is judged by
+ * its base id, the text before the first `[`, untrimmed: the options ride on
+ * a model, and a model the account lacks fails the call whatever options it
+ * carries.
+ */
+export function listHoldsPin(listed: readonly string[], pin: string): boolean {
+  const base = pin.trim().split("[")[0] ?? pin;
+  return listHolds(listed, base);
+}
+
+/**
  * The model value before any effort parameter rides on it, in the order the
  * module header gives: the pin (re-picked only when the account's list is
  * known and lacks it), the client's alias, then — for a caller carrying the
@@ -546,10 +562,7 @@ function baseModelValue(
   const listed = pick?.listed;
   const pin = stated(pins[modelClass]);
   if (pin !== undefined) {
-    // A bracketed pin is judged by its base id: the options ride on a model,
-    // and a model the account lacks fails the call whatever options it carries.
-    const base = pin.split("[")[0] ?? pin;
-    if (listed === undefined || listHolds(listed, base)) return pin;
+    if (listed === undefined || listHoldsPin(listed, pin)) return pin;
     // An id the account lacks fails the call; a re-pick that finds nothing on
     // the list either keeps the operator's value rather than a shipped one.
     return pickModel(projection.tool, modelClass, effort, listed)?.id ?? pin;

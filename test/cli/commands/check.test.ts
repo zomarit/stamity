@@ -33,6 +33,7 @@ import {
 } from "../../../src/manifest/manifest.ts";
 import { OWNED_PATHS } from "../../../src/manifest/ownedPaths.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
+import { pinsFor, resolveModelValue } from "../../../src/roster/modelLadder.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import {
@@ -4050,6 +4051,40 @@ describe("check — model-pins", () => {
     );
     expect(off.status).toBe("warn");
     expect(off.detail).toContain(`cursor advanced: the pinned model "claude-opus-4" is not on cursor's list`);
+  });
+
+  it("reads a pin with bracket options the way emission does", async () => {
+    // The row and the resolver share one "list holds this pin" test, so the row warns on a
+    // bracketed pin exactly where emission re-picks it. The resolver judges the id before `[`
+    // untrimmed: `gpt-6-sol[effort=high]` is kept, `gpt-6-sol [effort=high]` looks up
+    // "gpt-6-sol " and is re-picked, and the row says so rather than passing on the trimmed id.
+    const saved = [...CODEX_SAVED.ids];
+    const verdictFor = async (pin: string) => {
+      const manifest = pinnedManifest(["codex"], {
+        pins: { standard: { codex: pin } },
+        listed: { codex: { ...CODEX_SAVED, ids: saved } },
+      });
+      const emitted = resolveModelValue("standard", "codex", pinsFor(manifest.models, "codex"), {}, { listed: saved });
+      const verdict = await checkModelPins(manifest, { STAMITY_NO_CLIENT_PROBE: "1" }, fakeLister({}).lister, "/repo");
+      return { emitted, verdict };
+    };
+
+    const kept = await verdictFor("gpt-6-sol[effort=high]");
+    expect(kept.emitted).toBe("gpt-6-sol[effort=high]");
+    expect(kept.verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "codex: 4 class(es), each pinned or emitted model on the list (saved by the last sync)",
+    });
+
+    const repicked = await verdictFor("gpt-6-sol [effort=high]");
+    expect(repicked.emitted).not.toBe("gpt-6-sol [effort=high]");
+    expect(saved).toContain(repicked.emitted);
+    expect(repicked.verdict.status).toBe("warn");
+    expect(repicked.verdict.detail).toBe(
+      `codex standard: the pinned model "gpt-6-sol " is not on codex's list (saved by the last sync); pin a listed one with ` +
+        npxCommand("config set model.standard.codex <id>"),
+    );
   });
 
   it("falls back to the saved list when the live read times out, and is unverified with neither", async () => {

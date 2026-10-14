@@ -842,9 +842,12 @@ describe("the effort axis has no exported predicate", () => {
     // command's refusal and its list row; `effortDisclosures` by the planner.
     // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): `pinsFor` joined the list; its
     // callers are the four adapters and the config command, which the loop below still asserts.
+    // TEST CHANGE, justified (review/86): `listHoldsPin` joined the list — the one "list holds
+    // a pin" test, called by the resolver and by `check`'s model-pins row so the two agree.
     expect(exportedFunctions.toSorted()).toEqual([
       "effortDisclosures",
       "isModelClass",
+      "listHoldsPin",
       "nearestExpressibleEffort",
       "pinsFor",
       "resolveEffortValue",

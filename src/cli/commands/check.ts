@@ -36,8 +36,8 @@ import {
 } from "../../pack/verifyInstalled.ts";
 import type { PackArtifactReach, PackReach } from "../../types/content.ts";
 import { MODEL_PRIORITY } from "../../roster/modelDefaults.ts";
-import { MODEL_LADDER, pinsFor, resolveModelValue } from "../../roster/modelLadder.ts";
-import { EFFORT_LEVELS, TOOLS, type Tool, VALID_TOOLS } from "../../types/core.ts";
+import { listHoldsPin, MODEL_LADDER, pinsFor, resolveModelValue } from "../../roster/modelLadder.ts";
+import { TOOLS, type Tool, VALID_TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import {
   isPackOwner,
@@ -1462,32 +1462,15 @@ export type ModelLister = (
 ) => Promise<ModelListOutcome>;
 
 /**
- * The tail after `<model>-` that makes a listed id an effort variant of that
- * model: one effort level or `none`, optionally `-fast`. The same rule as the
- * ladder's own (`../../roster/modelLadder.ts`, `EFFORT_VARIANT_TAIL` and
- * `listHolds`, module-private there), so this row and the resolver agree on
- * what a list holds.
+ * A model value without its bracket options (`<id>[effort=high]` → `<id>`): the
+ * id `listHoldsPin` looks up, printed as it is read. The value is trimmed and
+ * the id before `[` is not, so a pin `<id> [effort=high]` prints with the space
+ * the lookup carries rather than as an id the list visibly holds.
  */
-const LISTED_EFFORT_VARIANT_TAIL = new RegExp(`^(?:${[...EFFORT_LEVELS, "none"].join("|")})(?:-fast)?$`, "i");
-
-/**
- * Whether `ids` holds `model`: the id itself, or — a Cursor family pin
- * (`claude-opus-4-8`) — an exact effort variant of it (`claude-opus-4-8-high`),
- * which that client's CLI accepts, never a longer id that merely starts with it
- * (`claude-opus-5-5-high` is not a variant of `claude-opus-5`). The ladder
- * keeps such a pin rather than re-picking it, so the row must not warn on it.
- */
-function listHoldsModel(ids: readonly string[], model: string): boolean {
-  return (
-    ids.includes(model) ||
-    ids.some((id) => id.startsWith(`${model}-`) && LISTED_EFFORT_VARIANT_TAIL.test(id.slice(model.length + 1)))
-  );
-}
-
-/** A model value without its bracket options (`<id>[effort=high]` → `<id>`), the part a list names. */
 function modelIdOf(value: string): string {
-  const bracket = value.indexOf("[");
-  return (bracket === -1 ? value : value.slice(0, bracket)).trim();
+  const trimmed = value.trim();
+  const bracket = trimmed.indexOf("[");
+  return bracket === -1 ? trimmed : trimmed.slice(0, bracket);
 }
 
 /** Why one client has nothing to compare with, after its live read came to `outcome`. */
@@ -1540,19 +1523,21 @@ function verifyClientModels(
   const warnings: string[] = [];
   let compared = 0;
   for (const { modelClass } of MODEL_LADDER) {
-    const pinned = modelIdOf(pins[modelClass] ?? "");
+    const pinValue = pins[modelClass] ?? "";
+    const pinned = modelIdOf(pinValue);
     const emittedValue = resolveModelValue(modelClass, tool, pins, efforts, pick);
     const emitted = emittedValue === undefined ? "" : modelIdOf(emittedValue);
     if (pinned === "" && emitted === "") continue;
     compared += 1;
     const where = `${tool}'s list (${reference.label})`;
-    if (pinned !== "" && !listHoldsModel(reference.ids, pinned)) {
+    // The resolver's own test (`listHoldsPin`), so the row warns exactly where emission re-picks.
+    if (pinned !== "" && !listHoldsPin(reference.ids, pinValue)) {
       warnings.push(
         `${tool} ${modelClass}: the pinned model "${sanitizeLabel(pinned)}" is not on ${where}; pin a listed one with ` +
           packageCommand(`config set model.${modelClass}.${tool} <id>`),
       );
     }
-    if (emitted !== "" && emitted !== pinned && !listHoldsModel(reference.ids, emitted)) {
+    if (emittedValue !== undefined && emitted !== "" && emitted !== pinned && !listHoldsPin(reference.ids, emittedValue)) {
       warnings.push(
         `${tool} ${modelClass}: the emitted model "${sanitizeLabel(emitted)}" is not on ${where}; ` +
           `${packageCommand("sync")} reads the list again and re-picks`,
