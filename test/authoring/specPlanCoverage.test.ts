@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -70,9 +70,9 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
     expect(check(removal).status).toBe("pass");
     expect(check(removal.replace("001–002", "001–003")).findings.some((row) => row.code === "dangling-requirement" && row.message.includes("003"))).toBe(true);
   });
-  it("reads the persisted candidate plan with all ten requirements", () => {
-    expect(check(readFileSync("docs/plans/006-finish-implementation.md", "utf8"), readFileSync("docs/specs/implementation-finish.md", "utf8")).status).toBe("pass");
-  });
+  // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): "reads the persisted candidate plan with all
+  // ten requirements" reads plan 006, a record that leaves `main`; it moved unchanged to
+  // test/records/specPlanCoverage.test.ts, under this describe's name.
 
   // CHECK-1, the three false-pass classes. Each one let a plan through with requirements out of
   // scope, so the checker reported a clean structure over work nobody had assigned.
@@ -217,52 +217,31 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
     });
   });
 
-  it("scopes all twenty-two requirements of the persisted Prove plan, not its range endpoints", () => {
-    const result = check(readFileSync("docs/plans/007-prove-behavior-and-value.md", "utf8"),
-      readFileSync("docs/specs/prove-behavior-and-value.md", "utf8"));
+  // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): this case read plan 007 and its spec, and plan
+  // 007 is a record that leaves `main`. It is synthetic now, written in the two shapes plan 007 adds over the prose
+  // range case above: the colon form (`ADDED: … … …`) and a second ADDED clause on the same line, over table-form
+  // units. The scope is asserted as the exact four ids, which neither an endpoints-only reading (no REQ-X-002) nor a
+  // first-clause-only reading (no REQ-X-004) produces; the twenty-two of the real plan is no longer counted.
+  it("scopes all four requirements of a Prove-shaped plan, not its range endpoints", () => {
+    const unit = (id: string, requirements: string, dependsOn: string) =>
+      `### ${id} — a unit\n\n| Field | Content |\n|---|---|\n| \`id\` | ${id} |\n| \`requirements\` | ${requirements} |\n| \`depends_on\` | ${dependsOn} |\n`;
+    const prove = "## Spec delta\n\nThe spec is the source. ADDED: REQ-X-001 … REQ-X-003, one per numbered requirement. " +
+      `ADDED at the merge: REQ-X-004, landed by a follow-up unit.\n\n## Units\n\n${unit("u1", "REQ-X-001, REQ-X-002", "none")}\n` +
+      unit("u2", "REQ-X-003, REQ-X-004", "u1");
+    const proveSpec = ["## Requirements", "", ...[1, 2, 3, 4].map((n) => `### REQ-X-00${n}\nRule ${n}.`)].join("\n") + "\n";
+    const result = check(prove, proveSpec);
     expect(result.status).toBe("pass");
-    expect(result.scope).toHaveLength(22);
+    expect(result.scope).toEqual(["REQ-X-001", "REQ-X-002", "REQ-X-003", "REQ-X-004"]);
   });
 });
 
 // REQ-FLOW-070 — plan-lint L5. The size codes are advisory: each one names a unit or a delta entry
 // and its line, and none of them turns the status to `fail`.
 describe("REQ-FLOW-070 — plan size, advisory (L5)", () => {
-  type Finding = { code: string; path: string; line: number; message: string };
   const L5 = new Set(["unit-size", "unit-oversize", "unit-prewritten", "delta-verbose"]);
   /** U1 grown to `span` lines (its heading and two fields included), one blank line before `### U2`. */
   const grown = (span: number, filler = (n: number) => `Note ${n}.`) => plan.replace("- **depends_on**: none.\n",
     `- **depends_on**: none.\n${Array.from({ length: span - 3 }, (_, n) => filler(n)).join("\n")}\n`);
-  /** The persisted plans are read against the real spec tree, from the repository root. */
-  function checkRepo(planPath: string) {
-    let output: string;
-    try {
-      output = execFileSync(process.execPath, [script, planPath, "docs/specs"], { encoding: "utf8", stdio: "pipe" });
-    } catch (error) {
-      output = String((error as { stdout?: string }).stdout ?? "");
-    }
-    return JSON.parse(output) as { status: string; units: string[]; findings: Finding[] };
-  }
-  /**
-   * A persisted plan read by quoted line, so a case names a heading and not the line it sat on when the case was
-   * written: `lineOf` is the 1-based line of the one row reading exactly `text`, and `span` runs from a unit's
-   * heading to its last non-blank line before the heading that ends it.
-   */
-  function planRows(planPath: string) {
-    const rows = readFileSync(planPath, "utf8").split(/\r?\n/);
-    const lineOf = (text: string) => {
-      const at = rows.flatMap((row, index) => (row === text ? [index + 1] : []));
-      expect(at, `${planPath} holds one line reading: ${text}`).toHaveLength(1);
-      return at[0] ?? 0;
-    };
-    const span = (heading: string, next: string) => {
-      const line = lineOf(heading);
-      let last = lineOf(next) - 1;
-      while (last > line && !rows[last - 1]?.trim()) last -= 1;
-      return { line, lines: last - line + 1, rows: rows.slice(line - 1, last) };
-    };
-    return { lineOf, span };
-  }
 
   it("starts a unit only at an unindented `### ` line, so an indented heading-like line is no unit", () => {
     for (const written of ["  ### X", "  `### Item text is data` naming the rule"]) {
@@ -270,45 +249,9 @@ describe("REQ-FLOW-070 — plan size, advisory (L5)", () => {
       expect(result, written).toMatchObject({ status: "pass", units: ["U1", "U2"], findings: [] });
     }
   });
-  it("reads plan 015's continuation line as no unit, and measures b1 whole", () => {
-    const path = "docs/plans/015-board-writes.md";
-    const result = checkRepo(path);
-    expect(result.status).toBe("pass");
-    expect(result.units).not.toContain("Item");
-    // TEST CHANGE, justified (2026-10-10, q3a-plan-size-script, review/13): the case pinned the numbers measured at
-    // 1987ed01 (the heading at :361, a span of 228 lines, the first `>` run at :467) on a plan that is still edited,
-    // so one line added to the unit turned it red. The same two exact findings are asserted; their numbers are now
-    // read from the plan by quoted line: the unit's heading, the heading that ends it, the first line of its `>` run.
-    const { lineOf, span } = planRows(path);
-    const b1 = span("### b1-board-contract — the board's write contract",
-      "### b2-pr-resolve-replies — PR-thread replies need no board setup");
-    expect(b1.rows.some((row) => row.startsWith("  `### Item text is data`"))).toBe(true);
-    expect(result.findings.filter((row) => row.message.startsWith("b1-board-contract "))).toEqual([
-      { code: "unit-oversize", path, line: b1.line, message: `b1-board-contract spans ${b1.lines} lines` },
-      { code: "unit-prewritten", path, line: b1.line,
-        message: `b1-board-contract carries prewritten text at line ${lineOf("    > ## Write-back contract")}` },
-    ]);
-  });
-  it("finds no unit-size, unit-oversize or unit-prewritten code in plan 013-02", () => {
-    const codes = checkRepo("docs/plans/013-optimization-sweep-02.md").findings.map((row) => row.code);
-    expect(codes.filter((code) => code.startsWith("unit-"))).toEqual([]);
-  });
-  it("counts plan 017-01's a1-docs-contract whole, past the `##` headings inside its fence", () => {
-    // TEST CHANGE, justified (2026-10-10, q3a-plan-size-script, review/13): the case pinned the numbers measured at
-    // 1987ed01 (the heading at :274, a span of 105 lines, the first fence at :289). The same two exact findings are
-    // asserted, their numbers read from the plan by quoted heading. Cut at the unit's first fenced `## ` the span
-    // would stop short of the heading that ends it, and the first assertion below keeps such a line in the unit.
-    const path = "docs/plans/017-docs-overhaul-01.md";
-    const a1 = planRows(path).span("### a1-docs-contract — the docs contract every agent here loads when it opens a docs page",
-      "### a2-prose-checks — the counter, the budgets, and the checks that keep pages short");
-    const fence = a1.rows.findIndex((row) => row.startsWith("```"));
-    expect(a1.rows.findIndex((row) => row.startsWith("## "))).toBeGreaterThan(fence);
-    expect(fence).toBeGreaterThan(0);
-    expect(checkRepo(path).findings.filter((row) => row.message.startsWith("a1-docs-contract "))).toEqual([
-      { code: "unit-oversize", path, line: a1.line, message: `a1-docs-contract spans ${a1.lines} lines` },
-      { code: "unit-prewritten", path, line: a1.line, message: `a1-docs-contract carries prewritten text at line ${a1.line + fence}` },
-    ]);
-  });
+  // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): the four cases that read a persisted plan
+  // (015 twice, 013-02, 017-01) moved unchanged, with the checkRepo and planRows helpers they used, to
+  // test/records/specPlanCoverage.test.ts under this describe's name: those plans are records that leave `main`.
   it("counts a unit whole past a `## ` line inside its fence", () => {
     // Heading, two fields, the opening fence, the fenced `## ` line, 57 notes and the closing fence: 63 lines. Read
     // as a section heading, the fenced line would end the Units section at five lines and lose U2 with it.
@@ -362,23 +305,6 @@ describe("REQ-FLOW-070 — plan size, advisory (L5)", () => {
       expect(entry(7), heading).toMatchObject({ status: "pass",
         findings: [{ code: "delta-verbose", path: "plan.md", line: 3, message: "REQ-DEMO-001 runs 7 lines" }] });
     }
-  });
-  it("reports the first `### ADDED REQ-` entry of plan 015 as delta-verbose", () => {
-    // The plan is a fixture of the heading form here, so the entry is found by that form and its numbers are read
-    // from the plan. No id of the plan's spec is written in this file: the spec-status gate reads an id cited by a
-    // test as that requirement's proof, and this case proves nothing about the board.
-    const path = "docs/plans/015-board-writes.md";
-    const rows = readFileSync(path, "utf8").split(/\r?\n/);
-    const at = rows.findIndex((row) => row.startsWith("### ADDED REQ-"));
-    const next = rows.findIndex((row, index) => index > at && /^#{1,6}\s/.test(row));
-    const id = /^### ADDED (\S+)/.exec(rows[at] ?? "")?.[1];
-    const below = rows.slice(at + 1, next).filter((row) => row.trim()).length;
-    expect(at).toBeGreaterThan(-1);
-    expect(below).toBeGreaterThan(6);
-    const result = checkRepo(path);
-    expect(result.status).toBe("pass");
-    expect(result.findings.find((row) => row.code === "delta-verbose"))
-      .toEqual({ code: "delta-verbose", path, line: at + 1, message: `${id} runs ${below} lines` });
   });
   it("still reads no `### ADDED REQ-` heading as a provisional definition", () => {
     // The definition reading is a separate rule and keeps its shape: only a bare `### REQ-` heading defines an id for

@@ -9,7 +9,7 @@ import { aggregate, calibrationMatches, EvalBlocked, headings, judgeBlocks, loca
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, HARNESS, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
-import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, sameConfiguration, undisposedRepeats } from "../../scripts/eval/run.mjs";
+import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
 import { CASES_DIR, REPO_ROOT, RUNNER_SKILL_FILE, caseFiles } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
@@ -1561,20 +1561,10 @@ describe("full run admission and strict aggregation", () => {
     expect(undisposedRepeats({ candidate: disposedCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual(["case-recycled:A1"]);
   });
 
-  // Run 27's eight repeats against the live corpus, the strongest evidence the guard has: the guard
-  // reads the prior run's case file through `git show <candidate>:…`, so a depth-one checkout (the
-  // CI test legs) cannot verify a note's hash and the guard fails closed there — the right behaviour
-  // for a runner, and a reason to skip this assertion rather than to weaken the guard.
-  const run27 = JSON.parse(read("evals/runs/2026-09-15-run-27/summary.json"));
-  const run27CandidateInHistory = (() => {
-    try { execFileSync("git", ["cat-file", "-e", `${run27.candidate}^{commit}`], { cwd: REPO_ROOT, stdio: "ignore" }); return true; } catch { return false; }
-  })();
-  it.skipIf(!run27CandidateInHistory)("reads every one of run 27's eight repeats as disposed by the live corpus (needs run 27's candidate in history)", () => {
-    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
-      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
-    expect(run27.advisory.repeats).toHaveLength(8);
-    expect(undisposedRepeats(run27, roster, REPO_ROOT)).toEqual([]);
-  });
+  // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): "reads every one of run 27's eight repeats as
+  // disposed by the live corpus" moved unchanged, with its collection-time read of run 27's summary and its history
+  // probe, to test/records/run27Repeats.test.ts under this describe's name: run 27 is a record that leaves `main`, and
+  // the read at collection failed this whole file in a checkout without the records.
 
   it("blocks the next run on an undisposed repeat, naming it, and lets a disposed one through", async () => {
     const blocked = temp();
@@ -1739,23 +1729,9 @@ describe("full run admission and strict aggregation", () => {
     writeRun(root, "2026-09-13-run-3", { profile: "codex-astra" });
     expect(previousRun(root, FIXTURE_KEY)?.runId).toBe("2026-09-13-run-3");
   });
-  // ADDED 2026-10-08 (REQ-PROVE-036, unit c3-release-rules, inbox rows 274 and 275): a pin of what
-  // the comparator already does, so a later change that drops `harness` from the key fails here. On
-  // the driver route `harness` carries the client and its version — read off run 43's own committed
-  // `inputs.json` rather than typed — so two client versions are two configurations.
-  it("keys two client versions apart through the harness, and reads an unrecorded harness as not compared", () => {
-    const run43 = JSON.parse(read("evals/runs/2026-10-08-run-43/inputs.json")) as { configuration: object };
-    const older = comparatorKey(run43.configuration);
-    expect(older.harness).toBe("claude-code-cli 2.1.286");
-    expect(older.models).toEqual(OPUS_5_5);
-    const newer = { ...older, harness: "claude-code-cli 2.1.291" };
-    expect(sameConfiguration(older, newer)).toBe(false);
-    expect(sameConfiguration(older, { ...older })).toBe(true);
-    // The older run recorded no harness: the other fields decide, both ways.
-    const unrecorded = { ...older, harness: null };
-    expect(sameConfiguration(unrecorded, newer)).toBe(true);
-    expect(sameConfiguration(unrecorded, { ...newer, models: OPUS_5 })).toBe(false);
-  });
+  // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): "keys two client versions apart through the
+  // harness, and reads an unrecorded harness as not compared" moved unchanged to test/records/evalRunInputs.test.ts
+  // under this describe's name: it reads run 43's committed inputs.json, a record that leaves `main`.
 });
 
 describe("committed inputs and manual entry point", () => {

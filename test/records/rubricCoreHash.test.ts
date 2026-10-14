@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { REPO_ROOT, RUBRIC_FILE } from "./support.ts";
+import { REPO_ROOT, RUBRIC_FILE } from "../evals/support.ts";
 
 /**
  * The grading core of the rubric is pinned to the newest committed run.
@@ -28,6 +28,11 @@ import { REPO_ROOT, RUBRIC_FILE } from "./support.ts";
  * Red-checked by hand on 2026-09-22: one byte changed above the boundary turned the hash assertion
  * red with the rule in its message; the byte was restored and the core hashed back to the run's
  * value before the file was committed.
+ *
+ * TEST CHANGE, justified: 2026-10-14, unit r1b-records-suite-eval-cases. Moved whole from
+ * `test/evals/` to the records suite, because the newest run's `inputs.json` under `evals/runs/`
+ * is a record that leaves `main`; `npm run test:records` runs it. The support import and the
+ * file's own path in the rule message follow the move. No assertion moved.
  */
 
 const CALIBRATION_BOUNDARY = "## Calibration protocol\n";
@@ -75,7 +80,7 @@ describe("the rubric's grading core is pinned to the newest committed run", () =
       "release's run with the prior complete run only when the core hash is unchanged, so this edit means the " +
       "next increment cannot compose: either restore the bytes above the boundary (carry the change below it, " +
       "or into evals/README.md) or run a full baseline and retain it, which is the maintainer's call. The " +
-      "header of test/evals/rubricCoreHash.test.ts records the 2026-09-20 increment the driver refused for this.";
+      "header of test/records/rubricCoreHash.test.ts records the 2026-09-20 increment the driver refused for this.";
     expect(actual, rule).toBe(recorded);
     expect(Buffer.byteLength(core), rule).toBe(recordedBytes);
   });

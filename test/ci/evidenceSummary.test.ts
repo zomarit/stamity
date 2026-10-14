@@ -56,12 +56,15 @@ describe("compact archived eval summaries", () => {
     expect(source).toEqual(before);
   });
 
-  it("preserves real run 24 metrics, verdicts, calibration and advisory gating with real nonempty payloads", () => {
-    const recorded = JSON.parse(readFileSync("evals/runs/2026-09-11-run-24/summary.json", "utf8"));
-    // The storage migration keeps this summary's facts locally and archives its full rows.
+  // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): this case read run 24's committed
+  // `summary.json` under `evals/runs/`, a record that leaves `main`. Its facts now come from the synthetic
+  // `original()` above, so the name no longer says "real run 24 metrics"; the payloads are still run 24's real
+  // recorded calls, and every assertion stands: the compaction keeps the metrics, verdicts, calibration and
+  // advisory fields and drops only `aggregate.rows` and `coverage`.
+  it("preserves the metrics, verdicts, calibration and advisory gating with real nonempty run 24 payloads", () => {
+    const recorded = original();
     // Exact recorded replay calls supply nonempty payloads without fetching the full archive.
     const source = structuredClone(recorded);
-    delete source.archiveStorage;
     const calls = JSON.parse(readFileSync("test/evals/fixtures/historical-replay/run-24/calls.json", "utf8"));
     source.aggregate.rows = calls.filter((call: { role: string }) => call.role === "judge");
     source.coverage = calls.filter((call: { role: string }) => call.role === "scenario");
@@ -73,7 +76,7 @@ describe("compact archived eval summaries", () => {
     restored.aggregate.rows = source.aggregate.rows;
     restored.coverage = source.coverage;
     expect(restored).toEqual(source);
-    for (const key of ["configurationHash", "status", "startedAt", "advisory", "calibration", "notDone"])
+    for (const key of ["configurationHash", "status", "startedAt", "advisory", "calibration", "notDone"] as const)
       expect(compact[key], key).toEqual(recorded[key]);
     expect(compact.aggregate.metrics).toEqual(recorded.aggregate.metrics);
     expect(compact.aggregate.floors).toEqual(recorded.aggregate.floors);
