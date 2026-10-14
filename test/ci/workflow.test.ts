@@ -1103,7 +1103,9 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(runOf(steps, "Install")).toBe("npm ci");
       expect(runOf(steps, "No record tracked on this commit")).toBe("node scripts/records.mjs guard");
       // No fetch: the checkout already holds `origin/records`.
-      expect(runOf(steps, "Restore the records")).toBe("node scripts/records.mjs restore --ref origin/records --no-fetch --force");
+      // TEST CHANGE, justified (run 2026-10-13_records-branch, ledger pr/5): the ref is now spelled in full, because the
+      // full-history checkout fetches every tag and a tag named `origin/records` would win the short name's lookup.
+      expect(runOf(steps, "Restore the records")).toBe("node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force");
       expect(runOf(steps, "Records suite")).toBe("npm run test:records");
       expect(runOf(steps, "Measurements page drift")).toBe(
         "node scripts/generate-docs.mjs --page measurements && git diff --exit-code docs/measurements.md",
@@ -1121,8 +1123,10 @@ describe("ci.yml — the merge-blocking gate", () => {
     it("runs the leak gate over a worktree of the records branch, not over main's checkout", () => {
       const { steps } = records();
       const gate = runOf(steps, "Leak gate over the records branch");
+      // TEST CHANGE, justified (run 2026-10-13_records-branch, ledger pr/5): the worktree's ref is spelled in full, so
+      // a fetched tag named `origin/records` cannot stand in for the branch the gate reads.
       expect(gate.trim().split("\n")).toEqual([
-        'git worktree add --detach "$RUNNER_TEMP/records-tree" origin/records',
+        'git worktree add --detach "$RUNNER_TEMP/records-tree" refs/remotes/origin/records',
         'node scripts/leak-gate.mjs --root "$RUNNER_TEMP/records-tree"',
       ]);
       expect(gate).not.toContain("npm run gate");
@@ -3193,9 +3197,12 @@ describe("release.yml — the only publishing path", () => {
     // TEST CHANGE, justified (run 2026-10-13_records-branch, ledger pr/4, the maintainer's decision "Log the sha
     // now, pin at 1.15.0"): the step was one command; it now also prints the records commit it restored, so the
     // run's log names the evidence a release was gated on. The restore command itself is unchanged.
+    // TEST CHANGE, justified (run 2026-10-13_records-branch, ledger pr/5): both commands spell the ref in full, since
+    // the depth-0 checkout fetches every tag and a tag named `origin/records` would shadow the short name; the log
+    // line keeps the short name.
     expect(restore.run).toBe([
-      "node scripts/records.mjs restore --ref origin/records --no-fetch --force",
-      "records_commit=$(git rev-parse --verify 'origin/records^{commit}')",
+      "node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force",
+      "records_commit=$(git rev-parse --verify 'refs/remotes/origin/records^{commit}')",
       "echo \"Restored the records commit $records_commit (origin/records)\"",
       "",
     ].join("\n"));

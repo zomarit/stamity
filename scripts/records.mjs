@@ -160,6 +160,15 @@ async function run(options, body) {
 
 const splitZ = (output) => output.split('\0').filter(Boolean)
 const lstatOrNull = (path) => { try { return lstatSync(path) } catch { return null } } // absent is an answer here
+/**
+ * Whether a record's mode is read from the disk's executable bit: not on Windows, which keeps none,
+ * and not where git's `core.fileMode` is false, a disk that reports every file as executable; there
+ * a copy's mode is the sync base's (else the ref's), as git itself reads it.
+ */
+const modesOnDisk = (ctx) => process.platform !== 'win32' &&
+  ctx.tryGit(['config', '--type=bool', '--get', 'core.fileMode']).output.trim() !== 'false'
+/** A ref as the output names it: the remote-tracking ref by its short name. */
+const named = (ref) => (ref === REMOTE_REF ? 'origin/records' : ref)
 
 /** Every row of the records set at a commit, `.stamity/handoffs/.gitkeep` left out. */
 function lsTree(ctx, oid) {
@@ -280,9 +289,11 @@ function refuseUnsafeTree(ctx, oid, { holds, outcome, fix, onBranch }) {
   if (lines.length > 0) stop(1, lines)
 }
 
-function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false }) {
+// The default is the remote-tracking ref in full: a tag named `origin/records` would win the short name's lookup.
+function restoreIn(ctx, { ref: rev = REMOTE_REF, fetch = true, force = false }) {
+  const ref = named(rev)
   if (fetch) fetchRecords(ctx)
-  const oid = requireCommit(ctx, ref, `fetch the records branch first; where none exists, ${NO_BRANCH_HINT}`)
+  const oid = requireCommit(ctx, rev, `fetch the records branch first; where none exists, ${NO_BRANCH_HINT}`)
   // One pushed without this script that breaks the tree rule is refused before any write, so the records job fails on it.
   refuseUnsafeTree(ctx, oid, {
     holds: `${ref} holds`, outcome: 'nothing was written', fix: 'Drop the old spelling of each from the records branch', onBranch: () => true,
@@ -291,13 +302,14 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
   const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
   if (unsupported.length > 0) stop(1, [`refused: ${ref} holds entries restore does not write (only regular files under the record paths):`, ...unsupported])
   // The last synced copy of each record, mode and blob: a local copy equal to it is stale, one that
-  // differs from it, in either, is an edit. Windows keeps no executable bit, so there a copy's mode
-  // is the base's (else the ref's) and a change of mode is never local, as `commit` reads it there.
+  // differs from it, in either, is an edit. Where the disk's mode is not read (`modesOnDisk`), a
+  // copy's mode is the base's (else the ref's) and a change of mode is never local, as `commit` reads it there.
+  const diskModes = modesOnDisk(ctx)
   const synced = ctx.commit(SYNC_BASE)
   const was = synced === null ? null : new Map(lsTree(ctx, synced).map((row) => [row.path, row]))
   const entry = (row) => `${row.mode} ${row.oid}`
   const onDisk = (path, stat, mode) => entry({
-    mode: process.platform === 'win32' ? mode : (stat.mode & 0o100 ? '100755' : '100644'),
+    mode: diskModes ? (stat.mode & 0o100 ? '100755' : '100644') : mode,
     oid: ctx.git(['hash-object', `--path=${path}`, '--', path]).trim(),
   })
   const symlinks = new Set(), blocked = new Set(), differs = [], updates = [], pending = [], writes = [], modes = []
@@ -344,7 +356,7 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     stop(1, [
       `refused: ${differs.length + edited.length} record(s) changed both here and on ${ref} since the last sync (${synced}); nothing was written.`,
       ...(differs.length === 0 ? [] : [
-        `For each, save your copy, write ${ref}'s (git show ${ref}:<path>), run restore again, then re-apply your edit; --force takes ${ref}'s copy of every differing record and deletes every unedited copy of a record deleted there:`,
+        `For each, move your copy out of the checkout and run restore again, which writes ${ref}'s copy, bytes and mode, then re-apply your edit; --force takes ${ref}'s copy of every differing record and deletes every unedited copy of a record deleted there:`,
         ...differs.map(({ row }) => row.path),
       ]),
       ...(edited.length === 0 ? [] : [
@@ -491,6 +503,7 @@ async function publishIn(ctx, { message, dryRun, allowDeletions, runGates, held 
   if (deleted.length > 0 && !allowDeletions)
     stop(1, [`refused: ${deleted.length} record(s) on the records branch are gone from disk; restore them, or pass --allow-deletions:`, ...deleted])
   const index = join(ctx.git(['rev-parse', '--absolute-git-dir']).trim(), 'records.index')
+  const diskModes = modesOnDisk(ctx)
   rmSync(index, { force: true })
   let tree
   try {
@@ -498,7 +511,7 @@ async function publishIn(ctx, { message, dryRun, allowDeletions, runGates, held 
     for (const [path, stat] of present) {
       const oid = ctx.git(['hash-object', '-w', `--path=${path}`, '--', path]).trim()
       const was = baseRows.get(path)
-      const mode = process.platform === 'win32' ? (was?.mode ?? '100644') : (stat.mode & 0o100 ? '100755' : '100644')
+      const mode = diskModes ? (stat.mode & 0o100 ? '100755' : '100644') : (was?.mode ?? '100644')
       if (was?.oid !== oid || was.mode !== mode) ctx.git(['update-index', '--add', '--cacheinfo', mode, oid, path], { index })
     }
     for (const path of deleted) ctx.git(['update-index', '--force-remove', '--', path], { index })
@@ -554,7 +567,7 @@ function verifyIn(ctx, base, ref) {
   return { code: 0, lines: [`verified: ${a.size} record path(s) carry the same mode and blob at ${base} and ${ref}`] }
 }
 
-export async function verify({ base, ref = 'origin/records', ...options } = {}) {
+export async function verify({ base, ref = REMOTE_REF, ...options } = {}) {
   return run(options, (ctx) => verifyIn(ctx, base, ref))
 }
 

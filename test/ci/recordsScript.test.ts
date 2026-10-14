@@ -347,6 +347,65 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(w.git(w.origin, "ls-tree", "records", tool)).toMatch(/^100644 /);
   });
 
+  // ADDED by run 2026-10-13_records-branch, fix batch 3 (the re-review's note 1): a copy whose mode alone differs keeps
+  // that mode through a redirect, so advice to write the ref's bytes over it loops; the advice brings the mode too.
+  it.skipIf(!POSIX)("advises a conflict over a mode change so that, followed as printed, restore writes the ref's bytes and mode and runs clean", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    w.write(b, PLAN, "# plan, from b\n");
+    expect((await records.publish({ root: b, env: w.env, message: "b", runGates: passing().run }) as Result).code).toBe(0);
+    chmodSync(join(w.clone, PLAN), 0o755);
+    const refused: Result = await records.restore(w.opts);
+    expect(refused.code, refused.lines.join("\n")).toBe(1);
+    expect(refused.lines).toContain(PLAN);
+    const advice = refused.lines.find((line) => line.startsWith("For each, ")) ?? "";
+    expect(advice).toContain("move your copy out of the checkout and run restore again, which writes origin/records's copy, bytes and mode");
+    // Followed as printed: the copy leaves the checkout, and the next restore writes the ref's.
+    rmSync(join(w.clone, PLAN));
+    const followed: Result = await records.restore(w.opts);
+    expect(followed.code, followed.lines.join("\n")).toBe(0);
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, from b\n");
+    expect(statSync(join(w.clone, PLAN)).mode & 0o111).toBe(0);
+    expect(w.synced(w.clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+  });
+
+  // ADDED by run 2026-10-13_records-branch, fix batch 3 (the re-review's note 2): where git keeps no executable bit
+  // (core.fileMode false: Windows, WSL on /mnt/c, exFAT, each reading every file as executable), the disk's mode is
+  // never a change, so a stale copy is not a pending edit, an upstream edit is no conflict, and nothing is published.
+  it("reads no change of mode from the disk where core.fileMode is false: restore takes the ref's edit and keeps no local one, and commit has nothing to publish", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    w.write(b, PLAN, "# plan, from b\n");
+    expect((await records.publish({ root: b, env: w.env, message: "b", runGates: passing().run }) as Result).code).toBe(0);
+    w.git(w.clone, "config", "core.fileMode", "false");
+    const listed = w.git(w.clone, "ls-tree", "-r", "-z", "--name-only", "refs/remotes/origin/records", "--", ...SPECS).split("\0").filter(Boolean);
+    for (const path of listed) if (existsSync(join(w.clone, path))) chmodSync(join(w.clone, path), 0o755);
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(restored.lines[0]).toMatch(/, updated 1, overwrote 0, .* kept 0 local edit\(s\)$/);
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, from b\n");
+    const dry: Result = await records.publish({ ...w.opts, message: "a", dryRun: true, runGates: passing().run });
+    expect(dry.code, dry.lines.join("\n")).toBe(0);
+    expect(dry.lines).toEqual(["nothing to publish: the records on disk equal origin/records"]);
+  });
+
+  // ADDED by run 2026-10-13_records-branch, fix batch 3 (ledger pr/5): a full-history checkout fetches every tag, and
+  // a tag named `origin/records` wins git's lookup of that short name over the remote-tracking ref.
+  it("reads origin/records by its full ref by default, so a tag of that name stands in for neither restore nor verify", async () => {
+    const w = world();
+    const branch = w.git(w.origin, "rev-parse", "records");
+    const decoy = w.craft(w.clone, branch, (indexed) => {
+      indexed("update-index", "--add", "--cacheinfo", `100644,${w.blob(w.clone, "# plan, from a tag\n")},${PLAN}`);
+    });
+    w.git(w.clone, "tag", "origin/records", decoy);
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
+    expect(w.synced(w.clone)).toBe(branch);
+    const verified: Result = await records.verify({ ...w.opts, base: branch });
+    expect(verified.code, verified.lines.join("\n")).toBe(0);
+  });
+
   it("removes a record the other side deleted when this copy is the sync base's, and keeps an unpublished new file", async () => {
     const w = world();
     const b = await w.machine("b");

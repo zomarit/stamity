@@ -902,7 +902,8 @@ jobs:
   # the canonical repository alone (a fork has no records branch), on every trigger, and needs no
   # other job: a proven push and a failed classifier say nothing about `origin/records`, so neither
   # may skip it. The full-history checkout already holds `origin/records`, the tags and `main`'s
-  # history the records suite reads, so the restore fetches nothing. `guard` refuses a record
+  # history the records suite reads, so the restore fetches nothing; the ref is spelled in full, so
+  # a fetched tag named `origin/records` cannot stand in for the branch. `guard` refuses a record
   # tracked on the checked-out commit. The leak gate runs over a detached worktree of the branch,
   # where every record is tracked: in this checkout the restored records are untracked, and the
   # gate's `--exclude-standard` listing would skip one that `main`'s `.gitignore` or a nested one
@@ -934,14 +935,14 @@ jobs:
         run: node scripts/records.mjs guard
 
       - name: Restore the records
-        run: node scripts/records.mjs restore --ref origin/records --no-fetch --force
+        run: node scripts/records.mjs restore --ref refs/remotes/origin/records --no-fetch --force
 
       - name: Records suite
         run: npm run test:records
 
       - name: Leak gate over the records branch
         run: |
-          git worktree add --detach "$RUNNER_TEMP/records-tree" origin/records
+          git worktree add --detach "$RUNNER_TEMP/records-tree" refs/remotes/origin/records
           node scripts/leak-gate.mjs --root "$RUNNER_TEMP/records-tree"
 
       - name: Measurements page drift

@@ -1132,13 +1132,18 @@ already holds is refused with the plain-git repair printed, whose `git rm` takes
 1. **`setup [--ref <ref>] [--no-fetch]`** writes the marked block of exclude entries, one per record pathspec, into the
    common directory's `info/exclude`, replacing an earlier block in place so a second run is byte-identical, then runs
    `restore` with the same ref and fetch (`:202-211`, `:381-394`).
-2. **`restore [--ref <ref>] [--no-fetch] [--force]`** writes the records of the ref, by default `origin/records`, into
-   the checkout (`:282-379`).
+2. **`restore [--ref <ref>] [--no-fetch] [--force]`** writes the records of the ref, by default
+   `refs/remotes/origin/records`, spelled in full so a tag named `origin/records` cannot stand in for it, into the
+   checkout (`:282-379`).
    - It merges three ways against the sync base, comparing each record's bytes and mode (`100644` or `100755`), so a
      change of mode alone, on either side, is a change (the mode since `371445b4`): a record changed only on the ref
      is written, its mode applied; one changed only on disk is kept and listed as a pending edit; one changed on both
-     refuses the run, listed, with nothing written. With no sync base, a differing file refuses as before. `--force`
-     takes the ref's copy of every differing record, a pending edit included (`:292-313`, `:335-350`).
+     refuses the run, listed, with nothing written; its advice is to move the copy out and restore again, which brings
+     the ref's mode as well as its bytes. With no sync base, a record whose bytes differ refuses as before, and one
+     whose mode alone differs takes the ref's mode. Where git reads no mode from the disk — on Windows, or where
+     `core.fileMode` is `false` — a copy's mode is the base's, else the ref's, so a change of mode is never local
+     there, and `commit` reads it the same way. `--force` takes the ref's copy of every differing record, a pending
+     edit included (`:292-313`, `:335-350`).
    - A record the base holds and the ref does not was deleted there. Its copy here is deleted only when it matches the
      base in bytes and mode, `--force` or not, so `restore` never deletes a file that holds an unpublished change
      (S25, S26).
@@ -1168,7 +1173,7 @@ already holds is refused with the plain-git repair printed, whose `git rm` takes
      the sync base move, and a local `records` branch moves only by fast-forward, saying why when it stays
      (`:518-540`).
 4. **`verify --base <sha> [--ref <ref>]`** proves every record path at `<sha>` carries the same mode and blob at the
-   ref, by default `origin/records`, naming each that differs (`:542-553`).
+   ref, by default `refs/remotes/origin/records`, naming each that differs (`:542-553`).
 5. **`guard [--ref <ref>]`** exits 1 naming each record path tracked at the ref, by default `HEAD` (`:555-561`).
 6. **`init --base <sha>`** runs once. It refuses when a `records` branch exists locally or on `origin`, and when the
    records at `<sha>` hold an entry that is not a regular record file, a name that is not portable, or a case pair.
@@ -1251,12 +1256,13 @@ How the suite behaves:
 The suite runs in four places:
 1. `ci.yml`'s `records` job, in `zomarit/stamity` alone, on every trigger, with no `needs`: its input, `origin/records`,
    is not part of the tree a pull request's run proved, so neither a proven push nor a failed classifier may skip it
-   (S10). It runs `guard`, `restore --ref origin/records --no-fetch --force`, `npm run test:records`, the leak gate with
-   `--root` over a detached worktree of `origin/records`, and the measurements page's drift check
-   (`.github/workflows/ci.yml:901-948`). `all-ci-checks` needs it and, outside its three shapes, asserts `success` in
-   `zomarit/stamity` and `skipped` elsewhere, the repository passed through `env:` (`:1062-1085`).
+   (S10). It runs `guard`, `restore --ref refs/remotes/origin/records --no-fetch --force`, `npm run test:records`, the
+   leak gate with `--root` over a detached worktree of `refs/remotes/origin/records`, and the measurements page's drift
+   check (`.github/workflows/ci.yml:901-948`). `all-ci-checks` needs it and, outside its three shapes, asserts
+   `success` in `zomarit/stamity` and `skipped` elsewhere, the repository passed through `env:` (`:1062-1085`).
 2. `release.yml`'s `gates` job: "Restore the records" after `Install` and "Records suite" after `Test`, with no extra
-   fetch, its depth-0 checkout already holding `origin/records` (`.github/workflows/release.yml:283-300`).
+   fetch, its depth-0 checkout already holding `origin/records`, which the step names in full, as the records job does
+   (`.github/workflows/release.yml:283-300`).
    `fork-release.yml` is unchanged.
 3. `.github/workflows/records.yml` on the `records` branch, on every push to it: it checks out `main` for the tools,
    restores the pushed commit, and runs the records suite, the leak gate over a worktree of the pushed commit, the
